@@ -19,7 +19,11 @@ import {
   Search,
 } from "lucide-react";
 
-import { TokenPoster, type PosterData, type PosterPeriod } from "../components/TokenPoster";
+import {
+  TokenPoster,
+  type PosterData,
+  type PosterPeriod,
+} from "../components/TokenPoster";
 import {
   Dot,
   EmptyState,
@@ -29,7 +33,10 @@ import {
   StatusBadge,
   TTButton,
 } from "../components/tt";
-import { buildContextBreakdown, getLocalUsageSnapshot } from "../lib/local-usage";
+import {
+  buildContextBreakdown,
+  getLocalUsageSnapshot,
+} from "../lib/local-usage";
 import type { LocalUsageContextBreakdownRow } from "../lib/local-usage/context-breakdown";
 import {
   breakdownComposition,
@@ -48,7 +55,11 @@ import {
   type UsageTimeGrain,
   type UsagePeriod,
 } from "../lib/local-usage/presentation";
-import type { LocalUsageEvent, LocalUsageSnapshot, LocalUsageSource } from "../lib/local-usage";
+import type {
+  LocalUsageEvent,
+  LocalUsageSnapshot,
+  LocalUsageSource,
+} from "../lib/local-usage";
 import {
   aggregatePricedUsage,
   applyPricingSnapshot,
@@ -94,7 +105,9 @@ const tokenTypeLabels: Record<string, string> = {
 
 export const Route = createFileRoute("/tokens")({
   validateSearch: (search: Record<string, unknown>): { tab?: Tab } => ({
-    tab: (["source", "project", "model", "tokenType"] as const).includes(search.tab as Tab)
+    tab: (["source", "project", "model", "tokenType"] as const).includes(
+      search.tab as Tab,
+    )
       ? (search.tab as Tab)
       : undefined,
   }),
@@ -144,7 +157,10 @@ function TokensPage() {
     dir: "desc",
   });
 
-  const selectedRange = useMemo(() => resolveUsageRange(period, from, to), [period, from, to]);
+  const selectedRange = useMemo(
+    () => resolveUsageRange(period, from, to),
+    [period, from, to],
+  );
   const periodEvents = useMemo(
     () => filterUsageEvents(snapshot.details, period, from, to),
     [snapshot.details, period, from, to],
@@ -155,8 +171,14 @@ function TokensPage() {
   );
   const totals = useMemo(() => totalsFromEvents(periodEvents), [periodEvents]);
   const cost = useMemo(() => estimateUsageCost(periodEvents), [periodEvents]);
-  const rows = useMemo(() => aggregatePricedUsage(periodEvents, tab), [periodEvents, tab]);
-  const sessionUsage = useMemo(() => aggregateUsageBySession(periodEvents), [periodEvents]);
+  const rows = useMemo(
+    () => aggregatePricedUsage(periodEvents, tab),
+    [periodEvents, tab],
+  );
+  const sessionUsage = useMemo(
+    () => aggregateUsageBySession(periodEvents),
+    [periodEvents],
+  );
   const timeBuckets = useMemo(
     () => aggregateEventsByTime(periodEvents, timeGrain),
     [periodEvents, timeGrain],
@@ -164,7 +186,9 @@ function TokensPage() {
   const visibleRows = useMemo(
     () =>
       sortRows(
-        rows.filter((row) => displayKey(row.key, tab).toLowerCase().includes(query.toLowerCase())),
+        rows.filter((row) =>
+          displayKey(row.key, tab).toLowerCase().includes(query.toLowerCase()),
+        ),
         sort,
         totals.totalTokens,
       ),
@@ -180,9 +204,19 @@ function TokensPage() {
     [periodEvents, query],
   );
   const pageCount = Math.max(1, Math.ceil(filteredDetails.length / PAGE_SIZE));
-  const pageEvents = filteredDetails.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageEvents = filteredDetails.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE,
+  );
   const posterData = useMemo(
-    () => buildPosterData(period, periodEvents, periodDaily, selectedRange, currency),
+    () =>
+      buildPosterData(
+        period,
+        periodEvents,
+        periodDaily,
+        selectedRange,
+        currency,
+      ),
     [currency, period, periodDaily, periodEvents, selectedRange],
   );
 
@@ -207,7 +241,7 @@ function TokensPage() {
         ? "模型"
         : tab === "tokenType"
           ? "Token 类型"
-          : "Provider";
+          : "AI 客户端";
 
   return (
     <>
@@ -222,7 +256,11 @@ function TokensPage() {
         }
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented value={period} onChange={setPeriod} options={periodOptions} />
+          <Segmented
+            value={period}
+            onChange={setPeriod}
+            options={periodOptions}
+          />
           <Segmented
             value={currency}
             onChange={setCurrency}
@@ -269,12 +307,22 @@ function TokensPage() {
         <Summary label="总 Token" value={formatTokens(totals.totalTokens)} />
         <Summary label="输入 Token" value={formatTokens(totals.inputTokens)} />
         <Summary label="输出 Token" value={formatTokens(totals.outputTokens)} />
-        <Summary label="缓存读取" value={formatTokens(totals.cachedInputTokens)} />
-        <Summary label="缓存写入" value={formatTokens(totals.cacheCreationInputTokens)} />
+        <Summary
+          label="缓存读取"
+          value={formatTokens(totals.cachedInputTokens)}
+        />
+        <Summary
+          label="缓存写入"
+          value={formatTokens(totals.cacheCreationInputTokens)}
+        />
         <Summary
           label="估算费用"
           value={formatCost(cost, currency)}
-          note={cost.unknownEvents > 0 ? `${cost.unknownEvents} 个事件价格未知` : "公开价估算"}
+          note={
+            cost.unknownEvents > 0
+              ? `${cost.unknownEvents} 个事件价格未知`
+              : "公开价估算"
+          }
         />
       </div>
 
@@ -283,7 +331,8 @@ function TokensPage() {
           费用仅统计可识别模型；{cost.unknownEvents.toLocaleString()} 个事件、共{" "}
           {cost.unknownModels.length.toLocaleString()} 个模型价格未知：
           {cost.unknownModels.slice(0, 5).join("、")}
-          {cost.unknownModels.length > 5 ? " 等" : ""}。未知部分没有按 0 元计入。
+          {cost.unknownModels.length > 5 ? " 等" : ""}。未知部分没有按 0
+          元计入。
         </div>
       )}
 
@@ -292,7 +341,7 @@ function TokensPage() {
           value={tab}
           onChange={setTab}
           options={[
-            { value: "source", label: "按 Provider" },
+            { value: "source", label: "按客户端" },
             { value: "model", label: "按模型" },
             { value: "project", label: "按项目" },
             { value: "tokenType", label: "按 Token 类型" },
@@ -345,7 +394,8 @@ function TokensPage() {
         {sessionUsage.available ? (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              仅按真实 `sessionId` 聚合；不会读取正文，也不会根据时间、项目或模型推断会话。
+              仅按真实 `sessionId`
+              聚合；不会读取正文，也不会根据时间、项目或模型推断会话。
               {sessionUsage.eventsWithoutSession > 0
                 ? ` 当前仍有 ${sessionUsage.eventsWithoutSession.toLocaleString()} 个事件缺少真实 sessionId，未计入会话聚合。`
                 : ""}
@@ -356,14 +406,19 @@ function TokensPage() {
                   <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                     <th className="px-4 py-2.5 font-normal">sessionId</th>
                     <th className="px-4 py-2.5 text-right font-normal">事件</th>
-                    <th className="px-4 py-2.5 text-right font-normal">总 Token</th>
+                    <th className="px-4 py-2.5 text-right font-normal">
+                      总 Token
+                    </th>
                     <th className="px-4 py-2.5 text-right font-normal">输入</th>
                     <th className="px-4 py-2.5 text-right font-normal">输出</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sessionUsage.rows.map((row) => (
-                    <tr key={row.sessionId} className="border-b border-border last:border-0">
+                    <tr
+                      key={row.sessionId}
+                      className="border-b border-border last:border-0"
+                    >
                       <td className="tt-num px-4 py-2.5">{row.sessionId}</td>
                       <td className="tt-num px-4 py-2.5 text-right">
                         {row.events.toLocaleString()}
@@ -402,14 +457,26 @@ function TokensPage() {
   );
 }
 
-function Summary({ label, value, note }: { label: string; value: string; note?: string }) {
+function Summary({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
   return (
     <div className="min-w-0 px-4 py-3">
       <div className="tt-label">{label}</div>
       <div className="tt-num mt-1 truncate text-lg" title={value}>
         {value}
       </div>
-      {note && <div className="mt-1 truncate text-[10px] text-muted-foreground">{note}</div>}
+      {note && (
+        <div className="mt-1 truncate text-[10px] text-muted-foreground">
+          {note}
+        </div>
+      )}
     </div>
   );
 }
@@ -445,7 +512,10 @@ function BreakdownTable({
     ["cache", "缓存输入占比"],
   ];
   const toggleSort = (key: SortKey) =>
-    setSort({ key, dir: sort.key === key && sort.dir === "desc" ? "asc" : "desc" });
+    setSort({
+      key,
+      dir: sort.key === key && sort.dir === "desc" ? "asc" : "desc",
+    });
 
   return (
     <Panel className="mt-3" bodyClassName="p-0">
@@ -482,16 +552,25 @@ function BreakdownTable({
                       ) : (
                         <ChevronRight className="size-3.5 text-muted-foreground" />
                       )}
-                      <span className="max-w-80 truncate" title={displayKey(row.key, tab)}>
+                      <span
+                        className="max-w-80 truncate"
+                        title={displayKey(row.key, tab)}
+                      >
                         {displayKey(row.key, tab)}
                       </span>
                     </td>
                     <td className="tt-num px-4 py-2.5 text-right">
                       {formatTokens(row.totalTokens)}
                     </td>
-                    <td className="tt-num px-4 py-2.5 text-right">{row.events.toLocaleString()}</td>
-                    <td className="tt-num px-4 py-2.5 text-right">{rowShare.toFixed(1)}%</td>
-                    <td className="tt-num px-4 py-2.5 text-right">{cacheRate(row).toFixed(1)}%</td>
+                    <td className="tt-num px-4 py-2.5 text-right">
+                      {row.events.toLocaleString()}
+                    </td>
+                    <td className="tt-num px-4 py-2.5 text-right">
+                      {rowShare.toFixed(1)}%
+                    </td>
+                    <td className="tt-num px-4 py-2.5 text-right">
+                      {cacheRate(row).toFixed(1)}%
+                    </td>
                     <td className="tt-num px-4 py-2.5 text-right">
                       {tab === "tokenType" && row.key === "reasoning"
                         ? "已含在输出计费"
@@ -502,7 +581,11 @@ function BreakdownTable({
                     <tr className="border-b border-border bg-surface-2/60">
                       <td colSpan={6} className="px-4 py-4">
                         {tab === "model" ? (
-                          <ModelDrilldown model={row.key} events={events} currency={currency} />
+                          <ModelDrilldown
+                            model={row.key}
+                            events={events}
+                            currency={currency}
+                          />
                         ) : (
                           <TokenComposition row={row} currency={currency} />
                         )}
@@ -514,7 +597,10 @@ function BreakdownTable({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                <td
+                  colSpan={6}
+                  className="px-4 py-8 text-center text-muted-foreground"
+                >
                   当前筛选条件下没有数据
                 </td>
               </tr>
@@ -546,8 +632,8 @@ function ModelDrilldown({
         <div>
           <div className="text-xs font-medium">模型真实下钻 · {model}</div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            {modelEvents.length.toLocaleString()} 个真实事件 · Provider、项目与 session
-            均来自本地日志
+            {modelEvents.length.toLocaleString()} 个真实事件 · Provider、项目与
+            session 均来自本地日志
           </div>
         </div>
         <span className="tt-num text-[11px] text-muted-foreground">
@@ -559,7 +645,7 @@ function ModelDrilldown({
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <DrilldownList
-          title="Provider 分布"
+          title="客户端分布"
           rows={providers}
           currency={currency}
           formatLabel={(key) => sourceLabel(key as LocalUsageSource)}
@@ -596,8 +682,14 @@ function ModelDrilldown({
               </thead>
               <tbody>
                 {sessions.rows.slice(0, 10).map((session) => (
-                  <tr key={session.sessionId} className="border-b border-border last:border-0">
-                    <td className="tt-num max-w-64 truncate px-3 py-2" title={session.sessionId}>
+                  <tr
+                    key={session.sessionId}
+                    className="border-b border-border last:border-0"
+                  >
+                    <td
+                      className="tt-num max-w-64 truncate px-3 py-2"
+                      title={session.sessionId}
+                    >
                       {session.sessionId}
                     </td>
                     <td className="tt-num px-3 py-2 text-right">
@@ -622,7 +714,8 @@ function ModelDrilldown({
           </div>
         ) : (
           <p className="px-3 py-4 text-[11px] text-muted-foreground">
-            当前模型事件没有真实 sessionId，因此不推断或伪造会话；Provider 和项目下钻仍可使用。
+            当前模型事件没有真实 sessionId，因此不推断或伪造会话；Provider
+            和项目下钻仍可使用。
           </p>
         )}
       </div>
@@ -660,7 +753,9 @@ function ContextBreakdown({ events }: { events: LocalUsageEvent[] }) {
   }
 
   const messages = findRow(context.categories, "messages");
-  const toolCategories = context.categories.filter((row) => row.key !== "messages");
+  const toolCategories = context.categories.filter(
+    (row) => row.key !== "messages",
+  );
   const toolCalls = sumRows(toolCategories);
   const total = context.totals.totalTokens;
 
@@ -674,14 +769,31 @@ function ContextBreakdown({ events }: { events: LocalUsageEvent[] }) {
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <ContextBucket label="Messages" row={messages} total={total} tone="bg-primary" />
-        <ContextBucket label="Tool calls" row={toolCalls} total={total} tone="bg-ok" />
+        <ContextBucket
+          label="Messages"
+          row={messages}
+          total={total}
+          tone="bg-primary"
+        />
+        <ContextBucket
+          label="Tool calls"
+          row={toolCalls}
+          total={total}
+          tone="bg-ok"
+        />
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-        <span>Reasoning {formatTokens(context.totals.reasoningOutputTokens)} · 已包含在输出</span>
-        <span>MCP servers {formatTokens(findRow(toolCategories, "mcp").totalTokens)}</span>
-        <span>Skills {formatTokens(findRow(toolCategories, "skills").totalTokens)}</span>
+        <span>
+          Reasoning {formatTokens(context.totals.reasoningOutputTokens)} ·
+          已包含在输出
+        </span>
+        <span>
+          MCP servers {formatTokens(findRow(toolCategories, "mcp").totalTokens)}
+        </span>
+        <span>
+          Skills {formatTokens(findRow(toolCategories, "skills").totalTokens)}
+        </span>
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -701,7 +813,12 @@ function ContextBreakdown({ events }: { events: LocalUsageEvent[] }) {
       </div>
 
       {context.skills.length > 0 && (
-        <ContextRows title="Skills" rows={context.skills} total={toolCalls.totalTokens} showCalls />
+        <ContextRows
+          title="Skills"
+          rows={context.skills}
+          total={toolCalls.totalTokens}
+          showCalls
+        />
       )}
       {context.commands.length > 0 && (
         <ContextRows
@@ -735,11 +852,16 @@ function ContextBucket({
           <span className={`size-1.5 rounded-full ${tone}`} />
           {label}
         </span>
-        <span className="tt-num text-muted-foreground">{percentage.toFixed(1)}%</span>
+        <span className="tt-num text-muted-foreground">
+          {percentage.toFixed(1)}%
+        </span>
       </div>
       <div className="tt-num mt-1 text-sm">{formatTokens(row.totalTokens)}</div>
       <div className="mt-1 h-1 overflow-hidden rounded-full bg-border">
-        <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, percentage)}%` }} />
+        <div
+          className={`h-full ${tone}`}
+          style={{ width: `${Math.min(100, percentage)}%` }}
+        />
       </div>
     </div>
   );
@@ -764,7 +886,9 @@ function ContextRows({
     <div className="rounded-sm border border-border bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="text-[11px] font-medium">{title}</span>
-        {note && <span className="text-[10px] text-muted-foreground">{note}</span>}
+        {note && (
+          <span className="text-[10px] text-muted-foreground">{note}</span>
+        )}
       </div>
       <div className="space-y-2 px-3 py-2">
         {rows.length === 0 ? (
@@ -789,9 +913,13 @@ function ContextRows({
                   </div>
                 </div>
                 {showCalls && (
-                  <span className="text-[10px] text-muted-foreground">{row.calls} 次</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {row.calls} 次
+                  </span>
                 )}
-                <span className="tt-num text-right">{formatTokens(row.totalTokens)}</span>
+                <span className="tt-num text-right">
+                  {formatTokens(row.totalTokens)}
+                </span>
               </div>
             );
           })
@@ -823,9 +951,11 @@ function sumRows(rows: LocalUsageContextBreakdownRow[]) {
       calls: total.calls + row.calls,
       inputTokens: total.inputTokens + row.inputTokens,
       cachedInputTokens: total.cachedInputTokens + row.cachedInputTokens,
-      cacheCreationInputTokens: total.cacheCreationInputTokens + row.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        total.cacheCreationInputTokens + row.cacheCreationInputTokens,
       outputTokens: total.outputTokens + row.outputTokens,
-      reasoningOutputTokens: total.reasoningOutputTokens + row.reasoningOutputTokens,
+      reasoningOutputTokens:
+        total.reasoningOutputTokens + row.reasoningOutputTokens,
       totalTokens: total.totalTokens + row.totalTokens,
     }),
     findRow([], "tool_calls"),
@@ -845,28 +975,43 @@ function DrilldownList({
 }) {
   return (
     <div className="rounded-sm border border-border bg-surface/50">
-      <div className="border-b border-border px-3 py-2 text-[11px] font-medium">{title}</div>
+      <div className="border-b border-border px-3 py-2 text-[11px] font-medium">
+        {title}
+      </div>
       <div className="divide-y divide-border">
         {rows.slice(0, 8).map((row) => (
-          <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2">
+          <div
+            key={row.key}
+            className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 px-3 py-2"
+          >
             <span className="truncate text-[11px]" title={formatLabel(row.key)}>
               {formatLabel(row.key)}
             </span>
-            <span className="tt-num text-[11px]">{formatTokens(row.totalTokens)}</span>
+            <span className="tt-num text-[11px]">
+              {formatTokens(row.totalTokens)}
+            </span>
             <span className="tt-num text-[10px] text-muted-foreground">
               {formatCost(row.cost, currency)}
             </span>
           </div>
         ))}
         {rows.length === 0 && (
-          <p className="px-3 py-4 text-[11px] text-muted-foreground">当前模型没有可聚合数据。</p>
+          <p className="px-3 py-4 text-[11px] text-muted-foreground">
+            当前模型没有可聚合数据。
+          </p>
         )}
       </div>
     </div>
   );
 }
 
-function TokenComposition({ row, currency }: { row: PricedUsageRow; currency: Currency }) {
+function TokenComposition({
+  row,
+  currency,
+}: {
+  row: PricedUsageRow;
+  currency: Currency;
+}) {
   const composition = breakdownComposition(row);
   const total = composition.reduce((sum, item) => sum + item.value, 0) || 1;
   return (
@@ -885,14 +1030,22 @@ function TokenComposition({ row, currency }: { row: PricedUsageRow; currency: Cu
           <span
             key={item.label}
             title={`${item.label} ${formatTokens(item.value)}`}
-            style={{ width: `${(item.value / total) * 100}%`, background: item.color }}
+            style={{
+              width: `${(item.value / total) * 100}%`,
+              background: item.color,
+            }}
           />
         ))}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
         {composition.map((item) => (
-          <div key={item.label} className="rounded-sm border border-border bg-surface/50 px-3 py-2">
-            <div className="text-[11px] text-muted-foreground">{item.label}</div>
+          <div
+            key={item.label}
+            className="rounded-sm border border-border bg-surface/50 px-3 py-2"
+          >
+            <div className="text-[11px] text-muted-foreground">
+              {item.label}
+            </div>
             <div className="tt-num mt-1">{formatTokens(item.value)}</div>
           </div>
         ))}
@@ -930,7 +1083,9 @@ function TimeBreakdown({
     <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-4">
       <Panel
         className="xl:col-span-3"
-        title={grain === "hour" ? "每小时 Token 类型分解" : "每日 Token 类型分解"}
+        title={
+          grain === "hour" ? "每小时 Token 类型分解" : "每日 Token 类型分解"
+        }
         action={
           <Segmented
             value={grain}
@@ -968,8 +1123,18 @@ function TimeBreakdown({
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="input" stackId="usage" name="输入" fill="var(--color-chart-1)" />
-              <Bar dataKey="output" stackId="usage" name="输出" fill="var(--color-chart-2)" />
+              <Bar
+                dataKey="input"
+                stackId="usage"
+                name="输入"
+                fill="var(--color-chart-1)"
+              />
+              <Bar
+                dataKey="output"
+                stackId="usage"
+                name="输出"
+                fill="var(--color-chart-2)"
+              />
               <Bar
                 dataKey="cacheRead"
                 stackId="usage"
@@ -982,29 +1147,49 @@ function TimeBreakdown({
                 name="缓存写入"
                 fill="var(--color-chart-5)"
               />
-              <Bar dataKey="reasoning" stackId="usage" name="推理" fill="var(--color-chart-4)" />
+              <Bar
+                dataKey="reasoning"
+                stackId="usage"
+                name="推理"
+                fill="var(--color-chart-4)"
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
         {chartData.length === 0 && (
-          <p className="mt-2 text-xs text-muted-foreground">当前时间范围内没有可聚合事件。</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            当前时间范围内没有可聚合事件。
+          </p>
         )}
       </Panel>
       <div className="space-y-3">
         <Panel title="缓存效果">
           <div className="space-y-2 text-xs">
-            <Fact label="缓存读取" value={formatTokens(totals.cachedInputTokens)} />
-            <Fact label="缓存写入" value={formatTokens(totals.cacheCreationInputTokens)} />
-            <Fact label="缓存输入占比" value={`${cacheRate(totals).toFixed(1)}%`} />
-            <Fact label="估算节省" value={formatMoney(cacheSavingsUsd, currency)} />
+            <Fact
+              label="缓存读取"
+              value={formatTokens(totals.cachedInputTokens)}
+            />
+            <Fact
+              label="缓存写入"
+              value={formatTokens(totals.cacheCreationInputTokens)}
+            />
+            <Fact
+              label="缓存输入占比"
+              value={`${cacheRate(totals).toFixed(1)}%`}
+            />
+            <Fact
+              label="估算节省"
+              value={formatMoney(cacheSavingsUsd, currency)}
+            />
           </div>
         </Panel>
         <Panel title="价格口径">
           <p className="text-[11px] leading-relaxed text-muted-foreground">
             美元按 LiteLLM 与厂商公开模型单价估算；人民币按最新 USD/CNY 参考汇率
-            {pricing ? ` ${pricing.usdToCny.toFixed(4)}` : " 7.2000"} 换算。汇率日期：
-            {pricing?.exchangeRateDate ?? "离线回退"}。推理 Token 已包含在输出 Token
-            计费中，不重复收费。
+            {pricing ? ` ${pricing.usdToCny.toFixed(4)}` : " 7.2000"}{" "}
+            换算。汇率日期：
+            {pricing?.exchangeRateDate ?? "离线回退"}。推理 Token 已包含在输出
+            Token 计费中，不重复收费。
           </p>
         </Panel>
       </div>
@@ -1083,13 +1268,21 @@ function DetailTable({
                   {formatEventTime(event.timestamp)}
                 </td>
                 <td className="px-4 py-2.5">{sourceLabel(event.source)}</td>
-                <td className="tt-num max-w-48 truncate px-4 py-2.5" title={event.model}>
+                <td
+                  className="tt-num max-w-48 truncate px-4 py-2.5"
+                  title={event.model}
+                >
                   {event.model}
                 </td>
-                <td className="max-w-56 truncate px-4 py-2.5" title={event.project}>
+                <td
+                  className="max-w-56 truncate px-4 py-2.5"
+                  title={event.project}
+                >
                   {event.project}
                 </td>
-                <td className="tt-num px-4 py-2.5 text-right">{formatTokens(event.inputTokens)}</td>
+                <td className="tt-num px-4 py-2.5 text-right">
+                  {formatTokens(event.inputTokens)}
+                </td>
                 <td className="tt-num px-4 py-2.5 text-right">
                   {formatTokens(event.outputTokens)}
                 </td>
@@ -1133,15 +1326,18 @@ function sortRows(
 ) {
   const direction = sort.dir === "asc" ? 1 : -1;
   return [...rows].sort((left, right) => {
-    if (sort.key === "name") return left.key.localeCompare(right.key) * direction;
+    if (sort.key === "name")
+      return left.key.localeCompare(right.key) * direction;
     if (sort.key === "events") return (left.events - right.events) * direction;
     if (sort.key === "share") {
       return (
-        (shareOf(left.totalTokens, totalTokens) - shareOf(right.totalTokens, totalTokens)) *
+        (shareOf(left.totalTokens, totalTokens) -
+          shareOf(right.totalTokens, totalTokens)) *
         direction
       );
     }
-    if (sort.key === "cache") return (cacheRate(left) - cacheRate(right)) * direction;
+    if (sort.key === "cache")
+      return (cacheRate(left) - cacheRate(right)) * direction;
     return (left.totalTokens - right.totalTokens) * direction;
   });
 }
@@ -1178,28 +1374,44 @@ function buildPosterData(
   };
 }
 
-function selectedRangeLabel(period: UsagePeriod, range: ReturnType<typeof resolveUsageRange>) {
+function selectedRangeLabel(
+  period: UsagePeriod,
+  range: ReturnType<typeof resolveUsageRange>,
+) {
   if (!range.valid) return selectedRangeHint(range);
-  if (range.from == null || range.to == null) return periodLabels[period] ?? period;
+  if (range.from == null || range.to == null)
+    return periodLabels[period] ?? period;
   return range.from === range.to ? range.from : `${range.from} 至 ${range.to}`;
 }
 
 function selectedRangeHint(range: ReturnType<typeof resolveUsageRange>) {
-  if (range.reason === "missing-boundary") return "请选择完整的开始和结束日期。";
+  if (range.reason === "missing-boundary")
+    return "请选择完整的开始和结束日期。";
   if (range.reason === "reversed-range") return "开始日期不能晚于结束日期。";
   if (range.reason === "invalid-boundary") return "日期格式无效。";
   return "筛选结果将按本地时间边界计算。";
 }
 
 function posterFilePeriod(period: UsagePeriod): PosterPeriod {
-  if (period === "today" || period === "week" || period === "month" || period === "year") {
+  if (
+    period === "today" ||
+    period === "week" ||
+    period === "month" ||
+    period === "year"
+  ) {
     return period;
   }
   if (period === "custom" || period === "7d" || period === "30d") return period;
   return "custom";
 }
 
-function EmptyTokens({ snapshot, error }: { snapshot: LocalUsageSnapshot; error: string | null }) {
+function EmptyTokens({
+  snapshot,
+  error,
+}: {
+  snapshot: LocalUsageSnapshot;
+  error: string | null;
+}) {
   return (
     <>
       <PageHeader

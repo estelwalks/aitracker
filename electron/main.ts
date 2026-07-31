@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,8 +13,15 @@ import {
   type IpcMainInvokeEvent,
 } from "electron";
 
-import { desktopIpc, type AutoLaunchState, type RuntimeInfo } from "./contracts.js";
-import { startLocalWebServer, type LocalWebServer } from "./local-web-server.js";
+import {
+  desktopIpc,
+  type AutoLaunchState,
+  type RuntimeInfo,
+} from "./contracts.js";
+import {
+  startLocalWebServer,
+  type LocalWebServer,
+} from "./local-web-server.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env.TRUSTTOOLS_DEV_URL;
@@ -23,6 +31,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
+let capabilityToken = "";
 let isQuitting = false;
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -36,9 +45,12 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
 }
 
 function getAutoLaunchState(): AutoLaunchState {
-  const supported = process.platform === "darwin" || process.platform === "win32";
+  const supported =
+    process.platform === "darwin" || process.platform === "win32";
   return {
-    enabled: supported ? app.getLoginItemSettings({ path: process.execPath }).openAtLogin : false,
+    enabled: supported
+      ? app.getLoginItemSettings({ path: process.execPath }).openAtLogin
+      : false,
     supported,
   };
 }
@@ -82,17 +94,55 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     return getAutoLaunchState();
   });
-  ipcMain.handle(desktopIpc.setAutoLaunch, (event, enabled: unknown): AutoLaunchState => {
-    assertTrustedSender(event);
-    if (typeof enabled !== "boolean") {
-      throw new TypeError("Auto-launch value must be a boolean");
-    }
-    return setAutoLaunch(enabled);
-  });
+  ipcMain.handle(
+    desktopIpc.setAutoLaunch,
+    (event, enabled: unknown): AutoLaunchState => {
+      assertTrustedSender(event);
+      if (typeof enabled !== "boolean") {
+        throw new TypeError("Auto-launch value must be a boolean");
+      }
+      return setAutoLaunch(enabled);
+    },
+  );
   ipcMain.handle(desktopIpc.showWindow, (event): void => {
     assertTrustedSender(event);
     showMainWindow();
   });
+
+  const prefsPath = join(app.getPath("userData"), "trusttools-prefs.json");
+
+  ipcMain.handle(
+    desktopIpc.getPreferences,
+    (event): Record<string, unknown> => {
+      assertTrustedSender(event);
+      try {
+        const raw = readFileSync(prefsPath, "utf8");
+        return JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    },
+  );
+
+  ipcMain.handle(
+    desktopIpc.setPreference,
+    (event, key: unknown, value: unknown): void => {
+      assertTrustedSender(event);
+      if (typeof key !== "string" || key.length === 0)
+        throw new TypeError("Preference key required");
+      let current: Record<string, unknown> = {};
+      try {
+        const raw = readFileSync(prefsPath, "utf8");
+        current = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        // file doesn't exist or is invalid; start fresh
+      }
+      current[key] = value;
+      const tmp = prefsPath + ".tmp." + Date.now();
+      writeFileSync(tmp, JSON.stringify(current, null, 2), "utf8");
+      renameSync(tmp, prefsPath);
+    },
+  );
 }
 
 function createTray(): void {
@@ -170,7 +220,10 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
-  await mainWindow.loadURL(allowedOrigin);
+  const appUrl = capabilityToken
+    ? `${allowedOrigin}?token=${capabilityToken}`
+    : allowedOrigin;
+  await mainWindow.loadURL(appUrl);
 }
 
 async function resolveApplicationOrigin(): Promise<string> {
@@ -182,6 +235,7 @@ async function resolveApplicationOrigin(): Promise<string> {
     ? join(process.resourcesPath, "web")
     : join(app.getAppPath(), ".output");
   localWebServer = await startLocalWebServer(webRoot);
+  capabilityToken = localWebServer.capabilityToken;
   return localWebServer.origin;
 }
 
@@ -194,18 +248,26 @@ async function prewarmLocalData(origin: string): Promise<void> {
     // installation opens with its historical usage instead of briefly
     // rendering an empty dashboard. Later loads reuse the scanner's
     // file-signature index and in-memory snapshot.
-    const response = await fetch(`${origin}/`, {
+    const prewarmUrl = capabilityToken
+      ? `${origin}/?token=${capabilityToken}`
+      : `${origin}/`;
+    const response = await fetch(prewarmUrl, {
       headers: { Accept: "text/html" },
       signal: controller.signal,
     });
     if (!response.ok) {
-      console.warn(`TrustTools initial data scan returned HTTP ${response.status}`);
+      console.warn(
+        `TrustTools initial data scan returned HTTP ${response.status}`,
+      );
     }
     await response.body?.cancel();
   } catch (error) {
     // Startup remains recoverable: the BrowserWindow request will retry the
     // same loaders, and visible-page polling continues refreshing afterwards.
-    console.warn("TrustTools initial data scan did not finish before launch", error);
+    console.warn(
+      "TrustTools initial data scan did not finish before launch",
+      error,
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -236,6 +298,8 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.showWindow);
+    ipcMain.removeHandler(desktopIpc.getPreferences);
+    ipcMain.removeHandler(desktopIpc.setPreference);
     void localWebServer?.close();
   });
 
