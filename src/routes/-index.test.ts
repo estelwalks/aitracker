@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { LocalUsageEvent, LocalUsageSource } from "../lib/local-usage/types.ts";
+import type {
+  LocalUsageEvent,
+  LocalUsageSource,
+} from "../lib/local-usage/types.ts";
 import {
   buildProviderBudgetIndicators,
   readRemainingSecurityScans,
   resolveEventProvider,
-} from "./index.tsx";
+} from "../lib/local-usage/provider-utils.ts";
 
 function event(
   model: string,
@@ -30,7 +33,9 @@ function event(
 
 test("事件优先使用显式服务商，并按模型归属常见服务商", () => {
   assert.equal(
-    resolveEventProvider(event("任意模型", "codex", { provider: "  自建服务  " })),
+    resolveEventProvider(
+      event("任意模型", "codex", { provider: "  自建服务  " }),
+    ),
     "自建服务",
   );
   assert.equal(resolveEventProvider(event("claude-3-5-sonnet")), "Anthropic");
@@ -40,7 +45,10 @@ test("事件优先使用显式服务商，并按模型归属常见服务商", ()
   assert.equal(resolveEventProvider(event("deepseek-chat")), "DeepSeek");
   assert.equal(resolveEventProvider(event("Kimi-K2")), "Moonshot");
   assert.equal(resolveEventProvider(event("grok-4")), "xAI");
-  assert.equal(resolveEventProvider(event("本地未知模型", "custom:原始来源")), "custom:原始来源");
+  assert.equal(
+    resolveEventProvider(event("本地未知模型", "custom:原始来源")),
+    "custom:原始来源",
+  );
 });
 
 test("服务商匹配忽略大小写并分别聚合日周月真实费用", () => {
@@ -52,7 +60,14 @@ test("服务商匹配忽略大小写并分别聚合日周月真实费用", () =>
       event("gpt-5.4", "codex", { timestamp: "2026-07-01T10:00:00+08:00" }),
       event("claude-3-5-sonnet", "claude-code"),
     ],
-    [{ provider: "openAI", dailyBudget: 21, weeklyBudget: 40, monthlyBudget: 50 }],
+    [
+      {
+        provider: "openAI",
+        dailyBudget: 21,
+        weeklyBudget: 40,
+        monthlyBudget: 50,
+      },
+    ],
     90,
     now,
   );
@@ -74,7 +89,14 @@ test("未知价格不会作为零费用宣称完整，混合价格保留已知�
   const now = new Date("2026-07-28T12:00:00+08:00");
   const [unknownOnly] = buildProviderBudgetIndicators(
     [event("unknown-model", "codex", { provider: "私有服务" })],
-    [{ provider: "私有服务", dailyBudget: 100, weeklyBudget: 100, monthlyBudget: 100 }],
+    [
+      {
+        provider: "私有服务",
+        dailyBudget: 100,
+        weeklyBudget: 100,
+        monthlyBudget: 100,
+      },
+    ],
     80,
     now,
   );
@@ -87,7 +109,14 @@ test("未知价格不会作为零费用宣称完整，混合价格保留已知�
       event("gpt-5.4", "codex", { provider: "OpenAI" }),
       event("unknown-model", "codex", { provider: "OpenAI" }),
     ],
-    [{ provider: "openai", dailyBudget: 100, weeklyBudget: 100, monthlyBudget: 100 }],
+    [
+      {
+        provider: "openai",
+        dailyBudget: 100,
+        weeklyBudget: 100,
+        monthlyBudget: 100,
+      },
+    ],
     80,
     now,
   );
