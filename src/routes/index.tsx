@@ -241,7 +241,10 @@ function Dashboard() {
   }, []);
 
   const remainingSecurityScans = useMemo(
-    () => readRemainingSecurityScans(window.localStorage),
+    () =>
+      typeof window !== "undefined"
+        ? readRemainingSecurityScans(window.localStorage)
+        : null,
     [],
   );
 
