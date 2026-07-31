@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "electron"],
+    "rootDir": "electron",
+    "outDir": "build/electron",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "sourceMap": true,
+    "declaration": false
+  },
+  "include": ["electron/**/*.ts", "electron/**/*.cts"]
+}

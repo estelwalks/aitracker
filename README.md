@@ -1,93 +1,140 @@
-# TrustTools_webapp
+# TrustTools V3.0 Client
 
+TrustTools V3.0 本地客户端。同一套 React + TypeScript UI 支持浏览器调试和 Electron 桌面运行。
 
+## 本地运行
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.intra.knownsec.com/RDWH/vibe/trusttools_webapp.git
-git branch -M main
-git push -uf origin main
+```bash
+npm install
+npm run dev
 ```
 
-## Integrate with your tools
+默认访问：
 
-* [Set up project integrations](https://gitlab.intra.knownsec.com/RDWH/vibe/trusttools_webapp/-/settings/integrations)
+```text
+http://127.0.0.1:8080
+```
 
-## Collaborate with your team
+端口由现有 Vite 配置决定。
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Electron 桌面运行
 
-## Test and Deploy
+```bash
+npm run dev:desktop
+```
 
-Use the built-in continuous integration in GitLab.
+桌面开发模式会先编译 `electron/**`，再启动 Vite 和 Electron。默认开发地址为
+`http://127.0.0.1:5173`，可通过环境变量覆盖，避免依赖固定端口：
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+```bash
+TRUSTTOOLS_DEV_HOST=127.0.0.1 TRUSTTOOLS_DEV_PORT=4173 npm run dev:desktop
+```
 
-***
+桌面壳启用单实例、系统托盘、窗口隐藏恢复和开机自启动 IPC。Renderer 使用
+`contextIsolation=true`、`nodeIntegration=false`、`sandbox=true`，只通过
+`window.trustToolsDesktop` 访问最小类型化 Preload API。
 
-# Editing this README
+## 生产构建
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```bash
+npm run build:desktop    # 构建 Web 产物 + 编译 Electron TypeScript
+npm run dist:mac         # macOS DMG（x64 + arm64，执行 scripts/package-mac.mjs）
+npm run dist:win         # Windows NSIS 安装包（x64）
+npm run dist             # 按当前平台执行 electron-builder 默认目标
+```
 
-## Suggestions for a good README
+分架构打包：
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+npm run dist:mac:x64     # macOS x64 DMG
+npm run dist:mac:arm64   # macOS arm64 DMG
+npm run dist:win:x64     # Windows x64 NSIS
+```
 
-## Name
-Choose a self-explaining name for your project.
+现有 Web 构建输出为 Cloudflare 模式的 Nitro Fetch Handler，不能直接通过
+`file://` 加载。打包时 `.output` 会作为只读资源进入应用；生产 Electron 主进程在
+`127.0.0.1` 的随机空闲端口启动轻量 HTTP 适配器，直接托管静态资源并调用 Nitro
+Handler。服务不监听局域网地址，也不使用固定生产端口。
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 测试
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```bash
+npm run test:e2e       # Playwright 端到端测试
+npm run test:perf      # 采集器性能测试
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## 代码规范
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```bash
+npm run lint           # ESLint 检查
+npm run format         # Prettier 格式化
+```
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## 验证
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+npx tsc --noEmit
+npm run build
+npm run build:electron
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## 数据接入
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索引，页面再按今天、周、月、年或自定义区间筛选：
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+- Claude Code：`~/.claude/projects/**/*.jsonl`
+- Codex：`~/.codex/sessions/**/rollout-*.jsonl`
+- Codex 归档：`~/.codex/archived_sessions/rollout-*.jsonl`
+- Aipy：macOS `~/Library/Application Support/aipy-pro/aipy`，Windows `%APPDATA%/aipy-pro/aipy`
+- WorkBuddy：`~/.workbuddy/projects/**/*.jsonl`
+- 同时自动探测 Cursor、Gemini CLI、Kimi Code、OpenCode、Grok、GitHub Copilot、Cline、Roo Code
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+无需预先安装 Claude Code 或 Codex；应用会独立探测每个受支持客户端，并区分“未发现客户端”“已发现但暂无日志”和“已有可解析数据”。
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+采集器只提取 Token 数字、模型、时间、来源和项目路径，不读取或返回 prompt、回复正文。项目路径返回浏览器前会把用户 Home 目录归一化为 `~/`。
 
-## License
-For open source projects, say how it is licensed.
+首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会在 `~/.trusttools/cache/local-usage-index-v10.json` 建立仅包含结构化 Token 事件的文件级索引。后续按增量游标和文件变化刷新，缓存使用临时文件加原子重命名写入。
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+采集范围与 Token Tracker 的 27 个 AI 工具保持兼容，并额外支持 AiPy。项目原有的 Cline 读取仍然保留。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置兼容采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 TrustTools 原生 reader 作为校验与降级路径。
+
+真实采集实现位于：
+
+```text
+src/lib/local-usage/
+├── scanner.server.ts
+├── snapshot.server.ts
+├── get-local-usage.ts
+├── aggregate.ts
+├── presentation.ts
+└── types.ts
+```
+
+统一客户端数据访问契约位于：
+
+```text
+src/lib/client-data/
+├── types.ts
+├── mock.ts
+├── runtime.ts
+└── index.ts
+```
+
+当前运行方式：
+
+- 浏览器 Dashboard/Token：TanStack Server Function 调用本地采集器
+- Electron：Preload 注入的类型化 IPC Adapter
+- Node 包：Node 本地采集 Adapter
+
+Skill、市场、安全检测和 Memory 页面目前仍使用 `src/lib/mock-data.ts` 中的演示数据，等待对应本地扫描器接入。
+
+Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可以单独提供可选的浏览器预览 Host，不作为桌面客户端内部通信方式。
+
+## 页面
+
+- `/`：首页 Dashboard
+- `/tokens`：Token 分析
+- `/skills`：Skill 管理
+- `/market`：Skill 市场
+- `/security`：安全检测
+- `/memory`：记忆聚合
+- `/settings`：本地设置

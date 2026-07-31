@@ -1,0 +1,10 @@
+TrustTools
+Copyright (c) 2026 TrustTools contributors
+
+This distribution includes third-party packages. Their licenses and notices
+remain the property of their respective copyright holders and are available
+from the package metadata and lockfile in this repository.
+
+The TokenTracker project was reviewed only as a behavioral reference for local
+usage-data discovery. TrustTools does not copy or redistribute TokenTracker
+source files, assets, names, or implementation structure.

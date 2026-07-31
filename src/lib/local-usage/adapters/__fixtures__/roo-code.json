@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-07-27T09:07:00.000Z",
+  "model": "roo-model",
+  "projectPath": "/work/roo",
+  "tokenUsage": {
+    "inputTokens": 16,
+    "outputTokens": 9
+  },
+  "usage": {
+    "reasoning_output_tokens": 3
+  }
+}

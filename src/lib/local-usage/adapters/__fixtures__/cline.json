@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-07-27T09:06:00.000Z",
+  "model": "cline-model",
+  "project": "/work/cline",
+  "usage": {
+    "input_tokens": "15",
+    "output_tokens": "8"
+  }
+}

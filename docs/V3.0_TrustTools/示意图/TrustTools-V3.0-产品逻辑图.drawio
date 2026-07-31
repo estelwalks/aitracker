@@ -1,0 +1,438 @@
+<mxfile host="Electron" version="26.0.0">
+  <diagram id="product-logic" name="产品逻辑图">
+    <mxGraphModel dx="1422" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============================================================ -->
+        <!-- 标题 -->
+        <!-- ============================================================ -->
+        <mxCell id="title" value="TrustTools V3.0 产品逻辑图"
+                style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=24;fontStyle=1;fontColor=#333333;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="个人 AI 主权工具 · 你的 skills、token 消耗、记忆——统一收回"
+                style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=13;fontColor=#666666;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="55" width="500" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 用户入口 -->
+        <!-- ============================================================ -->
+        <mxCell id="user-entry-zone" value="用户入口"
+                style="swimlane;startSize=28;fillColor=#e8f5e9;strokeColor=#a5d6a7;fontStyle=1;fontSize=13;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="1320" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="desktop-client" value="&lt;b&gt;桌面客户端&lt;/b&gt;&lt;br&gt;macOS / Windows&lt;br&gt;Electron 壳"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;"
+                vertex="1" parent="user-entry-zone">
+          <mxGeometry x="200" y="35" width="170" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="browser-plugin" value="&lt;b&gt;浏览器插件&lt;/b&gt;&lt;br&gt;Chrome / Edge"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;"
+                vertex="1" parent="user-entry-zone">
+          <mxGeometry x="500" y="35" width="170" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="no-login-note" value="不登录直接用，次数限制"
+                style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#999999;"
+                vertex="1" parent="user-entry-zone">
+          <mxGeometry x="850" y="40" width="200" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="user-icon" value="👤 用户"
+                style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;"
+                vertex="1" parent="user-entry-zone">
+          <mxGeometry x="40" y="38" width="100" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 产品核心模块区 -->
+        <!-- ============================================================ -->
+        <mxCell id="core-zone" value="核心产品模块"
+                style="swimlane;startSize=28;fillColor=#e3f2fd;strokeColor=#90caf9;fontStyle=1;fontSize=13;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="1320" height="410" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== Token 管理 ==================== -->
+        <mxCell id="token-group" value="📊 Token 管理"
+                style="swimlane;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="30" y="40" width="380" height="310" as="geometry" />
+        </mxCell>        <mxCell id="token-1" value="消耗采集&lt;br&gt;27个AI工具自动发现"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="15" y="40" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="token-2" value="费用换算&lt;br&gt;多币种 / 默认人民币"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="195" y="40" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="token-3" value="多级下钻&lt;br&gt;项目→Provider→模型→Token类型"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="15" y="100" width="340" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="token-4" value="用量预警&lt;br&gt;按日/周/月 · 按Provider"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="15" y="160" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="token-5" value="&lt;b&gt;👥 团队消耗看板&lt;/b&gt;&lt;br&gt;成员排名 · 项目汇总 · 趋势对比"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="195" y="160" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="token-viz" value="可视化 Dashboard&lt;br&gt;热力图 · 趋势图 · 饼图 · 明细表"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
+                vertex="1" parent="token-group">
+          <mxGeometry x="15" y="220" width="340" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== Skill 管理 ==================== -->
+        <mxCell id="skill-group" value="🔧 Skill 管理"
+                style="swimlane;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="430" y="40" width="380" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-1" value="本地扫描发现&lt;br&gt;8个Agent目录自动扫描"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="15" y="40" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-2" value="健康度评估&lt;br&gt;🟢活跃 🟡低频 🟠休眠 🔴废弃"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="195" y="40" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-3" value="一键清理&lt;br&gt;归档/卸载/黑名单 · 5分钟恢复"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="15" y="100" width="340" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-4" value="多Agent同步安装&lt;br&gt;Claude / Codex / Grok / Cursor 等8个"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="15" y="160" width="340" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-5" value="&lt;b&gt;👥 团队 Skill 共享&lt;/b&gt;&lt;br&gt;个人/团队双归属 · 人走技能留"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="15" y="220" width="340" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-6" value="&lt;b&gt;🆕 TrustTools 市场打通&lt;/b&gt;&lt;br&gt;搜索 Web Skill 库 · 一键下载安装 · 版本自动同步"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;"
+                vertex="1" parent="skill-group">
+          <mxGeometry x="15" y="270" width="340" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== 其他模块列 ==================== -->
+        <mxCell id="security-module" value="🛡️ Skill 安全检测"
+                style="swimlane;startSize=24;fillColor=#fce4ec;strokeColor=#f48fb1;fontStyle=1;fontSize=11;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="830" y="40" width="230" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-1" value="上传/拖入 skill"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#f48fb1;fontSize=10;"
+                vertex="1" parent="security-module">
+          <mxGeometry x="15" y="35" width="195" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-2" value="静态规则扫描"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#f48fb1;fontSize=10;"
+                vertex="1" parent="security-module">
+          <mxGeometry x="15" y="72" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-3" value="AI 代码审查"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#f48fb1;fontSize=10;"
+                vertex="1" parent="security-module">
+          <mxGeometry x="115" y="72" width="95" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sec-4" value="→ 安全报告：安全/可疑/危险"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#f48fb1;fontSize=10;"
+                vertex="1" parent="security-module">
+          <mxGeometry x="15" y="110" width="195" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="memory-module" value="🧠 记忆（多源）"
+                style="swimlane;startSize=24;fillColor=#ede7f6;strokeColor=#b39ddb;fontStyle=1;fontSize=11;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="1080" y="40" width="210" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="mem-1" value="&lt;b&gt;多源扫描&lt;/b&gt;&lt;br&gt;Claude / Codex / Windsurf"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede7f6;strokeColor=#b39ddb;fontSize=10;"
+                vertex="1" parent="memory-module">
+          <mxGeometry x="15" y="30" width="180" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="mem-2" value="&lt;b&gt;记忆画像 + 衰减&lt;/b&gt;&lt;br&gt;类型 / 体积 / 7-30-90 天活跃"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede7f6;strokeColor=#b39ddb;fontSize=10;"
+                vertex="1" parent="memory-module">
+          <mxGeometry x="15" y="62" width="180" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="mem-3" value="&lt;b&gt;跨项目复用 + 引用图&lt;/b&gt;"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede7f6;strokeColor=#b39ddb;fontSize=10;"
+                vertex="1" parent="memory-module">
+          <mxGeometry x="15" y="104" width="180" height="28" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== 账户 & 团队（横跨下方） ==================== -->
+        <mxCell id="account-module" value="🔐 账户体系"
+                style="swimlane;startSize=24;fillColor=#fff8e1;strokeColor=#ffcc02;fontStyle=1;fontSize=11;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="830" y="200" width="230" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="acct-1" value="手机号+验证码登录"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#ffcc02;fontSize=10;"
+                vertex="1" parent="account-module">
+          <mxGeometry x="15" y="35" width="195" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="acct-2" value="不登录 → 次数限制"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#ffcc02;fontSize=10;"
+                vertex="1" parent="account-module">
+          <mxGeometry x="15" y="68" width="195" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="acct-3" value="登录 → 无限次+团队+跨设备"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=#ffcc02;fontSize=10;"
+                vertex="1" parent="account-module">
+          <mxGeometry x="15" y="101" width="195" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="team-module" value="👥 团队"
+                style="swimlane;startSize=24;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;fontSize=11;"
+                vertex="1" parent="core-zone">
+          <mxGeometry x="1080" y="200" width="210" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="team-1" value="消耗看板"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="team-module">
+          <mxGeometry x="15" y="35" width="85" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="team-2" value="Skill 共享"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="team-module">
+          <mxGeometry x="110" y="35" width="85" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="team-3" value="成员管理"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="team-module">
+          <mxGeometry x="15" y="68" width="85" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="team-4" value="跨设备恢复"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="team-module">
+          <mxGeometry x="110" y="68" width="85" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="team-5" value="角色权限（管理员/成员）"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;"
+                vertex="1" parent="team-module">
+          <mxGeometry x="15" y="101" width="180" height="28" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 连线：用户入口 → 核心模块 -->
+        <!-- ============================================================ -->
+        <mxCell id="edge-desk-core" value=""
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#999999;exitX=0.5;exitY=1;entryX=0.3;entryY=0;"
+                edge="1" source="desktop-client" target="core-zone" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="325" y="195" /><mxPoint x="436" y="195" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-plugin-core" value=""
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#999999;exitX=0.5;exitY=1;entryX=0.7;entryY=0;"
+                edge="1" source="browser-plugin" target="core-zone" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="625" y="195" /><mxPoint x="964" y="195" /></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 数据源区 -->
+        <!-- ============================================================ -->
+        <mxCell id="data-zone" value="数据源"
+                style="swimlane;startSize=28;fillColor=#fff3e0;strokeColor=#ffb74d;fontStyle=1;fontSize=13;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="1320" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-local" value="&lt;b&gt;本机 AI 工具&lt;/b&gt;&lt;br&gt;Claude Code / Cursor / Codex&lt;br&gt;Gemini / Kimi / Grok ...&lt;br&gt;共 27 个工具"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ffb74d;fontSize=10;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="30" y="40" width="220" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-logs" value="日志文件&lt;br&gt;token 消耗记录"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#ffb74d;fontSize=10;dashed=1;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="280" y="50" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-skills" value="Skill 目录&lt;br&gt;已安装的 skills"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#ffb74d;fontSize=10;dashed=1;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="280" y="98" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-web" value="&lt;b&gt;Web AI 平台&lt;/b&gt;&lt;br&gt;ChatGPT / Claude.ai"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ffb74d;fontSize=10;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="470" y="40" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-web-detail" value="浏览器插件采集"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#ffb74d;fontSize=10;dashed=1;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="470" y="115" width="180" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ds-memory" value="&lt;b&gt;Memory 目录&lt;/b&gt;&lt;br&gt;~/.claude/projects/*/memory/&lt;br&gt;~/.codex/memory/&lt;br&gt;用户可配置"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#ffb74d;fontSize=10;"
+                vertex="1" parent="data-zone">
+          <mxGeometry x="690" y="40" width="220" height="95" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 连线：数据源 → 核心模块 -->
+        <!-- ============================================================ -->
+        <mxCell id="edge-ds-token" value=""
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#ffb74d;dashed=1;exitX=0.5;exitY=0;entryX=0.15;entryY=1;"
+                edge="1" source="ds-logs" target="core-zone" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-ds-skill" value=""
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#ffb74d;dashed=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;"
+                edge="1" source="ds-skills" target="core-zone" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="385" y="575" /><mxPoint x="700" y="575" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-ds-memory" value=""
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#ffb74d;dashed=1;exitX=0.5;exitY=0;entryX=0.85;entryY=1;"
+                edge="1" source="ds-memory" target="core-zone" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 连线：Skill 模块 ↔ V2.4 SkillPackage API（跨端打通） -->
+        <!-- ============================================================ -->
+        <mxCell id="edge-skill-v24" value="🆕 跨端调用 API"
+                style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=3;fontSize=11;fontStyle=1;exitX=0.5;exitY=1;entryX=0.4;entryY=0;labelBackgroundColor=#ffffff;"
+                edge="1" source="skill-6" target="cloud-v24-api" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="780" y="855" /></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 本地存储层 -->
+        <!-- ============================================================ -->
+        <mxCell id="storage-zone" value="本地存储"
+                style="swimlane;startSize=24;fillColor=#f5f5f5;strokeColor=#9e9e9e;fontStyle=1;fontSize=12;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="780" width="1320" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="st-jsonl" value="queue.jsonl&lt;br&gt;token 事件队列"
+                style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#9e9e9e;fontSize=10;"
+                vertex="1" parent="storage-zone">
+          <mxGeometry x="200" y="25" width="160" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st-sqlite" value="SQLite&lt;br&gt;skill / 配置 / 元数据"
+                style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#9e9e9e;fontSize=10;"
+                vertex="1" parent="storage-zone">
+          <mxGeometry x="480" y="25" width="160" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st-config" value="配置文件&lt;br&gt;设定 / 监控目录 / 预警阈值"
+                style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#9e9e9e;fontSize=10;"
+                vertex="1" parent="storage-zone">
+          <mxGeometry x="760" y="25" width="180" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- V2.4 现有系统 -->
+        <!-- ============================================================ -->
+        <mxCell id="v24-zone" value="现有 TrustTools"
+                style="swimlane;startSize=24;fillColor=#e0e0e0;strokeColor=#9e9e9e;fontStyle=1;fontSize=12;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="470" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="v24-sys" value="V2.4 SkillPackage&lt;br&gt;Python 后台 + DeepSeek API"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#757575;fontSize=10;"
+                vertex="1" parent="v24-zone">
+          <mxGeometry x="100" y="28" width="250" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 云端服务 -->
+        <!-- ============================================================ -->
+        <mxCell id="cloud-zone" value="TrustTools 云端（登录后可用）"
+                style="swimlane;startSize=24;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=12;"
+                vertex="1" parent="1">
+          <mxGeometry x="530" y="860" width="830" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud-auth" value="账户鉴权&lt;br&gt;手机号+验证码"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
+                vertex="1" parent="cloud-zone">
+          <mxGeometry x="40" y="28" width="140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud-team" value="团队数据&lt;br&gt;消耗 · Skill共享"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
+                vertex="1" parent="cloud-zone">
+          <mxGeometry x="210" y="28" width="160" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud-pricing" value="LiteLLM 定价缓存&lt;br&gt;24h 自动刷新"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;"
+                vertex="1" parent="cloud-zone">
+          <mxGeometry x="400" y="28" width="170" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="cloud-v24-api" value="&lt;b&gt;V2.4 SkillPackage API&lt;/b&gt;&lt;br&gt;搜索 / 详情 / 下载 / 版本&lt;br&gt;V3.0 桌面端直接消费"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;fontStyle=1;"
+                vertex="1" parent="cloud-zone">
+          <mxGeometry x="600" y="22" width="190" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- 图例 -->
+        <!-- ============================================================ -->
+        <mxCell id="legend-zone" value="图例"
+                style="swimlane;startSize=24;fillColor=#fafafa;strokeColor=#e0e0e0;fontStyle=1;fontSize=11;"
+                vertex="1" parent="1">
+          <mxGeometry x="40" y="945" width="1320" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-core" value="核心功能"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="40" y="30" width="70" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-team" value="团队功能（需登录）"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="130" y="30" width="110" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-security" value="安全检测"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#f48fb1;fontSize=9;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="260" y="30" width="70" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-data" value="数据源/存储"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#ffb74d;fontSize=9;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="350" y="30" width="80" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-cloud" value="云端"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="450" y="30" width="50" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-new" value="V3.0 新增/升级"
+                style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;fontStyle=1;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="510" y="30" width="100" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-dashed" value="虚线 = 数据流 · 绿色粗线 = V3.0 跨端打通"
+                style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontColor=#999999;"
+                vertex="1" parent="legend-zone">
+          <mxGeometry x="620" y="28" width="280" height="15" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

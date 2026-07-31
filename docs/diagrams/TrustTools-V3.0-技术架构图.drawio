@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="Electron" modified="2026-07-28T09:43:00+08:00" version="26.0.0">
+  <diagram id="trusttools-technical-architecture" name="技术架构">
+    <mxGraphModel dx="1700" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="TrustTools V3.0 技术架构图（当前实现）" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="500" y="20" width="700" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="desktop" value="桌面运行层" style="swimlane;startSize=34;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="80" width="1180" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="electron-main" value="Electron Main&#xa;单实例 · BrowserWindow&#xa;托盘 · 自启 · 生命周期" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="desktop">
+          <mxGeometry x="35" y="45" width="220" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="preload" value="Preload Bridge&#xa;类型化 IPC&#xa;最小能力暴露" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="desktop">
+          <mxGeometry x="315" y="45" width="190" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="renderer" value="TanStack Start Renderer&#xa;React 19 · Router · Recharts&#xa;7 个中文业务页面" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="desktop">
+          <mxGeometry x="565" y="45" width="245" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="local-web" value="生产本地 Web Server&#xa;随机 127.0.0.1 端口&#xa;托管 Nitro 产物" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="desktop">
+          <mxGeometry x="870" y="45" width="245" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="service" value="本地数据服务与领域层（TypeScript 模块化单体）" style="swimlane;startSize=34;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="280" width="1180" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="server-fns" value="TanStack Server Functions&#xa;类型校验 · SSR 安全&#xa;只监听本机" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="service">
+          <mxGeometry x="35" y="55" width="200" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="usage-engine" value="Token Engine&#xa;Adapter · 增量缓存&#xa;聚合 · 诊断" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="service">
+          <mxGeometry x="275" y="55" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="pricing-engine" value="Pricing Engine&#xa;模型价格目录&#xa;USD/CNY · 缓存价" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="service">
+          <mxGeometry x="500" y="55" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-engine" value="Skill Engine&#xa;8 Agent 扫描/复制&#xa;回收站 · 黑名单" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="service">
+          <mxGeometry x="725" y="55" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="memory-engine" value="Memory Engine&#xa;目录发现 · Markdown&#xa;摘要 · 来源归类" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="service">
+          <mxGeometry x="950" y="55" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="security-engine" value="Security Engine&#xa;危险命令 · URL · 密钥&#xa;每日限额" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="service">
+          <mxGeometry x="275" y="175" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="market-engine" value="Market Engine&#xa;API · 缓存 · tar 校验&#xa;扫描后原子安装" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="service">
+          <mxGeometry x="500" y="175" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="settings-engine" value="Settings Repository&#xa;localStorage 校验&#xa;桌面自启 IPC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="service">
+          <mxGeometry x="725" y="175" width="185" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="presentation" value="Presentation Layer&#xa;费用/Token 格式化&#xa;海报 Canvas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="service">
+          <mxGeometry x="950" y="175" width="185" height="85" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sources" value="本机数据源与持久化边界" style="swimlane;startSize=34;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="630" width="1180" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="ai-logs" value="10 个 Usage Adapter&#xa;Claude · Codex · Cursor&#xa;Gemini · Kimi · OpenCode&#xa;Grok · Copilot · Cline · Roo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="sources">
+          <mxGeometry x="35" y="55" width="235" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="skill-dirs" value="Agent Skill 目录&#xa;Claude · Codex · Cursor&#xa;Gemini · Windsurf 等" style="shape=folder;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="sources">
+          <mxGeometry x="320" y="65" width="210" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="memory-files" value="Memory 文件&#xa;CLAUDE.md · AGENTS.md&#xa;GEMINI.md · MEMORY.md" style="shape=document;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="sources">
+          <mxGeometry x="580" y="65" width="210" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="trusttools-store" value="~/.trusttools&#xa;Usage 增量缓存&#xa;市场缓存 · 临时区&#xa;回收站 · 黑名单" style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="sources">
+          <mxGeometry x="840" y="55" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="browser-store" value="浏览器 localStorage&#xa;设置 · 检测次数&#xa;主题偏好" style="shape=mxgraph.flowchart.database;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="sources">
+          <mxGeometry x="1090" y="65" width="65" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="market-api" value="TrustTools Web API&#xa;ai.trusttools.cn&#xa;Skill 搜索与下载" style="cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="370" width="175" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="user-boundary" value="用户主动选择的文件" style="shape=document;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="35" y="390" width="165" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="privacy-note" value="安全边界：Renderer 无 Node 权限 · contextIsolation=true · nodeIntegration=false · sandbox=true · 不持久化对话正文" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="900" width="1100" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-main-preload" value="类型化 IPC" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="electron-main" target="preload" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-preload-renderer" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="preload" target="renderer" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-main-localweb" value="生产启动/停止" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="electron-main" target="local-web" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-renderer-server" value="Server Function" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="renderer" target="server-fns" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-localweb-server" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;dashed=1;" edge="1" source="local-web" target="server-fns" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-server-usage" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="server-fns" target="usage-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-server-skill" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="server-fns" target="skill-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-server-memory" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="server-fns" target="memory-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-server-market" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="server-fns" target="market-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-usage-pricing" value="规范化事件" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="usage-engine" target="pricing-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-pricing-presentation" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="pricing-engine" target="presentation" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-user-security" value="仅本地读取" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="user-boundary" target="security-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-market-api" value="HTTPS · 超时/降级" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;dashed=1;" edge="1" source="market-engine" target="market-api" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-market-security" value="下载后静态扫描" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="market-engine" target="security-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-market-skill" value="安全通过后安装" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="market-engine" target="skill-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-ai-usage" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="ai-logs" target="usage-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-skilldirs-skill" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="skill-dirs" target="skill-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-memoryfiles-memory" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="memory-files" target="memory-engine" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-usage-store" value="增量索引/缓存" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="usage-engine" target="trusttools-store" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-skill-store" value="回收站/黑名单" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="skill-engine" target="trusttools-store" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-market-store" value="缓存/临时区" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="market-engine" target="trusttools-store" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e-settings-browser" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" source="settings-engine" target="browser-store" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

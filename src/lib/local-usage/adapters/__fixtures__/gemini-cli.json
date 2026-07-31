@@ -1,0 +1,13 @@
+{
+  "messages": [
+    {
+      "createdAt": "2026-07-27T09:01:00.000Z",
+      "model": "gemini-model",
+      "project": "/work/gemini",
+      "usage": {
+        "input_tokens": 11,
+        "output_tokens": 4
+      }
+    }
+  ]
+}
