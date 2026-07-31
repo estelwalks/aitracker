@@ -1,5 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { createReadStream, promises as fs } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { extname, join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -23,6 +28,7 @@ type NitroNodeMiddleware = (
 
 export interface LocalWebServer {
   origin: string;
+  capabilityToken: string;
   close(): Promise<void>;
 }
 
@@ -45,7 +51,10 @@ const mimeTypes: Record<string, string> = {
 
 function isInside(basePath: string, candidatePath: string): boolean {
   const pathFromBase = relative(basePath, candidatePath);
-  return pathFromBase === "" || (!pathFromBase.startsWith("..") && !pathFromBase.startsWith("/"));
+  return (
+    pathFromBase === "" ||
+    (!pathFromBase.startsWith("..") && !pathFromBase.startsWith("/"))
+  );
 }
 
 async function servePublicAsset(
@@ -79,7 +88,9 @@ async function servePublicAsset(
   response.setHeader("Content-Length", stats.size);
   response.setHeader(
     "Cache-Control",
-    pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    pathname.startsWith("/assets/")
+      ? "public, max-age=31536000, immutable"
+      : "no-cache",
   );
 
   if (request.method === "HEAD") {
@@ -91,7 +102,9 @@ async function servePublicAsset(
   return true;
 }
 
-async function readRequestBody(request: IncomingMessage): Promise<Buffer | undefined> {
+async function readRequestBody(
+  request: IncomingMessage,
+): Promise<Buffer | undefined> {
   if (request.method === "GET" || request.method === "HEAD") {
     return undefined;
   }
@@ -101,6 +114,29 @@ async function readRequestBody(request: IncomingMessage): Promise<Buffer | undef
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+}
+
+function validateToken(
+  request: IncomingMessage,
+  capabilityToken: string,
+): boolean {
+  const authHeader = request.headers.authorization;
+  if (authHeader && authHeader === `Bearer ${capabilityToken}`) {
+    return true;
+  }
+
+  const customToken = request.headers["x-capability-token"];
+  if (typeof customToken === "string" && customToken === capabilityToken) {
+    return true;
+  }
+
+  const url = new URL(request.url ?? "/", "http://localhost");
+  const queryToken = url.searchParams.get("token");
+  if (queryToken === capabilityToken) {
+    return true;
+  }
+
+  return false;
 }
 
 async function sendFetchResponse(
@@ -114,8 +150,9 @@ async function sendFetchResponse(
     nodeResponse.setHeader(name, value);
   });
 
-  const getSetCookie = (fetchResponse.headers as Headers & { getSetCookie?: () => string[] })
-    .getSetCookie;
+  const getSetCookie = (
+    fetchResponse.headers as Headers & { getSetCookie?: () => string[] }
+  ).getSetCookie;
   if (getSetCookie) {
     const cookies = getSetCookie.call(fetchResponse.headers);
     if (cookies.length > 0) {
@@ -127,9 +164,12 @@ async function sendFetchResponse(
   nodeResponse.end(Buffer.from(responseBody));
 }
 
-export async function startLocalWebServer(webRoot: string): Promise<LocalWebServer> {
+export async function startLocalWebServer(
+  webRoot: string,
+): Promise<LocalWebServer> {
   const serverEntry = join(webRoot, "server", "index.mjs");
   const publicDirectory = join(webRoot, "public");
+  const capabilityToken = randomUUID();
   const module = (await import(pathToFileURL(serverEntry).href)) as {
     default?: NitroHandler;
     middleware?: NitroNodeMiddleware;
@@ -137,16 +177,46 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
   const handler = module.default;
   const middleware = module.middleware;
   if (!handler?.fetch && !middleware) {
-    throw new Error("AITracker server build does not expose a fetch handler or Node middleware");
+    throw new Error(
+      "AITracker server build does not expose a fetch handler or Node middleware",
+    );
   }
 
   const server = createServer(async (request, response) => {
     try {
       const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
       const requestUrl = new URL(request.url ?? "/", origin);
-      if (await servePublicAsset(request, response, publicDirectory, requestUrl.pathname)) {
+      if (
+        await servePublicAsset(
+          request,
+          response,
+          publicDirectory,
+          requestUrl.pathname,
+        )
+      ) {
         return;
       }
+
+      // Reject oversized request bodies before reading them into memory.
+      const contentLengthHeader = request.headers["content-length"];
+      if (contentLengthHeader) {
+        const contentLength = parseInt(contentLengthHeader, 10);
+        if (!Number.isNaN(contentLength) && contentLength > 10 * 1024 * 1024) {
+          response.statusCode = 413;
+          response.setHeader("Content-Type", "text/plain; charset=utf-8");
+          response.end("Request body too large");
+          return;
+        }
+      }
+
+      // All non-static routes require the capability token.
+      if (!validateToken(request, capabilityToken)) {
+        response.statusCode = 401;
+        response.setHeader("Content-Type", "text/plain; charset=utf-8");
+        response.end("Unauthorized");
+        return;
+      }
+
       if (middleware) {
         await middleware(request, response);
         return;
@@ -199,6 +269,7 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
 
   return {
     origin: `http://127.0.0.1:${address.port}`,
+    capabilityToken,
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {
         server.close((error) => {

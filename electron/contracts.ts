@@ -3,6 +3,8 @@ export const desktopIpc = {
   getAutoLaunch: "desktop:get-auto-launch",
   setAutoLaunch: "desktop:set-auto-launch",
   showWindow: "desktop:show-window",
+  getPreferences: "desktop:get-preferences",
+  setPreference: "desktop:set-preference",
 } as const;
 
 export interface RuntimeInfo {
@@ -21,4 +23,6 @@ export interface AITrackerDesktopApi {
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
   showWindow(): Promise<void>;
+  getPreferences(): Promise<Record<string, unknown>>;
+  setPreference(key: string, value: unknown): Promise<void>;
 }

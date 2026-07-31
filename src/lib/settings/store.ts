@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { parseUserSecurityRules, type UserSecurityRule } from "../security/rules.ts";
+import {
+  parseUserSecurityRules,
+  type UserSecurityRule,
+} from "../security/rules.ts";
 
 export interface ProviderBudget {
   provider: string;
@@ -65,7 +68,9 @@ function parseProviderBudgets(candidate: unknown): ProviderBudget[] {
     if (!provider || providers.has(normalizedProvider)) continue;
 
     const safeBudget = (budget: unknown) =>
-      typeof budget === "number" && Number.isFinite(budget) && budget >= 0 ? budget : 0;
+      typeof budget === "number" && Number.isFinite(budget) && budget >= 0
+        ? budget
+        : 0;
     providers.add(normalizedProvider);
     budgets.push({
       provider,
@@ -81,14 +86,18 @@ export function parseSettings(raw: string | null): AITrackerSettings {
   if (!raw) return DEFAULT_SETTINGS;
   try {
     const value = JSON.parse(raw) as Partial<AITrackerSettings>;
-    const frequency = ["realtime", "5m", "30m"].includes(String(value.collectionFrequency))
+    const frequency = ["realtime", "5m", "30m"].includes(
+      String(value.collectionFrequency),
+    )
       ? (value.collectionFrequency as AITrackerSettings["collectionFrequency"])
       : DEFAULT_SETTINGS.collectionFrequency;
     const threshold = [80, 90, 100].includes(Number(value.alertThreshold))
       ? (Number(value.alertThreshold) as AITrackerSettings["alertThreshold"])
       : DEFAULT_SETTINGS.alertThreshold;
     const numberValue = (candidate: unknown, fallback: number) =>
-      typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0
+      typeof candidate === "number" &&
+      Number.isFinite(candidate) &&
+      candidate >= 0
         ? candidate
         : fallback;
     return {
@@ -99,25 +108,40 @@ export function parseSettings(raw: string | null): AITrackerSettings {
           : DEFAULT_SETTINGS.autoDiscoverAgents,
       collectionFrequency: frequency,
       monitoredDirectories: Array.isArray(value.monitoredDirectories)
-        ? value.monitoredDirectories.filter((item): item is string => typeof item === "string")
+        ? value.monitoredDirectories.filter(
+            (item): item is string => typeof item === "string",
+          )
         : [],
       memoryAutoDiscover:
         typeof value.memoryAutoDiscover === "boolean"
           ? value.memoryAutoDiscover
           : DEFAULT_SETTINGS.memoryAutoDiscover,
       memoryDirectories: Array.isArray(value.memoryDirectories)
-        ? value.memoryDirectories.filter((item): item is string => typeof item === "string")
+        ? value.memoryDirectories.filter(
+            (item): item is string => typeof item === "string",
+          )
         : [],
       memoryExcludes: Array.isArray(value.memoryExcludes)
-        ? value.memoryExcludes.filter((item): item is string => typeof item === "string")
+        ? value.memoryExcludes.filter(
+            (item): item is string => typeof item === "string",
+          )
         : DEFAULT_SETTINGS.memoryExcludes,
-      lowFrequencyCount: numberValue(value.lowFrequencyCount, DEFAULT_SETTINGS.lowFrequencyCount),
+      lowFrequencyCount: numberValue(
+        value.lowFrequencyCount,
+        DEFAULT_SETTINGS.lowFrequencyCount,
+      ),
       dozeDays: numberValue(value.dozeDays, DEFAULT_SETTINGS.dozeDays),
       deadDays: numberValue(value.deadDays, DEFAULT_SETTINGS.deadDays),
       trashMinutes: 5,
       dailyBudget: numberValue(value.dailyBudget, DEFAULT_SETTINGS.dailyBudget),
-      weeklyBudget: numberValue(value.weeklyBudget, DEFAULT_SETTINGS.weeklyBudget),
-      monthlyBudget: numberValue(value.monthlyBudget, DEFAULT_SETTINGS.monthlyBudget),
+      weeklyBudget: numberValue(
+        value.weeklyBudget,
+        DEFAULT_SETTINGS.weeklyBudget,
+      ),
+      monthlyBudget: numberValue(
+        value.monthlyBudget,
+        DEFAULT_SETTINGS.monthlyBudget,
+      ),
       providerBudgets: parseProviderBudgets(value.providerBudgets),
       alertThreshold: threshold,
       launchAtLoginRequested:
@@ -131,17 +155,96 @@ export function parseSettings(raw: string | null): AITrackerSettings {
   }
 }
 
+async function loadSettingsFromPlatform(): Promise<Record<string, unknown>> {
+  const api = (
+    window as {
+      desktopBridge?: {
+        getPreferences(): Promise<Record<string, unknown>>;
+      };
+    }
+  ).desktopBridge;
+  if (api) {
+    try {
+      return await api.getPreferences();
+    } catch {
+      // IPC unavailable; fall through
+    }
+  }
+  return {};
+}
+
+async function saveSettingToPlatform(
+  key: string,
+  value: string,
+): Promise<void> {
+  const api = (
+    window as {
+      desktopBridge?: {
+        setPreference(key: string, value: unknown): Promise<void>;
+      };
+    }
+  ).desktopBridge;
+  if (api) {
+    try {
+      await api.setPreference(key, value);
+    } catch {
+      // IPC unavailable; fall through to localStorage mirror
+    }
+  }
+}
+
 export function useAITrackerSettings() {
-  const [settings, setSettings] = useState<AITrackerSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] =
+    useState<AITrackerSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
+  const lastSavedRef = useRef<string>("");
 
   useEffect(() => {
-    setSettings(parseSettings(window.localStorage.getItem(STORAGE_KEY)));
-    setLoaded(true);
+    let cancelled = false;
+    async function load() {
+      let raw: string | null = null;
+      try {
+        const prefs = await loadSettingsFromPlatform();
+        if (prefs && typeof prefs[STORAGE_KEY] === "string") {
+          raw = prefs[STORAGE_KEY] as string;
+        }
+      } catch {
+        // fall through to localStorage
+      }
+      if (raw === null) {
+        try {
+          raw = window.localStorage.getItem(STORAGE_KEY);
+        } catch {
+          // localStorage not available
+        }
+      }
+      if (cancelled) return;
+      const parsed = parseSettings(raw);
+      setSettings(parsed);
+      lastSavedRef.current = JSON.stringify(parsed);
+      setLoaded(true);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (loaded) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    if (!loaded) return;
+    const serialized = JSON.stringify(settings);
+    if (serialized === lastSavedRef.current) return;
+    lastSavedRef.current = serialized;
+
+    // Persist to IPC-backed filesystem when available
+    void saveSettingToPlatform(STORAGE_KEY, serialized);
+
+    // Always mirror to localStorage for browser dev mode
+    try {
+      window.localStorage.setItem(STORAGE_KEY, serialized);
+    } catch {
+      // localStorage not available
+    }
   }, [loaded, settings]);
 
   return { settings, setSettings, loaded };
