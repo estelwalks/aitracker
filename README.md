@@ -17,6 +17,8 @@ http://127.0.0.1:8080
 
 端口由现有 Vite 配置决定。
 
+> **国内网络：** 项目已配置 `.npmrc` 使用 npmmirror.com 镜像下载 Electron 二进制文件。无需额外配置。
+
 ## Electron 桌面运行
 
 ```bash
