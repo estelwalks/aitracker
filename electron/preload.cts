@@ -11,6 +11,8 @@ const desktopIpc = {
   getAutoLaunch: "desktop:get-auto-launch",
   setAutoLaunch: "desktop:set-auto-launch",
   showWindow: "desktop:show-window",
+  getPreferences: "desktop:get-preferences",
+  setPreference: "desktop:set-preference",
 } as const;
 
 const desktopApi: TrustToolsDesktopApi = Object.freeze({
@@ -23,8 +25,17 @@ const desktopApi: TrustToolsDesktopApi = Object.freeze({
       desktopIpc.setAutoLaunch,
       enabled,
     ) as Promise<AutoLaunchState>,
-  showWindow: () =>
-    ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
+  showWindow: () => ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
+  getPreferences: () =>
+    ipcRenderer.invoke(desktopIpc.getPreferences) as Promise<
+      Record<string, unknown>
+    >,
+  setPreference: (key: string, value: unknown) =>
+    ipcRenderer.invoke(
+      desktopIpc.setPreference,
+      key,
+      value,
+    ) as Promise<void>,
 });
 
 contextBridge.exposeInMainWorld("trustToolsDesktop", desktopApi);

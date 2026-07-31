@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { refreshLocalUsageSnapshot } from "../lib/local-usage";
+import { seedDailyCountFromPlatform } from "../lib/security/daily-limit";
 import { parseSettings } from "../lib/settings/store";
 
 function NotFoundComponent() {
@@ -22,8 +23,12 @@ function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="tt-num text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">页面不存在</h2>
-        <p className="mt-2 text-sm text-muted-foreground">你访问的页面不存在或已被移动。</p>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">
+          页面不存在
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          你访问的页面不存在或已被移动。
+        </p>
         <div className="mt-6">
           <Link
             to="/"
@@ -47,8 +52,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">页面加载失败</h1>
-        <p className="mt-2 text-sm text-muted-foreground">出了点问题，可以重试或回到首页。</p>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          页面加载失败
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          出了点问题，可以重试或回到首页。
+        </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -71,39 +80,41 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "TrustTools V3.0 · AI 工具主权控制台" },
-      {
-        name: "description",
-        content:
-          "TrustTools V3.0 原型：统一管理多个 AI 编码工具的 Token 消耗、Skill 资产、安全检测与记忆。",
-      },
-      { name: "author", content: "TrustTools" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [
-      {
-        rel: "preconnect",
-        href: "https://fonts.googleapis.com",
-      },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
-      },
-      { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-    ],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
-  notFoundComponent: NotFoundComponent,
-  errorComponent: ErrorComponent,
-});
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
+  {
+    head: () => ({
+      meta: [
+        { charSet: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        { title: "TrustTools V3.0 · AI 工具主权控制台" },
+        {
+          name: "description",
+          content:
+            "TrustTools V3.0 原型：统一管理多个 AI 编码工具的 Token 消耗、Skill 资产、安全检测与记忆。",
+        },
+        { name: "author", content: "TrustTools" },
+        { property: "og:type", content: "website" },
+        { name: "twitter:card", content: "summary_large_image" },
+      ],
+      links: [
+        {
+          rel: "preconnect",
+          href: "https://fonts.googleapis.com",
+        },
+        {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
+        },
+        { rel: "stylesheet", href: appCss },
+        { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      ],
+    }),
+    shellComponent: RootShell,
+    component: RootComponent,
+    notFoundComponent: NotFoundComponent,
+    errorComponent: ErrorComponent,
+  },
+);
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
@@ -125,15 +136,27 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <PlatformPersistenceSeed />
         <LocalUsageAutoRefresh />
         <AppShell>
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
         </AppShell>
-        <Toaster position="top-right" theme="dark" toastOptions={{ duration: 3000 }} />
+        <Toaster
+          position="top-right"
+          theme="dark"
+          toastOptions={{ duration: 3000 }}
+        />
       </ThemeProvider>
     </QueryClientProvider>
   );
+}
+
+function PlatformPersistenceSeed() {
+  useEffect(() => {
+    void seedDailyCountFromPlatform();
+  }, []);
+  return null;
 }
 
 function LocalUsageAutoRefresh() {
@@ -156,7 +179,11 @@ function LocalUsageAutoRefresh() {
         window.localStorage.getItem("trusttools.settings.v1"),
       ).collectionFrequency;
       const interval =
-        frequency === "realtime" ? 5_000 : frequency === "5m" ? 5 * 60_000 : 30 * 60_000;
+        frequency === "realtime"
+          ? 5_000
+          : frequency === "5m"
+            ? 5 * 60_000
+            : 30 * 60_000;
       if (!force && Date.now() - lastRefresh < interval) return;
 
       refreshing = true;
