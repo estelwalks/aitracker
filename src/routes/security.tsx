@@ -11,7 +11,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Dot, PageHeader, Panel, StatusBadge, TTButton } from "../components/tt";
+import {
+  Dot,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  TTButton,
+} from "../components/tt";
 import {
   consumeDailyScan,
   DAILY_SCAN_LIMIT,
@@ -23,14 +29,20 @@ import {
   type SecurityReport,
   type SecuritySeverity,
 } from "../lib/security/scanner";
-import { requestAiSecurityReview, requestSecurityArchiveScan } from "../lib/security/server-fns";
+import {
+  requestAiSecurityReview,
+  requestSecurityArchiveScan,
+} from "../lib/security/server-fns";
 import { useTrustToolsSettings } from "../lib/settings/store";
 
 export const Route = createFileRoute("/security")({
   head: () => ({
     meta: [
       { title: "安全检测 · TrustTools V3.0" },
-      { name: "description", content: "对用户选择的本地文件执行真实静态安全规则扫描。" },
+      {
+        name: "description",
+        content: "对用户选择的本地文件执行真实静态安全规则扫描。",
+      },
     ],
   }),
   component: SecurityPage,
@@ -53,7 +65,9 @@ const severityClass: Record<SecuritySeverity, string> = {
   低危: "text-muted-foreground",
 };
 
-async function readSelectedFiles(files: FileList | File[]): Promise<SecurityInputFile[]> {
+async function readSelectedFiles(
+  files: FileList | File[],
+): Promise<SecurityInputFile[]> {
   const selected = Array.from(files).slice(0, MAX_FILES);
   const readable: SecurityInputFile[] = [];
   for (const file of selected) {
@@ -74,7 +88,9 @@ function isSupportedArchive(name: string): boolean {
 }
 
 function isUnsupportedArchive(name: string): boolean {
-  return /\.(?:zip|7z|rar|tgz|gz|bz2|xz)$/i.test(name) && !isSupportedArchive(name);
+  return (
+    /\.(?:zip|7z|rar|tgz|gz|bz2|xz)$/i.test(name) && !isSupportedArchive(name)
+  );
 }
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -102,7 +118,8 @@ function SecurityPage() {
   const [busy, setBusy] = useState(false);
   const [aiReviewEnabled, setAiReviewEnabled] = useState(false);
   const [report, setReport] = useState<SecurityReport | null>(null);
-  const [archiveSummary, setArchiveSummary] = useState<ArchiveScanSummary | null>(null);
+  const [archiveSummary, setArchiveSummary] =
+    useState<ArchiveScanSummary | null>(null);
   const [history, setHistory] = useState<SecurityReport[]>([]);
   const { settings } = useTrustToolsSettings();
   const [used, setUsed] = useState(() =>
@@ -117,7 +134,9 @@ function SecurityPage() {
       setUsed(count);
       const selected = Array.from(files);
       const archives = selected.filter((file) => isSupportedArchive(file.name));
-      const rejectedArchives = selected.filter((file) => isUnsupportedArchive(file.name));
+      const rejectedArchives = selected.filter((file) =>
+        isUnsupportedArchive(file.name),
+      );
       if (rejectedArchives.length > 0) {
         throw new Error("仅支持 .tar 与 .tar.gz；.zip 等其他压缩格式不支持");
       }
@@ -129,7 +148,8 @@ function SecurityPage() {
       if (archives.length === 1) {
         const archive = archives[0];
         if (!archive) throw new Error("未找到压缩包");
-        if (archive.size > MAX_ARCHIVE_SIZE) throw new Error("压缩包不能超过 20 MB");
+        if (archive.size > MAX_ARCHIVE_SIZE)
+          throw new Error("压缩包不能超过 20 MB");
         const result = await requestSecurityArchiveScan({
           data: {
             name: archive.name,
@@ -147,7 +167,8 @@ function SecurityPage() {
         });
       } else {
         const inputs = await readSelectedFiles(files);
-        if (inputs.length === 0) throw new Error("未找到可读取的文本文件（单文件上限 2MB）");
+        if (inputs.length === 0)
+          throw new Error("未找到可读取的文本文件（单文件上限 2MB）");
         next = scanSecurityFiles(inputs, settings.securityRules);
         if (aiReviewEnabled) {
           next.aiReview = await requestAiSecurityReview({ data: next.risks });
@@ -157,7 +178,9 @@ function SecurityPage() {
 
       setReport(next);
       setHistory((current) => [next, ...current].slice(0, 10));
-      toast.success(`扫描完成：${next.verdict}，发现 ${next.risks.length} 项风险`);
+      toast.success(
+        `扫描完成：${next.verdict}，发现 ${next.risks.length} 项风险`,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "扫描失败");
     } finally {
@@ -173,7 +196,9 @@ function SecurityPage() {
         desc="文本文件由浏览器本地扫描；tar 压缩包仅发送到本机 Server Function 安全解包，不上传外网"
         status={
           <StatusBadge tone={used >= DAILY_SCAN_LIMIT ? "warn" : "ok"}>
-            <Dot className={`size-1 ${used >= DAILY_SCAN_LIMIT ? "bg-warn" : "bg-ok"}`} />
+            <Dot
+              className={`size-1 ${used >= DAILY_SCAN_LIMIT ? "bg-warn" : "bg-ok"}`}
+            />
             今日 {used}/{DAILY_SCAN_LIMIT} 次
           </StatusBadge>
         }
@@ -190,7 +215,8 @@ function SecurityPage() {
           <span>
             <span className="font-medium">启用 AI 二次审查</span>
             <span className="mt-1 block text-[12px] text-muted-foreground">
-              默认关闭。启用后，仅将静态规则命中的已脱敏最小风险片段发送到服务端配置的 AI
+              默认关闭。启用后，仅将静态规则命中的已脱敏最小风险片段发送到服务端配置的
+              AI
               服务；不会发送完整文件。服务未配置、失败或限流时仍返回静态报告。
             </span>
           </span>
@@ -218,7 +244,9 @@ function SecurityPage() {
           multiple
           accept="text/*,.md,.js,.jsx,.ts,.tsx,.json,.yaml,.yml,.toml,.sh,.py"
           className="hidden"
-          onChange={(event) => event.target.files && void runScan(event.target.files)}
+          onChange={(event) =>
+            event.target.files && void runScan(event.target.files)
+          }
         />
         <input
           ref={(element) => {
@@ -229,19 +257,26 @@ function SecurityPage() {
           type="file"
           multiple
           className="hidden"
-          onChange={(event) => event.target.files && void runScan(event.target.files)}
+          onChange={(event) =>
+            event.target.files && void runScan(event.target.files)
+          }
         />
         <input
           ref={archiveInputRef}
           type="file"
           accept=".tar,.tar.gz,application/x-tar,application/gzip"
           className="hidden"
-          onChange={(event) => event.target.files && void runScan(event.target.files)}
+          onChange={(event) =>
+            event.target.files && void runScan(event.target.files)
+          }
         />
         <Upload className="size-7 text-muted-foreground" />
-        <p className="mt-3 text-sm font-medium">拖入文件或压缩包，或主动选择文件 / 目录</p>
+        <p className="mt-3 text-sm font-medium">
+          拖入文件或压缩包，或主动选择文件 / 目录
+        </p>
         <p className="mt-1 text-[12px] text-muted-foreground">
-          文本最多 100 个、单文件 2MB；支持单个 20MB 内的 .tar / .tar.gz，明确拒绝 .zip
+          文本最多 100 个、单文件 2MB；支持单个 20MB 内的 .tar /
+          .tar.gz，明确拒绝 .zip
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <TTButton
@@ -267,11 +302,13 @@ function SecurityPage() {
 
       {archiveSummary && (
         <div className="mt-3 rounded-sm border border-ok/30 bg-ok/10 p-3 text-[13px] text-ok">
-          <div className="font-medium">压缩包已在本机安全解包并完成真实扫描</div>
+          <div className="font-medium">
+            压缩包已在本机安全解包并完成真实扫描
+          </div>
           <div className="tt-num mt-1 text-[12px] text-muted-foreground">
-            {archiveSummary.archiveName} · {archiveSummary.entriesChecked} 个条目 · 压缩包{" "}
-            {(archiveSummary.archiveBytes / 1024).toFixed(1)} KB · 解包内容{" "}
-            {(archiveSummary.unpackedBytes / 1024).toFixed(1)} KB
+            {archiveSummary.archiveName} · {archiveSummary.entriesChecked}{" "}
+            个条目 · 压缩包 {(archiveSummary.archiveBytes / 1024).toFixed(1)} KB
+            · 解包内容 {(archiveSummary.unpackedBytes / 1024).toFixed(1)} KB
           </div>
         </div>
       )}
@@ -315,21 +352,32 @@ function SecurityPage() {
 
 function SecurityReportPanel({ report }: { report: SecurityReport }) {
   const VerdictIcon =
-    report.verdict === "危险" ? ShieldX : report.verdict === "可疑" ? ShieldAlert : ShieldCheck;
+    report.verdict === "危险"
+      ? ShieldX
+      : report.verdict === "可疑"
+        ? ShieldAlert
+        : ShieldCheck;
   const verdictClass =
-    report.verdict === "危险" ? "text-danger" : report.verdict === "可疑" ? "text-warn" : "text-ok";
+    report.verdict === "危险"
+      ? "text-danger"
+      : report.verdict === "可疑"
+        ? "text-warn"
+        : "text-ok";
 
   return (
     <Panel className="mt-3" title={`安全报告 · ${report.filesScanned} 个文件`}>
       <div className={`flex items-center gap-2 ${verdictClass}`}>
         <VerdictIcon className="size-5" />
-        <span className="text-sm font-semibold">综合判定：{report.verdict}</span>
+        <span className="text-sm font-semibold">
+          综合判定：{report.verdict}
+        </span>
         <span className="ml-auto text-xs">{report.risks.length} 项风险</span>
       </div>
 
       {report.risks.length === 0 ? (
         <div className="mt-4 flex items-center gap-2 rounded-sm border border-ok/30 bg-ok/10 p-3 text-[13px] text-ok">
-          <Check className="size-4" /> 静态规则未检出恶意 URL、危险命令或敏感信息。
+          <Check className="size-4" /> 静态规则未检出恶意
+          URL、危险命令或敏感信息。
         </div>
       ) : (
         <ul className="mt-4 space-y-2">
@@ -339,9 +387,13 @@ function SecurityReportPanel({ report }: { report: SecurityReport }) {
               className="rounded-sm border border-border bg-surface-2 p-3 text-[13px]"
             >
               <div className="flex flex-wrap items-center gap-2">
-                <AlertTriangle className={`size-3.5 ${severityClass[risk.severity]}`} />
+                <AlertTriangle
+                  className={`size-3.5 ${severityClass[risk.severity]}`}
+                />
                 <span className="font-medium">{risk.kind}</span>
-                <span className={severityClass[risk.severity]}>{risk.severity}</span>
+                <span className={severityClass[risk.severity]}>
+                  {risk.severity}
+                </span>
                 <span className="rounded-sm border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
                   {risk.source} · {risk.ruleName}
                 </span>
@@ -361,10 +413,14 @@ function SecurityReportPanel({ report }: { report: SecurityReport }) {
       <div className="mt-4 rounded-sm border border-border bg-surface-2 p-3 text-[13px]">
         <div className="tt-label mb-1">AI 审查</div>
         <div className="flex items-start gap-2">
-          <StatusBadge tone={report.aiReview.status === "已完成" ? "ok" : "warn"}>
+          <StatusBadge
+            tone={report.aiReview.status === "已完成" ? "ok" : "warn"}
+          >
             {report.aiReview.status}
           </StatusBadge>
-          <span className="text-muted-foreground">{report.aiReview.summary}</span>
+          <span className="text-muted-foreground">
+            {report.aiReview.summary}
+          </span>
         </div>
       </div>
     </Panel>
