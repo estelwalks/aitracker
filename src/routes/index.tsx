@@ -488,6 +488,7 @@ function Dashboard() {
       )}
 
       {(() => {
+        const isSsr = typeof window === "undefined";
         const widgets = (
           <>
             {visibleWidgets.includes("kpis") && (
@@ -900,7 +901,7 @@ function Dashboard() {
             )}
           </>
         );
-        return isNarrowViewport ? (
+        return isSsr || isNarrowViewport ? (
           <div className="flex flex-col gap-4">{widgets}</div>
         ) : (
           <ResponsiveGridLayout
