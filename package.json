@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "dev:desktop": "npm run build:electron && node electron/dev-runner.mjs",
+    "dev:desktop": "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ npm run build:electron && node electron/dev-runner.mjs",
     "dev:desktop:first-run": "node scripts/first-run-lab.mjs",
     "lab:first-run:prepare": "node scripts/first-run-lab.mjs --prepare-only",
     "lab:first-run:seed": "node scripts/first-run-lab.mjs --seed-only",
@@ -23,6 +23,7 @@
     "dist:mac:arm64": "npm run build:desktop && electron-builder --mac dmg --arm64 --publish never",
     "dist:win": "npm run build:desktop && electron-builder --win",
     "dist:win:x64": "npm run build:desktop && electron-builder --win nsis --x64 --publish never",
+    "postinstall": "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:perf": "node --import tsx --test src/lib/local-usage/performance.test.ts && tsc --noEmit && eslint src/lib/local-usage",
