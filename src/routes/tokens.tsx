@@ -144,7 +144,57 @@ function TokensPage() {
   const { tab = "source" } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
-  const [currency, setCurrency] = useState<Currency>("CNY");
+  const [currency, setCurrency] = useState<Currency>(() => {
+    try {
+      const stored = window.localStorage.getItem("trusttools-currency");
+      if (stored === "CNY" || stored === "USD") return stored as Currency;
+    } catch {
+      // localStorage not available
+    }
+    return "CNY";
+  });
+
+  useEffect(() => {
+    const api = (
+      window as {
+        desktopBridge?: {
+          getPreferences(): Promise<Record<string, unknown>>;
+        };
+      }
+    ).desktopBridge;
+    if (api) {
+      api
+        .getPreferences()
+        .then((prefs) => {
+          const stored = prefs?.currency;
+          if (stored === "CNY" || stored === "USD") {
+            setCurrency(stored as Currency);
+          }
+        })
+        .catch(() => {
+          // IPC unavailable
+        });
+    }
+  }, []);
+
+  const setPersistentCurrency = (value: Currency) => {
+    setCurrency(value);
+    try {
+      window.localStorage.setItem("trusttools-currency", value);
+      const api = (
+        window as {
+          desktopBridge?: {
+            setPreference(key: string, value: unknown): Promise<void>;
+          };
+        }
+      ).desktopBridge;
+      if (api) {
+        api.setPreference("currency", value).catch(() => {});
+      }
+    } catch {
+      // persistence not available
+    }
+  };
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -263,7 +313,7 @@ function TokensPage() {
           />
           <Segmented
             value={currency}
-            onChange={setCurrency}
+            onChange={setPersistentCurrency}
             options={[
               { value: "CNY", label: "人民币" },
               { value: "USD", label: "美元" },

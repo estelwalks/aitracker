@@ -15,18 +15,6 @@ extraResources:
       - "**/*"
   - from: build/tray-icon.png
     to: tray-icon.png
-  - from: vendor/aitracker-cli
-    to: aitracker-cli
-    filter:
-      - "bin/**/*"
-      - "src/**/*"
-      - "LICENSE"
-      - "package.json"
-      - "package-lock.json"
-  - from: vendor/aitracker-cli/node_modules
-    to: aitracker-cli/node_modules
-    filter:
-      - "**/*"
 afterPack: electron/after-pack.cjs
 mac:
   target:

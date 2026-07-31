@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -59,13 +66,13 @@ test("uses structured Skill calls as the only activity evidence", async () => {
         outputTokens: 5,
         reasoningOutputTokens: 0,
         totalTokens: 15,
-        context: { skills: [{ name: "example", calls: 2 }] },
+        context: { skills: [{ name: "example", calls: 5 }] },
       },
     ],
   });
 
   assert.equal(snapshot.skills[0]?.health, "active");
-  assert.match(snapshot.skills[0]?.healthReason ?? "", /真实调用 2 次/);
+  assert.match(snapshot.skills[0]?.healthReason ?? "", /真实调用 5 次/);
 });
 
 test("reads real version and source from SKILL.md frontmatter and changes fingerprint", async () => {
@@ -78,16 +85,28 @@ test("reads real version and source from SKILL.md frontmatter and changes finger
       join(skillPath, "SKILL.md"),
       "---\nversion: 1.2.3\nsource: https://example.com/versioned\n---\n# Versioned\n",
     );
-    const first = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const first = await scanLocalSkills({
+      homeDirectory: root,
+      trusttoolsDirectory,
+    });
     assert.equal(first.skills[0]?.installations[0]?.version, "1.2.3");
-    assert.equal(first.skills[0]?.installations[0]?.source?.kind, "frontmatter");
-    assert.equal(first.skills[0]?.installations[0]?.source?.url, "https://example.com/versioned");
+    assert.equal(
+      first.skills[0]?.installations[0]?.source?.kind,
+      "frontmatter",
+    );
+    assert.equal(
+      first.skills[0]?.installations[0]?.source?.url,
+      "https://example.com/versioned",
+    );
 
     await writeFile(
       join(skillPath, "SKILL.md"),
       "---\nversion: 1.2.4\nsource: https://example.com/versioned\n---\n# Versioned\n",
     );
-    const second = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const second = await scanLocalSkills({
+      homeDirectory: root,
+      trusttoolsDirectory,
+    });
     assert.equal(second.skills[0]?.installations[0]?.version, "1.2.4");
     assert.notEqual(second.fingerprint, first.fingerprint);
   } finally {
@@ -102,7 +121,10 @@ test("marks an update only when persisted market evidence is truly newer", async
   try {
     await mkdir(skillPath, { recursive: true });
     await mkdir(trusttoolsDirectory, { recursive: true });
-    await writeFile(join(skillPath, "SKILL.md"), "---\nversion: 1.0.0\n---\n# Market\n");
+    await writeFile(
+      join(skillPath, "SKILL.md"),
+      "---\nversion: 1.0.0\n---\n# Market\n",
+    );
     await writeFile(
       join(trusttoolsDirectory, "skill-origins.json"),
       JSON.stringify({
@@ -130,7 +152,10 @@ test("marks an update only when persisted market evidence is truly newer", async
       }),
     );
 
-    const snapshot = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      trusttoolsDirectory,
+    });
     const installation = snapshot.skills[0]?.installations[0];
     assert.equal(installation?.source?.kind, "market");
     assert.equal(installation?.updateStatus, "available");
@@ -192,10 +217,16 @@ test("refreshes matching market evidence without inventing missing fields", asyn
     const persisted = JSON.parse(await readFile(originsPath, "utf8")) as {
       installations: Record<
         string,
-        { latestRemoteVersion: string | null; latestRemoteUpdatedAt: string | null }
+        {
+          latestRemoteVersion: string | null;
+          latestRemoteUpdatedAt: string | null;
+        }
       >;
     };
-    assert.equal(persisted.installations["/tmp/example"].latestRemoteVersion, null);
+    assert.equal(
+      persisted.installations["/tmp/example"].latestRemoteVersion,
+      null,
+    );
     assert.equal(
       persisted.installations["/tmp/example"].latestRemoteUpdatedAt,
       "2026-02-01T00:00:00.000Z",
@@ -207,12 +238,23 @@ test("refreshes matching market evidence without inventing missing fields", asyn
 
 test("installs a validated market skill from the controlled temporary directory", async () => {
   const name = `contract-${randomUUID()}`;
-  const sourcePath = join(homedir(), ".trusttools", "tmp", `market-${randomUUID()}`, name);
+  const sourcePath = join(
+    homedir(),
+    ".trusttools",
+    "tmp",
+    `market-${randomUUID()}`,
+    name,
+  );
   const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES.Codex, name);
-  const trusttoolsDirectory = await mkdtemp(join(tmpdir(), "trusttools-origin-"));
+  const trusttoolsDirectory = await mkdtemp(
+    join(tmpdir(), "trusttools-origin-"),
+  );
   try {
     await mkdir(sourcePath, { recursive: true });
-    await writeFile(join(sourcePath, "SKILL.md"), "---\nversion: 2.3.4\n---\n# Contract");
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      "---\nversion: 2.3.4\n---\n# Contract",
+    );
 
     await installMarketSkill(
       {
@@ -237,7 +279,10 @@ test("installs a validated market skill from the controlled temporary directory"
     const origins = JSON.parse(
       await readFile(join(trusttoolsDirectory, "skill-origins.json"), "utf8"),
     ) as {
-      installations: Record<string, { localVersion: string; source: { slug: string } }>;
+      installations: Record<
+        string,
+        { localVersion: string; source: { slug: string } }
+      >;
     };
     assert.equal(origins.installations[targetPath].localVersion, "2.3.4");
     assert.equal(origins.installations[targetPath].source.slug, name);
@@ -262,7 +307,12 @@ test("rejects a market source outside the controlled temporary directory", async
 });
 
 test("rejects symbolic links anywhere in a market skill source", async () => {
-  const marketRoot = join(homedir(), ".trusttools", "tmp", `market-${randomUUID()}`);
+  const marketRoot = join(
+    homedir(),
+    ".trusttools",
+    "tmp",
+    `market-${randomUUID()}`,
+  );
   const sourcePath = join(marketRoot, `symlink-${randomUUID()}`);
   const linkedFile = join(marketRoot, "linked.md");
   try {
@@ -286,18 +336,21 @@ test("rejects an empty batch trash operation", async () => {
 
 test("deduplicates batch paths and keeps successful trash results when another item fails", async () => {
   const calls: string[] = [];
-  const result = await trashLocalSkills(["/skill/ok", "/skill/fail", "/skill/ok"], async (path) => {
-    calls.push(path);
-    if (path === "/skill/fail") throw new Error("模拟失败");
-    return {
-      id: randomUUID(),
-      skillName: "ok",
-      agent: "Codex",
-      originalPath: path,
-      trashedAt: "2026-07-28T00:00:00.000Z",
-      expiresAt: "2026-07-28T00:05:00.000Z",
-    };
-  });
+  const result = await trashLocalSkills(
+    ["/skill/ok", "/skill/fail", "/skill/ok"],
+    async (path) => {
+      calls.push(path);
+      if (path === "/skill/fail") throw new Error("模拟失败");
+      return {
+        id: randomUUID(),
+        skillName: "ok",
+        agent: "Codex",
+        originalPath: path,
+        trashedAt: "2026-07-28T00:00:00.000Z",
+        expiresAt: "2026-07-28T00:05:00.000Z",
+      };
+    },
+  );
 
   assert.deepEqual(calls, ["/skill/ok", "/skill/fail"]);
   assert.equal(result.succeeded.length, 1);
@@ -306,14 +359,17 @@ test("deduplicates batch paths and keeps successful trash results when another i
 });
 
 test("returns every successful batch trash result", async () => {
-  const result = await trashLocalSkills(["/skill/one", "/skill/two"], async (path) => ({
-    id: randomUUID(),
-    skillName: path.split("/").at(-1) ?? "skill",
-    agent: "Codex",
-    originalPath: path,
-    trashedAt: "2026-07-28T00:00:00.000Z",
-    expiresAt: "2026-07-28T00:05:00.000Z",
-  }));
+  const result = await trashLocalSkills(
+    ["/skill/one", "/skill/two"],
+    async (path) => ({
+      id: randomUUID(),
+      skillName: path.split("/").at(-1) ?? "skill",
+      agent: "Codex",
+      originalPath: path,
+      trashedAt: "2026-07-28T00:00:00.000Z",
+      expiresAt: "2026-07-28T00:05:00.000Z",
+    }),
+  );
 
   assert.deepEqual(
     result.succeeded.map((entry) => entry.originalPath),

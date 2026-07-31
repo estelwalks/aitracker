@@ -12,16 +12,18 @@ import {
   Store,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-const nav = [
-  { to: "/", label: "首页", shortLabel: "首页", icon: Home },
-  { to: "/tokens", label: "Token 分析", shortLabel: "Token", icon: BarChart3 },
-  { to: "/skills", label: "Skill 管理", shortLabel: "Skill", icon: Blocks },
-  { to: "/market", label: "Skill 市场", shortLabel: "市场", icon: Store },
-  { to: "/security", label: "安全检测", shortLabel: "安全", icon: ShieldCheck },
-  { to: "/memory", label: "记忆", shortLabel: "记忆", icon: Brain },
-  { to: "/settings", label: "设置", shortLabel: "设置", icon: Settings },
+import { useI18n } from "../lib/i18n/context";
+
+const navItems = [
+  { to: "/", i18nKey: "nav.dashboard", icon: Home },
+  { to: "/tokens", i18nKey: "nav.tokens", icon: BarChart3 },
+  { to: "/skills", i18nKey: "nav.skills", icon: Blocks },
+  { to: "/market", i18nKey: "nav.market", icon: Store },
+  { to: "/security", i18nKey: "nav.security", icon: ShieldCheck },
+  { to: "/memory", i18nKey: "nav.memory", icon: Brain },
+  { to: "/settings", i18nKey: "nav.settings", icon: Settings },
 ] as const;
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -32,7 +34,9 @@ function Brand({ compact = false }: { compact?: boolean }) {
       </div>
       {!compact && (
         <div className="min-w-0 leading-tight">
-          <div className="truncate text-sm font-semibold tracking-tight">AITracker</div>
+          <div className="truncate text-sm font-semibold tracking-tight">
+            AITracker
+          </div>
           <div className="tt-num mt-0.5 text-[9px] tracking-[0.04em] text-muted-foreground">
             V3.0.1
           </div>
@@ -43,10 +47,13 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [desktop, setDesktop] = useState(false);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const sidebarWidth = collapsed ? 64 : 240;
 
   useEffect(() => {
@@ -64,30 +71,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileOpen(false);
   }, [pathname]);
 
-  const navItems = nav.map((item) => {
-    const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-    const Icon = item.icon;
-    return (
-      <Link
-        key={item.to}
-        to={item.to}
-        title={collapsed ? item.label : undefined}
-        aria-current={active ? "page" : undefined}
-        className={`group relative flex h-10 items-center gap-3 rounded-sm px-3 text-[13px] transition-colors ${
-          active
-            ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-        }`}
-      >
-        {active && <span className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r bg-primary" />}
-        <Icon
-          className={`size-4 shrink-0 transition-colors ${active ? "text-primary" : "group-hover:text-foreground"}`}
-          strokeWidth={1.75}
-        />
-        {!collapsed && <span className="truncate">{item.label}</span>}
-      </Link>
-    );
-  });
+  const renderedNavItems = useMemo(
+    () =>
+      navItems.map((item) => {
+        const active =
+          item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+        const Icon = item.icon;
+        const label = t(item.i18nKey);
+        return (
+          <Link
+            key={item.to}
+            to={item.to}
+            title={collapsed ? label : undefined}
+            aria-current={active ? "page" : undefined}
+            className={`group relative flex h-10 items-center gap-3 rounded-sm px-3 text-[13px] transition-colors ${
+              active
+                ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            }`}
+          >
+            {active && (
+              <span className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r bg-primary" />
+            )}
+            <Icon
+              className={`size-4 shrink-0 transition-colors ${active ? "text-primary" : "group-hover:text-foreground"}`}
+              strokeWidth={1.75}
+            />
+            {!collapsed && <span className="truncate">{label}</span>}
+          </Link>
+        );
+      }),
+    [t, collapsed, pathname],
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -116,7 +131,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-2">{navItems}</nav>
+        <nav className="flex-1 space-y-0.5 px-2">{renderedNavItems}</nav>
 
         <div className="border-t border-sidebar-border p-2">
           <button

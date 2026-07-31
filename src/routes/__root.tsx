@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { I18nProvider } from "../lib/i18n/context";
 import { ThemeProvider } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { refreshLocalUsageSnapshot } from "../lib/local-usage";
@@ -135,19 +136,21 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <PlatformPersistenceSeed />
-        <LocalUsageAutoRefresh />
-        <AppShell>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-        </AppShell>
-        <Toaster
-          position="top-right"
-          theme="dark"
-          toastOptions={{ duration: 3000 }}
-        />
-      </ThemeProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          <PlatformPersistenceSeed />
+          <LocalUsageAutoRefresh />
+          <AppShell>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </AppShell>
+          <Toaster
+            position="top-right"
+            theme="dark"
+            toastOptions={{ duration: 3000 }}
+          />
+        </ThemeProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }
