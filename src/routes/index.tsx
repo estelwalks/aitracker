@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowRight, Database } from "lucide-react";
+import { ArrowRight, Database, Image, Shield } from "lucide-react";
 import RGL, {
   WidthProvider,
   type Layout,
@@ -73,8 +73,8 @@ import {
   resolveEventProvider,
   type ProviderAwareUsageEvent,
   type ProviderBudgetIndicators,
-  type ProviderBudgetPeriodIndicator,
 } from "../lib/local-usage/provider-utils";
+import { useTrustToolsSettings } from "../lib/settings/store";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -206,7 +206,7 @@ function daysAgo(days: number): string {
 function Dashboard() {
   const { snapshot, error, skills, pricing } = Route.useLoaderData();
   applyPricingSnapshot(pricing);
-  const [period, setPeriod] = useState<UsagePeriod>("7d");
+  const [period, setPeriod] = useState<UsagePeriod>("today");
   const [from, setFrom] = useState(daysAgo(14));
   const [to, setTo] = useState(daysAgo(0));
   const [chartMode, setChartMode] = useState<ChartMode>("area");
@@ -239,6 +239,11 @@ function Dashboard() {
     media.addEventListener("change", updateViewport);
     return () => media.removeEventListener("change", updateViewport);
   }, []);
+
+  const remainingSecurityScans = useMemo(
+    () => readRemainingSecurityScans(window.localStorage),
+    [],
+  );
 
   const updateDashboardSections = (section: DashboardSection) => {
     setDashboardSections((current) => {
@@ -304,6 +309,27 @@ function Dashboard() {
       ? (cachedTokens / primaryTokenTotals.totalTokens) * 100
       : 0;
   const skillHealth = buildSkillHealth(skills);
+  const { settings } = useTrustToolsSettings();
+  const budgetIndicators = useMemo(
+    () =>
+      settings.providerBudgets.length > 0
+        ? buildProviderBudgetIndicators(
+            snapshot.details as ProviderAwareUsageEvent[],
+            settings.providerBudgets,
+            settings.alertThreshold,
+          )
+        : [],
+    [snapshot.details, settings.providerBudgets, settings.alertThreshold],
+  );
+  const exceededProviders = useMemo(
+    () =>
+      budgetIndicators.filter((indicator) =>
+        indicator.periods.some(
+          (p) => p.state === "exceeded" || p.state === "warning",
+        ),
+      ),
+    [budgetIndicators],
+  );
   const topSources: SourceSeries[] = snapshot.bySource
     .slice(0, 5)
     .map((source, index) => ({
@@ -352,13 +378,21 @@ function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to="/tokens"
+            className="tt-button inline-flex items-center gap-1.5"
+            title="生成海报"
+          >
+            <Image className="size-4" />
+            <span>生成海报</span>
+          </Link>
           <details className="dashboard-settings">
             <summary className="tt-button">看板设置</summary>
             <div className="dashboard-settings-popover">
               {(Object.keys(dashboardDefaults) as DashboardSection[]).map(
                 (section) => {
                   const labels: Record<DashboardSection, string> = {
-                    kpis: "4 个 KPI",
+                    kpis: "5 个 KPI",
                     trend: "趋势",
                     provider: "AI 客户端",
                     models: "最近模型",
@@ -399,6 +433,33 @@ function Dashboard() {
           </StatusBadge>
         </div>
       </div>
+
+      {exceededProviders.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {exceededProviders.map((indicator) =>
+            indicator.periods
+              .filter((p) => p.state === "exceeded" || p.state === "warning")
+              .map((p) => (
+                <div
+                  key={`${indicator.provider}-${p.key}`}
+                  className={`rounded-sm border px-4 py-2.5 text-sm ${
+                    p.state === "exceeded"
+                      ? "border-danger/50 bg-danger/10 text-danger"
+                      : "border-warn/50 bg-warn/10 text-warn"
+                  }`}
+                >
+                  <strong>{indicator.provider}</strong> {p.label} {p.message}
+                  {p.budgetCny > 0 && (
+                    <span className="ml-2 text-xs opacity-75">
+                      (预算 {p.budgetCny.toFixed(0)} 元，已用{" "}
+                      {p.spentCny.toFixed(0)} 元)
+                    </span>
+                  )}
+                </div>
+              )),
+          )}
+        </div>
+      )}
 
       {period === "custom" && (
         <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
@@ -469,6 +530,13 @@ function Dashboard() {
                         ))}
                       </span>
                     }
+                  />
+                  <KpiCard
+                    to="/security"
+                    label="安全扫描"
+                    value={`${remainingSecurityScans} / ${DAILY_SCAN_LIMIT}`}
+                    hint="今日剩余安全扫描次数"
+                    icon={<Shield className="size-4" />}
                   />
                 </div>
               </div>
@@ -871,19 +939,22 @@ function KpiCard({
   hint,
   accent = false,
   tone,
+  icon,
 }: {
-  to: "/tokens" | "/skills";
+  to: "/tokens" | "/skills" | "/security";
   label: string;
   value: string;
   hint: ReactNode;
   accent?: boolean;
   tone?: "ok";
+  icon?: ReactNode;
 }) {
   return (
     <Link
       to={to}
       className={`dashboard-kpi ${accent ? "dashboard-kpi-accent" : ""}`}
     >
+      {icon && <span className="dashboard-kpi-icon">{icon}</span>}
       <span className="tt-label">{label}</span>
       <strong className={`tt-num ${tone === "ok" ? "text-ok" : ""}`}>
         {value}

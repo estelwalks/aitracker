@@ -12,13 +12,11 @@ import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
 
 const SYNC_INTERVAL_MS = 60_000;
 const SYNC_TIMEOUT_MS = 120_000;
-const INIT_TIMEOUT_MS = 180_000;
 const MAX_COMMAND_OUTPUT_BYTES = 64 * 1024;
 const MAX_LOG_BYTES = 512 * 1024;
 
 let lastSyncAt = 0;
 let syncPending: Promise<void> | undefined;
-let initializationPending: Promise<void> | undefined;
 
 interface QueueRow {
   hour_start?: unknown;
@@ -196,10 +194,13 @@ async function runSync(home: string, force: boolean): Promise<void> {
     );
     lastSyncAt = Date.now();
 
-    // Hook installation can involve copying the local runtime and must not
-    // block the first visible dashboard. It starts immediately after the
-    // historical scan and completes in the background in packaged Electron.
-    if (process.versions.electron) {
+    // initializeTokenTrackerUsage is gated behind TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE.
+    // The auto-init is intentionally disabled; this guard remains as a
+    // safety net in case the caller has explicitly opted in.
+    if (
+      process.versions.electron &&
+      process.env.TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE
+    ) {
       void initializeTokenTrackerUsage({ homeDirectory: home });
     }
   })().finally(() => {
@@ -209,31 +210,21 @@ async function runSync(home: string, force: boolean): Promise<void> {
   return syncPending;
 }
 
+/**
+ * initializeTokenTrackerUsage is intentionally disabled.
+ * The TokenTracker CLI must NOT be auto-executed. Per the architecture ADRs,
+ * TokenTracker is a behavior reference only — not bundled or executed.
+ *
+ * This no-op preserves the exported symbol for backwards compatibility
+ * with any existing callers (e.g. runSync), which are themselves gated
+ * behind TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE.
+ */
 export async function initializeTokenTrackerUsage(
-  options: {
+  _options: {
     homeDirectory?: string;
   } = {},
 ): Promise<void> {
-  const home = usageHome(options.homeDirectory);
-  const initialized = await stat(configPath(home))
-    .then((value) => value.isFile())
-    .catch(() => false);
-  if (initialized) return;
-  if (initializationPending) return initializationPending;
-
-  initializationPending = runTrackerCommand(
-    home,
-    ["init", "--yes", "--no-auth", "--no-open"],
-    INIT_TIMEOUT_MS,
-    // The awaited fast scan above already populated historical usage. Avoid
-    // launching a duplicate scan from TokenTracker's init command.
-    { TOKENTRACKER_SKIP_FIRST_SYNC: "1" },
-  )
-    .then(() => undefined)
-    .finally(() => {
-      initializationPending = undefined;
-    });
-  return initializationPending;
+  // Intentionally empty: auto-init is prohibited.
 }
 
 function count(value: unknown): number {
@@ -265,6 +256,12 @@ export async function collectTokenTrackerUsage(
   events: LocalUsageEvent[];
   summaries: LocalUsageSourceSummary[];
 }> {
+  // TokenTracker bridge is opt-in only. Without the explicit env var the
+  // bridge returns empty results — the native adapters are the canonical path.
+  if (!process.env.TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE) {
+    return { events: [], summaries: [] };
+  }
+
   const home = usageHome(options.homeDirectory);
   const outputPath = queuePath(home);
   const hasQueue = await stat(outputPath)

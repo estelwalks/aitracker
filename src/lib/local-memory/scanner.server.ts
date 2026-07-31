@@ -16,13 +16,20 @@ const MEMORY_FILE_NAMES = new Set([
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_FILES = 500;
 const MAX_DEPTH = 4;
-const SKIPPED_DIRECTORIES = new Set(["node_modules", ".git", "dist", "build", ".next"]);
+const SKIPPED_DIRECTORIES = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+]);
 
 interface ScanMemoryOptions {
   homeDirectory?: string;
   currentDirectory?: string;
   customPaths?: string[];
   includeDefaults?: boolean;
+  memoryExcludes?: string[];
 }
 
 function expandPath(path: string, homeDirectory: string): string {
@@ -50,9 +57,12 @@ export function markdownSummary(content: string): string {
 
 function sourceFor(path: string): string {
   const normalizedPath = path.replaceAll("\\", "/");
-  if (normalizedPath.includes("/.claude/") || basename(path) === "CLAUDE.md") return "Claude Code";
-  if (normalizedPath.includes("/.codex/") || basename(path) === "AGENTS.md") return "Codex";
-  if (normalizedPath.includes("/.gemini/") || basename(path) === "GEMINI.md") return "Gemini CLI";
+  if (normalizedPath.includes("/.claude/") || basename(path) === "CLAUDE.md")
+    return "Claude Code";
+  if (normalizedPath.includes("/.codex/") || basename(path) === "AGENTS.md")
+    return "Codex";
+  if (normalizedPath.includes("/.gemini/") || basename(path) === "GEMINI.md")
+    return "Gemini CLI";
   return "自定义";
 }
 
@@ -62,6 +72,7 @@ async function discoverFromPath(
   warnings: string[],
   depth = 0,
   acceptAllMarkdown = false,
+  excludes: Set<string> = SKIPPED_DIRECTORIES,
 ): Promise<void> {
   if (result.size >= MAX_FILES || depth > MAX_DEPTH) return;
   try {
@@ -79,7 +90,7 @@ async function discoverFromPath(
     for await (const entry of directory) {
       if (result.size >= MAX_FILES) break;
       if (entry.name.startsWith(".") && depth > 0) continue;
-      if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
+      if (excludes.has(entry.name)) continue;
       const child = join(path, entry.name);
       if (
         entry.isFile() &&
@@ -88,15 +99,26 @@ async function discoverFromPath(
       ) {
         result.add(child);
       } else if (entry.isDirectory()) {
-        await discoverFromPath(child, result, warnings, depth + 1, acceptAllMarkdown);
+        await discoverFromPath(
+          child,
+          result,
+          warnings,
+          depth + 1,
+          acceptAllMarkdown,
+          excludes,
+        );
       }
     }
   } catch (error) {
-    warnings.push(`${path}: ${error instanceof Error ? error.message : "无法读取"}`);
+    warnings.push(
+      `${path}: ${error instanceof Error ? error.message : "无法读取"}`,
+    );
   }
 }
 
-export async function scanLocalMemory(options: ScanMemoryOptions = {}): Promise<MemorySnapshot> {
+export async function scanLocalMemory(
+  options: ScanMemoryOptions = {},
+): Promise<MemorySnapshot> {
   const homeDirectory = options.homeDirectory ?? homedir();
   const currentDirectory = options.currentDirectory ?? process.cwd();
   const defaults = [
@@ -108,16 +130,23 @@ export async function scanLocalMemory(options: ScanMemoryOptions = {}): Promise<
     currentDirectory,
   ];
   const defaultPaths = options.includeDefaults === false ? [] : defaults;
-  const customPaths = (options.customPaths ?? []).map((path) => expandPath(path, homeDirectory));
+  const customPaths = (options.customPaths ?? []).map((path) =>
+    expandPath(path, homeDirectory),
+  );
   const requested = [...defaultPaths, ...customPaths];
   const files = new Set<string>();
   const warnings: string[] = [];
 
+  const mergedExcludes = new Set(SKIPPED_DIRECTORIES);
+  for (const dir of options.memoryExcludes ?? []) {
+    if (dir.trim()) mergedExcludes.add(dir.trim());
+  }
+
   for (const path of [...new Set(defaultPaths)]) {
-    await discoverFromPath(path, files, warnings, 0, false);
+    await discoverFromPath(path, files, warnings, 0, false, mergedExcludes);
   }
   for (const path of [...new Set(customPaths)]) {
-    await discoverFromPath(path, files, warnings, 0, true);
+    await discoverFromPath(path, files, warnings, 0, true, mergedExcludes);
   }
 
   const entries: MemoryEntry[] = [];
@@ -140,7 +169,9 @@ export async function scanLocalMemory(options: ScanMemoryOptions = {}): Promise<
         modifiedAt: details.mtime.toISOString(),
       });
     } catch (error) {
-      warnings.push(`${path}: ${error instanceof Error ? error.message : "无法读取"}`);
+      warnings.push(
+        `${path}: ${error instanceof Error ? error.message : "无法读取"}`,
+      );
     }
   }
 

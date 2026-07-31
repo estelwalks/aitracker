@@ -11,7 +11,15 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
 import type { LocalUsageEvent } from "../local-usage/types.ts";
@@ -29,6 +37,7 @@ import {
 } from "./types.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
+const RECENT_WINDOW_DAYS = 7;
 const RESTORE_WINDOW_MS = 5 * 60 * 1_000;
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
 const TRASH_DIR = join(TRUSTTOOLS_DIR, "trash");
@@ -75,16 +84,26 @@ export const SKILL_ROOT_SUFFIXES: Record<SkillAgent, string> = {
   OpenCode: ".config/opencode/skills",
 };
 
+export interface HealthThresholds {
+  lowFrequencyCount?: number;
+  dozeDays?: number;
+  deadDays?: number;
+}
+
 interface ScanOptions {
   homeDirectory?: string;
   now?: Date;
   trusttoolsDirectory?: string;
   usageEvents?: LocalUsageEvent[];
+  healthThresholds?: HealthThresholds;
 }
 
 function rootsFor(homeDirectory: string): Record<SkillAgent, string> {
   return Object.fromEntries(
-    SKILL_AGENTS.map((agent) => [agent, join(homeDirectory, SKILL_ROOT_SUFFIXES[agent])]),
+    SKILL_AGENTS.map((agent) => [
+      agent,
+      join(homeDirectory, SKILL_ROOT_SUFFIXES[agent]),
+    ]),
   ) as Record<SkillAgent, string>;
 }
 
@@ -112,12 +131,15 @@ function parseFrontmatter(content: string): Record<string, string> {
     if (separator <= 0) continue;
     const key = line.slice(0, separator).trim().toLowerCase();
     const value = cleanScalar(line.slice(separator + 1));
-    if (value && !value.startsWith("[") && !value.startsWith("{")) result[key] = value;
+    if (value && !value.startsWith("[") && !value.startsWith("{"))
+      result[key] = value;
   }
   return result;
 }
 
-async function readSkillManifest(path: string): Promise<Record<string, string>> {
+async function readSkillManifest(
+  path: string,
+): Promise<Record<string, string>> {
   try {
     const details = await lstat(path);
     const manifestPath = details.isFile() ? path : join(path, "SKILL.md");
@@ -127,7 +149,9 @@ async function readSkillManifest(path: string): Promise<Record<string, string>> 
   }
 }
 
-function frontmatterSource(frontmatter: Record<string, string>): SkillSource | null {
+function frontmatterSource(
+  frontmatter: Record<string, string>,
+): SkillSource | null {
   const value =
     frontmatter.source ??
     frontmatter.repository ??
@@ -146,17 +170,25 @@ function frontmatterSource(frontmatter: Record<string, string>): SkillSource | n
   };
 }
 
-async function readOrigins(filePath = ORIGINS_FILE): Promise<MarketOriginsFile> {
+async function readOrigins(
+  filePath = ORIGINS_FILE,
+): Promise<MarketOriginsFile> {
   try {
-    const parsed = JSON.parse(await readFile(filePath, "utf8")) as MarketOriginsFile;
-    if (parsed.version !== 1 || typeof parsed.installations !== "object") throw new Error();
+    const parsed = JSON.parse(
+      await readFile(filePath, "utf8"),
+    ) as MarketOriginsFile;
+    if (parsed.version !== 1 || typeof parsed.installations !== "object")
+      throw new Error();
     return parsed;
   } catch {
     return { version: 1, installations: {} };
   }
 }
 
-async function writeOrigins(value: MarketOriginsFile, filePath = ORIGINS_FILE): Promise<void> {
+async function writeOrigins(
+  value: MarketOriginsFile,
+  filePath = ORIGINS_FILE,
+): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
   await writeFile(filePath, JSON.stringify(value, null, 2), {
     encoding: "utf8",
@@ -181,24 +213,37 @@ function compareVersions(local: string, remote: string): number | null {
   return 0;
 }
 
-function updateEvidence(input: { version: string | null; origin: MarketOrigin | undefined }): {
+function updateEvidence(input: {
+  version: string | null;
+  origin: MarketOrigin | undefined;
+}): {
   status: SkillUpdateStatus;
   reason: string;
 } {
-  if (!input.origin) return { status: "unknown", reason: "没有可比较的远端来源证据" };
+  if (!input.origin)
+    return { status: "unknown", reason: "没有可比较的远端来源证据" };
 
   const localVersion = input.version ?? input.origin.localVersion;
   const remoteVersion = input.origin.latestRemoteVersion;
   if (localVersion && remoteVersion) {
     const comparison = compareVersions(localVersion, remoteVersion);
     if (comparison === 1) {
-      return { status: "available", reason: `远端版本 ${remoteVersion} 高于本地 ${localVersion}` };
+      return {
+        status: "available",
+        reason: `远端版本 ${remoteVersion} 高于本地 ${localVersion}`,
+      };
     }
     if (comparison === 0) {
-      return { status: "current", reason: `本地版本与远端 ${remoteVersion} 一致` };
+      return {
+        status: "current",
+        reason: `本地版本与远端 ${remoteVersion} 一致`,
+      };
     }
     if (comparison === -1) {
-      return { status: "current", reason: `远端版本 ${remoteVersion} 未高于本地 ${localVersion}` };
+      return {
+        status: "current",
+        reason: `远端版本 ${remoteVersion} 未高于本地 ${localVersion}`,
+      };
     }
   }
 
@@ -206,35 +251,116 @@ function updateEvidence(input: { version: string | null; origin: MarketOrigin | 
   const latestTime = Date.parse(input.origin.latestRemoteUpdatedAt ?? "");
   if (Number.isFinite(installedTime) && Number.isFinite(latestTime)) {
     if (latestTime > installedTime) {
-      return { status: "available", reason: "市场记录在本次安装后有真实更新时间" };
+      return {
+        status: "available",
+        reason: "市场记录在本次安装后有真实更新时间",
+      };
     }
     return { status: "current", reason: "市场更新时间未晚于本次安装证据" };
   }
   return { status: "unknown", reason: "远端未提供可比较的版本或更新时间" };
 }
 
+interface HealthThresholdsResolved {
+  lowFrequencyCount: number;
+  dozeDays: number;
+  deadDays: number;
+}
+
+const DEFAULT_HEALTH_THRESHOLDS: HealthThresholdsResolved = {
+  lowFrequencyCount: 5,
+  dozeDays: 30,
+  deadDays: 90,
+};
+
+function resolvedHealthThresholds(
+  raw?: HealthThresholds,
+): HealthThresholdsResolved {
+  if (!raw) return DEFAULT_HEALTH_THRESHOLDS;
+  return {
+    lowFrequencyCount:
+      raw.lowFrequencyCount != null &&
+      Number.isFinite(raw.lowFrequencyCount) &&
+      raw.lowFrequencyCount >= 0
+        ? raw.lowFrequencyCount
+        : DEFAULT_HEALTH_THRESHOLDS.lowFrequencyCount,
+    dozeDays:
+      raw.dozeDays != null && Number.isFinite(raw.dozeDays) && raw.dozeDays > 0
+        ? raw.dozeDays
+        : DEFAULT_HEALTH_THRESHOLDS.dozeDays,
+    deadDays:
+      raw.deadDays != null &&
+      Number.isFinite(raw.deadDays) &&
+      raw.deadDays > (raw.dozeDays ?? DEFAULT_HEALTH_THRESHOLDS.dozeDays)
+        ? raw.deadDays
+        : DEFAULT_HEALTH_THRESHOLDS.deadDays,
+  };
+}
+
 function healthFromLastUse(
   lastUsedAt: number,
   now: number,
+  recentCalls: number,
+  thresholds: HealthThresholdsResolved,
 ): { health: SkillHealth; reason: string } {
   const ageDays = Math.max(0, Math.floor((now - lastUsedAt) / DAY_MS));
-  if (ageDays <= 7) return { health: "active", reason: `最近调用距今 ${ageDays} 天` };
-  if (ageDays <= 30) return { health: "low", reason: `${ageDays} 天未调用` };
-  if (ageDays <= 90) return { health: "doze", reason: `${ageDays} 天未调用` };
+
+  // Active: last used within RECENT_WINDOW_DAYS AND enough calls in that window
+  if (
+    ageDays <= RECENT_WINDOW_DAYS &&
+    recentCalls >= thresholds.lowFrequencyCount
+  ) {
+    return {
+      health: "active",
+      reason: `最近 7 天调用 ${recentCalls} 次（活跃）`,
+    };
+  }
+
+  // Low: used within dozeDays but doesn't meet active criteria
+  if (ageDays <= thresholds.dozeDays) {
+    if (ageDays <= RECENT_WINDOW_DAYS) {
+      return {
+        health: "low",
+        reason: `7 天内仅 ${recentCalls} 次调用（需 ≥${thresholds.lowFrequencyCount} 次）`,
+      };
+    }
+    return { health: "low", reason: `${ageDays} 天未调用` };
+  }
+
+  // Doze: last used between dozeDays and deadDays ago
+  if (ageDays <= thresholds.deadDays) {
+    return { health: "doze", reason: `${ageDays} 天未调用` };
+  }
+
+  // Dead: last used more than deadDays ago
   return { health: "dead", reason: `${ageDays} 天未调用` };
+}
+
+interface SkillUsageInfo {
+  calls: number;
+  recentCalls: number;
+  lastUsedAt: number;
 }
 
 function skillUsageEvidence(
   events: LocalUsageEvent[],
-): Map<string, { calls: number; lastUsedAt: number }> {
-  const evidence = new Map<string, { calls: number; lastUsedAt: number }>();
+  now: number,
+): Map<string, SkillUsageInfo> {
+  const evidence = new Map<string, SkillUsageInfo>();
+  const recentThreshold = now - RECENT_WINDOW_DAYS * DAY_MS;
   for (const event of events) {
     const usedAt = Date.parse(event.timestamp);
     if (!Number.isFinite(usedAt)) continue;
+    const isRecent = usedAt >= recentThreshold;
     for (const skill of event.context?.skills ?? []) {
       const key = skill.name.toLowerCase();
-      const current = evidence.get(key) ?? { calls: 0, lastUsedAt: 0 };
+      const current = evidence.get(key) ?? {
+        calls: 0,
+        recentCalls: 0,
+        lastUsedAt: 0,
+      };
       current.calls += skill.calls;
+      if (isRecent) current.recentCalls += skill.calls;
       current.lastUsedAt = Math.max(current.lastUsedAt, usedAt);
       evidence.set(key, current);
     }
@@ -259,7 +385,11 @@ function safeSkillName(name: string): string {
 
 function isPathInside(root: string, candidate: string): boolean {
   const pathFromRoot = relative(resolve(root), resolve(candidate));
-  return pathFromRoot !== "" && pathFromRoot !== ".." && !pathFromRoot.startsWith(`..${sep}`);
+  return (
+    pathFromRoot !== "" &&
+    pathFromRoot !== ".." &&
+    !pathFromRoot.startsWith(`..${sep}`)
+  );
 }
 
 async function assertManagedSkillPath(
@@ -269,7 +399,11 @@ async function assertManagedSkillPath(
   const resolvedPath = resolve(path);
   const matchingAgent = SKILL_AGENTS.find((agent) => {
     const pathFromRoot = relative(resolve(roots[agent]), resolvedPath);
-    return pathFromRoot !== "" && !pathFromRoot.startsWith("..") && !pathFromRoot.includes(sep);
+    return (
+      pathFromRoot !== "" &&
+      !pathFromRoot.startsWith("..") &&
+      !pathFromRoot.includes(sep)
+    );
   });
   if (!matchingAgent) throw new Error("路径不属于受管 Skill 根目录");
 
@@ -296,7 +430,8 @@ async function assertNoSymbolicLinks(root: string): Promise<void> {
   for await (const entry of directory) {
     const entryPath = join(root, entry.name);
     const entryStat = await lstat(entryPath);
-    if (entryStat.isSymbolicLink()) throw new Error("市场 Skill 源不允许包含符号链接");
+    if (entryStat.isSymbolicLink())
+      throw new Error("市场 Skill 源不允许包含符号链接");
     if (entryStat.isDirectory()) await assertNoSymbolicLinks(entryPath);
   }
 }
@@ -356,7 +491,9 @@ async function scanInstallations(
           if (!(await isSkillEntry(path))) continue;
           const details = await stat(path);
           const frontmatter = await readSkillManifest(path);
-          const name = entry.isFile() ? entry.name.replace(/\.md$/i, "") : entry.name;
+          const name = entry.isFile()
+            ? entry.name.replace(/\.md$/i, "")
+            : entry.name;
           const origin = origins.installations[resolve(path)];
           const version = frontmatter.version ?? origin?.localVersion ?? null;
           const evidence = updateEvidence({ version, origin });
@@ -364,7 +501,9 @@ async function scanInstallations(
           current.push({
             agent,
             path,
-            installedAt: new Date(details.birthtimeMs || details.ctimeMs).toISOString(),
+            installedAt: new Date(
+              details.birthtimeMs || details.ctimeMs,
+            ).toISOString(),
             modifiedAt: details.mtime.toISOString(),
             version,
             source: origin?.source ?? frontmatterSource(frontmatter),
@@ -385,19 +524,30 @@ async function readBlacklist(filePath = BLACKLIST_FILE): Promise<string[]> {
   try {
     const value = JSON.parse(await readFile(filePath, "utf8")) as unknown;
     return Array.isArray(value)
-      ? [...new Set(value.filter((item): item is string => typeof item === "string"))].sort()
+      ? [
+          ...new Set(
+            value.filter((item): item is string => typeof item === "string"),
+          ),
+        ].sort()
       : [];
   } catch {
     return [];
   }
 }
 
-async function writeBlacklist(names: string[], filePath = BLACKLIST_FILE): Promise<void> {
+async function writeBlacklist(
+  names: string[],
+  filePath = BLACKLIST_FILE,
+): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
-  await writeFile(filePath, JSON.stringify([...new Set(names)].sort(), null, 2), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  await writeFile(
+    filePath,
+    JSON.stringify([...new Set(names)].sort(), null, 2),
+    {
+      encoding: "utf8",
+      mode: 0o600,
+    },
+  );
 }
 
 function metadataPath(trashRoot: string, id: string): string {
@@ -408,7 +558,10 @@ function payloadPath(trashRoot: string, id: string): string {
   return join(trashRoot, id, "payload");
 }
 
-async function listTrash(trashRoot = TRASH_DIR, now = new Date()): Promise<TrashEntry[]> {
+async function listTrash(
+  trashRoot = TRASH_DIR,
+  now = new Date(),
+): Promise<TrashEntry[]> {
   const result: TrashEntry[] = [];
   try {
     const directory = await opendir(trashRoot);
@@ -442,7 +595,9 @@ async function listTrash(trashRoot = TRASH_DIR, now = new Date()): Promise<Trash
   return result.sort((a, b) => b.trashedAt.localeCompare(a.trashedAt));
 }
 
-export async function scanLocalSkills(options: ScanOptions = {}): Promise<SkillSnapshot> {
+export async function scanLocalSkills(
+  options: ScanOptions = {},
+): Promise<SkillSnapshot> {
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
   const roots = rootsFor(homeDirectory);
@@ -453,7 +608,11 @@ export async function scanLocalSkills(options: ScanOptions = {}): Promise<SkillS
     listTrash(join(trusttoolsDirectory, "trash"), now),
   ]);
   const installations = await scanInstallations(roots, origins);
-  const usageEvidence = skillUsageEvidence(options.usageEvents ?? []);
+  const usageEvidence = skillUsageEvidence(
+    options.usageEvents ?? [],
+    now.getTime(),
+  );
+  const healthThresholds = resolvedHealthThresholds(options.healthThresholds);
 
   const skills: LocalSkill[] = [...installations.entries()]
     .map(([name, entries]) => {
@@ -462,9 +621,15 @@ export async function scanLocalSkills(options: ScanOptions = {}): Promise<SkillS
         usage == null
           ? {
               health: "unknown" as const,
-              reason: "未发现结构化调用记录；无法判断活跃度，文件修改时间不作为调用证据",
+              reason:
+                "未发现结构化调用记录；无法判断活跃度，文件修改时间不作为调用证据",
             }
-          : healthFromLastUse(usage.lastUsedAt, now.getTime());
+          : healthFromLastUse(
+              usage.lastUsedAt,
+              now.getTime(),
+              usage.recentCalls,
+              healthThresholds,
+            );
       return {
         id: name,
         name,
@@ -473,7 +638,8 @@ export async function scanLocalSkills(options: ScanOptions = {}): Promise<SkillS
           usage == null
             ? status.reason
             : `${status.reason}；本地日志记录真实调用 ${usage.calls.toLocaleString()} 次`,
-        lastUsedAt: usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
+        lastUsedAt:
+          usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
         usageCount: usage?.calls ?? 0,
         installations: entries.sort((a, b) => a.agent.localeCompare(b.agent)),
       };
@@ -499,7 +665,8 @@ export async function scanLocalSkills(options: ScanOptions = {}): Promise<SkillS
   return {
     generatedAt: now.toISOString(),
     fingerprint,
-    healthBasis: "活跃度只依据本地日志中的结构化 Skill 调用；文件修改时间仅作安装信息展示。",
+    healthBasis:
+      "活跃度只依据本地日志中的结构化 Skill 调用；文件修改时间仅作安装信息展示。",
     roots,
     skills,
     trash,
@@ -511,11 +678,13 @@ async function copySkillToAgent(input: {
   sourcePath: string;
   targetAgent: SkillAgent;
 }): Promise<string> {
-  if (!SKILL_AGENTS.includes(input.targetAgent)) throw new Error("目标 Agent 不受支持");
+  if (!SKILL_AGENTS.includes(input.targetAgent))
+    throw new Error("目标 Agent 不受支持");
 
   const roots = rootsFor(homedir());
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
-  if ((await readBlacklist()).includes(name)) throw new Error("该 Skill 已被加入黑名单");
+  if ((await readBlacklist()).includes(name))
+    throw new Error("该 Skill 已被加入黑名单");
 
   const sourceStat = await lstat(input.sourcePath);
   if (sourceStat.isSymbolicLink()) throw new Error("不允许复制符号链接");
@@ -529,7 +698,8 @@ async function copySkillToAgent(input: {
     await lstat(targetPath);
     throw new Error("目标位置已存在同名 Skill");
   } catch (error) {
-    if (error instanceof Error && error.message === "目标位置已存在同名 Skill") throw error;
+    if (error instanceof Error && error.message === "目标位置已存在同名 Skill")
+      throw error;
   }
   await cp(input.sourcePath, targetPath, {
     recursive: sourceStat.isDirectory(),
@@ -580,7 +750,10 @@ export async function installMarketSkill(
     repoPath: input.origin.repoPath,
     slug: input.origin.slug,
   };
-  const originsFile = join(options.trusttoolsDirectory ?? TRUSTTOOLS_DIR, "skill-origins.json");
+  const originsFile = join(
+    options.trusttoolsDirectory ?? TRUSTTOOLS_DIR,
+    "skill-origins.json",
+  );
   const origins = await readOrigins(originsFile);
   origins.installations[resolve(targetPath)] = {
     source,
@@ -617,14 +790,16 @@ export async function refreshMarketSkillEvidence(
   const filePath = join(trusttoolsDirectory, "skill-origins.json");
   const origins = await readOrigins(filePath);
   const now = options.now ?? new Date();
-  const dueOrigins = Object.entries(origins.installations).filter(([, origin]) => {
-    const checkedAt = Date.parse(origin.checkedAt ?? "");
-    return (
-      options.force ||
-      !Number.isFinite(checkedAt) ||
-      now.getTime() - checkedAt >= MARKET_EVIDENCE_TTL_MS
-    );
-  });
+  const dueOrigins = Object.entries(origins.installations).filter(
+    ([, origin]) => {
+      const checkedAt = Date.parse(origin.checkedAt ?? "");
+      return (
+        options.force ||
+        !Number.isFinite(checkedAt) ||
+        now.getTime() - checkedAt >= MARKET_EVIDENCE_TTL_MS
+      );
+    },
+  );
   if (dueOrigins.length === 0) return false;
 
   let changed = false;
@@ -650,22 +825,28 @@ export async function refreshMarketSkillEvidence(
       });
       if (!response.ok) continue;
       const body = marketRecord(await response.json());
-      const records = Array.isArray(body?.data) ? body.data.map(marketRecord).filter(Boolean) : [];
+      const records = Array.isArray(body?.data)
+        ? body.data.map(marketRecord).filter(Boolean)
+        : [];
       for (const [path, origin] of entries) {
         const matching = records.find(
           (record) =>
             optionalRemoteString(record?.slug) === origin.source.slug &&
-            optionalRemoteString(record?.repo_owner) === origin.source.repoOwner &&
+            optionalRemoteString(record?.repo_owner) ===
+              origin.source.repoOwner &&
             optionalRemoteString(record?.repo_name) === origin.source.repoName,
         );
         if (!matching) continue;
         const latestVersion = optionalRemoteString(matching.version);
         const latestUpdatedAt = optionalRemoteString(matching.updated_at);
         const baselineMissing =
-          origin.installedRemoteVersion === null && origin.installedRemoteUpdatedAt === null;
+          origin.installedRemoteVersion === null &&
+          origin.installedRemoteUpdatedAt === null;
         origins.installations[path] = {
           ...origin,
-          installedRemoteVersion: baselineMissing ? latestVersion : origin.installedRemoteVersion,
+          installedRemoteVersion: baselineMissing
+            ? latestVersion
+            : origin.installedRemoteVersion,
           installedRemoteUpdatedAt: baselineMissing
             ? latestUpdatedAt
             : origin.installedRemoteUpdatedAt,
@@ -705,10 +886,14 @@ export async function trashLocalSkill(path: string): Promise<TrashEntry> {
   await mkdir(entryRoot, { recursive: true, mode: 0o700 });
   try {
     await rename(path, payload);
-    await writeFile(metadataPath(TRASH_DIR, id), JSON.stringify(metadata, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
-    });
+    await writeFile(
+      metadataPath(TRASH_DIR, id),
+      JSON.stringify(metadata, null, 2),
+      {
+        encoding: "utf8",
+        mode: 0o600,
+      },
+    );
     return metadata;
   } catch (error) {
     await rename(payload, path).catch(() => undefined);
@@ -742,30 +927,46 @@ export async function restoreLocalSkill(id: string): Promise<void> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("回收站条目标识不合法");
   const entryRoot = join(TRASH_DIR, id);
   if (!isPathInside(TRASH_DIR, entryRoot)) throw new Error("回收站路径不合法");
-  const metadata = JSON.parse(await readFile(metadataPath(TRASH_DIR, id), "utf8")) as TrashEntry;
-  if (metadata.id !== id || new Date(metadata.expiresAt).getTime() <= Date.now()) {
+  const metadata = JSON.parse(
+    await readFile(metadataPath(TRASH_DIR, id), "utf8"),
+  ) as TrashEntry;
+  if (
+    metadata.id !== id ||
+    new Date(metadata.expiresAt).getTime() <= Date.now()
+  ) {
     await rm(entryRoot, { recursive: true, force: true });
     throw new Error("恢复期限已过");
   }
 
   const roots = rootsFor(homedir());
   const expectedRoot = roots[metadata.agent];
-  const pathFromRoot = relative(resolve(expectedRoot), resolve(metadata.originalPath));
-  if (pathFromRoot.startsWith("..") || pathFromRoot.includes(sep) || pathFromRoot === "") {
+  const pathFromRoot = relative(
+    resolve(expectedRoot),
+    resolve(metadata.originalPath),
+  );
+  if (
+    pathFromRoot.startsWith("..") ||
+    pathFromRoot.includes(sep) ||
+    pathFromRoot === ""
+  ) {
     throw new Error("原始路径不属于受管目录");
   }
   try {
     await lstat(metadata.originalPath);
     throw new Error("原始位置已存在同名 Skill");
   } catch (error) {
-    if (error instanceof Error && error.message === "原始位置已存在同名 Skill") throw error;
+    if (error instanceof Error && error.message === "原始位置已存在同名 Skill")
+      throw error;
   }
   await mkdir(expectedRoot, { recursive: true, mode: 0o700 });
   await rename(payloadPath(TRASH_DIR, id), metadata.originalPath);
   await rm(entryRoot, { recursive: true, force: true });
 }
 
-export async function setSkillBlacklisted(name: string, blocked: boolean): Promise<void> {
+export async function setSkillBlacklisted(
+  name: string,
+  blocked: boolean,
+): Promise<void> {
   const safeName = safeSkillName(name);
   const current = await readBlacklist();
   const next = blocked
