@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
@@ -16,11 +15,22 @@ import {
   YAxis,
 } from "recharts";
 import { ArrowRight, Database } from "lucide-react";
-import RGL, { WidthProvider, type Layout, type Layouts } from "react-grid-layout";
+import RGL, {
+  WidthProvider,
+  type Layout,
+  type Layouts,
+} from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
-import { Dot, EmptyState, PageHeader, Panel, Segmented, StatusBadge } from "../components/tt";
+import {
+  Dot,
+  EmptyState,
+  PageHeader,
+  Panel,
+  Segmented,
+  StatusBadge,
+} from "../components/tt";
 import { UsageHeatmap } from "../components/UsageHeatmap";
 import { getLocalUsageSnapshot } from "../lib/local-usage";
 import {
@@ -34,7 +44,11 @@ import {
   totalsFromDaily,
   type UsagePeriod,
 } from "../lib/local-usage/presentation";
-import type { LocalUsageEvent, LocalUsageSnapshot, LocalUsageSource } from "../lib/local-usage";
+import type {
+  LocalUsageEvent,
+  LocalUsageSnapshot,
+  LocalUsageSource,
+} from "../lib/local-usage";
 import {
   applyPricingSnapshot,
   currentUsdToCny,
@@ -45,11 +59,22 @@ import {
   totalsFromEvents,
 } from "../lib/pricing";
 import { getPricingSnapshot } from "../lib/pricing/server-fns";
-import { DAILY_SCAN_LIMIT, readDailyScanCount } from "../lib/security/daily-limit";
+import {
+  DAILY_SCAN_LIMIT,
+  readDailyScanCount,
+} from "../lib/security/daily-limit";
 import type { ProviderBudget } from "../lib/settings/store";
 import type { BudgetIndicator } from "../components/UsageHeatmap";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
 import type { SkillHealth, SkillSnapshot } from "../lib/local-skills/types";
+import {
+  buildProviderBudgetIndicators,
+  readRemainingSecurityScans,
+  resolveEventProvider,
+  type ProviderAwareUsageEvent,
+  type ProviderBudgetIndicators,
+  type ProviderBudgetPeriodIndicator,
+} from "../lib/local-usage/provider-utils";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -58,10 +83,14 @@ export const Route = createFileRoute("/")({
       (reason) => ({ status: "rejected" as const, reason }),
     );
     const snapshot =
-      usageResult.status === "fulfilled" ? usageResult.value : createEmptyUsageSnapshot();
+      usageResult.status === "fulfilled"
+        ? usageResult.value
+        : createEmptyUsageSnapshot();
     const [skillsResult, pricingResult] = await Promise.allSettled([
       getLocalSkills(),
-      getPricingSnapshot({ data: [...new Set(snapshot.details.map((event) => event.model))] }),
+      getPricingSnapshot({
+        data: [...new Set(snapshot.details.map((event) => event.model))],
+      }),
     ]);
     return {
       snapshot,
@@ -72,7 +101,8 @@ export const Route = createFileRoute("/")({
             : "本地数据读取失败"
           : null,
       skills: skillsResult.status === "fulfilled" ? skillsResult.value : null,
-      pricing: pricingResult.status === "fulfilled" ? pricingResult.value : null,
+      pricing:
+        pricingResult.status === "fulfilled" ? pricingResult.value : null,
     };
   },
   head: () => ({
@@ -88,7 +118,8 @@ export const Route = createFileRoute("/")({
 });
 
 type ChartMode = "area" | "bar" | "line";
-type DashboardSection = "kpis" | "trend" | "provider" | "models" | "heatmap" | "activity";
+type DashboardSection =
+  "kpis" | "trend" | "provider" | "models" | "heatmap" | "activity";
 type DashboardWidget = DashboardSection;
 const dashboardDefaults: Record<DashboardSection, boolean> = {
   kpis: true,
@@ -166,100 +197,10 @@ const periodLabels: Record<UsagePeriod, string> = {
   custom: "自定义区间",
 };
 
-type ProviderAwareUsageEvent = LocalUsageEvent & { provider?: unknown };
-
-export function resolveEventProvider(event: ProviderAwareUsageEvent): string {
-  if (typeof event.provider === "string" && event.provider.trim()) {
-    return event.provider.trim();
-  }
-
-  const model = event.model.trim().toLowerCase();
-  if (model.includes("claude")) return "Anthropic";
-  if (model.includes("gpt") || /(?:^|[/:\s])o\d(?:$|[-_.])/i.test(model)) return "OpenAI";
-  if (model.includes("gemini")) return "Google";
-  if (model.includes("deepseek")) return "DeepSeek";
-  if (model.includes("kimi") || model.includes("moonshot")) return "Moonshot";
-  if (model.includes("grok")) return "xAI";
-  return event.source;
-}
-
-export interface ProviderBudgetPeriodIndicator extends BudgetIndicator {
-  pricedEvents: number;
-  unknownEvents: number;
-}
-
-export interface ProviderBudgetIndicators {
-  provider: string;
-  periods: ProviderBudgetPeriodIndicator[];
-}
-
-export function buildProviderBudgetIndicators(
-  events: ProviderAwareUsageEvent[],
-  budgets: ProviderBudget[],
-  alertThreshold: number,
-  now = new Date(),
-): ProviderBudgetIndicators[] {
-  return budgets.map((budget) => {
-    const providerEvents = events.filter(
-      (event) => resolveEventProvider(event).toLowerCase() === budget.provider.toLowerCase(),
-    );
-    const periods = [
-      {
-        key: "daily" as const,
-        label: "今日",
-        period: "today" as const,
-        budget: budget.dailyBudget,
-      },
-      {
-        key: "weekly" as const,
-        label: "本周",
-        period: "week" as const,
-        budget: budget.weeklyBudget,
-      },
-      {
-        key: "monthly" as const,
-        label: "本月",
-        period: "month" as const,
-        budget: budget.monthlyBudget,
-      },
-    ].map((item) => {
-      const cost = estimateUsageCost(
-        filterEventsByPeriod(providerEvents, item.period, "", "", now),
-      );
-      const indicator = UsageHeatmap.buildBudgetIndicators(
-        [
-          {
-            key: item.key,
-            label: item.label,
-            budgetCny: item.budget,
-            spentCny: cost.knownUsd * currentUsdToCny(),
-            unknownEvents: cost.unknownEvents,
-          },
-        ],
-        alertThreshold,
-      )[0]!;
-      return {
-        ...indicator,
-        pricedEvents: cost.pricedEvents,
-        unknownEvents: cost.unknownEvents,
-      };
-    });
-    return { provider: budget.provider, periods };
-  });
-}
-
 function daysAgo(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() - days);
   return date.toISOString().slice(0, 10);
-}
-
-export function readRemainingSecurityScans(
-  storage?: Pick<Storage, "getItem">,
-  now = new Date(),
-): number | null {
-  if (!storage) return null;
-  return Math.max(0, DAILY_SCAN_LIMIT - readDailyScanCount(storage, now));
 }
 
 function Dashboard() {
@@ -276,10 +217,16 @@ function Dashboard() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("trusttools-dashboard-sections");
-      if (saved) setDashboardSections({ ...dashboardDefaults, ...JSON.parse(saved) });
-      const savedLayouts = window.localStorage.getItem("trusttools-dashboard-layouts");
-      if (savedLayouts) setLayouts({ ...dashboardLayouts, ...JSON.parse(savedLayouts) });
+      const saved = window.localStorage.getItem(
+        "trusttools-dashboard-sections",
+      );
+      if (saved)
+        setDashboardSections({ ...dashboardDefaults, ...JSON.parse(saved) });
+      const savedLayouts = window.localStorage.getItem(
+        "trusttools-dashboard-layouts",
+      );
+      if (savedLayouts)
+        setLayouts({ ...dashboardLayouts, ...JSON.parse(savedLayouts) });
     } catch {
       // Ignore unavailable or malformed local preferences.
     }
@@ -296,29 +243,41 @@ function Dashboard() {
   const updateDashboardSections = (section: DashboardSection) => {
     setDashboardSections((current) => {
       const next = { ...current, [section]: !current[section] };
-      window.localStorage.setItem("trusttools-dashboard-sections", JSON.stringify(next));
+      window.localStorage.setItem(
+        "trusttools-dashboard-sections",
+        JSON.stringify(next),
+      );
       return next;
     });
   };
 
-  const visibleWidgets = (Object.keys(dashboardSections) as DashboardWidget[]).filter(
-    (widget) => dashboardSections[widget],
-  );
+  const visibleWidgets = (
+    Object.keys(dashboardSections) as DashboardWidget[]
+  ).filter((widget) => dashboardSections[widget]);
   const onLayoutChange = (_layout: Layout[], nextLayouts: Layouts) => {
     setLayouts(nextLayouts);
-    window.localStorage.setItem("trusttools-dashboard-layouts", JSON.stringify(nextLayouts));
+    window.localStorage.setItem(
+      "trusttools-dashboard-layouts",
+      JSON.stringify(nextLayouts),
+    );
   };
 
   const selectedDaily = useMemo(
     () => filterDailyUsage(snapshot.daily, period, from, to),
     [snapshot.daily, period, from, to],
   );
-  const selectedTotals = useMemo(() => totalsFromDaily(selectedDaily), [selectedDaily]);
+  const selectedTotals = useMemo(
+    () => totalsFromDaily(selectedDaily),
+    [selectedDaily],
+  );
   const selectedEvents = useMemo(
     () => filterEventsByPeriod(snapshot.details, period, from, to),
     [snapshot.details, period, from, to],
   );
-  const selectedCost = useMemo(() => estimateUsageCost(selectedEvents), [selectedEvents]);
+  const selectedCost = useMemo(
+    () => estimateUsageCost(selectedEvents),
+    [selectedEvents],
+  );
   const todayEvents = useMemo(
     () => filterEventsByPeriod(snapshot.details, "today"),
     [snapshot.details],
@@ -327,34 +286,48 @@ function Dashboard() {
     () => filterEventsByPeriod(snapshot.details, "7d"),
     [snapshot.details],
   );
-  const primaryTokenEvents = sevenDayEvents.length > 0 ? sevenDayEvents : todayEvents;
-  const primaryTokenLabel = sevenDayEvents.length > 0 ? "近 7 天 Token" : "今日 Token";
+  const primaryTokenEvents =
+    sevenDayEvents.length > 0 ? sevenDayEvents : todayEvents;
+  const primaryTokenLabel =
+    sevenDayEvents.length > 0 ? "近 7 天 Token" : "今日 Token";
   const primaryTokenTotals = useMemo(
     () => totalsFromEvents(primaryTokenEvents),
     [primaryTokenEvents],
   );
-  const cacheCost = useMemo(() => estimateUsageCost(primaryTokenEvents), [primaryTokenEvents]);
+  const cacheCost = useMemo(
+    () => estimateUsageCost(primaryTokenEvents),
+    [primaryTokenEvents],
+  );
   const cachedTokens = primaryTokenTotals.cachedInputTokens;
   const cacheHitRate =
-    primaryTokenTotals.totalTokens > 0 ? (cachedTokens / primaryTokenTotals.totalTokens) * 100 : 0;
+    primaryTokenTotals.totalTokens > 0
+      ? (cachedTokens / primaryTokenTotals.totalTokens) * 100
+      : 0;
   const skillHealth = buildSkillHealth(skills);
-  const topSources: SourceSeries[] = snapshot.bySource.slice(0, 5).map((source, index) => ({
-    key: source.key as LocalUsageSource,
-    name: sourceLabel(source.key),
-    color: chartColors[index % chartColors.length]!,
-  }));
+  const topSources: SourceSeries[] = snapshot.bySource
+    .slice(0, 5)
+    .map((source, index) => ({
+      key: source.key as LocalUsageSource,
+      name: sourceLabel(source.key),
+      color: chartColors[index % chartColors.length]!,
+    }));
   const chartData = useMemo(
     () =>
       selectedDaily.map((day) => ({
         label: day.date.slice(5),
         total: day.totalTokens,
         ...Object.fromEntries(
-          topSources.map((source) => [source.key, day.bySource[source.key]?.totalTokens ?? 0]),
+          topSources.map((source) => [
+            source.key,
+            day.bySource[source.key]?.totalTokens ?? 0,
+          ]),
         ),
       })),
     [selectedDaily, topSources],
   );
-  const visibleSeries = topSources.filter((item) => !hiddenSources.includes(item.key));
+  const visibleSeries = topSources.filter(
+    (item) => !hiddenSources.includes(item.key),
+  );
   const providerShare = snapshot.bySource.slice(0, 5).map((item, index) => ({
     name: sourceLabel(item.key),
     value: shareOf(item.totalTokens, snapshot.totals.totalTokens),
@@ -382,33 +355,39 @@ function Dashboard() {
           <details className="dashboard-settings">
             <summary className="tt-button">看板设置</summary>
             <div className="dashboard-settings-popover">
-              {(Object.keys(dashboardDefaults) as DashboardSection[]).map((section) => {
-                const labels: Record<DashboardSection, string> = {
-                  kpis: "4 个 KPI",
-                  trend: "趋势",
-                  provider: "Provider",
-                  models: "最近模型",
-                  heatmap: "热力图",
-                  activity: "最近活动",
-                };
-                return (
-                  <label key={section}>
-                    <input
-                      type="checkbox"
-                      checked={dashboardSections[section]}
-                      onChange={() => updateDashboardSections(section)}
-                    />
-                    {labels[section]}
-                  </label>
-                );
-              })}
+              {(Object.keys(dashboardDefaults) as DashboardSection[]).map(
+                (section) => {
+                  const labels: Record<DashboardSection, string> = {
+                    kpis: "4 个 KPI",
+                    trend: "趋势",
+                    provider: "Provider",
+                    models: "最近模型",
+                    heatmap: "热力图",
+                    activity: "最近活动",
+                  };
+                  return (
+                    <label key={section}>
+                      <input
+                        type="checkbox"
+                        checked={dashboardSections[section]}
+                        onChange={() => updateDashboardSections(section)}
+                      />
+                      {labels[section]}
+                    </label>
+                  );
+                },
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setDashboardSections(dashboardDefaults);
                   setLayouts(dashboardLayouts);
-                  window.localStorage.removeItem("trusttools-dashboard-sections");
-                  window.localStorage.removeItem("trusttools-dashboard-layouts");
+                  window.localStorage.removeItem(
+                    "trusttools-dashboard-sections",
+                  );
+                  window.localStorage.removeItem(
+                    "trusttools-dashboard-layouts",
+                  );
                 }}
               >
                 恢复默认
@@ -529,24 +508,38 @@ function Dashboard() {
               }
             >
               <div className="dashboard-trend-summary">
-                <Metric label="区间合计" value={formatTokens(selectedTotals.totalTokens)} />
+                <Metric
+                  label="区间合计"
+                  value={formatTokens(selectedTotals.totalTokens)}
+                />
                 <Metric
                   label="日均"
                   value={formatTokens(
-                    selectedDaily.length ? selectedTotals.totalTokens / selectedDaily.length : 0,
+                    selectedDaily.length
+                      ? selectedTotals.totalTokens / selectedDaily.length
+                      : 0,
                   )}
                 />
                 <Metric
                   label="峰值"
                   value={formatTokens(
-                    Math.max(0, ...selectedDaily.map((item) => item.totalTokens)),
+                    Math.max(
+                      0,
+                      ...selectedDaily.map((item) => item.totalTokens),
+                    ),
                   )}
                 />
-                <Metric label="区间费用" value={formatCost(selectedCost, "CNY")} />
+                <Metric
+                  label="区间费用"
+                  value={formatCost(selectedCost, "CNY")}
+                />
               </div>
               <div className="h-[268px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <ComposedChart
+                    data={chartData}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
                     <CartesianGrid
                       stroke="var(--color-border)"
                       vertical={false}
@@ -554,14 +547,20 @@ function Dashboard() {
                     />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                      tick={{
+                        fontSize: 11,
+                        fill: "var(--color-muted-foreground)",
+                      }}
                       axisLine={{ stroke: "var(--color-border)" }}
                       tickLine={false}
                     />
                     <YAxis
                       tickFormatter={formatTokens}
                       width={48}
-                      tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                      tick={{
+                        fontSize: 11,
+                        fill: "var(--color-muted-foreground)",
+                      }}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -636,7 +635,10 @@ function Dashboard() {
                           : "border-border-strong"
                       }`}
                     >
-                      <span className="size-1.5 rounded-full" style={{ background: item.color }} />
+                      <span
+                        className="size-1.5 rounded-full"
+                        style={{ background: item.color }}
+                      />
                       {item.name}
                     </button>
                   );
@@ -648,7 +650,10 @@ function Dashboard() {
 
         {dashboardSections.provider && (
           <div key="provider" className="dashboard-widget">
-            <Panel title="Provider 消耗占比" action={<span className="tt-label">RING · 全量</span>}>
+            <Panel
+              title="Provider 消耗占比"
+              action={<span className="tt-label">RING · 全量</span>}
+            >
               <div className="dashboard-provider">
                 <div className="dashboard-donut">
                   <ResponsiveContainer width="100%" height="100%">
@@ -668,7 +673,9 @@ function Dashboard() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value) => `${Number(value).toLocaleString()} Token`}
+                        formatter={(value) =>
+                          `${Number(value).toLocaleString()} Token`
+                        }
                         contentStyle={{
                           background: "var(--color-popover)",
                           border: "1px solid var(--color-border)",
@@ -697,10 +704,15 @@ function Dashboard() {
                       <span className="h-1 flex-1 overflow-hidden bg-surface-2">
                         <span
                           className="block h-full"
-                          style={{ width: `${provider.value}%`, background: provider.color }}
+                          style={{
+                            width: `${provider.value}%`,
+                            background: provider.color,
+                          }}
                         />
                       </span>
-                      <span className="tt-num w-11 text-right">{provider.value.toFixed(0)}%</span>
+                      <span className="tt-num w-11 text-right">
+                        {provider.value.toFixed(0)}%
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -714,14 +726,19 @@ function Dashboard() {
             <Panel title="最近模型用量">
               <div className="space-y-3">
                 {recentModels.map((model) => (
-                  <div key={model.key} className="flex items-center gap-3 text-xs">
+                  <div
+                    key={model.key}
+                    className="flex items-center gap-3 text-xs"
+                  >
                     <span className="tt-num w-32 truncate" title={model.key}>
                       {model.key}
                     </span>
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
                       <div
                         className="h-full rounded-full bg-primary/75"
-                        style={{ width: `${(model.totalTokens / maxModelTokens) * 100}%` }}
+                        style={{
+                          width: `${(model.totalTokens / maxModelTokens) * 100}%`,
+                        }}
                       />
                     </span>
                     <span className="tt-num w-14 text-right text-muted-foreground">
@@ -739,7 +756,11 @@ function Dashboard() {
             <Panel
               className="dashboard-heatmap"
               title="7 × 24 消耗热力图"
-              action={<span className="text-[10px] text-muted-foreground">近 7 天 · 本机时区</span>}
+              action={
+                <span className="text-[10px] text-muted-foreground">
+                  近 7 天 · 本机时区
+                </span>
+              }
             >
               <UsageHeatmap events={sevenDayEvents} />
             </Panel>
@@ -769,8 +790,12 @@ function Dashboard() {
                       <th className="px-4 py-2.5 font-normal">来源</th>
                       <th className="px-4 py-2.5 font-normal">模型</th>
                       <th className="px-4 py-2.5 font-normal">项目</th>
-                      <th className="px-4 py-2.5 text-right font-normal">Token</th>
-                      <th className="px-4 py-2.5 text-right font-normal">估算费用</th>
+                      <th className="px-4 py-2.5 text-right font-normal">
+                        Token
+                      </th>
+                      <th className="px-4 py-2.5 text-right font-normal">
+                        估算费用
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -782,8 +807,12 @@ function Dashboard() {
                         <td className="tt-num px-4 py-2.5 text-muted-foreground">
                           {formatEventTime(event.timestamp)}
                         </td>
-                        <td className="px-4 py-2.5">{sourceLabel(event.source)}</td>
-                        <td className="tt-num max-w-48 truncate px-4 py-2.5">{event.model}</td>
+                        <td className="px-4 py-2.5">
+                          {sourceLabel(event.source)}
+                        </td>
+                        <td className="tt-num max-w-48 truncate px-4 py-2.5">
+                          {event.model}
+                        </td>
                         <td className="max-w-56 truncate px-4 py-2.5 text-muted-foreground">
                           {event.project}
                         </td>
@@ -831,9 +860,14 @@ function KpiCard({
   tone?: "ok";
 }) {
   return (
-    <Link to={to} className={`dashboard-kpi ${accent ? "dashboard-kpi-accent" : ""}`}>
+    <Link
+      to={to}
+      className={`dashboard-kpi ${accent ? "dashboard-kpi-accent" : ""}`}
+    >
       <span className="tt-label">{label}</span>
-      <strong className={`tt-num ${tone === "ok" ? "text-ok" : ""}`}>{value}</strong>
+      <strong className={`tt-num ${tone === "ok" ? "text-ok" : ""}`}>
+        {value}
+      </strong>
       <span className="dashboard-kpi-hint">{hint}</span>
     </Link>
   );
@@ -897,7 +931,11 @@ function EmptyDashboard({
       <Panel
         className="mt-3"
         title="周 × 时使用热力图"
-        action={<span className="text-[10px] text-muted-foreground">无事件时不生成模拟数据</span>}
+        action={
+          <span className="text-[10px] text-muted-foreground">
+            无事件时不生成模拟数据
+          </span>
+        }
       >
         <UsageHeatmap events={[]} />
       </Panel>

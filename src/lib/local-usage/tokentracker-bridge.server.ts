@@ -40,7 +40,8 @@ function usageHome(override?: string): string {
 }
 
 function runtimeEntry(): string {
-  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string })
+    .resourcesPath;
   return resourcesPath
     ? join(resourcesPath, "tokentracker-cli", "bin", "tracker.js")
     : resolve(process.cwd(), "vendor", "tokentracker-cli", "bin", "tracker.js");
@@ -83,16 +84,24 @@ interface TrackerCommandResult {
 }
 
 function appendCapped(chunks: Buffer[], chunk: Buffer | string): void {
-  const currentBytes = chunks.reduce((total, value) => total + value.byteLength, 0);
+  const currentBytes = chunks.reduce(
+    (total, value) => total + value.byteLength,
+    0,
+  );
   if (currentBytes >= MAX_COMMAND_OUTPUT_BYTES) return;
   const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
   chunks.push(value.subarray(0, MAX_COMMAND_OUTPUT_BYTES - currentBytes));
 }
 
-async function persistCommandResult(home: string, result: TrackerCommandResult): Promise<void> {
+async function persistCommandResult(
+  home: string,
+  result: TrackerCommandResult,
+): Promise<void> {
   const path = bootstrapLogPath(home);
   await mkdir(dirname(path), { recursive: true }).catch(() => undefined);
-  const existingSize = await stat(path).then((value) => value.size).catch(() => 0);
+  const existingSize = await stat(path)
+    .then((value) => value.size)
+    .catch(() => 0);
   if (existingSize > MAX_LOG_BYTES) {
     await writeFile(path, "", "utf8").catch(() => undefined);
   }
@@ -122,6 +131,7 @@ async function runTrackerCommand(
     let settled = false;
     let timedOut = false;
     let spawnError: string | undefined;
+    // eslint-disable-next-line prefer-const
     let timer: NodeJS.Timeout | undefined;
     const child = spawn(command.executable, [runtimeEntry(), ...args], {
       cwd: dirname(runtimeEntry()),
@@ -139,7 +149,10 @@ async function runTrackerCommand(
     });
     child.stdout?.on("data", (chunk: Buffer) => appendCapped(stdout, chunk));
     child.stderr?.on("data", (chunk: Buffer) => appendCapped(stderr, chunk));
-    const finish = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
+    const finish = (
+      exitCode: number | null,
+      signal: NodeJS.Signals | null,
+    ): void => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
@@ -152,7 +165,9 @@ async function runTrackerCommand(
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       };
-      void persistCommandResult(home, result).finally(() => resolveCommand(result));
+      void persistCommandResult(home, result).finally(() =>
+        resolveCommand(result),
+      );
     };
     child.once("error", (error) => {
       spawnError = error instanceof Error ? error.message : String(error);
@@ -174,7 +189,11 @@ async function runSync(home: string, force: boolean): Promise<void> {
     // `--auto` suppresses cloud/account work but still performs a full local
     // source scan when no notify source is supplied. This is the fast path that
     // lets a clean installation render existing history immediately.
-    await runTrackerCommand(home, ["sync", "--drain", "--auto"], SYNC_TIMEOUT_MS);
+    await runTrackerCommand(
+      home,
+      ["sync", "--drain", "--auto"],
+      SYNC_TIMEOUT_MS,
+    );
     lastSyncAt = Date.now();
 
     // Hook installation can involve copying the local runtime and must not
@@ -190,9 +209,11 @@ async function runSync(home: string, force: boolean): Promise<void> {
   return syncPending;
 }
 
-export async function initializeTokenTrackerUsage(options: {
-  homeDirectory?: string;
-} = {}): Promise<void> {
+export async function initializeTokenTrackerUsage(
+  options: {
+    homeDirectory?: string;
+  } = {},
+): Promise<void> {
   const home = usageHome(options.homeDirectory);
   const initialized = await stat(configPath(home))
     .then((value) => value.isFile())
@@ -235,16 +256,20 @@ function source(value: unknown): LocalUsageSource | undefined {
     : undefined;
 }
 
-export async function collectTokenTrackerUsage(options: {
-  forceSync?: boolean;
-  homeDirectory?: string;
-} = {}): Promise<{
+export async function collectTokenTrackerUsage(
+  options: {
+    forceSync?: boolean;
+    homeDirectory?: string;
+  } = {},
+): Promise<{
   events: LocalUsageEvent[];
   summaries: LocalUsageSourceSummary[];
 }> {
   const home = usageHome(options.homeDirectory);
   const outputPath = queuePath(home);
-  const hasQueue = await stat(outputPath).then((value) => value.isFile()).catch(() => false);
+  const hasQueue = await stat(outputPath)
+    .then((value) => value.isFile())
+    .catch(() => false);
   await runSync(home, options.forceSync === true || !hasQueue);
 
   const text = await readFile(outputPath, "utf8").catch(() => "");
@@ -255,9 +280,12 @@ export async function collectTokenTrackerUsage(options: {
       const row = JSON.parse(line) as QueueRow;
       const rowSource = source(row.source);
       if (!rowSource || typeof row.hour_start !== "string") continue;
-      const model = typeof row.model === "string" && row.model ? row.model : "unknown";
+      const model =
+        typeof row.model === "string" && row.model ? row.model : "unknown";
       const project =
-        typeof row.project_key === "string" && row.project_key ? row.project_key : "unknown";
+        typeof row.project_key === "string" && row.project_key
+          ? row.project_key
+          : "unknown";
       latest.set(`${rowSource}\0${model}\0${project}\0${row.hour_start}`, row);
     } catch {
       continue;
@@ -286,7 +314,9 @@ export async function collectTokenTrackerUsage(options: {
       timestamp: row.hour_start,
       model: typeof row.model === "string" && row.model ? row.model : "unknown",
       project:
-        typeof row.project_key === "string" && row.project_key ? row.project_key : "unknown",
+        typeof row.project_key === "string" && row.project_key
+          ? row.project_key
+          : "unknown",
       inputTokens,
       cachedInputTokens,
       cacheCreationInputTokens,
@@ -297,7 +327,8 @@ export async function collectTokenTrackerUsage(options: {
   }
 
   const counts = new Map<LocalUsageSource, number>();
-  for (const event of events) counts.set(event.source, (counts.get(event.source) ?? 0) + 1);
+  for (const event of events)
+    counts.set(event.source, (counts.get(event.source) ?? 0) + 1);
   const summaries = [...counts].map(([eventSource, eventCount]) => ({
     source: eventSource,
     available: true,
