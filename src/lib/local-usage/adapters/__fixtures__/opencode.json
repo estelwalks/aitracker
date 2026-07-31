@@ -1,0 +1,16 @@
+{
+  "messages": [
+    {
+      "time": "2026-07-27T09:03:00.000Z",
+      "metadata": {
+        "model": "opencode-model",
+        "cwd": "/work/opencode"
+      },
+      "tokens": {
+        "input": 13,
+        "cache_creation_input": 2,
+        "output": 6
+      }
+    }
+  ]
+}

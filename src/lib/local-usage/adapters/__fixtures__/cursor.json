@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-07-27T09:00:00.000Z",
+  "modelId": "cursor-model",
+  "cwd": "/work/cursor",
+  "usage": {
+    "inputTokens": 10,
+    "cachedInputTokens": 2,
+    "outputTokens": 3
+  }
+}
