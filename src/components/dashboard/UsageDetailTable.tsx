@@ -120,11 +120,12 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                         {row.key}
                       </span>
                       {row.composition.length > 1 && (
-                        <div className="flex h-1 w-28 overflow-hidden rounded-full">
+                        <div className="flex h-[5px] w-full max-w-36 overflow-hidden rounded-[2px] bg-surface-2">
                           {row.composition.map((seg, i) => (
                             <span
                               key={i}
                               className="block h-full"
+                              title={`${seg.label} ${formatTokens(seg.value)} · ${shareOf(seg.value, row.totalTokens).toFixed(1)}%`}
                               style={{
                                 width: `${shareOf(seg.value, row.totalTokens)}%`,
                                 background: seg.color,
