@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -13,11 +14,12 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 
 import {
+  batchUninstallLocalSkills,
   installMarketSkill,
   refreshMarketSkillEvidence,
   scanLocalSkills,
   SKILL_ROOT_SUFFIXES,
-  trashLocalSkills,
+  syncLocalSkill,
 } from "./scanner.server.ts";
 
 test("scans common agent roots without treating mtime as usage evidence", async () => {
@@ -337,50 +339,177 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
   }
 });
 
-test("rejects an empty batch trash operation", async () => {
-  await assert.rejects(trashLocalSkills([]), /至少选择一个 Skill/);
+test("reads description from SKILL.md frontmatter block scalars", async () => {
+  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-desc-"));
+  const trusttoolsDirectory = join(root, ".trusttools");
+  const foldedPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Codex CLI"],
+    "folded-skill",
+  );
+  const literalPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Claude Code"],
+    "literal-skill",
+  );
+  try {
+    await mkdir(foldedPath, { recursive: true });
+    await mkdir(literalPath, { recursive: true });
+    await writeFile(
+      join(foldedPath, "SKILL.md"),
+      "---\nversion: 1.0.0\ndescription: >\n  This is a\n  folded description.\n---\n# Folded\n",
+    );
+    await writeFile(
+      join(literalPath, "SKILL.md"),
+      "---\nversion: 1.0.0\ndescription: |\n  This is a\n  literal description.\n---\n# Literal\n",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      trusttoolsDirectory,
+    });
+    const folded = snapshot.skills.find((s) => s.name === "folded-skill");
+    const literal = snapshot.skills.find((s) => s.name === "literal-skill");
+    assert.equal(folded?.description, "This is a folded description.");
+    assert.equal(literal?.description, "This is a\nliteral description.");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
-test("deduplicates batch paths and keeps successful trash results when another item fails", async () => {
-  const calls: string[] = [];
-  const result = await trashLocalSkills(
-    ["/skill/ok", "/skill/fail", "/skill/ok"],
-    async (path) => {
-      calls.push(path);
-      if (path === "/skill/fail") throw new Error("模拟失败");
-      return {
-        id: randomUUID(),
-        skillName: "ok",
-        agent: "Codex CLI",
-        originalPath: path,
-        trashedAt: "2026-07-28T00:00:00.000Z",
-        expiresAt: "2026-07-28T00:05:00.000Z",
-      };
-    },
-  );
-
-  assert.deepEqual(calls, ["/skill/ok", "/skill/fail"]);
-  assert.equal(result.succeeded.length, 1);
-  assert.equal(result.succeeded[0].originalPath, "/skill/ok");
-  assert.deepEqual(result.failed, [{ path: "/skill/fail", error: "模拟失败" }]);
+test("rejects an empty batch uninstall operation", async () => {
+  await assert.rejects(batchUninstallLocalSkills([]), /至少选择一个 Skill/);
 });
 
-test("returns every successful batch trash result", async () => {
-  const result = await trashLocalSkills(
-    ["/skill/one", "/skill/two"],
-    async (path) => ({
-      id: randomUUID(),
-      skillName: path.split("/").at(-1) ?? "skill",
-      agent: "Codex",
-      originalPath: path,
-      trashedAt: "2026-07-28T00:00:00.000Z",
-      expiresAt: "2026-07-28T00:05:00.000Z",
-    }),
-  );
+test("permanently deletes a skill via batch uninstall and collects failures", async () => {
+  const name = `uninstall-${randomUUID().slice(0, 8)}`;
+  const skillPath = join(homedir(), SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(join(skillPath, "SKILL.md"), "# Test");
 
-  assert.deepEqual(
-    result.succeeded.map((entry) => entry.originalPath),
-    ["/skill/one", "/skill/two"],
-  );
-  assert.deepEqual(result.failed, []);
+    const result = await batchUninstallLocalSkills([
+      skillPath,
+      "/tmp/nonexistent-trusttools-skill",
+    ]);
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.failed.length, 1);
+    assert.match(result.failed[0].error, /不属于受管 Skill 根目录/);
+
+    // Verify the skill is permanently gone.
+    await assert.rejects(lstat(skillPath));
+  } finally {
+    await rm(skillPath, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill copies a skill to a target agent with no conflict", async () => {
+  const name = `sync-${randomUUID().slice(0, 8)}`;
+  const sourcePath = join(homedir(), SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 1.0.0\ndescription: A sync test skill\n---\n# ${name}\n`,
+    );
+
+    const result = await syncLocalSkill({
+      sourcePath,
+      targetAgents: ["Codex CLI"],
+      onConflict: "skip",
+    });
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.succeeded[0].agent, "Codex CLI");
+    assert.equal(result.succeeded[0].path, targetPath);
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.failed.length, 0);
+
+    // Verify the file was copied.
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 1\.0\.0/);
+    assert.match(content, /A sync test skill/);
+
+    // Verify description is read from frontmatter after sync.
+    const snapshot = await scanLocalSkills({ homeDirectory: homedir() });
+    const synced = snapshot.skills.find((s) => s.name === name);
+    assert.equal(synced?.description, "A sync test skill");
+    assert.equal(synced?.installations.length, 2);
+  } finally {
+    await rm(sourcePath, { recursive: true, force: true });
+    await rm(targetPath, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill skips on conflict when onConflict is skip", async () => {
+  const name = `sync-skip-${randomUUID().slice(0, 8)}`;
+  const sourcePath = join(homedir(), SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 2.0.0\n---\n# Source\n`,
+    );
+    await mkdir(targetPath, { recursive: true });
+    await writeFile(
+      join(targetPath, "SKILL.md"),
+      `---\nversion: 1.0.0\n---\n# Original\n`,
+    );
+
+    const result = await syncLocalSkill({
+      sourcePath,
+      targetAgents: ["Codex CLI"],
+      onConflict: "skip",
+    });
+    assert.equal(result.succeeded.length, 0);
+    assert.equal(result.skipped.length, 1);
+    assert.equal(result.skipped[0].agent, "Codex CLI");
+    assert.equal(result.skipped[0].reason, "conflict");
+    assert.equal(result.failed.length, 0);
+
+    // Verify the target still has the original content.
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 1\.0\.0/);
+    assert.match(content, /Original/);
+  } finally {
+    await rm(sourcePath, { recursive: true, force: true });
+    await rm(targetPath, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill overwrites on conflict when onConflict is overwrite", async () => {
+  const name = `sync-overwrite-${randomUUID().slice(0, 8)}`;
+  const sourcePath = join(homedir(), SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 2.0.0\ndescription: Overwritten by sync\n---\n# Source\n`,
+    );
+    await mkdir(targetPath, { recursive: true });
+    await writeFile(
+      join(targetPath, "SKILL.md"),
+      `---\nversion: 1.0.0\ndescription: Original target\n---\n# Original\n`,
+    );
+
+    const result = await syncLocalSkill({
+      sourcePath,
+      targetAgents: ["Codex CLI"],
+      onConflict: "overwrite",
+    });
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.succeeded[0].agent, "Codex CLI");
+    assert.equal(result.succeeded[0].path, targetPath);
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.failed.length, 0);
+
+    // Verify the target now has the source content (replaced).
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 2\.0\.0/);
+    assert.match(content, /Overwritten by sync/);
+  } finally {
+    await rm(sourcePath, { recursive: true, force: true });
+    await rm(targetPath, { recursive: true, force: true });
+  }
 });

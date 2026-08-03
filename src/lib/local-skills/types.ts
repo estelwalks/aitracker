@@ -1,7 +1,7 @@
 import { SKILL_TOOL_NAMES } from "../tools/catalog.ts";
 
 /**
- * Skill agent labels — derived from the catalog as the `nameZh` of every tool
+ * Skill agent labels - derived from the catalog as the `nameZh` of every tool
  * that exposes a skills directory (`skillRootSuffix !== null`). Kept as a
  * `readonly` tuple so `SkillAgent` is a narrow literal union.
  */
@@ -35,6 +35,7 @@ export interface SkillInstallation {
 export interface LocalSkill {
   id: string;
   name: string;
+  description: string | null;
   health: SkillHealth;
   healthReason: string;
   lastUsedAt: string | null;
@@ -42,23 +43,15 @@ export interface LocalSkill {
   installations: SkillInstallation[];
 }
 
-export interface TrashEntry {
-  id: string;
-  skillName: string;
-  agent: SkillAgent;
-  originalPath: string;
-  trashedAt: string;
-  expiresAt: string;
+export interface BatchUninstallResult {
+  succeeded: string[];
+  failed: { path: string; error: string }[];
 }
 
-export interface BatchTrashFailure {
-  path: string;
-  error: string;
-}
-
-export interface BatchTrashResult {
-  succeeded: TrashEntry[];
-  failed: BatchTrashFailure[];
+export interface SkillSyncResult {
+  succeeded: { agent: string; path: string }[];
+  skipped: { agent: string; reason: "conflict" }[];
+  failed: { agent: string; error: string }[];
 }
 
 export interface SkillSnapshot {
@@ -67,6 +60,5 @@ export interface SkillSnapshot {
   healthBasis: string;
   roots: Record<SkillAgent, string>;
   skills: LocalSkill[];
-  trash: TrashEntry[];
   blacklist: string[];
 }

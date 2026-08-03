@@ -5,7 +5,6 @@ import {
   opendir,
   readFile,
   realpath,
-  rename,
   rm,
   stat,
   writeFile,
@@ -20,28 +19,26 @@ import {
   resolve,
   sep,
 } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import type { LocalUsageEvent } from "../local-usage/types.ts";
 import { AI_TOOLS } from "../tools/catalog.ts";
 import {
   SKILL_AGENTS,
-  type BatchTrashResult,
+  type BatchUninstallResult,
   type LocalSkill,
   type SkillAgent,
   type SkillHealth,
   type SkillInstallation,
   type SkillSource,
   type SkillSnapshot,
+  type SkillSyncResult,
   type SkillUpdateStatus,
-  type TrashEntry,
 } from "./types.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const RECENT_WINDOW_DAYS = 7;
-const RESTORE_WINDOW_MS = 5 * 60 * 1_000;
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
-const TRASH_DIR = join(TRUSTTOOLS_DIR, "trash");
 const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
 const ORIGINS_FILE = join(TRUSTTOOLS_DIR, "skill-origins.json");
 const MARKET_TEMP_DIR = join(TRUSTTOOLS_DIR, "tmp");
@@ -124,16 +121,56 @@ function parseFrontmatter(content: string): Record<string, string> {
   const lines = normalized.split("\n");
   if (lines[0]?.trim() !== "---") return {};
   const result: Record<string, string> = {};
-  for (let index = 1; index < lines.length; index += 1) {
+  let index = 1;
+  while (index < lines.length) {
     const line = lines[index];
     if (line.trim() === "---") break;
-    if (/^\s/u.test(line) || line.trim().startsWith("#")) continue;
+    if (/^\s/u.test(line) || line.trim().startsWith("#")) {
+      index += 1;
+      continue;
+    }
     const separator = line.indexOf(":");
-    if (separator <= 0) continue;
+    if (separator <= 0) {
+      index += 1;
+      continue;
+    }
     const key = line.slice(0, separator).trim().toLowerCase();
-    const value = cleanScalar(line.slice(separator + 1));
+    const rawValue = line.slice(separator + 1);
+    const trimmedValue = rawValue.trim();
+
+    // YAML block scalars: ">" folded, "|" literal (with optional chomping "+/-").
+    const blockMatch = trimmedValue.match(/^([>|])([+-]?)$/u);
+    if (blockMatch) {
+      const indicator = blockMatch[1];
+      const collected: string[] = [];
+      let blockIndent: number | null = null;
+      index += 1;
+      while (index < lines.length) {
+        const nextLine = lines[index];
+        if (nextLine.trim() === "---") break;
+        if (nextLine.trim() === "") {
+          collected.push("");
+          index += 1;
+          continue;
+        }
+        const nextIndent = nextLine.search(/\S/u);
+        if (nextIndent <= 0) break;
+        if (blockIndent === null) blockIndent = nextIndent;
+        collected.push(nextLine.slice(blockIndent));
+        index += 1;
+      }
+      const joined =
+        indicator === ">"
+          ? collected.join(" ").replace(/\s+/gu, " ").trim()
+          : collected.join("\n").trim();
+      if (joined) result[key] = joined;
+      continue;
+    }
+
+    const value = cleanScalar(rawValue);
     if (value && !value.startsWith("[") && !value.startsWith("{"))
       result[key] = value;
+    index += 1;
   }
   return result;
 }
@@ -479,8 +516,12 @@ async function isSkillEntry(path: string): Promise<boolean> {
 async function scanInstallations(
   roots: Record<SkillAgent, string>,
   origins: MarketOriginsFile,
-): Promise<Map<string, SkillInstallation[]>> {
+): Promise<{
+  installations: Map<string, SkillInstallation[]>;
+  descriptions: Map<string, string | null>;
+}> {
   const installations = new Map<string, SkillInstallation[]>();
+  const descriptions = new Map<string, string | null>();
   await Promise.all(
     SKILL_AGENTS.map(async (agent) => {
       const root = roots[agent];
@@ -495,6 +536,9 @@ async function scanInstallations(
           const name = entry.isFile()
             ? entry.name.replace(/\.md$/i, "")
             : entry.name;
+          if (!descriptions.has(name)) {
+            descriptions.set(name, frontmatter.description ?? null);
+          }
           const origin = origins.installations[resolve(path)];
           const version = frontmatter.version ?? origin?.localVersion ?? null;
           const evidence = updateEvidence({ version, origin });
@@ -518,7 +562,7 @@ async function scanInstallations(
       }
     }),
   );
-  return installations;
+  return { installations, descriptions };
 }
 
 async function readBlacklist(filePath = BLACKLIST_FILE): Promise<string[]> {
@@ -551,51 +595,6 @@ async function writeBlacklist(
   );
 }
 
-function metadataPath(trashRoot: string, id: string): string {
-  return join(trashRoot, id, "entry.json");
-}
-
-function payloadPath(trashRoot: string, id: string): string {
-  return join(trashRoot, id, "payload");
-}
-
-async function listTrash(
-  trashRoot = TRASH_DIR,
-  now = new Date(),
-): Promise<TrashEntry[]> {
-  const result: TrashEntry[] = [];
-  try {
-    const directory = await opendir(trashRoot);
-    for await (const entry of directory) {
-      if (!entry.isDirectory()) continue;
-      const entryRoot = join(trashRoot, entry.name);
-      try {
-        const parsed = JSON.parse(
-          await readFile(metadataPath(trashRoot, entry.name), "utf8"),
-        ) as TrashEntry;
-        if (
-          parsed.id !== entry.name ||
-          !SKILL_AGENTS.includes(parsed.agent) ||
-          typeof parsed.originalPath !== "string"
-        ) {
-          await rm(entryRoot, { recursive: true, force: true });
-          continue;
-        }
-        if (new Date(parsed.expiresAt).getTime() <= now.getTime()) {
-          await rm(entryRoot, { recursive: true, force: true });
-          continue;
-        }
-        result.push(parsed);
-      } catch {
-        await rm(entryRoot, { recursive: true, force: true });
-      }
-    }
-  } catch {
-    return [];
-  }
-  return result.sort((a, b) => b.trashedAt.localeCompare(a.trashedAt));
-}
-
 export async function scanLocalSkills(
   options: ScanOptions = {},
 ): Promise<SkillSnapshot> {
@@ -603,12 +602,14 @@ export async function scanLocalSkills(
   const now = options.now ?? new Date();
   const roots = rootsFor(homeDirectory);
   const trusttoolsDirectory = options.trusttoolsDirectory ?? TRUSTTOOLS_DIR;
-  const [origins, blacklist, trash] = await Promise.all([
+  const [origins, blacklist] = await Promise.all([
     readOrigins(join(trusttoolsDirectory, "skill-origins.json")),
     readBlacklist(join(trusttoolsDirectory, "skill-blacklist.json")),
-    listTrash(join(trusttoolsDirectory, "trash"), now),
   ]);
-  const installations = await scanInstallations(roots, origins);
+  const { installations, descriptions } = await scanInstallations(
+    roots,
+    origins,
+  );
   const usageEvidence = skillUsageEvidence(
     options.usageEvents ?? [],
     now.getTime(),
@@ -634,6 +635,7 @@ export async function scanLocalSkills(
       return {
         id: name,
         name,
+        description: descriptions.get(name) ?? null,
         health: status.health,
         healthReason:
           usage == null
@@ -652,12 +654,12 @@ export async function scanLocalSkills(
       JSON.stringify({
         skills: skills.map((skill) => ({
           name: skill.name,
+          description: skill.description,
           health: skill.health,
           lastUsedAt: skill.lastUsedAt,
           usageCount: skill.usageCount,
           installations: skill.installations,
         })),
-        trash,
         blacklist,
       }),
     )
@@ -670,7 +672,6 @@ export async function scanLocalSkills(
       "活跃度只依据本地日志中的结构化 Skill 调用；文件修改时间仅作安装信息展示。",
     roots,
     skills,
-    trash,
     blacklist,
   };
 }
@@ -678,6 +679,7 @@ export async function scanLocalSkills(
 async function copySkillToAgent(input: {
   sourcePath: string;
   targetAgent: SkillAgent;
+  overwrite?: boolean;
 }): Promise<string> {
   if (!SKILL_AGENTS.includes(input.targetAgent))
     throw new Error("目标 Agent 不受支持");
@@ -695,12 +697,12 @@ async function copySkillToAgent(input: {
   if (!isPathInside(targetRoot, targetPath)) throw new Error("目标路径不合法");
 
   await mkdir(targetRoot, { recursive: true, mode: 0o700 });
-  try {
-    await lstat(targetPath);
-    throw new Error("目标位置已存在同名 Skill");
-  } catch (error) {
-    if (error instanceof Error && error.message === "目标位置已存在同名 Skill")
-      throw error;
+  const targetExists = await lstat(targetPath)
+    .then(() => true)
+    .catch(() => false);
+  if (targetExists) {
+    if (!input.overwrite) throw new Error("目标位置已存在同名 Skill");
+    await rm(targetPath, { recursive: true, force: true });
   }
   await cp(input.sourcePath, targetPath, {
     recursive: sourceStat.isDirectory(),
@@ -867,101 +869,85 @@ export async function refreshMarketSkillEvidence(
   return changed;
 }
 
-export async function trashLocalSkill(path: string): Promise<TrashEntry> {
+export async function uninstallLocalSkill(
+  path: string,
+): Promise<{ path: string }> {
   const roots = rootsFor(homedir());
-  const agent = await assertManagedSkillPath(path, roots);
-  const name = safeSkillName(basename(path).replace(/\.md$/i, ""));
-  const id = randomUUID();
-  const entryRoot = join(TRASH_DIR, id);
-  const payload = payloadPath(TRASH_DIR, id);
-  const trashedAt = new Date();
-  const metadata: TrashEntry = {
-    id,
-    skillName: name,
-    agent,
-    originalPath: resolve(path),
-    trashedAt: trashedAt.toISOString(),
-    expiresAt: new Date(trashedAt.getTime() + RESTORE_WINDOW_MS).toISOString(),
-  };
-
-  await mkdir(entryRoot, { recursive: true, mode: 0o700 });
-  try {
-    await rename(path, payload);
-    await writeFile(
-      metadataPath(TRASH_DIR, id),
-      JSON.stringify(metadata, null, 2),
-      {
-        encoding: "utf8",
-        mode: 0o600,
-      },
-    );
-    return metadata;
-  } catch (error) {
-    await rename(payload, path).catch(() => undefined);
-    await rm(entryRoot, { recursive: true, force: true });
-    throw error;
-  }
+  await assertManagedSkillPath(path, roots);
+  const target = resolve(path);
+  await rm(target, { recursive: true, force: true });
+  return { path: target };
 }
 
-export async function trashLocalSkills(
+export async function batchUninstallLocalSkills(
   paths: string[],
-  trash: (path: string) => Promise<TrashEntry> = trashLocalSkill,
-): Promise<BatchTrashResult> {
+): Promise<BatchUninstallResult> {
   const uniquePaths = [...new Set(paths)];
   if (uniquePaths.length === 0) throw new Error("至少选择一个 Skill");
 
-  const result: BatchTrashResult = { succeeded: [], failed: [] };
+  const succeeded: string[] = [];
+  const failed: { path: string; error: string }[] = [];
   for (const path of uniquePaths) {
     try {
-      result.succeeded.push(await trash(path));
+      const result = await uninstallLocalSkill(path);
+      succeeded.push(result.path);
     } catch (error) {
-      result.failed.push({
+      failed.push({
         path,
         error: error instanceof Error ? error.message : "未知错误",
       });
     }
   }
-  return result;
+  return { succeeded, failed };
 }
 
-export async function restoreLocalSkill(id: string): Promise<void> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("回收站条目标识不合法");
-  const entryRoot = join(TRASH_DIR, id);
-  if (!isPathInside(TRASH_DIR, entryRoot)) throw new Error("回收站路径不合法");
-  const metadata = JSON.parse(
-    await readFile(metadataPath(TRASH_DIR, id), "utf8"),
-  ) as TrashEntry;
-  if (
-    metadata.id !== id ||
-    new Date(metadata.expiresAt).getTime() <= Date.now()
-  ) {
-    await rm(entryRoot, { recursive: true, force: true });
-    throw new Error("恢复期限已过");
-  }
-
+export async function syncLocalSkill(input: {
+  sourcePath: string;
+  targetAgents: string[];
+  onConflict: "overwrite" | "skip";
+}): Promise<SkillSyncResult> {
   const roots = rootsFor(homedir());
-  const expectedRoot = roots[metadata.agent];
-  const pathFromRoot = relative(
-    resolve(expectedRoot),
-    resolve(metadata.originalPath),
-  );
-  if (
-    pathFromRoot.startsWith("..") ||
-    pathFromRoot.includes(sep) ||
-    pathFromRoot === ""
-  ) {
-    throw new Error("原始路径不属于受管目录");
+  await assertManagedSkillPath(input.sourcePath, roots);
+
+  const succeeded: { agent: string; path: string }[] = [];
+  const skipped: { agent: string; reason: "conflict" }[] = [];
+  const failed: { agent: string; error: string }[] = [];
+
+  for (const targetAgent of input.targetAgents) {
+    if (!SKILL_AGENTS.includes(targetAgent as SkillAgent)) {
+      failed.push({ agent: targetAgent, error: "目标 Agent 不受支持" });
+      continue;
+    }
+    const agent = targetAgent as SkillAgent;
+    try {
+      const targetPath = await copySkillToAgent({
+        sourcePath: input.sourcePath,
+        targetAgent: agent,
+        overwrite: input.onConflict === "overwrite",
+      });
+      const origins = await readOrigins();
+      const sourceOrigin = origins.installations[resolve(input.sourcePath)];
+      if (sourceOrigin) {
+        origins.installations[resolve(targetPath)] = {
+          ...sourceOrigin,
+          installedAt: new Date().toISOString(),
+        };
+        await writeOrigins(origins);
+      }
+      succeeded.push({ agent, path: targetPath });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      if (
+        input.onConflict === "skip" &&
+        message === "目标位置已存在同名 Skill"
+      ) {
+        skipped.push({ agent, reason: "conflict" });
+      } else {
+        failed.push({ agent, error: message });
+      }
+    }
   }
-  try {
-    await lstat(metadata.originalPath);
-    throw new Error("原始位置已存在同名 Skill");
-  } catch (error) {
-    if (error instanceof Error && error.message === "原始位置已存在同名 Skill")
-      throw error;
-  }
-  await mkdir(expectedRoot, { recursive: true, mode: 0o700 });
-  await rename(payloadPath(TRASH_DIR, id), metadata.originalPath);
-  await rm(entryRoot, { recursive: true, force: true });
+  return { succeeded, skipped, failed };
 }
 
 export async function setSkillBlacklisted(
