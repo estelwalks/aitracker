@@ -250,8 +250,7 @@ async function createMainWindow(): Promise<void> {
 
     if (!hasCloseHintBeenShown()) {
       await dialog.showMessageBox(mainWindow!, {
-        message:
-          "TrustTools 将继续在菜单栏运行，可通过托盘图标重新打开",
+        message: "TrustTools 将继续在菜单栏运行，可通过托盘图标重新打开",
         buttons: ["知道了"],
       });
       markCloseHintShown();
@@ -316,9 +315,11 @@ async function prewarmLocalData(origin: string): Promise<void> {
   }
 }
 
-async function checkDataCompatibility(): Promise<{ compatible: boolean; oldVersion?: string }> {
-  const homeDir =
-    process.env.TRUSTTOOLS_USAGE_HOME || app.getPath("home");
+async function checkDataCompatibility(): Promise<{
+  compatible: boolean;
+  oldVersion?: string;
+}> {
+  const homeDir = process.env.TRUSTTOOLS_USAGE_HOME || app.getPath("home");
   const schemaVersionPath = join(homeDir, ".trusttools", "schema_version");
 
   try {
