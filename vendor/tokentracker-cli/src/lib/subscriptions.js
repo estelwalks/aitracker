@@ -5,7 +5,9 @@ const cp = require("node:child_process");
 
 const { readJson } = require("./fs");
 const { resolveTrackerPaths } = require("./tracker-paths");
-const { probeOpenclawSessionPluginState } = require("./openclaw-session-plugin");
+const {
+  probeOpenclawSessionPluginState,
+} = require("./openclaw-session-plugin");
 
 const OPENAI_AUTH_CLAIM = "https://api.openai.com/auth";
 const MACOS_SECURITY_BIN = "/usr/bin/security";
@@ -114,7 +116,9 @@ function resolveCodexHome({ home, env }) {
 
 function resolveOpencodeDataDir({ home, env }) {
   const explicit = normalizeString(env?.XDG_DATA_HOME);
-  const base = explicit ? path.resolve(explicit) : path.join(home, ".local", "share");
+  const base = explicit
+    ? path.resolve(explicit)
+    : path.join(home, ".local", "share");
   return path.join(base, "opencode");
 }
 
@@ -164,34 +168,54 @@ async function detectOpencodeChatgptSubscription({ home, env }) {
   };
 }
 
-function probeMacosKeychainGenericPassword({ service, securityRunner, timeoutMs } = {}) {
+function probeMacosKeychainGenericPassword({
+  service,
+  securityRunner,
+  timeoutMs,
+} = {}) {
   const svc = normalizeString(service);
   if (!svc) return false;
 
-  const runner = typeof securityRunner === "function" ? securityRunner : cp.spawnSync;
-  if (runner === cp.spawnSync && !fs.existsSync(MACOS_SECURITY_BIN)) return false;
+  const runner =
+    typeof securityRunner === "function" ? securityRunner : cp.spawnSync;
+  if (runner === cp.spawnSync && !fs.existsSync(MACOS_SECURITY_BIN))
+    return false;
 
-  const result = runner(MACOS_SECURITY_BIN, ["find-generic-password", "-s", svc], {
-    stdio: "ignore",
-    timeout: Number.isFinite(timeoutMs) ? timeoutMs : 2000,
-  });
+  const result = runner(
+    MACOS_SECURITY_BIN,
+    ["find-generic-password", "-s", svc],
+    {
+      stdio: "ignore",
+      timeout: Number.isFinite(timeoutMs) ? timeoutMs : 2000,
+    },
+  );
 
   if (!result || result.error) return false;
   return result.status === 0;
 }
 
-function readMacosKeychainPassword({ service, securityRunner, timeoutMs } = {}) {
+function readMacosKeychainPassword({
+  service,
+  securityRunner,
+  timeoutMs,
+} = {}) {
   const svc = normalizeString(service);
   if (!svc) return null;
 
-  const runner = typeof securityRunner === "function" ? securityRunner : cp.spawnSync;
-  if (runner === cp.spawnSync && !fs.existsSync(MACOS_SECURITY_BIN)) return null;
+  const runner =
+    typeof securityRunner === "function" ? securityRunner : cp.spawnSync;
+  if (runner === cp.spawnSync && !fs.existsSync(MACOS_SECURITY_BIN))
+    return null;
 
-  const result = runner(MACOS_SECURITY_BIN, ["find-generic-password", "-s", svc, "-w"], {
-    stdio: ["ignore", "pipe", "ignore"],
-    timeout: Number.isFinite(timeoutMs) ? timeoutMs : 2000,
-    encoding: "utf8",
-  });
+  const result = runner(
+    MACOS_SECURITY_BIN,
+    ["find-generic-password", "-s", svc, "-w"],
+    {
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: Number.isFinite(timeoutMs) ? timeoutMs : 2000,
+      encoding: "utf8",
+    },
+  );
 
   if (!result || result.error) return null;
   if (result.status !== 0) return null;
@@ -217,7 +241,12 @@ function readClaudeCodeCredentialsFile({ home, fsReader } = {}) {
   }
 }
 
-function detectClaudeCodeCredentialsPresence({ platform = process.platform, securityRunner, home, fsReader } = {}) {
+function detectClaudeCodeCredentialsPresence({
+  platform = process.platform,
+  securityRunner,
+  home,
+  fsReader,
+} = {}) {
   if (platform === "darwin") {
     for (const service of CLAUDE_CODE_KEYCHAIN_SERVICES) {
       const present = probeMacosKeychainGenericPassword({
@@ -261,7 +290,8 @@ function detectClaudeCodeCredentialsPresence({ platform = process.platform, secu
 }
 
 function extractClaudeKeychainSubscription(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return null;
 
   const oauth = payload.claudeAiOauth;
   if (!oauth || typeof oauth !== "object" || Array.isArray(oauth)) return null;
@@ -273,7 +303,12 @@ function extractClaudeKeychainSubscription(payload) {
   return { subscriptionType, rateLimitTier };
 }
 
-function detectClaudeCodeSubscriptionDetails({ platform = process.platform, securityRunner, home, fsReader } = {}) {
+function detectClaudeCodeSubscriptionDetails({
+  platform = process.platform,
+  securityRunner,
+  home,
+  fsReader,
+} = {}) {
   const rawPayloads = [];
   if (platform === "darwin") {
     for (const service of CLAUDE_CODE_KEYCHAIN_SERVICES) {
@@ -327,14 +362,26 @@ async function collectLocalSubscriptions({
   if (opencode) out.push(opencode);
 
   if (probeKeychainDetails) {
-    const claude = detectClaudeCodeSubscriptionDetails({ platform, securityRunner, home });
+    const claude = detectClaudeCodeSubscriptionDetails({
+      platform,
+      securityRunner,
+      home,
+    });
     if (claude) out.push(claude);
     else if (probeKeychain) {
-      const present = detectClaudeCodeCredentialsPresence({ platform, securityRunner, home });
+      const present = detectClaudeCodeCredentialsPresence({
+        platform,
+        securityRunner,
+        home,
+      });
       if (present) out.push(present);
     }
   } else if (probeKeychain) {
-    const claude = detectClaudeCodeCredentialsPresence({ platform, securityRunner, home });
+    const claude = detectClaudeCodeCredentialsPresence({
+      platform,
+      securityRunner,
+      home,
+    });
     if (claude) out.push(claude);
   }
 
@@ -364,7 +411,12 @@ async function detectOpenclawSessionIntegration({ home, env }) {
   };
 }
 
-function readClaudeCodeAccessToken({ platform = process.platform, securityRunner, home, fsReader } = {}) {
+function readClaudeCodeAccessToken({
+  platform = process.platform,
+  securityRunner,
+  home,
+  fsReader,
+} = {}) {
   if (platform === "darwin") {
     for (const service of CLAUDE_CODE_KEYCHAIN_SERVICES) {
       try {
@@ -421,8 +473,12 @@ async function readCodexAuthBundle({ home, env } = {}) {
     const idPayload = decodeJwtPayload(auth?.tokens?.id_token);
     const accountId =
       normalizeString(auth?.tokens?.account_id) ||
-      normalizeString(extractOpenAiAuthNamespace(accessPayload)?.chatgpt_account_id) ||
-      normalizeString(extractOpenAiAuthNamespace(idPayload)?.chatgpt_account_id) ||
+      normalizeString(
+        extractOpenAiAuthNamespace(accessPayload)?.chatgpt_account_id,
+      ) ||
+      normalizeString(
+        extractOpenAiAuthNamespace(idPayload)?.chatgpt_account_id,
+      ) ||
       null;
 
     const accessInfo = extractChatgptSubscriptionFromPayload(accessPayload);

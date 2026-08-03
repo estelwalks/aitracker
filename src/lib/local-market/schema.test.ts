@@ -30,7 +30,12 @@ test("parseMarketApiResponse maps real API fields without inventing rating or ve
   assert.equal(parsed.skills[0]?.installCount, 42);
   assert.equal(parsed.skills[0]?.rating, null);
   assert.equal(parsed.skills[0]?.version, null);
-  assert.deepEqual(parsed.pagination, { page: 1, limit: 20, total: 1, pages: 1 });
+  assert.deepEqual(parsed.pagination, {
+    page: 1,
+    limit: 20,
+    total: 1,
+    pages: 1,
+  });
 });
 
 test("parseMarketApiResponse rejects malformed contracts", () => {
@@ -45,11 +50,20 @@ test("parseMarketApiResponse rejects malformed contracts", () => {
 });
 
 test("parseMarketQuery enforces pagination and search bounds", () => {
-  assert.deepEqual(parseMarketQuery({ page: 2, limit: 20, search: "  测试  " }), {
-    page: 2,
-    limit: 20,
-    search: "测试",
-  });
-  assert.throws(() => parseMarketQuery({ page: 0, limit: 20, search: "" }), /页码/);
-  assert.throws(() => parseMarketQuery({ page: 1, limit: 100, search: "" }), /每页/);
+  assert.deepEqual(
+    parseMarketQuery({ page: 2, limit: 20, search: "  测试  " }),
+    {
+      page: 2,
+      limit: 20,
+      search: "测试",
+    },
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 0, limit: 20, search: "" }),
+    /页码/,
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 1, limit: 100, search: "" }),
+    /每页/,
+  );
 });

@@ -37,7 +37,9 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -66,7 +68,12 @@ function normalizedToolName(value: unknown): string {
     )}`;
   }
   const name = normalizedIdentifier(raw, "unknown_tool");
-  for (const knownName of ["exec_command", "apply_patch", "tool_search", "web_search"]) {
+  for (const knownName of [
+    "exec_command",
+    "apply_patch",
+    "tool_search",
+    "web_search",
+  ]) {
     if (name === knownName || name.endsWith(`_${knownName}`)) return knownName;
   }
   return name;
@@ -93,7 +100,11 @@ function toolCategory(name: string): LocalUsageToolCategory {
     return "execution";
   if (name.includes("plan")) return "planning";
   if (name.includes("agent") || name.includes("thread")) return "agent";
-  if (name.includes("browser") || name.includes("web_search") || name.includes("web_")) {
+  if (
+    name.includes("browser") ||
+    name.includes("web_search") ||
+    name.includes("web_")
+  ) {
     return "browser";
   }
   if (name.startsWith("mcp_") || name.startsWith("mcp__")) return "mcp";
@@ -110,7 +121,9 @@ function durationBucket(value: unknown): LocalUsageCommandDurationBucket {
   return "over-60s";
 }
 
-function outputSizeBucket(characters: number | undefined): LocalUsageCommandOutputSizeBucket {
+function outputSizeBucket(
+  characters: number | undefined,
+): LocalUsageCommandOutputSizeBucket {
   if (characters == null) return "unknown";
   if (characters === 0) return "empty";
   if (characters < 1_024) return "under-1k";
@@ -118,19 +131,30 @@ function outputSizeBucket(characters: number | undefined): LocalUsageCommandOutp
   return "over-10k";
 }
 
-function exitStatus(value: unknown, completed: boolean): LocalUsageCommandExitStatus {
-  if (value === 0 || value === "success" || value === "completed") return "success";
+function exitStatus(
+  value: unknown,
+  completed: boolean,
+): LocalUsageCommandExitStatus {
+  if (value === 0 || value === "success" || value === "completed")
+    return "success";
   if (typeof value === "number" && value !== 0) return "failure";
   if (value === "failure" || value === "error") return "failure";
   if (value === "interrupted" || value === "cancelled") return "interrupted";
   return completed ? "success" : "unknown";
 }
 
-function safeCommandSignature(command: string): { executable: string; safeSignature: string } {
+function safeCommandSignature(command: string): {
+  executable: string;
+  safeSignature: string;
+} {
   const tokens = command.trim().split(/\s+/);
-  const safeTokens = tokens.filter((token) => /^[a-zA-Z0-9._-]{1,80}$/.test(token));
+  const safeTokens = tokens.filter((token) =>
+    /^[a-zA-Z0-9._-]{1,80}$/.test(token),
+  );
   const executable = normalizedIdentifier(safeTokens[0], "unknown");
-  const subcommand = safeTokens.slice(1).find((token) => !token.startsWith("-"));
+  const subcommand = safeTokens
+    .slice(1)
+    .find((token) => !token.startsWith("-"));
   const normalizedSubcommand =
     subcommand == null ? undefined : normalizedIdentifier(subcommand, "");
   return {
@@ -168,7 +192,11 @@ function skillNameFromArguments(argumentValue: unknown): string | undefined {
   return command == null ? undefined : skillNameFromCommand(command);
 }
 
-function addTool(state: CodexPendingContext, name: string, category = toolCategory(name)): void {
+function addTool(
+  state: CodexPendingContext,
+  name: string,
+  category = toolCategory(name),
+): void {
   const key = `${category}:${name}`;
   const existing = state.tools.get(key);
   if (existing == null) state.tools.set(key, { name, category, calls: 1 });
@@ -211,10 +239,17 @@ function outputText(value: unknown): string | undefined {
   return firstString(object?.text, object?.output, object?.content);
 }
 
-function recordOutput(state: CodexPendingContext, details: JsonObject, item?: JsonObject): void {
-  const text = outputText(item?.output ?? item?.content ?? details.output ?? details.content);
+function recordOutput(
+  state: CodexPendingContext,
+  details: JsonObject,
+  item?: JsonObject,
+): void {
+  const text = outputText(
+    item?.output ?? item?.content ?? details.output ?? details.content,
+  );
   const characters = text?.length ?? 0;
-  const lines = text == null || text.length === 0 ? 0 : text.split(/\r?\n/).length;
+  const lines =
+    text == null || text.length === 0 ? 0 : text.split(/\r?\n/).length;
   const completed =
     details.completed === true ||
     item?.completed === true ||
@@ -264,8 +299,16 @@ function mcpToolName(details: JsonObject, item?: JsonObject): string {
   return `mcp_${server}_${tool}`;
 }
 
-function explicitSkillName(details?: JsonObject, item?: JsonObject): string | undefined {
-  const value = firstString(details?.skill, details?.skill_name, item?.skill, item?.skill_name);
+function explicitSkillName(
+  details?: JsonObject,
+  item?: JsonObject,
+): string | undefined {
+  const value = firstString(
+    details?.skill,
+    details?.skill_name,
+    item?.skill,
+    item?.skill_name,
+  );
   return value == null ? undefined : normalizedIdentifier(value, "");
 }
 
@@ -283,29 +326,43 @@ export function createCodexPendingContext(): CodexPendingContext {
 }
 
 /** Reads a rollout record transiently and retains only a strictly whitelisted summary. */
-export function collectCodexContextRecord(state: CodexPendingContext, record: JsonObject): void {
+export function collectCodexContextRecord(
+  state: CodexPendingContext,
+  record: JsonObject,
+): void {
   const payload = asObject(record.payload) ?? record;
   const item = asObject(payload.item) ?? asObject(payload.response_item);
-  const type = normalizedIdentifier(firstString(item?.type, payload.type, record.type), "unknown");
+  const type = normalizedIdentifier(
+    firstString(item?.type, payload.type, record.type),
+    "unknown",
+  );
   const details = item ?? payload;
 
   if (type === "response_item") {
-    const nestedType = normalizedIdentifier(item?.type ?? payload.item_type, "unknown");
-    if (nestedType === "message" || nestedType === "output_text") state.textResponse = true;
+    const nestedType = normalizedIdentifier(
+      item?.type ?? payload.item_type,
+      "unknown",
+    );
+    if (nestedType === "message" || nestedType === "output_text")
+      state.textResponse = true;
     if (nestedType === "function_call" || nestedType === "custom_tool_call") {
       const name = normalizedToolName(firstString(item?.name, item?.tool_name));
       const argumentValue = item?.arguments ?? item?.input;
       addTool(state, name);
-      if (name === "exec_command") recordCommand(state, argumentValue, item ?? payload);
+      if (name === "exec_command")
+        recordCommand(state, argumentValue, item ?? payload);
       else addSkill(state, skillNameFromArguments(argumentValue));
       addSkill(state, explicitSkillName(item));
     }
-    if (nestedType === "function_call_output") recordOutput(state, payload, item);
+    if (nestedType === "function_call_output")
+      recordOutput(state, payload, item);
     return;
   }
 
   if (type === "function_call" || type === "custom_tool_call") {
-    const name = normalizedToolName(firstString(details.name, details.tool_name));
+    const name = normalizedToolName(
+      firstString(details.name, details.tool_name),
+    );
     const argumentValue = details.arguments ?? details.input;
     addTool(state, name);
     if (name === "exec_command") recordCommand(state, argumentValue, details);
@@ -337,7 +394,9 @@ export function collectCodexContextRecord(state: CodexPendingContext, record: Js
   if (type === "message" || type === "output_text") state.textResponse = true;
 }
 
-function consolidateCommands(commands: PendingCommand[]): LocalUsageCommandStat[] {
+function consolidateCommands(
+  commands: PendingCommand[],
+): LocalUsageCommandStat[] {
   const combined = new Map<string, LocalUsageCommandStat>();
   for (const command of commands) {
     const key = [
@@ -362,12 +421,16 @@ export function consumeCodexPendingContext(
   const tools = [...state.tools.values()].sort((left, right) =>
     left.name.localeCompare(right.name),
   );
-  const skills: LocalUsageSkillCall[] = [...state.skills].map(([name, calls]) => ({ name, calls }));
+  const skills: LocalUsageSkillCall[] = [...state.skills].map(
+    ([name, calls]) => ({ name, calls }),
+  );
   const context: LocalUsageContext = {
     ...(state.textResponse || tools.length === 0 ? { textResponse: true } : {}),
     ...(tools.length > 0 ? { tools } : {}),
     ...(skills.length > 0 ? { skills } : {}),
-    ...(state.commands.length > 0 ? { commands: consolidateCommands(state.commands) } : {}),
+    ...(state.commands.length > 0
+      ? { commands: consolidateCommands(state.commands) }
+      : {}),
     ...(state.outputCalls > 0
       ? {
           toolOutputs: {

@@ -31,7 +31,8 @@ export const requestAiSecurityReview = createServerFn({ method: "POST" })
   });
 
 const archiveScanRequestValidator = (input: unknown) => {
-  if (!input || typeof input !== "object") throw new Error("压缩包扫描参数不合法");
+  if (!input || typeof input !== "object")
+    throw new Error("压缩包扫描参数不合法");
   const candidate = input as Record<string, unknown>;
   if (
     typeof candidate.name !== "string" ||
@@ -61,6 +62,7 @@ const archiveScanRequestValidator = (input: unknown) => {
 export const requestSecurityArchiveScan = createServerFn({ method: "POST" })
   .validator(archiveScanRequestValidator)
   .handler(async ({ data }) => {
-    const { scanUploadedSecurityArchive } = await import("./archive-scan.server.ts");
+    const { scanUploadedSecurityArchive } =
+      await import("./archive-scan.server.ts");
     return scanUploadedSecurityArchive(data);
   });

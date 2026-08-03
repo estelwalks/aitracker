@@ -1,9 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, RefreshCw, RotateCcw, Search, ShieldBan, Trash2 } from "lucide-react";
+import {
+  Download,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldBan,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Dot, EmptyState, PageHeader, Panel, StatusBadge, TTButton } from "../components/tt";
+import {
+  Dot,
+  EmptyState,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  TTButton,
+} from "../components/tt";
 import {
   batchUninstallSkills,
   getLocalSkills,
@@ -28,19 +42,27 @@ export const Route = createFileRoute("/skills")({
       { title: "Skill 管理 · TrustTools V3.0" },
       {
         name: "description",
-        content: "扫描并管理本机 AI Agent 的 Skill，支持安全复制、回收站恢复与黑名单。",
+        content:
+          "扫描并管理本机 AI Agent 的 Skill，支持安全复制、回收站恢复与黑名单。",
       },
     ],
   }),
   component: SkillsPage,
 });
 
-const healthMeta: Record<SkillHealth, { label: string; dot: string; color: string }> = {
+const healthMeta: Record<
+  SkillHealth,
+  { label: string; dot: string; color: string }
+> = {
   active: { label: "活跃", dot: "bg-ok", color: "text-ok" },
   low: { label: "低频", dot: "bg-warn", color: "text-warn" },
   doze: { label: "休眠", dot: "bg-orange-500", color: "text-orange-500" },
   dead: { label: "长期未活动", dot: "bg-danger", color: "text-danger" },
-  unknown: { label: "调用未知", dot: "bg-muted-foreground", color: "text-muted-foreground" },
+  unknown: {
+    label: "调用未知",
+    dot: "bg-muted-foreground",
+    color: "text-muted-foreground",
+  },
 };
 
 function formatTime(value: string): string {
@@ -75,7 +97,9 @@ function SkillsPage() {
       snapshotRef.current = next;
       setSnapshot(next);
       setSelectedId((current) =>
-        next.skills.some((skill) => skill.id === current) ? current : (next.skills[0]?.id ?? ""),
+        next.skills.some((skill) => skill.id === current)
+          ? current
+          : (next.skills[0]?.id ?? ""),
       );
     } else if (message) {
       snapshotRef.current = next;
@@ -87,7 +111,8 @@ function SkillsPage() {
   useEffect(() => {
     let stopped = false;
     const synchronize = async () => {
-      if (stopped || document.visibilityState !== "visible" || busyRef.current) return;
+      if (stopped || document.visibilityState !== "visible" || busyRef.current)
+        return;
       try {
         await refreshSkillMarketEvidence();
         await refresh();
@@ -128,15 +153,25 @@ function SkillsPage() {
           skill.name.toLowerCase().includes(query.toLowerCase()) &&
           (health === "all" || skill.health === health) &&
           (agent === "all" ||
-            skill.installations.some((installation) => installation.agent === agent)),
+            skill.installations.some(
+              (installation) => installation.agent === agent,
+            )),
       ),
     [agent, health, query, snapshot.skills],
   );
-  const selected: LocalSkill | undefined = snapshot.skills.find((skill) => skill.id === selectedId);
-  const isBlocked = selected ? snapshot.blacklist.includes(selected.name) : false;
-  const visibleIds = useMemo(() => new Set(list.map((skill) => skill.id)), [list]);
+  const selected: LocalSkill | undefined = snapshot.skills.find(
+    (skill) => skill.id === selectedId,
+  );
+  const isBlocked = selected
+    ? snapshot.blacklist.includes(selected.name)
+    : false;
+  const visibleIds = useMemo(
+    () => new Set(list.map((skill) => skill.id)),
+    [list],
+  );
   const checkedVisible = list.filter((skill) => checkedIds.has(skill.id));
-  const allVisibleChecked = list.length > 0 && checkedVisible.length === list.length;
+  const allVisibleChecked =
+    list.length > 0 && checkedVisible.length === list.length;
 
   const toggleAllVisible = () => {
     setCheckedIds((current) => {
@@ -174,7 +209,9 @@ function SkillsPage() {
       setCheckedIds(new Set());
       await refresh();
       if (result.succeeded.length > 0) {
-        toast.success(`${result.succeeded.length} 个安装副本已移至 5 分钟回收站`);
+        toast.success(
+          `${result.succeeded.length} 个安装副本已移至 5 分钟回收站`,
+        );
       }
       if (result.failed.length > 0) {
         toast.error(
@@ -206,7 +243,8 @@ function SkillsPage() {
         desc={`${snapshot.healthBasis} 扫描于 ${formatTime(snapshot.generatedAt)}`}
         status={
           <StatusBadge tone="ok">
-            <Dot className="size-1 bg-ok" /> {snapshot.skills.length} 个真实 Skill
+            <Dot className="size-1 bg-ok" /> {snapshot.skills.length} 个真实
+            Skill
           </StatusBadge>
         }
       />
@@ -226,7 +264,9 @@ function SkillsPage() {
         </div>
         <select
           value={health}
-          onChange={(event) => setHealth(event.target.value as "all" | SkillHealth)}
+          onChange={(event) =>
+            setHealth(event.target.value as "all" | SkillHealth)
+          }
           className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
         >
           <option value="all">健康度：全部</option>
@@ -238,7 +278,9 @@ function SkillsPage() {
         </select>
         <select
           value={agent}
-          onChange={(event) => setAgent(event.target.value as "all" | SkillAgent)}
+          onChange={(event) =>
+            setAgent(event.target.value as "all" | SkillAgent)
+          }
           className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
         >
           <option value="all">Agent：全部</option>
@@ -251,7 +293,8 @@ function SkillsPage() {
           disabled={busy}
           onClick={() => run(() => Promise.resolve(), "已重新扫描本地 Skill")}
         >
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} /> 刷新扫描
+          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
+          刷新扫描
         </TTButton>
       </div>
 
@@ -273,7 +316,10 @@ function SkillsPage() {
                   size="sm"
                   disabled={busy}
                   onClick={() =>
-                    run(() => restoreSkill({ data: entry.id }), `${entry.skillName} 已恢复`)
+                    run(
+                      () => restoreSkill({ data: entry.id }),
+                      `${entry.skillName} 已恢复`,
+                    )
                   }
                 >
                   <RotateCcw className="size-3" /> 恢复
@@ -329,7 +375,9 @@ function SkillsPage() {
                     key={skill.id}
                     onClick={() => setSelectedId(skill.id)}
                     className={`flex cursor-pointer items-center gap-3 px-4 py-3 ${
-                      selectedId === skill.id ? "bg-accent/60" : "hover:bg-accent/30"
+                      selectedId === skill.id
+                        ? "bg-accent/60"
+                        : "hover:bg-accent/30"
                     }`}
                   >
                     <input
@@ -349,9 +397,13 @@ function SkillsPage() {
                     />
                     <Dot className={healthMeta[skill.health].dot} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-medium">{skill.name}</div>
+                      <div className="truncate text-[13px] font-medium">
+                        {skill.name}
+                      </div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {skill.installations.map((item) => item.agent).join(" + ")}
+                        {skill.installations
+                          .map((item) => item.agent)
+                          .join(" + ")}
                       </div>
                     </div>
                     {snapshot.blacklist.includes(skill.name) && (
@@ -359,7 +411,9 @@ function SkillsPage() {
                         黑名单
                       </span>
                     )}
-                    <span className={`text-xs ${healthMeta[skill.health].color}`}>
+                    <span
+                      className={`text-xs ${healthMeta[skill.health].color}`}
+                    >
                       {healthMeta[skill.health].label}
                     </span>
                   </li>
@@ -371,15 +425,21 @@ function SkillsPage() {
 
         <Panel title="Skill 详情">
           {!selected ? (
-            <p className="text-[13px] text-muted-foreground">选择一个 Skill 查看详情。</p>
+            <p className="text-[13px] text-muted-foreground">
+              选择一个 Skill 查看详情。
+            </p>
           ) : (
             <div className="space-y-4 text-[13px]">
               <div>
                 <div className="text-base font-semibold">{selected.name}</div>
-                <p className="mt-1 text-xs text-muted-foreground">{selected.healthReason}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selected.healthReason}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   最近调用：
-                  {selected.lastUsedAt == null ? "暂无可验证记录" : formatTime(selected.lastUsedAt)}
+                  {selected.lastUsedAt == null
+                    ? "暂无可验证记录"
+                    : formatTime(selected.lastUsedAt)}
                   {" · "}累计识别：{selected.usageCount.toLocaleString()} 次
                 </p>
               </div>
@@ -392,7 +452,9 @@ function SkillsPage() {
                       className="rounded-sm border border-border bg-surface-2 p-2"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">{installation.agent}</span>
+                        <span className="font-medium">
+                          {installation.agent}
+                        </span>
                         <TTButton
                           size="sm"
                           variant="danger"
@@ -442,7 +504,9 @@ function SkillsPage() {
                 <div className="flex flex-wrap gap-2">
                   {SKILL_AGENTS.filter(
                     (target) =>
-                      !selected.installations.some((installation) => installation.agent === target),
+                      !selected.installations.some(
+                        (installation) => installation.agent === target,
+                      ),
                   ).map((target) => (
                     <TTButton
                       key={target}
@@ -483,7 +547,11 @@ function SkillsPage() {
                   <ShieldBan className="size-3.5" />
                   {isBlocked ? "移出黑名单" : "加入黑名单"}
                 </TTButton>
-                <TTButton variant="danger" disabled={busy} onClick={() => uninstallAll(selected)}>
+                <TTButton
+                  variant="danger"
+                  disabled={busy}
+                  onClick={() => uninstallAll(selected)}
+                >
                   <Trash2 className="size-3.5" /> 卸载全部副本
                 </TTButton>
               </div>

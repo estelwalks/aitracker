@@ -45,7 +45,9 @@ async function serveStaticFile(baseDir, pathname, res) {
     res.writeHead(200, {
       "Content-Type": contentType,
       "Content-Length": stat.size,
-      "Cache-Control": isHtml ? "no-cache" : "public, max-age=31536000, immutable",
+      "Cache-Control": isHtml
+        ? "no-cache"
+        : "public, max-age=31536000, immutable",
     });
 
     const stream = fs.createReadStream(filePath);

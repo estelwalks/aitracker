@@ -10,12 +10,19 @@ async function purgeProjectUsage({
   projectState,
   cursors,
 }) {
-  if (!projectKey || !projectQueuePath || !projectQueueStatePath || !projectState) {
+  if (
+    !projectKey ||
+    !projectQueuePath ||
+    !projectQueueStatePath ||
+    !projectState
+  ) {
     return { removed: 0, kept: 0, removedBuckets: 0, removedProjectCursors: 0 };
   }
 
   let previousOffset = 0;
-  const previousState = await fsp.readFile(projectQueueStatePath, "utf8").catch(() => null);
+  const previousState = await fsp
+    .readFile(projectQueueStatePath, "utf8")
+    .catch(() => null);
   if (previousState) {
     try {
       const parsed = JSON.parse(previousState);
@@ -27,7 +34,9 @@ async function purgeProjectUsage({
   }
 
   const buckets =
-    projectState.buckets && typeof projectState.buckets === "object" ? projectState.buckets : {};
+    projectState.buckets && typeof projectState.buckets === "object"
+      ? projectState.buckets
+      : {};
   let removedBuckets = 0;
   const prefix = `${projectKey}|`;
   for (const key of Object.keys(buckets)) {
@@ -39,7 +48,8 @@ async function purgeProjectUsage({
   projectState.buckets = buckets;
 
   let removedProjectCursors = 0;
-  const files = cursors?.files && typeof cursors.files === "object" ? cursors.files : {};
+  const files =
+    cursors?.files && typeof cursors.files === "object" ? cursors.files : {};
   for (const cursor of Object.values(files)) {
     if (!cursor || typeof cursor !== "object") continue;
     if (cursor.project?.projectKey === projectKey) {
@@ -109,7 +119,11 @@ async function purgeProjectUsage({
     nextOffset = 0;
   }
 
-  await fsp.writeFile(projectQueueStatePath, JSON.stringify({ offset: nextOffset }), "utf8");
+  await fsp.writeFile(
+    projectQueueStatePath,
+    JSON.stringify({ offset: nextOffset }),
+    "utf8",
+  );
 
   return { removed, kept, removedBuckets, removedProjectCursors };
 }

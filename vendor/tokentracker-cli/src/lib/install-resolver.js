@@ -1,23 +1,43 @@
 const fssync = require("node:fs");
 const wsl = require("./wsl-probe");
 
-function resolveInstallPaths({ nativeValue, wslDir, wslValue } = {}, env = process.env, deps = {}) {
+function resolveInstallPaths(
+  { nativeValue, wslDir, wslValue } = {},
+  env = process.env,
+  deps = {},
+) {
   if (process.platform !== "win32") {
     return { native: nativeValue ?? null, wsl: null };
   }
 
-  const wslCandidate = wslValue !== undefined
-    ? (wsl.shouldProbeWsl(env) && pathExists(wslValue, deps.existsSync) ? wslValue : null)
-    : (wslDir && wsl.shouldProbeWsl(env) ? wsl.discoverWslHome(wslDir, { ...deps, env }) : null);
-  const nativeCandidate = wsl.shouldProbeNative(env) && nativeValue
-    ? pathExists(nativeValue, deps.existsSync) : null;
+  const wslCandidate =
+    wslValue !== undefined
+      ? wsl.shouldProbeWsl(env) && pathExists(wslValue, deps.existsSync)
+        ? wslValue
+        : null
+      : wslDir && wsl.shouldProbeWsl(env)
+        ? wsl.discoverWslHome(wslDir, { ...deps, env })
+        : null;
+  const nativeCandidate =
+    wsl.shouldProbeNative(env) && nativeValue
+      ? pathExists(nativeValue, deps.existsSync)
+      : null;
 
-  return wsl.resolveAllWin32Paths({ nativeValue: nativeCandidate, wslValue: wslCandidate, env, platform: "win32" });
+  return wsl.resolveAllWin32Paths({
+    nativeValue: nativeCandidate,
+    wslValue: wslCandidate,
+    env,
+    platform: "win32",
+  });
 }
 
 function pathExists(p, existsSync) {
   if (typeof p !== "string" || !p) return null;
-  try { return (existsSync || fssync.existsSync)(p) ? p : null; } catch (_e) { return null; }
+  try {
+    return (existsSync || fssync.existsSync)(p) ? p : null;
+  } catch (_e) {
+    return null;
+  }
 }
 
 // Migrate a flat (single-install) cursor to { native, wsl } namespaces.
@@ -28,8 +48,15 @@ function pathExists(p, existsSync) {
 // an already-counted install re-parsed without them double-counts everything.
 // Callers that cannot prove which install the flat cursor tracked must seed
 // ALL namespaces (the default): bounded backfill loss, never a double count.
-function ensureNamespacedCursors(cursors, providerName, activeKeys = ["native", "wsl"]) {
-  const state = cursors[providerName] && typeof cursors[providerName] === "object" ? cursors[providerName] : {};
+function ensureNamespacedCursors(
+  cursors,
+  providerName,
+  activeKeys = ["native", "wsl"],
+) {
+  const state =
+    cursors[providerName] && typeof cursors[providerName] === "object"
+      ? cursors[providerName]
+      : {};
 
   if (state.native !== undefined || state.wsl !== undefined) {
     return state;
@@ -57,10 +84,13 @@ function ensureFlatCursor(cursors, providerName, env, preferredKey) {
   if (state.native === undefined && state.wsl === undefined) return;
 
   const mode = wsl.getWslMode(env || process.env);
-  const preferWsl = preferredKey === "wsl" || preferredKey === "native"
-    ? preferredKey === "wsl"
-    : mode === "wsl-first" || mode === "wsl-only";
-  const merged = preferWsl ? { ...state.native, ...state.wsl } : { ...state.wsl, ...state.native };
+  const preferWsl =
+    preferredKey === "wsl" || preferredKey === "native"
+      ? preferredKey === "wsl"
+      : mode === "wsl-first" || mode === "wsl-only";
+  const merged = preferWsl
+    ? { ...state.native, ...state.wsl }
+    : { ...state.wsl, ...state.native };
   cursors[providerName] = merged;
 }
 

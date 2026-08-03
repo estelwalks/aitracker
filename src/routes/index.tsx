@@ -214,8 +214,13 @@ function Dashboard() {
   const [dashboardSections, setDashboardSections] = useState(dashboardDefaults);
   const [layouts, setLayouts] = useState<Layouts>(dashboardLayouts);
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  // Gate client-only rendering behind mount so the first client render
+  // matches the server HTML (avoids hydration mismatch with react-grid-layout,
+  // whose WidthProvider cannot measure width until after mount).
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     try {
       const saved = window.localStorage.getItem(
         "trusttools-dashboard-sections",
@@ -225,8 +230,29 @@ function Dashboard() {
       const savedLayouts = window.localStorage.getItem(
         "trusttools-dashboard-layouts",
       );
-      if (savedLayouts)
-        setLayouts({ ...dashboardLayouts, ...JSON.parse(savedLayouts) });
+      if (savedLayouts) {
+        // Only adopt a saved breakpoint layout when it still references every
+        // widget. A degenerate/empty entry (e.g. left over from a prior SSR
+        // glitch where RGL fired onLayoutChange with no children) would make
+        // react-grid-layout render nothing at that width, so fall back to the
+        // default for that breakpoint instead.
+        const parsed = JSON.parse(savedLayouts);
+        const expectedIds = dashboardLayouts.lg.map((item) => item.i);
+        const merged: Layouts = { ...dashboardLayouts };
+        for (const breakpoint of Object.keys(dashboardLayouts)) {
+          const candidate = parsed[breakpoint];
+          if (
+            Array.isArray(candidate) &&
+            candidate.length === expectedIds.length &&
+            expectedIds.every((id) =>
+              candidate.some((item: Layout) => item.i === id),
+            )
+          ) {
+            merged[breakpoint] = candidate;
+          }
+        }
+        setLayouts(merged);
+      }
     } catch {
       // Ignore unavailable or malformed local preferences.
     }
@@ -240,13 +266,15 @@ function Dashboard() {
     return () => media.removeEventListener("change", updateViewport);
   }, []);
 
-  const remainingSecurityScans = useMemo(
-    () =>
-      typeof window !== "undefined"
-        ? readRemainingSecurityScans(window.localStorage)
-        : null,
-    [],
-  );
+  // localStorage is only available on the client; keep the value null during
+  // SSR and the first client render so the rendered text matches the server
+  // HTML, then populate it after mount.
+  const [remainingSecurityScans, setRemainingSecurityScans] = useState<
+    number | null
+  >(null);
+  useEffect(() => {
+    setRemainingSecurityScans(readRemainingSecurityScans(window.localStorage));
+  }, []);
 
   const updateDashboardSections = (section: DashboardSection) => {
     setDashboardSections((current) => {
@@ -488,420 +516,415 @@ function Dashboard() {
       )}
 
       {(() => {
-        const isSsr = typeof window === "undefined";
-        const widgets = (
-          <>
-            {visibleWidgets.includes("kpis") && (
-              <div
-                key="kpis"
-                className="dashboard-widget dashboard-widget-kpis"
-              >
-                <div className="dashboard-kpis">
-                  <KpiCard
-                    to="/tokens"
-                    label={primaryTokenLabel}
-                    value={formatTokens(primaryTokenTotals.totalTokens)}
-                    hint={`${primaryTokenTotals.events.toLocaleString()} 个真实事件`}
-                    accent
-                  />
-                  <KpiCard
-                    to="/tokens"
-                    label="区间费用"
-                    value={formatCost(selectedCost, "CNY")}
-                    hint={
-                      selectedCost.unknownEvents > 0
-                        ? "部分模型价格未知，金额为已知下限"
-                        : `${periodLabels[period]} · 按本地模型目录估算`
-                    }
-                  />
-                  <KpiCard
-                    to="/tokens"
-                    label="缓存节省"
-                    value={formatMoneyCny(cacheCost.cacheSavingsUsd)}
-                    hint={`命中率 ${cacheHitRate.toFixed(0)}% · ${formatTokens(cachedTokens)} 缓存 Token`}
-                    tone="ok"
-                  />
-                  <KpiCard
-                    to="/skills"
-                    label="活跃 Skill 数"
-                    value={`${skillHealth.active} / ${skillHealth.total}`}
-                    hint={
-                      <span className="dashboard-health">
-                        {skillHealth.rows.map((item) => (
-                          <span key={item.health}>
-                            <Dot className={item.dot} /> {item.count}
-                          </span>
-                        ))}
-                      </span>
-                    }
-                  />
-                  <KpiCard
-                    to="/security"
-                    label="安全扫描"
-                    value={`${remainingSecurityScans} / ${DAILY_SCAN_LIMIT}`}
-                    hint="今日剩余安全扫描次数"
-                    icon={<Shield className="size-4" />}
-                  />
-                </div>
-              </div>
-            )}
-
-            {dashboardSections.trend && (
-              <div key="trend" className="dashboard-widget">
-                <Panel
-                  className="dashboard-trend"
-                  title={`Token 消耗趋势（按 AI 客户端分色，单位 K）`}
-                  action={
-                    <div className="flex items-center gap-2">
-                      <Segmented
-                        value={chartMode}
-                        onChange={setChartMode}
-                        options={[
-                          { value: "area", label: "堆叠" },
-                          { value: "bar", label: "柱状+趋势" },
-                          { value: "line", label: "折线" },
-                        ]}
-                      />
-                      <Segmented
-                        value={period}
-                        onChange={setPeriod}
-                        options={periodOptions.slice(0, 5)}
-                      />
-                    </div>
+        const widgets: ReactNode[] = [
+          visibleWidgets.includes("kpis") && (
+            <div key="kpis" className="dashboard-widget dashboard-widget-kpis">
+              <div className="dashboard-kpis">
+                <KpiCard
+                  to="/tokens"
+                  label={primaryTokenLabel}
+                  value={formatTokens(primaryTokenTotals.totalTokens)}
+                  hint={`${primaryTokenTotals.events.toLocaleString()} 个真实事件`}
+                  accent
+                />
+                <KpiCard
+                  to="/tokens"
+                  label="区间费用"
+                  value={formatCost(selectedCost, "CNY")}
+                  hint={
+                    selectedCost.unknownEvents > 0
+                      ? "部分模型价格未知，金额为已知下限"
+                      : `${periodLabels[period]} · 按本地模型目录估算`
                   }
-                >
-                  <div className="dashboard-trend-summary">
-                    <Metric
-                      label="区间合计"
-                      value={formatTokens(selectedTotals.totalTokens)}
+                />
+                <KpiCard
+                  to="/tokens"
+                  label="缓存节省"
+                  value={formatMoneyCny(cacheCost.cacheSavingsUsd)}
+                  hint={`命中率 ${cacheHitRate.toFixed(0)}% · ${formatTokens(cachedTokens)} 缓存 Token`}
+                  tone="ok"
+                />
+                <KpiCard
+                  to="/skills"
+                  label="活跃 Skill 数"
+                  value={`${skillHealth.active} / ${skillHealth.total}`}
+                  hint={
+                    <span className="dashboard-health">
+                      {skillHealth.rows.map((item) => (
+                        <span key={item.health}>
+                          <Dot className={item.dot} /> {item.count}
+                        </span>
+                      ))}
+                    </span>
+                  }
+                />
+                <KpiCard
+                  to="/security"
+                  label="安全扫描"
+                  value={
+                    remainingSecurityScans == null
+                      ? `- / ${DAILY_SCAN_LIMIT}`
+                      : `${remainingSecurityScans} / ${DAILY_SCAN_LIMIT}`
+                  }
+                  hint="今日剩余安全扫描次数"
+                  icon={<Shield className="size-4" />}
+                />
+              </div>
+            </div>
+          ),
+
+          dashboardSections.trend && (
+            <div key="trend" className="dashboard-widget">
+              <Panel
+                className="dashboard-trend"
+                title={`Token 消耗趋势（按 AI 客户端分色，单位 K）`}
+                action={
+                  <div className="flex items-center gap-2">
+                    <Segmented
+                      value={chartMode}
+                      onChange={setChartMode}
+                      options={[
+                        { value: "area", label: "堆叠" },
+                        { value: "bar", label: "柱状+趋势" },
+                        { value: "line", label: "折线" },
+                      ]}
                     />
-                    <Metric
-                      label="日均"
-                      value={formatTokens(
-                        selectedDaily.length
-                          ? selectedTotals.totalTokens / selectedDaily.length
-                          : 0,
-                      )}
-                    />
-                    <Metric
-                      label="峰值"
-                      value={formatTokens(
-                        Math.max(
-                          0,
-                          ...selectedDaily.map((item) => item.totalTokens),
-                        ),
-                      )}
-                    />
-                    <Metric
-                      label="区间费用"
-                      value={formatCost(selectedCost, "CNY")}
+                    <Segmented
+                      value={period}
+                      onChange={setPeriod}
+                      options={periodOptions.slice(0, 5)}
                     />
                   </div>
-                  <div className="h-[268px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart
-                        data={chartData}
-                        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                }
+              >
+                <div className="dashboard-trend-summary">
+                  <Metric
+                    label="区间合计"
+                    value={formatTokens(selectedTotals.totalTokens)}
+                  />
+                  <Metric
+                    label="日均"
+                    value={formatTokens(
+                      selectedDaily.length
+                        ? selectedTotals.totalTokens / selectedDaily.length
+                        : 0,
+                    )}
+                  />
+                  <Metric
+                    label="峰值"
+                    value={formatTokens(
+                      Math.max(
+                        0,
+                        ...selectedDaily.map((item) => item.totalTokens),
+                      ),
+                    )}
+                  />
+                  <Metric
+                    label="区间费用"
+                    value={formatCost(selectedCost, "CNY")}
+                  />
+                </div>
+                <div className="h-[268px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={chartData}
+                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid
+                        stroke="var(--color-border)"
+                        vertical={false}
+                        strokeDasharray="2 4"
+                      />
+                      <XAxis
+                        dataKey="label"
+                        tick={{
+                          fontSize: 11,
+                          fill: "var(--color-muted-foreground)",
+                        }}
+                        axisLine={{ stroke: "var(--color-border)" }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tickFormatter={formatTokens}
+                        width={48}
+                        tick={{
+                          fontSize: 11,
+                          fill: "var(--color-muted-foreground)",
+                        }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        formatter={(value, name) => [
+                          `${Number(value).toLocaleString()} Token`,
+                          sourceLabel(String(name)),
+                        ]}
+                        contentStyle={{
+                          background: "var(--color-popover)",
+                          border: "1px solid var(--color-border)",
+                          borderRadius: 5,
+                          fontSize: 12,
+                        }}
+                      />
+                      {visibleSeries.map((item) =>
+                        chartMode === "area" ? (
+                          <Area
+                            key={item.key}
+                            type="monotone"
+                            stackId="usage"
+                            dataKey={item.key}
+                            name={item.name}
+                            stroke={item.color}
+                            fill={item.color}
+                            fillOpacity={0.22}
+                            isAnimationActive={false}
+                          />
+                        ) : chartMode === "bar" ? (
+                          <Bar
+                            key={item.key}
+                            stackId="usage"
+                            dataKey={item.key}
+                            name={item.name}
+                            fill={item.color}
+                            maxBarSize={24}
+                            isAnimationActive={false}
+                          />
+                        ) : (
+                          <Line
+                            key={item.key}
+                            type="monotone"
+                            dataKey={item.key}
+                            name={item.name}
+                            stroke={item.color}
+                            strokeWidth={1.8}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        ),
+                      )}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {topSources.map((item) => {
+                    const hidden = hiddenSources.includes(item.key);
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          setHiddenSources((current) =>
+                            current.includes(item.key)
+                              ? current.filter((key) => key !== item.key)
+                              : [...current, item.key],
+                          )
+                        }
+                        className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] ${
+                          hidden
+                            ? "border-border text-muted-foreground opacity-50"
+                            : "border-border-strong"
+                        }`}
                       >
-                        <CartesianGrid
-                          stroke="var(--color-border)"
-                          vertical={false}
-                          strokeDasharray="2 4"
+                        <span
+                          className="size-1.5 rounded-full"
+                          style={{ background: item.color }}
                         />
-                        <XAxis
-                          dataKey="label"
-                          tick={{
-                            fontSize: 11,
-                            fill: "var(--color-muted-foreground)",
-                          }}
-                          axisLine={{ stroke: "var(--color-border)" }}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tickFormatter={formatTokens}
-                          width={48}
-                          tick={{
-                            fontSize: 11,
-                            fill: "var(--color-muted-foreground)",
-                          }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
+                        {item.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Panel>
+            </div>
+          ),
+
+          dashboardSections.provider && (
+            <div key="provider" className="dashboard-widget">
+              <Panel
+                title="AI 客户端消耗占比"
+                action={<span className="tt-label">RING · 全量</span>}
+              >
+                <div className="dashboard-provider">
+                  <div className="dashboard-donut">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={providerShare}
+                          dataKey="tokens"
+                          nameKey="name"
+                          innerRadius="68%"
+                          outerRadius="88%"
+                          stroke="var(--color-surface)"
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                        >
+                          {providerShare.map((provider) => (
+                            <Cell key={provider.name} fill={provider.color} />
+                          ))}
+                        </Pie>
                         <Tooltip
-                          formatter={(value, name) => [
-                            `${Number(value).toLocaleString()} Token`,
-                            sourceLabel(String(name)),
-                          ]}
+                          formatter={(value) =>
+                            `${Number(value).toLocaleString()} Token`
+                          }
                           contentStyle={{
                             background: "var(--color-popover)",
                             border: "1px solid var(--color-border)",
-                            borderRadius: 5,
-                            fontSize: 12,
+                            borderRadius: 4,
+                            fontSize: 11,
                           }}
                         />
-                        {visibleSeries.map((item) =>
-                          chartMode === "area" ? (
-                            <Area
-                              key={item.key}
-                              type="monotone"
-                              stackId="usage"
-                              dataKey={item.key}
-                              name={item.name}
-                              stroke={item.color}
-                              fill={item.color}
-                              fillOpacity={0.22}
-                              isAnimationActive={false}
-                            />
-                          ) : chartMode === "bar" ? (
-                            <Bar
-                              key={item.key}
-                              stackId="usage"
-                              dataKey={item.key}
-                              name={item.name}
-                              fill={item.color}
-                              maxBarSize={24}
-                              isAnimationActive={false}
-                            />
-                          ) : (
-                            <Line
-                              key={item.key}
-                              type="monotone"
-                              dataKey={item.key}
-                              name={item.name}
-                              stroke={item.color}
-                              strokeWidth={1.8}
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          ),
-                        )}
-                      </ComposedChart>
+                      </PieChart>
                     </ResponsiveContainer>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {topSources.map((item) => {
-                      const hidden = hiddenSources.includes(item.key);
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() =>
-                            setHiddenSources((current) =>
-                              current.includes(item.key)
-                                ? current.filter((key) => key !== item.key)
-                                : [...current, item.key],
-                            )
-                          }
-                          className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] ${
-                            hidden
-                              ? "border-border text-muted-foreground opacity-50"
-                              : "border-border-strong"
-                          }`}
-                        >
-                          <span
-                            className="size-1.5 rounded-full"
-                            style={{ background: item.color }}
-                          />
-                          {item.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </Panel>
-              </div>
-            )}
-
-            {dashboardSections.provider && (
-              <div key="provider" className="dashboard-widget">
-                <Panel
-                  title="AI 客户端消耗占比"
-                  action={<span className="tt-label">RING · 全量</span>}
-                >
-                  <div className="dashboard-provider">
-                    <div className="dashboard-donut">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={providerShare}
-                            dataKey="tokens"
-                            nameKey="name"
-                            innerRadius="68%"
-                            outerRadius="88%"
-                            stroke="var(--color-surface)"
-                            strokeWidth={2}
-                            isAnimationActive={false}
-                          >
-                            {providerShare.map((provider) => (
-                              <Cell key={provider.name} fill={provider.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value) =>
-                              `${Number(value).toLocaleString()} Token`
-                            }
-                            contentStyle={{
-                              background: "var(--color-popover)",
-                              border: "1px solid var(--color-border)",
-                              borderRadius: 4,
-                              fontSize: 11,
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="dashboard-donut-label">
-                        <strong>100%</strong>
-                        <span>TOTAL</span>
-                      </div>
-                    </div>
-                    <div className="dashboard-provider-list">
-                      {providerShare.map((provider, index) => (
-                        <div
-                          key={provider.name}
-                          className="dashboard-provider-row"
-                        >
-                          <span className="tt-num text-muted-foreground">
-                            {String(index + 1).padStart(2, "0")}
-                          </span>
-                          <span
-                            className="size-1.5 rounded-full"
-                            style={{ background: provider.color }}
-                          />
-                          <span className="truncate">{provider.name}</span>
-                          <span className="h-1 flex-1 overflow-hidden bg-surface-2">
-                            <span
-                              className="block h-full"
-                              style={{
-                                width: `${provider.value}%`,
-                                background: provider.color,
-                              }}
-                            />
-                          </span>
-                          <span className="tt-num w-11 text-right">
-                            {provider.value.toFixed(0)}%
-                          </span>
-                        </div>
-                      ))}
+                    <div className="dashboard-donut-label">
+                      <strong>100%</strong>
+                      <span>TOTAL</span>
                     </div>
                   </div>
-                </Panel>
-              </div>
-            )}
-
-            {dashboardSections.models && (
-              <div key="models" className="dashboard-widget">
-                <Panel title="最近模型用量">
-                  <div className="space-y-3">
-                    {recentModels.map((model) => (
+                  <div className="dashboard-provider-list">
+                    {providerShare.map((provider, index) => (
                       <div
-                        key={model.key}
-                        className="flex items-center gap-3 text-xs"
+                        key={provider.name}
+                        className="dashboard-provider-row"
                       >
-                        <span
-                          className="tt-num w-32 truncate"
-                          title={model.key}
-                        >
-                          {model.key}
+                        <span className="tt-num text-muted-foreground">
+                          {String(index + 1).padStart(2, "0")}
                         </span>
-                        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className="h-full rounded-full bg-primary/75"
+                        <span
+                          className="size-1.5 rounded-full"
+                          style={{ background: provider.color }}
+                        />
+                        <span className="truncate">{provider.name}</span>
+                        <span className="h-1 flex-1 overflow-hidden bg-surface-2">
+                          <span
+                            className="block h-full"
                             style={{
-                              width: `${(model.totalTokens / maxModelTokens) * 100}%`,
+                              width: `${provider.value}%`,
+                              background: provider.color,
                             }}
                           />
                         </span>
-                        <span className="tt-num w-14 text-right text-muted-foreground">
-                          {formatTokens(model.totalTokens)}
+                        <span className="tt-num w-11 text-right">
+                          {provider.value.toFixed(0)}%
                         </span>
                       </div>
                     ))}
                   </div>
-                </Panel>
-              </div>
-            )}
+                </div>
+              </Panel>
+            </div>
+          ),
 
-            {dashboardSections.heatmap && (
-              <div key="heatmap" className="dashboard-widget">
-                <Panel
-                  className="dashboard-heatmap"
-                  title="7 × 24 消耗热力图"
-                  action={
-                    <span className="text-[10px] text-muted-foreground">
-                      近 7 天 · 本机时区
-                    </span>
-                  }
-                >
-                  <UsageHeatmap events={sevenDayEvents} />
-                </Panel>
-              </div>
-            )}
-
-            {dashboardSections.activity && (
-              <div key="activity" className="dashboard-widget">
-                <Panel
-                  className="dashboard-activity"
-                  title="最近活动"
-                  action={
-                    <Link
-                      to="/tokens"
-                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+          dashboardSections.models && (
+            <div key="models" className="dashboard-widget">
+              <Panel title="最近模型用量">
+                <div className="space-y-3">
+                  {recentModels.map((model) => (
+                    <div
+                      key={model.key}
+                      className="flex items-center gap-3 text-xs"
                     >
-                      查看全部 <ArrowRight className="size-3" />
-                    </Link>
-                  }
-                  bodyClassName="p-0"
-                >
-                  <div className="tt-xscroll">
-                    <table className="w-full min-w-[760px] text-[13px]">
-                      <thead>
-                        <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
-                          <th className="px-4 py-2.5 font-normal">时间</th>
-                          <th className="px-4 py-2.5 font-normal">来源</th>
-                          <th className="px-4 py-2.5 font-normal">模型</th>
-                          <th className="px-4 py-2.5 font-normal">项目</th>
-                          <th className="px-4 py-2.5 text-right font-normal">
-                            Token
-                          </th>
-                          <th className="px-4 py-2.5 text-right font-normal">
-                            估算费用
-                          </th>
+                      <span className="tt-num w-32 truncate" title={model.key}>
+                        {model.key}
+                      </span>
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                        <div
+                          className="h-full rounded-full bg-primary/75"
+                          style={{
+                            width: `${(model.totalTokens / maxModelTokens) * 100}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="tt-num w-14 text-right text-muted-foreground">
+                        {formatTokens(model.totalTokens)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            </div>
+          ),
+
+          dashboardSections.heatmap && (
+            <div key="heatmap" className="dashboard-widget">
+              <Panel
+                className="dashboard-heatmap"
+                title="7 × 24 消耗热力图"
+                action={
+                  <span className="text-[10px] text-muted-foreground">
+                    近 7 天 · 本机时区
+                  </span>
+                }
+              >
+                <UsageHeatmap events={sevenDayEvents} />
+              </Panel>
+            </div>
+          ),
+
+          dashboardSections.activity && (
+            <div key="activity" className="dashboard-widget">
+              <Panel
+                className="dashboard-activity"
+                title="最近活动"
+                action={
+                  <Link
+                    to="/tokens"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    查看全部 <ArrowRight className="size-3" />
+                  </Link>
+                }
+                bodyClassName="p-0"
+              >
+                <div className="tt-xscroll">
+                  <table className="w-full min-w-[760px] text-[13px]">
+                    <thead>
+                      <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+                        <th className="px-4 py-2.5 font-normal">时间</th>
+                        <th className="px-4 py-2.5 font-normal">来源</th>
+                        <th className="px-4 py-2.5 font-normal">模型</th>
+                        <th className="px-4 py-2.5 font-normal">项目</th>
+                        <th className="px-4 py-2.5 text-right font-normal">
+                          Token
+                        </th>
+                        <th className="px-4 py-2.5 text-right font-normal">
+                          估算费用
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {snapshot.recent.slice(0, 10).map((event, index) => (
+                        <tr
+                          key={`${event.timestamp}-${event.model}-${index}`}
+                          className="border-b border-border last:border-0 hover:bg-accent/40"
+                        >
+                          <td className="tt-num px-4 py-2.5 text-muted-foreground">
+                            {formatEventTime(event.timestamp)}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {sourceLabel(event.source)}
+                          </td>
+                          <td className="tt-num max-w-48 truncate px-4 py-2.5">
+                            {event.model}
+                          </td>
+                          <td className="max-w-56 truncate px-4 py-2.5 text-muted-foreground">
+                            {event.project}
+                          </td>
+                          <td className="tt-num px-4 py-2.5 text-right">
+                            {formatTokens(event.totalTokens)}
+                          </td>
+                          <td className="tt-num px-4 py-2.5 text-right">
+                            {formatCost(estimateEventCost(event), "CNY")}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {snapshot.recent.slice(0, 10).map((event, index) => (
-                          <tr
-                            key={`${event.timestamp}-${event.model}-${index}`}
-                            className="border-b border-border last:border-0 hover:bg-accent/40"
-                          >
-                            <td className="tt-num px-4 py-2.5 text-muted-foreground">
-                              {formatEventTime(event.timestamp)}
-                            </td>
-                            <td className="px-4 py-2.5">
-                              {sourceLabel(event.source)}
-                            </td>
-                            <td className="tt-num max-w-48 truncate px-4 py-2.5">
-                              {event.model}
-                            </td>
-                            <td className="max-w-56 truncate px-4 py-2.5 text-muted-foreground">
-                              {event.project}
-                            </td>
-                            <td className="tt-num px-4 py-2.5 text-right">
-                              {formatTokens(event.totalTokens)}
-                            </td>
-                            <td className="tt-num px-4 py-2.5 text-right">
-                              {formatCost(estimateEventCost(event), "CNY")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              </div>
-            )}
-          </>
-        );
-        return isSsr || isNarrowViewport ? (
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Panel>
+            </div>
+          ),
+        ];
+        return !mounted || isNarrowViewport ? (
           <div className="flex flex-col gap-4">{widgets}</div>
         ) : (
           <ResponsiveGridLayout

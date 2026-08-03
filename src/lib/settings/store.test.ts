@@ -58,7 +58,12 @@ test("服务商预算会修剪名称、忽略大小写去重并安全修复非�
           weeklyBudget: -1,
           monthlyBudget: "100",
         },
-        { provider: "openai", dailyBudget: 99, weeklyBudget: 99, monthlyBudget: 99 },
+        {
+          provider: "openai",
+          dailyBudget: 99,
+          weeklyBudget: 99,
+          monthlyBudget: 99,
+        },
         { provider: "   ", dailyBudget: 1, weeklyBudget: 2, monthlyBudget: 3 },
         null,
       ],

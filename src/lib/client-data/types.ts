@@ -244,7 +244,10 @@ export interface ClientDataSource {
     request: TokenDetailRequest,
     options?: ClientDataRequestOptions,
   ): Promise<ModelDetail>;
-  getTokenSourceTree(row: Row, options?: ClientDataRequestOptions): Promise<SourceTree>;
+  getTokenSourceTree(
+    row: Row,
+    options?: ClientDataRequestOptions,
+  ): Promise<SourceTree>;
   getSkills(options?: ClientDataRequestOptions): Promise<SkillData>;
   getSecurity(options?: ClientDataRequestOptions): Promise<SecurityData>;
   getMarket(options?: ClientDataRequestOptions): Promise<MarketData>;

@@ -30,13 +30,15 @@ function rowTokens(row) {
   return isFiniteNumber(row.billable_total_tokens)
     ? row.billable_total_tokens
     : isFiniteNumber(row.total_tokens)
-    ? row.total_tokens
-    : 0;
+      ? row.total_tokens
+      : 0;
 }
 
 function rowDay(row) {
   // hour_start is ISO 8601 UTC. Slice to YYYY-MM-DD.
-  return typeof row.hour_start === "string" ? row.hour_start.slice(0, 10) : null;
+  return typeof row.hour_start === "string"
+    ? row.hour_start.slice(0, 10)
+    : null;
 }
 
 function rowYear(row) {
@@ -104,7 +106,13 @@ function aggregateWrapped(rows, opts = {}) {
     return {
       year,
       range: { from: null, to: null },
-      totals: { tokens: 0, conversations: 0, sources: 0, models: 0, active_days: 0 },
+      totals: {
+        tokens: 0,
+        conversations: 0,
+        sources: 0,
+        models: 0,
+        active_days: 0,
+      },
       top: { sources: [], models: [], days: [] },
       peak_hour: null,
       longest_streak: { days: 0, from: null, to: null },
@@ -125,13 +133,17 @@ function aggregateWrapped(rows, opts = {}) {
   for (const row of filtered) {
     const t = rowTokens(row);
     totalTokens += t;
-    if (isFiniteNumber(row.conversation_count)) totalConvs += row.conversation_count;
-    if (row.source) tokensBySource.set(row.source, (tokensBySource.get(row.source) || 0) + t);
-    if (row.model) tokensByModel.set(row.model, (tokensByModel.get(row.model) || 0) + t);
+    if (isFiniteNumber(row.conversation_count))
+      totalConvs += row.conversation_count;
+    if (row.source)
+      tokensBySource.set(row.source, (tokensBySource.get(row.source) || 0) + t);
+    if (row.model)
+      tokensByModel.set(row.model, (tokensByModel.get(row.model) || 0) + t);
     const day = rowDay(row);
     if (day) tokensByDay.set(day, (tokensByDay.get(day) || 0) + t);
     const h = isoHour(row);
-    if (h != null) tokensByHourOfDay.set(h, (tokensByHourOfDay.get(h) || 0) + t);
+    if (h != null)
+      tokensByHourOfDay.set(h, (tokensByHourOfDay.get(h) || 0) + t);
     if (row.hour_start) {
       if (!earliest || row.hour_start < earliest) earliest = row.hour_start;
       if (!latest || row.hour_start > latest) latest = row.hour_start;
@@ -184,26 +196,39 @@ function aggregateWrapped(rows, opts = {}) {
     tokens,
     share: totalTokens > 0 ? tokens / totalTokens : 0,
   }));
-  const topDays = topByValue(tokensByDay, 5).map(([day, tokens]) => ({ day, tokens }));
+  const topDays = topByValue(tokensByDay, 5).map(([day, tokens]) => ({
+    day,
+    tokens,
+  }));
 
   // Highlights — short, share-friendly one-liners derived from the numbers.
   const highlights = [];
   if (topModels.length > 0) {
     const m = topModels[0];
-    highlights.push(`${m.model} powered ${(m.share * 100).toFixed(0)}% of your year.`);
+    highlights.push(
+      `${m.model} powered ${(m.share * 100).toFixed(0)}% of your year.`,
+    );
   }
   if (topDays.length > 0) {
     const d = topDays[0];
-    highlights.push(`Your busiest day was ${d.day} (${formatCompact(d.tokens)} tokens).`);
+    highlights.push(
+      `Your busiest day was ${d.day} (${formatCompact(d.tokens)} tokens).`,
+    );
   }
   if (peakHour) {
-    highlights.push(`You hit peak flow around ${String(peakHour.hour).padStart(2, "0")}:00 UTC.`);
+    highlights.push(
+      `You hit peak flow around ${String(peakHour.hour).padStart(2, "0")}:00 UTC.`,
+    );
   }
   if (longestStreak.days >= 2) {
-    highlights.push(`Longest streak: ${longestStreak.days} consecutive days of coding with AI.`);
+    highlights.push(
+      `Longest streak: ${longestStreak.days} consecutive days of coding with AI.`,
+    );
   }
   if (tokensBySource.size >= 4) {
-    highlights.push(`You touched ${tokensBySource.size} different AI tools — that's range.`);
+    highlights.push(
+      `You touched ${tokensBySource.size} different AI tools — that's range.`,
+    );
   }
 
   return {

@@ -8,11 +8,17 @@ const DEFAULT_PLUGIN_NAME = "tokentracker.js";
 const PLUGIN_MARKER = "TOKENTRACKER_PLUGIN";
 const DEFAULT_EVENT = "session.updated";
 
-function resolveOpencodeConfigDir({ home = os.homedir(), env = process.env } = {}) {
+function resolveOpencodeConfigDir({
+  home = os.homedir(),
+  env = process.env,
+} = {}) {
   const explicit =
-    typeof env.OPENCODE_CONFIG_DIR === "string" ? env.OPENCODE_CONFIG_DIR.trim() : "";
+    typeof env.OPENCODE_CONFIG_DIR === "string"
+      ? env.OPENCODE_CONFIG_DIR.trim()
+      : "";
   if (explicit) return path.resolve(explicit);
-  const xdg = typeof env.XDG_CONFIG_HOME === "string" ? env.XDG_CONFIG_HOME.trim() : "";
+  const xdg =
+    typeof env.XDG_CONFIG_HOME === "string" ? env.XDG_CONFIG_HOME.trim() : "";
   const base = xdg || path.join(home, ".config");
   return path.join(base, "opencode");
 }
@@ -44,8 +50,17 @@ function buildOpencodePlugin({ notifyPath }) {
   );
 }
 
-async function upsertOpencodePlugin({ configDir, notifyPath, pluginName = DEFAULT_PLUGIN_NAME }) {
-  if (!configDir) return { changed: false, pluginPath: null, skippedReason: "config-missing" };
+async function upsertOpencodePlugin({
+  configDir,
+  notifyPath,
+  pluginName = DEFAULT_PLUGIN_NAME,
+}) {
+  if (!configDir)
+    return {
+      changed: false,
+      pluginPath: null,
+      skippedReason: "config-missing",
+    };
   const pluginDir = resolveOpencodePluginDir({ configDir });
   const pluginPath = path.join(pluginDir, pluginName);
   const next = buildOpencodePlugin({ notifyPath });
@@ -67,19 +82,33 @@ async function upsertOpencodePlugin({ configDir, notifyPath, pluginName = DEFAUL
   return { changed: true, pluginPath, backupPath, skippedReason: null };
 }
 
-async function removeOpencodePlugin({ configDir, pluginName = DEFAULT_PLUGIN_NAME }) {
+async function removeOpencodePlugin({
+  configDir,
+  pluginName = DEFAULT_PLUGIN_NAME,
+}) {
   if (!configDir) return { removed: false, skippedReason: "config-missing" };
-  const pluginPath = path.join(resolveOpencodePluginDir({ configDir }), pluginName);
+  const pluginPath = path.join(
+    resolveOpencodePluginDir({ configDir }),
+    pluginName,
+  );
   const existing = await fs.readFile(pluginPath, "utf8").catch(() => null);
-  if (existing == null) return { removed: false, skippedReason: "plugin-missing" };
-  if (!hasPluginMarker(existing)) return { removed: false, skippedReason: "unexpected-content" };
+  if (existing == null)
+    return { removed: false, skippedReason: "plugin-missing" };
+  if (!hasPluginMarker(existing))
+    return { removed: false, skippedReason: "unexpected-content" };
   await fs.unlink(pluginPath).catch(() => {});
   return { removed: true, skippedReason: null };
 }
 
-async function isOpencodePluginInstalled({ configDir, pluginName = DEFAULT_PLUGIN_NAME }) {
+async function isOpencodePluginInstalled({
+  configDir,
+  pluginName = DEFAULT_PLUGIN_NAME,
+}) {
   if (!configDir) return false;
-  const pluginPath = path.join(resolveOpencodePluginDir({ configDir }), pluginName);
+  const pluginPath = path.join(
+    resolveOpencodePluginDir({ configDir }),
+    pluginName,
+  );
   const existing = await fs.readFile(pluginPath, "utf8").catch(() => null);
   if (!existing) return false;
   return hasPluginMarker(existing);

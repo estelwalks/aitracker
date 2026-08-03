@@ -1,4 +1,8 @@
-export const SECURITY_RULE_KINDS = ["恶意 URL", "危险命令", "敏感信息"] as const;
+export const SECURITY_RULE_KINDS = [
+  "恶意 URL",
+  "危险命令",
+  "敏感信息",
+] as const;
 
 export type SecurityRuleKind = (typeof SECURITY_RULE_KINDS)[number];
 
@@ -15,7 +19,9 @@ export interface SecurityRuleValidation {
   message: string;
 }
 
-export function validateSecurityRulePattern(pattern: string): SecurityRuleValidation {
+export function validateSecurityRulePattern(
+  pattern: string,
+): SecurityRuleValidation {
   const normalized = pattern.trim();
   if (!normalized) {
     return { valid: false, message: "请输入正则表达式" };
@@ -29,7 +35,10 @@ export function validateSecurityRulePattern(pattern: string): SecurityRuleValida
   } catch (error) {
     return {
       valid: false,
-      message: error instanceof Error ? `正则无效：${error.message}` : "正则表达式无效",
+      message:
+        error instanceof Error
+          ? `正则无效：${error.message}`
+          : "正则表达式无效",
     };
   }
 }

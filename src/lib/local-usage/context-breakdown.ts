@@ -54,7 +54,10 @@ function combinedCounts(counts: LocalTokenCounts[]): LocalTokenCounts {
 }
 
 function distributableCounts(event: LocalUsageEvent): LocalTokenCounts {
-  const reasoningTokens = Math.min(event.reasoningOutputTokens, event.outputTokens);
+  const reasoningTokens = Math.min(
+    event.reasoningOutputTokens,
+    event.outputTokens,
+  );
   return {
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
@@ -70,7 +73,11 @@ function splitInteger(value: number, parts: number, index: number): number {
   return base + (index < value % parts ? 1 : 0);
 }
 
-function splitCounts(event: LocalUsageEvent, parts: number, index: number): LocalTokenCounts {
+function splitCounts(
+  event: LocalUsageEvent,
+  parts: number,
+  index: number,
+): LocalTokenCounts {
   return splitTokenCounts(distributableCounts(event), parts, index);
 }
 
@@ -82,14 +89,27 @@ function splitTokenCounts(
   return {
     inputTokens: splitInteger(counts.inputTokens, parts, index),
     cachedInputTokens: splitInteger(counts.cachedInputTokens, parts, index),
-    cacheCreationInputTokens: splitInteger(counts.cacheCreationInputTokens, parts, index),
+    cacheCreationInputTokens: splitInteger(
+      counts.cacheCreationInputTokens,
+      parts,
+      index,
+    ),
     outputTokens: splitInteger(counts.outputTokens, parts, index),
-    reasoningOutputTokens: splitInteger(counts.reasoningOutputTokens, parts, index),
+    reasoningOutputTokens: splitInteger(
+      counts.reasoningOutputTokens,
+      parts,
+      index,
+    ),
     totalTokens: splitInteger(counts.totalTokens, parts, index),
   };
 }
 
-function addRow(map: BreakdownMap, key: string, counts: LocalTokenCounts, calls: number): void {
+function addRow(
+  map: BreakdownMap,
+  key: string,
+  counts: LocalTokenCounts,
+  calls: number,
+): void {
   const row = map.get(key) ?? emptyRow(key);
   addCounts(row, counts);
   row.calls += calls;
@@ -98,7 +118,8 @@ function addRow(map: BreakdownMap, key: string, counts: LocalTokenCounts, calls:
 
 function sortedRows(map: BreakdownMap): LocalUsageContextBreakdownRow[] {
   return [...map.values()].sort(
-    (left, right) => right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+    (left, right) =>
+      right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
   );
 }
 
@@ -111,7 +132,9 @@ function uniqueTools(event: LocalUsageEvent): LocalUsageToolCall[] {
     if (existing == null) byName.set(key, { ...tool });
     else existing.calls += tool.calls;
   }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+  return [...byName.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
 }
 
 function commandKey(command: LocalUsageCommandStat): string {
@@ -132,7 +155,9 @@ function skillCalls(event: LocalUsageEvent): LocalUsageSkillCall[] {
  * Attributes one event's tokens only once across its distinct tools. Skills and command rows are
  * filtered views of those tool allocations, so category/tool totals never exceed event totals.
  */
-export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageContextBreakdown {
+export function buildContextBreakdown(
+  events: LocalUsageEvent[],
+): LocalUsageContextBreakdown {
   const totals = emptyCounts();
   const messages: BreakdownMap = new Map();
   const categories: BreakdownMap = new Map();
@@ -161,7 +186,10 @@ export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageCont
     const skillCounts = combinedCounts(
       eventTools
         .filter((tool) => tool.category === "skills")
-        .map((tool) => allocations.get(`${tool.category}:${tool.name}`) ?? emptyCounts()),
+        .map(
+          (tool) =>
+            allocations.get(`${tool.category}:${tool.name}`) ?? emptyCounts(),
+        ),
     );
     const eventSkills = skillCalls(event);
     if (eventSkills.length > 0) {
@@ -178,8 +206,11 @@ export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageCont
     const commandTool = eventTools.find((tool) => tool.name === "exec_command");
     if (commandTool != null) {
       const counts =
-        allocations.get(`${commandTool.category}:${commandTool.name}`) ?? emptyCounts();
-      const eventCommands = (event.context?.commands ?? []).filter((command) => command.calls > 0);
+        allocations.get(`${commandTool.category}:${commandTool.name}`) ??
+        emptyCounts();
+      const eventCommands = (event.context?.commands ?? []).filter(
+        (command) => command.calls > 0,
+      );
       for (const [index, command] of eventCommands.entries()) {
         addRow(
           commands,

@@ -65,13 +65,19 @@ function hashMachineId(machineId) {
 }
 
 function resolveShell(env = process.env) {
-  const raw = typeof env?.TOKENTRACKER_APP_SHELL === "string"
-    ? env.TOKENTRACKER_APP_SHELL.trim().toLowerCase()
-    : "";
+  const raw =
+    typeof env?.TOKENTRACKER_APP_SHELL === "string"
+      ? env.TOKENTRACKER_APP_SHELL.trim().toLowerCase()
+      : "";
   return VALID_SHELLS.has(raw) ? raw : "cli";
 }
 
-function buildHeartbeatPayload({ machineId, version = pkg.version, platform = process.platform, env = process.env }) {
+function buildHeartbeatPayload({
+  machineId,
+  version = pkg.version,
+  platform = process.platform,
+  env = process.env,
+}) {
   return {
     machine_hash: hashMachineId(machineId),
     app_version: String(version || "").slice(0, 32),
@@ -119,10 +125,16 @@ async function maybeSendHeartbeat({
       config: THROTTLE_CONFIG,
     });
     if (!decision.allowed) {
-      return { sent: false, reason: "throttled", blockedUntilMs: decision.blockedUntilMs };
+      return {
+        sent: false,
+        reason: "throttled",
+        blockedUntilMs: decision.blockedUntilMs,
+      };
     }
 
-    const machineId = getOrCreateMachineId(path.join(trackerDir, "queue.jsonl"));
+    const machineId = getOrCreateMachineId(
+      path.join(trackerDir, "queue.jsonl"),
+    );
     if (!machineId) return { sent: false, reason: "no-machine-id" };
 
     const runtime = resolveRuntimeConfig({ config, env });
@@ -132,15 +144,18 @@ async function maybeSendHeartbeat({
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
-      response = await fetchImpl(`${runtime.baseUrl}/functions/${HEARTBEAT_FUNCTION_SLUG}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: runtime.anonKey,
+      response = await fetchImpl(
+        `${runtime.baseUrl}/functions/${HEARTBEAT_FUNCTION_SLUG}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: runtime.anonKey,
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
         },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      );
     } finally {
       clearTimeout(timer);
     }
@@ -149,14 +164,21 @@ async function maybeSendHeartbeat({
       const failedState = recordUploadFailure({
         nowMs,
         state,
-        error: { message: `heartbeat http ${response?.status || "error"}`, status: response?.status },
+        error: {
+          message: `heartbeat http ${response?.status || "error"}`,
+          status: response?.status,
+        },
         config: THROTTLE_CONFIG,
       });
       await writeJson(statePath, failedState);
       return { sent: false, reason: "http-error", status: response?.status };
     }
 
-    const nextState = recordUploadSuccess({ nowMs, state, config: THROTTLE_CONFIG });
+    const nextState = recordUploadSuccess({
+      nowMs,
+      state,
+      config: THROTTLE_CONFIG,
+    });
     await writeJson(statePath, nextState);
     return { sent: true, reason: "sent" };
   } catch (e) {

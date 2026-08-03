@@ -40,7 +40,9 @@ test("sends only minimized masked risk fields", async () => {
     fetcher: async (_input, init) => {
       requestBody = String(init?.body);
       return new Response(
-        JSON.stringify({ choices: [{ message: { content: "风险可信，建议移除凭据。" } }] }),
+        JSON.stringify({
+          choices: [{ message: { content: "风险可信，建议移除凭据。" } }],
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     },

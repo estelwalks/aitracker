@@ -4,7 +4,15 @@ import { USAGE_ADAPTER_PRESETS } from "./presets.ts";
 export const GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
 const COMMON_MAPPING: UsageFieldMapping = {
-  records: ["events", "messages", "turns", "history", "items", "data.events", "data.messages"],
+  records: [
+    "events",
+    "messages",
+    "turns",
+    "history",
+    "items",
+    "data.events",
+    "data.messages",
+  ],
   timestamp: [
     "timestamp",
     "created_at",
@@ -96,10 +104,16 @@ function builtin(
 }
 
 export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
-  builtin("claude-code", [{ root: ".claude/projects", glob: "**/*.jsonl", format: "jsonl" }]),
+  builtin("claude-code", [
+    { root: ".claude/projects", glob: "**/*.jsonl", format: "jsonl" },
+  ]),
   builtin("codex", [
     { root: ".codex/sessions", glob: "**/rollout-*.jsonl", format: "jsonl" },
-    { root: ".codex/archived_sessions", glob: "**/rollout-*.jsonl", format: "jsonl" },
+    {
+      root: ".codex/archived_sessions",
+      glob: "**/rollout-*.jsonl",
+      format: "jsonl",
+    },
   ]),
   builtin("cursor", [
     {
@@ -123,7 +137,11 @@ export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
     { root: ".kimi/logs", glob: "**/*.jsonl", format: "jsonl" },
   ]),
   builtin("opencode", [
-    { root: ".local/share/opencode/storage/message", glob: "**/*.json", format: "json" },
+    {
+      root: ".local/share/opencode/storage/message",
+      glob: "**/*.json",
+      format: "json",
+    },
     { root: ".opencode", glob: "**/*.jsonl", format: "jsonl" },
   ]),
   builtin("grok", [
@@ -131,7 +149,11 @@ export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
     { root: ".grok/logs", glob: "**/*.jsonl", format: "jsonl" },
   ]),
   builtin("github-copilot", [
-    { root: ".config/github-copilot", glob: "**/*usage*.jsonl", format: "jsonl" },
+    {
+      root: ".config/github-copilot",
+      glob: "**/*usage*.jsonl",
+      format: "jsonl",
+    },
     {
       root: "Library/Application Support/github-copilot",
       glob: "**/*usage*.json",

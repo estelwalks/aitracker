@@ -14,24 +14,40 @@ function formatError(err) {
   return err && err.message ? err.message : String(err);
 }
 
-function warnSqliteUnavailable({ dbPath, label, cliError, nodeSqliteError, env, stderr }) {
+function warnSqliteUnavailable({
+  dbPath,
+  label,
+  cliError,
+  nodeSqliteError,
+  env,
+  stderr,
+}) {
   const key = `${label || "SQLite"}:${dbPath || ""}`;
   if (warnedSqliteReadFailures.has(key)) return;
   warnedSqliteReadFailures.add(key);
 
-  const out = stderr && typeof stderr.write === "function" ? stderr : process.stderr;
+  const out =
+    stderr && typeof stderr.write === "function" ? stderr : process.stderr;
   const displayLabel = label || "local";
   out.write(
     `[tokentracker] Cannot read ${displayLabel} SQLite database. Install sqlite3 CLI and add it to PATH, or use Node.js 22+ with node:sqlite support. Path: ${dbPath}\n`,
   );
   if (isDebugEnabled(env)) {
     out.write(`[tokentracker] sqlite3 CLI failed: ${formatError(cliError)}\n`);
-    out.write(`[tokentracker] node:sqlite failed: ${formatError(nodeSqliteError)}\n`);
+    out.write(
+      `[tokentracker] node:sqlite failed: ${formatError(nodeSqliteError)}\n`,
+    );
   }
 }
 
-function readSqliteRowsWithCli(dbPath, sql, { execFileSync, timeout, maxBuffer, readOnly }) {
-  const args = readOnly ? ["-readonly", "-json", dbPath, sql] : ["-json", dbPath, sql];
+function readSqliteRowsWithCli(
+  dbPath,
+  sql,
+  { execFileSync, timeout, maxBuffer, readOnly },
+) {
+  const args = readOnly
+    ? ["-readonly", "-json", dbPath, sql]
+    : ["-json", dbPath, sql];
   const raw = execFileSync("sqlite3", args, {
     windowsHide: true,
     encoding: "utf8",
@@ -89,12 +105,19 @@ function readSqliteJsonRows(dbPath, sql, options = {}) {
   const requireFn = options.requireFn || require;
   const env = options.env || process.env;
   const timeout = Number.isFinite(options.timeout) ? options.timeout : 30_000;
-  const maxBuffer = Number.isFinite(options.maxBuffer) ? options.maxBuffer : 50 * 1024 * 1024;
+  const maxBuffer = Number.isFinite(options.maxBuffer)
+    ? options.maxBuffer
+    : 50 * 1024 * 1024;
   const label = options.label || "local";
 
   let cliError = null;
   try {
-    return readSqliteRowsWithCli(dbPath, sql, { execFileSync, timeout, maxBuffer, readOnly: Boolean(options.readOnly) });
+    return readSqliteRowsWithCli(dbPath, sql, {
+      execFileSync,
+      timeout,
+      maxBuffer,
+      readOnly: Boolean(options.readOnly),
+    });
   } catch (err) {
     cliError = err;
   }
@@ -106,7 +129,10 @@ function readSqliteJsonRows(dbPath, sql, options = {}) {
     nodeSqliteError = err;
   }
 
-  if (isSqliteCliUnavailable(cliError) && isNodeSqliteUnavailable(nodeSqliteError)) {
+  if (
+    isSqliteCliUnavailable(cliError) &&
+    isNodeSqliteUnavailable(nodeSqliteError)
+  ) {
     warnSqliteUnavailable({
       dbPath,
       label,
@@ -127,8 +153,14 @@ function readSqliteJsonRows(dbPath, sql, options = {}) {
   return [];
 }
 
-async function readSqliteRowsWithCliAsync(dbPath, sql, { execFile, timeout, maxBuffer, readOnly }) {
-  const args = readOnly ? ["-readonly", "-json", dbPath, sql] : ["-json", dbPath, sql];
+async function readSqliteRowsWithCliAsync(
+  dbPath,
+  sql,
+  { execFile, timeout, maxBuffer, readOnly },
+) {
+  const args = readOnly
+    ? ["-readonly", "-json", dbPath, sql]
+    : ["-json", dbPath, sql];
   const { stdout } = await execFile("sqlite3", args, {
     windowsHide: true,
     encoding: "utf8",
@@ -156,12 +188,19 @@ async function readSqliteJsonRowsAsync(dbPath, sql, options = {}) {
   const requireFn = options.requireFn || require;
   const env = options.env || process.env;
   const timeout = Number.isFinite(options.timeout) ? options.timeout : 30_000;
-  const maxBuffer = Number.isFinite(options.maxBuffer) ? options.maxBuffer : 50 * 1024 * 1024;
+  const maxBuffer = Number.isFinite(options.maxBuffer)
+    ? options.maxBuffer
+    : 50 * 1024 * 1024;
   const label = options.label || "local";
 
   let cliError = null;
   try {
-    return await readSqliteRowsWithCliAsync(dbPath, sql, { execFile, timeout, maxBuffer, readOnly: Boolean(options.readOnly) });
+    return await readSqliteRowsWithCliAsync(dbPath, sql, {
+      execFile,
+      timeout,
+      maxBuffer,
+      readOnly: Boolean(options.readOnly),
+    });
   } catch (err) {
     cliError = err;
   }
@@ -173,7 +212,10 @@ async function readSqliteJsonRowsAsync(dbPath, sql, options = {}) {
     nodeSqliteError = err;
   }
 
-  if (isSqliteCliUnavailable(cliError) && isNodeSqliteUnavailable(nodeSqliteError)) {
+  if (
+    isSqliteCliUnavailable(cliError) &&
+    isNodeSqliteUnavailable(nodeSqliteError)
+  ) {
     warnSqliteUnavailable({
       dbPath,
       label,
@@ -198,9 +240,16 @@ function readSqliteFirstValue(dbPath, sql, column, options = {}) {
   const rows = readSqliteJsonRows(dbPath, sql, options);
   const row = rows[0];
   if (!row || typeof row !== "object") return null;
-  const key = typeof column === "string" && column.length > 0 ? column : Object.keys(row)[0];
+  const key =
+    typeof column === "string" && column.length > 0
+      ? column
+      : Object.keys(row)[0];
   const value = row[key];
-  return typeof value === "string" ? value.trim() : value == null ? null : String(value).trim();
+  return typeof value === "string"
+    ? value.trim()
+    : value == null
+      ? null
+      : String(value).trim();
 }
 
 function resetSqliteReaderWarningsForTests() {

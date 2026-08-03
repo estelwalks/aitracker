@@ -15,7 +15,11 @@ function identifierValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function opaqueIdentifier(source: LocalUsageSource, kind: string, value: string): string {
+function opaqueIdentifier(
+  source: LocalUsageSource,
+  kind: string,
+  value: string,
+): string {
   const digest = createHash("sha256")
     .update("trusttools-local-usage-session-v1\0")
     .update(source)
@@ -33,14 +37,20 @@ export function sessionIdFromStructuredValue(
   value: unknown,
 ): string | undefined {
   const identifier = identifierValue(value);
-  return identifier == null ? undefined : opaqueIdentifier(source, "structured", identifier);
+  return identifier == null
+    ? undefined
+    : opaqueIdentifier(source, "structured", identifier);
 }
 
 export function sessionIdFromRelativeFile(
   source: LocalUsageSource,
   relativeFileIdentity: string,
 ): string {
-  return opaqueIdentifier(source, "file", relativeFileIdentity.replaceAll("\\", "/"));
+  return opaqueIdentifier(
+    source,
+    "file",
+    relativeFileIdentity.replaceAll("\\", "/"),
+  );
 }
 
 export function isPrivateSessionId(value: unknown): value is string {

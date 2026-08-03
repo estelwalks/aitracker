@@ -42,8 +42,14 @@ const {
   upsertOpencodePlugin,
   isOpencodePluginInstalled,
 } = require("../lib/opencode-config");
-const { isCursorInstalled, extractCursorSessionToken } = require("../lib/cursor-config");
-const { removeOpenclawHookConfig, probeOpenclawHookState } = require("../lib/openclaw-hook");
+const {
+  isCursorInstalled,
+  extractCursorSessionToken,
+} = require("../lib/cursor-config");
+const {
+  removeOpenclawHookConfig,
+  probeOpenclawHookState,
+} = require("../lib/openclaw-hook");
 const {
   installOpenclawSessionPlugin,
   probeOpenclawSessionPluginState,
@@ -54,7 +60,7 @@ const {
   upsertGrokHook,
   probeGrokHookState,
   removeGrokHook,
-  GROK_HOOK_FILENAME
+  GROK_HOOK_FILENAME,
 } = require("../lib/grok-hook");
 const { resolveTrackerPaths } = require("../lib/tracker-paths");
 const {
@@ -63,7 +69,10 @@ const {
   piAgentDirCollidesWithOmp,
   resolveAnythingllmDbPath,
 } = require("../lib/rollout");
-const { resolveRuntimeConfig, DEFAULT_BASE_URL } = require("../lib/runtime-config");
+const {
+  resolveRuntimeConfig,
+  DEFAULT_BASE_URL,
+} = require("../lib/runtime-config");
 const {
   BOLD,
   DIM,
@@ -74,7 +83,11 @@ const {
   promptMenu,
   createSpinner,
 } = require("../lib/cli-ui");
-const { renderLocalReport, renderAuthTransition, renderSuccessBox } = require("../lib/init-flow");
+const {
+  renderLocalReport,
+  renderAuthTransition,
+  renderSuccessBox,
+} = require("../lib/init-flow");
 const { maybeShowStarCta } = require("../lib/star-cta");
 
 const ASCII_LOGO = [
@@ -136,7 +149,10 @@ async function cmdInit(argv) {
   const { rootDir, trackerDir, binDir } = await resolveTrackerPaths({ home });
 
   const configPath = path.join(trackerDir, "config.json");
-  const notifyOriginalPath = path.join(trackerDir, "codex_notify_original.json");
+  const notifyOriginalPath = path.join(
+    trackerDir,
+    "codex_notify_original.json",
+  );
   const linkCodeStatePath = path.join(trackerDir, "link_code_state.json");
 
   const existingConfig = await readJson(configPath);
@@ -152,7 +168,9 @@ async function cmdInit(argv) {
   renderWelcome();
 
   if (opts.dryRun) {
-    process.stdout.write(`${color("Dry run: preview only (no changes applied).", DIM)}\n\n`);
+    process.stdout.write(
+      `${color("Dry run: preview only (no changes applied).", DIM)}\n\n`,
+    );
   }
 
   if (isInteractive() && !opts.yes && !opts.dryRun) {
@@ -164,7 +182,10 @@ async function cmdInit(argv) {
     const normalizedChoice = String(choice || "")
       .trim()
       .toLowerCase();
-    if (normalizedChoice.startsWith("no") || normalizedChoice.includes("exit")) {
+    if (
+      normalizedChoice.startsWith("no") ||
+      normalizedChoice.includes("exit")
+    ) {
       process.stdout.write("Setup cancelled.\n");
       return;
     }
@@ -183,7 +204,9 @@ async function cmdInit(argv) {
     return;
   }
 
-  const spinner = createSpinner({ text: "Analyzing and configuring local environment..." });
+  const spinner = createSpinner({
+    text: "Analyzing and configuring local environment...",
+  });
   spinner.start();
   let setup;
   try {
@@ -239,9 +262,7 @@ function renderWelcome() {
   const previewNames = SUPPORTED_PROVIDERS.slice(0, 5).join(", ");
   const remaining = providerCount - 5;
   const providerLine =
-    remaining > 0
-      ? `${previewNames} +${remaining} more`
-      : previewNames;
+    remaining > 0 ? `${previewNames} +${remaining} more` : previewNames;
   process.stdout.write(
     [
       ASCII_LOGO,
@@ -274,11 +295,7 @@ function renderLocalSuccess({ firstSync } = {}) {
     );
   }
 
-  lines.push(
-    "",
-    `  Dashboard: ${CYAN}http://localhost:7680${RESET}`,
-    "",
-  );
+  lines.push("", `  Dashboard: ${CYAN}http://localhost:7680${RESET}`, "");
   process.stdout.write(lines.join("\n"));
 }
 
@@ -304,7 +321,13 @@ function shouldUseBrowserAuth({ deviceToken, opts }) {
   return true;
 }
 
-async function buildDryRunSummary({ opts, home, trackerDir, notifyPath, runtime }) {
+async function buildDryRunSummary({
+  opts,
+  home,
+  trackerDir,
+  notifyPath,
+  runtime,
+}) {
   const deviceToken = runtime?.deviceToken || null;
   const pendingBrowserAuth = shouldUseBrowserAuth({ deviceToken, opts });
   const context = buildIntegrationTargets({ home, trackerDir, notifyPath });
@@ -336,7 +359,9 @@ async function runSetup({
   await installLocalTrackerApp({ appDir });
 
   const existingPlainConfig =
-    existingConfig && typeof existingConfig === "object" && !Array.isArray(existingConfig)
+    existingConfig &&
+    typeof existingConfig === "object" &&
+    !Array.isArray(existingConfig)
       ? existingConfig
       : {};
   const config = {
@@ -372,9 +397,18 @@ async function runSetup({
   };
 }
 
-async function writeNotifyHandler({ trackerDir, binDir, notifyPath, packageName = "tokentracker-cli" }) {
+async function writeNotifyHandler({
+  trackerDir,
+  binDir,
+  notifyPath,
+  packageName = "tokentracker-cli",
+}) {
   const resolvedNotifyPath =
-    notifyPath || path.join(binDir || path.join(path.dirname(trackerDir), "bin"), "notify.cjs");
+    notifyPath ||
+    path.join(
+      binDir || path.join(path.dirname(trackerDir), "bin"),
+      "notify.cjs",
+    );
   await ensureDir(path.dirname(resolvedNotifyPath));
   await writeFileAtomic(
     resolvedNotifyPath,
@@ -384,8 +418,16 @@ async function writeNotifyHandler({ trackerDir, binDir, notifyPath, packageName 
   return resolvedNotifyPath;
 }
 
-async function repairCodexNotifyIntegration({ home = os.homedir(), trackerDir, binDir, safeMode = true } = {}) {
-  const paths = trackerDir && binDir ? { trackerDir, binDir } : await resolveTrackerPaths({ home });
+async function repairCodexNotifyIntegration({
+  home = os.homedir(),
+  trackerDir,
+  binDir,
+  safeMode = true,
+} = {}) {
+  const paths =
+    trackerDir && binDir
+      ? { trackerDir, binDir }
+      : await resolveTrackerPaths({ home });
   const resolvedTrackerDir = trackerDir || paths.trackerDir;
   const resolvedBinDir = binDir || paths.binDir;
   const notifyPath = await writeNotifyHandler({
@@ -415,7 +457,11 @@ async function repairCodexNotifyIntegration({ home = os.homedir(), trackerDir, b
       })
     : { repair: true, captureOriginal: true, replaceOriginal: false };
   if (!repairDecision.repair) {
-    return { changed: false, skippedReason: repairDecision.reason || "external-notify", notifyPath };
+    return {
+      changed: false,
+      skippedReason: repairDecision.reason || "external-notify",
+      notifyPath,
+    };
   }
 
   const result = await upsertCodexNotify({
@@ -434,7 +480,10 @@ async function repairRuntimeIntegrations({
   binDir,
   safeMode = true,
 } = {}) {
-  const paths = trackerDir && binDir ? { trackerDir, binDir } : await resolveTrackerPaths({ home });
+  const paths =
+    trackerDir && binDir
+      ? { trackerDir, binDir }
+      : await resolveTrackerPaths({ home });
   const resolvedTrackerDir = trackerDir || paths.trackerDir;
   const resolvedBinDir = binDir || paths.binDir;
   const notifyPath = await writeNotifyHandler({
@@ -454,45 +503,73 @@ async function repairRuntimeIntegrations({
       integrations[key] = await work();
     } catch (error) {
       integrations[key] = { changed: false, skippedReason: "repair-failed" };
-      warnings.push({ integration: key, error: error?.message || String(error) });
+      warnings.push({
+        integration: key,
+        error: error?.message || String(error),
+      });
     }
   };
 
-  await attempt("codex", () => repairCodexNotifyIntegration({
-    home,
-    trackerDir: resolvedTrackerDir,
-    binDir: resolvedBinDir,
-    safeMode,
-  }));
+  await attempt("codex", () =>
+    repairCodexNotifyIntegration({
+      home,
+      trackerDir: resolvedTrackerDir,
+      binDir: resolvedBinDir,
+      safeMode,
+    }),
+  );
 
   const hookRepairs = [
-    ["claude", context.claudeDir, () => upsertClaudeUsageHooks({
-      settingsPath: context.claudeSettingsPath,
-      hookCommand: context.claudeHookCommand,
-    })],
-    ["gemini", context.geminiConfigDir, () => upsertGeminiHook({
-      settingsPath: context.geminiSettingsPath,
-      hookCommand: context.geminiHookCommand,
-    })],
-    ["codebuddy", context.codebuddyDir, () => upsertClaudeHook({
-      settingsPath: context.codebuddySettingsPath,
-      hookCommand: context.codebuddyHookCommand,
-    })],
-    ["workbuddy", context.workbuddyDir, () => upsertClaudeHook({
-      settingsPath: context.workbuddySettingsPath,
-      hookCommand: context.workbuddyHookCommand,
-    })],
+    [
+      "claude",
+      context.claudeDir,
+      () =>
+        upsertClaudeUsageHooks({
+          settingsPath: context.claudeSettingsPath,
+          hookCommand: context.claudeHookCommand,
+        }),
+    ],
+    [
+      "gemini",
+      context.geminiConfigDir,
+      () =>
+        upsertGeminiHook({
+          settingsPath: context.geminiSettingsPath,
+          hookCommand: context.geminiHookCommand,
+        }),
+    ],
+    [
+      "codebuddy",
+      context.codebuddyDir,
+      () =>
+        upsertClaudeHook({
+          settingsPath: context.codebuddySettingsPath,
+          hookCommand: context.codebuddyHookCommand,
+        }),
+    ],
+    [
+      "workbuddy",
+      context.workbuddyDir,
+      () =>
+        upsertClaudeHook({
+          settingsPath: context.workbuddySettingsPath,
+          hookCommand: context.workbuddyHookCommand,
+        }),
+    ],
   ];
   for (const [key, configDir, repair] of hookRepairs) {
     if (await isDir(configDir)) await attempt(key, repair);
-    else integrations[key] = { changed: false, skippedReason: "config-missing" };
+    else
+      integrations[key] = { changed: false, skippedReason: "config-missing" };
   }
 
   if (await isDir(context.opencodeConfigDir)) {
-    await attempt("opencode", () => upsertOpencodePlugin({
-      configDir: context.opencodeConfigDir,
-      notifyPath,
-    }));
+    await attempt("opencode", () =>
+      upsertOpencodePlugin({
+        configDir: context.opencodeConfigDir,
+        notifyPath,
+      }),
+    );
   } else {
     integrations.opencode = { changed: false, skippedReason: "config-missing" };
   }
@@ -505,8 +582,14 @@ function buildIntegrationTargets({ home, trackerDir, notifyPath }) {
   const codexConfigPath = path.join(codexHome, "config.toml");
   const codeHome = process.env.CODE_HOME || path.join(home, ".code");
   const codeConfigPath = path.join(codeHome, "config.toml");
-  const notifyOriginalPath = path.join(trackerDir, "codex_notify_original.json");
-  const codeNotifyOriginalPath = path.join(trackerDir, "code_notify_original.json");
+  const notifyOriginalPath = path.join(
+    trackerDir,
+    "codex_notify_original.json",
+  );
+  const codeNotifyOriginalPath = path.join(
+    trackerDir,
+    "code_notify_original.json",
+  );
   const notifyCmd = buildCodexNotifyCmd(notifyPath);
   const codeNotifyCmd = buildEveryCodeNotifyCmd(notifyPath);
   const claudeDir = path.join(home, ".claude");
@@ -515,17 +598,24 @@ function buildIntegrationTargets({ home, trackerDir, notifyPath }) {
   // CodeBuddy CLI (Tencent) is a Claude-Code fork — same settings.json hook
   // schema, same SessionEnd event. We install the same hook with a different
   // --source token so notify.cjs / sync know which provider triggered.
-  const codebuddyDir = process.env.CODEBUDDY_HOME || path.join(home, ".codebuddy");
+  const codebuddyDir =
+    process.env.CODEBUDDY_HOME || path.join(home, ".codebuddy");
   const codebuddySettingsPath = path.join(codebuddyDir, "settings.json");
   const codebuddyHookCommand = buildHookCommand(notifyPath, "codebuddy");
   // WorkBuddy CLI (Tencent) is the same Claude-Code-fork hook schema as CodeBuddy.
-  const workbuddyDir = process.env.WORKBUDDY_HOME || path.join(home, ".workbuddy");
+  const workbuddyDir =
+    process.env.WORKBUDDY_HOME || path.join(home, ".workbuddy");
   const workbuddySettingsPath = path.join(workbuddyDir, "settings.json");
   const workbuddyHookCommand = buildHookCommand(notifyPath, "workbuddy");
   const geminiConfigDir = resolveGeminiConfigDir({ home, env: process.env });
-  const geminiSettingsPath = resolveGeminiSettingsPath({ configDir: geminiConfigDir });
+  const geminiSettingsPath = resolveGeminiSettingsPath({
+    configDir: geminiConfigDir,
+  });
   const geminiHookCommand = buildGeminiHookCommand(notifyPath);
-  const opencodeConfigDir = resolveOpencodeConfigDir({ home, env: process.env });
+  const opencodeConfigDir = resolveOpencodeConfigDir({
+    home,
+    env: process.env,
+  });
 
   return {
     trackerDir,
@@ -551,7 +641,12 @@ function buildIntegrationTargets({ home, trackerDir, notifyPath }) {
   };
 }
 
-async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOriginalPath }) {
+async function applyIntegrationSetup({
+  home,
+  trackerDir,
+  notifyPath,
+  notifyOriginalPath,
+}) {
   const context = buildIntegrationTargets({ home, trackerDir, notifyPath });
   context.notifyOriginalPath = notifyOriginalPath;
 
@@ -564,7 +659,10 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       codexConfigPath: context.codexConfigPath,
       notifyCmd: context.notifyCmd,
       notifyOriginalPath: context.notifyOriginalPath,
-      replaceOriginal: shouldReplaceStoredOriginalNotify(currentNotify, context.notifyCmd),
+      replaceOriginal: shouldReplaceStoredOriginalNotify(
+        currentNotify,
+        context.notifyCmd,
+      ),
     });
     summary.push({
       label: "Codex CLI",
@@ -572,7 +670,11 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       detail: result.changed ? "Updated config" : "Config already set",
     });
   } else {
-    summary.push({ label: "Codex CLI", status: "skipped", detail: renderSkipDetail(codexProbe) });
+    summary.push({
+      label: "Codex CLI",
+      status: "skipped",
+      detail: renderSkipDetail(codexProbe),
+    });
   }
 
   const claudeDirExists = await isDir(context.claudeDir);
@@ -581,9 +683,17 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       settingsPath: context.claudeSettingsPath,
       hookCommand: context.claudeHookCommand,
     });
-    summary.push({ label: "Claude", status: "installed", detail: "Hooks installed" });
+    summary.push({
+      label: "Claude",
+      status: "installed",
+      detail: "Hooks installed",
+    });
   } else {
-    summary.push({ label: "Claude", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "Claude",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const geminiConfigExists = await isDir(context.geminiConfigDir);
@@ -592,9 +702,17 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       settingsPath: context.geminiSettingsPath,
       hookCommand: context.geminiHookCommand,
     });
-    summary.push({ label: "Gemini", status: "installed", detail: "Hooks installed" });
+    summary.push({
+      label: "Gemini",
+      status: "installed",
+      detail: "Hooks installed",
+    });
   } else {
-    summary.push({ label: "Gemini", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "Gemini",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const opencodeResult = await upsertOpencodePlugin({
@@ -602,7 +720,11 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
     notifyPath,
   });
   if (opencodeResult?.skippedReason === "config-missing") {
-    summary.push({ label: "Opencode Plugin", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "Opencode Plugin",
+      status: "skipped",
+      detail: "Config not found",
+    });
   } else {
     summary.push({
       label: "Opencode Plugin",
@@ -628,17 +750,29 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       });
     }
   } else {
-    summary.push({ label: "Cursor", status: "skipped", detail: "Not installed" });
+    summary.push({
+      label: "Cursor",
+      status: "skipped",
+      detail: "Not installed",
+    });
   }
 
   // Kimi: passive reader — no hook installation needed.
   // TokenTracker reads both legacy ~/.kimi/ and official ~/.kimi-code/ sessions.
   {
     const kimiHome = process.env.KIMI_HOME || path.join(home, ".kimi");
-    const kimiCodeHome = process.env.KIMI_CODE_HOME || path.join(home, ".kimi-code");
+    const kimiCodeHome =
+      process.env.KIMI_CODE_HOME || path.join(home, ".kimi-code");
     const fssync = require("node:fs");
-    if (fssync.existsSync(path.join(kimiHome, "sessions")) || fssync.existsSync(path.join(kimiCodeHome, "sessions"))) {
-      summary.push({ label: "Kimi Code", status: "detected", detail: "Passive reader (no hook needed)" });
+    if (
+      fssync.existsSync(path.join(kimiHome, "sessions")) ||
+      fssync.existsSync(path.join(kimiCodeHome, "sessions"))
+    ) {
+      summary.push({
+        label: "Kimi Code",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
@@ -650,7 +784,11 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
     // installed", so skip rather than path.join(null, …) and crash.
     const ompAgentDir = resolveOmpAgentDir(process.env);
     if (ompAgentDir && fssync.existsSync(path.join(ompAgentDir, "sessions"))) {
-      summary.push({ label: "oh-my-pi", status: "detected", detail: "Passive reader (no hook needed)" });
+      summary.push({
+        label: "oh-my-pi",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
@@ -662,7 +800,11 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
     // ~/.pi doesn't exist, so guard before joining.
     const piAgentDir = resolvePiAgentDir(process.env);
     if (piAgentDir && fssync.existsSync(path.join(piAgentDir, "sessions"))) {
-      summary.push({ label: "pi", status: "detected", detail: "Passive reader (no hook needed)" });
+      summary.push({
+        label: "pi",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
@@ -670,26 +812,45 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
   // TokenTracker reads ~/.craft-agent/workspaces/<id>/sessions/**/session.jsonl
   // (and any user-relocated workspace listed in ~/.craft-agent/config.json).
   {
-    const craftConfigDir = process.env.CRAFT_CONFIG_DIR || path.join(home, ".craft-agent");
+    const craftConfigDir =
+      process.env.CRAFT_CONFIG_DIR || path.join(home, ".craft-agent");
     if (fssync.existsSync(craftConfigDir)) {
-      summary.push({ label: "Craft Agents", status: "detected", detail: "Passive reader (no hook needed)" });
+      summary.push({
+        label: "Craft Agents",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
   // Grok Build (xAI): SessionEnd hook in ~/.grok/hooks/ + handler in ~/.tokentracker/bin/
   {
     try {
-      const grokState = await probeGrokHookState({ home, trackerDir, env: process.env });
+      const grokState = await probeGrokHookState({
+        home,
+        trackerDir,
+        env: process.env,
+      });
       if (grokState.hasGrokInstall) {
-        const grokRes = await upsertGrokHook({ home, trackerDir, env: process.env });
+        const grokRes = await upsertGrokHook({
+          home,
+          trackerDir,
+          env: process.env,
+        });
         summary.push({
           label: "Grok Build",
           status: grokRes.configured ? "installed" : "detected",
-          detail: grokRes.configured ? "SessionEnd hook installed (99-tokentracker-usage.json)" : "Grok detected"
+          detail: grokRes.configured
+            ? "SessionEnd hook installed (99-tokentracker-usage.json)"
+            : "Grok detected",
         });
       }
     } catch (err) {
-      summary.push({ label: "Grok Build", status: "error", detail: String(err?.message || err) });
+      summary.push({
+        label: "Grok Build",
+        status: "error",
+        detail: String(err?.message || err),
+      });
     }
   }
 
@@ -697,11 +858,16 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
   // needed. Reuses OpenCode-fork SQLite schema at ~/.local/share/kilo/kilo.db
   // (override via KILO_HOME).
   {
-    const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+    const xdgDataHome =
+      process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
     const kiloHome = process.env.KILO_HOME || path.join(xdgDataHome, "kilo");
     const kiloDbPath = path.join(kiloHome, "kilo.db");
     if (fssync.existsSync(kiloDbPath)) {
-      summary.push({ label: "Kilo CLI", status: "detected", detail: "Passive reader (no hook needed)" });
+      summary.push({
+        label: "Kilo CLI",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
@@ -709,11 +875,17 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
   // OpenCode-fork SQLite schema at ~/.local/share/mimocode/mimocode.db
   // (override via MIMO_HOME).
   {
-    const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
-    const mimoHome = process.env.MIMO_HOME || path.join(xdgDataHome, "mimocode");
+    const xdgDataHome =
+      process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+    const mimoHome =
+      process.env.MIMO_HOME || path.join(xdgDataHome, "mimocode");
     const mimoDbPath = path.join(mimoHome, "mimocode.db");
     if (fssync.existsSync(mimoDbPath)) {
-      summary.push({ label: "Mimo", status: "detected", detail: "Passive reader (no hook needed)" });
+      summary.push({
+        label: "Mimo",
+        status: "detected",
+        detail: "Passive reader (no hook needed)",
+      });
     }
   }
 
@@ -754,9 +926,17 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       settingsPath: context.codebuddySettingsPath,
       hookCommand: context.codebuddyHookCommand,
     });
-    summary.push({ label: "CodeBuddy", status: "installed", detail: "Hooks installed" });
+    summary.push({
+      label: "CodeBuddy",
+      status: "installed",
+      detail: "Hooks installed",
+    });
   } else {
-    summary.push({ label: "CodeBuddy", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "CodeBuddy",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   // WorkBuddy: sibling Claude-Code fork. Same SessionEnd hook → notify.cjs →
@@ -767,9 +947,17 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       settingsPath: context.workbuddySettingsPath,
       hookCommand: context.workbuddyHookCommand,
     });
-    summary.push({ label: "WorkBuddy", status: "installed", detail: "Hooks installed" });
+    summary.push({
+      label: "WorkBuddy",
+      status: "installed",
+      detail: "Hooks installed",
+    });
   } else {
-    summary.push({ label: "WorkBuddy", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "WorkBuddy",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const openclawBefore = await probeOpenclawSessionPluginState({
@@ -789,7 +977,9 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       status: "skipped",
       detail: "OpenClaw CLI not found",
     });
-  } else if (openclawInstall?.skippedReason === "openclaw-plugins-install-failed") {
+  } else if (
+    openclawInstall?.skippedReason === "openclaw-plugins-install-failed"
+  ) {
     summary.push({
       label: "OpenClaw Session Plugin",
       status: "skipped",
@@ -819,8 +1009,16 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
     });
   }
 
-  const legacyHookState = await probeOpenclawHookState({ home, trackerDir, env: process.env });
-  if (legacyHookState?.configured || legacyHookState?.linked || legacyHookState?.enabled) {
+  const legacyHookState = await probeOpenclawHookState({
+    home,
+    trackerDir,
+    env: process.env,
+  });
+  if (
+    legacyHookState?.configured ||
+    legacyHookState?.linked ||
+    legacyHookState?.enabled
+  ) {
     await removeOpenclawHookConfig({ home, trackerDir, env: process.env });
     summary.push({
       label: "OpenClaw Hook (legacy)",
@@ -836,7 +1034,10 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       codeConfigPath: context.codeConfigPath,
       notifyCmd: context.codeNotifyCmd,
       notifyOriginalPath: context.codeNotifyOriginalPath,
-      replaceOriginal: shouldReplaceStoredOriginalNotify(currentNotify, context.codeNotifyCmd),
+      replaceOriginal: shouldReplaceStoredOriginalNotify(
+        currentNotify,
+        context.codeNotifyCmd,
+      ),
     });
     summary.push({
       label: "Every Code",
@@ -844,7 +1045,11 @@ async function applyIntegrationSetup({ home, trackerDir, notifyPath, notifyOrigi
       detail: result.changed ? "Updated config" : "Config already set",
     });
   } else {
-    summary.push({ label: "Every Code", status: "skipped", detail: renderSkipDetail(codeProbe) });
+    summary.push({
+      label: "Every Code",
+      status: "skipped",
+      detail: renderSkipDetail(codeProbe),
+    });
   }
 
   return summary;
@@ -864,7 +1069,11 @@ async function previewIntegrations({ context }) {
       detail: matches ? "Already configured" : "Will update config",
     });
   } else {
-    summary.push({ label: "Codex CLI", status: "skipped", detail: renderSkipDetail(codexProbe) });
+    summary.push({
+      label: "Codex CLI",
+      status: "skipped",
+      detail: renderSkipDetail(codexProbe),
+    });
   }
 
   const claudeDirExists = await isDir(context.claudeDir);
@@ -879,7 +1088,11 @@ async function previewIntegrations({ context }) {
       detail: configured ? "Hooks already installed" : "Will install hooks",
     });
   } else {
-    summary.push({ label: "Claude", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "Claude",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const codebuddyDirExists = await isDir(context.codebuddyDir);
@@ -894,7 +1107,11 @@ async function previewIntegrations({ context }) {
       detail: configured ? "Hooks already installed" : "Will install hooks",
     });
   } else {
-    summary.push({ label: "CodeBuddy", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "CodeBuddy",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const workbuddyDirExists = await isDir(context.workbuddyDir);
@@ -909,7 +1126,11 @@ async function previewIntegrations({ context }) {
       detail: configured ? "Hooks already installed" : "Will install hooks",
     });
   } else {
-    summary.push({ label: "WorkBuddy", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "WorkBuddy",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const geminiConfigExists = await isDir(context.geminiConfigDir);
@@ -924,11 +1145,17 @@ async function previewIntegrations({ context }) {
       detail: configured ? "Hooks already installed" : "Will install hooks",
     });
   } else {
-    summary.push({ label: "Gemini", status: "skipped", detail: "Config not found" });
+    summary.push({
+      label: "Gemini",
+      status: "skipped",
+      detail: "Config not found",
+    });
   }
 
   const opencodeDirExists = await isDir(context.opencodeConfigDir);
-  const installed = await isOpencodePluginInstalled({ configDir: context.opencodeConfigDir });
+  const installed = await isOpencodePluginInstalled({
+    configDir: context.opencodeConfigDir,
+  });
   const opencodeDetail = installed
     ? "Plugin already installed"
     : opencodeDirExists
@@ -974,7 +1201,11 @@ async function previewIntegrations({ context }) {
     trackerDir: context.trackerDir,
     env: process.env,
   });
-  if (legacyHookState?.configured || legacyHookState?.linked || legacyHookState?.enabled) {
+  if (
+    legacyHookState?.configured ||
+    legacyHookState?.linked ||
+    legacyHookState?.enabled
+  ) {
     summary.push({
       label: "OpenClaw Hook (legacy)",
       status: "updated",
@@ -992,7 +1223,11 @@ async function previewIntegrations({ context }) {
       detail: matches ? "Already configured" : "Will update config",
     });
   } else {
-    summary.push({ label: "Every Code", status: "skipped", detail: renderSkipDetail(codeProbe) });
+    summary.push({
+      label: "Every Code",
+      status: "skipped",
+      detail: renderSkipDetail(codeProbe),
+    });
   }
 
   return summary;
@@ -1012,7 +1247,11 @@ function arraysEqual(a, b) {
   return true;
 }
 
-async function shouldRepairCodexNotify({ currentNotify, expectedNotify, notifyOriginalPath }) {
+async function shouldRepairCodexNotify({
+  currentNotify,
+  expectedNotify,
+  notifyOriginalPath,
+}) {
   if (!Array.isArray(currentNotify) || currentNotify.length === 0) {
     return { repair: true, captureOriginal: true, replaceOriginal: true };
   }
@@ -1023,8 +1262,8 @@ async function shouldRepairCodexNotify({ currentNotify, expectedNotify, notifyOr
     return { repair: true, captureOriginal: false };
   }
   if (
-    isSkyComputerUseNotify(currentNotify)
-    && containsNestedTokenTrackerNotify(currentNotify, expectedNotify)
+    isSkyComputerUseNotify(currentNotify) &&
+    containsNestedTokenTrackerNotify(currentNotify, expectedNotify)
   ) {
     return { repair: false, reason: "already-wrapped" };
   }
@@ -1033,7 +1272,9 @@ async function shouldRepairCodexNotify({ currentNotify, expectedNotify, notifyOr
   }
 
   const original = await readJson(notifyOriginalPath);
-  const originalNotify = Array.isArray(original?.notify) ? original.notify : null;
+  const originalNotify = Array.isArray(original?.notify)
+    ? original.notify
+    : null;
   if (arraysEqual(currentNotify, originalNotify)) {
     return { repair: true, captureOriginal: true, replaceOriginal: false };
   }
@@ -1055,7 +1296,9 @@ function isTokenTrackerNotify(cmd, expectedNotify) {
 
 function isSkyComputerUseNotify(cmd) {
   if (!Array.isArray(cmd)) return false;
-  return cmd.some((part) => typeof part === "string" && part.includes("SkyComputerUseClient"));
+  return cmd.some(
+    (part) => typeof part === "string" && part.includes("SkyComputerUseClient"),
+  );
 }
 
 function containsNestedTokenTrackerNotify(cmd, expectedNotify) {
@@ -1912,7 +2155,8 @@ async function probeFile(p) {
     if (st.isFile()) return { exists: true, reason: null };
     return { exists: false, reason: "not-file" };
   } catch (e) {
-    if (e?.code === "ENOENT" || e?.code === "ENOTDIR") return { exists: false, reason: "missing" };
+    if (e?.code === "ENOENT" || e?.code === "ENOTDIR")
+      return { exists: false, reason: "missing" };
     if (e?.code === "EACCES" || e?.code === "EPERM")
       return { exists: false, reason: "permission-denied" };
     return { exists: false, reason: "error", code: e?.code || "unknown" };
@@ -1960,7 +2204,9 @@ async function installLocalTrackerApp({ appDir }) {
   await ensureDir(binToDir);
   await fs.copyFile(binFrom, binTo);
   await fs.chmod(binTo, 0o755).catch(() => {});
-  await fs.copyFile(packageJsonFrom, path.join(appDir, "package.json")).catch(() => {});
+  await fs
+    .copyFile(packageJsonFrom, path.join(appDir, "package.json"))
+    .catch(() => {});
   if (await isDir(dashboardDistFrom)) {
     await fs.cp(dashboardDistFrom, dashboardDistTo, { recursive: true });
   }
@@ -1988,7 +2234,11 @@ async function safeRealpath(p) {
 // derived from queue.jsonl after the wait window closes.
 const FIRST_SYNC_TIMEOUT_MS = 15_000;
 
-async function runFirstSyncAndRead({ trackerBinPath, trackerDir, packageName }) {
+async function runFirstSyncAndRead({
+  trackerBinPath,
+  trackerDir,
+  packageName,
+}) {
   // Test-only escape hatch: skip spawning a real `sync --drain` subprocess when
   // a test only exercises init wiring. Returns the same shape derived from an
   // (empty) queue so callers behave identically without the ~1s spawn per case.
@@ -1997,7 +2247,8 @@ async function runFirstSyncAndRead({ trackerBinPath, trackerDir, packageName }) 
   }
   const fallbackPkg = packageName || "tokentracker-cli";
   const argv = ["sync", "--drain"];
-  const hasLocalRuntime = typeof trackerBinPath === "string" && fssync.existsSync(trackerBinPath);
+  const hasLocalRuntime =
+    typeof trackerBinPath === "string" && fssync.existsSync(trackerBinPath);
   const cmd = hasLocalRuntime
     ? [process.execPath, trackerBinPath, ...argv]
     : ["npx", "--yes", fallbackPkg, ...argv];
@@ -2022,7 +2273,9 @@ async function runFirstSyncAndRead({ trackerBinPath, trackerDir, packageName }) 
       });
     } catch (err) {
       if (isDebugEnabled()) {
-        process.stderr.write(`first-sync spawn failed: ${err?.message || err}\n`);
+        process.stderr.write(
+          `first-sync spawn failed: ${err?.message || err}\n`,
+        );
       }
       settle();
       return;

@@ -62,12 +62,21 @@ function toNonNegativeNumber(value) {
 function readClaudeUsageTotals(usage) {
   if (!usage || typeof usage !== "object") return null;
   const input_tokens = toNonNegativeNumber(usage.input_tokens);
-  const cached_input_tokens = toNonNegativeNumber(usage.cache_read_input_tokens);
-  const cache_creation_input_tokens = toNonNegativeNumber(usage.cache_creation_input_tokens);
+  const cached_input_tokens = toNonNegativeNumber(
+    usage.cache_read_input_tokens,
+  );
+  const cache_creation_input_tokens = toNonNegativeNumber(
+    usage.cache_creation_input_tokens,
+  );
   const output_tokens = toNonNegativeNumber(usage.output_tokens);
-  const reasoning_output_tokens = toNonNegativeNumber(usage.reasoning_output_tokens);
+  const reasoning_output_tokens = toNonNegativeNumber(
+    usage.reasoning_output_tokens,
+  );
   const total_tokens =
-    input_tokens + cached_input_tokens + cache_creation_input_tokens + output_tokens;
+    input_tokens +
+    cached_input_tokens +
+    cache_creation_input_tokens +
+    output_tokens;
 
   return {
     input_tokens,
@@ -100,9 +109,11 @@ function extractExecCommands(content) {
     if (block.name !== "Bash" && block.name !== "exec_command") continue;
     const input = block.input || {};
     const command =
-      typeof input.command === "string" ? input.command
-      : typeof input.cmd === "string" ? input.cmd
-      : "";
+      typeof input.command === "string"
+        ? input.command
+        : typeof input.cmd === "string"
+          ? input.cmd
+          : "";
     if (command.trim()) commands.push(command.trim());
   }
   return commands;
@@ -110,7 +121,8 @@ function extractExecCommands(content) {
 
 function ensureExecRow(map, key) {
   const safeKey = key || "unknown";
-  if (!map.has(safeKey)) map.set(safeKey, { name: safeKey, ...buildExecStatsEntry() });
+  if (!map.has(safeKey))
+    map.set(safeKey, { name: safeKey, ...buildExecStatsEntry() });
   return map.get(safeKey);
 }
 
@@ -167,7 +179,11 @@ function allocateTotalsAcrossRows(totals, rows) {
     "reasoning_output_tokens",
     "total_tokens",
   ]) {
-    const alloc = allocateByLargestRemainder(Math.max(0, Number(totals?.[key] || 0)), weights, order);
+    const alloc = allocateByLargestRemainder(
+      Math.max(0, Number(totals?.[key] || 0)),
+      weights,
+      order,
+    );
     for (const name of order) {
       out.get(name)[key] = alloc[name] || 0;
     }
@@ -180,14 +196,16 @@ function extractSkillNames(content) {
   for (const block of Array.isArray(content) ? content : []) {
     if (!block || typeof block !== "object") continue;
     if (block.type !== "tool_use" || block.name !== "Skill") continue;
-    const skill = typeof block.input?.skill === "string" ? block.input.skill.trim() : "";
+    const skill =
+      typeof block.input?.skill === "string" ? block.input.skill.trim() : "";
     if (skill) names.push(skill);
   }
   return names;
 }
 
 function recordSkillUsage(skillLedger, skillNames, totals) {
-  if (!skillLedger || !Array.isArray(skillNames) || skillNames.length === 0) return;
+  if (!skillLedger || !Array.isArray(skillNames) || skillNames.length === 0)
+    return;
   const perMessageRows = new Map();
   for (const name of skillNames) {
     if (!perMessageRows.has(name)) perMessageRows.set(name, { calls: 0 });
@@ -207,18 +225,31 @@ function recordSkillUsage(skillLedger, skillNames, totals) {
 
 function computeOutputTokenBreakdown(usage, content) {
   const total = Math.max(0, Number(usage.output_tokens || 0));
-  const reasoningExplicit = Math.max(0, Number(usage.reasoning_output_tokens || 0));
+  const reasoningExplicit = Math.max(
+    0,
+    Number(usage.reasoning_output_tokens || 0),
+  );
   const blocks = Array.isArray(content) ? content : [];
 
   if (total === 0) {
     return {
-      bucket_tokens: { reasoning: 0, tool_calls: 0, subagents: 0, assistant_response: 0 },
+      bucket_tokens: {
+        reasoning: 0,
+        tool_calls: 0,
+        subagents: 0,
+        assistant_response: 0,
+      },
       tool_calls: { total_calls: 0, by_name: new Map() },
       subagents: { total_calls: 0, by_name: new Map() },
     };
   }
 
-  const bucketChars = { reasoning: 0, tool_calls: 0, subagents: 0, assistant_response: 0 };
+  const bucketChars = {
+    reasoning: 0,
+    tool_calls: 0,
+    subagents: 0,
+    assistant_response: 0,
+  };
   const toolCallChars = new Map();
   const subagentChars = new Map();
   const toolCallCounts = new Map();
@@ -241,12 +272,24 @@ function computeOutputTokenBreakdown(usage, content) {
       chars = (block.name || "").length + inputJson.length + 1;
       if (SUBAGENT_TOOL_NAMES.has(block.name)) {
         bucketChars.subagents += chars;
-        subagentChars.set(block.name, (subagentChars.get(block.name) || 0) + chars);
-        subagentCounts.set(block.name, (subagentCounts.get(block.name) || 0) + 1);
+        subagentChars.set(
+          block.name,
+          (subagentChars.get(block.name) || 0) + chars,
+        );
+        subagentCounts.set(
+          block.name,
+          (subagentCounts.get(block.name) || 0) + 1,
+        );
       } else {
         bucketChars.tool_calls += chars;
-        toolCallChars.set(block.name, (toolCallChars.get(block.name) || 0) + chars);
-        toolCallCounts.set(block.name, (toolCallCounts.get(block.name) || 0) + 1);
+        toolCallChars.set(
+          block.name,
+          (toolCallChars.get(block.name) || 0) + chars,
+        );
+        toolCallCounts.set(
+          block.name,
+          (toolCallCounts.get(block.name) || 0) + 1,
+        );
       }
     } else {
       continue;
@@ -257,13 +300,19 @@ function computeOutputTokenBreakdown(usage, content) {
 
   if (totalChars === 0) {
     return {
-      bucket_tokens: { reasoning: 0, tool_calls: 0, subagents: 0, assistant_response: total },
+      bucket_tokens: {
+        reasoning: 0,
+        tool_calls: 0,
+        subagents: 0,
+        assistant_response: total,
+      },
       tool_calls: { total_calls: 0, by_name: new Map() },
       subagents: { total_calls: 0, by_name: new Map() },
     };
   }
 
-  const explicitReasoning = reasoningExplicit > 0 ? Math.min(reasoningExplicit, total) : 0;
+  const explicitReasoning =
+    reasoningExplicit > 0 ? Math.min(reasoningExplicit, total) : 0;
   const nonReasoningOutput = total - explicitReasoning;
 
   const allocChars = { ...bucketChars };
@@ -274,7 +323,11 @@ function computeOutputTokenBreakdown(usage, content) {
   }
 
   const order = ["reasoning", "tool_calls", "subagents", "assistant_response"];
-  const prorated = allocateByLargestRemainder(Math.max(0, nonReasoningOutput), allocChars, order);
+  const prorated = allocateByLargestRemainder(
+    Math.max(0, nonReasoningOutput),
+    allocChars,
+    order,
+  );
 
   const bucketTokens = {
     reasoning: explicitReasoning + (prorated.reasoning || 0),
@@ -295,7 +348,11 @@ function computeOutputTokenBreakdown(usage, content) {
     const keys = [...toolCallChars.keys()].sort();
     const weights = {};
     for (const k of keys) weights[k] = toolCallChars.get(k) || 0;
-    const alloc = allocateByLargestRemainder(bucketTokens.tool_calls, weights, keys);
+    const alloc = allocateByLargestRemainder(
+      bucketTokens.tool_calls,
+      weights,
+      keys,
+    );
     for (const k of keys) toolTokensByName.set(k, alloc[k] || 0);
   }
 
@@ -304,7 +361,11 @@ function computeOutputTokenBreakdown(usage, content) {
     const keys = [...subagentChars.keys()].sort();
     const weights = {};
     for (const k of keys) weights[k] = subagentChars.get(k) || 0;
-    const alloc = allocateByLargestRemainder(bucketTokens.subagents, weights, keys);
+    const alloc = allocateByLargestRemainder(
+      bucketTokens.subagents,
+      weights,
+      keys,
+    );
     for (const k of keys) subagentTokensByName.set(k, alloc[k] || 0);
   }
 
@@ -365,7 +426,12 @@ function listSessionFiles(rootDir) {
 // that exact figure for reasoning instead of pro-rating.
 function splitOutputByContent(usage, content, breakdown) {
   const out = computeOutputTokenBreakdown(usage, content);
-  for (const key of ["reasoning", "tool_calls", "subagents", "assistant_response"]) {
+  for (const key of [
+    "reasoning",
+    "tool_calls",
+    "subagents",
+    "assistant_response",
+  ]) {
     const tok = out.bucket_tokens[key] || 0;
     if (tok === 0) continue;
     breakdown[key].output_tokens += tok;
@@ -377,11 +443,21 @@ function splitOutputByContent(usage, content, breakdown) {
 // Per-session state lets us pick out the *first* meaningful cache_creation
 // chunk and call that the system_prefix. Subsequent cache_creations are
 // incremental — we attribute them to conversation_history.
-function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, skillLedger = null, execLedger = null) {
+function classifyOneMessage(
+  obj,
+  sessionState,
+  breakdown,
+  toolLedger = null,
+  skillLedger = null,
+  execLedger = null,
+) {
   const usage = obj?.message?.usage;
   if (!usage || typeof usage !== "object") return;
 
-  const cacheCreate = Math.max(0, Number(usage.cache_creation_input_tokens || 0));
+  const cacheCreate = Math.max(
+    0,
+    Number(usage.cache_creation_input_tokens || 0),
+  );
   const cacheRead = Math.max(0, Number(usage.cache_read_input_tokens || 0));
   const inputNonCached = Math.max(0, Number(usage.input_tokens || 0));
   const output = Math.max(0, Number(usage.output_tokens || 0));
@@ -411,26 +487,30 @@ function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, ski
     }
   }
 
-  recordSkillUsage(
-    skillLedger,
-    extractSkillNames(obj?.message?.content),
-    {
-      input_tokens: inputNonCached,
-      cached_input_tokens: cacheRead,
-      cache_creation_input_tokens: cacheCreate,
-      output_tokens: output,
-      reasoning_output_tokens: 0,
-      total_tokens: inputNonCached + cacheRead + cacheCreate + output,
-    },
-  );
+  recordSkillUsage(skillLedger, extractSkillNames(obj?.message?.content), {
+    input_tokens: inputNonCached,
+    cached_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheCreate,
+    output_tokens: output,
+    reasoning_output_tokens: 0,
+    total_tokens: inputNonCached + cacheRead + cacheCreate + output,
+  });
 
   // Split output across reasoning / tool_calls / subagents / assistant_response.
   if (output > 0) {
     const out = computeOutputTokenBreakdown(
-      { output_tokens: output, reasoning_output_tokens: usage.reasoning_output_tokens },
+      {
+        output_tokens: output,
+        reasoning_output_tokens: usage.reasoning_output_tokens,
+      },
       obj?.message?.content,
     );
-    for (const key of ["reasoning", "tool_calls", "subagents", "assistant_response"]) {
+    for (const key of [
+      "reasoning",
+      "tool_calls",
+      "subagents",
+      "assistant_response",
+    ]) {
       const tok = out.bucket_tokens[key] || 0;
       if (tok === 0) continue;
       breakdown[key].output_tokens += tok;
@@ -447,7 +527,11 @@ function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, ski
         cache_creation_input_tokens: cacheCreate,
         output_tokens: out.bucket_tokens.tool_calls || 0,
         reasoning_output_tokens: 0,
-        total_tokens: inputNonCached + cacheRead + cacheCreate + (out.bucket_tokens.tool_calls || 0),
+        total_tokens:
+          inputNonCached +
+          cacheRead +
+          cacheCreate +
+          (out.bucket_tokens.tool_calls || 0),
       },
     );
 
@@ -458,12 +542,23 @@ function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, ski
         cache_creation_input_tokens: cacheCreate,
         output_tokens: out.bucket_tokens.tool_calls || 0,
         reasoning_output_tokens: 0,
-        total_tokens: inputNonCached + cacheRead + cacheCreate + (out.bucket_tokens.tool_calls || 0),
+        total_tokens:
+          inputNonCached +
+          cacheRead +
+          cacheCreate +
+          (out.bucket_tokens.tool_calls || 0),
       };
-      const toolTotalsByName = allocateTotalsAcrossRows(ledgerTotals, out.tool_calls.by_name);
+      const toolTotalsByName = allocateTotalsAcrossRows(
+        ledgerTotals,
+        out.tool_calls.by_name,
+      );
       for (const [name, row] of out.tool_calls.by_name.entries()) {
         if (!toolLedger.tool_calls.by_name.has(name)) {
-          toolLedger.tool_calls.by_name.set(name, { name, calls: 0, totals: emptyTotals() });
+          toolLedger.tool_calls.by_name.set(name, {
+            name,
+            calls: 0,
+            totals: emptyTotals(),
+          });
         }
         const target = toolLedger.tool_calls.by_name.get(name);
         target.calls += row.calls || 0;
@@ -477,12 +572,23 @@ function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, ski
         cache_creation_input_tokens: cacheCreate,
         output_tokens: out.bucket_tokens.subagents || 0,
         reasoning_output_tokens: 0,
-        total_tokens: inputNonCached + cacheRead + cacheCreate + (out.bucket_tokens.subagents || 0),
+        total_tokens:
+          inputNonCached +
+          cacheRead +
+          cacheCreate +
+          (out.bucket_tokens.subagents || 0),
       };
-      const subagentTotalsByName = allocateTotalsAcrossRows(subagentTotals, out.subagents.by_name);
+      const subagentTotalsByName = allocateTotalsAcrossRows(
+        subagentTotals,
+        out.subagents.by_name,
+      );
       for (const [name, row] of out.subagents.by_name.entries()) {
         if (!toolLedger.subagents.by_name.has(name)) {
-          toolLedger.subagents.by_name.set(name, { name, calls: 0, totals: emptyTotals() });
+          toolLedger.subagents.by_name.set(name, {
+            name,
+            calls: 0,
+            totals: emptyTotals(),
+          });
         }
         const target = toolLedger.subagents.by_name.get(name);
         target.calls += row.calls || 0;
@@ -494,7 +600,14 @@ function classifyOneMessage(obj, sessionState, breakdown, toolLedger = null, ski
 }
 
 // Read one session jsonl streaming, in timestamp range, dedup by msgId+reqId.
-async function categorizeSessionFile(filePath, { fromIso, toIso, seenHashes }, breakdown, toolLedger = null, skillLedger = null, execLedger = null) {
+async function categorizeSessionFile(
+  filePath,
+  { fromIso, toIso, seenHashes },
+  breakdown,
+  toolLedger = null,
+  skillLedger = null,
+  execLedger = null,
+) {
   let stream;
   try {
     stream = fssync.createReadStream(filePath, { encoding: "utf8" });
@@ -533,7 +646,14 @@ async function categorizeSessionFile(filePath, { fromIso, toIso, seenHashes }, b
 
     if (hash) seenHashes.add(hash);
 
-    classifyOneMessage(obj, sessionState, breakdown, toolLedger, skillLedger, execLedger);
+    classifyOneMessage(
+      obj,
+      sessionState,
+      breakdown,
+      toolLedger,
+      skillLedger,
+      execLedger,
+    );
     counted += 1;
   }
   rl.close();
@@ -570,7 +690,12 @@ function dayKeyToIsoBounds(from, to) {
 const CACHE = new Map();
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 const CACHE_SCHEMA_VERSION = "skills-exec-v3";
-const DISK_CACHE_DIR = path.join(os.homedir(), ".tokentracker", "cache", "claude-categorizer");
+const DISK_CACHE_DIR = path.join(
+  os.homedir(),
+  ".tokentracker",
+  "cache",
+  "claude-categorizer",
+);
 
 function cacheKeyHash(key) {
   return crypto.createHash("sha1").update(key).digest("hex").slice(0, 32);
@@ -593,21 +718,30 @@ function writeDiskCache(key, value) {
   try {
     fssync.mkdirSync(DISK_CACHE_DIR, { recursive: true });
     const fp = path.join(DISK_CACHE_DIR, `${cacheKeyHash(key)}.json`);
-    const payload = { schemaVersion: CACHE_SCHEMA_VERSION, at: Date.now(), value };
+    const payload = {
+      schemaVersion: CACHE_SCHEMA_VERSION,
+      at: Date.now(),
+      value,
+    };
     fssync.writeFileSync(fp, JSON.stringify(payload));
     // Bound on-disk size; categorizer is cheap to recompute when miss.
     try {
-      const entries = fssync.readdirSync(DISK_CACHE_DIR)
+      const entries = fssync
+        .readdirSync(DISK_CACHE_DIR)
         .filter((n) => n.endsWith(".json"))
         .map((n) => {
           const p = path.join(DISK_CACHE_DIR, n);
           let mtime = 0;
-          try { mtime = fssync.statSync(p).mtimeMs; } catch (_e) {}
+          try {
+            mtime = fssync.statSync(p).mtimeMs;
+          } catch (_e) {}
           return { p, mtime };
         })
         .sort((a, b) => b.mtime - a.mtime);
       for (const e of entries.slice(16)) {
-        try { fssync.unlinkSync(e.p); } catch (_e) {}
+        try {
+          fssync.unlinkSync(e.p);
+        } catch (_e) {}
       }
     } catch (_e) {}
   } catch (_e) {}
@@ -624,7 +758,12 @@ function maxMtimeMs(files) {
   return max;
 }
 
-async function computeClaudeCategoryBreakdown({ from = null, to = null, rootDir = null, projectDir = null } = {}) {
+async function computeClaudeCategoryBreakdown({
+  from = null,
+  to = null,
+  rootDir = null,
+  projectDir = null,
+} = {}) {
   const root = rootDir || defaultClaudeProjectsDir();
   let files = [];
   try {
@@ -708,9 +847,10 @@ async function computeClaudeCategoryBreakdown({ from = null, to = null, rootDir 
     totals,
     categories: CATEGORY_KEYS.map((key) => {
       const t = breakdown[key];
-      const percent = totals.total_tokens > 0
-        ? Number(((t.total_tokens / totals.total_tokens) * 100).toFixed(2))
-        : 0;
+      const percent =
+        totals.total_tokens > 0
+          ? Number(((t.total_tokens / totals.total_tokens) * 100).toFixed(2))
+          : 0;
       return { key, totals: t, percent };
     }),
     session_count: sessionCount,
@@ -750,12 +890,18 @@ function buildToolCallsBreakdown(toolLedger) {
         total_tokens: row.total_tokens || row.output_tokens || 0,
       },
     }));
-    rows.sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    rows.sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
     return rows;
   }
 
-  const toolCallsRows = mapToSortedRows(toolLedger.tool_calls.by_name || new Map());
-  const subagentRows = mapToSortedRows(toolLedger.subagents.by_name || new Map());
+  const toolCallsRows = mapToSortedRows(
+    toolLedger.tool_calls.by_name || new Map(),
+  );
+  const subagentRows = mapToSortedRows(
+    toolLedger.subagents.by_name || new Map(),
+  );
 
   function groupIntoCategories(rows) {
     const byCategory = new Map(); // name -> {name,calls,totals,tools:[]}
@@ -787,27 +933,42 @@ function buildToolCallsBreakdown(toolLedger) {
         totals: {
           input_tokens: Math.round(c.totals.input_tokens || 0),
           cached_input_tokens: Math.round(c.totals.cached_input_tokens || 0),
-          cache_creation_input_tokens: Math.round(c.totals.cache_creation_input_tokens || 0),
+          cache_creation_input_tokens: Math.round(
+            c.totals.cache_creation_input_tokens || 0,
+          ),
           output_tokens: Math.round(c.totals.output_tokens || 0),
-          reasoning_output_tokens: Math.round(c.totals.reasoning_output_tokens || 0),
+          reasoning_output_tokens: Math.round(
+            c.totals.reasoning_output_tokens || 0,
+          ),
           total_tokens: Math.round(c.totals.total_tokens || 0),
         },
         tools: c.tools
-          .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0))
+          .sort(
+            (a, b) =>
+              (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+          )
           .map((t) => ({
             name: t.name,
             calls: Math.round(t.calls || 0),
             totals: {
               input_tokens: Math.round(t.totals.input_tokens || 0),
-              cached_input_tokens: Math.round(t.totals.cached_input_tokens || 0),
-              cache_creation_input_tokens: Math.round(t.totals.cache_creation_input_tokens || 0),
+              cached_input_tokens: Math.round(
+                t.totals.cached_input_tokens || 0,
+              ),
+              cache_creation_input_tokens: Math.round(
+                t.totals.cache_creation_input_tokens || 0,
+              ),
               output_tokens: Math.round(t.totals.output_tokens || 0),
-              reasoning_output_tokens: Math.round(t.totals.reasoning_output_tokens || 0),
+              reasoning_output_tokens: Math.round(
+                t.totals.reasoning_output_tokens || 0,
+              ),
               total_tokens: Math.round(t.totals.total_tokens || 0),
             },
           })),
       }))
-      .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+      .sort(
+        (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+      );
     return categories;
   }
 
@@ -836,7 +997,9 @@ function buildSkillsBreakdown(skillLedger) {
       calls: Math.round(row.calls || 0),
       totals: roundTotals(row.totals || emptyTotals()),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 
   return {
     total_calls: Math.round(skillLedger?.total_calls || 0),
@@ -860,7 +1023,9 @@ function serializeExecRows(map) {
       output_lines: Math.round(row.output_lines || 0),
       totals: roundTotals(row.totals || emptyTotals()),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
 function buildExecCommandBreakdown(execLedger) {
@@ -906,13 +1071,19 @@ function buildMessageBreakdown(breakdown) {
         totals: {
           input_tokens: Math.round(row.totals.input_tokens || 0),
           cached_input_tokens: Math.round(row.totals.cached_input_tokens || 0),
-          cache_creation_input_tokens: Math.round(row.totals.cache_creation_input_tokens || 0),
+          cache_creation_input_tokens: Math.round(
+            row.totals.cache_creation_input_tokens || 0,
+          ),
           output_tokens: Math.round(row.totals.output_tokens || 0),
-          reasoning_output_tokens: Math.round(row.totals.reasoning_output_tokens || 0),
+          reasoning_output_tokens: Math.round(
+            row.totals.reasoning_output_tokens || 0,
+          ),
           total_tokens: Math.round(row.totals.total_tokens || 0),
         },
       }))
-      .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0)),
+      .sort(
+        (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+      ),
     privacy: {
       includes_content: false,
       note: "Aggregated message token categories only; prompt and assistant text are never returned.",
@@ -970,7 +1141,8 @@ function collectMemoryImports(filePath, seen) {
   let m;
   while ((m = re.exec(raw)) !== null) {
     let target = m[1];
-    if (target.startsWith("~")) target = path.join(os.homedir(), target.slice(1).replace(/^\//, ""));
+    if (target.startsWith("~"))
+      target = path.join(os.homedir(), target.slice(1).replace(/^\//, ""));
     else if (!path.isAbsolute(target)) target = path.resolve(dir, target);
     if (fileExists(target)) collectMemoryImports(target, seen);
   }
@@ -1007,7 +1179,10 @@ function countSkillsInDir(rootDir) {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       const sub = path.join(dir, e.name);
-      if (fileExists(path.join(sub, "SKILL.md")) || fileExists(path.join(sub, "skill.md"))) {
+      if (
+        fileExists(path.join(sub, "SKILL.md")) ||
+        fileExists(path.join(sub, "skill.md"))
+      ) {
         count += 1;
       } else {
         stack.push(sub);
@@ -1040,8 +1215,12 @@ function countAgentMarkdowns(rootDir) {
 function listEnabledPlugins() {
   const home = os.homedir();
   // settings.local.json overrides settings.json (CC's normal precedence).
-  const baseMap = safeReadJson(path.join(home, ".claude", "settings.json"))?.enabledPlugins || {};
-  const localMap = safeReadJson(path.join(home, ".claude", "settings.local.json"))?.enabledPlugins || {};
+  const baseMap =
+    safeReadJson(path.join(home, ".claude", "settings.json"))?.enabledPlugins ||
+    {};
+  const localMap =
+    safeReadJson(path.join(home, ".claude", "settings.local.json"))
+      ?.enabledPlugins || {};
   const merged = { ...baseMap, ...localMap };
   return Object.entries(merged)
     .filter(([, enabled]) => enabled === true)
@@ -1062,7 +1241,9 @@ function getConfiguredResources({ projectDir = null } = {}) {
   // --- Custom agents -----------------------------------------------------
   let agentsCount = countAgentMarkdowns(path.join(claudeRoot, "agents"));
   if (projectDir) {
-    agentsCount += countAgentMarkdowns(path.join(projectDir, ".claude", "agents"));
+    agentsCount += countAgentMarkdowns(
+      path.join(projectDir, ".claude", "agents"),
+    );
   }
 
   // --- MCP servers -------------------------------------------------------
@@ -1092,8 +1273,13 @@ function getConfiguredResources({ projectDir = null } = {}) {
     if (!versionDir) continue;
     skillsCount += countSkillsInDir(path.join(versionDir, "skills"));
     agentsCount += countAgentMarkdowns(path.join(versionDir, "agents"));
-    const pluginManifest = safeReadJson(path.join(versionDir, ".claude-plugin", "plugin.json"));
-    if (pluginManifest?.mcpServers && typeof pluginManifest.mcpServers === "object") {
+    const pluginManifest = safeReadJson(
+      path.join(versionDir, ".claude-plugin", "plugin.json"),
+    );
+    if (
+      pluginManifest?.mcpServers &&
+      typeof pluginManifest.mcpServers === "object"
+    ) {
       mcpCount += Object.keys(pluginManifest.mcpServers).length;
     }
   }
@@ -1103,7 +1289,8 @@ function getConfiguredResources({ projectDir = null } = {}) {
   const userMd = path.join(claudeRoot, "CLAUDE.md");
   const homeMd = path.join(home, "CLAUDE.md");
   if (fileExists(userMd)) collectMemoryImports(userMd, memorySeen);
-  if (fileExists(homeMd) && fssync.statSync(homeMd).size > 0) collectMemoryImports(homeMd, memorySeen);
+  if (fileExists(homeMd) && fssync.statSync(homeMd).size > 0)
+    collectMemoryImports(homeMd, memorySeen);
   // Walk up from projectDir to find the closest CLAUDE.md (CC walks up too).
   // Handles dev servers running from a subdir (e.g. vite from dashboard/).
   if (projectDir) {
@@ -1189,14 +1376,18 @@ function toUtcHalfHourStart(ts) {
   ).toISOString();
 }
 
-async function computeClaudeGroundTruthBuckets({ rootDir = null, rootDirs = null } = {}) {
+async function computeClaudeGroundTruthBuckets({
+  rootDir = null,
+  rootDirs = null,
+} = {}) {
   // Multi-root (#307): a Windows host may scan a native ~/.claude/projects
   // plus a WSL install over \\wsl$. `rootDirs` wins over the legacy single
   // `rootDir`; duplicated session files synced between environments collapse
   // via the msgId+reqId dedup below.
-  const roots = Array.isArray(rootDirs) && rootDirs.length > 0
-    ? rootDirs
-    : [rootDir || defaultClaudeProjectsDir()];
+  const roots =
+    Array.isArray(rootDirs) && rootDirs.length > 0
+      ? rootDirs
+      : [rootDir || defaultClaudeProjectsDir()];
   const files = [];
   const seenFiles = new Set();
   for (const root of roots) {
@@ -1247,10 +1438,15 @@ async function computeClaudeGroundTruthBuckets({ rootDir = null, rootDirs = null
             // conversation_count — would double. Usage rows are already
             // guarded by claudeMessageDedupKey below.
             const userKey =
-              typeof userObj?.uuid === "string" && userObj.uuid ? `u:${userObj.uuid}` : null;
+              typeof userObj?.uuid === "string" && userObj.uuid
+                ? `u:${userObj.uuid}`
+                : null;
             if (!userKey || !seenHashes.has(userKey)) {
               if (userKey) seenHashes.add(userKey);
-              const ts = typeof userObj?.timestamp === "string" ? userObj.timestamp : null;
+              const ts =
+                typeof userObj?.timestamp === "string"
+                  ? userObj.timestamp
+                  : null;
               const hourStart = ts ? toUtcHalfHourStart(ts) : null;
               if (hourStart) {
                 const k = `unknown|${hourStart}`;
@@ -1278,7 +1474,8 @@ async function computeClaudeGroundTruthBuckets({ rootDir = null, rootDirs = null
         seenHashes.add(hash);
       }
 
-      const model = (obj?.message?.model || obj?.model || "unknown").trim() || "unknown";
+      const model =
+        (obj?.message?.model || obj?.model || "unknown").trim() || "unknown";
       const ts = typeof obj?.timestamp === "string" ? obj.timestamp : null;
       const hourStart = ts ? toUtcHalfHourStart(ts) : null;
       if (!hourStart) continue;

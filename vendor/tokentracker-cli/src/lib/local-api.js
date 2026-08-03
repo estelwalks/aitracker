@@ -10,8 +10,15 @@ const {
   listExcludedSources,
   normalizeUsageScope,
 } = require("./source-metadata");
-const { accountSlugFor, fetchAccountUsage, mintAccessToken } = require("./cloud-account");
-const { getOrCreateMachineId, computeStableMachineId } = require("./machine-id");
+const {
+  accountSlugFor,
+  fetchAccountUsage,
+  mintAccessToken,
+} = require("./cloud-account");
+const {
+  getOrCreateMachineId,
+  computeStableMachineId,
+} = require("./machine-id");
 
 const SYNC_TIMEOUT_MS = 120_000;
 const TRACKER_BIN = path.resolve(__dirname, "../../bin/tracker.js");
@@ -19,7 +26,8 @@ const MAX_DEVICE_NAME_LENGTH = 128;
 
 function getSystemDeviceName() {
   try {
-    const hostname = os.hostname()
+    const hostname = os
+      .hostname()
       .replace(/[\u0000-\u001f\u007f]/g, "")
       .trim()
       .slice(0, MAX_DEVICE_NAME_LENGTH);
@@ -146,7 +154,10 @@ function readProjectQueueData(projectQueuePath) {
       projectQueueDataCache = null;
     }
     if (e?.code !== "ENOENT") {
-      console.error("[LocalAPI] readProjectQueueData: failed to stat:", e?.message || e);
+      console.error(
+        "[LocalAPI] readProjectQueueData: failed to stat:",
+        e?.message || e,
+      );
     }
     return [];
   }
@@ -163,7 +174,10 @@ function readProjectQueueData(projectQueuePath) {
     raw = fs.readFileSync(projectQueuePath, "utf8");
   } catch (e) {
     if (e?.code !== "ENOENT") {
-      console.error("[LocalAPI] readProjectQueueData: failed to read:", e?.message || e);
+      console.error(
+        "[LocalAPI] readProjectQueueData: failed to read:",
+        e?.message || e,
+      );
     }
     return [];
   }
@@ -188,12 +202,14 @@ function readProjectQueueData(projectQueuePath) {
 }
 
 function isLegacyInclusiveCodexRow(row) {
-  if (!row || (row.source !== "codex" && row.source !== "every-code")) return false;
+  if (!row || (row.source !== "codex" && row.source !== "every-code"))
+    return false;
   const inputTokens = Number(row.input_tokens || 0);
   const cachedInputTokens = Number(row.cached_input_tokens || 0);
   const outputTokens = Number(row.output_tokens || 0);
   const totalTokens = Number(row.total_tokens || 0);
-  if (!Number.isFinite(inputTokens) || !Number.isFinite(cachedInputTokens)) return false;
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(cachedInputTokens))
+    return false;
   if (cachedInputTokens <= 0 || inputTokens < cachedInputTokens) return false;
   // Legacy Codex queue rows stored input inclusive of cache reads, while
   // total_tokens remained input + output. Canonical rows keep input as pure
@@ -208,7 +224,8 @@ function normalizeQueueRow(row) {
     normalized = {
       ...normalized,
       input_tokens:
-        Number(normalized.input_tokens || 0) - Number(normalized.cached_input_tokens || 0),
+        Number(normalized.input_tokens || 0) -
+        Number(normalized.cached_input_tokens || 0),
     };
   }
   // Legacy Cursor rows from versions ≤ 0.26.5 wrote billable_total_tokens = 0
@@ -237,7 +254,10 @@ function readQueueData(queuePath) {
   } catch (e) {
     if (queueDataCache?.queuePath === queuePath) queueDataCache = null;
     if (e?.code !== "ENOENT") {
-      console.error("[LocalAPI] readQueueData: failed to stat queue:", e?.message || e);
+      console.error(
+        "[LocalAPI] readQueueData: failed to stat queue:",
+        e?.message || e,
+      );
     }
     return [];
   }
@@ -272,7 +292,10 @@ function readQueueData(queuePath) {
       const fd = fs.openSync(queuePath, "r");
       try {
         const probe = Buffer.allocUnsafe(1);
-        if (fs.readSync(fd, probe, 0, 1, offset - 1) !== 1 || probe[0] !== 0x0a) {
+        if (
+          fs.readSync(fd, probe, 0, 1, offset - 1) !== 1 ||
+          probe[0] !== 0x0a
+        ) {
           seen = new Map();
           offset = 0;
         }
@@ -299,7 +322,13 @@ function readQueueData(queuePath) {
           while (read < length) {
             // A concurrent truncation between stat and open makes readSync hit
             // EOF early — without the 0-byte break this loop never terminates.
-            const n = fs.readSync(fd, buffer, read, length - read, offset + read);
+            const n = fs.readSync(
+              fd,
+              buffer,
+              read,
+              length - read,
+              offset + read,
+            );
             if (n === 0) break;
             read += n;
           }
@@ -314,7 +343,10 @@ function readQueueData(queuePath) {
       // the dashboard would otherwise render "0 tokens" with no clue the queue
       // was unreadable.
       if (e?.code !== "ENOENT") {
-        console.error("[LocalAPI] readQueueData: failed to read queue:", e?.message || e);
+        console.error(
+          "[LocalAPI] readQueueData: failed to read queue:",
+          e?.message || e,
+        );
       }
       return canAppend ? cached.rows : [];
     }
@@ -404,7 +436,8 @@ function aggregateByDay(rows, timeZoneContext = null) {
     }
     const a = byDay.get(day);
     a.total_tokens += row.total_tokens || 0;
-    a.billable_total_tokens += row.billable_total_tokens ?? row.total_tokens ?? 0;
+    a.billable_total_tokens +=
+      row.billable_total_tokens ?? row.total_tokens ?? 0;
     a.total_cost_usd += computeRowCost(row);
     a.input_tokens += row.input_tokens || 0;
     a.output_tokens += row.output_tokens || 0;
@@ -419,16 +452,26 @@ function aggregateByDay(rows, timeZoneContext = null) {
     const model = row.model || "unknown";
     a.models[model] = (a.models[model] || 0) + (row.total_tokens || 0);
   }
-  const daily = Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day));
+  const daily = Array.from(byDay.values()).sort((a, b) =>
+    a.day.localeCompare(b.day),
+  );
   if (!cachedByTimeZone) {
     cachedByTimeZone = new Map();
     dailyAggregationCache.set(normalizedRows, cachedByTimeZone);
   }
-  boundedCacheSet(cachedByTimeZone, cacheKey, daily, MAX_TIME_ZONE_CACHE_ENTRIES);
+  boundedCacheSet(
+    cachedByTimeZone,
+    cacheKey,
+    daily,
+    MAX_TIME_ZONE_CACHE_ENTRIES,
+  );
   return daily;
 }
 
-function buildCodexCategoryFallbackFromQueue(queueRows, { from, to, timeZoneContext }) {
+function buildCodexCategoryFallbackFromQueue(
+  queueRows,
+  { from, to, timeZoneContext },
+) {
   const totals = {
     input_tokens: 0,
     cached_input_tokens: 0,
@@ -447,7 +490,9 @@ function buildCodexCategoryFallbackFromQueue(queueRows, { from, to, timeZoneCont
     if (to && day > to) continue;
     totals.input_tokens += Number(row.input_tokens || 0);
     totals.cached_input_tokens += Number(row.cached_input_tokens || 0);
-    totals.cache_creation_input_tokens += Number(row.cache_creation_input_tokens || 0);
+    totals.cache_creation_input_tokens += Number(
+      row.cache_creation_input_tokens || 0,
+    );
     totals.output_tokens += Number(row.output_tokens || 0);
     totals.reasoning_output_tokens += Number(row.reasoning_output_tokens || 0);
     totals.total_tokens += Number(row.total_tokens || 0);
@@ -485,7 +530,8 @@ function buildCodexCategoryFallbackFromQueue(queueRows, { from, to, timeZoneCont
             cache_creation_input_tokens: totals.cache_creation_input_tokens,
             output_tokens: 0,
             reasoning_output_tokens: 0,
-            total_tokens: totals.cached_input_tokens + totals.cache_creation_input_tokens,
+            total_tokens:
+              totals.cached_input_tokens + totals.cache_creation_input_tokens,
           },
         },
         {
@@ -495,12 +541,22 @@ function buildCodexCategoryFallbackFromQueue(queueRows, { from, to, timeZoneCont
             input_tokens: 0,
             cached_input_tokens: 0,
             cache_creation_input_tokens: 0,
-            output_tokens: Math.max(0, totals.output_tokens - totals.reasoning_output_tokens),
+            output_tokens: Math.max(
+              0,
+              totals.output_tokens - totals.reasoning_output_tokens,
+            ),
             reasoning_output_tokens: 0,
-            total_tokens: Math.max(0, totals.output_tokens - totals.reasoning_output_tokens),
+            total_tokens: Math.max(
+              0,
+              totals.output_tokens - totals.reasoning_output_tokens,
+            ),
           },
         },
-      ].sort((a, b) => Number(b.totals.total_tokens || 0) - Number(a.totals.total_tokens || 0)),
+      ].sort(
+        (a, b) =>
+          Number(b.totals.total_tokens || 0) -
+          Number(a.totals.total_tokens || 0),
+      ),
       privacy: {
         includes_content: false,
         note: "Queue fallback includes aggregated token categories only; message text is never returned.",
@@ -559,7 +615,11 @@ const LOCAL_TIER_KEYS = ["bronze", "silver", "gold", "diamond"];
  * time (night_owl) follows the caller's tz query params like every other
  * usage endpoint.
  */
-function computeLocalAchievements(queueRows, projectRows, { timeZoneContext } = {}) {
+function computeLocalAchievements(
+  queueRows,
+  projectRows,
+  { timeZoneContext } = {},
+) {
   const sortByHour = (rows) =>
     rows
       .filter((row) => row && row.hour_start)
@@ -599,7 +659,9 @@ function computeLocalAchievements(queueRows, projectRows, { timeZoneContext } = 
     const running = (perProjectTokens.get(projectKey) || 0) + tokens;
     perProjectTokens.set(projectKey, running);
     if (running > trackers.project_devotion.value) {
-      bump("project_devotion", running, row.hour_start, { project_key: projectKey });
+      bump("project_devotion", running, row.hour_start, {
+        project_key: projectKey,
+      });
     }
   }
 
@@ -607,7 +669,10 @@ function computeLocalAchievements(queueRows, projectRows, { timeZoneContext } = 
   for (const row of sortByHour(queueRows || [])) {
     if (Number(row.total_tokens || 0) <= 0) continue;
     if (nightHours.has(row.hour_start)) continue;
-    const parts = getZonedParts(new Date(row.hour_start), timeZoneContext || {});
+    const parts = getZonedParts(
+      new Date(row.hour_start),
+      timeZoneContext || {},
+    );
     if (!parts || parts.hour >= 6) continue;
     nightHours.add(row.hour_start);
     bump("night_owl", nightHours.size, row.hour_start);
@@ -748,7 +813,8 @@ function aggregateHourlyByDay(rows, dayKey, timeZoneContext) {
     }
     const bucket = byHour.get(hourKey);
     bucket.total_tokens += row.total_tokens || 0;
-    bucket.billable_total_tokens += row.billable_total_tokens ?? row.total_tokens ?? 0;
+    bucket.billable_total_tokens +=
+      row.billable_total_tokens ?? row.total_tokens ?? 0;
     bucket.input_tokens += row.input_tokens || 0;
     bucket.output_tokens += row.output_tokens || 0;
     bucket.cached_input_tokens += row.cached_input_tokens || 0;
@@ -760,9 +826,12 @@ function aggregateHourlyByDay(rows, dayKey, timeZoneContext) {
       bucket.models = {};
     }
     const model = row.model || "unknown";
-    bucket.models[model] = (bucket.models[model] || 0) + (row.total_tokens || 0);
+    bucket.models[model] =
+      (bucket.models[model] || 0) + (row.total_tokens || 0);
   }
-  return Array.from(byHour.values()).sort((a, b) => a.hour.localeCompare(b.hour));
+  return Array.from(byHour.values()).sort((a, b) =>
+    a.hour.localeCompare(b.hour),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -818,7 +887,12 @@ function parseCookieHeader(value) {
 }
 
 function isLoopbackHostname(hostname) {
-  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1" || hostname === "[::1]";
+  return (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
 }
 
 function hasAllowedLoopbackOrigin(headers = {}) {
@@ -827,7 +901,8 @@ function hasAllowedLoopbackOrigin(headers = {}) {
     if (raw == null || raw === "") continue;
     try {
       const url = new URL(String(raw));
-      if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname)) return false;
+      if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname))
+        return false;
     } catch (_e) {
       return false;
     }
@@ -862,13 +937,21 @@ function readBodyLimited(req, maxBytes) {
       total += chunk.length;
       if (total > maxBytes) {
         failed = true;
-        reject(new Error(`Request body exceeds ${Math.ceil(maxBytes / 1024 / 1024)} MB`));
+        reject(
+          new Error(
+            `Request body exceeds ${Math.ceil(maxBytes / 1024 / 1024)} MB`,
+          ),
+        );
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => { if (!failed) resolve(Buffer.concat(chunks)); });
-    req.on("error", (error) => { if (!failed) reject(error); });
+    req.on("end", () => {
+      if (!failed) resolve(Buffer.concat(chunks));
+    });
+    req.on("error", (error) => {
+      if (!failed) reject(error);
+    });
   });
 }
 
@@ -911,10 +994,20 @@ function runSyncCommand(extraEnv = {}, opts = {}) {
       stderr += c;
     });
     child.on("error", (e) => {
-      finish(reject, Object.assign(e, { stdout: trimOutput(stdout), stderr: trimOutput(stderr) }));
+      finish(
+        reject,
+        Object.assign(e, {
+          stdout: trimOutput(stdout),
+          stderr: trimOutput(stderr),
+        }),
+      );
     });
     child.on("close", (code) => {
-      const r = { code: code ?? 1, stdout: trimOutput(stdout), stderr: trimOutput(stderr) };
+      const r = {
+        code: code ?? 1,
+        stdout: trimOutput(stdout),
+        stderr: trimOutput(stderr),
+      };
       if (code === 0) {
         finish(resolve, r);
         return;
@@ -948,7 +1041,9 @@ function extractProjectFromCwd(cwd) {
   const home = os.homedir();
   if (!cwd || cwd === home) return null;
   const rel = cwd.replace(home + "/", "");
-  const parts = rel.split("/").filter((p) => p && !p.startsWith(".") && p !== "ext-global");
+  const parts = rel
+    .split("/")
+    .filter((p) => p && !p.startsWith(".") && p !== "ext-global");
   return parts.length > 0 ? parts[0] : null;
 }
 
@@ -967,7 +1062,9 @@ function scanCodexProjects(projectMap) {
           const files = fs.readdirSync(dp).filter((f) => f.endsWith(".jsonl"));
           for (const file of files.slice(0, 200)) {
             try {
-              const first = fs.readFileSync(path.join(dp, file), "utf8").split("\n")[0];
+              const first = fs
+                .readFileSync(path.join(dp, file), "utf8")
+                .split("\n")[0];
               const d = JSON.parse(first);
               if (d.git?.repository_url) {
                 const p = parseGitUrl(d.git.repository_url);
@@ -1011,7 +1108,9 @@ function scanClaudeProjects(projectMap) {
       const files = fs.readdirSync(subDir).filter((f) => f.endsWith(".jsonl"));
       for (const file of files.slice(0, 100)) {
         try {
-          const first = fs.readFileSync(path.join(subDir, file), "utf8").split("\n")[0];
+          const first = fs
+            .readFileSync(path.join(subDir, file), "utf8")
+            .split("\n")[0];
           if (!first) continue;
           const d = JSON.parse(first);
           const name = extractProjectFromCwd(d.cwd);
@@ -1104,7 +1203,10 @@ function buildProxyHeaders(headers) {
   for (const [key, rawValue] of normalized) {
     if (HOP_BY_HOP_HEADERS.has(key) || connectionNamed.has(key)) continue;
     if (Array.isArray(rawValue)) {
-      const joined = rawValue.filter((e) => e != null).map(String).join(", ");
+      const joined = rawValue
+        .filter((e) => e != null)
+        .map(String)
+        .join(", ");
       if (joined) out[key] = joined;
       continue;
     }
@@ -1133,7 +1235,8 @@ function createLocalApiHandler({ queuePath }) {
 
   // Load persisted cookies on startup
   try {
-    if (!fs.existsSync(trackerDataDir)) fs.mkdirSync(trackerDataDir, { recursive: true });
+    if (!fs.existsSync(trackerDataDir))
+      fs.mkdirSync(trackerDataDir, { recursive: true });
     if (fs.existsSync(cookiePath)) {
       const content = fs.readFileSync(cookiePath, "utf8");
       const saved = JSON.parse(content);
@@ -1143,7 +1246,10 @@ function createLocalApiHandler({ queuePath }) {
           relayCookies.set(k, v);
           count++;
         }
-        if (count > 0) console.log(`[LocalAPI] Loaded ${count} relay cookies from ${cookiePath}`);
+        if (count > 0)
+          console.log(
+            `[LocalAPI] Loaded ${count} relay cookies from ${cookiePath}`,
+          );
       }
     }
   } catch (e) {
@@ -1187,8 +1293,10 @@ function createLocalApiHandler({ queuePath }) {
       // Basic sticky logic: if it's a deletion cookie (Max-Age=0 or past date),
       // we only remove it if we have it.
       const lower = raw.toLowerCase();
-      const isDeletion = lower.includes("max-age=0") || lower.includes("expires=thu, 01 jan 1970");
-      
+      const isDeletion =
+        lower.includes("max-age=0") ||
+        lower.includes("expires=thu, 01 jan 1970");
+
       if (isDeletion) {
         if (relayCookies.has(name)) {
           relayCookies.delete(name);
@@ -1223,7 +1331,13 @@ function createLocalApiHandler({ queuePath }) {
   }
 
   function captureAuthTokensFromBody(bodyBuffer, contentType) {
-    if (!bodyBuffer || !String(contentType || "").toLowerCase().includes("application/json")) return;
+    if (
+      !bodyBuffer ||
+      !String(contentType || "")
+        .toLowerCase()
+        .includes("application/json")
+    )
+      return;
     let parsed = null;
     try {
       parsed = JSON.parse(bodyBuffer.toString("utf8"));
@@ -1231,7 +1345,8 @@ function createLocalApiHandler({ queuePath }) {
       return;
     }
     let changed = false;
-    const token = typeof parsed?.csrfToken === "string" ? parsed.csrfToken.trim() : "";
+    const token =
+      typeof parsed?.csrfToken === "string" ? parsed.csrfToken.trim() : "";
     if (token) {
       const cookie = `${csrfRelayCookieName}=${encodeURIComponent(token)}; Path=/; SameSite=Lax`;
       if (relayCookies.get(csrfRelayCookieName) !== cookie) {
@@ -1239,7 +1354,10 @@ function createLocalApiHandler({ queuePath }) {
         changed = true;
       }
     }
-    const refreshToken = typeof parsed?.refreshToken === "string" ? parsed.refreshToken.trim() : "";
+    const refreshToken =
+      typeof parsed?.refreshToken === "string"
+        ? parsed.refreshToken.trim()
+        : "";
     if (refreshToken) {
       const cookie = `insforge_refresh_token=${encodeURIComponent(refreshToken)}; Path=/; HttpOnly; SameSite=Lax`;
       if (relayCookies.get("insforge_refresh_token") !== cookie) {
@@ -1264,7 +1382,9 @@ function createLocalApiHandler({ queuePath }) {
   function getCloudSyncPref() {
     if (cloudSyncPrefCache === undefined) {
       try {
-        cloudSyncPrefCache = JSON.parse(fs.readFileSync(cloudSyncPrefPath, "utf8"))?.enabled !== false;
+        cloudSyncPrefCache =
+          JSON.parse(fs.readFileSync(cloudSyncPrefPath, "utf8"))?.enabled !==
+          false;
       } catch {
         cloudSyncPrefCache = true;
       }
@@ -1274,10 +1394,14 @@ function createLocalApiHandler({ queuePath }) {
   function setCloudSyncPref(enabled) {
     cloudSyncPrefCache = Boolean(enabled);
     try {
-      if (!fs.existsSync(trackerDataDir)) fs.mkdirSync(trackerDataDir, { recursive: true });
+      if (!fs.existsSync(trackerDataDir))
+        fs.mkdirSync(trackerDataDir, { recursive: true });
       fs.writeFileSync(
         cloudSyncPrefPath,
-        JSON.stringify({ enabled: cloudSyncPrefCache, updatedAt: new Date().toISOString() }),
+        JSON.stringify({
+          enabled: cloudSyncPrefCache,
+          updatedAt: new Date().toISOString(),
+        }),
         { encoding: "utf8", mode: 0o600 },
       );
     } catch (e) {
@@ -1309,7 +1433,10 @@ function createLocalApiHandler({ queuePath }) {
     return `${baseUrl}\0${refreshToken}\0${machineId}`;
   }
 
-  async function issueDeviceTokenForLocalSync(queuePathForMachineId, options = {}) {
+  async function issueDeviceTokenForLocalSync(
+    queuePathForMachineId,
+    options = {},
+  ) {
     if (!getCloudSyncPref()) return null;
     const refreshToken = getRefreshTokenForCloud();
     if (!refreshToken) return null;
@@ -1321,7 +1448,11 @@ function createLocalApiHandler({ queuePath }) {
       normalizeRemoteHttpBaseUrl(options.baseUrl) ||
       normalizeRemoteHttpBaseUrl(runtime.baseUrl) ||
       normalizeRemoteHttpBaseUrl(DEFAULT_BASE_URL);
-    const cacheKey = localSyncDeviceTokenCacheKey(refreshToken, machineId, baseUrl);
+    const cacheKey = localSyncDeviceTokenCacheKey(
+      refreshToken,
+      machineId,
+      baseUrl,
+    );
     const cachedToken = localSyncDeviceTokenCache.get(cacheKey);
     if (cachedToken) return cachedToken;
     const inflightToken = localSyncDeviceTokenInflight.get(cacheKey);
@@ -1351,30 +1482,39 @@ function createLocalApiHandler({ queuePath }) {
       if (runtime.anonKey) headers.apikey = runtime.anonKey;
 
       let timeoutId;
-      const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const controller =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
       if (controller && runtime.httpTimeoutMs > 0) {
         timeoutId = setTimeout(() => controller.abort(), runtime.httpTimeoutMs);
       }
 
       const dashboardPlatform =
-        process.platform === "darwin" ? "MacIntel" :
-          process.platform === "win32" ? "Win32" :
-            process.platform === "linux" ? "Linux x86_64" :
-              "web";
+        process.platform === "darwin"
+          ? "MacIntel"
+          : process.platform === "win32"
+            ? "Win32"
+            : process.platform === "linux"
+              ? "Linux x86_64"
+              : "web";
 
-      const res = await fetch(`${root}/functions/tokentracker-device-token-issue`, {
-        method: "POST",
-        headers,
-        signal: controller ? controller.signal : undefined,
-        body: JSON.stringify({
-          // 必须和 dashboard/src/lib/cloud-sync.ts 使用同一个设备身份。
-          // 旧云端设备按 (platform, device_name) 认领；如果这里发明
-          // local-sync 身份，会多出一个 active device，账户视图会把历史求和两次。
-          device_name: getSystemDeviceName() || `Token Tracker (dashboard) #${machineId.slice(0, 8)}`,
-          platform: dashboardPlatform,
-          machine_id: machineId,
-        }),
-      }).finally(() => {
+      const res = await fetch(
+        `${root}/functions/tokentracker-device-token-issue`,
+        {
+          method: "POST",
+          headers,
+          signal: controller ? controller.signal : undefined,
+          body: JSON.stringify({
+            // 必须和 dashboard/src/lib/cloud-sync.ts 使用同一个设备身份。
+            // 旧云端设备按 (platform, device_name) 认领；如果这里发明
+            // local-sync 身份，会多出一个 active device，账户视图会把历史求和两次。
+            device_name:
+              getSystemDeviceName() ||
+              `Token Tracker (dashboard) #${machineId.slice(0, 8)}`,
+            platform: dashboardPlatform,
+            machine_id: machineId,
+          }),
+        },
+      ).finally(() => {
         if (timeoutId) clearTimeout(timeoutId);
       });
       if (!res.ok) return null;
@@ -1382,7 +1522,10 @@ function createLocalApiHandler({ queuePath }) {
       const token = typeof data?.token === "string" ? data.token.trim() : "";
       if (token) {
         const activeRefreshToken = rotatedRefreshToken || refreshToken;
-        localSyncDeviceTokenCache.set(localSyncDeviceTokenCacheKey(activeRefreshToken, machineId, baseUrl), token);
+        localSyncDeviceTokenCache.set(
+          localSyncDeviceTokenCacheKey(activeRefreshToken, machineId, baseUrl),
+          token,
+        );
       }
       return token || null;
     })();
@@ -1417,7 +1560,8 @@ function createLocalApiHandler({ queuePath }) {
         timeoutMs,
       });
       if (!out || out.data == null) return "fallthrough";
-      if (out.rotatedRefreshToken) setRelayRefreshToken(out.rotatedRefreshToken);
+      if (out.rotatedRefreshToken)
+        setRelayRefreshToken(out.rotatedRefreshToken);
       if (out.rotatedCsrfToken) setRelayCsrfToken(out.rotatedCsrfToken);
       res.writeHead(200, {
         "Content-Type": "application/json",
@@ -1430,7 +1574,10 @@ function createLocalApiHandler({ queuePath }) {
       // Signed in + cloud sync on, but the cloud read failed (offline, token
       // rejected, edge error, or timeout). Fall back to local data rather than erroring.
       if (resolveRuntimeConfig().debug) {
-        console.warn(`[LocalAPI] account view fallback for ${usageSlug}:`, e?.message || e);
+        console.warn(
+          `[LocalAPI] account view fallback for ${usageSlug}:`,
+          e?.message || e,
+        );
       }
       return "fallthrough";
     }
@@ -1441,8 +1588,12 @@ function createLocalApiHandler({ queuePath }) {
     return typeof value === "string" ? value : "";
   }
 
-  function buildRelayCookieHeader(clientCookieHeader, { relayPrecedenceNames = [] } = {}) {
-    const normalizedClientCookieHeader = normalizeCookieHeader(clientCookieHeader);
+  function buildRelayCookieHeader(
+    clientCookieHeader,
+    { relayPrecedenceNames = [] } = {},
+  ) {
+    const normalizedClientCookieHeader =
+      normalizeCookieHeader(clientCookieHeader);
     if (relayCookies.size === 0) return normalizedClientCookieHeader;
     const relayPrecedence = new Set(relayPrecedenceNames);
     const clientPairs = new Map();
@@ -1473,10 +1624,13 @@ function createLocalApiHandler({ queuePath }) {
 
   function isAuthorizedLocalMutation(req) {
     const headerToken = req?.headers?.["x-tokentracker-local-auth"];
-    const cookieToken = parseCookieHeader(req?.headers?.cookie).get("tokentracker_local_auth");
-    const token = typeof headerToken === "string" && headerToken.trim()
-      ? headerToken.trim()
-      : cookieToken || "";
+    const cookieToken = parseCookieHeader(req?.headers?.cookie).get(
+      "tokentracker_local_auth",
+    );
+    const token =
+      typeof headerToken === "string" && headerToken.trim()
+        ? headerToken.trim()
+        : cookieToken || "";
     if (!token || token !== localAuthToken) return false;
     return hasAllowedLoopbackOrigin(req?.headers || {});
   }
@@ -1498,14 +1652,18 @@ function createLocalApiHandler({ queuePath }) {
     }
 
     // --- local Codex-compatible pet assets and package import ---
-    const localPetAssetMatch = p.match(/^\/api\/pets\/local\/([a-z0-9-]+)\/spritesheet\.webp$/);
+    const localPetAssetMatch = p.match(
+      /^\/api\/pets\/local\/([a-z0-9-]+)\/spritesheet\.webp$/,
+    );
     if (localPetAssetMatch) {
       const method = String(req.method || "GET").toUpperCase();
       if (method !== "GET" && method !== "HEAD") {
         json(res, { error: "Method Not Allowed" }, 405);
         return true;
       }
-      const pet = require("./pet-packages").resolvePetAsset(localPetAssetMatch[1]);
+      const pet = require("./pet-packages").resolvePetAsset(
+        localPetAssetMatch[1],
+      );
       if (!pet) {
         json(res, { error: "Pet not found" }, 404);
         return true;
@@ -1524,14 +1682,18 @@ function createLocalApiHandler({ queuePath }) {
 
     // Preview asset for a Codex pet that hasn't been imported yet (served from
     // ~/.codex/pets or straight out of the Codex.app bundle).
-    const codexPetAssetMatch = p.match(/^\/api\/pets\/codex\/([a-z0-9-]+)\/spritesheet\.webp$/);
+    const codexPetAssetMatch = p.match(
+      /^\/api\/pets\/codex\/([a-z0-9-]+)\/spritesheet\.webp$/,
+    );
     if (codexPetAssetMatch) {
       const method = String(req.method || "GET").toUpperCase();
       if (method !== "GET" && method !== "HEAD") {
         json(res, { error: "Method Not Allowed" }, 405);
         return true;
       }
-      const asset = require("./pet-packages").readCodexImportableAsset(codexPetAssetMatch[1]);
+      const asset = require("./pet-packages").readCodexImportableAsset(
+        codexPetAssetMatch[1],
+      );
       if (!asset) {
         json(res, { error: "Pet not found" }, 404);
         return true;
@@ -1561,7 +1723,12 @@ function createLocalApiHandler({ queuePath }) {
         const body = await readBodyLimited(req, pets.MAX_PACKAGE_BYTES);
         json(res, { ok: true, pet: await pets.importPetZip(body) });
       } catch (error) {
-        if (!res.headersSent) json(res, { ok: false, error: error?.message || "Pet import failed" }, 400);
+        if (!res.headersSent)
+          json(
+            res,
+            { ok: false, error: error?.message || "Pet import failed" },
+            400,
+          );
       }
       return true;
     }
@@ -1598,10 +1765,16 @@ function createLocalApiHandler({ queuePath }) {
       try {
         const targetUrl = `${insforgeBase.replace(/\/$/, "")}${p}${url.search || ""}`;
         const proxyHeaders = buildProxyHeaders(req.headers);
-        const hasClientCookie = normalizeCookieHeader(proxyHeaders["cookie"]).trim().length > 0;
-        const hasCsrfHeader = typeof proxyHeaders["x-csrf-token"] === "string" && proxyHeaders["x-csrf-token"].trim().length > 0;
+        const hasClientCookie =
+          normalizeCookieHeader(proxyHeaders["cookie"]).trim().length > 0;
+        const hasCsrfHeader =
+          typeof proxyHeaders["x-csrf-token"] === "string" &&
+          proxyHeaders["x-csrf-token"].trim().length > 0;
         const relayCsrfToken = getRelayCookieValue(csrfRelayCookieName);
-        const relayRefreshToken = getRelayCookieValue("insforge_refresh_token", { decode: true });
+        const relayRefreshToken = getRelayCookieValue(
+          "insforge_refresh_token",
+          { decode: true },
+        );
         // A cookie-less client (fresh WebView after an app update/restart) has no
         // browser session to pair a CSRF token with — the persisted refresh token
         // replayed through the mobile flow is the only viable recovery. The relay
@@ -1610,14 +1783,21 @@ function createLocalApiHandler({ queuePath }) {
         // recovery into 403 Invalid CSRF and signs the user out.
         const shouldUseRelayRefreshFallback =
           p === "/api/auth/refresh" && !hasClientCookie && relayRefreshToken;
-        if (p === "/api/auth/refresh" && relayCsrfToken && !shouldUseRelayRefreshFallback) {
+        if (
+          p === "/api/auth/refresh" &&
+          relayCsrfToken &&
+          !shouldUseRelayRefreshFallback
+        ) {
           proxyHeaders["x-csrf-token"] = relayCsrfToken;
         }
         const hasEffectiveCsrfHeader =
           hasCsrfHeader ||
-          (typeof proxyHeaders["x-csrf-token"] === "string" && proxyHeaders["x-csrf-token"].trim().length > 0);
+          (typeof proxyHeaders["x-csrf-token"] === "string" &&
+            proxyHeaders["x-csrf-token"].trim().length > 0);
         let shouldInjectRelayCookies =
-          p !== "/api/auth/refresh" || hasClientCookie || hasEffectiveCsrfHeader;
+          p !== "/api/auth/refresh" ||
+          hasClientCookie ||
+          hasEffectiveCsrfHeader;
         if (shouldUseRelayRefreshFallback) {
           shouldInjectRelayCookies = false;
         }
@@ -1626,27 +1806,36 @@ function createLocalApiHandler({ queuePath }) {
         // Refresh requests need either a browser cookie or an explicit CSRF token;
         // otherwise replaying a stale persisted refresh cookie just manufactures
         // Invalid CSRF errors on startup.
-        const originalCookieHeader = normalizeCookieHeader(proxyHeaders["cookie"]);
+        const originalCookieHeader = normalizeCookieHeader(
+          proxyHeaders["cookie"],
+        );
         const mergedCookie = shouldInjectRelayCookies
           ? buildRelayCookieHeader(originalCookieHeader, {
-              relayPrecedenceNames: p === "/api/auth/refresh"
-                ? [csrfRelayCookieName, "insforge_refresh_token"]
-                : [],
+              relayPrecedenceNames:
+                p === "/api/auth/refresh"
+                  ? [csrfRelayCookieName, "insforge_refresh_token"]
+                  : [],
             })
           : originalCookieHeader;
         const injectedRelayCookies =
-          shouldInjectRelayCookies && relayCookies.size > 0 && mergedCookie !== originalCookieHeader;
+          shouldInjectRelayCookies &&
+          relayCookies.size > 0 &&
+          mergedCookie !== originalCookieHeader;
         if (mergedCookie) proxyHeaders["cookie"] = mergedCookie;
 
         const bodyChunks = [];
         for await (const chunk of req) bodyChunks.push(chunk);
-        let proxyBody = bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : undefined;
+        let proxyBody =
+          bodyChunks.length > 0 ? Buffer.concat(bodyChunks) : undefined;
         let effectiveTargetUrl = targetUrl;
         if (shouldUseRelayRefreshFallback) {
           effectiveTargetUrl = `${insforgeBase.replace(/\/$/, "")}/api/auth/refresh?client_type=mobile`;
           proxyHeaders["content-type"] = "application/json";
           delete proxyHeaders["content-length"];
-          proxyBody = Buffer.from(JSON.stringify({ refresh_token: relayRefreshToken }), "utf8");
+          proxyBody = Buffer.from(
+            JSON.stringify({ refresh_token: relayRefreshToken }),
+            "utf8",
+          );
         }
         let proxyRes = await fetch(effectiveTargetUrl, {
           method: req.method || "GET",
@@ -1663,11 +1852,18 @@ function createLocalApiHandler({ queuePath }) {
         // persisted refresh token through the csrf-free mobile flow before
         // letting the client sign out.
         const isStaleCsrf403 =
-          p === "/api/auth/refresh"
-          && proxyRes.status === 403
-          && /invalid csrf token/i.test(resBody.toString("utf8"));
-        if (isStaleCsrf403 && relayRefreshToken && !shouldUseRelayRefreshFallback) {
-          const rescueHeaders = { ...proxyHeaders, "content-type": "application/json" };
+          p === "/api/auth/refresh" &&
+          proxyRes.status === 403 &&
+          /invalid csrf token/i.test(resBody.toString("utf8"));
+        if (
+          isStaleCsrf403 &&
+          relayRefreshToken &&
+          !shouldUseRelayRefreshFallback
+        ) {
+          const rescueHeaders = {
+            ...proxyHeaders,
+            "content-type": "application/json",
+          };
           delete rescueHeaders["cookie"];
           delete rescueHeaders["x-csrf-token"];
           delete rescueHeaders["content-length"];
@@ -1692,10 +1888,16 @@ function createLocalApiHandler({ queuePath }) {
         // destroy a still-valid persisted session.
         const allowRelayCapture = proxyRes.status < 400;
         const responseHeaders = [...proxyRes.headers.entries()]
-          .filter(([k]) => !["transfer-encoding", "connection"].includes(k.toLowerCase()))
+          .filter(
+            ([k]) =>
+              !["transfer-encoding", "connection"].includes(k.toLowerCase()),
+          )
           .map(([k, v]) => {
             if (k.toLowerCase() === "set-cookie") {
-              const rewritten = v.replace(/;\s*[Dd]omain=[^;]*/g, "; Domain=localhost");
+              const rewritten = v.replace(
+                /;\s*[Dd]omain=[^;]*/g,
+                "; Domain=localhost",
+              );
               if (allowRelayCapture) captureSetCookies(rewritten);
               return [k, rewritten];
             }
@@ -1706,14 +1908,17 @@ function createLocalApiHandler({ queuePath }) {
           if (p === "/api/auth/logout") {
             clearRelayCookies("sign out");
           } else {
-            captureAuthTokensFromBody(resBody, proxyRes.headers.get("content-type"));
+            captureAuthTokensFromBody(
+              resBody,
+              proxyRes.headers.get("content-type"),
+            );
           }
         }
         if (
-          isStaleCsrf403
-          && proxyRes.status === 403
-          && injectedRelayCookies
-          && !hasClientCookie
+          isStaleCsrf403 &&
+          proxyRes.status === 403 &&
+          injectedRelayCookies &&
+          !hasClientCookie
         ) {
           clearRelayCookies("stale refresh cookie without local CSRF context");
         }
@@ -1729,15 +1934,19 @@ function createLocalApiHandler({ queuePath }) {
     // browser credentials or fingerprintable headers. Without these limits
     // /proxy/ipcheck is an open reverse-proxy any local process can abuse
     // (exfiltrate dashboard cookies, anonymously POST through user IP).
-    if (p.startsWith(`${IP_CHECK_PROXY_PREFIX}/`) || p === IP_CHECK_PROXY_PREFIX) {
+    if (
+      p.startsWith(`${IP_CHECK_PROXY_PREFIX}/`) ||
+      p === IP_CHECK_PROXY_PREFIX
+    ) {
       const method = String(req.method || "GET").toUpperCase();
       if (method !== "GET" && method !== "HEAD") {
         json(res, { error: "Method Not Allowed" }, 405);
         return true;
       }
-      const targetPath = p === IP_CHECK_PROXY_PREFIX
-        ? "/"
-        : p.slice(IP_CHECK_PROXY_PREFIX.length) || "/";
+      const targetPath =
+        p === IP_CHECK_PROXY_PREFIX
+          ? "/"
+          : p.slice(IP_CHECK_PROXY_PREFIX.length) || "/";
       const ALLOWED_PREFIXES = [
         "/api/geoip/",
         "/api/geoip-batch",
@@ -1868,7 +2077,8 @@ function createLocalApiHandler({ queuePath }) {
           headers: {
             accept: req.headers["accept"] || "image/*",
             "accept-language": req.headers["accept-language"] || "en",
-            "user-agent": "TokenTracker/AvatarProxy (https://www.tokentracker.cc)",
+            "user-agent":
+              "TokenTracker/AvatarProxy (https://www.tokentracker.cc)",
           },
         });
         if (!upstream.ok) {
@@ -1936,29 +2146,49 @@ function createLocalApiHandler({ queuePath }) {
         }
         let localSyncBaseUrl = null;
         if (body.insforgeBaseUrl != null) {
-          const allowedBaseUrl = resolveAllowedInsforgeBaseUrl(body.insforgeBaseUrl);
+          const allowedBaseUrl = resolveAllowedInsforgeBaseUrl(
+            body.insforgeBaseUrl,
+          );
           if (!allowedBaseUrl) {
-            json(res, { ok: false, error: "Unsupported insforgeBaseUrl override" }, 400);
+            json(
+              res,
+              { ok: false, error: "Unsupported insforgeBaseUrl override" },
+              400,
+            );
             return true;
           }
           extraEnv.TOKENTRACKER_INSFORGE_BASE_URL = allowedBaseUrl;
           localSyncBaseUrl = allowedBaseUrl;
         }
-        if ((!background || publishAccount) &&
-            !extraEnv.TOKENTRACKER_DEVICE_TOKEN &&
-            getCloudSyncPref() &&
-            getRefreshTokenForCloud()) {
+        if (
+          (!background || publishAccount) &&
+          !extraEnv.TOKENTRACKER_DEVICE_TOKEN &&
+          getCloudSyncPref() &&
+          getRefreshTokenForCloud()
+        ) {
           let issuedToken = null;
           try {
-            issuedToken = await issueDeviceTokenForLocalSync(qp, { baseUrl: localSyncBaseUrl });
+            issuedToken = await issueDeviceTokenForLocalSync(qp, {
+              baseUrl: localSyncBaseUrl,
+            });
           } catch (e) {
             if (resolveRuntimeConfig().debug) {
-              console.warn("[LocalAPI] local sync device token issue failed:", e?.message || e);
+              console.warn(
+                "[LocalAPI] local sync device token issue failed:",
+                e?.message || e,
+              );
             }
           }
           if (!issuedToken) {
             if (drain) {
-              json(res, { ok: false, error: "Unable to issue cloud device token for local sync" }, 502);
+              json(
+                res,
+                {
+                  ok: false,
+                  error: "Unable to issue cloud device token for local sync",
+                },
+                502,
+              );
               return true;
             }
           } else {
@@ -1980,7 +2210,17 @@ function createLocalApiHandler({ queuePath }) {
         }
         json(res, { ok: true, ...result });
       } catch (e) {
-        json(res, { ok: false, error: e?.message, code: e?.code ?? null, stdout: e?.stdout || "", stderr: e?.stderr || "" }, 500);
+        json(
+          res,
+          {
+            ok: false,
+            error: e?.message,
+            code: e?.code ?? null,
+            stdout: e?.stdout || "",
+            stderr: e?.stderr || "",
+          },
+          500,
+        );
       }
       return true;
     }
@@ -2002,7 +2242,9 @@ function createLocalApiHandler({ queuePath }) {
     // response (X-TokenTracker-Account-View: 0) so the popover knows it got
     // local single-machine data, and fall through to the local handler below.
     if (url.searchParams.get("account") === "1") {
-      const usageSlug = p.startsWith("/functions/") ? p.slice("/functions/".length) : "";
+      const usageSlug = p.startsWith("/functions/")
+        ? p.slice("/functions/".length)
+        : "";
       if (accountSlugFor(usageSlug)) {
         const result = await tryServeAccountView(usageSlug, url, res);
         if (result === "served") return true;
@@ -2031,12 +2273,23 @@ function createLocalApiHandler({ queuePath }) {
           acc.conversation_count += r.conversation_count;
           return acc;
         },
-        { total_tokens: 0, billable_total_tokens: 0, total_cost_usd: 0, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0, conversation_count: 0 },
+        {
+          total_tokens: 0,
+          billable_total_tokens: 0,
+          total_cost_usd: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          cached_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          reasoning_output_tokens: 0,
+          conversation_count: 0,
+        },
       );
       const totalCost = totals.total_cost_usd;
 
       const todayParts = getZonedParts(new Date(), timeZoneContext);
-      const todayStr = formatPartsDayKey(todayParts) || new Date().toISOString().slice(0, 10);
+      const todayStr =
+        formatPartsDayKey(todayParts) || new Date().toISOString().slice(0, 10);
 
       const shiftDay = (dayStr, delta) => {
         const d = new Date(`${dayStr}T00:00:00Z`);
@@ -2053,11 +2306,14 @@ function createLocalApiHandler({ queuePath }) {
         return out;
       };
       const sumDays = (days) =>
-        days.reduce((a, r) => {
-          a.billable_total_tokens += r.billable_total_tokens;
-          a.conversation_count += r.conversation_count;
-          return a;
-        }, { billable_total_tokens: 0, conversation_count: 0 });
+        days.reduce(
+          (a, r) => {
+            a.billable_total_tokens += r.billable_total_tokens;
+            a.conversation_count += r.conversation_count;
+            return a;
+          },
+          { billable_total_tokens: 0, conversation_count: 0 },
+        );
 
       const l7 = collectDays(7);
       const l30 = collectDays(30);
@@ -2067,11 +2323,29 @@ function createLocalApiHandler({ queuePath }) {
       const l30fromStr = shiftDay(todayStr, -29);
 
       json(res, {
-        from, to, days: daily.length, scope, excluded_sources: excludedSources,
+        from,
+        to,
+        days: daily.length,
+        scope,
+        excluded_sources: excludedSources,
         totals: { ...totals, total_cost_usd: totalCost.toFixed(6) },
         rolling: {
-          last_7d: { from: l7fromStr, to: todayStr, active_days: l7.length, totals: l7t },
-          last_30d: { from: l30fromStr, to: todayStr, active_days: l30.length, totals: l30t, avg_per_active_day: l30.length > 0 ? Math.round(l30t.billable_total_tokens / l30.length) : 0 },
+          last_7d: {
+            from: l7fromStr,
+            to: todayStr,
+            active_days: l7.length,
+            totals: l7t,
+          },
+          last_30d: {
+            from: l30fromStr,
+            to: todayStr,
+            active_days: l30.length,
+            totals: l30t,
+            avg_per_active_day:
+              l30.length > 0
+                ? Math.round(l30t.billable_total_tokens / l30.length)
+                : 0,
+          },
         },
       });
       return true;
@@ -2083,8 +2357,16 @@ function createLocalApiHandler({ queuePath }) {
       const to = url.searchParams.get("to") || "";
       const timeZoneContext = getTimeZoneContext(url);
       const { rows, scope, excludedSources } = scopedQueueRows(qp, url);
-      const daily = aggregateByDay(rows, timeZoneContext).filter((d) => d.day >= from && d.day <= to);
-      json(res, { from, to, scope, excluded_sources: excludedSources, data: daily });
+      const daily = aggregateByDay(rows, timeZoneContext).filter(
+        (d) => d.day >= from && d.day <= to,
+      );
+      json(res, {
+        from,
+        to,
+        scope,
+        excluded_sources: excludedSources,
+        data: daily,
+      });
       return true;
     }
 
@@ -2109,16 +2391,32 @@ function createLocalApiHandler({ queuePath }) {
         const sessions = await buildSessionAnalytics();
         await buildGitOutcomes(sessions);
       } catch (error) {
-        console.error("[outcomes] automatic Git attribution failed:", error?.message || error);
+        console.error(
+          "[outcomes] automatic Git attribution failed:",
+          error?.message || error,
+        );
       }
       const outcomes = readAllOutcomesData();
       if (!outcomes.length) {
-        json(res, { available: false, from, to, by_model: [], by_tool: [], totals: null });
+        json(res, {
+          available: false,
+          from,
+          to,
+          by_model: [],
+          by_tool: [],
+          totals: null,
+        });
         return true;
       }
       const { rows, scope, excludedSources } = scopedQueueRows(qp, url);
       const result = computeQualityPerDollar(rows, outcomes, { from, to });
-      json(res, { from, to, scope, excluded_sources: excludedSources, ...result });
+      json(res, {
+        from,
+        to,
+        scope,
+        excluded_sources: excludedSources,
+        ...result,
+      });
       return true;
     }
 
@@ -2128,22 +2426,42 @@ function createLocalApiHandler({ queuePath }) {
       const to = url.searchParams.get("to") || "";
       const refresh = ["1", "true"].includes(url.searchParams.get("refresh"));
       try {
-        const { buildSessionAnalytics, summarizeSessions, sessionsToCsv } = require("./session-analytics");
+        const {
+          buildSessionAnalytics,
+          summarizeSessions,
+          sessionsToCsv,
+        } = require("./session-analytics");
         const sessions = await buildSessionAnalytics({ force: refresh });
         const wantsCsv = url.searchParams.get("format") === "csv";
-        const includeSessions = wantsCsv || ["1", "true"].includes(url.searchParams.get("include_sessions"));
-        const result = summarizeSessions(sessions, { from, to, includeSessions });
+        const includeSessions =
+          wantsCsv ||
+          ["1", "true"].includes(url.searchParams.get("include_sessions"));
+        const result = summarizeSessions(sessions, {
+          from,
+          to,
+          includeSessions,
+        });
         if (wantsCsv) {
           const content = sessionsToCsv(result.sessions);
           res.statusCode = 200;
           res.setHeader("Content-Type", "text/csv; charset=utf-8");
-          res.setHeader("Content-Disposition", "attachment; filename=tokentracker-sessions.csv");
+          res.setHeader(
+            "Content-Disposition",
+            "attachment; filename=tokentracker-sessions.csv",
+          );
           res.end(content);
           return true;
         }
         json(res, { from, to, ...result });
       } catch (error) {
-        json(res, { available: false, error: error?.message || "Session analytics failed" }, 500);
+        json(
+          res,
+          {
+            available: false,
+            error: error?.message || "Session analytics failed",
+          },
+          500,
+        );
       }
       return true;
     }
@@ -2158,21 +2476,30 @@ function createLocalApiHandler({ queuePath }) {
       const to = url.searchParams.get("to") || "";
       const refresh = ["1", "true"].includes(url.searchParams.get("refresh"));
       const limitParam = parseInt(url.searchParams.get("limit") || "0", 10);
-      const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 2000) : 0;
+      const limit =
+        Number.isFinite(limitParam) && limitParam > 0
+          ? Math.min(limitParam, 2000)
+          : 0;
       // This payload contains local paths and resumable session identifiers.
       // The server is loopback-only; additionally prevent browser/proxy caches
       // from retaining the response after the page is closed.
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Content-Type-Options", "nosniff");
       try {
-        const { buildSessionAnalytics, listSessionsForBrowser } = require("./session-analytics");
+        const {
+          buildSessionAnalytics,
+          listSessionsForBrowser,
+        } = require("./session-analytics");
         const sessions = await buildSessionAnalytics({ force: refresh });
         const result = listSessionsForBrowser(sessions, { from, to, limit });
         json(res, { from, to, ...result });
       } catch (error) {
         // Node fs errors embed the absolute path ("EACCES ... open '/Users/…'").
         // Keep that out of the HTTP body and log it locally instead.
-        console.warn("[local-api] session browser failed:", error?.message || error);
+        console.warn(
+          "[local-api] session browser failed:",
+          error?.message || error,
+        );
         json(res, { available: false, error: "Session browser failed" }, 500);
       }
       return true;
@@ -2181,7 +2508,14 @@ function createLocalApiHandler({ queuePath }) {
     // --- fixed context overhead audit (counts and estimates only) ---
     if (p === "/functions/tokentracker-context-health") {
       const { computeContextHealth } = require("./context-health");
-      json(res, computeContextHealth({ home: os.homedir(), cwd: process.cwd(), env: process.env }));
+      json(
+        res,
+        computeContextHealth({
+          home: os.homedir(),
+          cwd: process.cwd(),
+          env: process.env,
+        }),
+      );
       return true;
     }
 
@@ -2192,7 +2526,8 @@ function createLocalApiHandler({ queuePath }) {
       const { rows, scope, excludedSources } = scopedQueueRows(qp, url);
       const daily = aggregateByDay(rows, timeZoneContext);
       const todayParts = getZonedParts(new Date(), timeZoneContext);
-      const todayStr = formatPartsDayKey(todayParts) || new Date().toISOString().slice(0, 10);
+      const todayStr =
+        formatPartsDayKey(todayParts) || new Date().toISOString().slice(0, 10);
       const end = new Date(`${todayStr}T00:00:00Z`);
       const start = new Date(end);
       start.setUTCDate(start.getUTCDate() - weeks * 7 + 1);
@@ -2200,7 +2535,9 @@ function createLocalApiHandler({ queuePath }) {
       const to = end.toISOString().slice(0, 10);
       const byDay = new Map(daily.map((d) => [d.day, d]));
 
-      const allValues = daily.map((d) => d.billable_total_tokens).filter((v) => v > 0);
+      const allValues = daily
+        .map((d) => d.billable_total_tokens)
+        .filter((v) => v > 0);
       const maxValue = allValues.length > 0 ? Math.max(...allValues) : 0;
       const calcLevel = (v) => {
         if (v <= 0) return 0;
@@ -2219,7 +2556,13 @@ function createLocalApiHandler({ queuePath }) {
         const day = cursor.toISOString().slice(0, 10);
         const data = byDay.get(day);
         const billable = data?.billable_total_tokens || 0;
-        cells.push({ day, total_tokens: data?.total_tokens || 0, billable_total_tokens: billable, level: calcLevel(billable), models: data?.models || null });
+        cells.push({
+          day,
+          total_tokens: data?.total_tokens || 0,
+          billable_total_tokens: billable,
+          level: calcLevel(billable),
+          models: data?.models || null,
+        });
         cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
       const weeksArr = [];
@@ -2234,16 +2577,16 @@ function createLocalApiHandler({ queuePath }) {
         }
       }
 
-      json(res, { 
-        from, 
-        to, 
-        scope, 
-        excluded_sources: excludedSources, 
-        week_starts_on: "sun", 
-        active_days: cells.filter((c) => c.billable_total_tokens > 0).length, 
-        streak_days: 0, 
+      json(res, {
+        from,
+        to,
+        scope,
+        excluded_sources: excludedSources,
+        week_starts_on: "sun",
+        active_days: cells.filter((c) => c.billable_total_tokens > 0).length,
+        streak_days: 0,
         weeks: weeksArr,
-        total_cost_usd: totalCostUsd
+        total_cost_usd: totalCostUsd,
       });
       return true;
     }
@@ -2253,7 +2596,11 @@ function createLocalApiHandler({ queuePath }) {
       const from = url.searchParams.get("from") || "";
       const to = url.searchParams.get("to") || "";
       const timeZoneContext = getTimeZoneContext(url);
-      const { rows: scopedRows, scope, excludedSources } = scopedQueueRows(qp, url);
+      const {
+        rows: scopedRows,
+        scope,
+        excludedSources,
+      } = scopedQueueRows(qp, url);
       const rows = scopedRows.filter((r) => {
         if (!r.hour_start) return false;
         const d = rowDayKey(r, timeZoneContext);
@@ -2265,24 +2612,55 @@ function createLocalApiHandler({ queuePath }) {
         const src = row.source || "unknown";
         const mdl = row.model || "unknown";
         if (!bySource.has(src))
-          bySource.set(src, { source: src, source_scope: getSourceScope(src), totals: { total_tokens: 0, billable_total_tokens: 0, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0, total_cost_usd: "0" }, models: new Map() });
+          bySource.set(src, {
+            source: src,
+            source_scope: getSourceScope(src),
+            totals: {
+              total_tokens: 0,
+              billable_total_tokens: 0,
+              input_tokens: 0,
+              output_tokens: 0,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_cost_usd: "0",
+            },
+            models: new Map(),
+          });
         const sa = bySource.get(src);
         sa.totals.total_tokens += row.total_tokens || 0;
-        sa.totals.billable_total_tokens += row.billable_total_tokens ?? row.total_tokens ?? 0;
+        sa.totals.billable_total_tokens +=
+          row.billable_total_tokens ?? row.total_tokens ?? 0;
         sa.totals.input_tokens += row.input_tokens || 0;
         sa.totals.output_tokens += row.output_tokens || 0;
         sa.totals.cached_input_tokens += row.cached_input_tokens || 0;
-        sa.totals.cache_creation_input_tokens += row.cache_creation_input_tokens || 0;
+        sa.totals.cache_creation_input_tokens +=
+          row.cache_creation_input_tokens || 0;
         sa.totals.reasoning_output_tokens += row.reasoning_output_tokens || 0;
         if (!sa.models.has(mdl))
-          sa.models.set(mdl, { model: mdl, model_id: mdl, totals: { total_tokens: 0, billable_total_tokens: 0, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0, total_cost_usd: "0" } });
+          sa.models.set(mdl, {
+            model: mdl,
+            model_id: mdl,
+            totals: {
+              total_tokens: 0,
+              billable_total_tokens: 0,
+              input_tokens: 0,
+              output_tokens: 0,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_cost_usd: "0",
+            },
+          });
         const ma = sa.models.get(mdl);
         ma.totals.total_tokens += row.total_tokens || 0;
-        ma.totals.billable_total_tokens += row.billable_total_tokens ?? row.total_tokens ?? 0;
+        ma.totals.billable_total_tokens +=
+          row.billable_total_tokens ?? row.total_tokens ?? 0;
         ma.totals.input_tokens += row.input_tokens || 0;
         ma.totals.output_tokens += row.output_tokens || 0;
         ma.totals.cached_input_tokens += row.cached_input_tokens || 0;
-        ma.totals.cache_creation_input_tokens += row.cache_creation_input_tokens || 0;
+        ma.totals.cache_creation_input_tokens +=
+          row.cache_creation_input_tokens || 0;
         ma.totals.reasoning_output_tokens += row.reasoning_output_tokens || 0;
       }
 
@@ -2294,17 +2672,33 @@ function createLocalApiHandler({ queuePath }) {
               model: m.model,
               source: s.source,
             });
-            return { ...m, totals: { ...m.totals, total_cost_usd: cost.toFixed(6) } };
+            return {
+              ...m,
+              totals: { ...m.totals, total_cost_usd: cost.toFixed(6) },
+            };
           })
           .sort((a, b) => b.totals.total_tokens - a.totals.total_tokens);
-        const sourceCost = s.models.reduce((sum, m) => sum + Number(m.totals.total_cost_usd), 0);
+        const sourceCost = s.models.reduce(
+          (sum, m) => sum + Number(m.totals.total_cost_usd),
+          0,
+        );
         s.totals.total_cost_usd = sourceCost.toFixed(6);
         return s;
       });
 
       json(res, {
-        from, to, days: 0, scope, excluded_sources: excludedSources, sources,
-        pricing: { model: "per-model", pricing_mode: "per_token_type", source: "litellm", effective_from: new Date().toISOString().slice(0, 10) },
+        from,
+        to,
+        days: 0,
+        scope,
+        excluded_sources: excludedSources,
+        sources,
+        pricing: {
+          model: "per-model",
+          pricing_mode: "per_token_type",
+          source: "litellm",
+          effective_from: new Date().toISOString().slice(0, 10),
+        },
       });
       return true;
     }
@@ -2317,14 +2711,32 @@ function createLocalApiHandler({ queuePath }) {
     if (p === "/functions/tokentracker-usage-category-breakdown") {
       const from = url.searchParams.get("from") || "";
       const to = url.searchParams.get("to") || "";
-      const requestedSource = (url.searchParams.get("source") || "claude").trim().toLowerCase();
+      const requestedSource = (url.searchParams.get("source") || "claude")
+        .trim()
+        .toLowerCase();
       if (requestedSource === "claude") {
         try {
-          const result = await computeClaudeCategoryBreakdown({ from, to, projectDir: process.cwd() });
+          const result = await computeClaudeCategoryBreakdown({
+            from,
+            to,
+            projectDir: process.cwd(),
+          });
           json(res, { from, to, ...result });
         } catch (e) {
-          console.error("[LocalAPI] usage-category-breakdown:", e?.message || e);
-          json(res, { from, to, ...unsupportedCategoryPayload("claude"), error: "compute_failed" }, 500);
+          console.error(
+            "[LocalAPI] usage-category-breakdown:",
+            e?.message || e,
+          );
+          json(
+            res,
+            {
+              from,
+              to,
+              ...unsupportedCategoryPayload("claude"),
+              error: "compute_failed",
+            },
+            500,
+          );
         }
         return true;
       }
@@ -2339,18 +2751,33 @@ function createLocalApiHandler({ queuePath }) {
             timeZoneContext,
           });
           if (!Number(result?.totals?.total_tokens || 0)) {
-            const fallback = buildCodexCategoryFallbackFromQueue(readQueueData(qp), {
-              from,
-              to,
-              timeZoneContext,
-            });
+            const fallback = buildCodexCategoryFallbackFromQueue(
+              readQueueData(qp),
+              {
+                from,
+                to,
+                timeZoneContext,
+              },
+            );
             json(res, { from, to, ...fallback });
             return true;
           }
           json(res, { from, to, ...result });
         } catch (e) {
-          console.error("[LocalAPI] usage-category-breakdown(codex):", e?.message || e);
-          json(res, { from, to, ...unsupportedCategoryPayload("codex"), error: "compute_failed" }, 500);
+          console.error(
+            "[LocalAPI] usage-category-breakdown(codex):",
+            e?.message || e,
+          );
+          json(
+            res,
+            {
+              from,
+              to,
+              ...unsupportedCategoryPayload("codex"),
+              error: "compute_failed",
+            },
+            500,
+          );
         }
         return true;
       }
@@ -2366,8 +2793,20 @@ function createLocalApiHandler({ queuePath }) {
           });
           json(res, { from, to, ...result });
         } catch (e) {
-          console.error("[LocalAPI] usage-category-breakdown(grok):", e?.message || e);
-          json(res, { from, to, ...unsupportedCategoryPayload("grok"), error: "compute_failed" }, 500);
+          console.error(
+            "[LocalAPI] usage-category-breakdown(grok):",
+            e?.message || e,
+          );
+          json(
+            res,
+            {
+              from,
+              to,
+              ...unsupportedCategoryPayload("grok"),
+              error: "compute_failed",
+            },
+            500,
+          );
         }
         return true;
       }
@@ -2384,16 +2823,18 @@ function createLocalApiHandler({ queuePath }) {
       // (the old behavior) produced pure fiction: every short-and-hot
       // project got the same weight as every long-and-cold one.
       const limitParam = Number(url.searchParams.get("limit"));
-      const limit = Number.isFinite(limitParam) && limitParam > 0
-        ? Math.min(Math.floor(limitParam), PROJECT_USAGE_MAX_ENTRIES)
-        : PROJECT_USAGE_MAX_ENTRIES;
+      const limit =
+        Number.isFinite(limitParam) && limitParam > 0
+          ? Math.min(Math.floor(limitParam), PROJECT_USAGE_MAX_ENTRIES)
+          : PROJECT_USAGE_MAX_ENTRIES;
       const { timeZoneContext, hasRange, dayInRange, projectRows } =
         readProjectUsageContext(qp, url);
 
       const aggregateEntries = (rows, keyOf, refOf) => {
         const byKey = new Map();
         for (const row of rows) {
-          if (hasRange && !dayInRange(rowDayKey(row, timeZoneContext))) continue;
+          if (hasRange && !dayInRange(rowDayKey(row, timeZoneContext)))
+            continue;
           const key = keyOf(row);
           if (!byKey.has(key)) {
             byKey.set(key, {
@@ -2418,8 +2859,12 @@ function createLocalApiHandler({ queuePath }) {
           agg.input_tokens += Number(row.input_tokens || 0);
           agg.output_tokens += Number(row.output_tokens || 0);
           agg.cached_input_tokens += Number(row.cached_input_tokens || 0);
-          agg.cache_creation_input_tokens += Number(row.cache_creation_input_tokens || 0);
-          agg.reasoning_output_tokens += Number(row.reasoning_output_tokens || 0);
+          agg.cache_creation_input_tokens += Number(
+            row.cache_creation_input_tokens || 0,
+          );
+          agg.reasoning_output_tokens += Number(
+            row.reasoning_output_tokens || 0,
+          );
           agg.conversation_count += Number(row.conversation_count || 0);
           if (!agg.project_ref) agg.project_ref = refOf(row);
           const src = row.source || "unknown";
@@ -2437,7 +2882,10 @@ function createLocalApiHandler({ queuePath }) {
             billable_total_tokens: String(entry.billable_total_tokens),
             sources: Array.from(sourceTotals.entries())
               .sort((a, b) => b[1] - a[1])
-              .map(([source, totalTokens]) => ({ source, total_tokens: totalTokens })),
+              .map(([source, totalTokens]) => ({
+                source,
+                total_tokens: totalTokens,
+              })),
           }));
       };
 
@@ -2499,7 +2947,9 @@ function createLocalApiHandler({ queuePath }) {
         acc.input_tokens += Number(row.input_tokens || 0);
         acc.output_tokens += Number(row.output_tokens || 0);
         acc.cached_input_tokens += Number(row.cached_input_tokens || 0);
-        acc.cache_creation_input_tokens += Number(row.cache_creation_input_tokens || 0);
+        acc.cache_creation_input_tokens += Number(
+          row.cache_creation_input_tokens || 0,
+        );
         acc.reasoning_output_tokens += Number(row.reasoning_output_tokens || 0);
         acc.conversation_count += Number(row.conversation_count || 0);
       };
@@ -2523,10 +2973,12 @@ function createLocalApiHandler({ queuePath }) {
           // `models` keyed by source (project rows carry no model column) —
           // it feeds TrendMonitor's stacked-segment slot so the modal chart
           // colors by provider exactly like the dashboard's Usage Trend.
-          if (!byDay.has(day)) byDay.set(day, { day, ...emptyMeasures(), models: {} });
+          if (!byDay.has(day))
+            byDay.set(day, { day, ...emptyMeasures(), models: {} });
           const dayAgg = byDay.get(day);
           addMeasures(dayAgg, row);
-          dayAgg.models[src] = (dayAgg.models[src] || 0) + Number(row.total_tokens || 0);
+          dayAgg.models[src] =
+            (dayAgg.models[src] || 0) + Number(row.total_tokens || 0);
         }
 
         if (!bySource.has(src)) {
@@ -2554,10 +3006,15 @@ function createLocalApiHandler({ queuePath }) {
         // All-project total over the same range so the client can render
         // "share of everything you tracked" without a second request.
         range_total_tokens: rangeTotalTokens,
-        daily: Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day)),
+        daily: Array.from(byDay.values()).sort((a, b) =>
+          a.day.localeCompare(b.day),
+        ),
         sources: Array.from(bySource.values())
           .sort((a, b) => b.total_tokens - a.total_tokens)
-          .map(({ dayKeys, ...src }) => ({ ...src, days_active: dayKeys.size })),
+          .map(({ dayKeys, ...src }) => ({
+            ...src,
+            days_active: dayKeys.size,
+          })),
       });
       return true;
     }
@@ -2565,15 +3022,25 @@ function createLocalApiHandler({ queuePath }) {
     // --- user-status (stub) ---
     if (p === "/functions/tokentracker-user-status") {
       json(res, {
-        user_id: "local-user", email: "local@localhost", name: "Local User", is_public: false,
+        user_id: "local-user",
+        email: "local@localhost",
+        name: "Local User",
+        is_public: false,
         created_at: new Date().toISOString(),
-        pro: { active: true, sources: ["local"], expires_at: null, partial: false, as_of: new Date().toISOString() },
+        pro: {
+          active: true,
+          sources: ["local"],
+          expires_at: null,
+          partial: false,
+          as_of: new Date().toISOString(),
+        },
         // Cross-device popover state: whether account aggregation can be served
         // (signed in) and whether the dashboard's cloud-sync toggle is on.
         account: {
           available: Boolean(getRefreshTokenForCloud()),
           cloud_sync_enabled: getCloudSyncPref(),
-          account_view: Boolean(getRefreshTokenForCloud()) && getCloudSyncPref(),
+          account_view:
+            Boolean(getRefreshTokenForCloud()) && getCloudSyncPref(),
         },
       });
       return true;
@@ -2627,11 +3094,16 @@ function createLocalApiHandler({ queuePath }) {
       const { isTelemetryDisabled } = require("./telemetry");
       let config = {};
       try {
-        config = JSON.parse(fs.readFileSync(path.join(path.dirname(qp), "config.json"), "utf8")) || {};
+        config =
+          JSON.parse(
+            fs.readFileSync(path.join(path.dirname(qp), "config.json"), "utf8"),
+          ) || {};
       } catch {
         config = {};
       }
-      json(res, { disabled: isTelemetryDisabled({ env: process.env, config }) });
+      json(res, {
+        disabled: isTelemetryDisabled({ env: process.env, config }),
+      });
       return true;
     }
 
@@ -2649,7 +3121,8 @@ function createLocalApiHandler({ queuePath }) {
 
     // --- usage-hourly (stub for day-view) ---
     if (p === "/functions/tokentracker-usage-hourly") {
-      const day = url.searchParams.get("day") || new Date().toISOString().slice(0, 10);
+      const day =
+        url.searchParams.get("day") || new Date().toISOString().slice(0, 10);
       const timeZoneContext = getTimeZoneContext(url);
       const { rows, scope, excludedSources } = scopedQueueRows(qp, url);
       const data = aggregateHourlyByDay(rows, day, timeZoneContext);
@@ -2670,10 +3143,21 @@ function createLocalApiHandler({ queuePath }) {
         if (!day || day < from || day > to) continue;
         const month = day.slice(0, 7);
         if (!byMonth.has(month))
-          byMonth.set(month, { month, total_tokens: 0, billable_total_tokens: 0, input_tokens: 0, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0, conversation_count: 0 });
+          byMonth.set(month, {
+            month,
+            total_tokens: 0,
+            billable_total_tokens: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            cached_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            reasoning_output_tokens: 0,
+            conversation_count: 0,
+          });
         const a = byMonth.get(month);
         a.total_tokens += row.total_tokens || 0;
-        a.billable_total_tokens += row.billable_total_tokens ?? row.total_tokens ?? 0;
+        a.billable_total_tokens +=
+          row.billable_total_tokens ?? row.total_tokens ?? 0;
         a.input_tokens += row.input_tokens || 0;
         a.output_tokens += row.output_tokens || 0;
         a.cached_input_tokens += row.cached_input_tokens || 0;
@@ -2687,7 +3171,15 @@ function createLocalApiHandler({ queuePath }) {
         const model = row.model || "unknown";
         a.models[model] = (a.models[model] || 0) + (row.total_tokens || 0);
       }
-      json(res, { from, to, scope, excluded_sources: excludedSources, data: Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month)) });
+      json(res, {
+        from,
+        to,
+        scope,
+        excluded_sources: excludedSources,
+        data: Array.from(byMonth.values()).sort((a, b) =>
+          a.month.localeCompare(b.month),
+        ),
+      });
       return true;
     }
 
@@ -2715,7 +3207,10 @@ function createLocalApiHandler({ queuePath }) {
           }
           const body = await readJsonBody(req);
           if (body?.action === "install_url") {
-            json(res, { ok: true, pet: await pets.installFromCodexPets(body.url || body.id) });
+            json(res, {
+              ok: true,
+              pet: await pets.installFromCodexPets(body.url || body.id),
+            });
             return true;
           }
           if (body?.action === "remove") {
@@ -2731,7 +3226,11 @@ function createLocalApiHandler({ queuePath }) {
         }
         json(res, { ok: false, error: "Method Not Allowed" }, 405);
       } catch (error) {
-        json(res, { ok: false, error: error?.message || "Pet operation failed" }, 400);
+        json(
+          res,
+          { ok: false, error: error?.message || "Pet operation failed" },
+          400,
+        );
       }
       return true;
     }
@@ -2744,7 +3243,10 @@ function createLocalApiHandler({ queuePath }) {
         if (method === "GET") {
           const mode = url.searchParams.get("mode") || "installed";
           if (mode === "installed") {
-            json(res, { targets: skills.targetList(), skills: skills.listInstalledSkills() });
+            json(res, {
+              targets: skills.targetList(),
+              skills: skills.listInstalledSkills(),
+            });
             return true;
           }
           if (mode === "repos") {
@@ -2782,7 +3284,9 @@ function createLocalApiHandler({ queuePath }) {
           }
           if (mode === "skill_usage") {
             const force = url.searchParams.get("force") === "1";
-            const usage = await require("./skill-usage").scanSkillUsage({ force });
+            const usage = await require("./skill-usage").scanSkillUsage({
+              force,
+            });
             await ensurePricingLoaded();
             // Join raw per-skill aggregates against installed skills so we can
             // separate user-installed skills (where "dead weight" = unused) from
@@ -2790,7 +3294,13 @@ function createLocalApiHandler({ queuePath }) {
             // and are NOT uninstallable. Cost is priced per-model (source=claude).
             const installed = skills.listInstalledSkills();
             const skillDirectoryLeaf = (value) =>
-              String(value || "").replace(/\\/g, "/").split("/").filter(Boolean).pop()?.trim().toLowerCase() || "";
+              String(value || "")
+                .replace(/\\/g, "/")
+                .split("/")
+                .filter(Boolean)
+                .pop()
+                ?.trim()
+                .toLowerCase() || "";
             const leafCounts = new Map();
             for (const s of installed) {
               const leaf = skillDirectoryLeaf(s.directory);
@@ -2801,20 +3311,28 @@ function createLocalApiHandler({ queuePath }) {
             const nameCounts = new Map();
             const installedByName = new Map();
             for (const s of installed) {
-              const dir = String(s.directory || "").trim().toLowerCase();
+              const dir = String(s.directory || "")
+                .trim()
+                .toLowerCase();
               if (dir) installedByDirectory.set(dir, s);
               const leaf = skillDirectoryLeaf(s.directory);
-              if (leaf && leafCounts.get(leaf) === 1) installedByLeaf.set(leaf, s);
-              const name = String(s.name || "").trim().toLowerCase();
+              if (leaf && leafCounts.get(leaf) === 1)
+                installedByLeaf.set(leaf, s);
+              const name = String(s.name || "")
+                .trim()
+                .toLowerCase();
               if (name) {
                 nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
                 if (!installedByName.has(name)) installedByName.set(name, s);
               }
             }
             const findInstalledSkill = (value) => {
-              const norm = String(value || "").trim().toLowerCase();
+              const norm = String(value || "")
+                .trim()
+                .toLowerCase();
               if (!norm) return null;
-              if (installedByDirectory.has(norm)) return installedByDirectory.get(norm);
+              if (installedByDirectory.has(norm))
+                return installedByDirectory.get(norm);
               if (installedByLeaf.has(norm)) return installedByLeaf.get(norm);
               if (nameCounts.get(norm) === 1) return installedByName.get(norm);
               if (leafCounts.get(norm) > 1) return null;
@@ -2823,7 +3341,9 @@ function createLocalApiHandler({ queuePath }) {
             const usedSkillIds = new Set();
             const priced = usage.skills.map((entry) => {
               let cost = 0;
-              for (const [model, tokens] of Object.entries(entry.models || {})) {
+              for (const [model, tokens] of Object.entries(
+                entry.models || {},
+              )) {
                 cost += computeRowCost({ ...tokens, model, source: "claude" });
               }
               const match = findInstalledSkill(entry.skill);
@@ -2842,7 +3362,11 @@ function createLocalApiHandler({ queuePath }) {
             // Installed skills with zero invocations = dead-weight candidates.
             const unusedInstalled = installed
               .filter((s) => !usedSkillIds.has(s.id))
-              .map((s) => ({ skillId: s.id, directory: s.directory, name: s.name }));
+              .map((s) => ({
+                skillId: s.id,
+                directory: s.directory,
+                name: s.name,
+              }));
             json(res, {
               generatedAt: usage.generatedAt,
               scannedFiles: usage.scannedFiles,
@@ -2865,7 +3389,13 @@ function createLocalApiHandler({ queuePath }) {
           const body = await readJsonBody(req);
           const action = String(body?.action || "");
           if (action === "install") {
-            json(res, { ok: true, skill: await skills.installSkill(body.skill, body.targets || ["claude", "codex"]) });
+            json(res, {
+              ok: true,
+              skill: await skills.installSkill(
+                body.skill,
+                body.targets || ["claude", "codex"],
+              ),
+            });
             return true;
           }
           if (action === "uninstall") {
@@ -2877,15 +3407,28 @@ function createLocalApiHandler({ queuePath }) {
             return true;
           }
           if (action === "set_targets") {
-            json(res, { ok: true, skill: skills.setSkillTargets(body.id, body.targets || []) });
+            json(res, {
+              ok: true,
+              skill: skills.setSkillTargets(body.id, body.targets || []),
+            });
             return true;
           }
           if (action === "import_local") {
-            json(res, { ok: true, skill: skills.importLocalSkill(body.directory, body.targets || []) });
+            json(res, {
+              ok: true,
+              skill: skills.importLocalSkill(
+                body.directory,
+                body.targets || [],
+              ),
+            });
             return true;
           }
           if (action === "delete_local") {
-            json(res, { ok: true, ...(skills.deleteLocalSkill(body.directory, body.targets || []) || {}) });
+            json(res, {
+              ok: true,
+              ...(skills.deleteLocalSkill(body.directory, body.targets || []) ||
+                {}),
+            });
             return true;
           }
           if (action === "add_repo") {
@@ -2893,7 +3436,10 @@ function createLocalApiHandler({ queuePath }) {
             return true;
           }
           if (action === "remove_repo") {
-            json(res, { ok: true, ...(skills.removeRepo(body.owner, body.name) || {}) });
+            json(res, {
+              ok: true,
+              ...(skills.removeRepo(body.owner, body.name) || {}),
+            });
             return true;
           }
           json(res, { ok: false, error: "Unknown skills action" }, 400);
@@ -2902,7 +3448,11 @@ function createLocalApiHandler({ queuePath }) {
 
         json(res, { ok: false, error: "Method Not Allowed" }, 405);
       } catch (e) {
-        json(res, { ok: false, error: e?.message || "Unknown skills error" }, 500);
+        json(
+          res,
+          { ok: false, error: e?.message || "Unknown skills error" },
+          500,
+        );
       }
       return true;
     }
@@ -2914,14 +3464,19 @@ function createLocalApiHandler({ queuePath }) {
       const { projectRows } = readProjectUsageContext(qp, url);
       json(res, {
         generated_at: new Date().toISOString(),
-        achievements: computeLocalAchievements(queueRows, projectRows, { timeZoneContext }),
+        achievements: computeLocalAchievements(queueRows, projectRows, {
+          timeZoneContext,
+        }),
       });
       return true;
     }
 
     // --- usage-limits ---
     if (p === "/functions/tokentracker-usage-limits") {
-      const { getUsageLimits, resetUsageLimitsCache } = require("./usage-limits");
+      const {
+        getUsageLimits,
+        resetUsageLimitsCache,
+      } = require("./usage-limits");
       try {
         const refreshParam = url.searchParams.get("refresh");
         const forceRefresh = refreshParam === "1" || refreshParam === "true";

@@ -43,12 +43,12 @@ function buildGrokSessionEndHookJson({ notifyGrokHandlerPath }) {
             {
               type: "command",
               command: cmd,
-              timeout: 60
-            }
-          ]
-        }
-      ]
-    }
+              timeout: 60,
+            },
+          ],
+        },
+      ],
+    },
   };
 }
 
@@ -59,7 +59,7 @@ function shellQuote(value) {
 async function ensureGrokHookFiles({
   grokHooksDir,
   trackerDir,
-  handlerSource // path to the .cjs template we will write
+  handlerSource, // path to the .cjs template we will write
 } = {}) {
   if (!grokHooksDir || !trackerDir) {
     throw new Error("grokHooksDir and trackerDir are required");
@@ -74,8 +74,14 @@ async function ensureGrokHookFiles({
   const handlerPath = path.join(binDir, "grok-session-end-hook.cjs");
 
   // Write the hook JSON (always overwrite to keep command up-to-date if bin path changes)
-  const hookJson = buildGrokSessionEndHookJson({ notifyGrokHandlerPath: handlerPath });
-  await fs.writeFile(hookPath, JSON.stringify(hookJson, null, 2) + "\n", "utf8");
+  const hookJson = buildGrokSessionEndHookJson({
+    notifyGrokHandlerPath: handlerPath,
+  });
+  await fs.writeFile(
+    hookPath,
+    JSON.stringify(hookJson, null, 2) + "\n",
+    "utf8",
+  );
 
   // Write (or update) the handler script
   const handlerSourceCode = buildGrokSessionEndHandler({ trackerDir });
@@ -259,22 +265,34 @@ main().catch(() => process.exit(0));
 `;
 }
 
-async function probeGrokHookState({ home = os.homedir(), trackerDir, env = process.env } = {}) {
+async function probeGrokHookState({
+  home = os.homedir(),
+  trackerDir,
+  env = process.env,
+} = {}) {
   const grokHooksDir = resolveGrokHooksDir(env);
   const hookPath = path.join(grokHooksDir, GROK_HOOK_FILENAME);
   const binDir = resolveTrackerBinDir(trackerDir);
   const handlerPath = path.join(binDir, "grok-session-end-hook.cjs");
-  const legacyHandlerPath = path.join(resolveLegacyTrackerBinDir(trackerDir), "grok-session-end-hook.cjs");
+  const legacyHandlerPath = path.join(
+    resolveLegacyTrackerBinDir(trackerDir),
+    "grok-session-end-hook.cjs",
+  );
 
   const hookExists = fssync.existsSync(hookPath);
-  const handlerExists = fssync.existsSync(handlerPath) || fssync.existsSync(legacyHandlerPath);
+  const handlerExists =
+    fssync.existsSync(handlerPath) || fssync.existsSync(legacyHandlerPath);
 
   let configured = false;
   if (hookExists) {
     try {
       const content = fssync.readFileSync(hookPath, "utf8");
       const json = JSON.parse(content);
-      configured = Boolean(json?.hooks?.SessionEnd?.[0]?.hooks?.[0]?.command?.includes("grok-session-end-hook"));
+      configured = Boolean(
+        json?.hooks?.SessionEnd?.[0]?.hooks?.[0]?.command?.includes(
+          "grok-session-end-hook",
+        ),
+      );
     } catch {}
   }
 
@@ -290,12 +308,18 @@ async function probeGrokHookState({ home = os.homedir(), trackerDir, env = proce
     hookPath,
     handlerPath,
     legacyHandlerPath,
-    hasGrokInstall: fssync.existsSync(path.join(resolveGrokHome(env), "bin", "grok")) || hasSessions,
-    sessionsDir
+    hasGrokInstall:
+      fssync.existsSync(path.join(resolveGrokHome(env), "bin", "grok")) ||
+      hasSessions,
+    sessionsDir,
   };
 }
 
-async function upsertGrokHook({ home = os.homedir(), trackerDir, env = process.env } = {}) {
+async function upsertGrokHook({
+  home = os.homedir(),
+  trackerDir,
+  env = process.env,
+} = {}) {
   const grokHooksDir = resolveGrokHooksDir(env);
   const result = await ensureGrokHookFiles({ grokHooksDir, trackerDir });
 
@@ -303,16 +327,23 @@ async function upsertGrokHook({ home = os.homedir(), trackerDir, env = process.e
   return {
     ...state,
     changed: true,
-    ...result
+    ...result,
   };
 }
 
-async function removeGrokHook({ home = os.homedir(), trackerDir, env = process.env } = {}) {
+async function removeGrokHook({
+  home = os.homedir(),
+  trackerDir,
+  env = process.env,
+} = {}) {
   const grokHooksDir = resolveGrokHooksDir(env);
   const hookPath = path.join(grokHooksDir, GROK_HOOK_FILENAME);
   const binDir = resolveTrackerBinDir(trackerDir);
   const handlerPath = path.join(binDir, "grok-session-end-hook.cjs");
-  const legacyHandlerPath = path.join(resolveLegacyTrackerBinDir(trackerDir), "grok-session-end-hook.cjs");
+  const legacyHandlerPath = path.join(
+    resolveLegacyTrackerBinDir(trackerDir),
+    "grok-session-end-hook.cjs",
+  );
 
   let removed = false;
   try {
@@ -347,5 +378,5 @@ module.exports = {
   probeGrokHookState,
   removeGrokHook,
   GROK_HOOK_FILENAME,
-  buildGrokSessionEndHandler
+  buildGrokSessionEndHandler,
 };

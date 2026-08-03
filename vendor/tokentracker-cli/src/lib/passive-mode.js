@@ -57,7 +57,8 @@ function dirHasFile(dir, predicate) {
     const full = path.join(dir, entry.name);
     // Let the predicate accept either a file OR a directory name (so
     // "sessions" or "tmp" as a bare subdirectory still counts).
-    if (!predicate || predicate(full, entry.name, entry.isDirectory())) return true;
+    if (!predicate || predicate(full, entry.name, entry.isDirectory()))
+      return true;
     if (entry.isDirectory()) {
       // Shallow recurse — at most 1 level (covers projects/<name>/*.jsonl)
       if (dirHasFile(full, predicate)) return true;
@@ -93,76 +94,100 @@ function detectPassiveProviders({ home, hookStatus }) {
   const out = [];
 
   // Claude Code — logs at ~/.claude/projects/<name>/*.jsonl
-  out.push(buildEntry({
-    name: "claude",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.claude),
-    logsDir: path.join(home, ".claude", "projects"),
-    logsPredicate: (full) => full.endsWith(".jsonl"),
-    settingsPath: path.join(home, ".claude", "settings.json"),
-  }));
+  out.push(
+    buildEntry({
+      name: "claude",
+      hookExpected: true,
+      hookInstalled: Boolean(hookStatus?.claude),
+      logsDir: path.join(home, ".claude", "projects"),
+      logsPredicate: (full) => full.endsWith(".jsonl"),
+      settingsPath: path.join(home, ".claude", "settings.json"),
+    }),
+  );
 
   // Gemini CLI — logs at ~/.gemini/tmp/<session-id>/logs.json
   // (path varies by version; presence of ~/.gemini/sessions or
   // ~/.gemini/tmp is enough to call it "active")
-  out.push(buildEntry({
-    name: "gemini",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.gemini),
-    logsDir: path.join(home, ".gemini"),
-    logsPredicate: (_full, name, isDir) =>
-      (isDir && (name === "tmp" || name === "sessions")) || name === "logs.json",
-    settingsPath: path.join(home, ".gemini", "settings.json"),
-  }));
+  out.push(
+    buildEntry({
+      name: "gemini",
+      hookExpected: true,
+      hookInstalled: Boolean(hookStatus?.gemini),
+      logsDir: path.join(home, ".gemini"),
+      logsPredicate: (_full, name, isDir) =>
+        (isDir && (name === "tmp" || name === "sessions")) ||
+        name === "logs.json",
+      settingsPath: path.join(home, ".gemini", "settings.json"),
+    }),
+  );
 
   // Codex CLI — logs at ~/.codex/sessions/
   // Match either a "sessions" subdir (even if empty — the CLI created it)
   // or any *.jsonl session file.
-  out.push(buildEntry({
-    name: "codex",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.codex_notify ?? hookStatus?.codex),
-    logsDir: path.join(home, ".codex"),
-    logsPredicate: (_full, name, isDir) =>
-      (isDir && name === "sessions") || (!isDir && name.endsWith(".jsonl")),
-    settingsPath: path.join(home, ".codex", "config.toml"),
-  }));
+  out.push(
+    buildEntry({
+      name: "codex",
+      hookExpected: true,
+      hookInstalled: Boolean(hookStatus?.codex_notify ?? hookStatus?.codex),
+      logsDir: path.join(home, ".codex"),
+      logsPredicate: (_full, name, isDir) =>
+        (isDir && name === "sessions") || (!isDir && name.endsWith(".jsonl")),
+      settingsPath: path.join(home, ".codex", "config.toml"),
+    }),
+  );
 
   // Every Code — same shape as Codex, different home
-  out.push(buildEntry({
-    name: "every_code",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.every_code_notify ?? hookStatus?.every_code),
-    logsDir: path.join(home, ".code"),
-    logsPredicate: (_full, name, isDir) =>
-      (isDir && name === "sessions") || (!isDir && name.endsWith(".jsonl")),
-    settingsPath: path.join(home, ".code", "config.toml"),
-  }));
+  out.push(
+    buildEntry({
+      name: "every_code",
+      hookExpected: true,
+      hookInstalled: Boolean(
+        hookStatus?.every_code_notify ?? hookStatus?.every_code,
+      ),
+      logsDir: path.join(home, ".code"),
+      logsPredicate: (_full, name, isDir) =>
+        (isDir && name === "sessions") || (!isDir && name.endsWith(".jsonl")),
+      settingsPath: path.join(home, ".code", "config.toml"),
+    }),
+  );
 
   // CodeBuddy — Claude-fork; hook in ~/.codebuddy/settings.json
-  out.push(buildEntry({
-    name: "codebuddy",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.codebuddy),
-    logsDir: path.join(home, ".codebuddy"),
-    logsPredicate: (_full, name) => name === "projects" || name.endsWith(".jsonl"),
-    settingsPath: path.join(home, ".codebuddy", "settings.json"),
-  }));
+  out.push(
+    buildEntry({
+      name: "codebuddy",
+      hookExpected: true,
+      hookInstalled: Boolean(hookStatus?.codebuddy),
+      logsDir: path.join(home, ".codebuddy"),
+      logsPredicate: (_full, name) =>
+        name === "projects" || name.endsWith(".jsonl"),
+      settingsPath: path.join(home, ".codebuddy", "settings.json"),
+    }),
+  );
 
   // WorkBuddy — sibling Claude-fork; hook in ~/.workbuddy/settings.json
-  out.push(buildEntry({
-    name: "workbuddy",
-    hookExpected: true,
-    hookInstalled: Boolean(hookStatus?.workbuddy),
-    logsDir: path.join(home, ".workbuddy"),
-    logsPredicate: (_full, name) => name === "projects" || name.endsWith(".jsonl"),
-    settingsPath: path.join(home, ".workbuddy", "settings.json"),
-  }));
+  out.push(
+    buildEntry({
+      name: "workbuddy",
+      hookExpected: true,
+      hookInstalled: Boolean(hookStatus?.workbuddy),
+      logsDir: path.join(home, ".workbuddy"),
+      logsPredicate: (_full, name) =>
+        name === "projects" || name.endsWith(".jsonl"),
+      settingsPath: path.join(home, ".workbuddy", "settings.json"),
+    }),
+  );
 
   return out;
 }
 
-function buildEntry({ name, hookExpected, hookInstalled, logsDir, logsPredicate, settingsPath }) {
+function buildEntry({
+  name,
+  hookExpected,
+  hookInstalled,
+  logsDir,
+  logsPredicate,
+  settingsPath,
+}) {
   const logsPresent = dirHasFile(logsDir, logsPredicate);
   const passive = hookExpected && !hookInstalled && logsPresent;
   let reason = null;

@@ -28,7 +28,9 @@ interface BudgetInput {
 
 const weekdayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
-function aggregateUsageHeatmap(events: LocalUsageEvent[]): UsageHeatmapCell[][] {
+function aggregateUsageHeatmap(
+  events: LocalUsageEvent[],
+): UsageHeatmapCell[][] {
   const rows = Array.from({ length: 7 }, (_, weekday) =>
     Array.from({ length: 24 }, (_, hour) => ({
       weekday,
@@ -46,17 +48,26 @@ function aggregateUsageHeatmap(events: LocalUsageEvent[]): UsageHeatmapCell[][] 
     const cell = rows[weekday]?.[hour];
     if (!cell) continue;
     cell.events += 1;
-    cell.totalTokens += Number.isFinite(event.totalTokens) ? Math.max(0, event.totalTokens) : 0;
+    cell.totalTokens += Number.isFinite(event.totalTokens)
+      ? Math.max(0, event.totalTokens)
+      : 0;
   }
 
   return rows;
 }
 
-function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): BudgetIndicator[] {
+function buildBudgetIndicators(
+  inputs: BudgetInput[],
+  alertThreshold: number,
+): BudgetIndicator[] {
   const threshold = Math.min(100, Math.max(0, alertThreshold));
   return inputs.map((input) => {
-    const budgetCny = Number.isFinite(input.budgetCny) ? Math.max(0, input.budgetCny) : 0;
-    const spentCny = Number.isFinite(input.spentCny) ? Math.max(0, input.spentCny) : 0;
+    const budgetCny = Number.isFinite(input.budgetCny)
+      ? Math.max(0, input.budgetCny)
+      : 0;
+    const spentCny = Number.isFinite(input.spentCny)
+      ? Math.max(0, input.spentCny)
+      : 0;
     const percentage = budgetCny > 0 ? (spentCny / budgetCny) * 100 : 0;
     const hasUnknownCost = (input.unknownEvents ?? 0) > 0;
 
@@ -79,7 +90,9 @@ function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): B
         percentage,
         state: "exceeded",
         message:
-          percentage > 100 ? `已超出 ${formatPercentage(percentage - 100)}` : "已达到预算上限",
+          percentage > 100
+            ? `已超出 ${formatPercentage(percentage - 100)}`
+            : "已达到预算上限",
         hasUnknownCost,
       };
     }
@@ -125,7 +138,10 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
         <div className="grid grid-cols-[44px_repeat(24,minmax(22px,1fr))] gap-1">
           <span />
           {Array.from({ length: 24 }, (_, hour) => (
-            <span key={hour} className="tt-num text-center text-[9px] text-muted-foreground">
+            <span
+              key={hour}
+              className="tt-num text-center text-[9px] text-muted-foreground"
+            >
               {hour % 3 === 0 ? hour : ""}
             </span>
           ))}
@@ -141,7 +157,11 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
         <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
           <span>低</span>
           {[0.12, 0.28, 0.48, 0.7, 1].map((opacity) => (
-            <span key={opacity} className="size-3 rounded-[2px] bg-primary" style={{ opacity }} />
+            <span
+              key={opacity}
+              className="size-3 rounded-[2px] bg-primary"
+              style={{ opacity }}
+            />
           ))}
           <span>高 · 按 Token 强度</span>
         </div>
@@ -161,7 +181,9 @@ function HeatmapRow({
 }) {
   return (
     <>
-      <span className="flex items-center text-[10px] text-muted-foreground">{label}</span>
+      <span className="flex items-center text-[10px] text-muted-foreground">
+        {label}
+      </span>
       {cells.map((cell) => {
         const intensity = maxTokens > 0 ? cell.totalTokens / maxTokens : 0;
         return (

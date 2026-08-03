@@ -89,14 +89,21 @@ function usablePrice(value: LiteLlmPrice | undefined): value is LiteLlmPrice & {
   );
 }
 
-function runtimePrice(model: string, value: LiteLlmPrice, source: string): RuntimeModelPrice {
+function runtimePrice(
+  model: string,
+  value: LiteLlmPrice,
+  source: string,
+): RuntimeModelPrice {
   return {
     model,
     inputUsdPerMillion: (value.input_cost_per_token ?? 0) * 1_000_000,
     outputUsdPerMillion: (value.output_cost_per_token ?? 0) * 1_000_000,
     cacheReadUsdPerMillion:
-      (value.cache_read_input_token_cost ?? value.input_cost_per_token ?? 0) * 1_000_000,
-    cacheWriteUsdPerMillion: positiveOrZero(value.cache_creation_input_token_cost)
+      (value.cache_read_input_token_cost ?? value.input_cost_per_token ?? 0) *
+      1_000_000,
+    cacheWriteUsdPerMillion: positiveOrZero(
+      value.cache_creation_input_token_cost,
+    )
       ? value.cache_creation_input_token_cost * 1_000_000
       : null,
     source,
@@ -108,13 +115,21 @@ function resolveLiteLlmPrice(
   catalog: Record<string, LiteLlmPrice>,
 ): RuntimeModelPrice | undefined {
   const normalized = normalizedModel(model);
-  const entries = Object.entries(catalog).filter(([, value]) => usablePrice(value));
+  const entries = Object.entries(catalog).filter(([, value]) =>
+    usablePrice(value),
+  );
   const exact = entries.find(([key]) => normalizedModel(key) === normalized);
   if (exact) return runtimePrice(model, exact[1], `LiteLLM · ${exact[0]}`);
 
-  const suffixMatches = entries.filter(([key]) => normalizedModel(key).endsWith(`/${normalized}`));
+  const suffixMatches = entries.filter(([key]) =>
+    normalizedModel(key).endsWith(`/${normalized}`),
+  );
   if (suffixMatches.length === 1) {
-    return runtimePrice(model, suffixMatches[0]![1], `LiteLLM · ${suffixMatches[0]![0]}`);
+    return runtimePrice(
+      model,
+      suffixMatches[0]![1],
+      `LiteLLM · ${suffixMatches[0]![0]}`,
+    );
   }
   if (suffixMatches.length > 1) {
     const signatures = new Set(
@@ -128,21 +143,36 @@ function resolveLiteLlmPrice(
       ),
     );
     if (signatures.size === 1) {
-      return runtimePrice(model, suffixMatches[0]![1], `LiteLLM · 多 Provider 同价`);
+      return runtimePrice(
+        model,
+        suffixMatches[0]![1],
+        `LiteLLM · 多 Provider 同价`,
+      );
     }
   }
 
   const snapshotMatches = entries.filter(([key]) => {
     const candidate = normalizedModel(key).split("/").at(-1) ?? "";
-    return candidate.startsWith(`${normalized}-20`) || candidate.startsWith(`${normalized}-`);
+    return (
+      candidate.startsWith(`${normalized}-20`) ||
+      candidate.startsWith(`${normalized}-`)
+    );
   });
   if (snapshotMatches.length === 1) {
-    return runtimePrice(model, snapshotMatches[0]![1], `LiteLLM · ${snapshotMatches[0]![0]}`);
+    return runtimePrice(
+      model,
+      snapshotMatches[0]![1],
+      `LiteLLM · ${snapshotMatches[0]![0]}`,
+    );
   }
   return undefined;
 }
 
-async function isFresh(path: string, ttlMs: number, now: Date): Promise<boolean> {
+async function isFresh(
+  path: string,
+  ttlMs: number,
+  now: Date,
+): Promise<boolean> {
   try {
     return now.getTime() - (await stat(path)).mtimeMs < ttlMs;
   } catch {
@@ -160,7 +190,10 @@ async function readJson<T>(path: string): Promise<T | undefined> {
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(path, `${JSON.stringify(value)}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeFile(path, `${JSON.stringify(value)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 async function fetchJson(url: string, fetcher: typeof fetch): Promise<unknown> {
@@ -186,7 +219,10 @@ async function loadPriceCatalog(
   }
   for (const url of PRICE_URLS) {
     try {
-      const prices = (await fetchJson(url, fetcher)) as Record<string, LiteLlmPrice>;
+      const prices = (await fetchJson(url, fetcher)) as Record<
+        string,
+        LiteLlmPrice
+      >;
       const next = { fetchedAt: now.toISOString(), source: url, prices };
       await writeJson(cachePath, next);
       return { cache: next, source: "live" };
@@ -194,7 +230,9 @@ async function loadPriceCatalog(
       continue;
     }
   }
-  return cached ? { cache: cached, source: "stale-cache" } : { source: "fallback" };
+  return cached
+    ? { cache: cached, source: "stale-cache" }
+    : { source: "fallback" };
 }
 
 async function loadExchangeRate(
@@ -215,14 +253,23 @@ async function loadExchangeRate(
       date?: unknown;
       rate?: unknown;
     };
-    if (!positiveOrZero(value.rate) || value.rate === 0 || typeof value.date !== "string") {
+    if (
+      !positiveOrZero(value.rate) ||
+      value.rate === 0 ||
+      typeof value.date !== "string"
+    ) {
       throw new Error("汇率响应不完整");
     }
-    const next = { fetchedAt: now.toISOString(), date: value.date, rate: value.rate };
+    const next = {
+      fetchedAt: now.toISOString(),
+      date: value.date,
+      rate: value.rate,
+    };
     await writeJson(cachePath, next);
     return { rate: next.rate, date: next.date, source: "live" };
   } catch {
-    if (cached) return { rate: cached.rate, date: cached.date, source: "stale-cache" };
+    if (cached)
+      return { rate: cached.rate, date: cached.date, source: "stale-cache" };
     return {
       rate: FALLBACK_USD_TO_CNY,
       date: now.toISOString().slice(0, 10),
@@ -237,7 +284,11 @@ export async function buildPricingSnapshot(
 ): Promise<PricingSnapshot> {
   const now = options.now ?? new Date();
   const fetcher = options.fetcher ?? fetch;
-  const cacheDirectory = join(options.homeDirectory ?? homedir(), ".trusttools", "cache");
+  const cacheDirectory = join(
+    options.homeDirectory ?? homedir(),
+    ".trusttools",
+    "cache",
+  );
   const [catalog, exchange] = await Promise.all([
     loadPriceCatalog(join(cacheDirectory, "model-prices.json"), now, fetcher),
     loadExchangeRate(join(cacheDirectory, "usd-cny.json"), now, fetcher),

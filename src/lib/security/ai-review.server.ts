@@ -39,7 +39,8 @@ export async function reviewSecurityRisks(
   if (!config.endpoint || !config.apiKey || !config.model) {
     return {
       status: "未配置",
-      summary: "服务端未完整配置 AI endpoint、API key 和 model，已保留静态扫描结果。",
+      summary:
+        "服务端未完整配置 AI endpoint、API key 和 model，已保留静态扫描结果。",
     };
   }
 
@@ -54,7 +55,8 @@ export async function reviewSecurityRisks(
   let endpoint: URL;
   try {
     endpoint = new URL(config.endpoint);
-    if (!["http:", "https:"].includes(endpoint.protocol)) throw new Error("unsupported protocol");
+    if (!["http:", "https:"].includes(endpoint.protocol))
+      throw new Error("unsupported protocol");
   } catch {
     return {
       status: "未配置",

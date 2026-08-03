@@ -1,4 +1,7 @@
-import { createBrowserMockClientDataSource, type BrowserMockClientDataSourceOptions } from "./mock";
+import {
+  createBrowserMockClientDataSource,
+  type BrowserMockClientDataSourceOptions,
+} from "./mock";
 import type { ClientDataRuntime, ClientDataSource } from "./types";
 
 const globalSourceKey = "__TRUSTTOOLS_CLIENT_DATA_SOURCE__";
@@ -25,11 +28,17 @@ function detectRuntime(): ClientDataRuntime {
     return "browser";
   }
 
-  if (typeof process !== "undefined" && typeof process.versions?.electron === "string") {
+  if (
+    typeof process !== "undefined" &&
+    typeof process.versions?.electron === "string"
+  ) {
     return "electron";
   }
 
-  if (typeof process !== "undefined" && typeof process.versions?.node === "string") {
+  if (
+    typeof process !== "undefined" &&
+    typeof process.versions?.node === "string"
+  ) {
     return "node";
   }
 
@@ -37,7 +46,9 @@ function detectRuntime(): ClientDataRuntime {
 }
 
 function missingAdapterError(runtime: ClientDataRuntime) {
-  return new Error(`No TrustTools client data adapter is registered for the ${runtime} runtime`);
+  return new Error(
+    `No TrustTools client data adapter is registered for the ${runtime} runtime`,
+  );
 }
 
 export function setClientDataSource(source: ClientDataSource) {
@@ -74,7 +85,10 @@ export function resolveClientDataSource(
     return injectedSource;
   }
 
-  const runtime = options.runtime && options.runtime !== "auto" ? options.runtime : detectRuntime();
+  const runtime =
+    options.runtime && options.runtime !== "auto"
+      ? options.runtime
+      : detectRuntime();
 
   if (runtime === "browser" || runtime === "unknown") {
     return createBrowserMockClientDataSource(options.mock);
@@ -83,7 +97,9 @@ export function resolveClientDataSource(
   throw missingAdapterError(runtime);
 }
 
-export function getClientDataSource(options: ResolveClientDataSourceOptions = {}) {
+export function getClientDataSource(
+  options: ResolveClientDataSourceOptions = {},
+) {
   defaultSource ??= resolveClientDataSource(options);
   return defaultSource;
 }

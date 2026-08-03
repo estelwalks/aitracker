@@ -51,13 +51,18 @@ async function loadSeedSnapshot() {
   }
 }
 
-async function fetchUpstream({ url = LITELLM_PRICING_URL, timeoutMs = DEFAULT_FETCH_TIMEOUT_MS } = {}) {
+async function fetchUpstream({
+  url = LITELLM_PRICING_URL,
+  timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+} = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) {
-      throw new Error(`LiteLLM fetch failed: HTTP ${res.status} ${res.statusText}`);
+      throw new Error(
+        `LiteLLM fetch failed: HTTP ${res.status} ${res.statusText}`,
+      );
     }
     return await res.json();
   } finally {

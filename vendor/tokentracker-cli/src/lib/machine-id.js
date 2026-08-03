@@ -27,7 +27,10 @@ function resolveQueuePath() {
  */
 function defaultSeedPath(queuePath) {
   const rootDir = path.dirname(path.dirname(queuePath));
-  const home = path.basename(rootDir) === ".tokentracker" ? path.dirname(rootDir) : os.homedir();
+  const home =
+    path.basename(rootDir) === ".tokentracker"
+      ? path.dirname(rootDir)
+      : os.homedir();
   return path.join(home, ".config", "tokentracker", "machine-id");
 }
 
@@ -51,7 +54,11 @@ function mirrorSeedFile(seedPath, machineId) {
   try {
     fs.mkdirSync(path.dirname(seedPath), { recursive: true });
     fs.writeFileSync(seedPath, `${machineId}\n`);
-    try { fs.chmodSync(seedPath, 0o600); } catch { /* best effort */ }
+    try {
+      fs.chmodSync(seedPath, 0o600);
+    } catch {
+      /* best effort */
+    }
   } catch {
     // Read-only home etc. — identity still works, it just won't survive purge.
   }
@@ -62,7 +69,9 @@ function mirrorSeedFile(seedPath, machineId) {
  * (all-zeros / a single repeated character) that cloned images sometimes ship.
  */
 function isValidLinuxMachineId(value) {
-  const v = String(value || "").trim().toLowerCase();
+  const v = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!/^[0-9a-f]{32}$/.test(v)) return false;
   if (/^(.)\1+$/.test(v)) return false;
   return true;
@@ -74,10 +83,15 @@ function isValidLinuxMachineId(value) {
  * collapse onto one device row and their hourly upserts would overwrite each
  * other. Treat any container signal as "no stable id available".
  */
-function isLinuxContainer({ env = process.env, pathExists = fs.existsSync, readFile = fs.readFileSync } = {}) {
+function isLinuxContainer({
+  env = process.env,
+  pathExists = fs.existsSync,
+  readFile = fs.readFileSync,
+} = {}) {
   try {
     if (env.container) return true;
-    if (pathExists("/.dockerenv") || pathExists("/run/.containerenv")) return true;
+    if (pathExists("/.dockerenv") || pathExists("/run/.containerenv"))
+      return true;
     const cgroup = String(readFile("/proc/1/cgroup", "utf8"));
     if (/docker|containerd|kubepods|lxc/i.test(cgroup)) return true;
   } catch {
@@ -112,10 +126,14 @@ function computeStableMachineId({
   let raw = null;
   try {
     if (platform === "darwin") {
-      const out = execFile("/usr/sbin/ioreg", ["-rd1", "-c", "IOPlatformExpertDevice"], {
-        encoding: "utf8",
-        timeout: 5000,
-      });
+      const out = execFile(
+        "/usr/sbin/ioreg",
+        ["-rd1", "-c", "IOPlatformExpertDevice"],
+        {
+          encoding: "utf8",
+          timeout: 5000,
+        },
+      );
       const m = String(out).match(/"IOPlatformUUID"\s*=\s*"([0-9A-Fa-f-]+)"/);
       raw = m ? m[1] : null;
     } else if (platform === "linux") {
@@ -132,10 +150,19 @@ function computeStableMachineId({
         }
       }
     } else if (platform === "win32") {
-      const out = execFile("reg", ["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"], {
-        encoding: "utf8",
-        timeout: 5000,
-      });
+      const out = execFile(
+        "reg",
+        [
+          "query",
+          "HKLM\\SOFTWARE\\Microsoft\\Cryptography",
+          "/v",
+          "MachineGuid",
+        ],
+        {
+          encoding: "utf8",
+          timeout: 5000,
+        },
+      );
       const m = String(out).match(/MachineGuid\s+REG_SZ\s+(\S+)/);
       raw = m ? m[1] : null;
     }
@@ -151,7 +178,10 @@ function computeStableMachineId({
       user = "";
     }
   }
-  return crypto.createHash("sha256").update(`tokentracker-machine-v1:${raw}:${user}`).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(`tokentracker-machine-v1:${raw}:${user}`)
+    .digest("hex");
 }
 
 /**
@@ -208,7 +238,10 @@ function getOrCreateMachineId(queuePath, { seedPath, stableMachineId } = {}) {
   // fall back to the hardware fingerprint, then to a random UUID.
   let generated = readSeedFile(resolvedSeedPath);
   if (!generated) {
-    generated = stableMachineId === undefined ? computeStableMachineId() : stableMachineId;
+    generated =
+      stableMachineId === undefined
+        ? computeStableMachineId()
+        : stableMachineId;
   }
   if (!generated) {
     try {
@@ -221,7 +254,11 @@ function getOrCreateMachineId(queuePath, { seedPath, stableMachineId } = {}) {
     config.machineId = generated;
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-    try { fs.chmodSync(configPath, 0o600); } catch { /* best effort */ }
+    try {
+      fs.chmodSync(configPath, 0o600);
+    } catch {
+      /* best effort */
+    }
   } catch {
     return null;
   }

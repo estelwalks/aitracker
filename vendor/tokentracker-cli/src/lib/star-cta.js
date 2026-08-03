@@ -20,7 +20,9 @@ function isInteractiveCli({ stdout = process.stdout, env = process.env } = {}) {
   if (isTruthyFlag(env?.CI)) return false;
   if (isTruthyFlag(env?.TOKENTRACKER_NO_STAR_PROMPT)) return false;
 
-  const shell = String(env?.TOKENTRACKER_APP_SHELL || "").trim().toLowerCase();
+  const shell = String(env?.TOKENTRACKER_APP_SHELL || "")
+    .trim()
+    .toLowerCase();
   if (shell && shell !== "cli") return false;
   return true;
 }

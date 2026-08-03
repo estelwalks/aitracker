@@ -2,7 +2,10 @@
 
 export type Health = "active" | "low" | "doze" | "dead";
 
-export const healthMeta: Record<Health, { label: string; color: string; dot: string }> = {
+export const healthMeta: Record<
+  Health,
+  { label: string; color: string; dot: string }
+> = {
   active: { label: "活跃", color: "text-ok", dot: "bg-ok" },
   low: { label: "低频", color: "text-warn", dot: "bg-warn" },
   doze: { label: "休眠", color: "text-doze", dot: "bg-doze" },
@@ -62,28 +65,86 @@ export const recentModels = [
 ];
 
 export const activities = [
-  { time: "10:23", tool: "Claude Code", model: "sonnet-4.6", tokens: "12,345", cost: "¥0.89" },
-  { time: "10:15", tool: "Codex", model: "opus-4.7", tokens: "8,900", cost: "¥1.23" },
-  { time: "09:58", tool: "Cursor", model: "deepseek-v4", tokens: "45,678", cost: "¥0.34" },
-  { time: "09:41", tool: "Claude Code", model: "haiku-4.5", tokens: "6,210", cost: "¥0.08" },
-  { time: "09:12", tool: "Gemini CLI", model: "gemini-3-pro", tokens: "18,004", cost: "¥0.42" },
-  { time: "08:47", tool: "Claude Code", model: "sonnet-4.6", tokens: "23,118", cost: "¥1.64" },
-  { time: "08:20", tool: "Codex", model: "opus-4.7", tokens: "4,092", cost: "¥0.57" },
-  { time: "07:55", tool: "Kimi Code", model: "kimi-k3", tokens: "31,760", cost: "¥0.21" },
+  {
+    time: "10:23",
+    tool: "Claude Code",
+    model: "sonnet-4.6",
+    tokens: "12,345",
+    cost: "¥0.89",
+  },
+  {
+    time: "10:15",
+    tool: "Codex",
+    model: "opus-4.7",
+    tokens: "8,900",
+    cost: "¥1.23",
+  },
+  {
+    time: "09:58",
+    tool: "Cursor",
+    model: "deepseek-v4",
+    tokens: "45,678",
+    cost: "¥0.34",
+  },
+  {
+    time: "09:41",
+    tool: "Claude Code",
+    model: "haiku-4.5",
+    tokens: "6,210",
+    cost: "¥0.08",
+  },
+  {
+    time: "09:12",
+    tool: "Gemini CLI",
+    model: "gemini-3-pro",
+    tokens: "18,004",
+    cost: "¥0.42",
+  },
+  {
+    time: "08:47",
+    tool: "Claude Code",
+    model: "sonnet-4.6",
+    tokens: "23,118",
+    cost: "¥1.64",
+  },
+  {
+    time: "08:20",
+    tool: "Codex",
+    model: "opus-4.7",
+    tokens: "4,092",
+    cost: "¥0.57",
+  },
+  {
+    time: "07:55",
+    tool: "Kimi Code",
+    model: "kimi-k3",
+    tokens: "31,760",
+    cost: "¥0.21",
+  },
 ];
 
 // 7×24 热力图：0-100 强度
 export const heatmap: number[][] = Array.from({ length: 7 }, (_, d) =>
   Array.from({ length: 24 }, (_, h) => {
     const workday = d < 5 ? 1 : 0.45;
-    const peak = Math.exp(-Math.pow(h - 10.5, 2) / 14) + 0.8 * Math.exp(-Math.pow(h - 16, 2) / 12);
+    const peak =
+      Math.exp(-Math.pow(h - 10.5, 2) / 14) +
+      0.8 * Math.exp(-Math.pow(h - 16, 2) / 12);
     const night = 0.35 * Math.exp(-Math.pow(h - 22.5, 2) / 8);
     const noise = ((d * 31 + h * 17) % 13) / 40;
     return Math.min(100, Math.round((peak + night + noise) * workday * 62));
   }),
 );
 
-export const weekdayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+export const weekdayLabels = [
+  "周一",
+  "周二",
+  "周三",
+  "周四",
+  "周五",
+  "周六",
+  "周日",
+];
 
 export const tokenSummary = [
   { label: "总 Token", value: "3.62M" },
@@ -284,8 +345,18 @@ export const tokenBreakdown = [
 export const sessions = [
   { time: "07-27 10:23", model: "sonnet-4.6", tokens: "12,345", cost: "¥0.89" },
   { time: "07-27 10:15", model: "opus-4.7", tokens: "8,900", cost: "¥1.23" },
-  { time: "07-27 09:58", model: "deepseek-v4", tokens: "45,678", cost: "¥0.34" },
-  { time: "07-27 09:12", model: "gemini-3-pro", tokens: "18,004", cost: "¥0.42" },
+  {
+    time: "07-27 09:58",
+    model: "deepseek-v4",
+    tokens: "45,678",
+    cost: "¥0.34",
+  },
+  {
+    time: "07-27 09:12",
+    model: "gemini-3-pro",
+    tokens: "18,004",
+    cost: "¥0.42",
+  },
   { time: "07-26 21:40", model: "sonnet-4.6", tokens: "33,210", cost: "¥2.31" },
   { time: "07-26 17:02", model: "haiku-4.5", tokens: "6,102", cost: "¥0.09" },
 ];
@@ -321,7 +392,12 @@ export const skills: Skill[] = [
     version: "v1.2.0",
     source: "GitHub / anthropics",
     installedAt: "2026-06-15",
-    installed: { "Claude Code": true, Codex: true, Cursor: false, Gemini: false },
+    installed: {
+      "Claude Code": true,
+      Codex: true,
+      Cursor: false,
+      Gemini: false,
+    },
   },
   {
     id: "pdf-reader",
@@ -335,7 +411,12 @@ export const skills: Skill[] = [
     version: "v0.9.4",
     source: "TrustTools 市场",
     installedAt: "2026-06-28",
-    installed: { "Claude Code": true, Codex: true, Cursor: true, Gemini: false },
+    installed: {
+      "Claude Code": true,
+      Codex: true,
+      Cursor: true,
+      Gemini: false,
+    },
   },
   {
     id: "code-review",
@@ -349,7 +430,12 @@ export const skills: Skill[] = [
     version: "v2.0.1",
     source: "GitHub / openai",
     installedAt: "2026-05-02",
-    installed: { "Claude Code": false, Codex: true, Cursor: false, Gemini: false },
+    installed: {
+      "Claude Code": false,
+      Codex: true,
+      Cursor: false,
+      Gemini: false,
+    },
   },
   {
     id: "api-doc-gen",
@@ -363,7 +449,12 @@ export const skills: Skill[] = [
     version: "v0.3.0",
     source: "本地导入",
     installedAt: "2026-03-11",
-    installed: { "Claude Code": false, Codex: false, Cursor: true, Gemini: false },
+    installed: {
+      "Claude Code": false,
+      Codex: false,
+      Cursor: true,
+      Gemini: false,
+    },
   },
   {
     id: "old-deploy",
@@ -377,7 +468,12 @@ export const skills: Skill[] = [
     version: "v0.1.2",
     source: "本地导入",
     installedAt: "2025-12-20",
-    installed: { "Claude Code": true, Codex: false, Cursor: false, Gemini: false },
+    installed: {
+      "Claude Code": true,
+      Codex: false,
+      Cursor: false,
+      Gemini: false,
+    },
     note: "90 天+ 未使用",
   },
   {
@@ -392,7 +488,12 @@ export const skills: Skill[] = [
     version: "v1.0.0",
     source: "TrustTools 市场",
     installedAt: "2026-06-02",
-    installed: { "Claude Code": true, Codex: false, Cursor: true, Gemini: false },
+    installed: {
+      "Claude Code": true,
+      Codex: false,
+      Cursor: true,
+      Gemini: false,
+    },
   },
 ];
 
@@ -486,10 +587,30 @@ export const marketCats = ["全部", "编码", "安全", "文档", "运维", "�
 
 export const scanHistory = [
   { date: "07-27", file: "git-helper.zip", verdict: "safe" as const, note: "" },
-  { date: "07-26", file: "unknown-skill.zip", verdict: "danger" as const, note: "已删除" },
-  { date: "07-25", file: "pdf-reader.zip", verdict: "warn" as const, note: "用户已安装" },
-  { date: "07-22", file: "k8s-operator.tar.gz", verdict: "safe" as const, note: "" },
-  { date: "07-19", file: "shell-runner.zip", verdict: "warn" as const, note: "未安装" },
+  {
+    date: "07-26",
+    file: "unknown-skill.zip",
+    verdict: "danger" as const,
+    note: "已删除",
+  },
+  {
+    date: "07-25",
+    file: "pdf-reader.zip",
+    verdict: "warn" as const,
+    note: "用户已安装",
+  },
+  {
+    date: "07-22",
+    file: "k8s-operator.tar.gz",
+    verdict: "safe" as const,
+    note: "",
+  },
+  {
+    date: "07-19",
+    file: "shell-runner.zip",
+    verdict: "warn" as const,
+    note: "未安装",
+  },
 ];
 
 export const scanSteps = [
@@ -572,7 +693,12 @@ export const memories = [
 export type ModelDetail = {
   composition: { label: string; value: number; cost: string; color: string }[];
   behaviors: { label: string; tokens: string; cost: string; share: number }[];
-  pricing: { input: string; output: string; cacheRead: string; cacheWrite: string };
+  pricing: {
+    input: string;
+    output: string;
+    cacheRead: string;
+    cacheWrite: string;
+  };
   avgLatency: string;
   calls: string;
   avgPerCall: string;
@@ -581,11 +707,36 @@ export type ModelDetail = {
 export const modelDetail: Record<string, ModelDetail> = {
   "sonnet-4.6": {
     composition: [
-      { label: "输入", value: 1120, cost: "¥12.40", color: "var(--color-chart-1)" },
-      { label: "输出", value: 340, cost: "¥14.20", color: "var(--color-chart-2)" },
-      { label: "推理(Reasoning)", value: 90, cost: "¥3.10", color: "var(--color-chart-4)" },
-      { label: "缓存读", value: 148, cost: "¥1.30", color: "var(--color-chart-3)" },
-      { label: "缓存写", value: 22, cost: "¥0.50", color: "var(--color-chart-5)" },
+      {
+        label: "输入",
+        value: 1120,
+        cost: "¥12.40",
+        color: "var(--color-chart-1)",
+      },
+      {
+        label: "输出",
+        value: 340,
+        cost: "¥14.20",
+        color: "var(--color-chart-2)",
+      },
+      {
+        label: "推理(Reasoning)",
+        value: 90,
+        cost: "¥3.10",
+        color: "var(--color-chart-4)",
+      },
+      {
+        label: "缓存读",
+        value: 148,
+        cost: "¥1.30",
+        color: "var(--color-chart-3)",
+      },
+      {
+        label: "缓存写",
+        value: 22,
+        cost: "¥0.50",
+        color: "var(--color-chart-5)",
+      },
     ],
     behaviors: [
       { label: "代码生成", tokens: "0.72M", cost: "¥14.10", share: 42 },
@@ -606,11 +757,36 @@ export const modelDetail: Record<string, ModelDetail> = {
   },
   "opus-4.7": {
     composition: [
-      { label: "输入", value: 610, cost: "¥9.80", color: "var(--color-chart-1)" },
-      { label: "输出", value: 290, cost: "¥12.60", color: "var(--color-chart-2)" },
-      { label: "推理(Reasoning)", value: 121, cost: "¥4.40", color: "var(--color-chart-4)" },
-      { label: "缓存读", value: 82, cost: "¥0.90", color: "var(--color-chart-3)" },
-      { label: "缓存写", value: 17, cost: "¥0.30", color: "var(--color-chart-5)" },
+      {
+        label: "输入",
+        value: 610,
+        cost: "¥9.80",
+        color: "var(--color-chart-1)",
+      },
+      {
+        label: "输出",
+        value: 290,
+        cost: "¥12.60",
+        color: "var(--color-chart-2)",
+      },
+      {
+        label: "推理(Reasoning)",
+        value: 121,
+        cost: "¥4.40",
+        color: "var(--color-chart-4)",
+      },
+      {
+        label: "缓存读",
+        value: 82,
+        cost: "¥0.90",
+        color: "var(--color-chart-3)",
+      },
+      {
+        label: "缓存写",
+        value: 17,
+        cost: "¥0.30",
+        color: "var(--color-chart-5)",
+      },
     ],
     behaviors: [
       { label: "架构设计 / 方案", tokens: "0.38M", cost: "¥10.20", share: 34 },
@@ -619,18 +795,48 @@ export const modelDetail: Record<string, ModelDetail> = {
       { label: "代码审查", tokens: "0.13M", cost: "¥3.10", share: 12 },
       { label: "工具调用 / 检索", tokens: "0.08M", cost: "¥1.30", share: 6 },
     ],
-    pricing: { input: "¥0.055/K", output: "¥0.21/K", cacheRead: "¥0.005/K", cacheWrite: "¥0.11/K" },
+    pricing: {
+      input: "¥0.055/K",
+      output: "¥0.21/K",
+      cacheRead: "¥0.005/K",
+      cacheWrite: "¥0.11/K",
+    },
     avgLatency: "6.1s",
     calls: "492",
     avgPerCall: "2.28K",
   },
   "deepseek-v4": {
     composition: [
-      { label: "输入", value: 168, cost: "¥1.10", color: "var(--color-chart-1)" },
-      { label: "输出", value: 44, cost: "¥0.72", color: "var(--color-chart-2)" },
-      { label: "推理(Reasoning)", value: 19, cost: "¥0.18", color: "var(--color-chart-4)" },
-      { label: "缓存读", value: 8, cost: "¥0.08", color: "var(--color-chart-3)" },
-      { label: "缓存写", value: 1, cost: "¥0.02", color: "var(--color-chart-5)" },
+      {
+        label: "输入",
+        value: 168,
+        cost: "¥1.10",
+        color: "var(--color-chart-1)",
+      },
+      {
+        label: "输出",
+        value: 44,
+        cost: "¥0.72",
+        color: "var(--color-chart-2)",
+      },
+      {
+        label: "推理(Reasoning)",
+        value: 19,
+        cost: "¥0.18",
+        color: "var(--color-chart-4)",
+      },
+      {
+        label: "缓存读",
+        value: 8,
+        cost: "¥0.08",
+        color: "var(--color-chart-3)",
+      },
+      {
+        label: "缓存写",
+        value: 1,
+        cost: "¥0.02",
+        color: "var(--color-chart-5)",
+      },
     ],
     behaviors: [
       { label: "行内补全", tokens: "0.12M", cost: "¥0.90", share: 50 },
@@ -650,11 +856,36 @@ export const modelDetail: Record<string, ModelDetail> = {
   },
   "haiku-4.5": {
     composition: [
-      { label: "输入", value: 120, cost: "¥1.30", color: "var(--color-chart-1)" },
-      { label: "输出", value: 32, cost: "¥1.02", color: "var(--color-chart-2)" },
-      { label: "推理(Reasoning)", value: 4, cost: "¥0.10", color: "var(--color-chart-4)" },
-      { label: "缓存读", value: 12, cost: "¥0.20", color: "var(--color-chart-3)" },
-      { label: "缓存写", value: 2, cost: "¥0.08", color: "var(--color-chart-5)" },
+      {
+        label: "输入",
+        value: 120,
+        cost: "¥1.30",
+        color: "var(--color-chart-1)",
+      },
+      {
+        label: "输出",
+        value: 32,
+        cost: "¥1.02",
+        color: "var(--color-chart-2)",
+      },
+      {
+        label: "推理(Reasoning)",
+        value: 4,
+        cost: "¥0.10",
+        color: "var(--color-chart-4)",
+      },
+      {
+        label: "缓存读",
+        value: 12,
+        cost: "¥0.20",
+        color: "var(--color-chart-3)",
+      },
+      {
+        label: "缓存写",
+        value: 2,
+        cost: "¥0.08",
+        color: "var(--color-chart-5)",
+      },
     ],
     behaviors: [
       { label: "工具调用 / 检索", tokens: "0.07M", cost: "¥1.00", share: 41 },
@@ -688,16 +919,38 @@ function hash(s: string) {
   return h;
 }
 const money = (n: number) => `¥${n.toFixed(2)}`;
-const kFmt = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(2)}M` : `${Math.round(n)}K`);
+const kFmt = (n: number) =>
+  n >= 1000 ? `${(n / 1000).toFixed(2)}M` : `${Math.round(n)}K`;
 
 const behaviorSets: Record<string, string[]> = {
-  provider: ["代码生成", "调试与报错分析", "重构 / 批量编辑", "工具调用 / 检索", "代码解释 / 问答"],
-  project: ["代码生成", "需求 / 方案讨论", "调试与报错分析", "测试与修复", "文档与注释"],
-  model: ["代码生成", "代码解释 / 问答", "调试与报错分析", "重构 / 批量编辑", "工具调用 / 检索"],
+  provider: [
+    "代码生成",
+    "调试与报错分析",
+    "重构 / 批量编辑",
+    "工具调用 / 检索",
+    "代码解释 / 问答",
+  ],
+  project: [
+    "代码生成",
+    "需求 / 方案讨论",
+    "调试与报错分析",
+    "测试与修复",
+    "文档与注释",
+  ],
+  model: [
+    "代码生成",
+    "代码解释 / 问答",
+    "调试与报错分析",
+    "重构 / 批量编辑",
+    "工具调用 / 检索",
+  ],
 };
 
 /** 为任意行派生一份下钻明细；模型维度若已有精修数据则优先使用。 */
-export function rowDetail(row: Row, dim: "provider" | "project" | "model"): ModelDetail {
+export function rowDetail(
+  row: Row,
+  dim: "provider" | "project" | "model",
+): ModelDetail {
   if (modelDetail[row.name]) return modelDetail[row.name];
 
   const total = toK(row.tokens);
@@ -713,12 +966,42 @@ export function rowDetail(row: Row, dim: "provider" | "project" | "model"): Mode
   const reasoning = output * (0.15 + (seed % 13) / 100);
   const input = rest - output;
 
-  const parts: { label: string; value: number; color: string; weight: number }[] = [
-    { label: "输入", value: input, color: "var(--color-chart-1)", weight: 0.25 },
-    { label: "输出", value: output - reasoning, color: "var(--color-chart-2)", weight: 1 },
-    { label: "推理(Reasoning)", value: reasoning, color: "var(--color-chart-4)", weight: 1.1 },
-    { label: "缓存读", value: cacheRead, color: "var(--color-chart-3)", weight: 0.03 },
-    { label: "缓存写", value: cacheWrite, color: "var(--color-chart-5)", weight: 0.5 },
+  const parts: {
+    label: string;
+    value: number;
+    color: string;
+    weight: number;
+  }[] = [
+    {
+      label: "输入",
+      value: input,
+      color: "var(--color-chart-1)",
+      weight: 0.25,
+    },
+    {
+      label: "输出",
+      value: output - reasoning,
+      color: "var(--color-chart-2)",
+      weight: 1,
+    },
+    {
+      label: "推理(Reasoning)",
+      value: reasoning,
+      color: "var(--color-chart-4)",
+      weight: 1.1,
+    },
+    {
+      label: "缓存读",
+      value: cacheRead,
+      color: "var(--color-chart-3)",
+      weight: 0.03,
+    },
+    {
+      label: "缓存写",
+      value: cacheWrite,
+      color: "var(--color-chart-5)",
+      weight: 0.5,
+    },
   ];
   const wSum = parts.reduce((s, p) => s + p.value * p.weight, 0) || 1;
   const composition = parts.map((p) => ({
@@ -809,8 +1092,16 @@ export function sourceTree(row: Row): SourceTree {
         { label: "助手回复 Assistant response", tokens: assistant },
       ],
     },
-    { label: "推理 Reasoning", tokens: reasoning, color: "var(--color-chart-4)" },
-    { label: "系统提示词 System prompt", tokens: systemPrompt, color: "var(--color-chart-5)" },
+    {
+      label: "推理 Reasoning",
+      tokens: reasoning,
+      color: "var(--color-chart-4)",
+    },
+    {
+      label: "系统提示词 System prompt",
+      tokens: systemPrompt,
+      color: "var(--color-chart-5)",
+    },
     {
       label: "工具调用 Tool calls",
       tokens: toolCalls,

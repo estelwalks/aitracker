@@ -17,11 +17,16 @@ function parseMacProxyOutput(output) {
     const match = line.match(/^\s*([A-Za-z]+)\s*:\s*(.+?)\s*$/);
     if (match) values[match[1]] = match[2];
   }
-  if (values.HTTPSEnable !== "1" || !values.HTTPSProxy || !values.HTTPSPort) return null;
+  if (values.HTTPSEnable !== "1" || !values.HTTPSProxy || !values.HTTPSPort)
+    return null;
   return `http://${values.HTTPSProxy}:${values.HTTPSPort}`;
 }
 
-function resolveSystemProxyEnv({ env = process.env, platform = process.platform, commandRunner = cp.spawnSync } = {}) {
+function resolveSystemProxyEnv({
+  env = process.env,
+  platform = process.platform,
+  commandRunner = cp.spawnSync,
+} = {}) {
   const out = {};
   if (hasProxyEnv(env)) {
     out.NODE_USE_ENV_PROXY = env.NODE_USE_ENV_PROXY || "1";
@@ -60,7 +65,8 @@ function relaunchWithProxyEnvIfNeeded({
 } = {}) {
   if (!shouldRelaunchForProxy(argv, env)) return null;
   const proxyEnv = resolveSystemProxyEnv({ env, platform, commandRunner });
-  if (!proxyEnv || proxyEnv.NODE_USE_ENV_PROXY === env.NODE_USE_ENV_PROXY) return null;
+  if (!proxyEnv || proxyEnv.NODE_USE_ENV_PROXY === env.NODE_USE_ENV_PROXY)
+    return null;
 
   const childEnv = {
     ...env,

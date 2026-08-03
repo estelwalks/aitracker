@@ -20,7 +20,12 @@ test("accepts Aipy SQLite and WorkBuddy JSONL presets", () => {
 test("rejects mutating SQLite queries", () => {
   const result = parseExternalUsageAdapterFile({
     version: 1,
-    adapters: [{ ...USAGE_ADAPTER_PRESETS.aipy, query: "UPDATE task_event SET done = 1" }],
+    adapters: [
+      {
+        ...USAGE_ADAPTER_PRESETS.aipy,
+        query: "UPDATE task_event SET done = 1",
+      },
+    ],
   });
 
   assert.equal(result.file, undefined);

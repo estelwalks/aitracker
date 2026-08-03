@@ -8,7 +8,8 @@ import type {
   LocalUsageTotals,
 } from "./types.ts";
 
-export type UsagePeriod = "today" | "week" | "7d" | "30d" | "month" | "year" | "custom";
+export type UsagePeriod =
+  "today" | "week" | "7d" | "30d" | "month" | "year" | "custom";
 export type UsageTimeGrain = "day" | "hour";
 
 export interface UsageRange {
@@ -86,7 +87,8 @@ export function sourceLabel(source: LocalUsageSource | string): string {
   if (source === "claude-code") return "Claude Code";
   if (source === "codex") return "Codex";
   if (source === "aipy" || source === "custom:aipy") return "Aipy";
-  if (source === "workbuddy" || source === "custom:workbuddy") return "WorkBuddy";
+  if (source === "workbuddy" || source === "custom:workbuddy")
+    return "WorkBuddy";
   if (source.startsWith("custom:")) return source.slice("custom:".length);
   return source;
 }
@@ -161,9 +163,11 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
       events: totals.events + row.events,
       inputTokens: totals.inputTokens + row.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + row.cachedInputTokens,
-      cacheCreationInputTokens: totals.cacheCreationInputTokens + row.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        totals.cacheCreationInputTokens + row.cacheCreationInputTokens,
       outputTokens: totals.outputTokens + row.outputTokens,
-      reasoningOutputTokens: totals.reasoningOutputTokens + row.reasoningOutputTokens,
+      reasoningOutputTokens:
+        totals.reasoningOutputTokens + row.reasoningOutputTokens,
       totalTokens: totals.totalTokens + row.totalTokens,
     }),
     { events: 0, ...EMPTY_COUNTS },
@@ -172,7 +176,9 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
 
 export function cacheRate(counts: LocalTokenCounts): number {
   const inputTotal =
-    counts.inputTokens + counts.cachedInputTokens + counts.cacheCreationInputTokens;
+    counts.inputTokens +
+    counts.cachedInputTokens +
+    counts.cacheCreationInputTokens;
   return inputTotal ? (counts.cachedInputTokens / inputTotal) * 100 : 0;
 }
 
@@ -184,7 +190,11 @@ export function breakdownComposition(row: LocalUsageBreakdown) {
   return [
     { label: "输入", value: row.inputTokens, color: "var(--color-chart-1)" },
     { label: "输出", value: row.outputTokens, color: "var(--color-chart-2)" },
-    { label: "缓存读取", value: row.cachedInputTokens, color: "var(--color-chart-3)" },
+    {
+      label: "缓存读取",
+      value: row.cachedInputTokens,
+      color: "var(--color-chart-3)",
+    },
     {
       label: "缓存写入",
       value: row.cacheCreationInputTokens,
@@ -207,7 +217,8 @@ export function aggregateEventsByTime(
   for (const event of events) {
     const timestamp = new Date(event.timestamp);
     if (Number.isNaN(timestamp.getTime())) continue;
-    const key = grain === "hour" ? localHourKey(timestamp) : localDateKey(timestamp);
+    const key =
+      grain === "hour" ? localHourKey(timestamp) : localDateKey(timestamp);
     const totals = buckets.get(key) ?? { events: 0, ...EMPTY_COUNTS };
     totals.events += 1;
     totals.inputTokens += event.inputTokens;
@@ -223,12 +234,15 @@ export function aggregateEventsByTime(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, totals]) => ({
       key,
-      label: grain === "hour" ? key.slice(5, 13).replace("T", " ") : key.slice(5),
+      label:
+        grain === "hour" ? key.slice(5, 13).replace("T", " ") : key.slice(5),
       ...totals,
     }));
 }
 
-export function aggregateUsageBySession(events: LocalUsageEvent[]): SessionUsageSummary {
+export function aggregateUsageBySession(
+  events: LocalUsageEvent[],
+): SessionUsageSummary {
   const rows = new Map<string, LocalUsageTotals>();
   let eventsWithSession = 0;
   let eventsWithoutSession = 0;
@@ -257,7 +271,8 @@ export function aggregateUsageBySession(events: LocalUsageEvent[]): SessionUsage
       .map(([sessionId, totals]) => ({ sessionId, ...totals }))
       .sort(
         (left, right) =>
-          right.totalTokens - left.totalTokens || left.sessionId.localeCompare(right.sessionId),
+          right.totalTokens - left.totalTokens ||
+          left.sessionId.localeCompare(right.sessionId),
       ),
     eventsWithSession,
     eventsWithoutSession,
@@ -287,7 +302,12 @@ export function resolveUsageRange(
     from = `${now.getFullYear()}-01-01`;
   }
   if (period === "custom") {
-    if (customFrom == null || customTo == null || customFrom === "" || customTo === "") {
+    if (
+      customFrom == null ||
+      customTo == null ||
+      customFrom === "" ||
+      customTo === ""
+    ) {
       return {
         from: customFrom ?? null,
         to: customTo ?? null,
@@ -328,7 +348,9 @@ export function resolveUsageRange(
 }
 
 function trimFixed(value: number): string {
-  return value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2).replace(/\.?0+$/, "");
+  return value
+    .toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)
+    .replace(/\.?0+$/, "");
 }
 
 function addDays(value: Date, days: number): Date {

@@ -41,7 +41,10 @@ function emptySourceCounts(): Record<string, LocalTokenCounts> {
   };
 }
 
-function addTokenCounts(totals: LocalTokenCounts, event: LocalUsageEvent): void {
+function addTokenCounts(
+  totals: LocalTokenCounts,
+  event: LocalUsageEvent,
+): void {
   totals.inputTokens += event.inputTokens;
   totals.cachedInputTokens += event.cachedInputTokens;
   totals.cacheCreationInputTokens += event.cacheCreationInputTokens;
@@ -65,11 +68,15 @@ function addToBreakdown(
   breakdown.set(key, totals);
 }
 
-function serializeBreakdown(breakdown: Map<string, LocalUsageTotals>): LocalUsageBreakdown[] {
+function serializeBreakdown(
+  breakdown: Map<string, LocalUsageTotals>,
+): LocalUsageBreakdown[] {
   return [...breakdown.entries()]
     .map(([key, totals]) => ({ key, ...totals }))
     .sort(
-      (left, right) => right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        left.key.localeCompare(right.key),
     );
 }
 
@@ -88,9 +95,11 @@ export function sumTokenCounts(
     (totals, current) => ({
       inputTokens: totals.inputTokens + current.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + current.cachedInputTokens,
-      cacheCreationInputTokens: totals.cacheCreationInputTokens + current.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        totals.cacheCreationInputTokens + current.cacheCreationInputTokens,
       outputTokens: totals.outputTokens + current.outputTokens,
-      reasoningOutputTokens: totals.reasoningOutputTokens + current.reasoningOutputTokens,
+      reasoningOutputTokens:
+        totals.reasoningOutputTokens + current.reasoningOutputTokens,
       totalTokens: totals.totalTokens + current.totalTokens,
     }),
     {

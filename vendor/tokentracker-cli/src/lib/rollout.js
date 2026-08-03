@@ -7,7 +7,10 @@ const readline = require("node:readline");
 const crypto = require("node:crypto");
 const { ensureDir, writeJson, chmod600IfPossible } = require("./fs");
 const { physicalJsonlRecords } = require("./jsonl-lines");
-const { readSqliteJsonRows, readSqliteJsonRowsAsync } = require("./sqlite-reader");
+const {
+  readSqliteJsonRows,
+  readSqliteJsonRowsAsync,
+} = require("./sqlite-reader");
 const wsl = require("./wsl-probe");
 const { resolveInstallPaths } = require("./install-resolver");
 const {
@@ -31,7 +34,8 @@ async function listRolloutFiles(sessionsDir, options = {}) {
     options?.dayInventoryCache && typeof options.dayInventoryCache === "object"
       ? options.dayInventoryCache
       : null;
-  const stats = options?.stats && typeof options.stats === "object" ? options.stats : null;
+  const stats =
+    options?.stats && typeof options.stats === "object" ? options.stats : null;
   if (dayInventoryCache) {
     if (dayInventoryCache.version !== 1) {
       dayInventoryCache.days = {};
@@ -53,7 +57,10 @@ async function listRolloutFiles(sessionsDir, options = {}) {
       for (const d of days) {
         if (!/^[0-9]{2}$/.test(d.name) || !d.isDirectory()) continue;
         const dayDir = path.join(monthDir, d.name);
-        const files = await listRolloutDayFiles(dayDir, { dayInventoryCache, stats });
+        const files = await listRolloutDayFiles(dayDir, {
+          dayInventoryCache,
+          stats,
+        });
         out.push(...files);
       }
     }
@@ -65,8 +72,13 @@ async function listRolloutFiles(sessionsDir, options = {}) {
 
 async function listRolloutDayFiles(dayDir, { dayInventoryCache, stats } = {}) {
   const cacheDays = dayInventoryCache?.days;
-  const dayStat = dayInventoryCache ? await fs.stat(dayDir).catch(() => null) : null;
-  const statKey = dayStat && dayStat.isDirectory() ? directoryInventoryStatKey(dayStat) : null;
+  const dayStat = dayInventoryCache
+    ? await fs.stat(dayDir).catch(() => null)
+    : null;
+  const statKey =
+    dayStat && dayStat.isDirectory()
+      ? directoryInventoryStatKey(dayStat)
+      : null;
   const cached = cacheDays && cacheDays[dayDir];
   if (
     statKey &&
@@ -76,11 +88,15 @@ async function listRolloutDayFiles(dayDir, { dayInventoryCache, stats } = {}) {
     Array.isArray(cached.files) &&
     cached.files.every(isRolloutFileName)
   ) {
-    if (stats) stats.dayInventoryCacheHits = Number(stats.dayInventoryCacheHits || 0) + 1;
+    if (stats)
+      stats.dayInventoryCacheHits =
+        Number(stats.dayInventoryCacheHits || 0) + 1;
     return cached.files.map((name) => path.join(dayDir, name));
   }
 
-  if (stats && cached) stats.dayInventoryCacheMisses = Number(stats.dayInventoryCacheMisses || 0) + 1;
+  if (stats && cached)
+    stats.dayInventoryCacheMisses =
+      Number(stats.dayInventoryCacheMisses || 0) + 1;
   const entries = await safeReadDir(dayDir);
   const files = [];
   for (const f of entries) {
@@ -129,7 +145,11 @@ async function listRolloutFilesDeep(dir) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) {
         await walk(p);
-      } else if (e.isFile() && e.name.startsWith("rollout-") && e.name.endsWith(".jsonl")) {
+      } else if (
+        e.isFile() &&
+        e.name.startsWith("rollout-") &&
+        e.name.endsWith(".jsonl")
+      ) {
         out.push(p);
       }
     }
@@ -155,7 +175,8 @@ async function listGeminiSessionFiles(tmpDir) {
     const chats = await safeReadDir(chatsDir);
     for (const entry of chats) {
       if (!entry.isFile()) continue;
-      if (!entry.name.startsWith("session-") || !entry.name.endsWith(".json")) continue;
+      if (!entry.name.startsWith("session-") || !entry.name.endsWith(".json"))
+        continue;
       out.push(path.join(chatsDir, entry.name));
     }
   }
@@ -184,7 +205,9 @@ async function parseRolloutIncremental({
   invalidRecordPolicy = "skip",
 }) {
   if (invalidRecordPolicy !== "skip" && invalidRecordPolicy !== "throw") {
-    throw new TypeError(`unsupported invalidRecordPolicy: ${invalidRecordPolicy}`);
+    throw new TypeError(
+      `unsupported invalidRecordPolicy: ${invalidRecordPolicy}`,
+    );
   }
   await ensureDir(path.dirname(queuePath));
   let filesProcessed = 0;
@@ -193,8 +216,11 @@ async function parseRolloutIncremental({
   const cb = typeof onProgress === "function" ? onProgress : null;
   const totalFiles = Array.isArray(rolloutFiles) ? rolloutFiles.length : 0;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -202,7 +228,8 @@ async function parseRolloutIncremental({
   const projectFreshnessNowMs = Date.now();
   const touchedBuckets = new Set();
   const defaultSource = normalizeSourceInput(source) || DEFAULT_SOURCE;
-  const syncDiagnostics = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+  const syncDiagnostics =
+    diagnostics && typeof diagnostics === "object" ? diagnostics : null;
 
   if (!cursors.files || typeof cursors.files !== "object") {
     cursors.files = {};
@@ -218,7 +245,9 @@ async function parseRolloutIncremental({
     typeof codexEventStore.add === "function"
       ? codexEventStore
       : null;
-  const prevCodexHashes = Array.isArray(cursors?.codexHashes) ? cursors.codexHashes : [];
+  const prevCodexHashes = Array.isArray(cursors?.codexHashes)
+    ? cursors.codexHashes
+    : [];
   if (!externalCodexEventStore && !Array.isArray(cursors.codexHashes)) {
     cursors.codexHashes = prevCodexHashes;
   }
@@ -229,10 +258,13 @@ async function parseRolloutIncremental({
   let historicalCodexEvents = null;
   let cursorSessionPaths = null;
   if (syncDiagnostics) {
-    const codexParseCandidates = (Array.isArray(rolloutFiles) ? rolloutFiles : []).reduce((count, entry) => {
-      const entrySource = typeof entry === "string"
-        ? defaultSource
-        : normalizeSourceInput(entry?.source) || defaultSource;
+    const codexParseCandidates = (
+      Array.isArray(rolloutFiles) ? rolloutFiles : []
+    ).reduce((count, entry) => {
+      const entrySource =
+        typeof entry === "string"
+          ? defaultSource
+          : normalizeSourceInput(entry?.source) || defaultSource;
       return count + (entrySource === DEFAULT_SOURCE ? 1 : 0);
     }, 0);
     const discoveredRollouts = Number(syncDiagnostics.discovered_rollouts);
@@ -240,9 +272,15 @@ async function parseRolloutIncremental({
     const coldSkipped = Number(syncDiagnostics.cold_skipped);
     const parseCandidates = Number(syncDiagnostics.parse_candidates);
     Object.assign(syncDiagnostics, {
-      discovered_rollouts: Number.isFinite(discoveredRollouts) ? discoveredRollouts : codexParseCandidates,
-      cursor_keys: Number.isFinite(cursorKeys) ? cursorKeys : Object.keys(cursors.files).length,
-      parse_candidates: Number.isFinite(parseCandidates) ? parseCandidates : codexParseCandidates,
+      discovered_rollouts: Number.isFinite(discoveredRollouts)
+        ? discoveredRollouts
+        : codexParseCandidates,
+      cursor_keys: Number.isFinite(cursorKeys)
+        ? cursorKeys
+        : Object.keys(cursors.files).length,
+      parse_candidates: Number.isFinite(parseCandidates)
+        ? parseCandidates
+        : codexParseCandidates,
       stat_candidates: 0,
       cold_skipped: Number.isFinite(coldSkipped) ? coldSkipped : 0,
       content_files_read: 0,
@@ -271,8 +309,7 @@ async function parseRolloutIncremental({
       appendOnlyCodexEvents = {
         has(key) {
           return Boolean(
-            newCodexEventKeySet?.has(key) ||
-            seenCodexEvents?.has(key)
+            newCodexEventKeySet?.has(key) || seenCodexEvents?.has(key),
           );
         },
         add: recordNewCodexEvent,
@@ -286,8 +323,7 @@ async function parseRolloutIncremental({
         historicalCodexEvents = {
           has(key) {
             return Boolean(
-              newCodexEventKeySet?.has(key) ||
-              externalCodexEventStore.has(key)
+              newCodexEventKeySet?.has(key) || externalCodexEventStore.has(key),
             );
           },
           add: recordNewCodexEvent,
@@ -314,7 +350,8 @@ async function parseRolloutIncremental({
     for (const existingPath of Object.keys(cursors.files)) {
       const sessionId = codexSessionIdFromPath(existingPath);
       if (!sessionId) continue;
-      if (!cursorSessionPaths.has(sessionId)) cursorSessionPaths.set(sessionId, new Set());
+      if (!cursorSessionPaths.has(sessionId))
+        cursorSessionPaths.set(sessionId, new Set());
       cursorSessionPaths.get(sessionId).add(existingPath);
     }
     return cursorSessionPaths;
@@ -349,7 +386,8 @@ async function parseRolloutIncremental({
       typeof entry === "string"
         ? defaultSource
         : normalizeSourceInput(entry?.source) || defaultSource;
-    if (syncDiagnostics && fileSource === DEFAULT_SOURCE) syncDiagnostics.stat_candidates += 1;
+    if (syncDiagnostics && fileSource === DEFAULT_SOURCE)
+      syncDiagnostics.stat_candidates += 1;
     const st = await fs.stat(filePath).catch(() => null);
     if (!st || !st.isFile()) continue;
 
@@ -365,19 +403,24 @@ async function parseRolloutIncremental({
       !truncated &&
       prevOffset > 0 &&
       prevOffset < st.size &&
-      (!prev.lastTotal || typeof prev.lastTotal !== "object")
+      (!prev.lastTotal || typeof prev.lastTotal !== "object"),
     );
-    const startOffset = sameInode && !truncated && !rebuildingCodexBaseline ? prevOffset : 0;
-    const lastTotal = sameInode && !truncated && !rebuildingCodexBaseline
-      ? prev.lastTotal || null
-      : null;
-    const tokenUsageBaselines = sameInode && !truncated && !rebuildingCodexBaseline
-      ? prev.tokenUsageBaselines || null
-      : null;
+    const startOffset =
+      sameInode && !truncated && !rebuildingCodexBaseline ? prevOffset : 0;
+    const lastTotal =
+      sameInode && !truncated && !rebuildingCodexBaseline
+        ? prev.lastTotal || null
+        : null;
+    const tokenUsageBaselines =
+      sameInode && !truncated && !rebuildingCodexBaseline
+        ? prev.tokenUsageBaselines || null
+        : null;
     const lastModel = sameInode && !truncated ? prev.lastModel || null : null;
 
-    const codexProjectFastPath = projectEnabled && fileSource === DEFAULT_SOURCE;
-    const projectOffset = sameInode && !truncated ? Number(prev.projectOffset || 0) : 0;
+    const codexProjectFastPath =
+      projectEnabled && fileSource === DEFAULT_SOURCE;
+    const projectOffset =
+      sameInode && !truncated ? Number(prev.projectOffset || 0) : 0;
     const projectUpToDate =
       codexProjectFastPath &&
       typeof publicRepoResolver !== "function" &&
@@ -424,21 +467,26 @@ async function parseRolloutIncremental({
     const projectRef = projectContext?.projectRef || null;
     const projectKey = projectContext?.projectKey || null;
 
-    if (syncDiagnostics && !projectContextOnlyScan && fileSource === DEFAULT_SOURCE) {
+    if (
+      syncDiagnostics &&
+      !projectContextOnlyScan &&
+      fileSource === DEFAULT_SOURCE
+    ) {
       syncDiagnostics.content_files_read += 1;
     }
-    const codexEventTracker = fileSource === DEFAULT_SOURCE
-      ? (needsHistoricalCodexDedup({
-          filePath,
-          prev,
-          sameInode,
-          truncated,
-          startOffset,
-          rebuildingBaseline: rebuildingCodexBaseline,
-        })
+    const codexEventTracker =
+      fileSource === DEFAULT_SOURCE
+        ? needsHistoricalCodexDedup({
+            filePath,
+            prev,
+            sameInode,
+            truncated,
+            startOffset,
+            rebuildingBaseline: rebuildingCodexBaseline,
+          })
           ? getHistoricalCodexEvents
-          : getAppendOnlyCodexEvents)
-      : null;
+          : getAppendOnlyCodexEvents
+        : null;
     const result = projectContextOnlyScan
       ? await scanRolloutProjectFileContexts({
           filePath,
@@ -492,7 +540,8 @@ async function parseRolloutIncremental({
       );
     } else if (Number.isFinite(prev?.projectOffset)) {
       nextCursor.projectOffset = prev.projectOffset;
-      if (prev?.projectFileContext) nextCursor.projectFileContext = prev.projectFileContext;
+      if (prev?.projectFileContext)
+        nextCursor.projectFileContext = prev.projectFileContext;
     }
     cursors.files[key] = nextCursor;
 
@@ -511,9 +560,17 @@ async function parseRolloutIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   if (!externalCodexEventStore) {
     for (const key of newCodexEventKeys || []) prevCodexHashes.push(key);
@@ -532,7 +589,12 @@ async function parseRolloutIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 async function filterColdCodexRolloutFiles({
@@ -546,10 +608,11 @@ async function filterColdCodexRolloutFiles({
   diagnostics = null,
 } = {}) {
   const files = Array.isArray(rolloutFiles) ? rolloutFiles : [];
-  const syncDiagnostics = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
-  const isCodexEntry = (entry) => (
-    typeof entry === "string" || (normalizeSourceInput(entry?.source) || DEFAULT_SOURCE) === DEFAULT_SOURCE
-  );
+  const syncDiagnostics =
+    diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+  const isCodexEntry = (entry) =>
+    typeof entry === "string" ||
+    (normalizeSourceInput(entry?.source) || DEFAULT_SOURCE) === DEFAULT_SOURCE;
   if (syncDiagnostics) {
     const discoveredRollouts = files.reduce(
       (count, entry) => count + (isCodexEntry(entry) ? 1 : 0),
@@ -582,7 +645,10 @@ async function filterColdCodexRolloutFiles({
     const directory = path.dirname(filePath);
     if (cursorLoadDirectories.has(directory)) return;
     cursorLoadDirectories.add(directory);
-    const result = await codexCursorStore.loadCodexFilesForPaths([filePath], cursors);
+    const result = await codexCursorStore.loadCodexFilesForPaths(
+      [filePath],
+      cursors,
+    );
     if (result?.restarted) cursorStoreRestarted = true;
   };
 
@@ -736,12 +802,15 @@ async function claudeFileIdentityHash(filePath, st) {
     fh = await fs.open(filePath, "r");
     const buf = Buffer.alloc(length);
     const { bytesRead } = await fh.read(buf, 0, length, 0);
-    const hash = crypto.createHash("sha256").update(buf.subarray(0, bytesRead)).digest("hex");
+    const hash = crypto
+      .createHash("sha256")
+      .update(buf.subarray(0, bytesRead))
+      .digest("hex");
     return `${hash}:${st.size}`;
   } catch (_e) {
     return null;
   } finally {
-    if (fh) await fh.close().catch(() => { });
+    if (fh) await fh.close().catch(() => {});
   }
 }
 
@@ -762,8 +831,11 @@ async function parseClaudeIncremental({
   const files = Array.isArray(projectFiles) ? projectFiles : [];
   const totalFiles = files.length;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -775,7 +847,9 @@ async function parseClaudeIncremental({
   const touchedBuckets = new Set();
   // Persist seenMessageHashes across syncs to prevent cross-file duplicates
   // (e.g. subagent file created after main session was already parsed).
-  const prevHashes = Array.isArray(cursors.claudeHashes) ? cursors.claudeHashes : [];
+  const prevHashes = Array.isArray(cursors.claudeHashes)
+    ? cursors.claudeHashes
+    : [];
   const seenMessageHashes = new Set(prevHashes);
   const defaultSource = normalizeSourceInput(source) || "claude";
 
@@ -821,7 +895,9 @@ async function parseClaudeIncremental({
     let fileId = null;
     if (seenFileIds) {
       const cachedFileId =
-        sameInode && typeof prev?.fileId === "string" && prev?.fileIdSize === st.size
+        sameInode &&
+        typeof prev?.fileId === "string" &&
+        prev?.fileIdSize === st.size
           ? prev.fileId
           : null;
       fileId = cachedFileId || (await claudeFileIdentityHash(filePath, st));
@@ -983,9 +1059,17 @@ async function parseClaudeIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
@@ -996,9 +1080,16 @@ async function parseClaudeIncremental({
   // Persist message hashes for cross-sync dedup; cap at 100k entries to bound size.
   const allHashes = Array.from(seenMessageHashes);
   cursors.claudeHashes =
-    allHashes.length > 100_000 ? allHashes.slice(allHashes.length - 100_000) : allHashes;
+    allHashes.length > 100_000
+      ? allHashes.slice(allHashes.length - 100_000)
+      : allHashes;
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 async function parseGeminiIncremental({
@@ -1018,8 +1109,11 @@ async function parseGeminiIncremental({
   const files = Array.isArray(sessionFiles) ? sessionFiles : [];
   const totalFiles = files.length;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -1064,9 +1158,12 @@ async function parseGeminiIncremental({
       }
       continue;
     }
-    let startIndex = prev && prev.inode === inode ? Number(prev.lastIndex || -1) : -1;
-    let lastTotals = prev && prev.inode === inode ? prev.lastTotals || null : null;
-    let lastModel = prev && prev.inode === inode ? prev.lastModel || null : null;
+    let startIndex =
+      prev && prev.inode === inode ? Number(prev.lastIndex || -1) : -1;
+    let lastTotals =
+      prev && prev.inode === inode ? prev.lastTotals || null : null;
+    let lastModel =
+      prev && prev.inode === inode ? prev.lastModel || null : null;
 
     const projectContext = projectEnabled
       ? await resolveProjectContextForFile({
@@ -1157,9 +1254,17 @@ async function parseGeminiIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
@@ -1168,7 +1273,12 @@ async function parseGeminiIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 async function parseOpencodeIncremental({
@@ -1188,8 +1298,11 @@ async function parseOpencodeIncremental({
   const files = Array.isArray(messageFiles) ? messageFiles : [];
   const totalFiles = files.length;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -1219,7 +1332,10 @@ async function parseOpencodeIncremental({
     const size = Number.isFinite(st.size) ? st.size : 0;
     const mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs : 0;
     const unchanged =
-      prev && prev.inode === inode && prev.size === size && prev.mtimeMs === mtimeMs;
+      prev &&
+      prev.inode === inode &&
+      prev.size === size &&
+      prev.mtimeMs === mtimeMs;
     if (unchanged) {
       filesProcessed += 1;
       if (cb) {
@@ -1235,7 +1351,8 @@ async function parseOpencodeIncremental({
       continue;
     }
 
-    const fallbackTotals = prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
+    const fallbackTotals =
+      prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
     const fallbackMessageKey =
       prev && typeof prev.messageKey === "string" && prev.messageKey.trim()
         ? prev.messageKey.trim()
@@ -1297,9 +1414,17 @@ async function parseOpencodeIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
@@ -1310,7 +1435,12 @@ async function parseOpencodeIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 // Passive discovery of OpenClaw session transcripts (issue #264). OpenClaw was
@@ -1332,9 +1462,11 @@ async function parseOpencodeIncremental({
 // transcript history.
 function resolveOpenclawHome(env = process.env) {
   const override =
-    (typeof env.TOKENTRACKER_OPENCLAW_HOME === "string" && env.TOKENTRACKER_OPENCLAW_HOME.trim()) ||
+    (typeof env.TOKENTRACKER_OPENCLAW_HOME === "string" &&
+      env.TOKENTRACKER_OPENCLAW_HOME.trim()) ||
     (typeof env.OPENCLAW_HOME === "string" && env.OPENCLAW_HOME.trim()) ||
-    (typeof env.OPENCLAW_STATE_DIR === "string" && env.OPENCLAW_STATE_DIR.trim()) ||
+    (typeof env.OPENCLAW_STATE_DIR === "string" &&
+      env.OPENCLAW_STATE_DIR.trim()) ||
     "";
   return override || path.join(os.homedir(), ".openclaw");
 }
@@ -1346,10 +1478,14 @@ function resolveOpenclawHomes(env = process.env, deps = {}) {
   const roots = [resolveOpenclawHome(env)];
   const platform = deps.platform || process.platform;
   const overridden =
-    env.TOKENTRACKER_OPENCLAW_HOME || env.OPENCLAW_HOME || env.OPENCLAW_STATE_DIR;
+    env.TOKENTRACKER_OPENCLAW_HOME ||
+    env.OPENCLAW_HOME ||
+    env.OPENCLAW_STATE_DIR;
   if (platform === "win32" && !overridden) {
     const discoverWslHome = deps.discoverWslHome || wsl.discoverWslHome;
-    const wslRoot = wsl.shouldProbeWsl(env) ? discoverWslHome(".openclaw", { ...deps, env }) : null;
+    const wslRoot = wsl.shouldProbeWsl(env)
+      ? discoverWslHome(".openclaw", { ...deps, env })
+      : null;
     if (wslRoot) roots.push(wslRoot);
   }
   return roots;
@@ -1360,10 +1496,17 @@ function resolveOpenclawHomes(env = process.env, deps = {}) {
 // the SQLite migration moves still-hot transcripts into
 // `session-sqlite-import-archive/`. Match the same `*.jsonl*` shape other
 // OpenClaw readers use so those are not silently dropped.
-const OPENCLAW_TRANSCRIPT_SUBDIRS = ["sessions", "session-sqlite-import-archive"];
+const OPENCLAW_TRANSCRIPT_SUBDIRS = [
+  "sessions",
+  "session-sqlite-import-archive",
+];
 
 function isOpenclawTranscriptName(name) {
-  return typeof name === "string" && name.includes(".jsonl") && !name.endsWith(".json");
+  return (
+    typeof name === "string" &&
+    name.includes(".jsonl") &&
+    !name.endsWith(".json")
+  );
 }
 
 async function resolveOpenclawSessionFiles(env = process.env, deps = {}) {
@@ -1378,7 +1521,8 @@ async function resolveOpenclawSessionFiles(env = process.env, deps = {}) {
         const dir = path.join(agentsDir, agent.name, subdir);
         const entries = await safeReadDir(dir);
         for (const entry of entries) {
-          if (!entry.isFile() || !isOpenclawTranscriptName(entry.name)) continue;
+          if (!entry.isFile() || !isOpenclawTranscriptName(entry.name))
+            continue;
           const full = path.join(dir, entry.name);
           const key = openclawCursorKey(full);
           if (seen.has(key)) continue;
@@ -1410,7 +1554,8 @@ async function parseOpenclawIncremental({
   const hourlyState = normalizeHourlyState(
     cursors?.hourly ? structuredClone(cursors.hourly) : null,
   );
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
   const projectState = projectEnabled
     ? normalizeProjectState(
         cursors?.projectHourly ? structuredClone(cursors.projectHourly) : null,
@@ -1441,7 +1586,9 @@ async function parseOpenclawIncremental({
     const previousKey = cursorKeys.get(key);
     const prev = previousKey ? stagedFiles[previousKey] : null;
     const prevUsageEvents =
-      prev?.usageEvents && typeof prev.usageEvents === "object" ? prev.usageEvents : {};
+      prev?.usageEvents && typeof prev.usageEvents === "object"
+        ? prev.usageEvents
+        : {};
     const hasUsageEventCursor =
       prev &&
       Object.prototype.hasOwnProperty.call(prev, "usageEvents") &&
@@ -1464,14 +1611,13 @@ async function parseOpenclawIncremental({
         const offsetBoundaryMatches =
           hasUsageEventCursor &&
           previousOffset <= fileEndOffset &&
-          await openclawOffsetEndsAtLineBoundary(fileHandle, previousOffset);
+          (await openclawOffsetEndsAtLineBoundary(fileHandle, previousOffset));
         const parsedLegacyUpdatedAt = Date.parse(String(prev?.updatedAt || ""));
-        const legacyAggregateAfterMs =
-          legacyCursor
-            ? Number.isFinite(parsedLegacyUpdatedAt)
-              ? parsedLegacyUpdatedAt
-              : Number.POSITIVE_INFINITY
-            : null;
+        const legacyAggregateAfterMs = legacyCursor
+          ? Number.isFinite(parsedLegacyUpdatedAt)
+            ? parsedLegacyUpdatedAt
+            : Number.POSITIVE_INFINITY
+          : null;
         if (
           hasUsageEventCursor &&
           offsetBoundaryMatches &&
@@ -1538,7 +1684,9 @@ async function parseOpenclawIncremental({
     }
     if (!accepted) {
       if (!openedRegularFile) continue;
-      throw new Error(`OpenClaw session changed repeatedly while parsing: ${filePath}`);
+      throw new Error(
+        `OpenClaw session changed repeatedly while parsing: ${filePath}`,
+      );
     }
 
     mergeOpenclawAttemptBuckets(
@@ -1587,9 +1735,17 @@ async function parseOpenclawIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   cursors.files = stagedFiles;
   hourlyState.updatedAt = new Date().toISOString();
@@ -1599,7 +1755,12 @@ async function parseOpenclawIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 function openclawCursorKey(filePath) {
@@ -1615,7 +1776,10 @@ function sameOpenclawFileGeneration(left, right) {
   const leftInode = Number(left.ino || 0);
   const rightInode = Number(right.ino || 0);
   if (leftInode > 0 && rightInode > 0) {
-    if (leftInode !== rightInode || Number(left.dev || 0) !== Number(right.dev || 0)) {
+    if (
+      leftInode !== rightInode ||
+      Number(left.dev || 0) !== Number(right.dev || 0)
+    ) {
       return false;
     }
   }
@@ -1746,7 +1910,8 @@ async function parseOpenclawSessionFile({
     const usage = normalizeOpenclawUsage(msg.usage);
     if (!usage) continue;
 
-    const tokenTimestamp = typeof obj?.timestamp === "string" ? obj.timestamp : null;
+    const tokenTimestamp =
+      typeof obj?.timestamp === "string" ? obj.timestamp : null;
     if (!tokenTimestamp) continue;
 
     const model = normalizeModelInput(msg.model) || DEFAULT_MODEL;
@@ -1780,7 +1945,8 @@ async function parseOpenclawSessionFile({
       cache_creation_input_tokens: openclawCacheWrite,
       output_tokens: openclawOutput,
       reasoning_output_tokens: 0,
-      total_tokens: openclawInput + openclawCached + openclawCacheWrite + openclawOutput,
+      total_tokens:
+        openclawInput + openclawCached + openclawCacheWrite + openclawOutput,
       conversation_count: 1,
     };
 
@@ -1866,13 +2032,7 @@ function normalizeOpenclawUsage(usage) {
   return normalized;
 }
 
-function openclawUsageFingerprintMetadata(
-  obj,
-  msg,
-  usage,
-  model,
-  identityKey,
-) {
+function openclawUsageFingerprintMetadata(obj, msg, usage, model, identityKey) {
   return {
     identityKey,
     timestamp: typeof obj?.timestamp === "string" ? obj.timestamp : null,
@@ -1904,9 +2064,10 @@ function openclawUsageEventIdentity(obj, msg, usage, model) {
 
   const metadata = {
     timestamp: typeof obj?.timestamp === "string" ? obj.timestamp : null,
-    messageTimestamp: typeof msg?.timestamp === "number" || typeof msg?.timestamp === "string"
-      ? msg.timestamp
-      : null,
+    messageTimestamp:
+      typeof msg?.timestamp === "number" || typeof msg?.timestamp === "string"
+        ? msg.timestamp
+        : null,
     responseId: typeof msg?.responseId === "string" ? msg.responseId : null,
     model,
     provider: typeof msg?.provider === "string" ? msg.provider : null,
@@ -1986,7 +2147,8 @@ async function parseRolloutFile({
     lastTotal,
     baselines: tokenUsageBaselines,
   });
-  let latestTotal = lastTotal && typeof lastTotal === "object" ? lastTotal : null;
+  let latestTotal =
+    lastTotal && typeof lastTotal === "object" ? lastTotal : null;
   let currentCwd = null;
   let currentDate = null;
   let isForkedRollout = false;
@@ -2054,10 +2216,16 @@ async function parseRolloutFile({
       obj?.payload &&
       typeof obj.payload === "object"
     ) {
-      if (obj.type === "session_meta" && typeof obj.payload.forked_from_id === "string") {
+      if (
+        obj.type === "session_meta" &&
+        typeof obj.payload.forked_from_id === "string"
+      ) {
         isForkedRollout = obj.payload.forked_from_id.trim().length > 0;
       }
-      if (obj.type === "turn_context" && typeof obj.payload.current_date === "string") {
+      if (
+        obj.type === "turn_context" &&
+        typeof obj.payload.current_date === "string"
+      ) {
         currentDate = normalizeIsoDate(obj.payload.current_date);
       }
       if (typeof obj.payload.model === "string") {
@@ -2088,7 +2256,8 @@ async function parseRolloutFile({
     const info = token.info;
     if (!info || typeof info !== "object") continue;
 
-    const tokenTimestamp = typeof token.timestamp === "string" ? token.timestamp : null;
+    const tokenTimestamp =
+      typeof token.timestamp === "string" ? token.timestamp : null;
     if (!tokenTimestamp) continue;
 
     const lastUsage = info.last_token_usage;
@@ -2125,10 +2294,16 @@ async function parseRolloutFile({
       // the prefix, so no later row can be skipped off a stale baseline.
       // Replay flushes are monotonic in every sampled rollout (2,116 gaps,
       // min 0ms), so this never fires on genuine replays.
-      if (!Number.isFinite(tokenMs) || (prevForkedTokenMs !== null && tokenMs < prevForkedTokenMs)) {
+      if (
+        !Number.isFinite(tokenMs) ||
+        (prevForkedTokenMs !== null && tokenMs < prevForkedTokenMs)
+      ) {
         replayPrefixActive = false;
       } else {
-        if (prevForkedTokenMs !== null && tokenMs - prevForkedTokenMs >= CODEX_FORK_REPLAY_GAP_MS) {
+        if (
+          prevForkedTokenMs !== null &&
+          tokenMs - prevForkedTokenMs >= CODEX_FORK_REPLAY_GAP_MS
+        ) {
           replayPrefixActive = false;
         }
         forkedReplaySkip =
@@ -2141,7 +2316,10 @@ async function parseRolloutFile({
 
     // date matching is conservative; same-day fork replays are caught by the
     // burst detector above rather than this cross-day date guard.
-    if (forkedReplaySkip || isForkedReplayToken({ isForkedRollout, rolloutDate, currentDate })) {
+    if (
+      forkedReplaySkip ||
+      isForkedReplayToken({ isForkedRollout, rolloutDate, currentDate })
+    ) {
       continue;
     }
 
@@ -2164,9 +2342,10 @@ async function parseRolloutFile({
     // rewrite) manages Codex. Other rollout-format sources (e.g. every-code) have
     // their own model re-alignment that legitimately re-reads prior events, which
     // this dedup would otherwise suppress.
-    const codexEvents = typeof seenCodexEvents === "function"
-      ? seenCodexEvents()
-      : seenCodexEvents;
+    const codexEvents =
+      typeof seenCodexEvents === "function"
+        ? seenCodexEvents()
+        : seenCodexEvents;
     if (codexEvents && source === "codex") {
       const dedupKey = `${sessionId || filePath}:${tokenTimestamp}`;
       if (codexEvents.has(dedupKey)) continue;
@@ -2185,7 +2364,9 @@ async function parseRolloutFile({
         currentProjectRef,
       );
       addTotals(projectBucket.totals, delta);
-      projectTouchedBuckets.add(projectBucketKey(currentProjectKey, source, bucketStart));
+      projectTouchedBuckets.add(
+        projectBucketKey(currentProjectKey, source, bucketStart),
+      );
     }
     eventsAggregated += 1;
   }
@@ -2228,7 +2409,10 @@ async function scanRolloutProjectFileContexts({
     };
   }
 
-  const stream = fssync.createReadStream(filePath, { start: 0, end: endOffset - 1 });
+  const stream = fssync.createReadStream(filePath, {
+    start: 0,
+    end: endOffset - 1,
+  });
   let currentCwd = null;
   let scannedEndOffset = 0;
   let committedEndOffset = 0;
@@ -2245,10 +2429,7 @@ async function scanRolloutProjectFileContexts({
     const { line } = record;
     if (
       !line ||
-      !(
-        line.includes('"turn_context"') ||
-        line.includes('"session_meta"')
-      ) ||
+      !(line.includes('"turn_context"') || line.includes('"session_meta"')) ||
       !line.includes('"cwd"')
     ) {
       if (line && (invalidRecordPolicy === "throw" || !record.terminated)) {
@@ -2318,12 +2499,16 @@ async function parseClaudeFile({
   seenMessageHashes,
 }) {
   const st = fileStat || (await fs.stat(filePath).catch(() => null));
-  if (!st || !st.isFile()) return { endOffset: startOffset, eventsAggregated: 0 };
+  if (!st || !st.isFile())
+    return { endOffset: startOffset, eventsAggregated: 0 };
 
   const endOffset = st.size;
   if (startOffset >= endOffset) return { endOffset, eventsAggregated: 0 };
 
-  const stream = fssync.createReadStream(filePath, { encoding: "utf8", start: startOffset });
+  const stream = fssync.createReadStream(filePath, {
+    encoding: "utf8",
+    start: startOffset,
+  });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   let eventsAggregated = 0;
@@ -2356,16 +2541,24 @@ async function parseClaudeFile({
           // guarantee from claudeMessageDedupKey; user lines have no
           // message.id, so the line uuid is the identity.
           const userKey =
-            seenMessageHashes && typeof userObj?.uuid === "string" && userObj.uuid
+            seenMessageHashes &&
+            typeof userObj?.uuid === "string" &&
+            userObj.uuid
               ? `u:${userObj.uuid}`
               : null;
           if (!userKey || !seenMessageHashes.has(userKey)) {
             if (userKey) seenMessageHashes.add(userKey);
-            const userTs = typeof userObj?.timestamp === "string" ? userObj.timestamp : null;
+            const userTs =
+              typeof userObj?.timestamp === "string" ? userObj.timestamp : null;
             const userBucketStart = userTs ? toUtcHalfHourStart(userTs) : null;
             if (userBucketStart) {
               const userModel = DEFAULT_MODEL;
-              const userBucket = getHourlyBucket(hourlyState, source, userModel, userBucketStart);
+              const userBucket = getHourlyBucket(
+                hourlyState,
+                source,
+                userModel,
+                userBucketStart,
+              );
               userBucket.totals.conversation_count += 1;
               touchedBuckets.add(bucketKey(source, userModel, userBucketStart));
             }
@@ -2388,8 +2581,10 @@ async function parseClaudeFile({
     const dedupHash = seenMessageHashes ? claudeMessageDedupKey(obj) : null;
     if (dedupHash && seenMessageHashes.has(dedupHash)) continue;
 
-    const model = normalizeModelInput(obj?.message?.model || obj?.model) || DEFAULT_MODEL;
-    const tokenTimestamp = typeof obj?.timestamp === "string" ? obj.timestamp : null;
+    const model =
+      normalizeModelInput(obj?.message?.model || obj?.model) || DEFAULT_MODEL;
+    const tokenTimestamp =
+      typeof obj?.timestamp === "string" ? obj.timestamp : null;
     if (!tokenTimestamp) continue;
 
     const delta = normalizeClaudeUsage(usage);
@@ -2413,7 +2608,9 @@ async function parseClaudeFile({
         projectRef,
       );
       addTotals(projectBucket.totals, delta);
-      projectTouchedBuckets.add(projectBucketKey(projectKey, source, bucketStart));
+      projectTouchedBuckets.add(
+        projectBucketKey(projectKey, source, bucketStart),
+      );
     }
     eventsAggregated += 1;
   }
@@ -2438,13 +2635,24 @@ async function parseGeminiFile({
   projectKey,
 }) {
   const raw = await fs.readFile(filePath, "utf8").catch(() => "");
-  if (!raw.trim()) return { lastIndex: startIndex, lastTotals, lastModel, eventsAggregated: 0 };
+  if (!raw.trim())
+    return {
+      lastIndex: startIndex,
+      lastTotals,
+      lastModel,
+      eventsAggregated: 0,
+    };
 
   let session;
   try {
     session = JSON.parse(raw);
   } catch (_e) {
-    return { lastIndex: startIndex, lastTotals, lastModel, eventsAggregated: 0 };
+    return {
+      lastIndex: startIndex,
+      lastTotals,
+      lastModel,
+      eventsAggregated: 0,
+    };
   }
 
   const messages = Array.isArray(session?.messages) ? session.messages : [];
@@ -2457,7 +2665,9 @@ async function parseGeminiFile({
   let eventsAggregated = 0;
   let model = typeof lastModel === "string" ? lastModel : null;
   let totals = lastTotals && typeof lastTotals === "object" ? lastTotals : null;
-  const projectActive = Boolean(projectKey && projectState && projectTouchedBuckets);
+  const projectActive = Boolean(
+    projectKey && projectState && projectTouchedBuckets,
+  );
   let projectStartIndex =
     projectActive && Number.isFinite(projectCursor?.lastIndex)
       ? Number(projectCursor.lastIndex)
@@ -2467,7 +2677,9 @@ async function parseGeminiFile({
       ? projectCursor.lastModel
       : null;
   let projectTotals =
-    projectActive && projectCursor?.lastTotals && typeof projectCursor.lastTotals === "object"
+    projectActive &&
+    projectCursor?.lastTotals &&
+    typeof projectCursor.lastTotals === "object"
       ? projectCursor.lastTotals
       : null;
   if (projectActive && projectStartIndex >= messages.length) {
@@ -2476,7 +2688,9 @@ async function parseGeminiFile({
     projectModel = null;
   }
   const hourlyBegin = Number.isFinite(startIndex) ? startIndex + 1 : 0;
-  const projectBegin = projectActive ? projectStartIndex + 1 : Number.POSITIVE_INFINITY;
+  const projectBegin = projectActive
+    ? projectStartIndex + 1
+    : Number.POSITIVE_INFINITY;
   const begin = Math.min(hourlyBegin, projectBegin);
 
   for (let idx = begin; idx < messages.length; idx++) {
@@ -2508,7 +2722,12 @@ async function parseGeminiFile({
         delta.conversation_count = 1;
         bucketStart = toUtcHalfHourStart(timestamp);
         if (bucketStart) {
-          const bucket = getHourlyBucket(hourlyState, source, model, bucketStart);
+          const bucket = getHourlyBucket(
+            hourlyState,
+            source,
+            model,
+            bucketStart,
+          );
           addTotals(bucket.totals, delta);
           touchedBuckets.add(bucketKey(source, model, bucketStart));
           eventsAggregated += 1;
@@ -2534,7 +2753,9 @@ async function parseGeminiFile({
           projectRef,
         );
         addTotals(projectBucket.totals, projectDelta);
-        projectTouchedBuckets.add(projectBucketKey(projectKey, source, bucketStart));
+        projectTouchedBuckets.add(
+          projectBucketKey(projectKey, source, bucketStart),
+        );
       }
       projectTotals = currentTotals;
     }
@@ -2568,8 +2789,12 @@ async function parseOpencodeMessageFile({
     typeof fallbackMessageKey === "string" && fallbackMessageKey.trim()
       ? fallbackMessageKey.trim()
       : null;
-  const legacyTotals = fallbackTotals && typeof fallbackTotals === "object" ? fallbackTotals : null;
-  const fallbackEntry = messageIndex && fallbackKey ? messageIndex[fallbackKey] : null;
+  const legacyTotals =
+    fallbackTotals && typeof fallbackTotals === "object"
+      ? fallbackTotals
+      : null;
+  const fallbackEntry =
+    messageIndex && fallbackKey ? messageIndex[fallbackKey] : null;
   const fallbackLastTotals =
     fallbackEntry && typeof fallbackEntry.lastTotals === "object"
       ? fallbackEntry.lastTotals
@@ -2599,7 +2824,8 @@ async function parseOpencodeMessageFile({
 
   const messageKey = deriveOpencodeMessageKey(msg, filePath);
   const prev = messageIndex && messageKey ? messageIndex[messageKey] : null;
-  const indexTotals = prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
+  const indexTotals =
+    prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
   const fallbackMatch = !fallbackKey || fallbackKey === messageKey;
   const lastTotals = indexTotals || (fallbackMatch ? fallbackLastTotals : null);
 
@@ -2610,11 +2836,17 @@ async function parseOpencodeMessageFile({
 
   const delta = diffGeminiTotals(currentTotals, lastTotals);
   if (!delta || isAllZeroUsage(delta)) {
-    return { messageKey, lastTotals: currentTotals, eventsAggregated: 0, shouldUpdate: true };
+    return {
+      messageKey,
+      lastTotals: currentTotals,
+      eventsAggregated: 0,
+      shouldUpdate: true,
+    };
   }
   delta.conversation_count = 1;
 
-  const timestampMs = coerceEpochMs(msg?.time?.completed) || coerceEpochMs(msg?.time?.created);
+  const timestampMs =
+    coerceEpochMs(msg?.time?.completed) || coerceEpochMs(msg?.time?.created);
   if (!timestampMs) {
     return {
       messageKey,
@@ -2635,7 +2867,9 @@ async function parseOpencodeMessageFile({
     };
   }
 
-  const model = normalizeModelInput(msg?.modelID || msg?.model || msg?.modelId) || DEFAULT_MODEL;
+  const model =
+    normalizeModelInput(msg?.modelID || msg?.model || msg?.modelId) ||
+    DEFAULT_MODEL;
   const bucket = getHourlyBucket(hourlyState, source, model, bucketStart);
   addTotals(bucket.totals, delta);
   touchedBuckets.add(bucketKey(source, model, bucketStart));
@@ -2648,12 +2882,23 @@ async function parseOpencodeMessageFile({
       projectRef,
     );
     addTotals(projectBucket.totals, delta);
-    projectTouchedBuckets.add(projectBucketKey(projectKey, source, bucketStart));
+    projectTouchedBuckets.add(
+      projectBucketKey(projectKey, source, bucketStart),
+    );
   }
-  return { messageKey, lastTotals: currentTotals, eventsAggregated: 1, shouldUpdate: true };
+  return {
+    messageKey,
+    lastTotals: currentTotals,
+    eventsAggregated: 1,
+    shouldUpdate: true,
+  };
 }
 
-async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets }) {
+async function enqueueTouchedBuckets({
+  queuePath,
+  hourlyState,
+  touchedBuckets,
+}) {
   if (!touchedBuckets || touchedBuckets.size === 0) return 0;
 
   const touchedGroups = new Set();
@@ -2675,7 +2920,10 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
     if (Object.prototype.hasOwnProperty.call(groupQueued, groupKey)) {
       legacyGroups.add(groupKey);
     }
-    if (!codexTouched && groupKey.startsWith(`${DEFAULT_SOURCE}${BUCKET_SEPARATOR}`)) {
+    if (
+      !codexTouched &&
+      groupKey.startsWith(`${DEFAULT_SOURCE}${BUCKET_SEPARATOR}`)
+    ) {
       codexTouched = true;
     }
   }
@@ -2751,7 +2999,8 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
     let alignedModel = null;
     if (unknownBucket?.alignedModel) {
       const normalized = normalizeModelInput(unknownBucket.alignedModel);
-      alignedModel = normalized && normalized !== DEFAULT_MODEL ? normalized : null;
+      alignedModel =
+        normalized && normalized !== DEFAULT_MODEL ? normalized : null;
     }
     const zeroTotals = initTotals();
     const zeroKey = totalsKey(zeroTotals);
@@ -2819,7 +3068,8 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
             output_tokens: totals.output_tokens,
             reasoning_output_tokens: totals.reasoning_output_tokens,
             total_tokens: totals.total_tokens,
-            billable_total_tokens: totals.billable_total_tokens ?? totals.total_tokens,
+            billable_total_tokens:
+              totals.billable_total_tokens ?? totals.total_tokens,
             conversation_count: totals.conversation_count,
           }),
         );
@@ -2878,7 +3128,8 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
     }
     if (unknownBucket) unknownBucket.alignedModel = nextAligned;
     const key = totalsKey(unknownBucket.totals);
-    const outputKey = outputModel === DEFAULT_MODEL ? key : `${key}|${outputModel}`;
+    const outputKey =
+      outputModel === DEFAULT_MODEL ? key : `${key}|${outputModel}`;
     if (unknownBucket.queuedKey === outputKey) continue;
     toAppend.push(
       JSON.stringify({
@@ -2887,11 +3138,14 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
         hour_start: group.hourStart,
         input_tokens: unknownBucket.totals.input_tokens,
         cached_input_tokens: unknownBucket.totals.cached_input_tokens,
-        cache_creation_input_tokens: unknownBucket.totals.cache_creation_input_tokens,
+        cache_creation_input_tokens:
+          unknownBucket.totals.cache_creation_input_tokens,
         output_tokens: unknownBucket.totals.output_tokens,
         reasoning_output_tokens: unknownBucket.totals.reasoning_output_tokens,
         total_tokens: unknownBucket.totals.total_tokens,
-        billable_total_tokens: unknownBucket.totals.billable_total_tokens ?? unknownBucket.totals.total_tokens,
+        billable_total_tokens:
+          unknownBucket.totals.billable_total_tokens ??
+          unknownBucket.totals.total_tokens,
         conversation_count: unknownBucket.totals.conversation_count,
       }),
     );
@@ -2923,7 +3177,8 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
     }
 
     for (const group of grouped.values()) {
-      const model = group.models.size === 1 ? [...group.models][0] : DEFAULT_MODEL;
+      const model =
+        group.models.size === 1 ? [...group.models][0] : DEFAULT_MODEL;
       const key = totalsKey(group.totals);
       const groupKey = groupBucketKey(group.source, group.hourStart);
       if (groupQueued[groupKey] === key) continue;
@@ -2938,7 +3193,8 @@ async function enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets })
           output_tokens: group.totals.output_tokens,
           reasoning_output_tokens: group.totals.reasoning_output_tokens,
           total_tokens: group.totals.total_tokens,
-          billable_total_tokens: group.totals.billable_total_tokens ?? group.totals.total_tokens,
+          billable_total_tokens:
+            group.totals.billable_total_tokens ?? group.totals.total_tokens,
           conversation_count: group.totals.conversation_count,
         }),
       );
@@ -2977,8 +3233,10 @@ async function enqueueTouchedProjectBuckets({
     const totals = bucket.totals;
     const queuedKey = totalsKey(totals);
     if (bucket.queuedKey === queuedKey) continue;
-    const projectRef = typeof bucket.project_ref === "string" ? bucket.project_ref : null;
-    const projectKey = typeof bucket.project_key === "string" ? bucket.project_key : null;
+    const projectRef =
+      typeof bucket.project_ref === "string" ? bucket.project_ref : null;
+    const projectKey =
+      typeof bucket.project_key === "string" ? bucket.project_key : null;
     if (!projectRef || !projectKey) continue;
 
     toAppend.push(
@@ -2993,7 +3251,8 @@ async function enqueueTouchedProjectBuckets({
         output_tokens: totals.output_tokens,
         reasoning_output_tokens: totals.reasoning_output_tokens,
         total_tokens: totals.total_tokens,
-        billable_total_tokens: totals.billable_total_tokens ?? totals.total_tokens,
+        billable_total_tokens:
+          totals.billable_total_tokens ?? totals.total_tokens,
         conversation_count: totals.conversation_count,
       }),
     );
@@ -3084,7 +3343,11 @@ function findNearestCodexModel(hourStart, dominants) {
     const candidate = Date.parse(entry.hourStart);
     if (!Number.isFinite(candidate)) continue;
     const diff = Math.abs(candidate - target);
-    if (!best || diff < best.diff || (diff === best.diff && candidate < best.time)) {
+    if (
+      !best ||
+      diff < best.diff ||
+      (diff === best.diff && candidate < best.time)
+    ) {
       best = { diff, time: candidate, model: entry.model };
     }
   }
@@ -3095,7 +3358,8 @@ function findNearestCodexModel(hourStart, dominants) {
 function normalizeHourlyState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
   const version = Number(state.version || 1);
-  const rawBuckets = state.buckets && typeof state.buckets === "object" ? state.buckets : {};
+  const rawBuckets =
+    state.buckets && typeof state.buckets === "object" ? state.buckets : {};
   const buckets = {};
   const groupQueued = {};
 
@@ -3128,7 +3392,9 @@ function normalizeHourlyState(raw) {
   }
 
   const existingGroupQueued =
-    state.groupQueued && typeof state.groupQueued === "object" ? state.groupQueued : {};
+    state.groupQueued && typeof state.groupQueued === "object"
+      ? state.groupQueued
+      : {};
 
   return {
     version: 3,
@@ -3140,9 +3406,11 @@ function normalizeHourlyState(raw) {
 
 function normalizeProjectState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
-  const rawBuckets = state.buckets && typeof state.buckets === "object" ? state.buckets : {};
+  const rawBuckets =
+    state.buckets && typeof state.buckets === "object" ? state.buckets : {};
   const buckets = {};
-  const rawProjects = state.projects && typeof state.projects === "object" ? state.projects : {};
+  const rawProjects =
+    state.projects && typeof state.projects === "object" ? state.projects : {};
   const projects = {};
 
   for (const [key, value] of Object.entries(rawBuckets)) {
@@ -3165,7 +3433,8 @@ function normalizeProjectState(raw) {
 
 function normalizeOpencodeState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
-  const messages = state.messages && typeof state.messages === "object" ? state.messages : {};
+  const messages =
+    state.messages && typeof state.messages === "object" ? state.messages : {};
   return {
     messages,
     updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : null,
@@ -3174,7 +3443,8 @@ function normalizeOpencodeState(raw) {
 
 function normalizeQoderState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
-  const messages = state.messages && typeof state.messages === "object" ? state.messages : {};
+  const messages =
+    state.messages && typeof state.messages === "object" ? state.messages : {};
   return {
     messages,
     updatedAt: typeof state.updatedAt === "string" ? state.updatedAt : null,
@@ -3187,8 +3457,12 @@ function normalizeMessageKeyPart(value) {
 }
 
 function deriveOpencodeMessageKey(msg, fallback) {
-  const sessionId = normalizeMessageKeyPart(msg?.sessionID || msg?.sessionId || msg?.session_id);
-  const messageId = normalizeMessageKeyPart(msg?.id || msg?.messageID || msg?.messageId);
+  const sessionId = normalizeMessageKeyPart(
+    msg?.sessionID || msg?.sessionId || msg?.session_id,
+  );
+  const messageId = normalizeMessageKeyPart(
+    msg?.id || msg?.messageID || msg?.messageId,
+  );
   if (sessionId && messageId) return `${sessionId}|${messageId}`;
   return fallback;
 }
@@ -3270,26 +3544,37 @@ function addTotals(target, delta) {
   target.output_tokens += delta.output_tokens || 0;
   target.reasoning_output_tokens += delta.reasoning_output_tokens || 0;
   target.total_tokens += delta.total_tokens || 0;
-  target.billable_total_tokens += delta.billable_total_tokens ?? delta.total_tokens ?? 0;
+  target.billable_total_tokens +=
+    delta.billable_total_tokens ?? delta.total_tokens ?? 0;
   target.conversation_count += delta.conversation_count || 0;
 }
 
 function subtractTotals(target, totals) {
-  target.input_tokens = Math.max(0, target.input_tokens - (totals.input_tokens || 0));
+  target.input_tokens = Math.max(
+    0,
+    target.input_tokens - (totals.input_tokens || 0),
+  );
   target.cached_input_tokens = Math.max(
     0,
     target.cached_input_tokens - (totals.cached_input_tokens || 0),
   );
   target.cache_creation_input_tokens = Math.max(
     0,
-    target.cache_creation_input_tokens - (totals.cache_creation_input_tokens || 0),
+    target.cache_creation_input_tokens -
+      (totals.cache_creation_input_tokens || 0),
   );
-  target.output_tokens = Math.max(0, target.output_tokens - (totals.output_tokens || 0));
+  target.output_tokens = Math.max(
+    0,
+    target.output_tokens - (totals.output_tokens || 0),
+  );
   target.reasoning_output_tokens = Math.max(
     0,
     target.reasoning_output_tokens - (totals.reasoning_output_tokens || 0),
   );
-  target.total_tokens = Math.max(0, target.total_tokens - (totals.total_tokens || 0));
+  target.total_tokens = Math.max(
+    0,
+    target.total_tokens - (totals.total_tokens || 0),
+  );
   target.billable_total_tokens = Math.max(
     0,
     target.billable_total_tokens -
@@ -3334,7 +3619,9 @@ function toUtcHalfHourStart(ts) {
 }
 
 function rolloutDateFromPath(filePath) {
-  const match = path.basename(String(filePath || "")).match(/^rollout-(\d{4}-\d{2}-\d{2})T/);
+  const match = path
+    .basename(String(filePath || ""))
+    .match(/^rollout-(\d{4}-\d{2}-\d{2})T/);
   return match ? match[1] : null;
 }
 
@@ -3354,7 +3641,9 @@ function normalizeIsoDate(value) {
 const CODEX_FORK_REPLAY_GAP_MS = 500;
 
 function isForkedReplayToken({ isForkedRollout, rolloutDate, currentDate }) {
-  return Boolean(isForkedRollout && rolloutDate && currentDate && currentDate < rolloutDate);
+  return Boolean(
+    isForkedRollout && rolloutDate && currentDate && currentDate < rolloutDate,
+  );
 }
 
 function normalizeNonNegativeNumber(value) {
@@ -3383,10 +3672,15 @@ function parseBucketKey(key) {
   if (typeof key !== "string")
     return { source: DEFAULT_SOURCE, model: DEFAULT_MODEL, hourStart: "" };
   const first = key.indexOf(BUCKET_SEPARATOR);
-  if (first <= 0) return { source: DEFAULT_SOURCE, model: DEFAULT_MODEL, hourStart: key };
+  if (first <= 0)
+    return { source: DEFAULT_SOURCE, model: DEFAULT_MODEL, hourStart: key };
   const second = key.indexOf(BUCKET_SEPARATOR, first + 1);
   if (second <= 0) {
-    return { source: key.slice(0, first), model: DEFAULT_MODEL, hourStart: key.slice(first + 1) };
+    return {
+      source: key.slice(0, first),
+      model: DEFAULT_MODEL,
+      hourStart: key.slice(first + 1),
+    };
   }
   return {
     source: key.slice(0, first),
@@ -3412,7 +3706,10 @@ async function resolveProjectMetaForPath(startDir, cache) {
   if (cache && cache.has(startDir)) return cache.get(startDir);
 
   if (startDir.includes(CLAUDE_MEM_OBSERVER_PATH_SEGMENT)) {
-    const meta = { projectRef: CLAUDE_MEM_OBSERVER_PROJECT_REF, repoRoot: startDir };
+    const meta = {
+      projectRef: CLAUDE_MEM_OBSERVER_PROJECT_REF,
+      repoRoot: startDir,
+    };
     if (cache) cache.set(startDir, meta);
     return meta;
   }
@@ -3438,8 +3735,13 @@ async function resolveProjectMetaForPath(startDir, cache) {
         repoRoot: current,
         configPath,
         configMtimeMs:
-          configStat && Number.isFinite(configStat.mtimeMs) ? configStat.mtimeMs : null,
-        configSize: configStat && Number.isFinite(configStat.size) ? configStat.size : null,
+          configStat && Number.isFinite(configStat.mtimeMs)
+            ? configStat.mtimeMs
+            : null,
+        configSize:
+          configStat && Number.isFinite(configStat.size)
+            ? configStat.size
+            : null,
       };
       if (cache) {
         for (const entry of visited) cache.set(entry, meta);
@@ -3460,7 +3762,12 @@ async function resolveProjectMetaForPath(startDir, cache) {
 }
 
 function addProjectFileContext(contexts, projectContext) {
-  if (!Array.isArray(contexts) || !projectContext || typeof projectContext !== "object") return;
+  if (
+    !Array.isArray(contexts) ||
+    !projectContext ||
+    typeof projectContext !== "object"
+  )
+    return;
   const configPath =
     typeof projectContext.configPath === "string" && projectContext.configPath
       ? projectContext.configPath
@@ -3479,13 +3786,19 @@ function buildProjectFileContext(projectContexts, checkedAtMs = Date.now()) {
   const configs = [];
   for (const context of contexts) {
     const configPath =
-      typeof context?.configPath === "string" && context.configPath ? context.configPath : null;
+      typeof context?.configPath === "string" && context.configPath
+        ? context.configPath
+        : null;
     if (!configPath || seen.has(configPath)) continue;
     seen.add(configPath);
     configs.push({
       configPath,
-      configMtimeMs: Number.isFinite(context.configMtimeMs) ? context.configMtimeMs : null,
-      configSize: Number.isFinite(context.configSize) ? context.configSize : null,
+      configMtimeMs: Number.isFinite(context.configMtimeMs)
+        ? context.configMtimeMs
+        : null,
+      configSize: Number.isFinite(context.configSize)
+        ? context.configSize
+        : null,
     });
   }
   if (configs.length === 0) return { absent: true, checkedAtMs };
@@ -3498,7 +3811,8 @@ function buildProjectFileContext(projectContexts, checkedAtMs = Date.now()) {
 }
 
 async function isProjectFileContextFresh(projectFileContext, options = {}) {
-  if (!projectFileContext || typeof projectFileContext !== "object") return false;
+  if (!projectFileContext || typeof projectFileContext !== "object")
+    return false;
   const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
   const absentTtlMs = Number.isFinite(options.absentTtlMs)
     ? options.absentTtlMs
@@ -3509,21 +3823,31 @@ async function isProjectFileContextFresh(projectFileContext, options = {}) {
       : null;
   if (projectFileContext.absent === true) {
     const checkedAtMs = Number(projectFileContext.checkedAtMs);
-    return Number.isFinite(checkedAtMs) && checkedAtMs > 0 && nowMs - checkedAtMs < absentTtlMs;
+    return (
+      Number.isFinite(checkedAtMs) &&
+      checkedAtMs > 0 &&
+      nowMs - checkedAtMs < absentTtlMs
+    );
   }
   if (Array.isArray(projectFileContext.configs)) {
     if (projectFileContext.configs.length === 0) return false;
     for (const config of projectFileContext.configs) {
-      if (!(await isSingleProjectConfigFresh(config, freshnessCache))) return false;
+      if (!(await isSingleProjectConfigFresh(config, freshnessCache)))
+        return false;
     }
     return true;
   }
   return isSingleProjectConfigFresh(projectFileContext, freshnessCache);
 }
 
-async function isSingleProjectConfigFresh(projectFileContext, freshnessCache = null) {
+async function isSingleProjectConfigFresh(
+  projectFileContext,
+  freshnessCache = null,
+) {
   const configPath =
-    typeof projectFileContext.configPath === "string" ? projectFileContext.configPath : null;
+    typeof projectFileContext.configPath === "string"
+      ? projectFileContext.configPath
+      : null;
   if (!configPath) return false;
   let st;
   if (freshnessCache && freshnessCache.has(configPath)) {
@@ -3580,7 +3904,8 @@ async function defaultPublicRepoResolver({ projectRef, repoRoot }) {
 
 function recordProjectMeta(projectState, meta) {
   if (!projectState || !meta || typeof meta !== "object") return;
-  const repoRootHash = typeof meta.repoRootHash === "string" ? meta.repoRootHash : null;
+  const repoRootHash =
+    typeof meta.repoRootHash === "string" ? meta.repoRootHash : null;
   let projectKey = typeof meta.projectKey === "string" ? meta.projectKey : null;
   if (
     !projectKey &&
@@ -3601,7 +3926,8 @@ function recordProjectMeta(projectState, meta) {
   }
   const prev = projectState.projects[projectKey] || {};
   const status = typeof meta.status === "string" ? meta.status : null;
-  const projectRef = typeof meta.projectRef === "string" ? meta.projectRef : null;
+  const projectRef =
+    typeof meta.projectRef === "string" ? meta.projectRef : null;
   const next = {
     ...prev,
     project_ref: projectRef || prev.project_ref || null,
@@ -3642,16 +3968,23 @@ async function resolveProjectContextForPath({
   projectState,
 }) {
   if (!startDir) return null;
-  const projectMeta = await resolveProjectMetaForPath(startDir, projectMetaCache);
+  const projectMeta = await resolveProjectMetaForPath(
+    startDir,
+    projectMetaCache,
+  );
   if (!projectMeta) return null;
   const resolver =
-    typeof publicRepoResolver === "function" ? publicRepoResolver : defaultPublicRepoResolver;
+    typeof publicRepoResolver === "function"
+      ? publicRepoResolver
+      : defaultPublicRepoResolver;
   const meta = await resolver({
     projectRef: projectMeta.projectRef,
     repoRoot: projectMeta.repoRoot,
     cache: publicRepoCache,
   });
-  const repoRootHash = projectMeta.repoRoot ? hashRepoRoot(projectMeta.repoRoot) : null;
+  const repoRootHash = projectMeta.repoRoot
+    ? hashRepoRoot(projectMeta.repoRoot)
+    : null;
   const normalized = {
     ...(meta || {}),
     projectRef: meta?.projectRef || projectMeta.projectRef,
@@ -3741,7 +4074,9 @@ async function resolveGitConfigPath(rootDir) {
     const cfg = await fs.stat(configPath).catch(() => null);
     if (cfg && cfg.isFile()) return configPath;
 
-    const commonDirRaw = await fs.readFile(path.join(gitDir, "commondir"), "utf8").catch(() => "");
+    const commonDirRaw = await fs
+      .readFile(path.join(gitDir, "commondir"), "utf8")
+      .catch(() => "");
     const commonDirRel = commonDirRaw.trim();
     if (!commonDirRel) return null;
     let commonDir = commonDirRel;
@@ -3884,21 +4219,32 @@ function diffGeminiTotals(current, previous) {
   // would otherwise be permanently reported as zero. Gemini itself always
   // emits cache_creation=0 so the extra field is a no-op for Gemini.
   const delta = {
-    input_tokens: Math.max(0, (current.input_tokens || 0) - (previous.input_tokens || 0)),
+    input_tokens: Math.max(
+      0,
+      (current.input_tokens || 0) - (previous.input_tokens || 0),
+    ),
     cached_input_tokens: Math.max(
       0,
       (current.cached_input_tokens || 0) - (previous.cached_input_tokens || 0),
     ),
     cache_creation_input_tokens: Math.max(
       0,
-      (current.cache_creation_input_tokens || 0) - (previous.cache_creation_input_tokens || 0),
+      (current.cache_creation_input_tokens || 0) -
+        (previous.cache_creation_input_tokens || 0),
     ),
-    output_tokens: Math.max(0, (current.output_tokens || 0) - (previous.output_tokens || 0)),
+    output_tokens: Math.max(
+      0,
+      (current.output_tokens || 0) - (previous.output_tokens || 0),
+    ),
     reasoning_output_tokens: Math.max(
       0,
-      (current.reasoning_output_tokens || 0) - (previous.reasoning_output_tokens || 0),
+      (current.reasoning_output_tokens || 0) -
+        (previous.reasoning_output_tokens || 0),
     ),
-    total_tokens: Math.max(0, (current.total_tokens || 0) - (previous.total_tokens || 0)),
+    total_tokens: Math.max(
+      0,
+      (current.total_tokens || 0) - (previous.total_tokens || 0),
+    ),
   };
 
   return isAllZeroUsage(delta) ? null : delta;
@@ -3958,9 +4304,13 @@ function normalizeUsage(u) {
 // cursors.claudeHashes (msgId strings don't contain `:`, so the two formats
 // share the same Set without collision).
 function claudeMessageDedupKey(obj) {
-  const msgId = typeof obj?.message?.id === "string" && obj.message.id ? obj.message.id : null;
+  const msgId =
+    typeof obj?.message?.id === "string" && obj.message.id
+      ? obj.message.id
+      : null;
   if (!msgId) return null;
-  const reqId = typeof obj?.requestId === "string" && obj.requestId ? obj.requestId : null;
+  const reqId =
+    typeof obj?.requestId === "string" && obj.requestId ? obj.requestId : null;
   return reqId ? `${msgId}:${reqId}` : msgId;
 }
 
@@ -3981,7 +4331,12 @@ function normalizeClaudeUsage(u) {
 }
 
 function isNonEmptyObject(v) {
-  return Boolean(v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0);
+  return Boolean(
+    v &&
+    typeof v === "object" &&
+    !Array.isArray(v) &&
+    Object.keys(v).length > 0,
+  );
 }
 
 function isAllZeroUsage(u) {
@@ -4064,7 +4419,11 @@ async function walkOpencodeMessages(dir, out) {
       await walkOpencodeMessages(fullPath, out);
       continue;
     }
-    if (entry.isFile() && entry.name.startsWith("msg_") && entry.name.endsWith(".json"))
+    if (
+      entry.isFile() &&
+      entry.name.startsWith("msg_") &&
+      entry.name.endsWith(".json")
+    )
       out.push(fullPath);
   }
 }
@@ -4083,7 +4442,7 @@ function readOpencodeDbMessages(dbPath, sqliteOptions = {}) {
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
 
   try {
@@ -4211,12 +4570,18 @@ async function parseOpencodeDbIncremental({
   const messages = Array.isArray(dbMessages) ? dbMessages : [];
   const totalMessages = messages.length;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
-  const cursorNamespace = typeof cursorKey === "string" && cursorKey.length > 0 ? cursorKey : "opencode";
+  const cursorNamespace =
+    typeof cursorKey === "string" && cursorKey.length > 0
+      ? cursorKey
+      : "opencode";
   const opencodeState = normalizeOpencodeState(cursors?.[cursorNamespace]);
   const messageIndex = opencodeState.messages;
   const touchedBuckets = new Set();
@@ -4230,7 +4595,8 @@ async function parseOpencodeDbIncremental({
     // DB stores id/sessionID as separate columns; inject into msg for key derivation
     const msgForKey = { ...msg };
     if (entry.id && !msgForKey.id) msgForKey.id = entry.id;
-    if (entry.sessionID && !msgForKey.sessionID) msgForKey.sessionID = entry.sessionID;
+    if (entry.sessionID && !msgForKey.sessionID)
+      msgForKey.sessionID = entry.sessionID;
     const messageKey = deriveOpencodeMessageKey(msgForKey, null);
     if (!messageKey) {
       messagesProcessed += 1;
@@ -4239,7 +4605,8 @@ async function parseOpencodeDbIncremental({
 
     // Skip messages already indexed (from prior JSON-file parsing or previous DB sync)
     const prev = messageIndex[messageKey];
-    const lastTotals = prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
+    const lastTotals =
+      prev && typeof prev.lastTotals === "object" ? prev.lastTotals : null;
 
     const currentTotals = normalizeOpencodeTokens(msg?.tokens);
     if (!currentTotals) {
@@ -4270,7 +4637,8 @@ async function parseOpencodeDbIncremental({
     }
     delta.conversation_count = 1;
 
-    const timestampMs = coerceEpochMs(msg?.time?.completed) || coerceEpochMs(msg?.time?.created);
+    const timestampMs =
+      coerceEpochMs(msg?.time?.completed) || coerceEpochMs(msg?.time?.created);
     if (!timestampMs) {
       messagesProcessed += 1;
       continue;
@@ -4283,8 +4651,15 @@ async function parseOpencodeDbIncremental({
       continue;
     }
 
-    const model = normalizeModelInput(msg?.modelID || msg?.model || msg?.modelId) || DEFAULT_MODEL;
-    const bucket = getHourlyBucket(hourlyState, defaultSource, model, bucketStart);
+    const model =
+      normalizeModelInput(msg?.modelID || msg?.model || msg?.modelId) ||
+      DEFAULT_MODEL;
+    const bucket = getHourlyBucket(
+      hourlyState,
+      defaultSource,
+      model,
+      bucketStart,
+    );
     addTotals(bucket.totals, delta);
     touchedBuckets.add(bucketKey(defaultSource, model, bucketStart));
 
@@ -4308,7 +4683,9 @@ async function parseOpencodeDbIncremental({
           projectRef,
         );
         addTotals(projectBucket.totals, delta);
-        projectTouchedBuckets.add(projectBucketKey(projectKey, defaultSource, bucketStart));
+        projectTouchedBuckets.add(
+          projectBucketKey(projectKey, defaultSource, bucketStart),
+        );
       }
     }
 
@@ -4330,9 +4707,17 @@ async function parseOpencodeDbIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
@@ -4343,7 +4728,12 @@ async function parseOpencodeDbIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { messagesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    messagesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 const QODER_USAGE_SQL = `
@@ -4403,7 +4793,8 @@ function resolveQoderDbPaths({
     return { native: nativeValue, wsl: null };
   }
   const existsSync = deps.existsSync || fssync.existsSync;
-  const native = wsl.shouldProbeNative(env) && existsSync(nativeValue) ? nativeValue : null;
+  const native =
+    wsl.shouldProbeNative(env) && existsSync(nativeValue) ? nativeValue : null;
   const discoverWslHome = deps.discoverWslHome || wsl.discoverWslHome;
   const wslRoot = wsl.shouldProbeWsl(env)
     ? discoverWslHome(".config/Qoder", { ...deps, env })
@@ -4430,7 +4821,8 @@ async function readQoderDbMessages(dbPath, sqliteOptions = {}) {
 
 function parseJsonObject(value) {
   if (!value) return null;
-  if (value && typeof value === "object" && !Buffer.isBuffer(value)) return value;
+  if (value && typeof value === "object" && !Buffer.isBuffer(value))
+    return value;
   try {
     const parsed = JSON.parse(String(value));
     return parsed && typeof parsed === "object" ? parsed : null;
@@ -4478,12 +4870,14 @@ function qoderModelFromRow(row) {
   const preferred = parseJsonObject(row?.preferred_model_info);
   return (
     normalizeModelInput(direct?.model_key || direct?.modelKey) ||
-    normalizeModelInput(recordExtra?.modelConfig?.key || recordExtra?.model_config?.key) ||
+    normalizeModelInput(
+      recordExtra?.modelConfig?.key || recordExtra?.model_config?.key,
+    ) ||
     normalizeModelInput(
       preferred?.model_key ||
-      preferred?.modelKey ||
-      preferred?.preferred_model ||
-      preferred?.preferredModel,
+        preferred?.modelKey ||
+        preferred?.preferred_model ||
+        preferred?.preferredModel,
     ) ||
     "qoder-agent"
   );
@@ -4499,7 +4893,8 @@ function qoderMessageKey(row) {
 }
 
 function qoderProjectPath(row) {
-  const raw = typeof row?.project_uri === "string" ? row.project_uri.trim() : "";
+  const raw =
+    typeof row?.project_uri === "string" ? row.project_uri.trim() : "";
   if (!raw) return null;
   if (!raw.startsWith("file://")) return raw;
   try {
@@ -4523,8 +4918,11 @@ async function parseQoderDbIncremental({
   const hourlyState = normalizeHourlyState(cursors?.hourly);
   const qoderState = normalizeQoderState(cursors?.qoder);
   const touchedBuckets = new Set();
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -4542,7 +4940,8 @@ async function parseQoderDbIncremental({
       normalizeMessageKeyPart(row?.request_id) ||
       normalizeMessageKeyPart(row?.session_id) ||
       messageKey;
-    if (!requestOwners.has(requestKey)) requestOwners.set(requestKey, messageKey);
+    if (!requestOwners.has(requestKey))
+      requestOwners.set(requestKey, messageKey);
   }
   const cb = typeof onProgress === "function" ? onProgress : null;
   let messagesProcessed = 0;
@@ -4570,7 +4969,8 @@ async function parseQoderDbIncremental({
     // every pass. Qoder can attach token_info to an earlier assistant row only
     // after a later row was already counted; retaining the old per-message
     // owner in that case inflates one request to two conversations.
-    const conversationCount = requestOwners.get(requestKey) === messageKey ? 1 : 0;
+    const conversationCount =
+      requestOwners.get(requestKey) === messageKey ? 1 : 0;
 
     const currentTotals = {
       ...currentBase,
@@ -4595,7 +4995,9 @@ async function parseQoderDbIncremental({
     }
 
     const previousTotals =
-      previous?.totals && typeof previous.totals === "object" ? previous.totals : null;
+      previous?.totals && typeof previous.totals === "object"
+        ? previous.totals
+        : null;
     const unchanged =
       previousTotals &&
       totalsKey(previousTotals) === totalsKey(currentTotals) &&
@@ -4611,7 +5013,9 @@ async function parseQoderDbIncremental({
           previous.bucketStart,
         );
         subtractTotals(oldBucket.totals, previousTotals);
-        touchedBuckets.add(bucketKey("qoder", previous.model, previous.bucketStart));
+        touchedBuckets.add(
+          bucketKey("qoder", previous.model, previous.bucketStart),
+        );
         if (projectEnabled && previous.projectKey) {
           const oldProjectBucket = getProjectBucket(
             projectState,
@@ -4622,7 +5026,11 @@ async function parseQoderDbIncremental({
           );
           subtractTotals(oldProjectBucket.totals, previousTotals);
           projectTouchedBuckets.add(
-            projectBucketKey(previous.projectKey, "qoder", previous.bucketStart),
+            projectBucketKey(
+              previous.projectKey,
+              "qoder",
+              previous.bucketStart,
+            ),
           );
         }
       }
@@ -4639,7 +5047,9 @@ async function parseQoderDbIncremental({
           projectRef,
         );
         addTotals(projectBucket.totals, currentTotals);
-        projectTouchedBuckets.add(projectBucketKey(projectKey, "qoder", bucketStart));
+        projectTouchedBuckets.add(
+          projectBucketKey(projectKey, "qoder", bucketStart),
+        );
       }
       qoderState.messages[messageKey] = {
         totals: currentTotals,
@@ -4687,7 +5097,12 @@ async function parseQoderDbIncremental({
     projectState.updatedAt = updatedAt;
     cursors.projectHourly = projectState;
   }
-  return { messagesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    messagesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 // ── Claude Science (Anthropic's local research workbench, issue #246) ──
@@ -4754,7 +5169,9 @@ const CLAUDE_SCIENCE_TOKEN_COLUMNS = [
 function buildClaudeScienceFramesQuery(columnNames) {
   const columns = new Set(columnNames);
   const optional = (col) => (columns.has(col) ? col : `NULL AS ${col}`);
-  const present = CLAUDE_SCIENCE_TOKEN_COLUMNS.filter((col) => columns.has(col));
+  const present = CLAUDE_SCIENCE_TOKEN_COLUMNS.filter((col) =>
+    columns.has(col),
+  );
   const where = present.length
     ? `WHERE ${present.map((col) => `COALESCE(${col}, 0) <> 0`).join("\n   OR ")}`
     : "WHERE 0";
@@ -4776,9 +5193,13 @@ ORDER BY created_at, id
 // `operon.db` is the pre-rename filename; both are still probed.
 const CLAUDE_SCIENCE_DB_FILENAMES = ["operon-cli.db", "operon.db"];
 
-function resolveClaudeScienceRoot({ home = os.homedir(), env = process.env } = {}) {
+function resolveClaudeScienceRoot({
+  home = os.homedir(),
+  env = process.env,
+} = {}) {
   const override =
-    typeof env.CLAUDE_SCIENCE_HOME === "string" && env.CLAUDE_SCIENCE_HOME.trim()
+    typeof env.CLAUDE_SCIENCE_HOME === "string" &&
+    env.CLAUDE_SCIENCE_HOME.trim()
       ? path.resolve(env.CLAUDE_SCIENCE_HOME.trim())
       : null;
   return override || path.join(home, ".claude-science");
@@ -4813,9 +5234,14 @@ function claudeScienceDbsUnderRoot(root) {
 // Windows users run the app inside WSL, so on win32 the distro home is probed
 // too (same pattern as the other WSL-aware providers). Returns [] when nothing
 // is installed.
-function resolveClaudeScienceDbPaths({ home = os.homedir(), env = process.env, deps = {} } = {}) {
+function resolveClaudeScienceDbPaths({
+  home = os.homedir(),
+  env = process.env,
+  deps = {},
+} = {}) {
   const explicit =
-    typeof env.CLAUDE_SCIENCE_DB_PATH === "string" && env.CLAUDE_SCIENCE_DB_PATH.trim()
+    typeof env.CLAUDE_SCIENCE_DB_PATH === "string" &&
+    env.CLAUDE_SCIENCE_DB_PATH.trim()
       ? path.resolve(env.CLAUDE_SCIENCE_DB_PATH.trim())
       : null;
   if (explicit) return fssync.existsSync(explicit) ? [explicit] : [];
@@ -4844,9 +5270,13 @@ function resolveClaudeScienceDbPaths({ home = os.homedir(), env = process.env, d
 
 // Kept for the default single-install path (and its existing callers/tests):
 // the conventional location, whether or not it exists yet.
-function resolveClaudeScienceDbPath({ home = os.homedir(), env = process.env } = {}) {
+function resolveClaudeScienceDbPath({
+  home = os.homedir(),
+  env = process.env,
+} = {}) {
   const explicit =
-    typeof env.CLAUDE_SCIENCE_DB_PATH === "string" && env.CLAUDE_SCIENCE_DB_PATH.trim()
+    typeof env.CLAUDE_SCIENCE_DB_PATH === "string" &&
+    env.CLAUDE_SCIENCE_DB_PATH.trim()
       ? env.CLAUDE_SCIENCE_DB_PATH.trim()
       : null;
   if (explicit) return path.resolve(explicit);
@@ -4899,22 +5329,35 @@ async function readClaudeScienceFrames(dbPath, sqliteOptions = {}) {
 // clamped independently — mixing them before the subtraction would let one
 // group's cache mask the other's shortfall.
 function claudeScienceUncachedInput(input, cacheRead, cacheWrite) {
-  return Math.max(0, toNonNegativeInt(input) - toNonNegativeInt(cacheRead) - toNonNegativeInt(cacheWrite));
+  return Math.max(
+    0,
+    toNonNegativeInt(input) -
+      toNonNegativeInt(cacheRead) -
+      toNonNegativeInt(cacheWrite),
+  );
 }
 
 function normalizeClaudeScienceTokens(row) {
   const uncachedInput =
-    claudeScienceUncachedInput(row?.input_tokens, row?.cache_read_tokens, row?.cache_write_tokens) +
+    claudeScienceUncachedInput(
+      row?.input_tokens,
+      row?.cache_read_tokens,
+      row?.cache_write_tokens,
+    ) +
     claudeScienceUncachedInput(
       row?.aux_input_tokens,
       row?.aux_cache_read_tokens,
       row?.aux_cache_write_tokens,
     );
-  const output = toNonNegativeInt(row?.output_tokens) + toNonNegativeInt(row?.aux_output_tokens);
+  const output =
+    toNonNegativeInt(row?.output_tokens) +
+    toNonNegativeInt(row?.aux_output_tokens);
   const cacheRead =
-    toNonNegativeInt(row?.cache_read_tokens) + toNonNegativeInt(row?.aux_cache_read_tokens);
+    toNonNegativeInt(row?.cache_read_tokens) +
+    toNonNegativeInt(row?.aux_cache_read_tokens);
   const cacheWrite =
-    toNonNegativeInt(row?.cache_write_tokens) + toNonNegativeInt(row?.aux_cache_write_tokens);
+    toNonNegativeInt(row?.cache_write_tokens) +
+    toNonNegativeInt(row?.aux_cache_write_tokens);
   const total = uncachedInput + output + cacheRead + cacheWrite;
   if (total <= 0) return null;
   return {
@@ -4967,7 +5410,9 @@ async function parseClaudeScienceIncremental({
 
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index];
-    const frameId = normalizeMessageKeyPart(row?.id == null ? "" : String(row.id));
+    const frameId = normalizeMessageKeyPart(
+      row?.id == null ? "" : String(row.id),
+    );
     const base = normalizeClaudeScienceTokens(row);
     const timestampMs = claudeScienceFrameTimestampMs(row);
     const bucketStart = timestampMs
@@ -4989,7 +5434,9 @@ async function parseClaudeScienceIncremental({
 
     const previous = state.messages[frameId];
     const previousTotals =
-      previous?.totals && typeof previous.totals === "object" ? previous.totals : null;
+      previous?.totals && typeof previous.totals === "object"
+        ? previous.totals
+        : null;
     const unchanged =
       previousTotals &&
       totalsKey(previousTotals) === totalsKey(currentTotals) &&
@@ -5005,9 +5452,16 @@ async function parseClaudeScienceIncremental({
           previous.bucketStart,
         );
         subtractTotals(oldBucket.totals, previousTotals);
-        touchedBuckets.add(bucketKey("claude-science", previous.model, previous.bucketStart));
+        touchedBuckets.add(
+          bucketKey("claude-science", previous.model, previous.bucketStart),
+        );
       }
-      const bucket = getHourlyBucket(hourlyState, "claude-science", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "claude-science",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, currentTotals);
       touchedBuckets.add(bucketKey("claude-science", model, bucketStart));
       state.messages[frameId] = {
@@ -5031,7 +5485,11 @@ async function parseClaudeScienceIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   state.updatedAt = updatedAt;
@@ -5105,7 +5563,8 @@ async function parseCursorApiIncremental({
     for (const record of records) {
       if (!record?.date) continue;
       const b = toUtcHalfHourStart(record.date);
-      if (b && (!earliestBucketStart || b < earliestBucketStart)) earliestBucketStart = b;
+      if (b && (!earliestBucketStart || b < earliestBucketStart))
+        earliestBucketStart = b;
     }
     // No parseable record date at all means the export is malformed —
     // refilling would add nothing, so wiping would zero out (and upload
@@ -5116,7 +5575,8 @@ async function parseCursorApiIncremental({
         const sourceKey = normalizeSourceInput(parsed.source) || DEFAULT_SOURCE;
         if (sourceKey !== defaultSource) continue;
         if (!bucket?.totals) continue;
-        if (parsed.hourStart && parsed.hourStart < earliestBucketStart) continue;
+        if (parsed.hourStart && parsed.hourStart < earliestBucketStart)
+          continue;
         bucket.totals = initTotals();
         touchedBuckets.add(key);
       }
@@ -5138,7 +5598,12 @@ async function parseCursorApiIncremental({
     if (!bucketStart) continue;
 
     const model = normalizeModelInput(record.model) || DEFAULT_MODEL;
-    const bucket = getHourlyBucket(hourlyState, defaultSource, model, bucketStart);
+    const bucket = getHourlyBucket(
+      hourlyState,
+      defaultSource,
+      model,
+      bucketStart,
+    );
     addTotals(bucket.totals, delta);
     touchedBuckets.add(bucketKey(defaultSource, model, bucketStart));
 
@@ -5159,7 +5624,11 @@ async function parseCursorApiIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
 
@@ -5184,26 +5653,37 @@ function resolveKiroBasePath(env = process.env) {
   const home = require("node:os").homedir();
   const suffix = ["Kiro", "User", "globalStorage", "kiro.kiroagent"];
   if (process.platform === "win32") {
-    const appData = typeof env.APPDATA === "string" && env.APPDATA.trim().length > 0
-      ? env.APPDATA.trim()
-      : path.join(home, "AppData", "Roaming");
+    const appData =
+      typeof env.APPDATA === "string" && env.APPDATA.trim().length > 0
+        ? env.APPDATA.trim()
+        : path.join(home, "AppData", "Roaming");
     return path.join(appData, ...suffix);
   }
   if (process.platform === "linux") {
-    const configHome = typeof env.XDG_CONFIG_HOME === "string" && env.XDG_CONFIG_HOME.trim().length > 0
-      ? env.XDG_CONFIG_HOME.trim()
-      : path.join(home, ".config");
+    const configHome =
+      typeof env.XDG_CONFIG_HOME === "string" &&
+      env.XDG_CONFIG_HOME.trim().length > 0
+        ? env.XDG_CONFIG_HOME.trim()
+        : path.join(home, ".config");
     return path.join(configHome, ...suffix);
   }
   return path.join(home, "Library", "Application Support", ...suffix);
 }
 
 function resolveKiroDbPath(basePath) {
-  return path.join(basePath || resolveKiroBasePath(), "dev_data", "devdata.sqlite");
+  return path.join(
+    basePath || resolveKiroBasePath(),
+    "dev_data",
+    "devdata.sqlite",
+  );
 }
 
 function resolveKiroJsonlPath(basePath) {
-  return path.join(basePath || resolveKiroBasePath(), "dev_data", "tokens_generated.jsonl");
+  return path.join(
+    basePath || resolveKiroBasePath(),
+    "dev_data",
+    "tokens_generated.jsonl",
+  );
 }
 
 function readKiroDbTokens(dbPath, sinceId, sqliteOptions = {}) {
@@ -5219,7 +5699,7 @@ function readKiroDbTokens(dbPath, sinceId, sqliteOptions = {}) {
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
   try {
     return readSqliteJsonRows(effectiveDbPath, sql, {
@@ -5252,7 +5732,8 @@ function readKiroJsonlTokens(jsonlPath, sinceLineIndex) {
   if (!jsonlPath || !fssync.existsSync(jsonlPath)) {
     return { rows: [], lineCount: 0, reset: false };
   }
-  const startLine = Number.isFinite(sinceLineIndex) && sinceLineIndex > 0 ? sinceLineIndex : 0;
+  const startLine =
+    Number.isFinite(sinceLineIndex) && sinceLineIndex > 0 ? sinceLineIndex : 0;
   let raw;
   try {
     raw = fssync.readFileSync(jsonlPath, "utf8");
@@ -5343,7 +5824,10 @@ function resolveKiroModel(timeline, utcTimestamp) {
     const entry = timeline[mid];
     // Check if timestamp falls within the .chat execution window
     if (ts >= entry.startMs && ts <= entry.endMs) return entry.model;
-    const dist = Math.min(Math.abs(ts - entry.startMs), Math.abs(ts - entry.endMs));
+    const dist = Math.min(
+      Math.abs(ts - entry.startMs),
+      Math.abs(ts - entry.endMs),
+    );
     if (dist < bestDist) {
       bestDist = dist;
       best = entry.model;
@@ -5372,14 +5856,30 @@ function normalizeKiroModelName(raw) {
   return name || null;
 }
 
-async function parseKiroIncremental({ basePath, dbPath, jsonlPath, cursors, queuePath, onProgress, sqliteOptions } = {}) {
+async function parseKiroIncremental({
+  basePath,
+  dbPath,
+  jsonlPath,
+  cursors,
+  queuePath,
+  onProgress,
+  sqliteOptions,
+} = {}) {
   await ensureDir(path.dirname(queuePath));
-  const kiroState = cursors.kiro && typeof cursors.kiro === "object" ? cursors.kiro : {};
-  const lastDbId = typeof kiroState.lastDbId === "number"
-    ? kiroState.lastDbId
-    : (typeof kiroState.lastId === "number" ? kiroState.lastId : 0);
-  const jsonlState = kiroState.jsonl && typeof kiroState.jsonl === "object" ? kiroState.jsonl : {};
-  const lastJsonlLine = typeof jsonlState.lastLine === "number" ? jsonlState.lastLine : 0;
+  const kiroState =
+    cursors.kiro && typeof cursors.kiro === "object" ? cursors.kiro : {};
+  const lastDbId =
+    typeof kiroState.lastDbId === "number"
+      ? kiroState.lastDbId
+      : typeof kiroState.lastId === "number"
+        ? kiroState.lastId
+        : 0;
+  const jsonlState =
+    kiroState.jsonl && typeof kiroState.jsonl === "object"
+      ? kiroState.jsonl
+      : {};
+  const lastJsonlLine =
+    typeof jsonlState.lastLine === "number" ? jsonlState.lastLine : 0;
 
   const resolvedDbPath = dbPath || resolveKiroDbPath(basePath);
   const resolvedJsonlPath = jsonlPath || resolveKiroJsonlPath(basePath);
@@ -5408,7 +5908,10 @@ async function parseKiroIncremental({ basePath, dbPath, jsonlPath, cursors, queu
       cursors.kiro = {
         ...kiroState,
         lastDbId,
-        jsonl: { lastLine: jsonlResult.lineCount, updatedAt: new Date().toISOString() },
+        jsonl: {
+          lastLine: jsonlResult.lineCount,
+          updatedAt: new Date().toISOString(),
+        },
         updatedAt: new Date().toISOString(),
       };
       return {
@@ -5433,8 +5936,9 @@ async function parseKiroIncremental({ basePath, dbPath, jsonlPath, cursors, queu
   // Build model timeline from .chat files for model name resolution.
   // Must come from the SAME install as the rows being parsed (dual-install:
   // a WSL install's rows must not be resolved against native .chat files).
-  const timelineBase = basePath
-    || (dbPath ? path.dirname(path.dirname(dbPath)) : resolveKiroBasePath());
+  const timelineBase =
+    basePath ||
+    (dbPath ? path.dirname(path.dirname(dbPath)) : resolveKiroBasePath());
   const modelTimeline = buildKiroModelTimeline(timelineBase);
 
   const hourlyState = normalizeHourlyState(cursors?.hourly);
@@ -5485,7 +5989,11 @@ async function parseKiroIncremental({ basePath, dbPath, jsonlPath, cursors, queu
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -5512,9 +6020,15 @@ function resolveHermesPath(env = process.env, deps = {}) {
   const home = require("node:os").homedir();
   const defaultPath = path.join(home, ".hermes");
   if (process.platform === "win32") {
-    const localAppData = typeof env.LOCALAPPDATA === "string" ? env.LOCALAPPDATA.trim() : "";
-    const nativeValue = localAppData.length > 0 ? path.join(localAppData, "hermes") : null;
-    const paths = resolveInstallPaths({ nativeValue, wslDir: ".hermes" }, env, deps);
+    const localAppData =
+      typeof env.LOCALAPPDATA === "string" ? env.LOCALAPPDATA.trim() : "";
+    const nativeValue =
+      localAppData.length > 0 ? path.join(localAppData, "hermes") : null;
+    const paths = resolveInstallPaths(
+      { nativeValue, wslDir: ".hermes" },
+      env,
+      deps,
+    );
     const picked = paths.native || paths.wsl;
     if (picked) return picked;
     const mode = wsl.getWslMode(env);
@@ -5550,13 +6064,33 @@ function discoverWslHermesHome(deps = {}) {
   return wsl.discoverWslHome(".hermes", deps);
 }
 
-function pickWin32ProviderPath({ env = process.env, nativeValue, wslProviderDir, wslValue, deps = {} }) {
-  const paths = resolveInstallPaths({ nativeValue, wslDir: wslProviderDir, wslValue }, env, deps);
+function pickWin32ProviderPath({
+  env = process.env,
+  nativeValue,
+  wslProviderDir,
+  wslValue,
+  deps = {},
+}) {
+  const paths = resolveInstallPaths(
+    { nativeValue, wslDir: wslProviderDir, wslValue },
+    env,
+    deps,
+  );
   return paths.native || paths.wsl;
 }
 
-function resolveAllWin32ProviderPaths({ env = process.env, nativeValue, wslProviderDir, wslValue, deps = {} }) {
-  return resolveInstallPaths({ nativeValue, wslDir: wslProviderDir, wslValue }, env, deps);
+function resolveAllWin32ProviderPaths({
+  env = process.env,
+  nativeValue,
+  wslProviderDir,
+  wslValue,
+  deps = {},
+}) {
+  return resolveInstallPaths(
+    { nativeValue, wslDir: wslProviderDir, wslValue },
+    env,
+    deps,
+  );
 }
 
 function resolveHermesDbPath(env = process.env) {
@@ -5565,13 +6099,15 @@ function resolveHermesDbPath(env = process.env) {
 }
 
 function resolveAllHermesDBPaths({ hermesPath, dbPath } = {}) {
-  const hermesDir = hermesPath ?? (dbPath ? path.dirname(dbPath) : resolveHermesPath());
+  const hermesDir =
+    hermesPath ?? (dbPath ? path.dirname(dbPath) : resolveHermesPath());
   if (!hermesDir) return { default: null, profiles: {} };
   const defaultDbPath = dbPath ?? path.join(hermesDir, "state.db");
   const profilePaths = {};
   try {
     const profilesDir = path.join(hermesDir, "profiles");
-    const profiles = fssync.readdirSync(profilesDir, { withFileTypes: true })
+    const profiles = fssync
+      .readdirSync(profilesDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -5581,12 +6117,12 @@ function resolveAllHermesDBPaths({ hermesPath, dbPath } = {}) {
         profilePaths[entry.name] = dbPath;
       }
     }
-  } catch (_e) { }
+  } catch (_e) {}
 
   return {
     default: fssync.existsSync(defaultDbPath) ? defaultDbPath : null,
     profiles: profilePaths,
-  }
+  };
 }
 
 function sqliteStringLiteral(value) {
@@ -5605,15 +6141,30 @@ function snapshotSqliteDb(dbPath) {
   return wsl.snapshotSqliteDb(dbPath);
 }
 
-function readHermesSessions(dbPath, lastCompletedEpoch, unfinishedSessionIds = [], sqliteOptions = {}) {
+function readHermesSessions(
+  dbPath,
+  lastCompletedEpoch,
+  unfinishedSessionIds = [],
+  sqliteOptions = {},
+) {
   if (!dbPath || !fssync.existsSync(dbPath)) return [];
-  const since = Number.isFinite(lastCompletedEpoch) && lastCompletedEpoch > 0 ? lastCompletedEpoch : 0;
+  const since =
+    Number.isFinite(lastCompletedEpoch) && lastCompletedEpoch > 0
+      ? lastCompletedEpoch
+      : 0;
   const forceIds = Array.isArray(unfinishedSessionIds)
-    ? [...new Set(unfinishedSessionIds.filter((id) => typeof id === "string" && id.length > 0))]
+    ? [
+        ...new Set(
+          unfinishedSessionIds.filter(
+            (id) => typeof id === "string" && id.length > 0,
+          ),
+        ),
+      ]
     : [];
-  const forceIncludeSql = forceIds.length > 0
-    ? ` OR id IN (${forceIds.map(sqliteStringLiteral).join(",")})`
-    : "";
+  const forceIncludeSql =
+    forceIds.length > 0
+      ? ` OR id IN (${forceIds.map(sqliteStringLiteral).join(",")})`
+      : "";
   // Fetch sessions that started at/after the cursor, sessions that are still
   // in-progress (ended_at IS NULL), OR sessions that were previously observed
   // unfinished.  Hermes updates token counts in real-time, including a final
@@ -5668,7 +6219,7 @@ function sqliteDbContainsIds(dbPath, table, ids, sqliteOptions = {}) {
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
   try {
     const rows = readSqliteJsonRows(effectiveDbPath, sql, {
@@ -5689,16 +6240,28 @@ function sqliteDbContainsIds(dbPath, table, ids, sqliteOptions = {}) {
 // DB (providers may delete old sessions, which would blind the probe).
 function sampleRecentKeys(obj, limit = 16) {
   if (!obj || typeof obj !== "object") return [];
-  const keys = Object.keys(obj).filter((k) => typeof k === "string" && k.length > 0);
+  const keys = Object.keys(obj).filter(
+    (k) => typeof k === "string" && k.length > 0,
+  );
   return keys.slice(-limit);
 }
 
 function gooseInstallOwnsCursor(dbPath, flatState, sqliteOptions) {
-  return sqliteDbContainsIds(dbPath, "sessions", sampleRecentKeys(flatState?.sessionTotals), sqliteOptions);
+  return sqliteDbContainsIds(
+    dbPath,
+    "sessions",
+    sampleRecentKeys(flatState?.sessionTotals),
+    sqliteOptions,
+  );
 }
 
 function zedInstallOwnsCursor(dbPath, flatState, sqliteOptions) {
-  return sqliteDbContainsIds(dbPath, "threads", sampleRecentKeys(flatState?.threadTotals), sqliteOptions);
+  return sqliteDbContainsIds(
+    dbPath,
+    "threads",
+    sampleRecentKeys(flatState?.threadTotals),
+    sqliteOptions,
+  );
 }
 
 function hermesInstallOwnsCursor(hermesPath, flatState, sqliteOptions) {
@@ -5714,14 +6277,19 @@ function hermesInstallOwnsCursor(hermesPath, flatState, sqliteOptions) {
   };
   collect(flatState);
   if (flatState?.profiles && typeof flatState.profiles === "object") {
-    for (const profileState of Object.values(flatState.profiles)) collect(profileState);
+    for (const profileState of Object.values(flatState.profiles))
+      collect(profileState);
   }
   const sample = [...ids].slice(-16);
   if (sample.length === 0) return false;
 
   const dbPaths = resolveAllHermesDBPaths({ hermesPath });
-  const allDbs = [dbPaths.default, ...Object.values(dbPaths.profiles)].filter(Boolean);
-  return allDbs.some((db) => sqliteDbContainsIds(db, "sessions", sample, sqliteOptions));
+  const allDbs = [dbPaths.default, ...Object.values(dbPaths.profiles)].filter(
+    Boolean,
+  );
+  return allDbs.some((db) =>
+    sqliteDbContainsIds(db, "sessions", sample, sqliteOptions),
+  );
 }
 
 function kiroInstallOwnsCursor(dbPath, flatState, sqliteOptions) {
@@ -5729,19 +6297,30 @@ function kiroInstallOwnsCursor(dbPath, flatState, sqliteOptions) {
   // whose tokens_generated table never reached that id cannot be the flat
   // cursor's host. Both installs containing the id (short/equal histories)
   // yields two hits upstream → caller seeds every namespace (safe).
-  const lastDbId = typeof flatState?.lastDbId === "number" && Number.isInteger(flatState.lastDbId) && flatState.lastDbId > 0
-    ? flatState.lastDbId
-    : (typeof flatState?.lastId === "number" && Number.isInteger(flatState.lastId) && flatState.lastId > 0
-      ? flatState.lastId
-      : 0);
+  const lastDbId =
+    typeof flatState?.lastDbId === "number" &&
+    Number.isInteger(flatState.lastDbId) &&
+    flatState.lastDbId > 0
+      ? flatState.lastDbId
+      : typeof flatState?.lastId === "number" &&
+          Number.isInteger(flatState.lastId) &&
+          flatState.lastId > 0
+        ? flatState.lastId
+        : 0;
   if (!lastDbId) return false;
-  return sqliteDbContainsIds(dbPath, "tokens_generated", [String(lastDbId)], sqliteOptions);
+  return sqliteDbContainsIds(
+    dbPath,
+    "tokens_generated",
+    [String(lastDbId)],
+    sqliteOptions,
+  );
 }
 
 // Kiro CLI request_ids live inside the conversations_v2 JSON payload, not in
 // an id column — probe via json_each instead of sqliteDbContainsIds.
 function kiroCliDbContainsRequestIds(dbPath, requestIds, sqliteOptions = {}) {
-  if (!dbPath || !Array.isArray(requestIds) || requestIds.length === 0) return false;
+  if (!dbPath || !Array.isArray(requestIds) || requestIds.length === 0)
+    return false;
   if (!fssync.existsSync(dbPath)) return false;
   const inList = requestIds.map(sqliteStringLiteral).join(",");
   // Alias both tables: conversations_v2.value and json_each's own `value`
@@ -5758,7 +6337,7 @@ function kiroCliDbContainsRequestIds(dbPath, requestIds, sqliteOptions = {}) {
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
   try {
     const rows = readSqliteJsonRows(effectiveDbPath, sql, {
@@ -5781,11 +6360,19 @@ function kiroCliInstallOwnsCursor(dbPath, flatState, sqliteOptions) {
   // tag, and neither appears in conversations_v2. Filter BEFORE sampling so
   // recent session-file churn cannot blind the probe to older SQLite ids.
   const requests =
-    flatState?.requests && typeof flatState.requests === "object" ? flatState.requests : {};
+    flatState?.requests && typeof flatState.requests === "object"
+      ? flatState.requests
+      : {};
   const sqliteKeyed = {};
   for (const [k, v] of Object.entries(requests)) {
     if (k.includes(":")) continue;
-    if (v && typeof v === "object" && typeof v.session_id === "string" && v.session_id) continue;
+    if (
+      v &&
+      typeof v === "object" &&
+      typeof v.session_id === "string" &&
+      v.session_id
+    )
+      continue;
     sqliteKeyed[k] = v;
   }
   const sample = sampleRecentKeys(sqliteKeyed);
@@ -5800,9 +6387,17 @@ function hasLegacyHermesDefaultState(hermesState) {
   );
 }
 
-async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, onProgress, sqliteOptions } = {}) {
+async function parseHermesIncremental({
+  hermesPath,
+  dbPath,
+  cursors,
+  queuePath,
+  onProgress,
+  sqliteOptions,
+} = {}) {
   await ensureDir(path.dirname(queuePath));
-  const hermesState = cursors.hermes && typeof cursors.hermes === "object" ? cursors.hermes : {};
+  const hermesState =
+    cursors.hermes && typeof cursors.hermes === "object" ? cursors.hermes : {};
 
   const dbPaths = resolveAllHermesDBPaths({ hermesPath, dbPath });
   if (dbPaths.default === null && Object.keys(dbPaths.profiles).length === 0) {
@@ -5818,7 +6413,9 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
   const touchedBuckets = new Set();
 
   function ingestProfile(dbPath, dbState) {
-    const trackedUnfinishedSessionIds = Array.isArray(dbState.unfinishedSessionIds)
+    const trackedUnfinishedSessionIds = Array.isArray(
+      dbState.unfinishedSessionIds,
+    )
       ? dbState.unfinishedSessionIds
       : [];
     const rows = readHermesSessions(
@@ -5834,14 +6431,18 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
     }
 
     // Per-session snapshot from the previous sync: { [sessionId]: { in, out, cacheRead, cacheWrite, reasoning } }
-    const prevSnapshots = (dbState.snapshots && typeof dbState.snapshots === "object")
-      ? dbState.snapshots : {};
+    const prevSnapshots =
+      dbState.snapshots && typeof dbState.snapshots === "object"
+        ? dbState.snapshots
+        : {};
 
     // Only advance past sessions that have fully ended.  Active sessions
     // (ended_at IS NULL) must be re-read every sync because Hermes updates
     // their token counts in real-time after each turn.
     const lastCompletedStartedAt =
-      typeof dbState.lastCompletedStartedAt === "number" ? dbState.lastCompletedStartedAt : 0;
+      typeof dbState.lastCompletedStartedAt === "number"
+        ? dbState.lastCompletedStartedAt
+        : 0;
 
     let maxCompletedStartedAt = lastCompletedStartedAt;
     let oldestUnfinishedStartedAt = Infinity;
@@ -5862,19 +6463,33 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
         cacheRead === 0 &&
         cacheWrite === 0 &&
         reasoning === 0
-      ) continue;
+      )
+        continue;
 
       // Save current snapshot for next sync
-      nextSnapshots[row.id] = { in: inputTokens, out: outputTokens, cacheRead, cacheWrite, reasoning, message_count: messageCount };
+      nextSnapshots[row.id] = {
+        in: inputTokens,
+        out: outputTokens,
+        cacheRead,
+        cacheWrite,
+        reasoning,
+        message_count: messageCount,
+      };
 
       const startedAt = Number(row.started_at);
       const endedAt = row.ended_at == null ? null : Number(row.ended_at);
       if (endedAt == null) {
         if (row.id && Number.isFinite(startedAt)) {
           nextUnfinishedSessionIds.add(row.id);
-          oldestUnfinishedStartedAt = Math.min(oldestUnfinishedStartedAt, startedAt);
+          oldestUnfinishedStartedAt = Math.min(
+            oldestUnfinishedStartedAt,
+            startedAt,
+          );
         }
-      } else if (Number.isFinite(startedAt) && startedAt > maxCompletedStartedAt) {
+      } else if (
+        Number.isFinite(startedAt) &&
+        startedAt > maxCompletedStartedAt
+      ) {
         maxCompletedStartedAt = startedAt;
       }
 
@@ -5897,7 +6512,14 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
         dMessageCount = Math.max(0, messageCount - (prev.message_count || 0));
       }
       // Skip if delta is zero (session unchanged since last sync)
-      if (dInput === 0 && dOutput === 0 && dCacheRead === 0 && dCacheWrite === 0 && dReasoning === 0) continue;
+      if (
+        dInput === 0 &&
+        dOutput === 0 &&
+        dCacheRead === 0 &&
+        dCacheWrite === 0 &&
+        dReasoning === 0
+      )
+        continue;
 
       // Prefer ended_at for bucket placement; fall back to started_at
       const epochSec = endedAt ?? startedAt;
@@ -5934,7 +6556,9 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
       }
     }
 
-    const nextLastCompletedStartedAt = Number.isFinite(oldestUnfinishedStartedAt)
+    const nextLastCompletedStartedAt = Number.isFinite(
+      oldestUnfinishedStartedAt,
+    )
       ? Math.min(maxCompletedStartedAt, oldestUnfinishedStartedAt)
       : maxCompletedStartedAt;
 
@@ -5951,17 +6575,26 @@ async function parseHermesIncremental({ hermesPath, dbPath, cursors, queuePath, 
     ingestProfile(dbPaths.default, hermesState);
   }
 
-  hermesState.profiles = hermesState.profiles && typeof hermesState.profiles === "object" ? hermesState.profiles : {};
+  hermesState.profiles =
+    hermesState.profiles && typeof hermesState.profiles === "object"
+      ? hermesState.profiles
+      : {};
 
   for (const [profileName, dbPath] of Object.entries(dbPaths.profiles)) {
-    const profileState = hermesState.profiles[profileName] && typeof hermesState.profiles[profileName] === "object"
-      ? hermesState.profiles[profileName]
-      : {};
+    const profileState =
+      hermesState.profiles[profileName] &&
+      typeof hermesState.profiles[profileName] === "object"
+        ? hermesState.profiles[profileName]
+        : {};
     hermesState.profiles[profileName] = profileState;
     ingestProfile(dbPath, profileState);
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
   cursors.hermes = {
@@ -5984,7 +6617,10 @@ function resolveKimiDefaultModel(env = process.env) {
   const fallback = "kimi-for-coding";
   try {
     const home = env.HOME || require("node:os").homedir();
-    const cfgPath = path.join(env.KIMI_HOME || path.join(home, ".kimi"), "config.toml");
+    const cfgPath = path.join(
+      env.KIMI_HOME || path.join(home, ".kimi"),
+      "config.toml",
+    );
     const raw = fssync.readFileSync(cfgPath, "utf8");
     const defaultMatch = raw.match(/^\s*default_model\s*=\s*"([^"]+)"/m);
     if (!defaultMatch) return fallback;
@@ -6029,18 +6665,27 @@ function resolveKiroCliDbPath(env = process.env) {
     // macOS/Linux only — Windows users run it inside WSL (handled by the
     // dual-install path in sync). Kept as the conventional %LOCALAPPDATA%
     // location so a future native build is picked up; harmless when absent.
-    const localAppData = typeof env.LOCALAPPDATA === "string" && env.LOCALAPPDATA.trim().length > 0
-      ? env.LOCALAPPDATA.trim()
-      : path.join(home, "AppData", "Local");
+    const localAppData =
+      typeof env.LOCALAPPDATA === "string" && env.LOCALAPPDATA.trim().length > 0
+        ? env.LOCALAPPDATA.trim()
+        : path.join(home, "AppData", "Local");
     return path.join(localAppData, "kiro-cli", "data.sqlite3");
   }
   if (process.platform === "linux") {
-    const dataHome = typeof env.XDG_DATA_HOME === "string" && env.XDG_DATA_HOME.trim().length > 0
-      ? env.XDG_DATA_HOME.trim()
-      : path.join(home, ".local", "share");
+    const dataHome =
+      typeof env.XDG_DATA_HOME === "string" &&
+      env.XDG_DATA_HOME.trim().length > 0
+        ? env.XDG_DATA_HOME.trim()
+        : path.join(home, ".local", "share");
     return path.join(dataHome, "kiro-cli", "data.sqlite3");
   }
-  return path.join(home, "Library", "Application Support", "kiro-cli", "data.sqlite3");
+  return path.join(
+    home,
+    "Library",
+    "Application Support",
+    "kiro-cli",
+    "data.sqlite3",
+  );
 }
 
 // Bug-4: canonical UUID shape — 8-4-4-4-12 hex groups. The looser
@@ -6156,8 +6801,7 @@ async function readKiroCliMessageChars(jsonlPath, turnMessageIds) {
     return result;
   }
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-  const midToTurn =
-    turnMessageIds instanceof Map ? turnMessageIds : new Map();
+  const midToTurn = turnMessageIds instanceof Map ? turnMessageIds : new Map();
   const attributedTurns = new Set();
   let pendingPromptChars = 0;
   // Bug-5: wrap the streamed iteration. Mid-read errors (file deleted or
@@ -6183,7 +6827,11 @@ async function readKiroCliMessageChars(jsonlPath, turnMessageIds) {
         if (!c || typeof c !== "object") continue;
         if (c.kind === "text" && typeof c.data === "string") {
           chars += c.data.length;
-        } else if (c.kind === "toolUse" && c.data && typeof c.data === "object") {
+        } else if (
+          c.kind === "toolUse" &&
+          c.data &&
+          typeof c.data === "object"
+        ) {
           try {
             chars += JSON.stringify(c.data.input || {}).length;
           } catch {
@@ -6236,7 +6884,9 @@ async function readKiroCliSessionTurns(jsonPath) {
   const sessionModelId =
     (modelInfo && (modelInfo.model_id || modelInfo.model_name)) || null;
   const sessionId =
-    typeof parsed.session_id === "string" ? parsed.session_id : path.basename(jsonPath, ".json");
+    typeof parsed.session_id === "string"
+      ? parsed.session_id
+      : path.basename(jsonPath, ".json");
 
   // Build turn_index -> Set(message_id) so the jsonl walker can attribute
   // orphaned Prompt events (not referenced by turn.message_ids) to the
@@ -6264,10 +6914,11 @@ async function readKiroCliSessionTurns(jsonPath) {
     // namespace across runs that see 0 vs runs that don't.
     const loopRand =
       turn.loop_id && typeof turn.loop_id === "object"
-        ? turn.loop_id.rand ?? turn.loop_id.seed ?? null
+        ? (turn.loop_id.rand ?? turn.loop_id.seed ?? null)
         : null;
     const messageIds = Array.isArray(turn.message_ids) ? turn.message_ids : [];
-    const requestId = loopRand != null ? `${sessionId}:${loopRand}` : (messageIds[0] || null);
+    const requestId =
+      loopRand != null ? `${sessionId}:${loopRand}` : messageIds[0] || null;
     if (!requestId) continue;
 
     // Prefer real token counts if kiro-cli populated them.
@@ -6339,10 +6990,7 @@ async function readKiroCliSessionTurns(jsonPath) {
 function kiroCliV2ContentChars(value) {
   if (typeof value === "string") return value.length;
   if (Array.isArray(value)) {
-    return value.reduce(
-      (sum, item) => sum + kiroCliV2ContentChars(item),
-      0,
-    );
+    return value.reduce((sum, item) => sum + kiroCliV2ContentChars(item), 0);
   }
   if (!value || typeof value !== "object") return 0;
   for (const key of ["content", "text", "value", "parts", "entries"]) {
@@ -6361,7 +7009,9 @@ function kiroCliV2UsageCredits(payload) {
   let hasCreditEntry = false;
   for (const summary of summaries) {
     if (!summary || typeof summary !== "object") continue;
-    const unit = String(summary.unit || "").trim().toLowerCase();
+    const unit = String(summary.unit || "")
+      .trim()
+      .toLowerCase();
     if (unit !== "credit" && unit !== "credits") continue;
     const usage = Number(summary.usage);
     if (!Number.isFinite(usage) || usage < 0) continue;
@@ -6437,9 +7087,7 @@ async function readKiroCliV2SessionTurns(messagesPath) {
 
   const flushTurn = () => {
     if (!turn) return;
-    const hasUsage =
-      turn.outputChars > 0 ||
-      turn.reasoningChars > 0;
+    const hasUsage = turn.outputChars > 0 || turn.reasoningChars > 0;
     const tsMs = Number.isFinite(turn.timestampMs)
       ? turn.timestampMs
       : Number.isFinite(pendingUserTimestampMs)
@@ -6447,8 +7095,7 @@ async function readKiroCliV2SessionTurns(messagesPath) {
         : fallbackTimestamp;
     if (hasUsage && Number.isFinite(tsMs) && tsMs > 0) {
       const requestId =
-        turn.executionId ||
-        `${sessionId}:v2:${fallbackTurnIndex}`;
+        turn.executionId || `${sessionId}:v2:${fallbackTurnIndex}`;
       const messageIds = Array.from(turn.messageIds);
       flat.push({
         request_id: requestId,
@@ -6472,10 +7119,9 @@ async function readKiroCliV2SessionTurns(messagesPath) {
     turn = {
       executionId:
         typeof payload?.executionId === "string" ? payload.executionId : null,
-      timestampMs:
-        Number.isFinite(timestampMs)
-          ? timestampMs
-          : pendingUserTimestampMs,
+      timestampMs: Number.isFinite(timestampMs)
+        ? timestampMs
+        : pendingUserTimestampMs,
       inputChars: pendingUserChars,
       outputChars: 0,
       reasoningChars: 0,
@@ -6498,9 +7144,7 @@ async function readKiroCliV2SessionTurns(messagesPath) {
       const payload = event?.payload;
       if (!payload || typeof payload !== "object") continue;
       const type =
-        typeof payload.type === "string"
-          ? payload.type.toLowerCase()
-          : "";
+        typeof payload.type === "string" ? payload.type.toLowerCase() : "";
       const timestampMs = Date.parse(event.timestamp || "");
 
       if (type === "user") {
@@ -6528,10 +7172,7 @@ async function readKiroCliV2SessionTurns(messagesPath) {
             creditRecordCount += usage.recordCount;
             if (
               Number.isFinite(timestampMs) &&
-              (
-                !latestCreditAt ||
-                timestampMs > Date.parse(latestCreditAt)
-              )
+              (!latestCreditAt || timestampMs > Date.parse(latestCreditAt))
             ) {
               latestCreditAt = new Date(timestampMs).toISOString();
             }
@@ -6542,12 +7183,7 @@ async function readKiroCliV2SessionTurns(messagesPath) {
         continue;
       }
 
-      if (
-        ["assistant", "tool_call", "tool_result"].includes(
-          type,
-        ) &&
-        !turn
-      ) {
+      if (["assistant", "tool_call", "tool_result"].includes(type) && !turn) {
         startTurn(payload, timestampMs);
       }
       if (!turn) continue;
@@ -6622,7 +7258,11 @@ async function writeKiroCliCreditsSidecar({
     let installs = {};
     try {
       const prev = JSON.parse(await fs.readFile(sidecarPath, "utf8"));
-      if (prev?.version === 1 && prev.installs && typeof prev.installs === "object") {
+      if (
+        prev?.version === 1 &&
+        prev.installs &&
+        typeof prev.installs === "object"
+      ) {
         installs = prev.installs;
       }
     } catch {
@@ -6638,7 +7278,8 @@ async function writeKiroCliCreditsSidecar({
       const ts = Date.parse(entry?.updated_at || "");
       if (!Number.isFinite(ts) || Date.now() - ts > staleMs) delete installs[k];
     }
-    const key = typeof installKey === "string" && installKey ? installKey : "default";
+    const key =
+      typeof installKey === "string" && installKey ? installKey : "default";
     installs[key] = {
       total_credits: Number(totalCredits.toFixed(12)),
       record_count: recordCount,
@@ -6745,7 +7386,7 @@ function readKiroCliRequests(dbPath, env = process.env, sqliteOptions = {}) {
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
   let rows;
   try {
@@ -6786,11 +7427,22 @@ function readKiroCliRequests(dbPath, env = process.env, sqliteOptions = {}) {
   return flat;
 }
 
-async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onProgress, env, sqliteOptions } = {}) {
+async function parseKiroCliIncremental({
+  sessionFiles,
+  cursors,
+  queuePath,
+  onProgress,
+  env,
+  sqliteOptions,
+} = {}) {
   await ensureDir(path.dirname(queuePath));
   const kiroCliState =
-    cursors.kiroCli && typeof cursors.kiroCli === "object" ? cursors.kiroCli : {};
-  const seenIds = new Set(Array.isArray(kiroCliState.seenIds) ? kiroCliState.seenIds : []);
+    cursors.kiroCli && typeof cursors.kiroCli === "object"
+      ? cursors.kiroCli
+      : {};
+  const seenIds = new Set(
+    Array.isArray(kiroCliState.seenIds) ? kiroCliState.seenIds : [],
+  );
 
   // Back-compat branch: if caller explicitly passes sessionFiles (an array of
   // per-session .json paths, the old contract used in tests/fixtures), read
@@ -6843,10 +7495,8 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
       if (credits.recordCount > 0) kiroCreditSessions++;
       if (
         credits.latestAt &&
-        (
-          !latestKiroCreditAt ||
-          Date.parse(credits.latestAt) > Date.parse(latestKiroCreditAt)
-        )
+        (!latestKiroCreditAt ||
+          Date.parse(credits.latestAt) > Date.parse(latestKiroCreditAt))
       ) {
         latestKiroCreditAt = credits.latestAt;
       }
@@ -6942,9 +7592,7 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
         prev.output_tokens ||
         prev.reasoning_output_tokens
       ) {
-        const prevReasoning = toNonNegativeInt(
-          prev.reasoning_output_tokens,
-        );
+        const prevReasoning = toNonNegativeInt(prev.reasoning_output_tokens);
         const prevBucket = getHourlyBucket(
           hourlyState,
           "kiro",
@@ -6989,8 +7637,8 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
       const mids = Array.isArray(s.all_message_ids)
         ? s.all_message_ids
         : s.message_id
-        ? [s.message_id]
-        : [];
+          ? [s.message_id]
+          : [];
       for (const mid of mids) {
         if (typeof mid === "string" && mid && migratedMsgIds.has(mid)) {
           return false;
@@ -7028,7 +7676,10 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
     cursors.kiroCli = {
       ...kiroCliState,
       requests: cappedEarly.requests,
-      watermarkMs: Math.max(Number(kiroCliState.watermarkMs) || 0, cappedEarly.watermarkMs),
+      watermarkMs: Math.max(
+        Number(kiroCliState.watermarkMs) || 0,
+        cappedEarly.watermarkMs,
+      ),
       updatedAt,
     };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued };
@@ -7072,8 +7723,7 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
     const model = canonical || "kiro-cli-agent";
 
     // Fingerprint captures every field whose change should cause a re-bucket.
-    const fingerprint =
-      `${promptChars}:${responseChars}:${reasoningChars}:${model}:${tsMs}`;
+    const fingerprint = `${promptChars}:${responseChars}:${reasoningChars}:${model}:${tsMs}`;
     const prev = requestState[requestId];
     if (prev && prev.fingerprint === fingerprint) continue; // unchanged
 
@@ -7082,27 +7732,22 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
     // truth. enqueueTouchedBuckets will emit the net delta at flush time.
     if (
       prev &&
-      (
-        prev.input_tokens ||
-        prev.output_tokens ||
-        prev.reasoning_output_tokens
-      )
+      (prev.input_tokens || prev.output_tokens || prev.reasoning_output_tokens)
     ) {
-      const prevReasoning = toNonNegativeInt(
-        prev.reasoning_output_tokens,
+      const prevReasoning = toNonNegativeInt(prev.reasoning_output_tokens);
+      const prevBucket = getHourlyBucket(
+        hourlyState,
+        "kiro",
+        prev.model,
+        prev.bucketStart,
       );
-      const prevBucket = getHourlyBucket(hourlyState, "kiro", prev.model, prev.bucketStart);
       addTotals(prevBucket.totals, {
         input_tokens: -prev.input_tokens,
         cached_input_tokens: 0,
         cache_creation_input_tokens: 0,
         output_tokens: -prev.output_tokens,
         reasoning_output_tokens: -prevReasoning,
-        total_tokens: -(
-          prev.input_tokens +
-          prev.output_tokens +
-          prevReasoning
-        ),
+        total_tokens: -(prev.input_tokens + prev.output_tokens + prevReasoning),
         conversation_count: -1,
       });
       touchedBuckets.add(bucketKey("kiro", prev.model, prev.bucketStart));
@@ -7157,7 +7802,11 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
     touchedBuckets,
   });
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -7179,7 +7828,11 @@ async function parseKiroCliIncremental({ sessionFiles, cursors, queuePath, onPro
 const KIRO_CLI_CURSOR_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const KIRO_CLI_CURSOR_MAX_ENTRIES = 20_000;
 
-function clampAndCapKiroCliState({ requestState, hourlyState, touchedBuckets }) {
+function clampAndCapKiroCliState({
+  requestState,
+  hourlyState,
+  touchedBuckets,
+}) {
   // TASK-010: clamp conversation_count to >= 0 on Kiro-touched buckets
   // only. The shared enqueueTouchedBuckets is left untouched so
   // legitimate negatives from the 10 other parsers are not masked. Kiro
@@ -7218,7 +7871,10 @@ function clampAndCapKiroCliState({ requestState, hourlyState, touchedBuckets }) 
     cappedEntries.sort((a, b) => b[2] - a[2]); // newest first
     // Newest EVICTED entry sits at index MAX_ENTRIES after the sort; the
     // watermark must clear it so count-capped evictions can't re-add either.
-    watermarkMs = Math.max(watermarkMs, cappedEntries[KIRO_CLI_CURSOR_MAX_ENTRIES][2] + 1);
+    watermarkMs = Math.max(
+      watermarkMs,
+      cappedEntries[KIRO_CLI_CURSOR_MAX_ENTRIES][2] + 1,
+    );
     cappedEntries.length = KIRO_CLI_CURSOR_MAX_ENTRIES;
   }
   const capped = {};
@@ -7291,7 +7947,8 @@ async function parseKiroCliFromSessionFiles({
     )
       ? parsed.session_state.conversation_metadata.user_turn_metadatas
       : [];
-    const sessionId = typeof parsed.session_id === "string" ? parsed.session_id : filePath;
+    const sessionId =
+      typeof parsed.session_id === "string" ? parsed.session_id : filePath;
     const sessionModelId =
       (parsed?.session_state?.rts_model_state?.model_info &&
         (parsed.session_state.rts_model_state.model_info.model_id ||
@@ -7314,7 +7971,12 @@ async function parseKiroCliFromSessionFiles({
         turn.cache_creation_input_tokens ?? turn.cache_write_input_tokens,
       );
       const reasoning = toNonNegativeInt(turn.reasoning_output_tokens);
-      if (input === 0 && output === 0 && cacheRead === 0 && cacheCreation === 0) {
+      if (
+        input === 0 &&
+        output === 0 &&
+        cacheRead === 0 &&
+        cacheCreation === 0
+      ) {
         maxIndex = i;
         continue;
       }
@@ -7325,7 +7987,9 @@ async function parseKiroCliFromSessionFiles({
       if (!bucketStart) continue;
 
       const turnMessageId =
-        typeof turn.message_id === "string" && turn.message_id ? turn.message_id : null;
+        typeof turn.message_id === "string" && turn.message_id
+          ? turn.message_id
+          : null;
       const dedupKey = turnMessageId ? `${sessionId}:${turnMessageId}` : null;
       if (dedupKey && seenIds.has(dedupKey)) {
         maxIndex = i;
@@ -7335,7 +7999,8 @@ async function parseKiroCliFromSessionFiles({
       const rawModel =
         turn.model_id ||
         turn.modelId ||
-        (turn.model_info && (turn.model_info.model_id || turn.model_info.modelId)) ||
+        (turn.model_info &&
+          (turn.model_info.model_id || turn.model_info.modelId)) ||
         sessionModelId;
       const normalized = rawModel ? normalizeKiroModelName(rawModel) : null;
       const model = normalized || "kiro-cli-agent";
@@ -7376,13 +8041,23 @@ async function parseKiroCliFromSessionFiles({
   }
 
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
-  cursors.kiroCli = { ...kiroCliState, seenIds: cappedSeen, fileOffsets, updatedAt };
+  cursors.kiroCli = {
+    ...kiroCliState,
+    seenIds: cappedSeen,
+    fileOffsets,
+    updatedAt,
+  };
 
   return {
     recordsProcessed,
@@ -7395,7 +8070,8 @@ async function parseKiroCliFromSessionFiles({
 
 function resolveKimiHome(env = process.env) {
   const home = require("node:os").homedir();
-  const explicit = typeof env?.KIMI_HOME === "string" ? env.KIMI_HOME.trim() : "";
+  const explicit =
+    typeof env?.KIMI_HOME === "string" ? env.KIMI_HOME.trim() : "";
   if (explicit) return path.resolve(explicit);
   if (process.platform === "win32") {
     return pickWin32ProviderPath({
@@ -7417,21 +8093,37 @@ function resolveKimiWireFiles(env = process.env) {
     for (const ws of fssync.readdirSync(sessionsDir)) {
       const wsDir = path.join(sessionsDir, ws);
       let wsStat;
-      try { wsStat = fssync.statSync(wsDir); } catch { continue; }
+      try {
+        wsStat = fssync.statSync(wsDir);
+      } catch {
+        continue;
+      }
       if (!wsStat.isDirectory()) continue;
       for (const sess of fssync.readdirSync(wsDir)) {
         const wireFile = path.join(wsDir, sess, "wire.jsonl");
         if (fssync.existsSync(wireFile)) files.push(wireFile);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return files;
 }
 
-async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress, env, model } = {}) {
+async function parseKimiIncremental({
+  wireFiles,
+  cursors,
+  queuePath,
+  onProgress,
+  env,
+  model,
+} = {}) {
   await ensureDir(path.dirname(queuePath));
-  const kimiState = cursors.kimi && typeof cursors.kimi === "object" ? cursors.kimi : {};
-  const seenIds = new Set(Array.isArray(kimiState.seenIds) ? kimiState.seenIds : []);
+  const kimiState =
+    cursors.kimi && typeof cursors.kimi === "object" ? cursors.kimi : {};
+  const seenIds = new Set(
+    Array.isArray(kimiState.seenIds) ? kimiState.seenIds : [],
+  );
   const fileOffsets =
     kimiState.fileOffsets && typeof kimiState.fileOffsets === "object"
       ? { ...kimiState.fileOffsets }
@@ -7442,7 +8134,12 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
     : resolveKimiWireFiles(env || process.env);
   const kimiModel = model || resolveKimiDefaultModel(env || process.env);
   if (files.length === 0) {
-    cursors.kimi = { ...kimiState, seenIds: Array.from(seenIds), fileOffsets, updatedAt: new Date().toISOString() };
+    cursors.kimi = {
+      ...kimiState,
+      seenIds: Array.from(seenIds),
+      fileOffsets,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -7455,7 +8152,11 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -7466,14 +8167,23 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
 
     let stream;
     try {
-      stream = fssync.createReadStream(filePath, { encoding: "utf8", start: startOffset });
-    } catch { continue; }
+      stream = fssync.createReadStream(filePath, {
+        encoding: "utf8",
+        start: startOffset,
+      });
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
 
       const msg = entry.message;
       if (!msg || msg.type !== "StatusUpdate") continue;
@@ -7490,7 +8200,12 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
       const output = toNonNegativeInt(token_usage.output);
       const cacheRead = toNonNegativeInt(token_usage.input_cache_read);
       const cacheCreation = toNonNegativeInt(token_usage.input_cache_creation);
-      if (input === 0 && output === 0 && cacheRead === 0 && cacheCreation === 0) {
+      if (
+        input === 0 &&
+        output === 0 &&
+        cacheRead === 0 &&
+        cacheCreation === 0
+      ) {
         seenIds.add(message_id);
         continue;
       }
@@ -7511,7 +8226,12 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
         conversation_count: 1,
       };
 
-      const bucket = getHourlyBucket(hourlyState, "kimi", kimiModel, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "kimi",
+        kimiModel,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("kimi", kimiModel, bucketStart));
       seenIds.add(message_id);
@@ -7529,15 +8249,26 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
-    fileOffsets[filePath] = { size: postStat.size, mtimeMs: postStat.mtimeMs, ino: postStat.ino };
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
+    fileOffsets[filePath] = {
+      size: postStat.size,
+      mtimeMs: postStat.mtimeMs,
+      ino: postStat.ino,
+    };
   }
 
   // Cap seenIds to last 10k to bound cursor state size
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -7571,7 +8302,8 @@ async function parseKimiIncremental({ wireFiles, cursors, queuePath, onProgress,
 // keeps state from colliding with the legacy reader's cursors.kimi.
 function resolveKimiCodeHome(env = process.env) {
   const home = require("node:os").homedir();
-  const explicit = typeof env?.KIMI_CODE_HOME === "string" ? env.KIMI_CODE_HOME.trim() : "";
+  const explicit =
+    typeof env?.KIMI_CODE_HOME === "string" ? env.KIMI_CODE_HOME.trim() : "";
   if (explicit) return path.resolve(explicit);
   if (process.platform === "win32") {
     return pickWin32ProviderPath({
@@ -7592,7 +8324,11 @@ function resolveKimiCodeWireFiles(env = process.env) {
   const walk = (dir, depth) => {
     if (depth > 5) return;
     let entries;
-    try { entries = fssync.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fssync.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const ent of entries) {
       const full = path.join(dir, ent.name);
       if (ent.isDirectory()) walk(full, depth + 1);
@@ -7623,17 +8359,37 @@ function kimiCodeModelAlias(value) {
   return value.includes("/") ? value.split("/").pop() : value;
 }
 
-async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgress, env, model } = {}) {
+async function parseKimiCodeIncremental({
+  wireFiles,
+  cursors,
+  queuePath,
+  onProgress,
+  env,
+  model,
+} = {}) {
   await ensureDir(path.dirname(queuePath));
-  const state = cursors.kimiCode && typeof cursors.kimiCode === "object" ? cursors.kimiCode : {};
+  const state =
+    cursors.kimiCode && typeof cursors.kimiCode === "object"
+      ? cursors.kimiCode
+      : {};
   const seenIds = new Set(Array.isArray(state.seenIds) ? state.seenIds : []);
   const fileOffsets =
-    state.fileOffsets && typeof state.fileOffsets === "object" ? { ...state.fileOffsets } : {};
+    state.fileOffsets && typeof state.fileOffsets === "object"
+      ? { ...state.fileOffsets }
+      : {};
 
-  const files = Array.isArray(wireFiles) ? wireFiles : resolveKimiCodeWireFiles(env || process.env);
-  const fallbackModel = model || resolveKimiCodeDefaultModel(env || process.env);
+  const files = Array.isArray(wireFiles)
+    ? wireFiles
+    : resolveKimiCodeWireFiles(env || process.env);
+  const fallbackModel =
+    model || resolveKimiCodeDefaultModel(env || process.env);
   if (files.length === 0) {
-    cursors.kimiCode = { ...state, seenIds: Array.from(seenIds), fileOffsets, updatedAt: new Date().toISOString() };
+    cursors.kimiCode = {
+      ...state,
+      seenIds: Array.from(seenIds),
+      fileOffsets,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -7646,7 +8402,11 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -7655,19 +8415,29 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
     const startOffset = stat.size < prevSize || inodeChanged ? 0 : prevSize;
     // Model is declared in a `config.update` near the file head; persist it on
     // the cursor so incremental resumes (which start past that line) keep it.
-    let fileModel = (typeof prevEntry.model === "string" && prevEntry.model) || fallbackModel;
+    let fileModel =
+      (typeof prevEntry.model === "string" && prevEntry.model) || fallbackModel;
     if (stat.size <= startOffset) continue;
 
     let stream;
     try {
-      stream = fssync.createReadStream(filePath, { encoding: "utf8", start: startOffset });
-    } catch { continue; }
+      stream = fssync.createReadStream(filePath, {
+        encoding: "utf8",
+        start: startOffset,
+      });
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
 
       if (entry.type === "config.update") {
         const alias = kimiCodeModelAlias(entry.modelAlias);
@@ -7676,7 +8446,9 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
       }
 
       const evt =
-        entry.type === "context.append_loop_event" && entry.event && typeof entry.event === "object"
+        entry.type === "context.append_loop_event" &&
+        entry.event &&
+        typeof entry.event === "object"
           ? entry.event
           : entry;
       if (!evt || evt.type !== "step.end") continue;
@@ -7714,7 +8486,8 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
           input = toNonNegativeInt(usage.input_tokens);
         } else {
           const details =
-            usage.input_tokens_details && typeof usage.input_tokens_details === "object"
+            usage.input_tokens_details &&
+            typeof usage.input_tokens_details === "object"
               ? usage.input_tokens_details
               : null;
           const cached = toNonNegativeInt(details ? details.cached_tokens : 0);
@@ -7723,7 +8496,12 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
         }
         output = toNonNegativeInt(usage.output_tokens);
       }
-      if (input === 0 && output === 0 && cacheRead === 0 && cacheCreation === 0) {
+      if (
+        input === 0 &&
+        output === 0 &&
+        cacheRead === 0 &&
+        cacheCreation === 0
+      ) {
         seenIds.add(id);
         continue;
       }
@@ -7744,7 +8522,12 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
         conversation_count: 1,
       };
 
-      const bucket = getHourlyBucket(hourlyState, "kimi", fileModel, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "kimi",
+        fileModel,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("kimi", fileModel, bucketStart));
       seenIds.add(id);
@@ -7762,14 +8545,26 @@ async function parseKimiCodeIncremental({ wireFiles, cursors, queuePath, onProgr
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
-    fileOffsets[filePath] = { size: postStat.size, mtimeMs: postStat.mtimeMs, ino: postStat.ino, model: fileModel };
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
+    fileOffsets[filePath] = {
+      size: postStat.size,
+      mtimeMs: postStat.mtimeMs,
+      ino: postStat.ino,
+      model: fileModel,
+    };
   }
 
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -7831,7 +8626,12 @@ function resolveCodebuddyDefaultModel(env = process.env) {
     const settingsPath = path.join(codebuddyHome, "settings.json");
     const raw = fssync.readFileSync(settingsPath, "utf8");
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && typeof parsed.model === "string" && parsed.model.trim()) {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.model === "string" &&
+      parsed.model.trim()
+    ) {
       return parsed.model.trim();
     }
   } catch (_e) {
@@ -7850,7 +8650,11 @@ function resolveCodebuddyProjectFiles(env = process.env) {
     if (fssync.existsSync(projectsDir)) {
       const walkJsonl = (dir) => {
         let entries;
-        try { entries = fssync.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        try {
+          entries = fssync.readdirSync(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
         for (const entry of entries) {
           const full = path.join(dir, entry.name);
           let isDir = entry.isDirectory();
@@ -7860,7 +8664,9 @@ function resolveCodebuddyProjectFiles(env = process.env) {
               const st = fssync.statSync(full);
               isDir = st.isDirectory();
               isFile = st.isFile();
-            } catch { continue; }
+            } catch {
+              continue;
+            }
           }
           if (isDir) walkJsonl(full);
           else if (isFile && entry.name.endsWith(".jsonl")) files.push(full);
@@ -7876,31 +8682,77 @@ function resolveCodebuddyProjectFiles(env = process.env) {
 
   if (process.platform === "darwin") {
     const appSupport = path.join(home, "Library", "Application Support");
-    logRoots.push({ dir: path.join(appSupport, "CodeBuddy CN", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(appSupport, "Code", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(appSupport, "CodeBuddyExtension", "Logs", "CodeBuddyIDE"), pattern: "*.log" });
-    logRoots.push({ dir: path.join(appSupport, "CodeBuddyExtension", "Logs", "VSCode"), pattern: "*.log" });
+    logRoots.push({
+      dir: path.join(appSupport, "CodeBuddy CN", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(appSupport, "Code", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(appSupport, "CodeBuddyExtension", "Logs", "CodeBuddyIDE"),
+      pattern: "*.log",
+    });
+    logRoots.push({
+      dir: path.join(appSupport, "CodeBuddyExtension", "Logs", "VSCode"),
+      pattern: "*.log",
+    });
   } else if (process.platform === "win32") {
     const appData = env.APPDATA || path.join(home, "AppData", "Roaming");
-    const localAppData = env.LOCALAPPDATA || path.join(home, "AppData", "Local");
-    logRoots.push({ dir: path.join(appData, "CodeBuddy CN", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(appData, "Code", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(localAppData, "CodeBuddyExtension", "Logs", "CodeBuddyIDE"), pattern: "*.log" });
-    logRoots.push({ dir: path.join(localAppData, "CodeBuddyExtension", "Logs", "VSCode"), pattern: "*.log" });
+    const localAppData =
+      env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    logRoots.push({
+      dir: path.join(appData, "CodeBuddy CN", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(appData, "Code", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(
+        localAppData,
+        "CodeBuddyExtension",
+        "Logs",
+        "CodeBuddyIDE",
+      ),
+      pattern: "*.log",
+    });
+    logRoots.push({
+      dir: path.join(localAppData, "CodeBuddyExtension", "Logs", "VSCode"),
+      pattern: "*.log",
+    });
   } else {
     const xdgConfig = env.XDG_CONFIG_HOME || path.join(home, ".config");
     const xdgData = env.XDG_DATA_HOME || path.join(home, ".local", "share");
-    logRoots.push({ dir: path.join(xdgConfig, "CodeBuddy CN", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(xdgConfig, "Code", "logs"), pattern: "codebuddy-extension-log" });
-    logRoots.push({ dir: path.join(xdgData, "CodeBuddyExtension", "Logs", "CodeBuddyIDE"), pattern: "*.log" });
-    logRoots.push({ dir: path.join(xdgData, "CodeBuddyExtension", "Logs", "VSCode"), pattern: "*.log" });
+    logRoots.push({
+      dir: path.join(xdgConfig, "CodeBuddy CN", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(xdgConfig, "Code", "logs"),
+      pattern: "codebuddy-extension-log",
+    });
+    logRoots.push({
+      dir: path.join(xdgData, "CodeBuddyExtension", "Logs", "CodeBuddyIDE"),
+      pattern: "*.log",
+    });
+    logRoots.push({
+      dir: path.join(xdgData, "CodeBuddyExtension", "Logs", "VSCode"),
+      pattern: "*.log",
+    });
   }
 
   for (const root of logRoots) {
     if (!fssync.existsSync(root.dir)) continue;
     const walkLogs = (dir) => {
       let entries;
-      try { entries = fssync.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      try {
+        entries = fssync.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
       for (const entry of entries) {
         const full = path.join(dir, entry.name);
         let isDir = entry.isDirectory();
@@ -7910,7 +8762,9 @@ function resolveCodebuddyProjectFiles(env = process.env) {
             const st = fssync.statSync(full);
             isDir = st.isDirectory();
             isFile = st.isFile();
-          } catch { continue; }
+          } catch {
+            continue;
+          }
         }
         if (isDir) {
           walkLogs(full);
@@ -7961,7 +8815,7 @@ function parseLogTimestampMs(line, fallbackTs) {
   }
   let ts = Date.parse(raw);
   if (isNaN(ts)) {
-    const normalized = raw.replace(/\//g, '-');
+    const normalized = raw.replace(/\//g, "-");
     ts = Date.parse(normalized);
   }
   return isNaN(ts) ? fallbackTs : ts;
@@ -7977,7 +8831,9 @@ async function parseCodebuddyIncremental({
 } = {}) {
   await ensureDir(path.dirname(queuePath));
   const codebuddyState =
-    cursors.codebuddy && typeof cursors.codebuddy === "object" ? cursors.codebuddy : {};
+    cursors.codebuddy && typeof cursors.codebuddy === "object"
+      ? cursors.codebuddy
+      : {};
   const seenIds = new Set(
     Array.isArray(codebuddyState.seenIds) ? codebuddyState.seenIds : [],
   );
@@ -7986,14 +8842,16 @@ async function parseCodebuddyIncremental({
       ? { ...codebuddyState.fileOffsets }
       : {};
   const logModelsByAgent =
-    codebuddyState.logModelsByAgent && typeof codebuddyState.logModelsByAgent === "object"
+    codebuddyState.logModelsByAgent &&
+    typeof codebuddyState.logModelsByAgent === "object"
       ? { ...codebuddyState.logModelsByAgent }
       : {};
 
   const files = Array.isArray(projectFiles)
     ? projectFiles
     : resolveCodebuddyProjectFiles(env || process.env);
-  const fallbackModel = defaultModel || resolveCodebuddyDefaultModel(env || process.env);
+  const fallbackModel =
+    defaultModel || resolveCodebuddyDefaultModel(env || process.env);
 
   if (files.length === 0) {
     cursors.codebuddy = {
@@ -8014,7 +8872,11 @@ async function parseCodebuddyIncremental({
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -8029,7 +8891,9 @@ async function parseCodebuddyIncremental({
         encoding: "utf8",
         start: startOffset,
       });
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     const isLogFile = filePath.endsWith(".log");
@@ -8040,7 +8904,10 @@ async function parseCodebuddyIncremental({
       if (!line || !line.trim()) continue;
 
       if (isLogFile) {
-        if (line.includes("[CraftInvokableAgent]") && line.includes("Model prepared:")) {
+        if (
+          line.includes("[CraftInvokableAgent]") &&
+          line.includes("Model prepared:")
+        ) {
           const agentId = getBracketValueAfter(line, "[CraftInvokableAgent]");
           const marker = "Model prepared:";
           const idx = line.indexOf(marker);
@@ -8062,7 +8929,10 @@ async function parseCodebuddyIncremental({
           continue;
         }
 
-        if (!line.includes("[AgentReporter]") || !line.includes("Agent execution successful with usage:")) {
+        if (
+          !line.includes("[AgentReporter]") ||
+          !line.includes("Agent execution successful with usage:")
+        ) {
           continue;
         }
 
@@ -8080,7 +8950,9 @@ async function parseCodebuddyIncremental({
         let usage;
         try {
           usage = JSON.parse(usageJsonRaw.slice(0, endBrace + 1));
-        } catch { continue; }
+        } catch {
+          continue;
+        }
 
         if (!usage || typeof usage !== "object") continue;
 
@@ -8136,7 +9008,12 @@ async function parseCodebuddyIncremental({
           inputTokens = Math.max(0, inputTokens - cacheRead);
         }
 
-        if (inputTokens === 0 && completionTokens === 0 && cacheRead === 0 && cacheCreation === 0) {
+        if (
+          inputTokens === 0 &&
+          completionTokens === 0 &&
+          cacheRead === 0 &&
+          cacheCreation === 0
+        ) {
           seenIds.add(messageId);
           continue;
         }
@@ -8157,11 +9034,21 @@ async function parseCodebuddyIncremental({
           cache_creation_input_tokens: cacheCreation,
           output_tokens: completionTokens,
           reasoning_output_tokens: reasoningTokens,
-          total_tokens: inputTokens + completionTokens + cacheRead + cacheCreation + reasoningTokens,
+          total_tokens:
+            inputTokens +
+            completionTokens +
+            cacheRead +
+            cacheCreation +
+            reasoningTokens,
           conversation_count: 1,
         };
 
-        const bucket = getHourlyBucket(hourlyState, "codebuddy", model, bucketStart);
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "codebuddy",
+          model,
+          bucketStart,
+        );
         addTotals(bucket.totals, delta);
         touchedBuckets.add(bucketKey("codebuddy", model, bucketStart));
         seenIds.add(messageId);
@@ -8178,12 +9065,18 @@ async function parseCodebuddyIncremental({
         }
       } else {
         let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
 
-        if (!entry || entry.type !== "message" || entry.role !== "assistant") continue;
+        if (!entry || entry.type !== "message" || entry.role !== "assistant")
+          continue;
 
         const provider = entry.providerData;
-        const rawUsage = provider && typeof provider === "object" ? provider.rawUsage : null;
+        const rawUsage =
+          provider && typeof provider === "object" ? provider.rawUsage : null;
         if (!rawUsage || typeof rawUsage !== "object") continue;
 
         const sessionId =
@@ -8191,7 +9084,8 @@ async function parseCodebuddyIncremental({
             ? entry.sessionId
             : path.basename(filePath, ".jsonl");
         const tsMs =
-          Number.isFinite(Number(entry.timestamp)) && Number(entry.timestamp) > 0
+          Number.isFinite(Number(entry.timestamp)) &&
+          Number(entry.timestamp) > 0
             ? Number(entry.timestamp)
             : null;
         const messageId =
@@ -8210,12 +9104,15 @@ async function parseCodebuddyIncremental({
         const promptTokens = toNonNegativeInt(rawUsage.prompt_tokens);
         const completionTokens = toNonNegativeInt(rawUsage.completion_tokens);
         const details =
-          rawUsage.prompt_tokens_details && typeof rawUsage.prompt_tokens_details === "object"
+          rawUsage.prompt_tokens_details &&
+          typeof rawUsage.prompt_tokens_details === "object"
             ? rawUsage.prompt_tokens_details
             : {};
         const cachedTokens = toNonNegativeInt(details.cached_tokens);
         const cacheReadAlt = toNonNegativeInt(rawUsage.cache_read_input_tokens);
-        const cacheCreation = toNonNegativeInt(rawUsage.cache_creation_input_tokens);
+        const cacheCreation = toNonNegativeInt(
+          rawUsage.cache_creation_input_tokens,
+        );
         const reasoningTokens = toNonNegativeInt(details.reasoning_tokens);
 
         const cacheRead = Math.max(cachedTokens, cacheReadAlt);
@@ -8251,11 +9148,20 @@ async function parseCodebuddyIncremental({
           output_tokens: completionTokens,
           reasoning_output_tokens: reasoningTokens,
           total_tokens:
-            inputTokens + completionTokens + cacheRead + cacheCreation + reasoningTokens,
+            inputTokens +
+            completionTokens +
+            cacheRead +
+            cacheCreation +
+            reasoningTokens,
           conversation_count: 1,
         };
 
-        const bucket = getHourlyBucket(hourlyState, "codebuddy", model, bucketStart);
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "codebuddy",
+          model,
+          bucketStart,
+        );
         addTotals(bucket.totals, delta);
         touchedBuckets.add(bucketKey("codebuddy", model, bucketStart));
         seenIds.add(messageId);
@@ -8274,7 +9180,9 @@ async function parseCodebuddyIncremental({
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
     fileOffsets[filePath] = {
       size: postStat.size,
       mtimeMs: postStat.mtimeMs,
@@ -8290,7 +9198,9 @@ async function parseCodebuddyIncremental({
   const logModelEntries = Object.entries(logModelsByAgent);
   const cappedLogModelsByAgent =
     logModelEntries.length > 10_000
-      ? Object.fromEntries(logModelEntries.slice(logModelEntries.length - 10_000))
+      ? Object.fromEntries(
+          logModelEntries.slice(logModelEntries.length - 10_000),
+        )
       : logModelsByAgent;
 
   const bucketsQueued = await enqueueTouchedBuckets({
@@ -8379,7 +9289,12 @@ function resolveWorkbuddyDefaultModel(env = process.env) {
     const settingsPath = path.join(workbuddyHome, "settings.json");
     const raw = fssync.readFileSync(settingsPath, "utf8");
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && typeof parsed.model === "string" && parsed.model.trim()) {
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.model === "string" &&
+      parsed.model.trim()
+    ) {
       return parsed.model.trim();
     }
   } catch (_e) {
@@ -8399,7 +9314,11 @@ function resolveWorkbuddyProjectFiles(env = process.env) {
   const files = [];
   const walk = (dir) => {
     let entries;
-    try { entries = fssync.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fssync.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       let isDir = entry.isDirectory();
@@ -8410,7 +9329,9 @@ function resolveWorkbuddyProjectFiles(env = process.env) {
           const st = fssync.statSync(full);
           isDir = st.isDirectory();
           isFile = st.isFile();
-        } catch { continue; }
+        } catch {
+          continue;
+        }
       }
       if (isDir) walk(full);
       else if (isFile && entry.name.endsWith(".jsonl")) files.push(full);
@@ -8431,7 +9352,9 @@ async function parseWorkbuddyIncremental({
 } = {}) {
   await ensureDir(path.dirname(queuePath));
   const workbuddyState =
-    cursors.workbuddy && typeof cursors.workbuddy === "object" ? cursors.workbuddy : {};
+    cursors.workbuddy && typeof cursors.workbuddy === "object"
+      ? cursors.workbuddy
+      : {};
   const seenIds = new Set(
     Array.isArray(workbuddyState.seenIds) ? workbuddyState.seenIds : [],
   );
@@ -8440,11 +9363,13 @@ async function parseWorkbuddyIncremental({
       ? { ...workbuddyState.fileOffsets }
       : {};
   const sqliteSessions =
-    workbuddyState.sqliteSessions && typeof workbuddyState.sqliteSessions === "object"
+    workbuddyState.sqliteSessions &&
+    typeof workbuddyState.sqliteSessions === "object"
       ? { ...workbuddyState.sqliteSessions }
       : {};
   const detailedSessions =
-    workbuddyState.detailedSessions && typeof workbuddyState.detailedSessions === "object"
+    workbuddyState.detailedSessions &&
+    typeof workbuddyState.detailedSessions === "object"
       ? { ...workbuddyState.detailedSessions }
       : {};
   const detailedSessionsWithUsage = new Set();
@@ -8452,10 +9377,13 @@ async function parseWorkbuddyIncremental({
   const files = Array.isArray(projectFiles)
     ? projectFiles
     : resolveWorkbuddyProjectFiles(env || process.env);
-  const fallbackModel = defaultModel || resolveWorkbuddyDefaultModel(env || process.env);
+  const fallbackModel =
+    defaultModel || resolveWorkbuddyDefaultModel(env || process.env);
 
   const workbuddyHome = resolveWorkbuddyHome(env || process.env);
-  const dbPath = workbuddyHome ? path.join(workbuddyHome, "workbuddy.db") : null;
+  const dbPath = workbuddyHome
+    ? path.join(workbuddyHome, "workbuddy.db")
+    : null;
   const dbExists = Boolean(dbPath && fssync.existsSync(dbPath));
 
   if (files.length === 0 && !dbExists) {
@@ -8479,7 +9407,11 @@ async function parseWorkbuddyIncremental({
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -8496,19 +9428,26 @@ async function parseWorkbuddyIncremental({
         encoding: "utf8",
         start: startOffset,
       });
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (!entry || typeof entry !== "object") continue;
 
       // Usage is carried on ANY record with providerData.rawUsage — assistant
       // messages AND function_call records. Aggregate them all; dedup per id.
       const provider = entry.providerData;
-      const rawUsage = provider && typeof provider === "object" ? provider.rawUsage : null;
+      const rawUsage =
+        provider && typeof provider === "object" ? provider.rawUsage : null;
       if (!rawUsage || typeof rawUsage !== "object") continue;
 
       const sessionId =
@@ -8540,11 +9479,13 @@ async function parseWorkbuddyIncremental({
       const promptTokens = toNonNegativeInt(rawUsage.prompt_tokens);
       const completionTokens = toNonNegativeInt(rawUsage.completion_tokens);
       const promptDetails =
-        rawUsage.prompt_tokens_details && typeof rawUsage.prompt_tokens_details === "object"
+        rawUsage.prompt_tokens_details &&
+        typeof rawUsage.prompt_tokens_details === "object"
           ? rawUsage.prompt_tokens_details
           : {};
       const completionDetails =
-        rawUsage.completion_tokens_details && typeof rawUsage.completion_tokens_details === "object"
+        rawUsage.completion_tokens_details &&
+        typeof rawUsage.completion_tokens_details === "object"
           ? rawUsage.completion_tokens_details
           : {};
 
@@ -8555,12 +9496,17 @@ async function parseWorkbuddyIncremental({
         toNonNegativeInt(promptDetails.cached_tokens),
         toNonNegativeInt(rawUsage.prompt_cache_hit_tokens),
       );
-      const cacheCreation = toNonNegativeInt(rawUsage.cache_creation_input_tokens);
+      const cacheCreation = toNonNegativeInt(
+        rawUsage.cache_creation_input_tokens,
+      );
       // prompt_tokens is the FULL prompt: subtract BOTH reads and writes so
       // input_tokens is pure non-cached input (no double-counting cache writes).
       const inputTokens = Math.max(0, promptTokens - cacheRead - cacheCreation);
       // completion_tokens INCLUDES reasoning (verified: total == prompt+completion).
-      const reasoningTokens = Math.min(completionTokens, toNonNegativeInt(completionDetails.reasoning_tokens));
+      const reasoningTokens = Math.min(
+        completionTokens,
+        toNonNegativeInt(completionDetails.reasoning_tokens),
+      );
       const outputTokens = Math.max(0, completionTokens - reasoningTokens);
 
       if (
@@ -8595,11 +9541,20 @@ async function parseWorkbuddyIncremental({
         output_tokens: outputTokens,
         reasoning_output_tokens: reasoningTokens,
         total_tokens:
-          inputTokens + outputTokens + cacheRead + cacheCreation + reasoningTokens,
+          inputTokens +
+          outputTokens +
+          cacheRead +
+          cacheCreation +
+          reasoningTokens,
         conversation_count: 1,
       };
 
-      const bucket = getHourlyBucket(hourlyState, "workbuddy", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "workbuddy",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("workbuddy", model, bucketStart));
       seenIds.add(messageId);
@@ -8619,7 +9574,9 @@ async function parseWorkbuddyIncremental({
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
     fileOffsets[filePath] = {
       size: postStat.size,
       mtimeMs: postStat.mtimeMs,
@@ -8657,9 +9614,14 @@ async function parseWorkbuddyIncremental({
     try {
       for (const row of rows) {
         if (!row || typeof row !== "object") continue;
-        const sessionId = typeof row.session_id === "string" ? row.session_id.trim() : "";
+        const sessionId =
+          typeof row.session_id === "string" ? row.session_id.trim() : "";
         if (!sessionId) continue;
-        if (detailedSessions[sessionId] || detailedSessionsWithUsage.has(sessionId)) continue;
+        if (
+          detailedSessions[sessionId] ||
+          detailedSessionsWithUsage.has(sessionId)
+        )
+          continue;
 
         const usedNow = toNonNegativeInt(row.used);
         const updatedAtRaw = toNonNegativeInt(row.updated_at);
@@ -8689,7 +9651,8 @@ async function parseWorkbuddyIncremental({
         const cacheCreation = 0;
         const reasoningTokens = 0;
 
-        const tsMs = updatedAtRaw > 10000000000 ? updatedAtRaw : updatedAtRaw * 1000;
+        const tsMs =
+          updatedAtRaw > 10000000000 ? updatedAtRaw : updatedAtRaw * 1000;
         const tsIso = new Date(tsMs).toISOString();
         const bucketStart = toUtcHalfHourStart(tsIso);
         if (!bucketStart) continue;
@@ -8706,7 +9669,12 @@ async function parseWorkbuddyIncremental({
           conversation_count: prevUsed === 0 || isReset ? 1 : 0,
         };
 
-        const bucket = getHourlyBucket(hourlyState, "workbuddy", model, bucketStart);
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "workbuddy",
+          model,
+          bucketStart,
+        );
         addTotals(bucket.totals, delta);
         touchedBuckets.add(bucketKey("workbuddy", model, bucketStart));
         sqliteSessions[sessionId] = {
@@ -8731,14 +9699,19 @@ async function parseWorkbuddyIncremental({
     sqliteSessionEntries.length > 10_000
       ? Object.fromEntries(
           sqliteSessionEntries
-            .sort((a, b) => toNonNegativeInt(b[1]?.used) - toNonNegativeInt(a[1]?.used))
+            .sort(
+              (a, b) =>
+                toNonNegativeInt(b[1]?.used) - toNonNegativeInt(a[1]?.used),
+            )
             .slice(0, 10_000),
         )
       : sqliteSessions;
   const detailedSessionEntries = Object.entries(detailedSessions);
   const cappedDetailedSessions =
     detailedSessionEntries.length > 10_000
-      ? Object.fromEntries(detailedSessionEntries.slice(detailedSessionEntries.length - 10_000))
+      ? Object.fromEntries(
+          detailedSessionEntries.slice(detailedSessionEntries.length - 10_000),
+        )
       : detailedSessions;
 
   const bucketsQueued = await enqueueTouchedBuckets({
@@ -8859,10 +9832,18 @@ function resolveOmpSessionFiles(env = process.env) {
     for (const cwdDir of fssync.readdirSync(sessionsDir)) {
       const cwdPath = path.join(sessionsDir, cwdDir);
       let stat;
-      try { stat = fssync.statSync(cwdPath); } catch { continue; }
+      try {
+        stat = fssync.statSync(cwdPath);
+      } catch {
+        continue;
+      }
       if (!stat.isDirectory()) continue;
       let entries;
-      try { entries = fssync.readdirSync(cwdPath); } catch { continue; }
+      try {
+        entries = fssync.readdirSync(cwdPath);
+      } catch {
+        continue;
+      }
       for (const entry of entries) {
         if (!entry.endsWith(".jsonl")) continue;
         files.push(path.join(cwdPath, entry));
@@ -8891,7 +9872,11 @@ function resolveOmpSubagentFiles(env = process.env) {
   const files = [];
   const walk = (dir) => {
     let entries;
-    try { entries = fssync.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fssync.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       let isDir = entry.isDirectory();
@@ -8902,7 +9887,9 @@ function resolveOmpSubagentFiles(env = process.env) {
           const st = fssync.statSync(full);
           isDir = st.isDirectory();
           isFile = st.isFile();
-        } catch { continue; }
+        } catch {
+          continue;
+        }
       }
       if (isDir) walk(full);
       else if (isFile && entry.name.endsWith(".jsonl")) files.push(full);
@@ -8912,15 +9899,27 @@ function resolveOmpSubagentFiles(env = process.env) {
     for (const cwdDir of fssync.readdirSync(sessionsDir)) {
       const cwdPath = path.join(sessionsDir, cwdDir);
       let stat;
-      try { stat = fssync.statSync(cwdPath); } catch { continue; }
+      try {
+        stat = fssync.statSync(cwdPath);
+      } catch {
+        continue;
+      }
       if (!stat.isDirectory()) continue;
       let entries;
-      try { entries = fssync.readdirSync(cwdPath, { withFileTypes: true }); } catch { continue; }
+      try {
+        entries = fssync.readdirSync(cwdPath, { withFileTypes: true });
+      } catch {
+        continue;
+      }
       for (const entry of entries) {
         const full = path.join(cwdPath, entry.name);
         let isDir = entry.isDirectory();
         if (!isDir && !entry.isFile()) {
-          try { isDir = fssync.statSync(full).isDirectory(); } catch { continue; }
+          try {
+            isDir = fssync.statSync(full).isDirectory();
+          } catch {
+            continue;
+          }
         }
         if (isDir) walk(full);
       }
@@ -8955,9 +9954,15 @@ async function resolveOmpFileCwd(filePath) {
     for await (const line of rl) {
       if (!line || !line.includes('"session"')) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
       if (entry?.type !== "session") continue;
-      return typeof entry.cwd === "string" && entry.cwd.trim() ? entry.cwd.trim() : null;
+      return typeof entry.cwd === "string" && entry.cwd.trim()
+        ? entry.cwd.trim()
+        : null;
     }
   } finally {
     rl.close();
@@ -8993,7 +9998,10 @@ async function resolveOmpFileCwd(filePath) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveKilocodeRoots(env = process.env) {
-  if (typeof env.TOKENTRACKER_KILOCODE_ROOTS === "string" && env.TOKENTRACKER_KILOCODE_ROOTS.trim()) {
+  if (
+    typeof env.TOKENTRACKER_KILOCODE_ROOTS === "string" &&
+    env.TOKENTRACKER_KILOCODE_ROOTS.trim()
+  ) {
     return env.TOKENTRACKER_KILOCODE_ROOTS.split(":")
       .map((r) => r.trim())
       .filter(Boolean);
@@ -9024,7 +10032,14 @@ function resolveKilocodeRoots(env = process.env) {
     ];
     const wslRoots = [];
     if (wsl.shouldProbeWsl(env)) {
-      for (const ide of ["Code", "Code - Insiders", "Cursor", "CodeBuddy", "Windsurf", "VSCodium"]) {
+      for (const ide of [
+        "Code",
+        "Code - Insiders",
+        "Cursor",
+        "CodeBuddy",
+        "Windsurf",
+        "VSCodium",
+      ]) {
         const wslDir = wsl.discoverWslHome(`.config/${ide}`, { env });
         if (wslDir) wslRoots.push(wslDir);
       }
@@ -9054,10 +10069,20 @@ function resolveKilocodeTaskFiles(env = process.env) {
   const roots = resolveKilocodeRoots(env);
   const out = [];
   for (const root of roots) {
-    const tasksDir = path.join(root, "User", "globalStorage", "kilocode.kilo-code", "tasks");
+    const tasksDir = path.join(
+      root,
+      "User",
+      "globalStorage",
+      "kilocode.kilo-code",
+      "tasks",
+    );
     if (!fssync.existsSync(tasksDir)) continue;
     let entries;
-    try { entries = fssync.readdirSync(tasksDir); } catch { continue; }
+    try {
+      entries = fssync.readdirSync(tasksDir);
+    } catch {
+      continue;
+    }
     for (const taskUuid of entries) {
       const filePath = path.join(tasksDir, taskUuid, "ui_messages.json");
       if (!fssync.existsSync(filePath)) continue;
@@ -9075,7 +10100,8 @@ function resolveKilocodeTaskFiles(env = process.env) {
 // We surface the provider explicitly so the dashboard's Model column doesn't
 // imply this is a model.
 function normalizeKilocodeProviderToModel(providerName) {
-  if (typeof providerName !== "string" || !providerName.trim()) return "provider:unknown";
+  if (typeof providerName !== "string" || !providerName.trim())
+    return "provider:unknown";
   const slug = providerName
     .trim()
     .toLowerCase()
@@ -9115,10 +10141,20 @@ function resolveRoocodeTaskFiles(env = process.env) {
   const roots = resolveKilocodeRoots(env);
   const out = [];
   for (const root of roots) {
-    const tasksDir = path.join(root, "User", "globalStorage", "rooveterinaryinc.roo-cline", "tasks");
+    const tasksDir = path.join(
+      root,
+      "User",
+      "globalStorage",
+      "rooveterinaryinc.roo-cline",
+      "tasks",
+    );
     if (!fssync.existsSync(tasksDir)) continue;
     let entries;
-    try { entries = fssync.readdirSync(tasksDir); } catch { continue; }
+    try {
+      entries = fssync.readdirSync(tasksDir);
+    } catch {
+      continue;
+    }
     for (const taskUuid of entries) {
       const filePath = path.join(tasksDir, taskUuid, "ui_messages.json");
       if (!fssync.existsSync(filePath)) continue;
@@ -9135,9 +10171,16 @@ function resolveRoocodeTaskFiles(env = process.env) {
 // missing, unreadable, or contains no tag. Bounded to first 1MB to avoid
 // pathological history files starving sync.
 function readRoocodeTaskModel(uiMessagesPath) {
-  const historyPath = path.join(path.dirname(uiMessagesPath), "api_conversation_history.json");
+  const historyPath = path.join(
+    path.dirname(uiMessagesPath),
+    "api_conversation_history.json",
+  );
   let raw;
-  try { raw = fssync.readFileSync(historyPath, "utf8"); } catch { return null; }
+  try {
+    raw = fssync.readFileSync(historyPath, "utf8");
+  } catch {
+    return null;
+  }
   if (raw.length > 1_048_576) {
     // Naive `slice(raw.length - 1MB)` can split a `<environment_details>`
     // block mid-tag — e.g. the keep window starts at "...<mod" so the
@@ -9162,7 +10205,10 @@ function normalizeRoocodeModel({ explicitModel, apiProtocol }) {
   const trimmed = typeof explicitModel === "string" ? explicitModel.trim() : "";
   if (trimmed) return trimmed;
   if (typeof apiProtocol === "string" && apiProtocol.trim()) {
-    const slug = apiProtocol.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+    const slug = apiProtocol
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, "");
     if (slug) return `protocol:${slug}`;
   }
   return "unknown";
@@ -9177,7 +10223,9 @@ async function parseRoocodeIncremental({
 } = {}) {
   await ensureDir(path.dirname(queuePath));
   const roocodeState =
-    cursors.roocode && typeof cursors.roocode === "object" ? cursors.roocode : {};
+    cursors.roocode && typeof cursors.roocode === "object"
+      ? cursors.roocode
+      : {};
   const seenIds = new Set(
     Array.isArray(roocodeState.seenIds) ? roocodeState.seenIds : [],
   );
@@ -9210,7 +10258,11 @@ async function parseRoocodeIncremental({
     const entry = files[fileIdx];
     const { filePath, taskUuid } = entry;
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath];
     if (
@@ -9222,9 +10274,17 @@ async function parseRoocodeIncremental({
     }
 
     let raw;
-    try { raw = fssync.readFileSync(filePath, "utf8"); } catch { continue; }
+    try {
+      raw = fssync.readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
     let data;
-    try { data = JSON.parse(raw); } catch { continue; }
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      continue;
+    }
     if (!Array.isArray(data)) continue;
 
     // Read sibling history once per task — model can change mid-task but is
@@ -9236,11 +10296,16 @@ async function parseRoocodeIncremental({
       if (!msg || typeof msg !== "object") continue;
       // Like Kilo Code, accept both api_req_started (live) and api_req_deleted
       // (user-removed turn whose tokens were already consumed).
-      if (msg.say !== "api_req_started" && msg.say !== "api_req_deleted") continue;
+      if (msg.say !== "api_req_started" && msg.say !== "api_req_deleted")
+        continue;
       if (typeof msg.text !== "string" || !msg.text.startsWith("{")) continue;
 
       let payload;
-      try { payload = JSON.parse(msg.text); } catch { continue; }
+      try {
+        payload = JSON.parse(msg.text);
+      } catch {
+        continue;
+      }
       if (!payload || typeof payload !== "object") continue;
 
       const ts = Number(msg.ts);
@@ -9254,7 +10319,12 @@ async function parseRoocodeIncremental({
       const tokensOut = toNonNegativeInt(payload.tokensOut);
       const cacheReads = toNonNegativeInt(payload.cacheReads);
       const cacheWrites = toNonNegativeInt(payload.cacheWrites);
-      if (tokensIn === 0 && tokensOut === 0 && cacheReads === 0 && cacheWrites === 0) {
+      if (
+        tokensIn === 0 &&
+        tokensOut === 0 &&
+        cacheReads === 0 &&
+        cacheWrites === 0
+      ) {
         // Cline-family extensions write `api_req_started` at request START
         // (zero tokens) and back-fill the SAME message in place (same ts)
         // once the request completes. Marking the zero placeholder as seen
@@ -9283,14 +10353,23 @@ async function parseRoocodeIncremental({
         explicitModel: taskModel,
         apiProtocol: payload.apiProtocol,
       });
-      const bucket = getHourlyBucket(hourlyState, "roocode", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "roocode",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("roocode", model, bucketStart));
       seenIds.add(dedupKey);
       eventsAggregated++;
     }
 
-    fileOffsets[filePath] = { size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino };
+    fileOffsets[filePath] = {
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ino: stat.ino,
+    };
 
     if (cb) {
       cb({
@@ -9304,13 +10383,23 @@ async function parseRoocodeIncremental({
   }
 
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 50_000 ? seenArr.slice(seenArr.length - 50_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 50_000 ? seenArr.slice(seenArr.length - 50_000) : seenArr;
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
-  cursors.roocode = { ...roocodeState, seenIds: cappedSeen, fileOffsets, updatedAt };
+  cursors.roocode = {
+    ...roocodeState,
+    seenIds: cappedSeen,
+    fileOffsets,
+    updatedAt,
+  };
 
   return { recordsProcessed, eventsAggregated, bucketsQueued };
 }
@@ -9354,20 +10443,37 @@ const ZED_DOUBLE_COUNTED_PROVIDERS = new Set();
 const MAX_ZED_THREAD_JSON_BYTES = 32 * 1024 * 1024;
 
 function resolveZedDbPath(env = process.env) {
-  if (typeof env.TOKENTRACKER_ZED_DB === "string" && env.TOKENTRACKER_ZED_DB.trim()) {
+  if (
+    typeof env.TOKENTRACKER_ZED_DB === "string" &&
+    env.TOKENTRACKER_ZED_DB.trim()
+  ) {
     return env.TOKENTRACKER_ZED_DB.trim();
   }
   const home = env.HOME || require("node:os").homedir();
   if (process.platform === "darwin") {
-    return path.join(home, "Library", "Application Support", "Zed", "threads", "threads.db");
+    return path.join(
+      home,
+      "Library",
+      "Application Support",
+      "Zed",
+      "threads",
+      "threads.db",
+    );
   }
   if (process.platform === "win32") {
     const local = env.LOCALAPPDATA || path.join(home, "AppData", "Local");
     const native = path.join(local, "Zed", "threads", "threads.db");
-    const wslThreadsDir = wsl.shouldProbeWsl(env) ? wsl.discoverWslHome(".local/share/zed/threads", { env }) : null;
-    const wslDbPath = wslThreadsDir && fssync.existsSync(path.join(wslThreadsDir, "threads.db"))
-      ? path.join(wslThreadsDir, "threads.db") : null;
-    const paths = resolveInstallPaths({ nativeValue: native, wslValue: wslDbPath }, env);
+    const wslThreadsDir = wsl.shouldProbeWsl(env)
+      ? wsl.discoverWslHome(".local/share/zed/threads", { env })
+      : null;
+    const wslDbPath =
+      wslThreadsDir && fssync.existsSync(path.join(wslThreadsDir, "threads.db"))
+        ? path.join(wslThreadsDir, "threads.db")
+        : null;
+    const paths = resolveInstallPaths(
+      { nativeValue: native, wslValue: wslDbPath },
+      env,
+    );
     const picked = paths.native || paths.wsl;
     if (picked) return picked;
     const mode = wsl.getWslMode(env);
@@ -9396,7 +10502,9 @@ async function decodeZedThreadBlob({ dataType, data }) {
         ? zlib.zstdDecompressSync(data)
         : Buffer.from(await require("@mongodb-js/zstd").decompress(data));
     if (out.length > MAX_ZED_THREAD_JSON_BYTES) {
-      throw new Error(`decoded zstd blob exceeds ${MAX_ZED_THREAD_JSON_BYTES} bytes`);
+      throw new Error(
+        `decoded zstd blob exceeds ${MAX_ZED_THREAD_JSON_BYTES} bytes`,
+      );
     }
     return out.toString("utf8");
   }
@@ -9427,10 +10535,9 @@ function readZedUsage(value) {
 function sumZedRequestUsage(value) {
   const total = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
   if (!value) return total;
-  const iter =
-    Array.isArray(value)
-      ? value
-      : typeof value === "object"
+  const iter = Array.isArray(value)
+    ? value
+    : typeof value === "object"
       ? Object.values(value)
       : [];
   for (const entry of iter) {
@@ -9451,23 +10558,32 @@ function extractZedTotals(thread) {
   if (!thread || thread.imported === true) return null;
   const model = thread.model;
   if (!model || typeof model !== "object") return null;
-  const provider = typeof model.provider === "string" ? model.provider.trim() : "";
+  const provider =
+    typeof model.provider === "string" ? model.provider.trim() : "";
   // Count usage for ALL providers — Zed-hosted (zed.dev) and bring-your-own
   // (copilot_chat, openai-subscribed, anthropic, lmstudio, …) alike. Only skip
   // providers whose usage a dedicated parser already reports (see
   // ZED_DOUBLE_COUNTED_PROVIDERS).
-  if (provider && ZED_DOUBLE_COUNTED_PROVIDERS.has(provider.toLowerCase())) return null;
+  if (provider && ZED_DOUBLE_COUNTED_PROVIDERS.has(provider.toLowerCase()))
+    return null;
   const modelId = typeof model.model === "string" ? model.model.trim() : "";
   if (!modelId) return null;
 
   const request = sumZedRequestUsage(thread.request_token_usage);
-  if (request.input + request.output + request.cache_read + request.cache_write > 0) {
+  if (
+    request.input + request.output + request.cache_read + request.cache_write >
+    0
+  ) {
     return { totals: request, model: modelId };
   }
   const cumulative = readZedUsage(thread.cumulative_token_usage);
   if (
     cumulative &&
-    cumulative.input + cumulative.output + cumulative.cache_read + cumulative.cache_write > 0
+    cumulative.input +
+      cumulative.output +
+      cumulative.cache_read +
+      cumulative.cache_write >
+      0
   ) {
     return { totals: cumulative, model: modelId };
   }
@@ -9485,25 +10601,26 @@ function buildZedThreadsQuery(dbPath, cursorUpdatedAt, sqliteOptions = {}) {
     timeout: 10_000,
     ...sqliteOptions,
   });
-  const columns = new Set(
-    pragmaRows
-      .map((row) => row?.name)
-      .filter(Boolean),
-  );
+  const columns = new Set(pragmaRows.map((row) => row?.name).filter(Boolean));
   const optional = (col) => (columns.has(col) ? col : `NULL AS ${col}`);
   // Incremental: only fetch threads updated after the last sync watermark.
   // Without this we'd zstd-decode every thread on every sync (~250MB for a
   // 5k-thread DB on every menu-bar tick). Empty cursor → full scan (first
   // sync). updated_at is stored as ISO 8601 text, so lexical comparison ==
   // chronological comparison.
-  const escaped = typeof cursorUpdatedAt === "string" && cursorUpdatedAt
-    ? cursorUpdatedAt.replace(/'/g, "''")
-    : null;
+  const escaped =
+    typeof cursorUpdatedAt === "string" && cursorUpdatedAt
+      ? cursorUpdatedAt.replace(/'/g, "''")
+      : null;
   const where = escaped ? ` WHERE updated_at > '${escaped}'` : "";
   return `SELECT id, updated_at, ${optional("created_at")}, data_type, hex(data) AS data_hex FROM threads${where}`;
 }
 
-function readZedThreadRowsFromSqlite(dbPath, cursorUpdatedAt, sqliteOptions = {}) {
+function readZedThreadRowsFromSqlite(
+  dbPath,
+  cursorUpdatedAt,
+  sqliteOptions = {},
+) {
   const query = buildZedThreadsQuery(dbPath, cursorUpdatedAt, sqliteOptions);
   return readSqliteJsonRows(dbPath, query, {
     label: "Zed",
@@ -9533,8 +10650,11 @@ async function parseZedIncremental({
     zedState.threadTotals && typeof zedState.threadTotals === "object"
       ? { ...zedState.threadTotals }
       : {};
-  const cursorUpdatedAt = typeof zedState.lastUpdatedAt === "string" ? zedState.lastUpdatedAt : null;
-  const cursorDbMtime = Number.isFinite(zedState.lastDbMtimeMs) ? zedState.lastDbMtimeMs : 0;
+  const cursorUpdatedAt =
+    typeof zedState.lastUpdatedAt === "string" ? zedState.lastUpdatedAt : null;
+  const cursorDbMtime = Number.isFinite(zedState.lastDbMtimeMs)
+    ? zedState.lastDbMtimeMs
+    : 0;
 
   // mtime short-circuit: if the SQLite file hasn't been touched since the
   // last sync there's nothing to read — skip the ~250MB copyFile + zstd
@@ -9545,13 +10665,21 @@ async function parseZedIncremental({
     currentMtime = fssync.statSync(resolvedDb).mtimeMs;
   } catch (e) {
     if (e && e.code === "ENOENT") {
-      cursors.zed = { ...zedState, threadTotals, updatedAt: new Date().toISOString() };
+      cursors.zed = {
+        ...zedState,
+        threadTotals,
+        updatedAt: new Date().toISOString(),
+      };
       return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
     }
     throw e;
   }
   if (currentMtime > 0 && currentMtime === cursorDbMtime) {
-    cursors.zed = { ...zedState, threadTotals, updatedAt: new Date().toISOString() };
+    cursors.zed = {
+      ...zedState,
+      threadTotals,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -9561,13 +10689,21 @@ async function parseZedIncremental({
   const snap = snapshotSqliteDb(resolvedDb);
   let rows = [];
   try {
-    rows = readZedThreadRowsFromSqlite(snap.path, cursorUpdatedAt, sqliteOptions);
+    rows = readZedThreadRowsFromSqlite(
+      snap.path,
+      cursorUpdatedAt,
+      sqliteOptions,
+    );
   } finally {
     snap.cleanup();
   }
 
   if (rows.length === 0) {
-    cursors.zed = { ...zedState, threadTotals, updatedAt: new Date().toISOString() };
+    cursors.zed = {
+      ...zedState,
+      threadTotals,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -9583,22 +10719,43 @@ async function parseZedIncremental({
     if (!row || typeof row.id !== "string" || !row.data_hex) continue;
 
     let blob;
-    try { blob = Buffer.from(row.data_hex, "hex"); } catch { continue; }
+    try {
+      blob = Buffer.from(row.data_hex, "hex");
+    } catch {
+      continue;
+    }
 
     let jsonText;
-    try { jsonText = await decodeZedThreadBlob({ dataType: row.data_type, data: blob }); }
-    catch { continue; }
+    try {
+      jsonText = await decodeZedThreadBlob({
+        dataType: row.data_type,
+        data: blob,
+      });
+    } catch {
+      continue;
+    }
 
     let thread;
-    try { thread = JSON.parse(jsonText); } catch { continue; }
+    try {
+      thread = JSON.parse(jsonText);
+    } catch {
+      continue;
+    }
 
     const extracted = extractZedTotals(thread);
     if (!extracted) continue;
 
-    const prev = threadTotals[row.id] || { input: 0, output: 0, cache_read: 0, cache_write: 0 };
+    const prev = threadTotals[row.id] || {
+      input: 0,
+      output: 0,
+      cache_read: 0,
+      cache_write: 0,
+    };
     const curr = extracted.totals;
-    const prevSum = prev.input + prev.output + prev.cache_read + prev.cache_write;
-    const currSum = curr.input + curr.output + curr.cache_read + curr.cache_write;
+    const prevSum =
+      prev.input + prev.output + prev.cache_read + prev.cache_write;
+    const currSum =
+      curr.input + curr.output + curr.cache_read + curr.cache_write;
     // Detect cumulative reset: a thread can be re-created with the same id
     // but lower totals (rare — Zed may purge & rewrite on import/export).
     // Naive `Math.max(0, curr - prev)` would clamp the delta to 0 and quietly
@@ -9614,7 +10771,8 @@ async function parseZedIncremental({
           cache_read: Math.max(0, curr.cache_read - prev.cache_read),
           cache_write: Math.max(0, curr.cache_write - prev.cache_write),
         };
-    const totalDelta = delta.input + delta.output + delta.cache_read + delta.cache_write;
+    const totalDelta =
+      delta.input + delta.output + delta.cache_read + delta.cache_write;
     if (totalDelta <= 0) {
       if (
         curr.input !== prev.input ||
@@ -9645,7 +10803,12 @@ async function parseZedIncremental({
       conversation_count: 1,
     };
 
-    const bucket = getHourlyBucket(hourlyState, "zed", extracted.model, bucketStart);
+    const bucket = getHourlyBucket(
+      hourlyState,
+      "zed",
+      extracted.model,
+      bucketStart,
+    );
     addTotals(bucket.totals, bucketDelta);
     touchedBuckets.add(bucketKey("zed", extracted.model, bucketStart));
     threadTotals[row.id] = curr;
@@ -9690,7 +10853,11 @@ async function parseZedIncremental({
     Object.assign(threadTotals, capped);
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -9722,17 +10889,26 @@ async function parseZedIncremental({
 
 const ANYTHINGLLM_PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-function resolveAnythingllmDbPath(env = process.env, platform = process.platform) {
-  const override = typeof env.TOKENTRACKER_ANYTHINGLLM_DB === "string"
-    ? env.TOKENTRACKER_ANYTHINGLLM_DB.trim()
-    : "";
+function resolveAnythingllmDbPath(
+  env = process.env,
+  platform = process.platform,
+) {
+  const override =
+    typeof env.TOKENTRACKER_ANYTHINGLLM_DB === "string"
+      ? env.TOKENTRACKER_ANYTHINGLLM_DB.trim()
+      : "";
   if (override) return override;
 
   const os = require("node:os");
   if (platform === "win32") {
     const home = env.USERPROFILE || os.homedir();
     const appData = env.APPDATA || path.join(home, "AppData", "Roaming");
-    return path.join(appData, "anythingllm-desktop", "storage", "anythingllm.db");
+    return path.join(
+      appData,
+      "anythingllm-desktop",
+      "storage",
+      "anythingllm.db",
+    );
   }
 
   const home = env.HOME || os.homedir();
@@ -9748,7 +10924,12 @@ function resolveAnythingllmDbPath(env = process.env, platform = process.platform
   }
 
   const configHome = env.XDG_CONFIG_HOME || path.join(home, ".config");
-  return path.join(configHome, "anythingllm-desktop", "storage", "anythingllm.db");
+  return path.join(
+    configHome,
+    "anythingllm-desktop",
+    "storage",
+    "anythingllm.db",
+  );
 }
 
 function parseAnythingllmTimestamp(value) {
@@ -9757,9 +10938,8 @@ function parseAnythingllmTimestamp(value) {
     // Prisma stores SQLite DateTime values as epoch milliseconds. Accept
     // seconds as well for compatibility with databases created by other
     // SQLite clients.
-    const epochMs = Math.abs(epochValue) < 100_000_000_000
-      ? epochValue * 1000
-      : epochValue;
+    const epochMs =
+      Math.abs(epochValue) < 100_000_000_000 ? epochValue * 1000 : epochValue;
     const parsed = new Date(epochMs);
     return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
   };
@@ -9767,24 +10947,33 @@ function parseAnythingllmTimestamp(value) {
   if (typeof value !== "string" || !value.trim()) return null;
   const trimmed = value.trim();
   if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return epochIso(Number(trimmed));
-  const naive = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(trimmed);
+  const naive =
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/.exec(
+      trimmed,
+    );
   if (naive) {
     const millis = String(naive[7] || "0").padEnd(3, "0");
-    return new Date(Date.UTC(
-      +naive[1],
-      +naive[2] - 1,
-      +naive[3],
-      +naive[4],
-      +naive[5],
-      +naive[6],
-      +millis,
-    )).toISOString();
+    return new Date(
+      Date.UTC(
+        +naive[1],
+        +naive[2] - 1,
+        +naive[3],
+        +naive[4],
+        +naive[5],
+        +naive[6],
+        +millis,
+      ),
+    ).toISOString();
   }
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function readAnythingllmUsageRowsWhere(dbPath, whereClause, sqliteOptions = {}) {
+function readAnythingllmUsageRowsWhere(
+  dbPath,
+  whereClause,
+  sqliteOptions = {},
+) {
   if (!dbPath || !fssync.existsSync(dbPath)) return [];
   const metric = (jsonPath, alias) =>
     `CASE WHEN json_valid(response) THEN json_extract(response, '${jsonPath}') ELSE NULL END AS ${alias}`;
@@ -9809,7 +10998,7 @@ function readAnythingllmUsageRowsWhere(dbPath, whereClause, sqliteOptions = {}) 
     try {
       snapshot = snapshotSqliteDb(dbPath);
       effectiveDbPath = snapshot.path;
-    } catch (_e) { }
+    } catch (_e) {}
   }
 
   try {
@@ -9827,7 +11016,11 @@ function readAnythingllmUsageRowsWhere(dbPath, whereClause, sqliteOptions = {}) 
 
 function readAnythingllmUsageRows(dbPath, sinceId = 0, sqliteOptions = {}) {
   const safeSinceId = Math.max(0, Math.trunc(Number(sinceId) || 0));
-  return readAnythingllmUsageRowsWhere(dbPath, `id > ${safeSinceId}`, sqliteOptions);
+  return readAnythingllmUsageRowsWhere(
+    dbPath,
+    `id > ${safeSinceId}`,
+    sqliteOptions,
+  );
 }
 
 function readAnythingllmUsageRowsByIds(dbPath, ids, sqliteOptions = {}) {
@@ -9863,17 +11056,22 @@ async function parseAnythingllmIncremental({
 } = {}) {
   await ensureDir(path.dirname(queuePath));
   const resolvedDb = dbPath || resolveAnythingllmDbPath(env || process.env);
-  const priorState = cursors.anythingllm && typeof cursors.anythingllm === "object"
-    ? cursors.anythingllm
-    : {};
-  const lastChatId = Math.max(0, Math.trunc(Number(priorState.lastChatId) || 0));
+  const priorState =
+    cursors.anythingllm && typeof cursors.anythingllm === "object"
+      ? cursors.anythingllm
+      : {};
+  const lastChatId = Math.max(
+    0,
+    Math.trunc(Number(priorState.lastChatId) || 0),
+  );
   const pendingChatIds = new Set(
     (Array.isArray(priorState.pendingChatIds) ? priorState.pendingChatIds : [])
       .map(toNonNegativeInt)
       .filter((id) => id > 0),
   );
-  const pendingCutoffMs = (Number.isFinite(nowMs) ? nowMs : Date.now())
-    - ANYTHINGLLM_PENDING_MAX_AGE_MS;
+  const pendingCutoffMs =
+    (Number.isFinite(nowMs) ? nowMs : Date.now()) -
+    ANYTHINGLLM_PENDING_MAX_AGE_MS;
 
   if (!resolvedDb || !fssync.existsSync(resolvedDb)) {
     cursors.anythingllm = {
@@ -9885,7 +11083,11 @@ async function parseAnythingllmIncremental({
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
-  const incrementalRows = readAnythingllmUsageRows(resolvedDb, lastChatId, sqliteOptions);
+  const incrementalRows = readAnythingllmUsageRows(
+    resolvedDb,
+    lastChatId,
+    sqliteOptions,
+  );
   const pendingRetryRows = readAnythingllmUsageRowsByIds(
     resolvedDb,
     [...pendingChatIds],
@@ -9931,21 +11133,25 @@ async function parseAnythingllmIncremental({
     const outputTokens = toNonNegativeInt(row?.completion_tokens);
     const reportedTotal = toNonNegativeInt(row?.total_tokens);
     if (inputTokens === 0 && outputTokens === 0) {
-      const pendingTimestamp = parseAnythingllmTimestamp(row?.lastUpdatedAt)
-        || parseAnythingllmTimestamp(row?.createdAt);
-      const pendingTimestampMs = pendingTimestamp ? Date.parse(pendingTimestamp) : NaN;
+      const pendingTimestamp =
+        parseAnythingllmTimestamp(row?.lastUpdatedAt) ||
+        parseAnythingllmTimestamp(row?.createdAt);
+      const pendingTimestampMs = pendingTimestamp
+        ? Date.parse(pendingTimestamp)
+        : NaN;
       const shouldRetry =
-        toNonNegativeInt(row?.include) === 0
-        && Number.isFinite(pendingTimestampMs)
-        && pendingTimestampMs >= pendingCutoffMs;
+        toNonNegativeInt(row?.include) === 0 &&
+        Number.isFinite(pendingTimestampMs) &&
+        pendingTimestampMs >= pendingCutoffMs;
       if (rowId > 0 && shouldRetry) pendingChatIds.add(rowId);
       else if (rowId > 0) pendingChatIds.delete(rowId);
       reportProgress(i + 1);
       continue;
     }
 
-    const timestamp = parseAnythingllmTimestamp(row?.createdAt)
-      || parseAnythingllmTimestamp(row?.lastUpdatedAt);
+    const timestamp =
+      parseAnythingllmTimestamp(row?.createdAt) ||
+      parseAnythingllmTimestamp(row?.lastUpdatedAt);
     const bucketStart = timestamp ? toUtcHalfHourStart(timestamp) : null;
     if (!bucketStart) {
       if (rowId > 0) pendingChatIds.delete(rowId);
@@ -9967,7 +11173,12 @@ async function parseAnythingllmIncremental({
       conversation_count: 1,
     };
 
-    const bucket = getHourlyBucket(hourlyState, "anythingllm", model, bucketStart);
+    const bucket = getHourlyBucket(
+      hourlyState,
+      "anythingllm",
+      model,
+      bucketStart,
+    );
     addTotals(bucket.totals, delta);
     touchedBuckets.add(bucketKey("anythingllm", model, bucketStart));
     eventsAggregated += 1;
@@ -9975,7 +11186,11 @@ async function parseAnythingllmIncremental({
     reportProgress(i + 1);
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -10015,23 +11230,38 @@ async function parseAnythingllmIncremental({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveGooseDbPath(env = process.env) {
-  if (typeof env.TOKENTRACKER_GOOSE_DB === "string" && env.TOKENTRACKER_GOOSE_DB.trim()) {
+  if (
+    typeof env.TOKENTRACKER_GOOSE_DB === "string" &&
+    env.TOKENTRACKER_GOOSE_DB.trim()
+  ) {
     return env.TOKENTRACKER_GOOSE_DB.trim();
   }
-  const root = typeof env.GOOSE_PATH_ROOT === "string" ? env.GOOSE_PATH_ROOT.trim() : "";
+  const root =
+    typeof env.GOOSE_PATH_ROOT === "string" ? env.GOOSE_PATH_ROOT.trim() : "";
   if (root) return path.join(root, "data", "sessions", "sessions.db");
   const home = env.HOME || require("node:os").homedir();
   const candidates = [];
   if (process.platform === "darwin") {
     candidates.push(
-      path.join(home, "Library", "Application Support", "goose", "sessions", "sessions.db"),
+      path.join(
+        home,
+        "Library",
+        "Application Support",
+        "goose",
+        "sessions",
+        "sessions.db",
+      ),
     );
   } else if (process.platform === "win32") {
     const appData = env.APPDATA || path.join(home, "AppData", "Roaming");
     const native = path.join(appData, "goose", "sessions", "sessions.db");
-    const wslDir = wsl.shouldProbeWsl(env) ? wsl.discoverWslHome(".local/share/goose/sessions", { env }) : null;
-    const wslValue = wslDir && fssync.existsSync(path.join(wslDir, "sessions.db"))
-      ? path.join(wslDir, "sessions.db") : null;
+    const wslDir = wsl.shouldProbeWsl(env)
+      ? wsl.discoverWslHome(".local/share/goose/sessions", { env })
+      : null;
+    const wslValue =
+      wslDir && fssync.existsSync(path.join(wslDir, "sessions.db"))
+        ? path.join(wslDir, "sessions.db")
+        : null;
     const paths = resolveInstallPaths({ nativeValue: native, wslValue }, env);
     const picked = paths.native || paths.wsl;
     if (picked) candidates.push(picked);
@@ -10055,14 +11285,17 @@ function resolveGooseDbPath(env = process.env) {
 }
 
 function parseGooseModelName(modelConfigJson) {
-  if (typeof modelConfigJson !== "string" || !modelConfigJson.trim()) return null;
+  if (typeof modelConfigJson !== "string" || !modelConfigJson.trim())
+    return null;
   try {
     const obj = JSON.parse(modelConfigJson);
     if (obj && typeof obj.model_name === "string") {
       const trimmed = obj.model_name.trim();
       return trimmed || null;
     }
-  } catch (_e) { /* ignore */ }
+  } catch (_e) {
+    /* ignore */
+  }
   return null;
 }
 
@@ -10074,9 +11307,13 @@ function parseGooseCreatedAt(s) {
   const trimmed = s.trim();
   // Match naive UTC formats FIRST — otherwise `new Date("2026-05-21 14:30:00")`
   // is interpreted in the local zone, shifting the bucket by ±N hours.
-  const dt = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})$/.exec(trimmed);
+  const dt = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})$/.exec(
+    trimmed,
+  );
   if (dt) {
-    const d = new Date(Date.UTC(+dt[1], +dt[2] - 1, +dt[3], +dt[4], +dt[5], +dt[6]));
+    const d = new Date(
+      Date.UTC(+dt[1], +dt[2] - 1, +dt[3], +dt[4], +dt[5], +dt[6]),
+    );
     return d.toISOString();
   }
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
@@ -10099,11 +11336,7 @@ function readGooseSessionsFromSqlite(dbPath, sqliteOptions = {}) {
     timeout: 10_000,
     ...sqliteOptions,
   });
-  const columns = new Set(
-    pragmaRows
-      .map((row) => row?.name)
-      .filter(Boolean),
-  );
+  const columns = new Set(pragmaRows.map((row) => row?.name).filter(Boolean));
   const optional = (col) => (columns.has(col) ? col : `NULL AS ${col}`);
   const sql = `
     SELECT
@@ -10147,17 +11380,27 @@ async function parseGooseIncremental({
       : {};
 
   if (!resolvedDb) {
-    cursors.goose = { ...gooseState, sessionTotals, updatedAt: new Date().toISOString() };
+    cursors.goose = {
+      ...gooseState,
+      sessionTotals,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
-  const cursorDbMtime = Number.isFinite(gooseState.lastDbMtimeMs) ? gooseState.lastDbMtimeMs : 0;
+  const cursorDbMtime = Number.isFinite(gooseState.lastDbMtimeMs)
+    ? gooseState.lastDbMtimeMs
+    : 0;
   let currentMtime = 0;
   try {
     currentMtime = fssync.statSync(resolvedDb).mtimeMs;
   } catch (e) {
     if (e && e.code === "ENOENT") {
-      cursors.goose = { ...gooseState, sessionTotals, updatedAt: new Date().toISOString() };
+      cursors.goose = {
+        ...gooseState,
+        sessionTotals,
+        updatedAt: new Date().toISOString(),
+      };
       return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
     }
     throw e;
@@ -10165,7 +11408,11 @@ async function parseGooseIncremental({
   // mtime short-circuit: skip the full sessions table scan when the DB
   // hasn't been touched since the last sync.
   if (currentMtime > 0 && currentMtime === cursorDbMtime) {
-    cursors.goose = { ...gooseState, sessionTotals, updatedAt: new Date().toISOString() };
+    cursors.goose = {
+      ...gooseState,
+      sessionTotals,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -10180,7 +11427,11 @@ async function parseGooseIncremental({
   }
 
   if (rows.length === 0) {
-    cursors.goose = { ...gooseState, sessionTotals, updatedAt: new Date().toISOString() };
+    cursors.goose = {
+      ...gooseState,
+      sessionTotals,
+      updatedAt: new Date().toISOString(),
+    };
     return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
   }
 
@@ -10228,7 +11479,11 @@ async function parseGooseIncremental({
         prev.output !== outputNow ||
         prev.total !== totalNow
       ) {
-        sessionTotals[row.id] = { input: inputNow, output: outputNow, total: totalNow };
+        sessionTotals[row.id] = {
+          input: inputNow,
+          output: outputNow,
+          total: totalNow,
+        };
       }
       continue;
     }
@@ -10238,7 +11493,8 @@ async function parseGooseIncremental({
     const accountedDelta = dInput + dOutput;
     const reasoningDelta = Math.max(0, dTotal - accountedDelta);
 
-    const tsIso = parseGooseCreatedAt(row.created_at) || new Date().toISOString();
+    const tsIso =
+      parseGooseCreatedAt(row.created_at) || new Date().toISOString();
     const bucketStart = toUtcHalfHourStart(tsIso);
     if (!bucketStart) continue;
 
@@ -10258,7 +11514,11 @@ async function parseGooseIncremental({
     const bucket = getHourlyBucket(hourlyState, "goose", model, bucketStart);
     addTotals(bucket.totals, bucketDelta);
     touchedBuckets.add(bucketKey("goose", model, bucketStart));
-    sessionTotals[row.id] = { input: inputNow, output: outputNow, total: totalNow };
+    sessionTotals[row.id] = {
+      input: inputNow,
+      output: outputNow,
+      total: totalNow,
+    };
     eventsAggregated++;
 
     if (cb) {
@@ -10281,7 +11541,11 @@ async function parseGooseIncremental({
     Object.assign(sessionTotals, capped);
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -10323,7 +11587,10 @@ async function parseGooseIncremental({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveDroidSessionsDirs(env = process.env) {
-  if (typeof env.DROID_SESSIONS_DIR === "string" && env.DROID_SESSIONS_DIR.trim()) {
+  if (
+    typeof env.DROID_SESSIONS_DIR === "string" &&
+    env.DROID_SESSIONS_DIR.trim()
+  ) {
     return env.DROID_SESSIONS_DIR.split(",")
       .map((d) => expandHomePath(d.trim(), env))
       .filter(Boolean);
@@ -10499,7 +11766,11 @@ function extractDroidModelFromSidecarJsonl(settingsPath) {
 // rust/crates/ccusage/src/utils.rs verbatim.
 function applyDroidTotalFallback(usage) {
   const known =
-    usage.input + usage.output + usage.cacheCreation + usage.cacheRead + usage.thinking;
+    usage.input +
+    usage.output +
+    usage.cacheCreation +
+    usage.cacheRead +
+    usage.thinking;
   const total = usage.totalTokens || 0;
   const missing = total > known ? total - known : 0;
   if (missing === 0) return usage;
@@ -10725,7 +11996,11 @@ async function parseDroidIncremental({
     const sumNow =
       inputNow + outputNow + cacheCreationNow + cacheReadNow + thinkingNow;
     const sumPrev =
-      prev.input + prev.output + prev.cacheCreation + prev.cacheRead + prev.thinking;
+      prev.input +
+      prev.output +
+      prev.cacheCreation +
+      prev.cacheRead +
+      prev.thinking;
 
     // Transient empty: settings.json was observed with zero tokens (mid-write
     // or a brief wipe before the next turn restores totals). Do NOT clobber
@@ -10864,7 +12139,9 @@ async function parseKilocodeIncremental({
 } = {}) {
   await ensureDir(path.dirname(queuePath));
   const kilocodeState =
-    cursors.kilocode && typeof cursors.kilocode === "object" ? cursors.kilocode : {};
+    cursors.kilocode && typeof cursors.kilocode === "object"
+      ? cursors.kilocode
+      : {};
   const seenIds = new Set(
     Array.isArray(kilocodeState.seenIds) ? kilocodeState.seenIds : [],
   );
@@ -10897,7 +12174,11 @@ async function parseKilocodeIncremental({
     const entry = files[fileIdx];
     const { filePath, taskUuid } = entry;
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath];
     if (
@@ -10909,9 +12190,17 @@ async function parseKilocodeIncremental({
     }
 
     let raw;
-    try { raw = fssync.readFileSync(filePath, "utf8"); } catch { continue; }
+    try {
+      raw = fssync.readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
     let data;
-    try { data = JSON.parse(raw); } catch { continue; }
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      continue;
+    }
     if (!Array.isArray(data)) continue;
 
     for (const msg of data) {
@@ -10920,11 +12209,16 @@ async function parseKilocodeIncremental({
       // the same payload when a user removes a turn from the task (Cline-style
       // edit-and-retry) — tokens were already consumed by the provider, so we
       // still count them.
-      if (msg.say !== "api_req_started" && msg.say !== "api_req_deleted") continue;
+      if (msg.say !== "api_req_started" && msg.say !== "api_req_deleted")
+        continue;
       if (typeof msg.text !== "string" || !msg.text.startsWith("{")) continue;
 
       let payload;
-      try { payload = JSON.parse(msg.text); } catch { continue; }
+      try {
+        payload = JSON.parse(msg.text);
+      } catch {
+        continue;
+      }
       if (!payload || typeof payload !== "object") continue;
 
       const ts = Number(msg.ts);
@@ -10938,7 +12232,12 @@ async function parseKilocodeIncremental({
       const tokensOut = toNonNegativeInt(payload.tokensOut);
       const cacheReads = toNonNegativeInt(payload.cacheReads);
       const cacheWrites = toNonNegativeInt(payload.cacheWrites);
-      if (tokensIn === 0 && tokensOut === 0 && cacheReads === 0 && cacheWrites === 0) {
+      if (
+        tokensIn === 0 &&
+        tokensOut === 0 &&
+        cacheReads === 0 &&
+        cacheWrites === 0
+      ) {
         // See the roocode parser: `api_req_started` is written at request
         // START with zero tokens and back-filled in place (same ts) on
         // completion. Marking the placeholder seen would drop the
@@ -10961,14 +12260,23 @@ async function parseKilocodeIncremental({
       };
 
       const model = normalizeKilocodeProviderToModel(payload.inferenceProvider);
-      const bucket = getHourlyBucket(hourlyState, "kilo-code", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "kilo-code",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("kilo-code", model, bucketStart));
       seenIds.add(dedupKey);
       eventsAggregated++;
     }
 
-    fileOffsets[filePath] = { size: stat.size, mtimeMs: stat.mtimeMs, ino: stat.ino };
+    fileOffsets[filePath] = {
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      ino: stat.ino,
+    };
 
     if (cb) {
       cb({
@@ -10983,13 +12291,23 @@ async function parseKilocodeIncremental({
 
   // Cap seenIds to last 50k to bound cursor state size
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 50_000 ? seenArr.slice(seenArr.length - 50_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 50_000 ? seenArr.slice(seenArr.length - 50_000) : seenArr;
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
-  cursors.kilocode = { ...kilocodeState, seenIds: cappedSeen, fileOffsets, updatedAt };
+  cursors.kilocode = {
+    ...kilocodeState,
+    seenIds: cappedSeen,
+    fileOffsets,
+    updatedAt,
+  };
 
   return { recordsProcessed, eventsAggregated, bucketsQueued };
 }
@@ -11006,9 +12324,13 @@ async function parseOmpIncremental({
   defaultModel,
 } = {}) {
   await ensureDir(path.dirname(queuePath));
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const ompState = cursors.omp && typeof cursors.omp === "object" ? cursors.omp : {};
-  const seenIds = new Set(Array.isArray(ompState.seenIds) ? ompState.seenIds : []);
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const ompState =
+    cursors.omp && typeof cursors.omp === "object" ? cursors.omp : {};
+  const seenIds = new Set(
+    Array.isArray(ompState.seenIds) ? ompState.seenIds : [],
+  );
   const projectSeenIds = new Set(
     Array.isArray(ompState.projectSeenIds) ? ompState.projectSeenIds : [],
   );
@@ -11017,7 +12339,8 @@ async function parseOmpIncremental({
       ? { ...ompState.fileOffsets }
       : {};
   const projectFileOffsets =
-    ompState.projectFileOffsets && typeof ompState.projectFileOffsets === "object"
+    ompState.projectFileOffsets &&
+    typeof ompState.projectFileOffsets === "object"
       ? { ...ompState.projectFileOffsets }
       : {};
 
@@ -11059,7 +12382,9 @@ async function parseOmpIncremental({
 
   const hourlyState = normalizeHourlyState(cursors?.hourly);
   const touchedBuckets = new Set();
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -11070,7 +12395,11 @@ async function parseOmpIncremental({
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -11086,13 +12415,19 @@ async function parseOmpIncremental({
         encoding: "utf8",
         start: startOffset,
       });
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
 
       // First line of each file is type:"session" (header) — skip all
       // non-message records.
@@ -11106,7 +12441,8 @@ async function parseOmpIncremental({
       if (!usage || typeof usage !== "object") continue;
 
       // Dedup by top-level entry id (8-char string assigned by oh-my-pi).
-      const entryId = typeof entry.id === "string" && entry.id ? entry.id : null;
+      const entryId =
+        typeof entry.id === "string" && entry.id ? entry.id : null;
       if (!entryId) continue;
       if (seenIds.has(entryId)) continue;
 
@@ -11150,7 +12486,8 @@ async function parseOmpIncremental({
 
       // Use provided totalTokens when available; otherwise sum all components.
       const totalTokens =
-        Number.isFinite(Number(usage.totalTokens)) && Number(usage.totalTokens) > 0
+        Number.isFinite(Number(usage.totalTokens)) &&
+        Number(usage.totalTokens) > 0
           ? toNonNegativeInt(usage.totalTokens)
           : input + output + cacheRead + cacheWrite + reasoningTokens;
 
@@ -11184,7 +12521,9 @@ async function parseOmpIncremental({
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
     fileOffsets[filePath] = {
       size: postStat.size,
       mtimeMs: postStat.mtimeMs,
@@ -11200,7 +12539,11 @@ async function parseOmpIncremental({
   if (projectEnabled) {
     for (const filePath of files) {
       let stat;
-      try { stat = fssync.statSync(filePath); } catch { continue; }
+      try {
+        stat = fssync.statSync(filePath);
+      } catch {
+        continue;
+      }
 
       const prevEntry = projectFileOffsets[filePath] || {};
       const prevSize = Number(prevEntry.size) || 0;
@@ -11232,16 +12575,24 @@ async function parseOmpIncremental({
         } catch {
           continue;
         }
-        const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        const rl = readline.createInterface({
+          input: stream,
+          crlfDelay: Infinity,
+        });
         for await (const line of rl) {
           if (!line || !line.trim()) continue;
           let entry;
-          try { entry = JSON.parse(line); } catch { continue; }
+          try {
+            entry = JSON.parse(line);
+          } catch {
+            continue;
+          }
           const msg = entry?.type === "message" ? entry.message : null;
           const usage = msg?.role === "assistant" ? msg.usage : null;
           if (!usage || typeof usage !== "object") continue;
 
-          const entryId = typeof entry.id === "string" && entry.id ? entry.id : null;
+          const entryId =
+            typeof entry.id === "string" && entry.id ? entry.id : null;
           if (!entryId || projectSeenIds.has(entryId)) continue;
 
           const input = toNonNegativeInt(usage.input);
@@ -11261,22 +12612,27 @@ async function parseOmpIncremental({
           }
 
           let tsMs = null;
-          if (Number.isFinite(Number(msg.timestamp)) && Number(msg.timestamp) > 0) {
+          if (
+            Number.isFinite(Number(msg.timestamp)) &&
+            Number(msg.timestamp) > 0
+          ) {
             tsMs = Number(msg.timestamp);
           } else if (typeof entry.timestamp === "string" && entry.timestamp) {
             const parsed = Date.parse(entry.timestamp);
             if (Number.isFinite(parsed) && parsed > 0) tsMs = parsed;
           }
-          const bucketStart = tsMs == null
-            ? null
-            : toUtcHalfHourStart(new Date(tsMs).toISOString());
+          const bucketStart =
+            tsMs == null
+              ? null
+              : toUtcHalfHourStart(new Date(tsMs).toISOString());
           if (!bucketStart) {
             projectSeenIds.add(entryId);
             continue;
           }
 
           const totalTokens =
-            Number.isFinite(Number(usage.totalTokens)) && Number(usage.totalTokens) > 0
+            Number.isFinite(Number(usage.totalTokens)) &&
+            Number(usage.totalTokens) > 0
               ? toNonNegativeInt(usage.totalTokens)
               : input + output + cacheRead + cacheWrite + reasoningTokens;
           const delta = {
@@ -11296,13 +12652,17 @@ async function parseOmpIncremental({
             projectRef,
           );
           addTotals(projectBucket.totals, delta);
-          projectTouchedBuckets.add(projectBucketKey(projectKey, "omp", bucketStart));
+          projectTouchedBuckets.add(
+            projectBucketKey(projectKey, "omp", bucketStart),
+          );
           projectSeenIds.add(entryId);
         }
       }
 
       let postStat = stat;
-      try { postStat = fssync.statSync(filePath); } catch {}
+      try {
+        postStat = fssync.statSync(filePath);
+      } catch {}
       projectFileOffsets[filePath] = {
         size: postStat.size,
         mtimeMs: postStat.mtimeMs,
@@ -11354,7 +12714,12 @@ async function parseOmpIncremental({
     updatedAt,
   };
 
-  return { recordsProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    recordsProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -11417,10 +12782,18 @@ function resolvePiSessionFiles(env = process.env) {
     for (const cwdDir of fssync.readdirSync(sessionsDir)) {
       const cwdPath = path.join(sessionsDir, cwdDir);
       let stat;
-      try { stat = fssync.statSync(cwdPath); } catch { continue; }
+      try {
+        stat = fssync.statSync(cwdPath);
+      } catch {
+        continue;
+      }
       if (!stat.isDirectory()) continue;
       let entries;
-      try { entries = fssync.readdirSync(cwdPath); } catch { continue; }
+      try {
+        entries = fssync.readdirSync(cwdPath);
+      } catch {
+        continue;
+      }
       for (const entry of entries) {
         if (!entry.endsWith(".jsonl")) continue;
         files.push(path.join(cwdPath, entry));
@@ -11463,8 +12836,11 @@ async function parsePiIncremental({
   defaultModel,
 } = {}) {
   await ensureDir(path.dirname(queuePath));
-  const piState = cursors.pi && typeof cursors.pi === "object" ? cursors.pi : {};
-  const seenIds = new Set(Array.isArray(piState.seenIds) ? piState.seenIds : []);
+  const piState =
+    cursors.pi && typeof cursors.pi === "object" ? cursors.pi : {};
+  const seenIds = new Set(
+    Array.isArray(piState.seenIds) ? piState.seenIds : [],
+  );
   const fileOffsets =
     piState.fileOffsets && typeof piState.fileOffsets === "object"
       ? { ...piState.fileOffsets }
@@ -11494,7 +12870,11 @@ async function parsePiIncremental({
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     const prevEntry = fileOffsets[filePath] || {};
     const prevSize = Number(prevEntry.size) || 0;
@@ -11509,13 +12889,19 @@ async function parsePiIncremental({
         encoding: "utf8",
         start: startOffset,
       });
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
       let entry;
-      try { entry = JSON.parse(line); } catch { continue; }
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
 
       if (!entry || entry.type !== "message") continue;
 
@@ -11525,7 +12911,8 @@ async function parsePiIncremental({
       const usage = msg.usage;
       if (!usage || typeof usage !== "object") continue;
 
-      const entryId = typeof entry.id === "string" && entry.id ? entry.id : null;
+      const entryId =
+        typeof entry.id === "string" && entry.id ? entry.id : null;
       if (!entryId) continue;
       if (seenIds.has(entryId)) continue;
 
@@ -11565,7 +12952,8 @@ async function parsePiIncremental({
       if (!bucketStart) continue;
 
       const totalTokens =
-        Number.isFinite(Number(usage.totalTokens)) && Number(usage.totalTokens) > 0
+        Number.isFinite(Number(usage.totalTokens)) &&
+        Number(usage.totalTokens) > 0
           ? toNonNegativeInt(usage.totalTokens)
           : input + output + cacheRead + cacheWrite + reasoningTokens;
 
@@ -11600,7 +12988,9 @@ async function parsePiIncremental({
     }
 
     let postStat = stat;
-    try { postStat = fssync.statSync(filePath); } catch {}
+    try {
+      postStat = fssync.statSync(filePath);
+    } catch {}
     fileOffsets[filePath] = {
       size: postStat.size,
       mtimeMs: postStat.mtimeMs,
@@ -11697,7 +13087,11 @@ function resolveCraftWorkspaceRoots(env = process.env) {
       for (const entry of fssync.readdirSync(defaultWorkspaces)) {
         const wsPath = path.join(defaultWorkspaces, entry);
         let stat;
-        try { stat = fssync.statSync(wsPath); } catch { continue; }
+        try {
+          stat = fssync.statSync(wsPath);
+        } catch {
+          continue;
+        }
         if (stat.isDirectory()) roots.add(wsPath);
       }
     } catch {
@@ -11730,11 +13124,19 @@ function resolveCraftSessionFiles(env = process.env) {
     const sessionsDir = path.join(root, "sessions");
     if (!fssync.existsSync(sessionsDir)) continue;
     let entries;
-    try { entries = fssync.readdirSync(sessionsDir); } catch { continue; }
+    try {
+      entries = fssync.readdirSync(sessionsDir);
+    } catch {
+      continue;
+    }
     for (const sessionId of entries) {
       const sessionDir = path.join(sessionsDir, sessionId);
       let stat;
-      try { stat = fssync.statSync(sessionDir); } catch { continue; }
+      try {
+        stat = fssync.statSync(sessionDir);
+      } catch {
+        continue;
+      }
       if (!stat.isDirectory()) continue;
       const filePath = path.join(sessionDir, "session.jsonl");
       if (fssync.existsSync(filePath)) files.push(filePath);
@@ -11758,7 +13160,8 @@ async function parseCraftIncremental({
   defaultModel,
 } = {}) {
   await ensureDir(path.dirname(queuePath));
-  const craftState = cursors.craft && typeof cursors.craft === "object" ? cursors.craft : {};
+  const craftState =
+    cursors.craft && typeof cursors.craft === "object" ? cursors.craft : {};
   // Per-session previous totals so each re-parse only contributes the delta
   // of the running token totals (the header rewrites in place as the session
   // grows). Shape: { [sessionId]: { input, output, cacheRead, cacheWrite, total } }
@@ -11790,7 +13193,11 @@ async function parseCraftIncremental({
   for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
     const filePath = files[fileIdx];
     let stat;
-    try { stat = fssync.statSync(filePath); } catch { continue; }
+    try {
+      stat = fssync.statSync(filePath);
+    } catch {
+      continue;
+    }
 
     // Read only the FIRST line — the SessionHeader carries the running totals.
     // Streaming the whole file would be wasted work since we don't use
@@ -11805,7 +13212,9 @@ async function parseCraftIncremental({
         encoding: "utf8",
         end: 1024 * 1024 - 1,
       });
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
     for await (const line of rl) {
       if (!line || !line.trim()) continue;
@@ -11818,7 +13227,9 @@ async function parseCraftIncremental({
       break;
     }
     rl.close();
-    try { stream.destroy(); } catch {}
+    try {
+      stream.destroy();
+    } catch {}
 
     if (!header || typeof header !== "object") {
       if (parseError && process.env.TOKENTRACKER_DEBUG) {
@@ -11834,9 +13245,9 @@ async function parseCraftIncremental({
     const sessionId =
       typeof header.id === "string" && header.id
         ? header.id
-        : (typeof header.sdkSessionId === "string" && header.sdkSessionId
-            ? header.sdkSessionId
-            : null);
+        : typeof header.sdkSessionId === "string" && header.sdkSessionId
+          ? header.sdkSessionId
+          : null;
     if (!sessionId) continue;
 
     recordsProcessed++;
@@ -11846,7 +13257,8 @@ async function parseCraftIncremental({
     const totalCacheRead = toNonNegativeInt(usage.cacheReadTokens);
     const totalCacheWrite = toNonNegativeInt(usage.cacheCreationTokens);
     const totalReported =
-      Number.isFinite(Number(usage.totalTokens)) && Number(usage.totalTokens) > 0
+      Number.isFinite(Number(usage.totalTokens)) &&
+      Number(usage.totalTokens) > 0
         ? toNonNegativeInt(usage.totalTokens)
         : totalInput + totalOutput + totalCacheRead + totalCacheWrite;
 
@@ -11868,7 +13280,12 @@ async function parseCraftIncremental({
 
     const nowMs = Date.now();
 
-    if (dInput === 0 && dOutput === 0 && dCacheRead === 0 && dCacheWrite === 0) {
+    if (
+      dInput === 0 &&
+      dOutput === 0 &&
+      dCacheRead === 0 &&
+      dCacheWrite === 0
+    ) {
       // No new usage since last parse — but still update the snapshot in case
       // an earlier truncate left it stale, and refresh lastSeenAt so the
       // eviction policy treats the session as live.
@@ -11885,7 +13302,11 @@ async function parseCraftIncremental({
 
     // Bucket on lastMessageAt (preferred) or createdAt — both ms epoch.
     let tsMs = null;
-    const tsCandidates = [header.lastMessageAt, header.lastUsedAt, header.createdAt];
+    const tsCandidates = [
+      header.lastMessageAt,
+      header.lastUsedAt,
+      header.createdAt,
+    ];
     for (const cand of tsCandidates) {
       if (Number.isFinite(Number(cand)) && Number(cand) > 0) {
         tsMs = Number(cand);
@@ -11911,7 +13332,8 @@ async function parseCraftIncremental({
       cache_creation_input_tokens: dCacheWrite,
       output_tokens: dOutput,
       reasoning_output_tokens: 0,
-      total_tokens: dTotal > 0 ? dTotal : dInput + dOutput + dCacheRead + dCacheWrite,
+      total_tokens:
+        dTotal > 0 ? dTotal : dInput + dOutput + dCacheRead + dCacheWrite,
       conversation_count: prev.total === 0 ? 1 : 0,
     };
 
@@ -11999,7 +13421,11 @@ function resolveCopilotOtelPaths(env = process.env) {
     }
   }
   const explicit = env.COPILOT_OTEL_FILE_EXPORTER_PATH;
-  if (typeof explicit === "string" && explicit.trim() && fssync.existsSync(explicit)) {
+  if (
+    typeof explicit === "string" &&
+    explicit.trim() &&
+    fssync.existsSync(explicit)
+  ) {
     paths.add(explicit);
   }
   return Array.from(paths).sort();
@@ -12014,7 +13440,11 @@ function isCopilotChatSpan(record) {
   // (OTEL JS SDK LogRecord shape with event.name:"gen_ai.client.inference.operation.details")
   // mark chat completions with gen_ai.operation.name === "chat".
   if (opName === "chat") return true;
-  if (record.type === "span" && typeof record.name === "string" && record.name.startsWith("chat ")) {
+  if (
+    record.type === "span" &&
+    typeof record.name === "string" &&
+    record.name.startsWith("chat ")
+  ) {
     return true;
   }
   return false;
@@ -12030,7 +13460,10 @@ function copilotOtelTimeToMs(value) {
 }
 
 function pickCopilotModel(attrs) {
-  const candidates = [attrs?.["gen_ai.response.model"], attrs?.["gen_ai.request.model"]];
+  const candidates = [
+    attrs?.["gen_ai.response.model"],
+    attrs?.["gen_ai.request.model"],
+  ];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) return c.trim();
   }
@@ -12098,8 +13531,14 @@ function getCopilotDedupKey(record, attrs = record?.attributes || {}) {
   const traceId = record?.traceId || record?.spanContext?.traceId || "";
   const spanId = record?.spanId || record?.spanContext?.spanId || "";
   const responseId =
-    typeof attrs["gen_ai.response.id"] === "string" ? attrs["gen_ai.response.id"] : "";
-  return traceId && spanId ? `${traceId}:${spanId}` : responseId ? `resp:${responseId}` : null;
+    typeof attrs["gen_ai.response.id"] === "string"
+      ? attrs["gen_ai.response.id"]
+      : "";
+  return traceId && spanId
+    ? `${traceId}:${spanId}`
+    : responseId
+      ? `resp:${responseId}`
+      : null;
 }
 
 function copilotUsageMatchKey({
@@ -12221,8 +13660,7 @@ async function copilotOtelCursorHasLegacyCliUsage(cursors) {
   const entries = Object.entries(offsets).filter(
     ([, entry]) => Number(entry?.size) > 0,
   );
-  const hasSeenIds =
-    Array.isArray(state.seenIds) && state.seenIds.length > 0;
+  const hasSeenIds = Array.isArray(state.seenIds) && state.seenIds.length > 0;
   if (entries.length === 0) return hasSeenIds;
   for (const [filePath, entry] of entries) {
     let stat;
@@ -12256,8 +13694,13 @@ async function parseCopilotIncremental({
   storeUsageEvents,
 } = {}) {
   await ensureDir(path.dirname(queuePath));
-  const copilotState = cursors.copilot && typeof cursors.copilot === "object" ? cursors.copilot : {};
-  const seenIds = new Set(Array.isArray(copilotState.seenIds) ? copilotState.seenIds : []);
+  const copilotState =
+    cursors.copilot && typeof cursors.copilot === "object"
+      ? cursors.copilot
+      : {};
+  const seenIds = new Set(
+    Array.isArray(copilotState.seenIds) ? copilotState.seenIds : [],
+  );
   const priorVersion = Number(copilotState.version) || 1;
   const fileOffsetsRaw =
     copilotState.fileOffsets && typeof copilotState.fileOffsets === "object"
@@ -12292,9 +13735,10 @@ async function parseCopilotIncremental({
     }
   }
 
-  const files = Array.isArray(otelPaths) && otelPaths.length > 0
-    ? otelPaths
-    : resolveCopilotOtelPaths(env || process.env);
+  const files =
+    Array.isArray(otelPaths) && otelPaths.length > 0
+      ? otelPaths
+      : resolveCopilotOtelPaths(env || process.env);
   if (files.length === 0) {
     cursors.copilot = {
       ...copilotState,
@@ -12341,7 +13785,10 @@ async function parseCopilotIncremental({
 
     let stream;
     try {
-      stream = fssync.createReadStream(filePath, { encoding: "utf8", start: startOffset });
+      stream = fssync.createReadStream(filePath, {
+        encoding: "utf8",
+        start: startOffset,
+      });
     } catch (_e) {
       continue;
     }
@@ -12477,7 +13924,12 @@ async function parseCopilotIncremental({
         conversation_count: 1,
       };
 
-      const bucket = getHourlyBucket(hourlyState, "copilot", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "copilot",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, delta);
       touchedBuckets.add(bucketKey("copilot", model, bucketStart));
       eventsAggregated++;
@@ -12509,18 +13961,27 @@ async function parseCopilotIncremental({
     try {
       postStat = fssync.statSync(filePath);
     } catch (_e) {}
-    fileOffsets[filePath] = { size: postStat.size, mtimeMs: postStat.mtimeMs, ino: postStat.ino };
+    fileOffsets[filePath] = {
+      size: postStat.size,
+      mtimeMs: postStat.mtimeMs,
+      ino: postStat.ino,
+    };
   }
 
   // Cap dedup set to last 10k IDs to bound state size
   const seenArr = Array.from(seenIds);
-  const cappedSeen = seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
+  const cappedSeen =
+    seenArr.length > 10_000 ? seenArr.slice(seenArr.length - 10_000) : seenArr;
   const retainedRecentOtelUsageEvents = pruneCopilotUsageClaims(
     recentOtelUsageEvents,
   );
   replaceCopilotUsageClaims(storeUsageEvents, Date.now(), Infinity);
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const updatedAt = new Date().toISOString();
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
@@ -12554,7 +14015,10 @@ async function parseCopilotIncremental({
 const COPILOT_STORE_CURSOR_VERSION = 2;
 const COPILOT_STORE_LEGACY_MODEL = "github-copilot-legacy";
 
-function resolveCopilotDbPaths({ fileName, overrideEnvKey }, env = process.env) {
+function resolveCopilotDbPaths(
+  { fileName, overrideEnvKey },
+  env = process.env,
+) {
   const home =
     process.platform === "win32"
       ? env.USERPROFILE || env.HOME || require("node:os").homedir()
@@ -12654,8 +14118,7 @@ function normalizeCopilotPendingMalformedEvents(value) {
   for (const [id, fingerprint] of Object.entries(value)) {
     const normalizedId = toNonNegativeInt(id);
     if (normalizedId > 0) {
-      result[normalizedId] =
-        typeof fingerprint === "string" ? fingerprint : "";
+      result[normalizedId] = typeof fingerprint === "string" ? fingerprint : "";
     }
   }
   return result;
@@ -12997,7 +14460,11 @@ function normalizeCopilotSessionStoreUsage(row) {
     output_tokens: outputWithoutReasoning,
     reasoning_output_tokens: reasoningClamped,
     total_tokens:
-      input + cacheRead + cacheWrite + outputWithoutReasoning + reasoningClamped,
+      input +
+      cacheRead +
+      cacheWrite +
+      outputWithoutReasoning +
+      reasoningClamped,
     precision,
   };
 }
@@ -13027,7 +14494,9 @@ async function parseCopilotSessionStoreIncremental({
       ? cursors.copilotStore
       : {};
   const dbStates =
-    storeState.dbs && typeof storeState.dbs === "object" ? { ...storeState.dbs } : {};
+    storeState.dbs && typeof storeState.dbs === "object"
+      ? { ...storeState.dbs }
+      : {};
   let uniquePaths = uniqueCopilotDbPaths(
     paths,
     env || process.env,
@@ -13038,15 +14507,15 @@ async function parseCopilotSessionStoreIncremental({
     uniquePaths,
     mergeCopilotStoreAliasStates,
   );
-  uniquePaths = uniquePaths.filter(
-    (dbPath) => !migratedAliasPaths.has(dbPath),
-  );
+  uniquePaths = uniquePaths.filter((dbPath) => !migratedAliasPaths.has(dbPath));
   const seenSessions = new Set(
     Array.isArray(storeState.seenSessions) ? storeState.seenSessions : [],
   );
   const excludedFirstRunSessions = new Set(
     Array.isArray(excludeSessionIdsOnFirstRun)
-      ? excludeSessionIdsOnFirstRun.filter((value) => typeof value === "string" && value)
+      ? excludeSessionIdsOnFirstRun.filter(
+          (value) => typeof value === "string" && value,
+        )
       : [],
   );
   const excludedFirstRunTotals =
@@ -13141,24 +14610,25 @@ async function parseCopilotSessionStoreIncremental({
       const reconcileAllRows =
         (resetDetected || inodeChanged) && !resetWithoutFingerprintHistory;
       const needsAdoption =
-        globalAdoptionPending ||
-        !dbState.adoptedAt ||
-        resetDetected;
+        globalAdoptionPending || !dbState.adoptedAt || resetDetected;
       const baselineOnly =
         resetWithoutFingerprintHistory ||
         (needsAdoption && !resetDetected && !backfillOnFirstRun);
       const incrementalRows = readCopilotSessionStoreUsageRows(
         snap.path,
-        reconcileAllRows || baselineOnly || needsFingerprintSeed ? 0 : priorLastId,
+        reconcileAllRows || baselineOnly || needsFingerprintSeed
+          ? 0
+          : priorLastId,
         sqliteOptions,
       );
-      const pendingRetryRows = resetDetected || reconcileAllRows
-        ? []
-        : readCopilotSessionStoreUsageRowsByIds(
-            snap.path,
-            Object.keys(pendingMalformedEvents),
-            sqliteOptions,
-          );
+      const pendingRetryRows =
+        resetDetected || reconcileAllRows
+          ? []
+          : readCopilotSessionStoreUsageRowsByIds(
+              snap.path,
+              Object.keys(pendingMalformedEvents),
+              sqliteOptions,
+            );
       const pendingRetryIds = new Set(
         pendingRetryRows.map((row) => toNonNegativeInt(row?.id)),
       );
@@ -13230,15 +14700,11 @@ async function parseCopilotSessionStoreIncremental({
             continue;
           }
         }
-        const seedOnly =
-          needsFingerprintSeed && rowId <= priorLastId;
+        const seedOnly = needsFingerprintSeed && rowId <= priorLastId;
         const recentEvent = copilotStoreRecentEvent(row, claimNowMs);
         if (pendingRetryIds.has(rowId) && !recentEvent) {
           if (seedOnly) {
-            incrementCopilotFingerprintCount(
-              seenEventCounts,
-              eventFingerprint,
-            );
+            incrementCopilotFingerprintCount(seenEventCounts, eventFingerprint);
           }
           pendingMalformedEvents[rowId] = eventFingerprint || "";
           seenSessions.add(sessionId);
@@ -13257,7 +14723,11 @@ async function parseCopilotSessionStoreIncremental({
           continue;
         }
         incrementCopilotFingerprintCount(seenEventCounts, eventFingerprint);
-        if (needsAdoption && backfillOnFirstRun && excludedFirstRunSessions.has(sessionId)) {
+        if (
+          needsAdoption &&
+          backfillOnFirstRun &&
+          excludedFirstRunSessions.has(sessionId)
+        ) {
           if (
             !matchedOtelUsage &&
             Object.prototype.hasOwnProperty.call(
@@ -13311,7 +14781,12 @@ async function parseCopilotSessionStoreIncremental({
           total_tokens: normalized.total_tokens,
           conversation_count: seenSessions.has(sessionId) ? 0 : 1,
         };
-        const bucket = getHourlyBucket(hourlyState, "copilot", model, bucketStart);
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "copilot",
+          model,
+          bucketStart,
+        );
         addTotals(bucket.totals, delta);
         touchedBuckets.add(bucketKey("copilot", model, bucketStart));
         seenSessions.add(sessionId);
@@ -13471,8 +14946,9 @@ function normalizeCopilotDbPath(dbPath, env = process.env) {
       : raw.startsWith("~/") || raw.startsWith("~\\")
         ? path.join(home, raw.slice(2))
         : raw;
-  const normalized =
-    path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(expanded);
+  const normalized = path.isAbsolute(expanded)
+    ? path.normalize(expanded)
+    : path.resolve(expanded);
   return normalized;
 }
 
@@ -13498,12 +14974,8 @@ function mergeCopilotStoreAliasStates(primary = {}, alias = {}) {
     );
   }
   const pendingMalformedEvents = {
-    ...normalizeCopilotPendingMalformedEvents(
-      primary?.pendingMalformedEvents,
-    ),
-    ...normalizeCopilotPendingMalformedEvents(
-      alias?.pendingMalformedEvents,
-    ),
+    ...normalizeCopilotPendingMalformedEvents(primary?.pendingMalformedEvents),
+    ...normalizeCopilotPendingMalformedEvents(alias?.pendingMalformedEvents),
   };
   return {
     ...primary,
@@ -13553,21 +15025,14 @@ function coalesceCopilotDbStatesByIdentity(
           ? selectedByInode.get(ino)
           : null;
     if (!selectedPath || selectedPath === statePath) continue;
-    dbStates[selectedPath] = mergeStates(
-      dbStates[selectedPath],
-      state,
-    );
+    dbStates[selectedPath] = mergeStates(dbStates[selectedPath], state);
     delete dbStates[statePath];
     migratedPaths.add(statePath);
   }
   return migratedPaths;
 }
 
-function uniqueCopilotDbPaths(
-  paths,
-  env = process.env,
-  preferredPaths = [],
-) {
+function uniqueCopilotDbPaths(paths, env = process.env, preferredPaths = []) {
   const pathKey = (dbPath) =>
     process.platform === "win32" ? dbPath.toLowerCase() : dbPath;
   const preferredKeys = new Set(
@@ -13634,19 +15099,26 @@ function resolveCopilotAppDbPath(env = process.env) {
 }
 
 function shouldCountCopilotAppSession(row) {
-  const sessionType = typeof row?.session_type === "string" ? row.session_type.trim().toLowerCase() : "";
-  const providerId = typeof row?.provider_id === "string" ? row.provider_id.trim().toLowerCase() : "";
+  const sessionType =
+    typeof row?.session_type === "string"
+      ? row.session_type.trim().toLowerCase()
+      : "";
+  const providerId =
+    typeof row?.provider_id === "string"
+      ? row.provider_id.trim().toLowerCase()
+      : "";
   // OTEL remains the owner for recognizable Copilot CLI / VS Code extension
   // sessions. The App DB path is separately cursored, but skipping known
   // OTEL-backed surfaces avoids duplicate source="copilot" buckets if GitHub
   // mirrors those sessions into data.db in a future release.
   const markers = [sessionType, providerId];
-  return !markers.some((value) =>
-    value === "cli" ||
-    value === "copilot-cli" ||
-    value.includes("vscode") ||
-    value.includes("extension") ||
-    value.includes("otel")
+  return !markers.some(
+    (value) =>
+      value === "cli" ||
+      value === "copilot-cli" ||
+      value.includes("vscode") ||
+      value.includes("extension") ||
+      value.includes("otel"),
   );
 }
 
@@ -13672,7 +15144,10 @@ function normalizeCopilotAppModel(model) {
   const normalized = normalizeModelInput(model);
   if (!normalized) return "";
   if (/^claude-(sonnet|opus|haiku)-\d+\.\d+/.test(normalized)) {
-    return normalized.replace(/^(claude-(?:sonnet|opus|haiku)-\d+)\.(\d+)/, "$1-$2");
+    return normalized.replace(
+      /^(claude-(?:sonnet|opus|haiku)-\d+)\.(\d+)/,
+      "$1-$2",
+    );
   }
   return normalized;
 }
@@ -13689,10 +15164,13 @@ function readCopilotAppSessionsFromSqlite(dbPath, sqliteOptions = {}) {
   const columns = new Set(pragmaRows.map((row) => row?.name).filter(Boolean));
   if (!columns.has("id")) return [];
   const optional = (col) => (columns.has(col) ? col : `NULL AS ${col}`);
-  const orderTerms = ["updated_at", "created_at"].filter((col) => columns.has(col));
-  const orderBy = orderTerms.length > 0
-    ? `ORDER BY COALESCE(${orderTerms.join(", ")}, ''), id`
-    : "ORDER BY id";
+  const orderTerms = ["updated_at", "created_at"].filter((col) =>
+    columns.has(col),
+  );
+  const orderBy =
+    orderTerms.length > 0
+      ? `ORDER BY COALESCE(${orderTerms.join(", ")}, ''), id`
+      : "ORDER BY id";
   // Select only the columns the parser consumes. Content-ish columns like
   // `title` must stay out of the query: token counts only, never user content.
   const sql = `
@@ -13781,18 +15259,28 @@ function capCopilotAppSessionTotals(sessionTotals, maxEntries = 10_000) {
 }
 
 function normalizeCopilotAppTokenDelta(curr, prev) {
-  const inputDelta = Math.max(0, Number(curr?.input || 0) - Number(prev?.input || 0));
-  const cachedDelta = Math.max(0, Number(curr?.cached || 0) - Number(prev?.cached || 0));
+  const inputDelta = Math.max(
+    0,
+    Number(curr?.input || 0) - Number(prev?.input || 0),
+  );
+  const cachedDelta = Math.max(
+    0,
+    Number(curr?.cached || 0) - Number(prev?.cached || 0),
+  );
   const cachedInputTokens = Math.min(cachedDelta, inputDelta);
   const inputTokens = Math.max(0, inputDelta - cachedInputTokens);
-  const outputDelta = Math.max(0, Number(curr?.output || 0) - Number(prev?.output || 0));
+  const outputDelta = Math.max(
+    0,
+    Number(curr?.output || 0) - Number(prev?.output || 0),
+  );
   const reasoningDelta = Math.max(
     0,
     Number(curr?.reasoning || 0) - Number(prev?.reasoning || 0),
   );
   const reasoningTokens = Math.min(reasoningDelta, outputDelta);
   const outputTokens = Math.max(0, outputDelta - reasoningTokens);
-  const totalTokens = inputTokens + cachedInputTokens + outputTokens + reasoningTokens;
+  const totalTokens =
+    inputTokens + cachedInputTokens + outputTokens + reasoningTokens;
   return {
     input_tokens: inputTokens,
     cached_input_tokens: cachedInputTokens,
@@ -13800,7 +15288,8 @@ function normalizeCopilotAppTokenDelta(curr, prev) {
     output_tokens: outputTokens,
     reasoning_output_tokens: reasoningTokens,
     total_tokens: totalTokens,
-    conversation_count: copilotAppBaselineTotal(prev) === 0 && totalTokens > 0 ? 1 : 0,
+    conversation_count:
+      copilotAppBaselineTotal(prev) === 0 && totalTokens > 0 ? 1 : 0,
   };
 }
 
@@ -13815,13 +15304,16 @@ async function parseCopilotAppDbIncremental({
   observeOnly = false,
 } = {}) {
   await ensureDir(path.dirname(queuePath));
-  const paths = Array.isArray(dbPaths) && dbPaths.length > 0
-    ? dbPaths
-    : dbPath
-      ? [dbPath]
-      : resolveCopilotAppDbPaths(env || process.env);
+  const paths =
+    Array.isArray(dbPaths) && dbPaths.length > 0
+      ? dbPaths
+      : dbPath
+        ? [dbPath]
+        : resolveCopilotAppDbPaths(env || process.env);
   const appState =
-    cursors.copilotApp && typeof cursors.copilotApp === "object" ? cursors.copilotApp : {};
+    cursors.copilotApp && typeof cursors.copilotApp === "object"
+      ? cursors.copilotApp
+      : {};
   const dbStates =
     appState.dbs && typeof appState.dbs === "object" ? { ...appState.dbs } : {};
   const uniquePaths = uniqueCopilotDbPaths(
@@ -13839,9 +15331,10 @@ async function parseCopilotAppDbIncremental({
   const updatedAt = new Date().toISOString();
 
   for (const resolvedDb of uniquePaths) {
-    const dbState = dbStates[resolvedDb] && typeof dbStates[resolvedDb] === "object"
-      ? dbStates[resolvedDb]
-      : {};
+    const dbState =
+      dbStates[resolvedDb] && typeof dbStates[resolvedDb] === "object"
+        ? dbStates[resolvedDb]
+        : {};
     const sessionTotals =
       dbState.sessionTotals && typeof dbState.sessionTotals === "object"
         ? { ...dbState.sessionTotals }
@@ -13862,7 +15355,10 @@ async function parseCopilotAppDbIncremental({
       continue;
     }
 
-    if (dbState.lastDbFingerprint && sameSqliteFingerprint(currentFingerprint, dbState.lastDbFingerprint)) {
+    if (
+      dbState.lastDbFingerprint &&
+      sameSqliteFingerprint(currentFingerprint, dbState.lastDbFingerprint)
+    ) {
       dbStates[resolvedDb] = { ...dbState, sessionTotals, updatedAt };
       continue;
     }
@@ -13898,14 +15394,20 @@ async function parseCopilotAppDbIncremental({
         cached: toNonNegativeInt(row.total_cached_tokens),
         reasoning: toNonNegativeInt(row.total_reasoning_tokens),
       };
-      const prev = sessionTotals[sessionId] || { input: 0, output: 0, cached: 0, reasoning: 0 };
+      const prev = sessionTotals[sessionId] || {
+        input: 0,
+        output: 0,
+        cached: 0,
+        reasoning: 0,
+      };
       const bucketDelta = normalizeCopilotAppTokenDelta(curr, prev);
       const totalDelta = bucketDelta.total_tokens;
       const rowUpdatedAt =
         parseCopilotAppTimestamp(row.updated_at) ||
         parseCopilotAppTimestamp(row.created_at) ||
         updatedAt;
-      const model = normalizeCopilotAppModel(row.model) || COPILOT_APP_DEFAULT_MODEL;
+      const model =
+        normalizeCopilotAppModel(row.model) || COPILOT_APP_DEFAULT_MODEL;
 
       if (totalDelta <= 0) {
         sessionTotals[sessionId] = { ...curr, model, updatedAt: rowUpdatedAt };
@@ -13922,7 +15424,12 @@ async function parseCopilotAppDbIncremental({
         continue;
       }
 
-      const bucket = getHourlyBucket(hourlyState, "copilot", model, bucketStart);
+      const bucket = getHourlyBucket(
+        hourlyState,
+        "copilot",
+        model,
+        bucketStart,
+      );
       addTotals(bucket.totals, bucketDelta);
       touchedBuckets.add(bucketKey("copilot", model, bucketStart));
       sessionTotals[sessionId] = { ...curr, model, updatedAt: rowUpdatedAt };
@@ -13951,7 +15458,11 @@ async function parseCopilotAppDbIncremental({
     };
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   hourlyState.updatedAt = updatedAt;
   cursors.hourly = hourlyState;
   cursors.copilotApp = {
@@ -14006,11 +15517,19 @@ function resolveGrokBuildSessions(env = process.env) {
   for (const cwdDir of cwdDirs) {
     const cwdPath = path.join(sessionsRoot, cwdDir);
     let stat;
-    try { stat = fssync.statSync(cwdPath); } catch { continue; }
+    try {
+      stat = fssync.statSync(cwdPath);
+    } catch {
+      continue;
+    }
     if (!stat.isDirectory()) continue;
 
     let sessionIds = [];
-    try { sessionIds = fssync.readdirSync(cwdPath); } catch { continue; }
+    try {
+      sessionIds = fssync.readdirSync(cwdPath);
+    } catch {
+      continue;
+    }
 
     for (const sid of sessionIds) {
       const sessionDir = path.join(cwdPath, sid);
@@ -14023,7 +15542,7 @@ function resolveGrokBuildSessions(env = process.env) {
           signalsPath,
           summaryPath: path.join(sessionDir, "summary.json"),
           sessionId: sid,
-          encodedCwd: cwdDir
+          encodedCwd: cwdDir,
         });
       }
     }
@@ -14033,8 +15552,13 @@ function resolveGrokBuildSessions(env = process.env) {
 
 function normalizeGrokSessionSnapshots(grokState) {
   const snapshots = {};
-  if (grokState?.sessionSnapshots && typeof grokState.sessionSnapshots === "object") {
-    for (const [sessionId, snapshot] of Object.entries(grokState.sessionSnapshots)) {
+  if (
+    grokState?.sessionSnapshots &&
+    typeof grokState.sessionSnapshots === "object"
+  ) {
+    for (const [sessionId, snapshot] of Object.entries(
+      grokState.sessionSnapshots,
+    )) {
       const safeSessionId = normalizeModelInput(sessionId);
       if (!safeSessionId || !snapshot || typeof snapshot !== "object") continue;
       const totalTokens = normalizeNonNegativeNumber(snapshot.totalTokens);
@@ -14044,7 +15568,8 @@ function normalizeGrokSessionSnapshots(grokState) {
         model: normalizeModelInput(snapshot.model) || null,
         source: normalizeModelInput(snapshot.source) || null,
         lastEventId: normalizeModelInput(snapshot.lastEventId) || null,
-        lastEventTimestamp: normalizeModelInput(snapshot.lastEventTimestamp) || null,
+        lastEventTimestamp:
+          normalizeModelInput(snapshot.lastEventTimestamp) || null,
         updatedAt: normalizeModelInput(snapshot.updatedAt) || null,
         legacySeen: snapshot.legacySeen === true,
       };
@@ -14084,7 +15609,8 @@ function readGrokJsonFile(filePath) {
 }
 
 function grokUpdatesPathForSession(sess) {
-  if (typeof sess?.updatesPath === "string" && sess.updatesPath.trim()) return sess.updatesPath;
+  if (typeof sess?.updatesPath === "string" && sess.updatesPath.trim())
+    return sess.updatesPath;
   if (typeof sess?.sessionDir === "string" && sess.sessionDir.trim()) {
     return path.join(sess.sessionDir, "updates.jsonl");
   }
@@ -14094,14 +15620,18 @@ function grokUpdatesPathForSession(sess) {
 function grokSessionIdFor(sess) {
   return (
     normalizeModelInput(sess?.sessionId) ||
-    (normalizeModelInput(sess?.sessionDir) ? path.basename(sess.sessionDir) : null)
+    (normalizeModelInput(sess?.sessionDir)
+      ? path.basename(sess.sessionDir)
+      : null)
   );
 }
 
 function grokModelFromSignals(signals) {
   return (
     normalizeModelInput(signals?.primaryModelId) ||
-    normalizeModelInput(Array.isArray(signals?.modelsUsed) ? signals.modelsUsed[0] : null) ||
+    normalizeModelInput(
+      Array.isArray(signals?.modelsUsed) ? signals.modelsUsed[0] : null,
+    ) ||
     normalizeModelInput(signals?.model) ||
     "grok-build"
   );
@@ -14132,7 +15662,9 @@ function grokMessageCountFromSignals(signals) {
 // cumulative spend across a session (especially after compaction).
 function grokEffectiveTotalFromSignals(signals) {
   if (!signals || typeof signals !== "object") return 0;
-  const beforeCompaction = normalizeNonNegativeNumber(signals.totalTokensBeforeCompaction);
+  const beforeCompaction = normalizeNonNegativeNumber(
+    signals.totalTokensBeforeCompaction,
+  );
   const totalTokens = normalizeNonNegativeNumber(signals.totalTokens);
   if (signals.contextTokensUsed == null) {
     return beforeCompaction + totalTokens;
@@ -14202,12 +15734,15 @@ function grokFileEndsWithNewline(filePath, size) {
   }
 }
 
-
 function canonicalizeGrokUsageModel(model) {
   const raw = normalizeModelInput(model) || "grok-build";
   const lower = raw.toLowerCase();
   // Free Build SKU must not fuzzy-match paid grok-4.5 rates in native clients.
-  if (lower.includes("build-free") || lower.endsWith("-free") || lower.includes("free-tier")) {
+  if (
+    lower.includes("build-free") ||
+    lower.endsWith("-free") ||
+    lower.includes("free-tier")
+  ) {
     return "grok-build-free";
   }
   if (lower === "grok-4.5-build" || lower === "grok-4-5-build") {
@@ -14235,19 +15770,24 @@ function normalizeGrokTurnUsage(usage, model, timestamp, eventId) {
   // Grok reports inputTokens as the full prompt (including cache hits). Split
   // so pricing can apply cache_read rates correctly.
   const nonCachedInput = Math.max(0, inputRaw - cached);
-  let total = normalizeNonNegativeNumber(usage.totalTokens ?? usage.total_tokens);
+  let total = normalizeNonNegativeNumber(
+    usage.totalTokens ?? usage.total_tokens,
+  );
   if (total <= 0) {
     total = inputRaw + output + reasoning;
   }
-  if (total <= 0 && nonCachedInput <= 0 && cached <= 0 && output <= 0) return null;
+  if (total <= 0 && nonCachedInput <= 0 && cached <= 0 && output <= 0)
+    return null;
   return {
     input_tokens: nonCachedInput,
     cached_input_tokens: cached,
     cache_creation_input_tokens: 0,
     output_tokens: output,
     reasoning_output_tokens: reasoning,
-    total_tokens: total > 0 ? total : nonCachedInput + cached + output + reasoning,
-    billable_total_tokens: total > 0 ? total : nonCachedInput + cached + output + reasoning,
+    total_tokens:
+      total > 0 ? total : nonCachedInput + cached + output + reasoning,
+    billable_total_tokens:
+      total > 0 ? total : nonCachedInput + cached + output + reasoning,
     conversation_count: 1,
     model: canonicalizeGrokUsageModel(model),
     timestamp,
@@ -14255,7 +15795,12 @@ function normalizeGrokTurnUsage(usage, model, timestamp, eventId) {
   };
 }
 
-function extractGrokTurnUsageEvents(record, fallbackTimestamp, fallbackModel, lineIndex) {
+function extractGrokTurnUsageEvents(
+  record,
+  fallbackTimestamp,
+  fallbackModel,
+  lineIndex,
+) {
   const update = record?.params?.update;
   if (!update || typeof update !== "object") return [];
   if (update.sessionUpdate !== "turn_completed") return [];
@@ -14270,7 +15815,9 @@ function extractGrokTurnUsageEvents(record, fallbackTimestamp, fallbackModel, li
   );
 
   const modelUsage =
-    usage.modelUsage && typeof usage.modelUsage === "object" ? usage.modelUsage : null;
+    usage.modelUsage && typeof usage.modelUsage === "object"
+      ? usage.modelUsage
+      : null;
   const events = [];
   if (modelUsage && Object.keys(modelUsage).length > 0) {
     for (const [modelName, modelUsageEntry] of Object.entries(modelUsage)) {
@@ -14285,7 +15832,12 @@ function extractGrokTurnUsageEvents(record, fallbackTimestamp, fallbackModel, li
     }
   }
   if (events.length === 0) {
-    const event = normalizeGrokTurnUsage(usage, fallbackModel, timestamp, baseEventId);
+    const event = normalizeGrokTurnUsage(
+      usage,
+      fallbackModel,
+      timestamp,
+      baseEventId,
+    );
     if (event) events.push(event);
   }
   return events;
@@ -14300,11 +15852,19 @@ function extractGrokContextTokenEvent(record, fallbackTimestamp, lineIndex) {
   return {
     totalTokens,
     timestamp: grokTimestampFromUpdate(meta, record, fallbackTimestamp),
-    eventId: grokEventId(meta.eventId ?? record?.eventId ?? record?.id, String(lineIndex)),
+    eventId: grokEventId(
+      meta.eventId ?? record?.eventId ?? record?.id,
+      String(lineIndex),
+    ),
   };
 }
 
-async function readGrokUpdateTokenEvents(updatesPath, fallbackTimestamp, prevOffsetEntry, options = {}) {
+async function readGrokUpdateTokenEvents(
+  updatesPath,
+  fallbackTimestamp,
+  prevOffsetEntry,
+  options = {},
+) {
   const fallbackModel = options.fallbackModel || "grok-build";
   if (!updatesPath) {
     return { turnEvents: [], contextEvents: [], offsetEntry: null };
@@ -14312,7 +15872,8 @@ async function readGrokUpdateTokenEvents(updatesPath, fallbackTimestamp, prevOff
   let stat;
   try {
     stat = fssync.statSync(updatesPath);
-    if (!stat.isFile()) return { turnEvents: [], contextEvents: [], offsetEntry: null };
+    if (!stat.isFile())
+      return { turnEvents: [], contextEvents: [], offsetEntry: null };
   } catch {
     return { turnEvents: [], contextEvents: [], offsetEntry: null };
   }
@@ -14370,20 +15931,30 @@ async function readGrokUpdateTokenEvents(updatesPath, fallbackTimestamp, prevOff
         turnEvents.push(...turns);
         continue;
       }
-      const contextEvent = extractGrokContextTokenEvent(record, fallbackTimestamp, lineIndex);
+      const contextEvent = extractGrokContextTokenEvent(
+        record,
+        fallbackTimestamp,
+        lineIndex,
+      );
       if (contextEvent) contextEvents.push(contextEvent);
     }
   } catch {
     // Stream error mid-read: discard partial events and do not advance the
     // offset, so the next sync re-extracts from the same range exactly once
     // instead of double-counting already-parsed turn events.
-    return { turnEvents: [], contextEvents: [], offsetEntry: prevOffsetEntry || null };
+    return {
+      turnEvents: [],
+      contextEvents: [],
+      offsetEntry: prevOffsetEntry || null,
+    };
   }
 
   // When the file does not end on a newline, the final emitted line is a
   // partial tail still being written. Exclude its bytes so the committed offset
   // stays on a complete-line boundary and the line is re-read once finished.
-  const trailingPartialBytes = endsWithNewline ? 0 : Buffer.byteLength(lastLine, "utf8");
+  const trailingPartialBytes = endsWithNewline
+    ? 0
+    : Buffer.byteLength(lastLine, "utf8");
   const committedSize = Math.max(startOffset, stat.size - trailingPartialBytes);
   return {
     turnEvents,
@@ -14396,8 +15967,12 @@ function estimateGrokTokenDelta(totalTokens, conversationCount, options = {}) {
   const total = Math.trunc(normalizeNonNegativeNumber(totalTokens));
   const inputTokens = Math.round(total * GROK_ESTIMATED_INPUT_RATIO);
   const outputTokens = Math.max(0, total - inputTokens);
-  const rawConversations = Math.trunc(normalizeNonNegativeNumber(conversationCount));
-  const conversations = options.allowZeroConversationCount ? rawConversations : Math.max(1, rawConversations);
+  const rawConversations = Math.trunc(
+    normalizeNonNegativeNumber(conversationCount),
+  );
+  const conversations = options.allowZeroConversationCount
+    ? rawConversations
+    : Math.max(1, rawConversations);
 
   return {
     input_tokens: inputTokens,
@@ -14413,7 +15988,10 @@ function estimateGrokTokenDelta(totalTokens, conversationCount, options = {}) {
 
 function clearGrokHourlyBuckets(hourlyState) {
   if (!hourlyState || typeof hourlyState !== "object") return;
-  const buckets = hourlyState.buckets && typeof hourlyState.buckets === "object" ? hourlyState.buckets : null;
+  const buckets =
+    hourlyState.buckets && typeof hourlyState.buckets === "object"
+      ? hourlyState.buckets
+      : null;
   if (buckets) {
     for (const key of Object.keys(buckets)) {
       if (key.startsWith("grok|")) delete buckets[key];
@@ -14451,9 +16029,14 @@ async function retractStaleGrokQueueRows(queuePath, keepKeys) {
     }
     if ((row?.source || "") !== "grok") continue;
     const model = normalizeModelInput(row.model) || DEFAULT_MODEL;
-    const hourStart = typeof row.hour_start === "string" ? row.hour_start : null;
+    const hourStart =
+      typeof row.hour_start === "string" ? row.hour_start : null;
     if (!hourStart) continue;
-    latestGrok.set(bucketKey("grok", model, hourStart), { model, hour_start: hourStart, row });
+    latestGrok.set(bucketKey("grok", model, hourStart), {
+      model,
+      hour_start: hourStart,
+      row,
+    });
   }
 
   const zero = initTotals();
@@ -14480,11 +16063,12 @@ async function parseGrokBuildIncremental({
   cursors = {},
   queuePath,
   onProgress,
-  env = process.env
+  env = process.env,
 } = {}) {
   if (queuePath) await ensureDir(path.dirname(queuePath));
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const grokState = cursors.grok && typeof cursors.grok === "object" ? { ...cursors.grok } : {};
+  const grokState =
+    cursors.grok && typeof cursors.grok === "object" ? { ...cursors.grok } : {};
   const prevVersion = Number(grokState.version) || 0;
   const needsTurnUsageMigration = prevVersion < GROK_CURSOR_VERSION;
 
@@ -14528,9 +16112,10 @@ async function parseGrokBuildIncremental({
   const updateOffsets = {};
   const touchedBuckets = new Set();
 
-  const sessionList = Array.isArray(sessions) && sessions.length > 0
-    ? sessions
-    : resolveGrokBuildSessions(env);
+  const sessionList =
+    Array.isArray(sessions) && sessions.length > 0
+      ? sessions
+      : resolveGrokBuildSessions(env);
 
   let eventsAggregated = 0;
 
@@ -14538,21 +16123,30 @@ async function parseGrokBuildIncremental({
     const sess = sessionList[index];
     const sessionId = grokSessionIdFor(sess);
     if (!sessionId) {
-      if (onProgress) onProgress({ index: index + 1, total: sessionList.length, bucketsQueued: touchedBuckets.size });
+      if (onProgress)
+        onProgress({
+          index: index + 1,
+          total: sessionList.length,
+          bucketsQueued: touchedBuckets.size,
+        });
       continue;
     }
 
-    const signals = sess?.signals && typeof sess.signals === "object"
-      ? sess.signals
-      : readGrokJsonFile(sess?.signalsPath);
+    const signals =
+      sess?.signals && typeof sess.signals === "object"
+        ? sess.signals
+        : readGrokJsonFile(sess?.signalsPath);
     const safeSignals = signals && typeof signals === "object" ? signals : {};
 
-    const summary = sess?.summary && typeof sess.summary === "object"
-      ? sess.summary
-      : readGrokJsonFile(sess?.summaryPath) || {};
+    const summary =
+      sess?.summary && typeof sess.summary === "object"
+        ? sess.summary
+        : readGrokJsonFile(sess?.summaryPath) || {};
     const previous = sessionSnapshots[sessionId] || {};
     const previousTotal = normalizeNonNegativeNumber(previous.totalTokens);
-    const previousMessageCount = normalizeNonNegativeNumber(previous.messageCount);
+    const previousMessageCount = normalizeNonNegativeNumber(
+      previous.messageCount,
+    );
     const messageCount = grokMessageCountFromSignals(safeSignals);
     const model = grokModelFromSignals(safeSignals);
     const lastActive = grokLastActiveFromSignals(safeSignals, summary);
@@ -14564,7 +16158,8 @@ async function parseGrokBuildIncremental({
     let lastEventId = previous.lastEventId || null;
     let lastEventTimestamp = previous.lastEventTimestamp || null;
     let lastModel = previous.model || model;
-    let sawTurnUsage = source === "turn_usage" || previous.source === "turn_usage";
+    let sawTurnUsage =
+      source === "turn_usage" || previous.source === "turn_usage";
     // Defer bucket writes until after we know whether this is a legacy baseline
     // pass (first sighting of a session already counted under an older scanner).
     const pendingBucketDeltas = [];
@@ -14584,7 +16179,10 @@ async function parseGrokBuildIncremental({
     // that turn (input/output/cache/reasoning). Sum them.
     for (const event of updates.turnEvents) {
       sawTurnUsage = true;
-      const hourStartStr = toUtcHalfHourStart(event.timestamp) || toUtcHalfHourStart(lastActive) || toUtcHalfHourStart(Date.now());
+      const hourStartStr =
+        toUtcHalfHourStart(event.timestamp) ||
+        toUtcHalfHourStart(lastActive) ||
+        toUtcHalfHourStart(Date.now());
       if (!hourStartStr) continue;
       const eventModel = event.model || model;
       const delta = {
@@ -14623,7 +16221,9 @@ async function parseGrokBuildIncremental({
           toUtcHalfHourStart(lastActive) ||
           toUtcHalfHourStart(Date.now());
         if (!hourStartStr) continue;
-        const delta = estimateGrokTokenDelta(deltaTokens, 0, { allowZeroConversationCount: true });
+        const delta = estimateGrokTokenDelta(deltaTokens, 0, {
+          allowZeroConversationCount: true,
+        });
         pendingBucketDeltas.push({ model, hourStartStr, delta });
         tokenDeltaForSession += deltaTokens;
         finalTouchedHourStart = hourStartStr;
@@ -14634,9 +16234,12 @@ async function parseGrokBuildIncremental({
       if (effectiveSignalTotal > highWatermark) {
         const deltaTokens = effectiveSignalTotal - highWatermark;
         highWatermark = effectiveSignalTotal;
-        const hourStartStr = toUtcHalfHourStart(lastActive) || toUtcHalfHourStart(Date.now());
+        const hourStartStr =
+          toUtcHalfHourStart(lastActive) || toUtcHalfHourStart(Date.now());
         if (hourStartStr) {
-          const delta = estimateGrokTokenDelta(deltaTokens, 0, { allowZeroConversationCount: true });
+          const delta = estimateGrokTokenDelta(deltaTokens, 0, {
+            allowZeroConversationCount: true,
+          });
           pendingBucketDeltas.push({ model, hourStartStr, delta });
           tokenDeltaForSession += deltaTokens;
           finalTouchedHourStart = hourStartStr;
@@ -14649,13 +16252,21 @@ async function parseGrokBuildIncremental({
     const finalTotal = Math.max(previousTotal, cumulativeTotal);
     // Sessions already observed under an older scanner must establish a watermark
     // without backfilling historical tokens as brand-new usage.
-    const legacyBaselineOnly = previous.legacySeen && previousTotal === 0 && finalTotal > 0;
+    const legacyBaselineOnly =
+      previous.legacySeen && previousTotal === 0 && finalTotal > 0;
 
     if (!legacyBaselineOnly) {
       for (const pending of pendingBucketDeltas) {
-        const bucket = getHourlyBucket(hourlyState, "grok", pending.model, pending.hourStartStr);
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "grok",
+          pending.model,
+          pending.hourStartStr,
+        );
         addTotals(bucket.totals, pending.delta);
-        touchedBuckets.add(bucketKey("grok", pending.model, pending.hourStartStr));
+        touchedBuckets.add(
+          bucketKey("grok", pending.model, pending.hourStartStr),
+        );
         eventsAggregated++;
       }
 
@@ -14663,14 +16274,26 @@ async function parseGrokBuildIncremental({
       // counts each turn_completed as one conversation).
       if (!sawTurnUsage && tokenDeltaForSession > 0 && finalTouchedHourStart) {
         const deltaMessageCount =
-          messageCount > previousMessageCount ? messageCount - previousMessageCount : 1;
-        const bucket = getHourlyBucket(hourlyState, "grok", lastModel || model, finalTouchedHourStart);
+          messageCount > previousMessageCount
+            ? messageCount - previousMessageCount
+            : 1;
+        const bucket = getHourlyBucket(
+          hourlyState,
+          "grok",
+          lastModel || model,
+          finalTouchedHourStart,
+        );
         addTotals(bucket.totals, { conversation_count: deltaMessageCount });
-        touchedBuckets.add(bucketKey("grok", lastModel || model, finalTouchedHourStart));
+        touchedBuckets.add(
+          bucketKey("grok", lastModel || model, finalTouchedHourStart),
+        );
       }
     }
 
-    if (finalTotal > 0 && (tokenDeltaForSession > 0 || previousTotal > 0 || legacyBaselineOnly)) {
+    if (
+      finalTotal > 0 &&
+      (tokenDeltaForSession > 0 || previousTotal > 0 || legacyBaselineOnly)
+    ) {
       sessionSnapshots[sessionId] = {
         totalTokens: finalTotal,
         messageCount: Math.max(previousMessageCount, messageCount),
@@ -14689,14 +16312,19 @@ async function parseGrokBuildIncremental({
         model: lastModel || model,
         source: previous.source || null,
         lastEventId: lastEventId || previous.lastEventId || null,
-        lastEventTimestamp: lastEventTimestamp || previous.lastEventTimestamp || null,
+        lastEventTimestamp:
+          lastEventTimestamp || previous.lastEventTimestamp || null,
         updatedAt: new Date().toISOString(),
         legacySeen: true,
       };
     }
 
     if (onProgress) {
-      onProgress({ index: index + 1, total: sessionList.length, bucketsQueued: touchedBuckets.size });
+      onProgress({
+        index: index + 1,
+        total: sessionList.length,
+        bucketsQueued: touchedBuckets.size,
+      });
     }
   }
 
@@ -14721,9 +16349,10 @@ async function parseGrokBuildIncremental({
   cursors.hourly = hourlyState;
   sessionSnapshots = capGrokSessionSnapshots(sessionSnapshots);
 
-  const migrations = grokState.migrations && typeof grokState.migrations === "object"
-    ? { ...grokState.migrations }
-    : {};
+  const migrations =
+    grokState.migrations && typeof grokState.migrations === "object"
+      ? { ...grokState.migrations }
+      : {};
   if (needsTurnUsageMigration) {
     migrations.turnUsageV4 = {
       appliedAt: new Date().toISOString(),
@@ -14739,13 +16368,13 @@ async function parseGrokBuildIncremental({
     seenSessions: Object.keys(sessionSnapshots),
     updateOffsets,
     migrations,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 
   return {
     recordsProcessed: eventsAggregated,
     eventsAggregated,
-    bucketsQueued
+    bucketsQueued,
   };
 }
 
@@ -14764,7 +16393,12 @@ async function listAntigravitySessionFiles(brainDir) {
   const entries = await safeReadDir(brainDir).catch(() => []);
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const logsDir = path.join(brainDir, entry.name, ".system_generated", "logs");
+    const logsDir = path.join(
+      brainDir,
+      entry.name,
+      ".system_generated",
+      "logs",
+    );
     const transcriptPath = path.join(logsDir, "transcript.jsonl");
     const st = await fs.stat(transcriptPath).catch(() => null);
     if (st && st.isFile()) {
@@ -14777,7 +16411,9 @@ async function listAntigravitySessionFiles(brainDir) {
 
 async function listAntigravityTranscripts(geminiHome) {
   const dirs = resolveAntigravityBrainDirs(geminiHome);
-  const lists = await Promise.all(dirs.map((dir) => listAntigravitySessionFiles(dir)));
+  const lists = await Promise.all(
+    dirs.map((dir) => listAntigravitySessionFiles(dir)),
+  );
   return lists.flat();
 }
 
@@ -14798,8 +16434,11 @@ async function parseAntigravityIncremental({
   const files = Array.isArray(sessionFiles) ? sessionFiles : [];
   const totalFiles = files.length;
   const hourlyState = normalizeHourlyState(cursors?.hourly);
-  const projectEnabled = typeof projectQueuePath === "string" && projectQueuePath.length > 0;
-  const projectState = projectEnabled ? normalizeProjectState(cursors?.projectHourly) : null;
+  const projectEnabled =
+    typeof projectQueuePath === "string" && projectQueuePath.length > 0;
+  const projectState = projectEnabled
+    ? normalizeProjectState(cursors?.projectHourly)
+    : null;
   const projectTouchedBuckets = projectEnabled ? new Set() : null;
   const projectMetaCache = projectEnabled ? new Map() : null;
   const publicRepoCache = projectEnabled ? new Map() : null;
@@ -14828,7 +16467,10 @@ async function parseAntigravityIncremental({
     const mtimeMs = Number.isFinite(st.mtimeMs) ? st.mtimeMs : 0;
 
     const unchanged =
-      prev && prev.inode === inode && prev.size === size && prev.mtimeMs === mtimeMs;
+      prev &&
+      prev.inode === inode &&
+      prev.size === size &&
+      prev.mtimeMs === mtimeMs;
     if (unchanged) {
       filesProcessed += 1;
       if (cb) {
@@ -14847,8 +16489,13 @@ async function parseAntigravityIncremental({
     const sameFile = prev && prev.inode === inode;
     const lastLine = sameFile ? Number(prev.lastLine || 0) : 0;
     const initialContextTokens = sameFile ? Number(prev.contextTokens || 0) : 0;
-    const initialPrevContext = sameFile ? Number(prev.previousContextTokens || 0) : 0;
-    const initialModel = sameFile && typeof prev.currentModel === "string" ? prev.currentModel : null;
+    const initialPrevContext = sameFile
+      ? Number(prev.previousContextTokens || 0)
+      : 0;
+    const initialModel =
+      sameFile && typeof prev.currentModel === "string"
+        ? prev.currentModel
+        : null;
 
     const projectContext = projectEnabled
       ? await resolveProjectContextForFile({
@@ -14903,9 +16550,17 @@ async function parseAntigravityIncremental({
     }
   }
 
-  const bucketsQueued = await enqueueTouchedBuckets({ queuePath, hourlyState, touchedBuckets });
+  const bucketsQueued = await enqueueTouchedBuckets({
+    queuePath,
+    hourlyState,
+    touchedBuckets,
+  });
   const projectBucketsQueued = projectEnabled
-    ? await enqueueTouchedProjectBuckets({ projectQueuePath, projectState, projectTouchedBuckets })
+    ? await enqueueTouchedProjectBuckets({
+        projectQueuePath,
+        projectState,
+        projectTouchedBuckets,
+      })
     : 0;
   hourlyState.updatedAt = new Date().toISOString();
   cursors.hourly = hourlyState;
@@ -14914,7 +16569,12 @@ async function parseAntigravityIncremental({
     cursors.projectHourly = projectState;
   }
 
-  return { filesProcessed, eventsAggregated, bucketsQueued, projectBucketsQueued };
+  return {
+    filesProcessed,
+    eventsAggregated,
+    bucketsQueued,
+    projectBucketsQueued,
+  };
 }
 
 async function parseAntigravityFile({
@@ -14952,8 +16612,12 @@ async function parseAntigravityFile({
   // when the cached state is missing (legacy cursor) or the file rotated.
   const canResume =
     Number.isFinite(lastLine) && lastLine > 0 && lastLine <= lines.length;
-  const cachedTokens = Number.isFinite(initialContextTokens) ? initialContextTokens : 0;
-  const cachedPrev = Number.isFinite(initialPrevContext) ? initialPrevContext : 0;
+  const cachedTokens = Number.isFinite(initialContextTokens)
+    ? initialContextTokens
+    : 0;
+  const cachedPrev = Number.isFinite(initialPrevContext)
+    ? initialPrevContext
+    : 0;
   const cachedModel = typeof initialModel === "string" ? initialModel : null;
   const resumed = canResume && (cachedTokens > 0 || cachedModel !== null);
   const scanStart = resumed ? lastLine : 0;
@@ -14966,7 +16630,10 @@ async function parseAntigravityFile({
   // tokens accumulated AFTER that point count as new input on the next planner
   // call — prevents O(N²) double-counting of the full history every turn.
   let previousContextTokens = resumed ? cachedPrev : 0;
-  let lastCompletedLine = Math.min(Number.isFinite(lastLine) ? lastLine : 0, lines.length);
+  let lastCompletedLine = Math.min(
+    Number.isFinite(lastLine) ? lastLine : 0,
+    lines.length,
+  );
 
   for (let i = scanStart; i < lines.length; i++) {
     const line = lines[i];
@@ -14981,7 +16648,10 @@ async function parseAntigravityFile({
 
     const isNewEvent = i >= lastLine;
 
-    if (parsed.type === "USER_INPUT" || parsed.type === "USER_SETTINGS_CHANGE") {
+    if (
+      parsed.type === "USER_INPUT" ||
+      parsed.type === "USER_SETTINGS_CHANGE"
+    ) {
       const content = typeof parsed.content === "string" ? parsed.content : "";
       const model = parseAntigravityModelSelection(content);
       if (model) currentModel = model;
@@ -15015,11 +16685,13 @@ async function parseAntigravityFile({
 
     if (parsed.type === "PLANNER_RESPONSE") {
       const content = typeof parsed.content === "string" ? parsed.content : "";
-      const thinking = typeof parsed.thinking === "string" ? parsed.thinking : "";
+      const thinking =
+        typeof parsed.thinking === "string" ? parsed.thinking : "";
 
       const inputDelta = Math.max(0, contextTokens - previousContextTokens);
       const outputTokens =
-        antigravityValueTokens(content) + antigravityValueTokens(parsed.tool_calls);
+        antigravityValueTokens(content) +
+        antigravityValueTokens(parsed.tool_calls);
       const reasoningTokens = antigravityValueTokens(thinking);
 
       delta.input_tokens = inputDelta;
@@ -15051,7 +16723,9 @@ async function parseAntigravityFile({
         projectRef,
       );
       addTotals(projectBucket.totals, delta);
-      projectTouchedBuckets.add(projectBucketKey(projectKey, source, bucketStart));
+      projectTouchedBuckets.add(
+        projectBucketKey(projectKey, source, bucketStart),
+      );
     }
     eventsAggregated += 1;
     // Snapshot the pre-planner context first. The planner's own content+tool_calls
@@ -15083,8 +16757,7 @@ async function readAntigravityDefaultModel(filePath) {
     if (settings.model && typeof settings.model === "string") {
       return normalizeAntigravityTranscriptModel(settings.model);
     }
-  } catch (_) {
-  }
+  } catch (_) {}
   return null;
 }
 

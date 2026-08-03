@@ -12,7 +12,8 @@ export type { PricingSnapshot, RuntimeModelPrice } from "./types";
 
 export type Currency = "USD" | "CNY";
 export type UsageDimension = "source" | "model" | "project" | "tokenType";
-export type TokenTypeKey = "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
+export type TokenTypeKey =
+  "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
 
 export const DEFAULT_USD_TO_CNY = 7.2;
 let activePricingSnapshot: PricingSnapshot | null = null;
@@ -49,7 +50,11 @@ const EMPTY_COUNTS: LocalTokenCounts = {
 };
 
 export function findModelPrice(model: string): ModelPrice | undefined {
-  const normalized = model.trim().toLowerCase().replaceAll("_", "-").replaceAll(".", "-");
+  const normalized = model
+    .trim()
+    .toLowerCase()
+    .replaceAll("_", "-")
+    .replaceAll(".", "-");
   const runtime = activePricingSnapshot?.prices[normalized];
   if (runtime) {
     return {
@@ -72,7 +77,10 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
   if (price == null) {
     return unknownCost(event.model);
   }
-  if (event.cacheCreationInputTokens > 0 && price.cacheWriteUsdPerMillion == null) {
+  if (
+    event.cacheCreationInputTokens > 0 &&
+    price.cacheWriteUsdPerMillion == null
+  ) {
     return unknownCost(event.model);
   }
 
@@ -80,17 +88,25 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
     price.tiers?.find(
       (candidate) =>
         candidate.maxInputTokens == null ||
-        event.inputTokens + event.cachedInputTokens + event.cacheCreationInputTokens <=
+        event.inputTokens +
+          event.cachedInputTokens +
+          event.cacheCreationInputTokens <=
           candidate.maxInputTokens,
     ) ?? price;
   const knownUsd =
     perMillion(event.inputTokens, tier.inputUsdPerMillion) +
     perMillion(event.outputTokens, tier.outputUsdPerMillion) +
     perMillion(event.cachedInputTokens, tier.cacheReadUsdPerMillion) +
-    perMillion(event.cacheCreationInputTokens, price.cacheWriteUsdPerMillion ?? 0);
+    perMillion(
+      event.cacheCreationInputTokens,
+      price.cacheWriteUsdPerMillion ?? 0,
+    );
   const cacheSavingsUsd = Math.max(
     0,
-    perMillion(event.cachedInputTokens, tier.inputUsdPerMillion - tier.cacheReadUsdPerMillion),
+    perMillion(
+      event.cachedInputTokens,
+      tier.inputUsdPerMillion - tier.cacheReadUsdPerMillion,
+    ),
   );
 
   return {
@@ -114,7 +130,10 @@ export function aggregatePricedUsage(
   events: LocalUsageEvent[],
   dimension: UsageDimension,
 ): PricedUsageRow[] {
-  const rows = new Map<string, { events: LocalUsageEvent[]; totals: LocalUsageTotals }>();
+  const rows = new Map<
+    string,
+    { events: LocalUsageEvent[]; totals: LocalUsageTotals }
+  >();
 
   for (const event of events) {
     if (dimension === "tokenType") {
@@ -122,14 +141,24 @@ export function aggregatePricedUsage(
       continue;
     }
     const key =
-      dimension === "source" ? event.source : dimension === "model" ? event.model : event.project;
+      dimension === "source"
+        ? event.source
+        : dimension === "model"
+          ? event.model
+          : event.project;
     addEventToRow(rows, key, event);
   }
 
   return [...rows.entries()]
-    .map(([key, row]) => ({ key, ...row.totals, cost: estimateUsageCost(row.events) }))
+    .map(([key, row]) => ({
+      key,
+      ...row.totals,
+      cost: estimateUsageCost(row.events),
+    }))
     .sort(
-      (left, right) => right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        left.key.localeCompare(right.key),
     );
 }
 
@@ -170,20 +199,30 @@ export function totalsFromEvents(events: LocalUsageEvent[]): LocalUsageTotals {
       events: totals.events + 1,
       inputTokens: totals.inputTokens + event.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + event.cachedInputTokens,
-      cacheCreationInputTokens: totals.cacheCreationInputTokens + event.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        totals.cacheCreationInputTokens + event.cacheCreationInputTokens,
       outputTokens: totals.outputTokens + event.outputTokens,
-      reasoningOutputTokens: totals.reasoningOutputTokens + event.reasoningOutputTokens,
+      reasoningOutputTokens:
+        totals.reasoningOutputTokens + event.reasoningOutputTokens,
       totalTokens: totals.totalTokens + event.totalTokens,
     }),
     { events: 0, ...EMPTY_COUNTS },
   );
 }
 
-export function convertUsd(value: number, currency: Currency, usdToCny?: number) {
+export function convertUsd(
+  value: number,
+  currency: Currency,
+  usdToCny?: number,
+) {
   return currency === "USD" ? value : value * (usdToCny ?? currentUsdToCny());
 }
 
-export function formatMoney(valueUsd: number, currency: Currency, usdToCny?: number): string {
+export function formatMoney(
+  valueUsd: number,
+  currency: Currency,
+  usdToCny?: number,
+): string {
   const value = convertUsd(valueUsd, currency, usdToCny);
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -193,14 +232,22 @@ export function formatMoney(valueUsd: number, currency: Currency, usdToCny?: num
   }).format(value);
 }
 
-export function formatCost(cost: CostEstimate, currency: Currency, usdToCny?: number): string {
+export function formatCost(
+  cost: CostEstimate,
+  currency: Currency,
+  usdToCny?: number,
+): string {
   if (cost.pricedEvents === 0 && cost.unknownEvents > 0) return "价格未知";
   const amount = formatMoney(cost.knownUsd, currency, usdToCny);
   return cost.unknownEvents > 0 ? `${amount}（部分未知）` : amount;
 }
 
 export function sourceName(source: LocalUsageSource | string) {
-  return source === "claude-code" ? "Claude Code" : source === "codex" ? "Codex" : source;
+  return source === "claude-code"
+    ? "Claude Code"
+    : source === "codex"
+      ? "Codex"
+      : source;
 }
 
 function perMillion(tokens: number, rate: number) {
@@ -233,7 +280,9 @@ function mergeCosts(left: CostEstimate, right: CostEstimate): CostEstimate {
     cacheSavingsUsd: left.cacheSavingsUsd + right.cacheSavingsUsd,
     pricedEvents: left.pricedEvents + right.pricedEvents,
     unknownEvents: left.unknownEvents + right.unknownEvents,
-    unknownModels: [...new Set([...left.unknownModels, ...right.unknownModels])].sort(),
+    unknownModels: [
+      ...new Set([...left.unknownModels, ...right.unknownModels]),
+    ].sort(),
     complete: left.complete && right.complete,
   };
 }

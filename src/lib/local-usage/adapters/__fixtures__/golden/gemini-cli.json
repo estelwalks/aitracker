@@ -1,1 +1,12 @@
-{"source":"gemini-cli","timestamp":"2026-07-27T09:01:00.000Z","model":"gemini-model","project":"/work/gemini","inputTokens":11,"cachedInputTokens":0,"cacheCreationInputTokens":0,"outputTokens":4,"reasoningOutputTokens":0,"totalTokens":15}
+{
+  "source": "gemini-cli",
+  "timestamp": "2026-07-27T09:01:00.000Z",
+  "model": "gemini-model",
+  "project": "/work/gemini",
+  "inputTokens": 11,
+  "cachedInputTokens": 0,
+  "cacheCreationInputTokens": 0,
+  "outputTokens": 4,
+  "reasoningOutputTokens": 0,
+  "totalTokens": 15
+}

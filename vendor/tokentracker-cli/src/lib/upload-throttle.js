@@ -38,7 +38,10 @@ function decideAutoUpload({ nowMs, pendingBytes, state, config }) {
     };
   }
 
-  const blockedUntilMs = Math.max(s.nextAllowedAtMs || 0, s.backoffUntilMs || 0);
+  const blockedUntilMs = Math.max(
+    s.nextAllowedAtMs || 0,
+    s.backoffUntilMs || 0,
+  );
   if (blockedUntilMs > 0 && nowMs < blockedUntilMs) {
     return {
       allowed: false,
@@ -49,7 +52,8 @@ function decideAutoUpload({ nowMs, pendingBytes, state, config }) {
     };
   }
 
-  const maxBatches = pending >= cfg.backlogBytes ? cfg.maxBatchesLarge : cfg.maxBatchesSmall;
+  const maxBatches =
+    pending >= cfg.backlogBytes ? cfg.maxBatchesLarge : cfg.maxBatchesSmall;
   return {
     allowed: true,
     reason: "allowed",
@@ -63,7 +67,9 @@ function recordUploadSuccess({ nowMs, state, config, randInt }) {
   const cfg = { ...DEFAULTS, ...(config || {}) };
   const s = normalizeState(state);
   const jitter =
-    typeof randInt === "function" ? randInt(0, cfg.jitterMsMax) : randomInt(0, cfg.jitterMsMax);
+    typeof randInt === "function"
+      ? randInt(0, cfg.jitterMsMax)
+      : randomInt(0, cfg.jitterMsMax);
   const nextAllowedAtMs = nowMs + cfg.intervalMs + jitter;
 
   return {
@@ -87,10 +93,16 @@ function recordUploadFailure({ nowMs, state, error, config }) {
 
   let backoffMs = 0;
   if (retryAfterMs > 0) {
-    backoffMs = Math.min(cfg.backoffMaxMs, Math.max(cfg.backoffInitialMs, retryAfterMs));
+    backoffMs = Math.min(
+      cfg.backoffMaxMs,
+      Math.max(cfg.backoffInitialMs, retryAfterMs),
+    );
   } else {
     const step = Math.min(10, Math.max(0, s.backoffStep || 0));
-    backoffMs = Math.min(cfg.backoffMaxMs, cfg.backoffInitialMs * Math.pow(2, step));
+    backoffMs = Math.min(
+      cfg.backoffMaxMs,
+      cfg.backoffInitialMs * Math.pow(2, step),
+    );
   }
 
   const backoffUntilMs = nowMs + backoffMs;
@@ -108,10 +120,12 @@ function recordUploadFailure({ nowMs, state, error, config }) {
 }
 
 function parseRetryAfterMs(headerValue, nowMs = Date.now()) {
-  if (typeof headerValue !== "string" || headerValue.trim().length === 0) return null;
+  if (typeof headerValue !== "string" || headerValue.trim().length === 0)
+    return null;
   const v = headerValue.trim();
   const seconds = Number(v);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.floor(seconds * 1000);
+  if (Number.isFinite(seconds) && seconds >= 0)
+    return Math.floor(seconds * 1000);
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return null;
   const delta = d.getTime() - nowMs;

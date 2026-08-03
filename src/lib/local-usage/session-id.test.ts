@@ -20,9 +20,18 @@ test("session ids are stable, opaque, and source scoped", () => {
 });
 
 test("file fallback is stable and distinguishes relative file identities", () => {
-  const first = sessionIdFromRelativeFile("codex", "sessions/2026/rollout-a.jsonl");
-  const repeat = sessionIdFromRelativeFile("codex", "sessions/2026/rollout-a.jsonl");
-  const second = sessionIdFromRelativeFile("codex", "sessions/2026/rollout-b.jsonl");
+  const first = sessionIdFromRelativeFile(
+    "codex",
+    "sessions/2026/rollout-a.jsonl",
+  );
+  const repeat = sessionIdFromRelativeFile(
+    "codex",
+    "sessions/2026/rollout-a.jsonl",
+  );
+  const second = sessionIdFromRelativeFile(
+    "codex",
+    "sessions/2026/rollout-b.jsonl",
+  );
 
   assert.equal(first, repeat);
   assert.notEqual(first, second);

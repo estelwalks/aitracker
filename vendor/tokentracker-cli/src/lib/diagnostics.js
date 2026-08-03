@@ -5,17 +5,25 @@ const fs = require("node:fs/promises");
 const { readJson } = require("./fs");
 const { readCursorStateSummary } = require("./cursor-store");
 const { readCodexNotify, readEveryCodeNotify } = require("./codex-config");
-const { areClaudeUsageHooksConfigured, buildClaudeHookCommand } = require("./claude-config");
+const {
+  areClaudeUsageHooksConfigured,
+  buildClaudeHookCommand,
+} = require("./claude-config");
 const {
   resolveGeminiConfigDir,
   resolveGeminiSettingsPath,
   buildGeminiHookCommand,
   isGeminiHookConfigured,
 } = require("./gemini-config");
-const { resolveOpencodeConfigDir, isOpencodePluginInstalled } = require("./opencode-config");
+const {
+  resolveOpencodeConfigDir,
+  isOpencodePluginInstalled,
+} = require("./opencode-config");
 const { normalizeState: normalizeUploadState } = require("./upload-throttle");
 const { probeOpenclawHookState } = require("./openclaw-hook");
-const { probeOpenclawSessionPluginState } = require("./openclaw-session-plugin");
+const {
+  probeOpenclawSessionPluginState,
+} = require("./openclaw-session-plugin");
 const { probeGrokHookState } = require("./grok-hook");
 const { resolveTrackerPaths } = require("./tracker-paths");
 const wsl = require("./wsl-probe");
@@ -26,15 +34,18 @@ const wsl = require("./wsl-probe");
 function resolveKiroIdeBaseInline(env, home) {
   const suffix = ["Kiro", "User", "globalStorage", "kiro.kiroagent"];
   if (process.platform === "win32") {
-    const appData = typeof env.APPDATA === "string" && env.APPDATA.trim().length > 0
-      ? env.APPDATA.trim()
-      : path.join(home, "AppData", "Roaming");
+    const appData =
+      typeof env.APPDATA === "string" && env.APPDATA.trim().length > 0
+        ? env.APPDATA.trim()
+        : path.join(home, "AppData", "Roaming");
     return path.join(appData, ...suffix);
   }
   if (process.platform === "linux") {
-    const configHome = typeof env.XDG_CONFIG_HOME === "string" && env.XDG_CONFIG_HOME.trim().length > 0
-      ? env.XDG_CONFIG_HOME.trim()
-      : path.join(home, ".config");
+    const configHome =
+      typeof env.XDG_CONFIG_HOME === "string" &&
+      env.XDG_CONFIG_HOME.trim().length > 0
+        ? env.XDG_CONFIG_HOME.trim()
+        : path.join(home, ".config");
     return path.join(configHome, ...suffix);
   }
   return path.join(home, "Library", "Application Support", ...suffix);
@@ -44,15 +55,18 @@ function resolveKiroCliDbPathInline(env, home) {
   if (env.KIRO_CLI_DB_PATH) return env.KIRO_CLI_DB_PATH;
   const effectiveHome = env.HOME || home;
   if (process.platform === "win32") {
-    const localAppData = typeof env.LOCALAPPDATA === "string" && env.LOCALAPPDATA.trim().length > 0
-      ? env.LOCALAPPDATA.trim()
-      : path.join(effectiveHome, "AppData", "Local");
+    const localAppData =
+      typeof env.LOCALAPPDATA === "string" && env.LOCALAPPDATA.trim().length > 0
+        ? env.LOCALAPPDATA.trim()
+        : path.join(effectiveHome, "AppData", "Local");
     return path.join(localAppData, "kiro-cli", "data.sqlite3");
   }
   if (process.platform === "linux") {
-    const dataHome = typeof env.XDG_DATA_HOME === "string" && env.XDG_DATA_HOME.trim().length > 0
-      ? env.XDG_DATA_HOME.trim()
-      : path.join(effectiveHome, ".local", "share");
+    const dataHome =
+      typeof env.XDG_DATA_HOME === "string" &&
+      env.XDG_DATA_HOME.trim().length > 0
+        ? env.XDG_DATA_HOME.trim()
+        : path.join(effectiveHome, ".local", "share");
     return path.join(dataHome, "kiro-cli", "data.sqlite3");
   }
   return path.join(
@@ -83,18 +97,28 @@ async function collectTrackerDiagnostics({
   const codeConfigPath = path.join(codeHome, "config.toml");
   const claudeConfigPath = path.join(home, ".claude", "settings.json");
   const geminiConfigDir = resolveGeminiConfigDir({ home, env: process.env });
-  const geminiSettingsPath = resolveGeminiSettingsPath({ configDir: geminiConfigDir });
-  const opencodeConfigDir = resolveOpencodeConfigDir({ home, env: process.env });
+  const geminiSettingsPath = resolveGeminiSettingsPath({
+    configDir: geminiConfigDir,
+  });
+  const opencodeConfigDir = resolveOpencodeConfigDir({
+    home,
+    env: process.env,
+  });
   const grokHome =
     process.env.TOKENTRACKER_GROK_HOME ||
     process.env.GROK_HOME ||
     path.join(home, ".grok");
 
   const config = await readJson(configPath);
-  const cursorSummary = await readCursorStateSummary({ trackerDir, cursorsPath });
+  const cursorSummary = await readCursorStateSummary({
+    trackerDir,
+    cursorsPath,
+  });
   const cursors = cursorSummary.cursors;
   const queueState = (await readJson(queueStatePath)) || { offset: 0 };
-  const uploadThrottle = normalizeUploadState(await readJson(uploadThrottlePath));
+  const uploadThrottle = normalizeUploadState(
+    await readJson(uploadThrottlePath),
+  );
   const autoRetry = await readJson(autoRetryPath);
 
   const queueSize = await safeStatSize(queuePath);
@@ -102,23 +126,34 @@ async function collectTrackerDiagnostics({
   const pendingBytes = Math.max(0, queueSize - offsetBytes);
 
   const lastNotify = (await safeReadText(notifySignalPath))?.trim() || null;
-  const lastOpenclawSync = (await safeReadText(openclawSignalPath))?.trim() || null;
-  const lastNotifySpawn = parseEpochMsToIso((await safeReadText(throttlePath))?.trim() || null);
+  const lastOpenclawSync =
+    (await safeReadText(openclawSignalPath))?.trim() || null;
+  const lastNotifySpawn = parseEpochMsToIso(
+    (await safeReadText(throttlePath))?.trim() || null,
+  );
 
   const codexNotifyRaw = await readCodexNotify(codexConfigPath);
-  const notifyConfigured = Array.isArray(codexNotifyRaw) && codexNotifyRaw.length > 0;
-  const codexNotify = notifyConfigured ? codexNotifyRaw.map((v) => redactValue(v, home)) : null;
+  const notifyConfigured =
+    Array.isArray(codexNotifyRaw) && codexNotifyRaw.length > 0;
+  const codexNotify = notifyConfigured
+    ? codexNotifyRaw.map((v) => redactValue(v, home))
+    : null;
   const everyCodeNotifyRaw = await readEveryCodeNotify(codeConfigPath);
-  const everyCodeConfigured = Array.isArray(everyCodeNotifyRaw) && everyCodeNotifyRaw.length > 0;
+  const everyCodeConfigured =
+    Array.isArray(everyCodeNotifyRaw) && everyCodeNotifyRaw.length > 0;
   const everyCodeNotify = everyCodeConfigured
     ? everyCodeNotifyRaw.map((v) => redactValue(v, home))
     : null;
-  const claudeHookCommand = buildClaudeHookCommand(path.join(binDir, "notify.cjs"));
+  const claudeHookCommand = buildClaudeHookCommand(
+    path.join(binDir, "notify.cjs"),
+  );
   const claudeHookConfigured = await areClaudeUsageHooksConfigured({
     settingsPath: claudeConfigPath,
     hookCommand: claudeHookCommand,
   });
-  const geminiHookCommand = buildGeminiHookCommand(path.join(binDir, "notify.cjs"));
+  const geminiHookCommand = buildGeminiHookCommand(
+    path.join(binDir, "notify.cjs"),
+  );
   const geminiHookConfigured = await isGeminiHookConfigured({
     settingsPath: geminiSettingsPath,
     hookCommand: geminiHookCommand,
@@ -131,16 +166,29 @@ async function collectTrackerDiagnostics({
     trackerDir,
     env: process.env,
   });
-  const openclawHookState = await probeOpenclawHookState({ home, trackerDir, env: process.env });
-  const grokHookState = await probeGrokHookState({ home, trackerDir, env: process.env });
+  const openclawHookState = await probeOpenclawHookState({
+    home,
+    trackerDir,
+    env: process.env,
+  });
+  const grokHookState = await probeGrokHookState({
+    home,
+    trackerDir,
+    env: process.env,
+  });
 
   // Kiro IDE and Kiro CLI sub-path presence — merged under one "kiro" source
   // at token/cost aggregation level; operators need visibility of both
   // sub-paths here for debugging.
-  const kiroIdeDevDataDir = path.join(resolveKiroIdeBaseInline(process.env, home), "dev_data");
+  const kiroIdeDevDataDir = path.join(
+    resolveKiroIdeBaseInline(process.env, home),
+    "dev_data",
+  );
   const kiroIdePresent =
     (await safeStatSize(path.join(kiroIdeDevDataDir, "devdata.sqlite"))) > 0 ||
-    (await safeStatSize(path.join(kiroIdeDevDataDir, "tokens_generated.jsonl"))) > 0;
+    (await safeStatSize(
+      path.join(kiroIdeDevDataDir, "tokens_generated.jsonl"),
+    )) > 0;
   const kiroCliDbPath = resolveKiroCliDbPathInline(process.env, home);
   const kiroCliPresent = require("node:fs").existsSync(kiroCliDbPath);
 
@@ -150,25 +198,37 @@ async function collectTrackerDiagnostics({
   let claudeWslProjects = null;
   if (process.platform === "win32" && wsl.shouldProbeWsl(process.env)) {
     const wslClaudeHome = wsl.discoverWslHome(".claude");
-    if (wslClaudeHome) claudeWslProjects = redactWslUser(path.join(wslClaudeHome, "projects"));
-    const wslIdeBase = wsl.discoverWslHome(".config/Kiro/User/globalStorage/kiro.kiroagent");
+    if (wslClaudeHome)
+      claudeWslProjects = redactWslUser(path.join(wslClaudeHome, "projects"));
+    const wslIdeBase = wsl.discoverWslHome(
+      ".config/Kiro/User/globalStorage/kiro.kiroagent",
+    );
     const wslKiroHomeDir = wsl.discoverWslHome(".kiro");
     const wslCliDataDir = wsl.discoverWslHome(".local/share/kiro-cli");
     const wslHomeRoot = wslKiroHomeDir
       ? path.dirname(wslKiroHomeDir)
-      : (wslCliDataDir ? path.dirname(path.dirname(path.dirname(wslCliDataDir))) : null);
+      : wslCliDataDir
+        ? path.dirname(path.dirname(path.dirname(wslCliDataDir)))
+        : null;
     const wslCliDb = wslHomeRoot
       ? path.join(wslHomeRoot, ".local", "share", "kiro-cli", "data.sqlite3")
       : null;
     if (wslIdeBase || wslHomeRoot) {
       kiroWslInstalls = {
-        ide_dev_data: wslIdeBase ? redactWslUser(path.join(wslIdeBase, "dev_data")) : null,
-        ide_present: Boolean(wslIdeBase) && (
-          (await safeStatSize(path.join(wslIdeBase, "dev_data", "devdata.sqlite"))) > 0 ||
-          (await safeStatSize(path.join(wslIdeBase, "dev_data", "tokens_generated.jsonl"))) > 0
-        ),
+        ide_dev_data: wslIdeBase
+          ? redactWslUser(path.join(wslIdeBase, "dev_data"))
+          : null,
+        ide_present:
+          Boolean(wslIdeBase) &&
+          ((await safeStatSize(
+            path.join(wslIdeBase, "dev_data", "devdata.sqlite"),
+          )) > 0 ||
+            (await safeStatSize(
+              path.join(wslIdeBase, "dev_data", "tokens_generated.jsonl"),
+            )) > 0),
         cli_db: wslCliDb ? redactWslUser(wslCliDb) : null,
-        cli_present: Boolean(wslCliDb) && require("node:fs").existsSync(wslCliDb),
+        cli_present:
+          Boolean(wslCliDb) && require("node:fs").existsSync(wslCliDb),
       };
     }
   }
@@ -194,8 +254,13 @@ async function collectTrackerDiagnostics({
       code_home: redactValue(codeHome, home),
       code_config: redactValue(codeConfigPath, home),
       claude_config: redactValue(claudeConfigPath, home),
-      claude_projects: redactValue(path.join(home, ".claude", "projects"), home),
-      ...(process.platform === "win32" ? { claude_projects_wsl: claudeWslProjects } : {}),
+      claude_projects: redactValue(
+        path.join(home, ".claude", "projects"),
+        home,
+      ),
+      ...(process.platform === "win32"
+        ? { claude_projects_wsl: claudeWslProjects }
+        : {}),
       gemini_config: redactValue(geminiSettingsPath, home),
       opencode_config: redactValue(opencodeConfigDir, home),
       grok_home: redactValue(grokHome, home),
@@ -208,7 +273,10 @@ async function collectTrackerDiagnostics({
       ide_present: kiroIdePresent,
       cli_present: kiroCliPresent,
       ...(process.platform === "win32"
-        ? { wsl_mode: wsl.getWslMode(process.env), wsl_installs: kiroWslInstalls }
+        ? {
+            wsl_mode: wsl.getWslMode(process.env),
+            wsl_installs: kiroWslInstalls,
+          }
         : {}),
       cli_approximation:
         "Kiro CLI does not persist explicit token counts (billing is credit-based on Bedrock). Tokens are approximated at 4 chars/token from user prompt chars and assistant response chars. Source rows that came through this path have model='kiro-cli-agent' when the underlying model is unknown (auto-routing); known Bedrock ARNs canonicalize to their short name (e.g. claude-sonnet-4).",
@@ -219,10 +287,12 @@ async function collectTrackerDiagnostics({
       base_url: typeof config?.baseUrl === "string" ? config.baseUrl : null,
       device_token: config?.deviceToken ? "set" : "unset",
       device_id: maskId(config?.deviceId),
-      installed_at: typeof config?.installedAt === "string" ? config.installedAt : null,
+      installed_at:
+        typeof config?.installedAt === "string" ? config.installedAt : null,
     },
     parse: {
-      updated_at: typeof cursors?.updatedAt === "string" ? cursors.updatedAt : null,
+      updated_at:
+        typeof cursors?.updatedAt === "string" ? cursors.updatedAt : null,
       file_count: cursorSummary.fileCount,
       cursor_store: cursorSummary.mode,
       cursor_store_legacy_drift: cursorSummary.legacyDrift === true,
@@ -233,7 +303,8 @@ async function collectTrackerDiagnostics({
       size_bytes: queueSize,
       offset_bytes: offsetBytes,
       pending_bytes: pendingBytes,
-      updated_at: typeof queueState.updatedAt === "string" ? queueState.updatedAt : null,
+      updated_at:
+        typeof queueState.updatedAt === "string" ? queueState.updatedAt : null,
     },
     notify: {
       last_notify: lastNotify,
@@ -246,9 +317,15 @@ async function collectTrackerDiagnostics({
       claude_hook_configured: claudeHookConfigured,
       gemini_hook_configured: geminiHookConfigured,
       opencode_plugin_configured: opencodePluginConfigured,
-      openclaw_session_plugin_configured: Boolean(openclawSessionPluginState?.configured),
-      openclaw_session_plugin_linked: Boolean(openclawSessionPluginState?.linked),
-      openclaw_session_plugin_enabled: Boolean(openclawSessionPluginState?.enabled),
+      openclaw_session_plugin_configured: Boolean(
+        openclawSessionPluginState?.configured,
+      ),
+      openclaw_session_plugin_linked: Boolean(
+        openclawSessionPluginState?.linked,
+      ),
+      openclaw_session_plugin_enabled: Boolean(
+        openclawSessionPluginState?.enabled,
+      ),
       openclaw_session_plugin_conversation_access: Boolean(
         openclawSessionPluginState?.conversationAccess,
       ),
@@ -262,7 +339,9 @@ async function collectTrackerDiagnostics({
     },
     upload: {
       last_success_at: lastSuccessAt,
-      next_allowed_after: parseEpochMsToIso(uploadThrottle.nextAllowedAtMs || null),
+      next_allowed_after: parseEpochMsToIso(
+        uploadThrottle.nextAllowedAtMs || null,
+      ),
       backoff_until: parseEpochMsToIso(uploadThrottle.backoffUntilMs || null),
       last_error: uploadThrottle.lastError
         ? {
@@ -274,12 +353,17 @@ async function collectTrackerDiagnostics({
     auto_retry: autoRetryAt
       ? {
           next_retry_at: autoRetryAt,
-          reason: typeof autoRetry?.reason === "string" ? autoRetry.reason : null,
+          reason:
+            typeof autoRetry?.reason === "string" ? autoRetry.reason : null,
           pending_bytes: Number.isFinite(Number(autoRetry?.pendingBytes))
             ? Math.max(0, Number(autoRetry.pendingBytes))
             : null,
-          scheduled_at: typeof autoRetry?.scheduledAt === "string" ? autoRetry.scheduledAt : null,
-          source: typeof autoRetry?.source === "string" ? autoRetry.source : null,
+          scheduled_at:
+            typeof autoRetry?.scheduledAt === "string"
+              ? autoRetry.scheduledAt
+              : null,
+          source:
+            typeof autoRetry?.source === "string" ? autoRetry.source : null,
         }
       : null,
   };
@@ -296,7 +380,9 @@ function redactValue(value, home) {
   if (typeof value !== "string") return value;
   if (typeof home !== "string" || home.length === 0) return value;
   const homeNorm = home.endsWith(path.sep) ? home.slice(0, -1) : home;
-  return value.startsWith(homeNorm) ? `~${value.slice(homeNorm.length)}` : value;
+  return value.startsWith(homeNorm)
+    ? `~${value.slice(homeNorm.length)}`
+    : value;
 }
 
 // UNC WSL paths embed the distro name AND the Linux username; doctor reports

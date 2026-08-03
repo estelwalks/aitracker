@@ -17,8 +17,7 @@ function readBaseUrl(config) {
     // while routing persisted config through the shared retired-host filter.
     cli: {
       baseUrl:
-        process.env.TOKENTRACKER_BASE_URL ||
-        process.env.TOKENTRACKER_API_URL,
+        process.env.TOKENTRACKER_BASE_URL || process.env.TOKENTRACKER_API_URL,
     },
     config: config || {},
     env: {},
@@ -26,38 +25,48 @@ function readBaseUrl(config) {
 }
 
 async function authorize({ baseUrl, clientInfo, machineId }) {
-  const res = await fetch(`${baseUrl}/functions/tokentracker-device-flow-authorize`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_info: clientInfo,
-      // Machine-stable identity: the server anchors the issued device to this
-      // id instead of the hostname-derived display name, so hostname renames
-      // don't mint duplicate devices and two machines sharing a default
-      // hostname don't collapse into one (token ping-pong + row overwrite).
-      ...(machineId ? { machine_id: machineId } : {}),
-    }),
-  });
+  const res = await fetch(
+    `${baseUrl}/functions/tokentracker-device-flow-authorize`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_info: clientInfo,
+        // Machine-stable identity: the server anchors the issued device to this
+        // id instead of the hostname-derived display name, so hostname renames
+        // don't mint duplicate devices and two machines sharing a default
+        // hostname don't collapse into one (token ping-pong + row overwrite).
+        ...(machineId ? { machine_id: machineId } : {}),
+      }),
+    },
+  );
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`authorize failed (HTTP ${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(
+      `authorize failed (HTTP ${res.status}): ${text.slice(0, 200)}`,
+    );
   }
   return res.json();
 }
 
 async function pollOnce({ baseUrl, deviceCode }) {
-  const res = await fetch(`${baseUrl}/functions/tokentracker-device-flow-poll`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ device_code: deviceCode }),
-  });
+  const res = await fetch(
+    `${baseUrl}/functions/tokentracker-device-flow-poll`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_code: deviceCode }),
+    },
+  );
   const data = await res.json().catch(() => ({}));
   // 404 = unknown, 410 = expired, 200 = {status, user_id?, device_token?}.
   // Anything else (502 from a misconfigured edge, 5xx during deploy, …) must
   // bubble up as a network-style error — masking it as "unknown" would tell
   // the user their device_code was evicted when it wasn't.
   if (!res.ok && res.status !== 404 && res.status !== 410) {
-    throw new Error(`poll HTTP ${res.status}: ${(data?.error ?? "").toString().slice(0, 200)}`);
+    throw new Error(
+      `poll HTTP ${res.status}: ${(data?.error ?? "").toString().slice(0, 200)}`,
+    );
   }
   return {
     status: data.status ?? "unknown",
@@ -120,7 +129,10 @@ async function cmdDeviceLogin(argv = [], options = {}) {
     let wait =
       consecutiveErrors === 0
         ? POLL_INTERVAL_MS
-        : Math.min(POLL_INTERVAL_MS * Math.pow(2, consecutiveErrors - 1), MAX_BACKOFF_MS);
+        : Math.min(
+            POLL_INTERVAL_MS * Math.pow(2, consecutiveErrors - 1),
+            MAX_BACKOFF_MS,
+          );
     if (consecutiveErrors > 0) {
       const jitter = wait * 0.2 * (Math.random() * 2 - 1);
       wait = Math.max(POLL_INTERVAL_MS, wait + jitter);
@@ -132,12 +144,16 @@ async function cmdDeviceLogin(argv = [], options = {}) {
       consecutiveErrors = 0;
     } catch (e) {
       consecutiveErrors++;
-      process.stderr.write(`poll error (retry ${consecutiveErrors}): ${e?.message || e}\n`);
+      process.stderr.write(
+        `poll error (retry ${consecutiveErrors}): ${e?.message || e}\n`,
+      );
       continue;
     }
     if (result.status === "approved" && result.user_id) {
       if (!result.deviceToken) {
-        throw new Error("device login approved but server did not return a device token");
+        throw new Error(
+          "device login approved but server did not return a device token",
+        );
       }
       const next = {
         ...config,
@@ -153,7 +169,9 @@ async function cmdDeviceLogin(argv = [], options = {}) {
         device_login_at: new Date().toISOString(),
       };
       await writeJson(configPath, next);
-      process.stdout.write(`\n✓ Approved. device token written to ${configPath}\n`);
+      process.stdout.write(
+        `\n✓ Approved. device token written to ${configPath}\n`,
+      );
       return;
     }
     if (result.status === "expired") {

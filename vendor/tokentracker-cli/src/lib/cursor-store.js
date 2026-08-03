@@ -3,12 +3,7 @@ const fssync = require("node:fs");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
-const {
-  ensureDir,
-  readJson,
-  readJsonStrict,
-  writeJson,
-} = require("./fs");
+const { ensureDir, readJson, readJsonStrict, writeJson } = require("./fs");
 
 const STORE_VERSION = 2;
 const STORE_DIRNAME = "cursor-store-v2";
@@ -89,11 +84,11 @@ async function openCursorStore({
   }
 
   const legacySize = Number(legacyFingerprint?.size || 0);
-  const shouldActivate = forceV2 || (
-    Number.isFinite(activationBytes) &&
-    activationBytes >= 0 &&
-    legacySize >= activationBytes
-  );
+  const shouldActivate =
+    forceV2 ||
+    (Number.isFinite(activationBytes) &&
+      activationBytes >= 0 &&
+      legacySize >= activationBytes);
   if (!shouldActivate) {
     const cursors = (await readJson(cursorsPath)) || defaultCursorState();
     return new LegacyCursorStore({ cursorsPath, cursors });
@@ -121,7 +116,8 @@ async function openCursorStore({
 }
 
 async function readCursorStateSummary({ trackerDir, cursorsPath } = {}) {
-  const resolvedCursorsPath = cursorsPath || path.join(trackerDir, "cursors.json");
+  const resolvedCursorsPath =
+    cursorsPath || path.join(trackerDir, "cursors.json");
   const storeRoot = path.join(path.dirname(resolvedCursorsPath), STORE_DIRNAME);
   const manifest = await readJson(path.join(storeRoot, MANIFEST_FILENAME));
   if (isManifest(manifest)) {
@@ -130,13 +126,13 @@ async function readCursorStateSummary({ trackerDir, cursorsPath } = {}) {
       legacyFingerprint &&
       !sameFingerprint(legacyFingerprint, manifest.legacyFingerprint)
     ) {
-      return summarizeLegacyCursorState(
-        await readJson(resolvedCursorsPath),
-        { legacyDrift: true },
-      );
+      return summarizeLegacyCursorState(await readJson(resolvedCursorsPath), {
+        legacyDrift: true,
+      });
     }
-    const opened = await readGeneration({ storeRoot, generationId: manifest.current }) ||
-      await readGeneration({ storeRoot, generationId: manifest.previous });
+    const opened =
+      (await readGeneration({ storeRoot, generationId: manifest.current })) ||
+      (await readGeneration({ storeRoot, generationId: manifest.previous }));
     if (opened) {
       return {
         cursors: opened.core,
@@ -245,7 +241,8 @@ class V2CursorStore {
     this.codexEventStore = {
       get size() {
         let pending = 0;
-        for (const values of self.pendingEventKeys.values()) pending += values.size;
+        for (const values of self.pendingEventKeys.values())
+          pending += values.size;
         return Number(self.generation?.counts?.codexEvents || 0) + pending;
       },
       has(key) {
@@ -262,14 +259,18 @@ class V2CursorStore {
   }
 
   get currentCorePath() {
-    return path.join(this.generationDir, this.generation?.coreFile || "core.json");
+    return path.join(
+      this.generationDir,
+      this.generation?.coreFile || "core.json",
+    );
   }
 
   async loadCodexFilesForPaths(paths, cursors = this.cursors) {
     const shardKeys = new Set();
     for (const entry of Array.isArray(paths) ? paths : []) {
       const filePath = typeof entry === "string" ? entry : entry?.path;
-      if (!isCodexSessionCursorPathForRoots(filePath, this.codexRoots)) continue;
+      if (!isCodexSessionCursorPathForRoots(filePath, this.codexRoots))
+        continue;
       shardKeys.add(codexFileShardKey(filePath));
     }
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -301,7 +302,10 @@ class V2CursorStore {
 
   async loadFileShardUnchecked(shardKey, cursors = this.cursors) {
     if (this.loadedFileShards.has(shardKey)) {
-      mergeFileShardIntoCursors(this.loadedFileShards.get(shardKey).data, cursors);
+      mergeFileShardIntoCursors(
+        this.loadedFileShards.get(shardKey).data,
+        cursors,
+      );
       return this.loadedFileShards.get(shardKey).data;
     }
     const metadata = this.generation?.codexFiles?.[shardKey] || null;
@@ -319,7 +323,11 @@ class V2CursorStore {
           error,
         );
       }
-      assertShardIntegrity(raw, metadata, `Codex cursor shard ${metadata.file}`);
+      assertShardIntegrity(
+        raw,
+        metadata,
+        `Codex cursor shard ${metadata.file}`,
+      );
       try {
         data = JSON.parse(raw);
       } catch (error) {
@@ -329,14 +337,15 @@ class V2CursorStore {
         );
       }
     }
-    const normalized = data && typeof data === "object" && !Array.isArray(data)
-      ? data
-      : {};
+    const normalized =
+      data && typeof data === "object" && !Array.isArray(data) ? data : {};
     if (
       filePath &&
       (normalized !== data || Object.keys(normalized).length !== metadata.count)
     ) {
-      throw cursorStoreCorruption(`Invalid Codex cursor shard ${metadata.file}`);
+      throw cursorStoreCorruption(
+        `Invalid Codex cursor shard ${metadata.file}`,
+      );
     }
     this.loadedFileShards.set(shardKey, {
       data: normalized,
@@ -354,7 +363,9 @@ class V2CursorStore {
           await this.loadFileShard(shardKey, cursors);
         }
         const hashes = [];
-        for (const shardKey of Object.keys(this.generation?.codexEvents || {})) {
+        for (const shardKey of Object.keys(
+          this.generation?.codexEvents || {},
+        )) {
           const values = this.loadEventSet(shardKey, cursors);
           for (const key of values) hashes.push(key);
         }
@@ -397,7 +408,10 @@ class V2CursorStore {
     if (this.skipValidationCache.has(shardKey)) {
       return this.skipValidationCache.get(shardKey);
     }
-    const valid = await validateProjectSummary(shardMetadata.projectSummary, nowMs);
+    const valid = await validateProjectSummary(
+      shardMetadata.projectSummary,
+      nowMs,
+    );
     this.skipValidationCache.set(shardKey, valid);
     return valid;
   }
@@ -531,7 +545,12 @@ class V2CursorStore {
         coreFile: "core.json",
         codexFiles: cloneJson(this.generation?.codexFiles || {}),
         codexEvents: cloneJson(this.generation?.codexEvents || {}),
-        counts: { nonCodexFiles: 0, codexFiles: 0, totalFiles: 0, codexEvents: 0 },
+        counts: {
+          nonCodexFiles: 0,
+          codexFiles: 0,
+          totalFiles: 0,
+          codexEvents: 0,
+        },
       };
 
       await cloneGenerationFiles({
@@ -547,7 +566,10 @@ class V2CursorStore {
         }
       }
       for (const shardKey of codexShardKeysPresent) {
-        if (!this.loadedFileShards.has(shardKey) && nextMetadata.codexFiles[shardKey]) {
+        if (
+          !this.loadedFileShards.has(shardKey) &&
+          nextMetadata.codexFiles[shardKey]
+        ) {
           await this.loadFileShardUnchecked(shardKey, cursors);
         }
       }
@@ -562,7 +584,10 @@ class V2CursorStore {
       ]);
       for (const shardKey of dirtyFileShards) {
         const data = codexFilesByShard.get(shardKey) || {};
-        const relativeFile = path.join("codex-files", `${safeShardFilename(shardKey)}.json`);
+        const relativeFile = path.join(
+          "codex-files",
+          `${safeShardFilename(shardKey)}.json`,
+        );
         const targetPath = path.join(generationDir, relativeFile);
         await fs.unlink(targetPath).catch(() => {});
         if (Object.keys(data).length === 0) {
@@ -591,7 +616,10 @@ class V2CursorStore {
           if (pending.size === 0) continue;
           const existing = this.loadEventSetUnchecked(shardKey);
           for (const key of pending) existing.add(key);
-          const relativeFile = path.join("codex-events", `${safeShardFilename(shardKey)}.txt`);
+          const relativeFile = path.join(
+            "codex-events",
+            `${safeShardFilename(shardKey)}.txt`,
+          );
           const targetPath = path.join(generationDir, relativeFile);
           await fs.unlink(targetPath).catch(() => {});
           const serialized = serializeEventSet(existing);
@@ -631,7 +659,10 @@ class V2CursorStore {
         legacyFingerprint: this.manifest?.legacyFingerprint || null,
         updatedAt: new Date().toISOString(),
       };
-      await writeJson(path.join(this.storeRoot, MANIFEST_FILENAME), nextManifest);
+      await writeJson(
+        path.join(this.storeRoot, MANIFEST_FILENAME),
+        nextManifest,
+      );
       published = true;
 
       this.manifest = nextManifest;
@@ -644,13 +675,15 @@ class V2CursorStore {
       this.skipValidationCache.clear();
       this.materializedCodexHashes = false;
       this.requiresCommit = false;
-      await cleanupGenerations(this.storeRoot, new Set([
-        nextManifest.current,
-        nextManifest.previous,
-      ].filter(Boolean)));
+      await cleanupGenerations(
+        this.storeRoot,
+        new Set([nextManifest.current, nextManifest.previous].filter(Boolean)),
+      );
     } catch (error) {
       if (!published) {
-        await fs.rm(generationDir, { recursive: true, force: true }).catch(() => {});
+        await fs
+          .rm(generationDir, { recursive: true, force: true })
+          .catch(() => {});
       }
       throw error;
     }
@@ -690,7 +723,10 @@ async function migrateLegacyCursorState({
   };
 
   for (const [shardKey, data] of codexFilesByShard.entries()) {
-    const relativeFile = path.join("codex-files", `${safeShardFilename(shardKey)}.json`);
+    const relativeFile = path.join(
+      "codex-files",
+      `${safeShardFilename(shardKey)}.json`,
+    );
     const serialized = `${JSON.stringify(data)}\n`;
     await fs.writeFile(
       path.join(generationDir, relativeFile),
@@ -707,7 +743,10 @@ async function migrateLegacyCursorState({
   }
 
   for (const [shardKey, values] of eventShards.entries()) {
-    const relativeFile = path.join("codex-events", `${safeShardFilename(shardKey)}.txt`);
+    const relativeFile = path.join(
+      "codex-events",
+      `${safeShardFilename(shardKey)}.txt`,
+    );
     const serialized = serializeEventSet(values);
     await fs.writeFile(
       path.join(generationDir, relativeFile),
@@ -742,10 +781,10 @@ async function migrateLegacyCursorState({
     updatedAt: new Date().toISOString(),
   };
   await writeJson(path.join(storeRoot, MANIFEST_FILENAME), manifest);
-  await cleanupGenerations(storeRoot, new Set([
-    manifest.current,
-    manifest.previous,
-  ].filter(Boolean)));
+  await cleanupGenerations(
+    storeRoot,
+    new Set([manifest.current, manifest.previous].filter(Boolean)),
+  );
   return manifest;
 }
 
@@ -765,7 +804,9 @@ async function readLegacyCursorStateForMigration(cursorsPath) {
     result.value.codexHashes !== undefined &&
     !Array.isArray(result.value.codexHashes)
   ) {
-    throw cursorStoreCorruption(`Invalid legacy Codex event state ${cursorsPath}`);
+    throw cursorStoreCorruption(
+      `Invalid legacy Codex event state ${cursorsPath}`,
+    );
   }
   return result.value;
 }
@@ -777,10 +818,9 @@ async function openManifestGeneration({
   codexRoots,
   failureInjector,
 }) {
-  const generationIds = Array.from(new Set([
-    manifest.current,
-    manifest.previous,
-  ].filter(Boolean)));
+  const generationIds = Array.from(
+    new Set([manifest.current, manifest.previous].filter(Boolean)),
+  );
   for (const generationId of generationIds) {
     const generation = await readGeneration({ storeRoot, generationId });
     if (!generation) continue;
@@ -801,7 +841,8 @@ async function openManifestGeneration({
 }
 
 async function readGeneration({ storeRoot, generationId }) {
-  if (typeof generationId !== "string" || generationId.length === 0) return null;
+  if (typeof generationId !== "string" || generationId.length === 0)
+    return null;
   const directory = generationDirectory(storeRoot, generationId);
   const metadata = await readJson(path.join(directory, "generation.json"));
   if (!isGenerationMetadata(metadata, generationId)) {
@@ -816,7 +857,8 @@ async function readGeneration({ storeRoot, generationId }) {
 }
 
 function readGenerationSync({ storeRoot, generationId }) {
-  if (typeof generationId !== "string" || generationId.length === 0) return null;
+  if (typeof generationId !== "string" || generationId.length === 0)
+    return null;
   const directory = generationDirectory(storeRoot, generationId);
   try {
     const metadata = JSON.parse(
@@ -843,7 +885,7 @@ function isCursorStateRoot(value) {
     !Array.isArray(value) &&
     value.files &&
     typeof value.files === "object" &&
-    !Array.isArray(value.files)
+    !Array.isArray(value.files),
   );
 }
 
@@ -902,8 +944,9 @@ async function generationReferencesExist(directory, metadata) {
     ["codex-files", metadata.codexFiles],
     ["codex-events", metadata.codexEvents],
   ]) {
-    const expectedNames = Object.values(shards)
-      .map((entry) => normalizeShardReference(entry.file, expectedDirectory).name);
+    const expectedNames = Object.values(shards).map(
+      (entry) => normalizeShardReference(entry.file, expectedDirectory).name,
+    );
     if (expectedNames.length === 0) continue;
 
     let entries;
@@ -925,8 +968,9 @@ function generationReferencesExistSync(directory, metadata) {
     ["codex-files", metadata.codexFiles],
     ["codex-events", metadata.codexEvents],
   ]) {
-    const expectedNames = Object.values(shards)
-      .map((entry) => normalizeShardReference(entry.file, expectedDirectory).name);
+    const expectedNames = Object.values(shards).map(
+      (entry) => normalizeShardReference(entry.file, expectedDirectory).name,
+    );
     if (expectedNames.length === 0) continue;
 
     let entries;
@@ -944,7 +988,8 @@ function generationReferencesExistSync(directory, metadata) {
 }
 
 function normalizeShardReference(relativeFile, expectedDirectory) {
-  if (typeof relativeFile !== "string" || relativeFile.length === 0) return null;
+  if (typeof relativeFile !== "string" || relativeFile.length === 0)
+    return null;
   const normalized = relativeFile.replace(/\\/g, "/");
   const parts = normalized.split("/");
   if (
@@ -960,8 +1005,9 @@ function normalizeShardReference(relativeFile, expectedDirectory) {
 }
 
 function sameGenerationCounts(left, right) {
-  return ["nonCodexFiles", "codexFiles", "totalFiles", "codexEvents"]
-    .every((key) => Number(left?.[key]) === Number(right?.[key]));
+  return ["nonCodexFiles", "codexFiles", "totalFiles", "codexEvents"].every(
+    (key) => Number(left?.[key]) === Number(right?.[key]),
+  );
 }
 
 async function cloneGenerationFiles({ fromDirectory, toDirectory, metadata }) {
@@ -982,11 +1028,15 @@ async function cloneOrCopy(fromDirectory, toDirectory, relativeFile) {
 
 async function rebuildEventShards({ generationDir, metadata, hashes }) {
   for (const entry of Object.values(metadata.codexEvents || {})) {
-    if (entry?.file) await fs.unlink(path.join(generationDir, entry.file)).catch(() => {});
+    if (entry?.file)
+      await fs.unlink(path.join(generationDir, entry.file)).catch(() => {});
   }
   metadata.codexEvents = {};
   for (const [shardKey, values] of partitionEventHashes(hashes).entries()) {
-    const relativeFile = path.join("codex-events", `${safeShardFilename(shardKey)}.txt`);
+    const relativeFile = path.join(
+      "codex-events",
+      `${safeShardFilename(shardKey)}.txt`,
+    );
     const serialized = serializeEventSet(values);
     await fs.writeFile(
       path.join(generationDir, relativeFile),
@@ -1023,9 +1073,10 @@ function buildCodexFileShardMetadata({
       const checkedAtMs = Number(context.checkedAtMs);
       if (Number.isFinite(checkedAtMs) && checkedAtMs > 0) {
         const expiresAt = checkedAtMs + PROJECT_ABSENT_CONTEXT_RESCAN_MS;
-        absentFreshUntil = absentFreshUntil == null
-          ? expiresAt
-          : Math.min(absentFreshUntil, expiresAt);
+        absentFreshUntil =
+          absentFreshUntil == null
+            ? expiresAt
+            : Math.min(absentFreshUntil, expiresAt);
       } else {
         absentFreshUntil = 0;
       }
@@ -1038,7 +1089,9 @@ function buildCodexFileShardMetadata({
 
   for (const [dayDir, value] of Object.entries(directories)) {
     const inventory = dayInventoryCache?.days?.[dayDir];
-    const inventoryFiles = Array.isArray(inventory?.files) ? inventory.files : [];
+    const inventoryFiles = Array.isArray(inventory?.files)
+      ? inventory.files
+      : [];
     const complete = Boolean(
       typeof inventory?.statKey === "string" &&
       inventoryFiles.length > 0 &&
@@ -1048,14 +1101,18 @@ function buildCodexFileShardMetadata({
         const offset = Number(cursor?.offset);
         const projectOffset = Number(cursor?.projectOffset);
         return (
-          Number.isFinite(offset) && offset > 0 &&
-          Number.isFinite(projectOffset) && projectOffset >= offset &&
-          cursor?.projectFileContext && typeof cursor.projectFileContext === "object"
+          Number.isFinite(offset) &&
+          offset > 0 &&
+          Number.isFinite(projectOffset) &&
+          projectOffset >= offset &&
+          cursor?.projectFileContext &&
+          typeof cursor.projectFileContext === "object"
         );
-      })
+      }),
     );
     directories[dayDir] = {
-      statKey: typeof inventory?.statKey === "string" ? inventory.statKey : null,
+      statKey:
+        typeof inventory?.statKey === "string" ? inventory.statKey : null,
       fileCount: inventoryFiles.length,
       complete,
     };
@@ -1102,12 +1159,17 @@ function assertShardIntegrity(raw, metadata, label) {
 async function validateProjectSummary(summary, nowMs) {
   if (!summary || typeof summary !== "object") return false;
   const absentFreshUntil = Number(summary.absentFreshUntil);
-  if (Number.isFinite(absentFreshUntil) && absentFreshUntil > 0 && nowMs >= absentFreshUntil) {
+  if (
+    Number.isFinite(absentFreshUntil) &&
+    absentFreshUntil > 0 &&
+    nowMs >= absentFreshUntil
+  ) {
     return false;
   }
   if (summary.absentFreshUntil === 0) return false;
   for (const config of Array.isArray(summary.configs) ? summary.configs : []) {
-    const configPath = typeof config?.configPath === "string" ? config.configPath : null;
+    const configPath =
+      typeof config?.configPath === "string" ? config.configPath : null;
     if (!configPath) return false;
     const stat = await fs.stat(configPath).catch(() => null);
     if (
@@ -1126,11 +1188,14 @@ function projectConfigs(context) {
   const raw = Array.isArray(context.configs) ? context.configs : [context];
   const out = [];
   for (const config of raw) {
-    const configPath = typeof config?.configPath === "string" ? config.configPath : null;
+    const configPath =
+      typeof config?.configPath === "string" ? config.configPath : null;
     if (!configPath) continue;
     out.push({
       configPath,
-      configMtimeMs: Number.isFinite(config.configMtimeMs) ? config.configMtimeMs : null,
+      configMtimeMs: Number.isFinite(config.configMtimeMs)
+        ? config.configMtimeMs
+        : null,
       configSize: Number.isFinite(config.configSize) ? config.configSize : null,
     });
   }
@@ -1172,10 +1237,14 @@ function mergeFileShardIntoCursors(data, cursors) {
 
 function calculateGenerationCounts(metadata, coreFiles) {
   const nonCodexFiles = Object.keys(coreFiles || {}).length;
-  const codexFiles = Object.values(metadata.codexFiles || {})
-    .reduce((sum, entry) => sum + Number(entry?.count || 0), 0);
-  const codexEvents = Object.values(metadata.codexEvents || {})
-    .reduce((sum, entry) => sum + Number(entry?.count || 0), 0);
+  const codexFiles = Object.values(metadata.codexFiles || {}).reduce(
+    (sum, entry) => sum + Number(entry?.count || 0),
+    0,
+  );
+  const codexEvents = Object.values(metadata.codexEvents || {}).reduce(
+    (sum, entry) => sum + Number(entry?.count || 0),
+    0,
+  );
   return {
     nonCodexFiles,
     codexFiles,
@@ -1195,17 +1264,22 @@ function isCodexSessionCursorPathForRoots(filePath, codexRoots) {
   if (typeof filePath !== "string") return false;
   const normalized = filePath.replace(/\\/g, "/");
   if (/\/\.codex\/(?:archived_)?sessions\//.test(normalized)) return true;
-  return codexRoots.some((root) => (
-    normalized.startsWith(`${root}/sessions/`) ||
-    normalized.startsWith(`${root}/archived_sessions/`)
-  ));
+  return codexRoots.some(
+    (root) =>
+      normalized.startsWith(`${root}/sessions/`) ||
+      normalized.startsWith(`${root}/archived_sessions/`),
+  );
 }
 
 function normalizeCodexRoots(roots) {
   const values = Array.isArray(roots) ? roots : [roots];
-  return Array.from(new Set(values
-    .filter((root) => typeof root === "string" && root.trim().length > 0)
-    .map((root) => root.replace(/\\/g, "/").replace(/\/+$/, ""))));
+  return Array.from(
+    new Set(
+      values
+        .filter((root) => typeof root === "string" && root.trim().length > 0)
+        .map((root) => root.replace(/\\/g, "/").replace(/\/+$/, "")),
+    ),
+  );
 }
 
 function codexFileShardKey(filePath) {
@@ -1253,7 +1327,7 @@ function isManifest(value) {
     value &&
     value.version === STORE_VERSION &&
     typeof value.current === "string" &&
-    value.current.length > 0
+    value.current.length > 0,
   );
 }
 
@@ -1275,8 +1349,9 @@ async function fingerprintFile(filePath) {
 
 function sameFingerprint(left, right) {
   if (!left || !right) return left === right;
-  return ["dev", "ino", "size", "mtimeNs", "ctimeNs"]
-    .every((key) => String(left[key]) === String(right[key]));
+  return ["dev", "ino", "size", "mtimeNs", "ctimeNs"].every(
+    (key) => String(left[key]) === String(right[key]),
+  );
 }
 
 async function cleanupGenerations(storeRoot, keep) {
