@@ -1,13 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Download,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  ShieldBan,
-  Trash2,
-} from "lucide-react";
+import { Download, RefreshCw, Search, ShieldBan, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -23,7 +16,6 @@ import {
   getLocalSkills,
   installSkill,
   refreshSkillMarketEvidence,
-  restoreSkill,
   uninstallSkill,
   updateSkillBlacklist,
 } from "../lib/local-skills/server-fns";
@@ -43,7 +35,7 @@ export const Route = createFileRoute("/skills")({
       {
         name: "description",
         content:
-          "扫描并管理本机 AI Agent 的 Skill，支持安全复制、回收站恢复与黑名单。",
+          "扫描并管理本机 AI Agent 的 Skill，支持安全复制、跨 Agent 同步与黑名单。",
       },
     ],
   }),
@@ -196,7 +188,7 @@ function SkillsPage() {
     if (paths.length === 0) return;
     if (
       !window.confirm(
-        `确认清理已选的 ${checkedVisible.length} 个 Skill（${paths.length} 个安装副本）？成功项可在 5 分钟内恢复。`,
+        `确认永久删除已选的 ${checkedVisible.length} 个 Skill（${paths.length} 个安装副本）？此操作不可撤销。`,
       )
     ) {
       return;
@@ -209,9 +201,7 @@ function SkillsPage() {
       setCheckedIds(new Set());
       await refresh();
       if (result.succeeded.length > 0) {
-        toast.success(
-          `${result.succeeded.length} 个安装副本已移至 5 分钟回收站`,
-        );
+        toast.success(`${result.succeeded.length} 个安装副本已永久删除`);
       }
       if (result.failed.length > 0) {
         toast.error(
@@ -233,7 +223,7 @@ function SkillsPage() {
       for (const installation of skill.installations) {
         await uninstallSkill({ data: installation.path });
       }
-    }, `${skill.name} 已移至回收站，可在 5 分钟内恢复`);
+    }, `${skill.name} 已永久删除`);
 
   return (
     <>
@@ -297,38 +287,6 @@ function SkillsPage() {
           刷新扫描
         </TTButton>
       </div>
-
-      {snapshot.trash.length > 0 && (
-        <Panel className="mb-3" title={`回收站（${snapshot.trash.length}）`}>
-          <ul className="space-y-2">
-            {snapshot.trash.map((entry) => (
-              <li
-                key={entry.id}
-                className="flex flex-wrap items-center gap-3 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[13px]"
-              >
-                <Trash2 className="size-3.5 text-muted-foreground" />
-                <span className="font-medium">{entry.skillName}</span>
-                <span className="text-muted-foreground">{entry.agent}</span>
-                <span className="tt-num ml-auto text-[11px] text-warn">
-                  恢复截止 {formatTime(entry.expiresAt)}
-                </span>
-                <TTButton
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                    run(
-                      () => restoreSkill({ data: entry.id }),
-                      `${entry.skillName} 已恢复`,
-                    )
-                  }
-                >
-                  <RotateCcw className="size-3" /> 恢复
-                </TTButton>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,62%)_minmax(0,1fr)]">
         <Panel title={`Skill 列表（${list.length}）`} bodyClassName="p-0">
@@ -462,7 +420,7 @@ function SkillsPage() {
                           onClick={() =>
                             run(
                               () => uninstallSkill({ data: installation.path }),
-                              `${selected.name} 已移至回收站`,
+                              `${selected.name} 已永久删除`,
                             )
                           }
                         >

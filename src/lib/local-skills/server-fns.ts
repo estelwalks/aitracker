@@ -5,10 +5,10 @@ import { join } from "node:path";
 
 import {
   SKILL_AGENTS,
-  type BatchTrashResult,
+  type BatchUninstallResult,
   type SkillAgent,
   type SkillSnapshot,
-  type TrashEntry,
+  type SkillSyncResult,
 } from "./types.ts";
 import type { HealthThresholds } from "./scanner.server.ts";
 
@@ -102,23 +102,44 @@ export const installSkill = createServerFn({ method: "POST" })
 
 export const uninstallSkill = createServerFn({ method: "POST" })
   .validator(stringInput)
-  .handler(async ({ data }): Promise<TrashEntry> => {
-    const { trashLocalSkill } = await import("./scanner.server.ts");
-    return trashLocalSkill(data);
+  .handler(async ({ data }): Promise<{ path: string }> => {
+    const { uninstallLocalSkill } = await import("./scanner.server.ts");
+    return uninstallLocalSkill(data);
   });
 
 export const batchUninstallSkills = createServerFn({ method: "POST" })
   .validator(batchPathsInput)
-  .handler(async ({ data }): Promise<BatchTrashResult> => {
-    const { trashLocalSkills } = await import("./scanner.server.ts");
-    return trashLocalSkills(data);
+  .handler(async ({ data }): Promise<BatchUninstallResult> => {
+    const { batchUninstallLocalSkills } = await import("./scanner.server.ts");
+    return batchUninstallLocalSkills(data);
   });
 
-export const restoreSkill = createServerFn({ method: "POST" })
-  .validator(stringInput)
-  .handler(async ({ data }): Promise<void> => {
-    const { restoreLocalSkill } = await import("./scanner.server.ts");
-    await restoreLocalSkill(data);
+export const syncLocalSkill = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      sourcePath: string;
+      targetAgents: string[];
+      onConflict: "overwrite" | "skip";
+    }) => {
+      if (
+        typeof input?.sourcePath !== "string" ||
+        !Array.isArray(input?.targetAgents) ||
+        input.targetAgents.length === 0 ||
+        input.targetAgents.length > SKILL_AGENTS.length ||
+        input.targetAgents.some(
+          (agent) => typeof agent !== "string" || !SKILL_AGENTS.includes(agent),
+        ) ||
+        (input.onConflict !== "overwrite" && input.onConflict !== "skip")
+      ) {
+        throw new Error("同步参数不合法");
+      }
+      return input;
+    },
+  )
+  .handler(async ({ data }): Promise<SkillSyncResult> => {
+    const { syncLocalSkill: doSyncLocalSkill } =
+      await import("./scanner.server.ts");
+    return doSyncLocalSkill(data);
   });
 
 export const updateSkillBlacklist = createServerFn({ method: "POST" })
