@@ -29,7 +29,8 @@ function renderBox(lines, { padding = 1 } = {}) {
   const top = `+${"-".repeat(innerWidth)}+`;
   const bottom = `+${"-".repeat(innerWidth)}+`;
   const body = content.map((line) => {
-    const padded = " ".repeat(padding) + formatLine(line, maxLen) + " ".repeat(padding);
+    const padded =
+      " ".repeat(padding) + formatLine(line, maxLen) + " ".repeat(padding);
     return `|${padded}|`;
   });
   return [top, ...body, bottom].join("\n");
@@ -45,7 +46,10 @@ function underline(text) {
 
 async function promptEnter(message) {
   if (!isInteractive()) return;
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   await new Promise((resolve) => rl.question(message, () => resolve()));
   rl.close();
 }
@@ -153,9 +157,14 @@ function createSpinner({ text, intervalMs = 80 }) {
 }
 
 function formatSummaryLine({ label, status, detail }) {
-  const isSuccess = status === "updated" || status === "set" || status === "installed";
+  const isSuccess =
+    status === "updated" || status === "set" || status === "installed";
   const bullet = isSuccess ? color("*", GREEN) : "o";
-  const statusLabel = isSuccess ? detail || status : detail ? `Skipped - ${detail}` : "Skipped";
+  const statusLabel = isSuccess
+    ? detail || status
+    : detail
+      ? `Skipped - ${detail}`
+      : "Skipped";
   const line = `  ${bullet} ${label.padEnd(22)} [${statusLabel}]`;
   return isSuccess ? line : color(line, DIM);
 }

@@ -39,7 +39,8 @@ function categorizeTool(name) {
     return "MCP: Unknown";
   }
 
-  if (/^Task(Create|Update|Get|List|Output|Stop)$/.test(name)) return "Task Mgmt";
+  if (/^Task(Create|Update|Get|List|Output|Stop)$/.test(name))
+    return "Task Mgmt";
   if (/^Todo/.test(name)) return "Task Mgmt";
   if (/Plan/.test(name)) return "Planning";
   if (name === "Agent") return "Agent";
@@ -64,7 +65,8 @@ function categorizeTool(name) {
   if (name === "Grep") return "Search";
   if (name === "Bash") return "Execution";
 
-  if (name.includes("<tool_call>") || name.includes("<arg_")) return "Malformed";
+  if (name.includes("<tool_call>") || name.includes("<arg_"))
+    return "Malformed";
 
   return "Other";
 }
@@ -75,24 +77,41 @@ function categorizeTool(name) {
 
 function inferExecCommandKind(command) {
   const cmd = String(command || "").trim();
-  if (/^(npm|yarn|pnpm)\s+(run\s+)?(build|build:|.*:build\b)/.test(cmd)) return "build";
-  if (/^(npm|yarn|pnpm)\s+(test|run\s+test\b|run\s+.*test\b)/.test(cmd)) return "test";
+  if (/^(npm|yarn|pnpm)\s+(run\s+)?(build|build:|.*:build\b)/.test(cmd))
+    return "build";
+  if (/^(npm|yarn|pnpm)\s+(test|run\s+test\b|run\s+.*test\b)/.test(cmd))
+    return "test";
   if (/^(npm|yarn|pnpm)\s+run\s+typecheck\b/.test(cmd)) return "typecheck";
   if (/^(npm|yarn|pnpm)\s+(install|add|ci)\b/.test(cmd)) return "dependency";
   if (/^(npm|yarn|pnpm)\s+(pack|publish|version)\b/.test(cmd)) return "package";
-  if (/^(npm|yarn|pnpm)\s+run\s+(dev|serve|start|.*dev.*)\b/.test(cmd)) return "dev_server";
-  if (/^node\s+--check\b/.test(cmd) || /\bnode\s+--check\b/.test(cmd)) return "syntax_check";
-  if (/^node\s+--input-type=module\s+-e\b/.test(cmd) || /^node\s+-e\b/.test(cmd)) return "node_eval";
+  if (/^(npm|yarn|pnpm)\s+run\s+(dev|serve|start|.*dev.*)\b/.test(cmd))
+    return "dev_server";
+  if (/^node\s+--check\b/.test(cmd) || /\bnode\s+--check\b/.test(cmd))
+    return "syntax_check";
+  if (
+    /^node\s+--input-type=module\s+-e\b/.test(cmd) ||
+    /^node\s+-e\b/.test(cmd)
+  )
+    return "node_eval";
   if (/^node\s+.*\b(query|analyze|report)\b/.test(cmd)) return "node_cli";
   if (/^git\s+status\b/.test(cmd)) return "git_status";
-  if (/^git\s+(push|pull|fetch|clone)\b/.test(cmd) || /\bgit\s+(push|pull|fetch|clone)\b/.test(cmd)) return "git_remote";
-  if (/^git\s+(add|commit|branch|config|remote|restore)\b/.test(cmd) || /\bgit\s+(add|commit|branch|config|remote|restore)\b/.test(cmd)) return "git_local";
+  if (
+    /^git\s+(push|pull|fetch|clone)\b/.test(cmd) ||
+    /\bgit\s+(push|pull|fetch|clone)\b/.test(cmd)
+  )
+    return "git_remote";
+  if (
+    /^git\s+(add|commit|branch|config|remote|restore)\b/.test(cmd) ||
+    /\bgit\s+(add|commit|branch|config|remote|restore)\b/.test(cmd)
+  )
+    return "git_local";
   if (/^(curl|wget)\b/.test(cmd) || /\b(curl|wget)\b/.test(cmd)) return "http";
   if (/^(ps|pgrep|pkill|kill|lsof)\b/.test(cmd)) return "process";
   if (/^tmux\b/.test(cmd)) return "terminal";
   if (/^(open|osascript)\b/.test(cmd)) return "browser_control";
   if (/^(rm|mkdir|touch|chmod|cp|mv)\b/.test(cmd)) return "file_mutation";
-  if (/^(pwd|ls|test)\b/.test(cmd) || /^(pwd|ls)\s*[;&|]/.test(cmd)) return "shell_inspect";
+  if (/^(pwd|ls|test)\b/.test(cmd) || /^(pwd|ls)\s*[;&|]/.test(cmd))
+    return "shell_inspect";
   if (/[;&|]{1,2}/.test(cmd)) return "compound";
   return "unknown";
 }
@@ -108,7 +127,11 @@ function shellWords(command) {
 }
 
 function unwrapShellCommand(words) {
-  if (words.length >= 3 && /^(bash|sh|zsh|fish)$/.test(words[0]) && words[1] === "-lc") {
+  if (
+    words.length >= 3 &&
+    /^(bash|sh|zsh|fish)$/.test(words[0]) &&
+    words[1] === "-lc"
+  ) {
     return shellWords(words.slice(2).join(" "));
   }
   if (words.length >= 3 && /^(rtk|env|command|xcrun)$/.test(words[0])) {
@@ -164,7 +187,9 @@ function roundTotals(totals) {
   return {
     input_tokens: Math.round(totals?.input_tokens || 0),
     cached_input_tokens: Math.round(totals?.cached_input_tokens || 0),
-    cache_creation_input_tokens: Math.round(totals?.cache_creation_input_tokens || 0),
+    cache_creation_input_tokens: Math.round(
+      totals?.cache_creation_input_tokens || 0,
+    ),
     output_tokens: Math.round(totals?.output_tokens || 0),
     reasoning_output_tokens: Math.round(totals?.reasoning_output_tokens || 0),
     total_tokens: Math.round(totals?.total_tokens || 0),
@@ -205,13 +230,16 @@ function allocateByLargestRemainder(total, weights, order) {
     return out;
   }
 
-  const exact = order.map((key) => (Number(weights[key] || 0) / totalWeight) * total);
+  const exact = order.map(
+    (key) => (Number(weights[key] || 0) / totalWeight) * total,
+  );
   const floored = exact.map((x) => Math.floor(x));
   const remainder = total - floored.reduce((a, b) => a + b, 0);
   const remainders = exact
     .map((x, i) => ({ i, frac: x - Math.floor(x) }))
     .sort((a, b) => b.frac - a.frac);
-  for (let k = 0; k < remainder; k++) floored[remainders[k % order.length].i] += 1;
+  for (let k = 0; k < remainder; k++)
+    floored[remainders[k % order.length].i] += 1;
 
   for (let i = 0; i < order.length; i++) out[order[i]] = floored[i];
   return out;

@@ -9,7 +9,9 @@ const { DEFAULT_BASE_URL } = require("./runtime-config");
 async function beginBrowserAuth({ baseUrl, dashboardUrl, timeoutMs, open }) {
   const nonce = crypto.randomBytes(16).toString("hex");
   const callbackPath = `/tokentracker/callback/${nonce}`;
-  const authUrl = dashboardUrl ? new URL("/", dashboardUrl) : new URL("/auth/sign-up", baseUrl);
+  const authUrl = dashboardUrl
+    ? new URL("/", dashboardUrl)
+    : new URL("/auth/sign-up", baseUrl);
   const postAuthRedirect = resolvePostAuthRedirect({ dashboardUrl, authUrl });
   const { callbackUrl, waitForCallback } = await startLocalCallbackServer({
     callbackPath,
@@ -26,7 +28,11 @@ async function beginBrowserAuth({ baseUrl, dashboardUrl, timeoutMs, open }) {
   return { authUrl: authUrl.toString(), waitForCallback };
 }
 
-async function startLocalCallbackServer({ callbackPath, timeoutMs, redirectUrl }) {
+async function startLocalCallbackServer({
+  callbackPath,
+  timeoutMs,
+  redirectUrl,
+}) {
   let resolved = false;
   let resolveResult;
   let rejectResult;
@@ -137,16 +143,23 @@ async function startLocalCallbackServer({ callbackPath, timeoutMs, redirectUrl }
 
 function detectDefaultBrowser() {
   try {
-    const raw = cp.execFileSync("defaults", [
-      "read", "com.apple.LaunchServices/com.apple.launchservices.secure", "LSHandlers",
-    ], { encoding: "utf8", timeout: 3000 });
+    const raw = cp.execFileSync(
+      "defaults",
+      [
+        "read",
+        "com.apple.LaunchServices/com.apple.launchservices.secure",
+        "LSHandlers",
+      ],
+      { encoding: "utf8", timeout: 3000 },
+    );
     const match = raw.match(/https[\s\S]*?LSHandlerRoleAll\s*=\s*"([^"]+)"/);
     if (!match) return null;
     const bundleId = match[1].toLowerCase();
     if (bundleId.includes("chrome")) return "Google Chrome";
     if (bundleId.includes("safari")) return "Safari";
     if (bundleId.includes("edgemac")) return "Microsoft Edge";
-    if (bundleId.includes("thebrowser") || bundleId.includes("arc")) return "Arc";
+    if (bundleId.includes("thebrowser") || bundleId.includes("arc"))
+      return "Arc";
     return null;
   } catch (_e) {
     return null;
@@ -174,7 +187,10 @@ function hasGraphicalSession(env = process.env) {
   );
 }
 
-function isCommandAvailable(command, { env = process.env, platform = process.platform } = {}) {
+function isCommandAvailable(
+  command,
+  { env = process.env, platform = process.platform } = {},
+) {
   if (typeof command !== "string" || !command.trim()) return false;
 
   const pathEntries = String(env.PATH || "")
@@ -182,12 +198,13 @@ function isCommandAvailable(command, { env = process.env, platform = process.pla
     .map((entry) => entry.trim())
     .filter(Boolean);
   const hasPathSeparator = command.includes("/") || command.includes("\\");
-  const suffixes = platform === "win32"
-    ? String(env.PATHEXT || ".EXE;.CMD;.BAT;.COM")
-      .split(";")
-      .map((ext) => ext.trim())
-      .filter(Boolean)
-    : [""];
+  const suffixes =
+    platform === "win32"
+      ? String(env.PATHEXT || ".EXE;.CMD;.BAT;.COM")
+          .split(";")
+          .map((ext) => ext.trim())
+          .filter(Boolean)
+      : [""];
 
   const candidates = [];
   if (hasPathSeparator) {
@@ -256,8 +273,15 @@ function resolveBrowserLaunchCommand(
   return null;
 }
 
-function openInBrowser(url, { platform = process.platform, env = process.env, spawn = cp.spawn, commandExists = isCommandAvailable } = {}) {
-
+function openInBrowser(
+  url,
+  {
+    platform = process.platform,
+    env = process.env,
+    spawn = cp.spawn,
+    commandExists = isCommandAvailable,
+  } = {},
+) {
   if (platform === "darwin") {
     // On macOS, prefer reusing a matching tab in a supported running browser.
     // Supported browsers are checked with the user's default browser first.
@@ -329,7 +353,10 @@ end if
 `;
     if (commandExists("osascript", { env, platform })) {
       try {
-        const child = spawn("osascript", ["-e", script], { stdio: "ignore", detached: true });
+        const child = spawn("osascript", ["-e", script], {
+          stdio: "ignore",
+          detached: true,
+        });
         child.unref();
         return true;
       } catch (_e) {}
@@ -345,11 +372,18 @@ end if
     return false;
   }
 
-  const launch = resolveBrowserLaunchCommand(url, { platform, env, commandExists });
+  const launch = resolveBrowserLaunchCommand(url, {
+    platform,
+    env,
+    commandExists,
+  });
   if (!launch) return false;
 
   try {
-    const child = spawn(launch.command, launch.args, { stdio: "ignore", detached: true });
+    const child = spawn(launch.command, launch.args, {
+      stdio: "ignore",
+      detached: true,
+    });
     child.unref();
     return true;
   } catch (_e) {}

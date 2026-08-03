@@ -58,7 +58,10 @@ function firstDefined(object, camel, snake) {
 
 function normalizeResetAt(value) {
   if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "number" || /^\d+(?:\.\d+)?$/.test(String(value).trim())) {
+  if (
+    typeof value === "number" ||
+    /^\d+(?:\.\d+)?$/.test(String(value).trim())
+  ) {
     const raw = Number(value);
     if (!Number.isFinite(raw)) return null;
     const milliseconds = raw > 10_000_000_000 ? raw : raw * 1000;
@@ -77,30 +80,52 @@ function normalizeQuotaSummary(summary) {
   if (!summary || typeof summary !== "object") {
     throw new Error("Qoder usage response is missing totalQuota.quotaSummary.");
   }
-  const used = finiteNumber(firstDefined(summary, "usedValue", "used_value"), "usedValue");
-  const total = finiteNumber(firstDefined(summary, "limitValue", "limit_value"), "limitValue");
-  const rawRemaining = firstDefined(summary, "remainingValue", "remaining_value");
-  const remaining = rawRemaining === null || rawRemaining === undefined
-    ? Math.max(0, total - used)
-    : finiteNumber(rawRemaining, "remainingValue");
-  const rawPercentage = firstDefined(summary, "usagePercentage", "usage_percentage");
-  const providedPercentage = rawPercentage === null || rawPercentage === undefined
-    ? null
-    : finiteNumber(rawPercentage, "usagePercentage");
+  const used = finiteNumber(
+    firstDefined(summary, "usedValue", "used_value"),
+    "usedValue",
+  );
+  const total = finiteNumber(
+    firstDefined(summary, "limitValue", "limit_value"),
+    "limitValue",
+  );
+  const rawRemaining = firstDefined(
+    summary,
+    "remainingValue",
+    "remaining_value",
+  );
+  const remaining =
+    rawRemaining === null || rawRemaining === undefined
+      ? Math.max(0, total - used)
+      : finiteNumber(rawRemaining, "remainingValue");
+  const rawPercentage = firstDefined(
+    summary,
+    "usagePercentage",
+    "usage_percentage",
+  );
+  const providedPercentage =
+    rawPercentage === null || rawPercentage === undefined
+      ? null
+      : finiteNumber(rawPercentage, "usagePercentage");
 
   if (used < 0 || total < 0 || remaining < 0) {
     throw new Error("Qoder quota values must be nonnegative.");
   }
   if (total === 0 && (used !== 0 || remaining !== 0)) {
-    throw new Error("Qoder zero total quota must have zero usage and remaining.");
+    throw new Error(
+      "Qoder zero total quota must have zero usage and remaining.",
+    );
   }
-  const usagePercentage = providedPercentage ?? (total > 0 ? (used / total) * 100 : 100);
+  const usagePercentage =
+    providedPercentage ?? (total > 0 ? (used / total) * 100 : 100);
   return {
     used,
     total,
     remaining,
     usagePercentage: Math.max(0, Math.min(100, usagePercentage)),
-    unit: typeof summary.unit === "string" && summary.unit.trim() ? summary.unit.trim() : null,
+    unit:
+      typeof summary.unit === "string" && summary.unit.trim()
+        ? summary.unit.trim()
+        : null,
   };
 }
 
@@ -128,7 +153,9 @@ function normalizeQoderUsageResponse(response) {
     error: null,
     primary_window: {
       used_percent: Math.max(0, Math.min(100, usedPercent)),
-      reset_at: normalizeResetAt(firstDefined(response, "nextResetAt", "next_reset_at")),
+      reset_at: normalizeResetAt(
+        firstDefined(response, "nextResetAt", "next_reset_at"),
+      ),
       used_credits: used,
       limit_credits: total,
       remaining_credits: remaining,
@@ -150,20 +177,31 @@ function qoderDataRoot({
     return path.join(home, "Library", "Application Support", "Qoder");
   }
   if (platform === "win32") {
-    return path.join(env.APPDATA || path.join(home, "AppData", "Roaming"), "Qoder");
+    return path.join(
+      env.APPDATA || path.join(home, "AppData", "Roaming"),
+      "Qoder",
+    );
   }
   return path.join(home, ".config", "Qoder");
 }
 
-function qoderRpcRequest(method, params = {}, {
-  home = os.homedir(),
-  env = process.env,
-  platform = process.platform,
-  timeoutMs = 1500,
-  netModule = net,
-} = {}) {
+function qoderRpcRequest(
+  method,
+  params = {},
+  {
+    home = os.homedir(),
+    env = process.env,
+    platform = process.platform,
+    timeoutMs = 1500,
+    netModule = net,
+  } = {},
+) {
   return new Promise((resolve, reject) => {
-    const infoPath = path.join(qoderDataRoot({ home, env, platform }), "SharedClientCache", ".info.json");
+    const infoPath = path.join(
+      qoderDataRoot({ home, env, platform }),
+      "SharedClientCache",
+      ".info.json",
+    );
     let info;
     try {
       info = JSON.parse(fs.readFileSync(infoPath, "utf8"));
@@ -171,7 +209,8 @@ function qoderRpcRequest(method, params = {}, {
       reject(new Error("Qoder local service is not running."));
       return;
     }
-    const socketPath = typeof info?.ipcServerPath === "string" ? info.ipcServerPath.trim() : "";
+    const socketPath =
+      typeof info?.ipcServerPath === "string" ? info.ipcServerPath.trim() : "";
     if (!socketPath) {
       reject(new Error("Qoder local service endpoint is unavailable."));
       return;
@@ -180,7 +219,10 @@ function qoderRpcRequest(method, params = {}, {
     let settled = false;
     let buffer = Buffer.alloc(0);
     const socket = netModule.createConnection(socketPath);
-    const timer = setTimeout(() => finish(new Error("Qoder local service request timed out.")), timeoutMs);
+    const timer = setTimeout(
+      () => finish(new Error("Qoder local service request timed out.")),
+      timeoutMs,
+    );
 
     function finish(error, value) {
       if (settled) return;
@@ -192,12 +234,14 @@ function qoderRpcRequest(method, params = {}, {
     }
 
     socket.on("connect", () => {
-      const body = Buffer.from(JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method,
-        params,
-      }));
+      const body = Buffer.from(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method,
+          params,
+        }),
+      );
       socket.write(`Content-Length: ${body.length}\r\n\r\n`);
       socket.write(body);
     });
@@ -206,22 +250,34 @@ function qoderRpcRequest(method, params = {}, {
       buffer = Buffer.concat([buffer, chunk]);
       const headerEnd = buffer.indexOf("\r\n\r\n");
       if (headerEnd < 0) return;
-      const match = /Content-Length:\s*(\d+)/i.exec(buffer.subarray(0, headerEnd).toString("ascii"));
+      const match = /Content-Length:\s*(\d+)/i.exec(
+        buffer.subarray(0, headerEnd).toString("ascii"),
+      );
       if (!match) {
         finish(new Error("Qoder local service returned an invalid response."));
         return;
       }
       const bodyLength = Number(match[1]);
       const bodyStart = headerEnd + 4;
-      if (!Number.isFinite(bodyLength) || bodyLength < 0 || bodyLength > 4 * 1024 * 1024) {
+      if (
+        !Number.isFinite(bodyLength) ||
+        bodyLength < 0 ||
+        bodyLength > 4 * 1024 * 1024
+      ) {
         finish(new Error("Qoder local service response is too large."));
         return;
       }
       if (buffer.length < bodyStart + bodyLength) return;
       try {
-        const message = JSON.parse(buffer.subarray(bodyStart, bodyStart + bodyLength).toString("utf8"));
+        const message = JSON.parse(
+          buffer.subarray(bodyStart, bodyStart + bodyLength).toString("utf8"),
+        );
         if (message.error) {
-          finish(new Error(message.error.message || "Qoder local service request failed."));
+          finish(
+            new Error(
+              message.error.message || "Qoder local service request failed.",
+            ),
+          );
         } else {
           finish(null, message.result);
         }
@@ -239,31 +295,39 @@ function normalizeQoderRpcUsage(response) {
   const used = finiteNumber(quota.used, "userQuota.used");
   const total = finiteNumber(quota.total, "userQuota.total");
   const remaining = finiteNumber(quota.remaining, "userQuota.remaining");
-  const reportedPercent = Number(response.totalUsagePercentage ?? quota.percentage);
-  const usedPercent = total === 0
-    ? 0
-    : response.isQuotaExceeded === true
-      ? 100
-      : Number.isFinite(reportedPercent)
-        ? reportedPercent
-        : (used / total) * 100;
+  const reportedPercent = Number(
+    response.totalUsagePercentage ?? quota.percentage,
+  );
+  const usedPercent =
+    total === 0
+      ? 0
+      : response.isQuotaExceeded === true
+        ? 100
+        : Number.isFinite(reportedPercent)
+          ? reportedPercent
+          : (used / total) * 100;
   const normalizedExpiry = normalizeResetAt(response.expiresAt);
   const expiryMs = normalizedExpiry ? Date.parse(normalizedExpiry) : NaN;
   return {
     configured: true,
     error: null,
-    plan_label: typeof response.userType === "string" ? response.userType : null,
+    plan_label:
+      typeof response.userType === "string" ? response.userType : null,
     quota_exceeded: response.isQuotaExceeded === true,
     primary_window: {
       used_percent: Math.max(0, Math.min(100, usedPercent)),
       // Qoder uses 9999-12-31 as a no-expiry sentinel for Free accounts.
-      reset_at: Number.isFinite(expiryMs) && expiryMs < Date.UTC(2100, 0, 1)
-        ? normalizedExpiry
-        : null,
+      reset_at:
+        Number.isFinite(expiryMs) && expiryMs < Date.UTC(2100, 0, 1)
+          ? normalizedExpiry
+          : null,
       used_credits: used,
       limit_credits: total,
       remaining_credits: remaining,
-      unit: typeof quota.unit === "string" && quota.unit.trim() ? quota.unit.trim() : "credits",
+      unit:
+        typeof quota.unit === "string" && quota.unit.trim()
+          ? quota.unit.trim()
+          : "credits",
     },
     source: "local-ipc",
   };
@@ -274,11 +338,20 @@ function normalizeQoderActivityResponse(response, { nowMs = Date.now() } = {}) {
     throw new Error("Qoder activity response is not an object.");
   }
   if (response.code !== undefined && Number(response.code) !== 0) {
-    throw new Error(`Qoder activity API returned ${response.msg || `code ${response.code}`}.`);
+    throw new Error(
+      `Qoder activity API returned ${response.msg || `code ${response.code}`}.`,
+    );
   }
-  const activities = Array.isArray(response.data?.activities) ? response.data.activities : [];
+  const activities = Array.isArray(response.data?.activities)
+    ? response.data.activities
+    : [];
   const activity = activities.find((entry) => {
-    if (!entry || entry.activityId !== QODER_ULTIMATE_ACTIVITY_ID || entry.eligible === false) return false;
+    if (
+      !entry ||
+      entry.activityId !== QODER_ULTIMATE_ACTIVITY_ID ||
+      entry.eligible === false
+    )
+      return false;
     if (String(entry.tagStyle || "").toUpperCase() === "EXPIRED") return false;
     const endAt = Number(entry.activityEndAt);
     return !Number.isFinite(endAt) || endAt <= 0 || endAt > nowMs;
@@ -287,7 +360,9 @@ function normalizeQoderActivityResponse(response, { nowMs = Date.now() } = {}) {
   const used = finiteNumber(activity.used, "activity.used");
   const total = finiteNumber(activity.limit, "activity.limit");
   const rawRemaining = Number(activity.remaining);
-  const remaining = Number.isFinite(rawRemaining) ? rawRemaining : Math.max(0, total - used);
+  const remaining = Number.isFinite(rawRemaining)
+    ? rawRemaining
+    : Math.max(0, total - used);
   if (used < 0 || total <= 0 || remaining < 0) {
     throw new Error("Qoder activity quota values are invalid.");
   }
@@ -312,10 +387,13 @@ function readQoderActivityCache({
   maxAgeMs = QODER_ACTIVITY_CACHE_MAX_AGE_MS,
 } = {}) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(qoderActivityCachePath({ home }), "utf8"));
+    const parsed = JSON.parse(
+      fs.readFileSync(qoderActivityCachePath({ home }), "utf8"),
+    );
     const window = parsed?.activity_window;
     const cachedAtMs = Date.parse(parsed?.cached_at || "");
-    if (!window || !Number.isFinite(cachedAtMs) || cachedAtMs > nowMs + 60_000) return null;
+    if (!window || !Number.isFinite(cachedAtMs) || cachedAtMs > nowMs + 60_000)
+      return null;
     const resetAtMs = Date.parse(window.reset_at || "");
     if (Number.isFinite(resetAtMs)) {
       if (resetAtMs <= nowMs) return null;
@@ -325,18 +403,25 @@ function readQoderActivityCache({
     const used = Number(window.used_credits);
     const total = Number(window.limit_credits);
     const remaining = Number(window.remaining_credits);
-    if (!Number.isFinite(used) || !Number.isFinite(total) || !Number.isFinite(remaining)
-      || used < 0 || total <= 0 || remaining < 0) return null;
+    if (
+      !Number.isFinite(used) ||
+      !Number.isFinite(total) ||
+      !Number.isFinite(remaining) ||
+      used < 0 ||
+      total <= 0 ||
+      remaining < 0
+    )
+      return null;
     return window;
   } catch (_error) {
     return null;
   }
 }
 
-function writeQoderActivityCache(window, {
-  home = os.homedir(),
-  nowMs = Date.now(),
-} = {}) {
+function writeQoderActivityCache(
+  window,
+  { home = os.homedir(), nowMs = Date.now() } = {},
+) {
   if (!window) return;
   const cachePath = qoderActivityCachePath({ home });
   const payload = {
@@ -346,7 +431,10 @@ function writeQoderActivityCache(window, {
   try {
     fs.mkdirSync(path.dirname(cachePath), { recursive: true });
     const tmpPath = `${cachePath}.${process.pid}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: "utf8", mode: 0o600 });
+    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
     fs.renameSync(tmpPath, cachePath);
   } catch (_error) {}
 }
@@ -359,7 +447,9 @@ function qoderCachedWindow(window, { cachedAtMs, nowMs } = {}) {
   if (!window || typeof window !== "object") return null;
   const resetAtMs = Date.parse(window.reset_at || "");
   if (Number.isFinite(resetAtMs)) return resetAtMs > nowMs ? window : null;
-  return nowMs - cachedAtMs <= QODER_LIMITS_CACHE_UNKNOWN_RESET_TTL_MS ? window : null;
+  return nowMs - cachedAtMs <= QODER_LIMITS_CACHE_UNKNOWN_RESET_TTL_MS
+    ? window
+    : null;
 }
 
 function readQoderLimitsCache({
@@ -367,15 +457,28 @@ function readQoderLimitsCache({
   nowMs = Date.now(),
 } = {}) {
   try {
-    const raw = JSON.parse(fs.readFileSync(qoderLimitsCachePath({ home }), "utf8"))?.qoder;
+    const raw = JSON.parse(
+      fs.readFileSync(qoderLimitsCachePath({ home }), "utf8"),
+    )?.qoder;
     const cachedAtMs = Date.parse(raw?.cached_at || "");
-    if (!Number.isFinite(cachedAtMs) || cachedAtMs > nowMs + 60_000) return null;
-    const primaryWindow = qoderCachedWindow(raw.primary_window, { cachedAtMs, nowMs });
-    const secondaryWindow = qoderCachedWindow(raw.secondary_window, { cachedAtMs, nowMs });
+    if (!Number.isFinite(cachedAtMs) || cachedAtMs > nowMs + 60_000)
+      return null;
+    const primaryWindow = qoderCachedWindow(raw.primary_window, {
+      cachedAtMs,
+      nowMs,
+    });
+    const secondaryWindow = qoderCachedWindow(raw.secondary_window, {
+      cachedAtMs,
+      nowMs,
+    });
     if (!primaryWindow && !secondaryWindow) return null;
-    const hasUnexpiredDatedWindow = [primaryWindow, secondaryWindow]
-      .some((window) => Number.isFinite(Date.parse(window?.reset_at || "")));
-    if (nowMs - cachedAtMs > QODER_LIMITS_CACHE_MAX_AGE_MS && !hasUnexpiredDatedWindow) {
+    const hasUnexpiredDatedWindow = [primaryWindow, secondaryWindow].some(
+      (window) => Number.isFinite(Date.parse(window?.reset_at || "")),
+    );
+    if (
+      nowMs - cachedAtMs > QODER_LIMITS_CACHE_MAX_AGE_MS &&
+      !hasUnexpiredDatedWindow
+    ) {
       return null;
     }
     return {
@@ -395,11 +498,16 @@ function readQoderLimitsCache({
   }
 }
 
-function writeQoderLimitsCache(limits, {
-  home = os.homedir(),
-  nowMs = Date.now(),
-} = {}) {
-  if (!limits?.configured || limits.error || (!limits.primary_window && !limits.secondary_window)) return;
+function writeQoderLimitsCache(
+  limits,
+  { home = os.homedir(), nowMs = Date.now() } = {},
+) {
+  if (
+    !limits?.configured ||
+    limits.error ||
+    (!limits.primary_window && !limits.secondary_window)
+  )
+    return;
   const cachePath = qoderLimitsCachePath({ home });
   const payload = {
     qoder: {
@@ -413,25 +521,36 @@ function writeQoderLimitsCache(limits, {
   try {
     fs.mkdirSync(path.dirname(cachePath), { recursive: true });
     const tmpPath = `${cachePath}.${process.pid}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: "utf8", mode: 0o600 });
+    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), {
+      encoding: "utf8",
+      mode: 0o600,
+    });
     fs.renameSync(tmpPath, cachePath);
   } catch (_error) {}
 }
 
-function buildQoderActivityHeaders(authStatus, {
-  nowMs = Date.now(),
-  randomUUID = crypto.randomUUID,
-} = {}) {
+function buildQoderActivityHeaders(
+  authStatus,
+  { nowMs = Date.now(), randomUUID = crypto.randomUUID } = {},
+) {
   const userId = String(authStatus?.id || authStatus?.accountId || "").trim();
   const accessToken = String(authStatus?.token || "").trim();
   if (!userId || !accessToken) {
     throw new Error("Qoder local session is missing activity credentials.");
   }
-  const temporaryKey = Buffer.from(randomUUID().replace(/-/g, "").slice(0, 16), "ascii");
-  const cosyKey = crypto.publicEncrypt(
-    { key: QODER_SERVER_PUBLIC_KEY, padding: crypto.constants.RSA_PKCS1_PADDING },
-    temporaryKey,
-  ).toString("base64");
+  const temporaryKey = Buffer.from(
+    randomUUID().replace(/-/g, "").slice(0, 16),
+    "ascii",
+  );
+  const cosyKey = crypto
+    .publicEncrypt(
+      {
+        key: QODER_SERVER_PUBLIC_KEY,
+        padding: crypto.constants.RSA_PKCS1_PADDING,
+      },
+      temporaryKey,
+    )
+    .toString("base64");
   const identity = {
     name: authStatus.name || "",
     aid: userId,
@@ -443,18 +562,25 @@ function buildQoderActivityHeaders(authStatus, {
     security_oauth_token: accessToken,
     refresh_token: authStatus.refreshToken || "",
   };
-  const cipher = crypto.createCipheriv("aes-128-cbc", temporaryKey, temporaryKey);
+  const cipher = crypto.createCipheriv(
+    "aes-128-cbc",
+    temporaryKey,
+    temporaryKey,
+  );
   const info = Buffer.concat([
     cipher.update(Buffer.from(JSON.stringify(identity), "utf8")),
     cipher.final(),
   ]).toString("base64");
-  const payload = Buffer.from(JSON.stringify({
-    version: "v1",
-    requestId: randomUUID(),
-    info,
-    cosyVersion: QODER_COSY_VERSION,
-    ideVersion: "",
-  }), "utf8").toString("base64");
+  const payload = Buffer.from(
+    JSON.stringify({
+      version: "v1",
+      requestId: randomUUID(),
+      info,
+      cosyVersion: QODER_COSY_VERSION,
+      ideVersion: "",
+    }),
+    "utf8",
+  ).toString("base64");
   const cosyDate = String(Math.floor(nowMs / 1000));
   const signature = crypto
     .createHash("md5")
@@ -559,9 +685,11 @@ function listRecentQoderRendererLogs(logRoot, maxFiles = 12) {
 
 function parseQoderQuotaLog(text) {
   if (typeof text !== "string" || !text) return null;
-  const matches = Array.from(text.matchAll(
-    /userType=([^,\s]+)[\s\S]*?isQuotaExceeded=(true|false)[\s\S]*?userQuota(?:=|\s+)used=([0-9.]+),\s*total=([0-9.]+),\s*remaining=([0-9.]+),\s*percentage=([0-9.]+),\s*unit=([^,\s]+)/g,
-  ));
+  const matches = Array.from(
+    text.matchAll(
+      /userType=([^,\s]+)[\s\S]*?isQuotaExceeded=(true|false)[\s\S]*?userQuota(?:=|\s+)used=([0-9.]+),\s*total=([0-9.]+),\s*remaining=([0-9.]+),\s*percentage=([0-9.]+),\s*unit=([^,\s]+)/g,
+    ),
+  );
   const match = matches.at(-1);
   if (!match) return null;
   const quotaExceeded = match[2] === "true";
@@ -576,11 +704,12 @@ function parseQoderQuotaLog(text) {
     plan_label: match[1],
     quota_exceeded: quotaExceeded,
     primary_window: {
-      used_percent: total === 0
-        ? 0
-        : quotaExceeded
-          ? 100
-          : Math.max(0, Math.min(100, percentage)),
+      used_percent:
+        total === 0
+          ? 0
+          : quotaExceeded
+            ? 100
+            : Math.max(0, Math.min(100, percentage)),
       reset_at: null,
       used_credits: used,
       limit_credits: total,
@@ -604,13 +733,19 @@ function readQoderLocalQuota({
     typeof env.QODER_HOME === "string" && env.QODER_HOME.trim()
       ? path.resolve(env.QODER_HOME.trim())
       : null;
-  const logRoot = explicitLogRoot || (configuredRoot
-    ? path.join(configuredRoot, "logs")
-    : platform === "darwin"
-      ? path.join(home, "Library", "Application Support", "Qoder", "logs")
-      : platform === "win32"
-        ? path.join(env.APPDATA || path.join(home, "AppData", "Roaming"), "Qoder", "logs")
-        : path.join(home, ".config", "Qoder", "logs"));
+  const logRoot =
+    explicitLogRoot ||
+    (configuredRoot
+      ? path.join(configuredRoot, "logs")
+      : platform === "darwin"
+        ? path.join(home, "Library", "Application Support", "Qoder", "logs")
+        : platform === "win32"
+          ? path.join(
+              env.APPDATA || path.join(home, "AppData", "Roaming"),
+              "Qoder",
+              "logs",
+            )
+          : path.join(home, ".config", "Qoder", "logs"));
   for (const logPath of listRecentQoderRendererLogs(logRoot)) {
     try {
       const fd = fs.openSync(logPath, "r");
@@ -630,8 +765,12 @@ function readQoderLocalQuota({
 }
 
 function siteFromEnv(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "cn" || normalized === "china" || normalized.includes(".cn")
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return normalized === "cn" ||
+    normalized === "china" ||
+    normalized.includes(".cn")
     ? QODER_SITES.china
     : QODER_SITES.international;
 }
@@ -652,7 +791,9 @@ async function fetchQoderLimits({
   // Qoder's shared client accepts only one reliable request at a time. Parallel
   // connections intermittently time out even while the desktop app is running.
   try {
-    rpcUsage = normalizeQoderRpcUsage(await rpcRequest("credit/usage", {}, rpcOptions));
+    rpcUsage = normalizeQoderRpcUsage(
+      await rpcRequest("credit/usage", {}, rpcOptions),
+    );
   } catch (_error) {}
   try {
     const authResult = await rpcRequest("auth/status", {}, rpcOptions);
@@ -695,22 +836,34 @@ async function fetchQoderLimits({
     return cachedLimits;
   }
 
-  const manualCookie = typeof env.QODER_COOKIE === "string" ? env.QODER_COOKIE.trim() : "";
+  const manualCookie =
+    typeof env.QODER_COOKIE === "string" ? env.QODER_COOKIE.trim() : "";
   const sessions = manualCookie
-    ? [{ cookieHeader: manualCookie, site: siteFromEnv(env.QODER_SITE), sourceLabel: "QODER_COOKIE" }]
+    ? [
+        {
+          cookieHeader: manualCookie,
+          site: siteFromEnv(env.QODER_SITE),
+          sourceLabel: "QODER_COOKIE",
+        },
+      ]
     : [];
 
   let lastError = null;
   for (const session of sessions) {
     try {
-      const result = await fetchQoderUsage(session.cookieHeader, session.site, fetchImpl);
+      const result = await fetchQoderUsage(
+        session.cookieHeader,
+        session.site,
+        fetchImpl,
+      );
       // Qoder 1.18 can return an all-zero active plan with usage_percentage=0
       // while the desktop client separately marks the account quota-exceeded.
       // Preserve that status as metadata, but match Qoder's Credits UI by
       // rendering an empty 0/0 bucket as 0%, not a full red 100% bar.
-      const local = result.primary_window?.limit_credits === 0
-        ? readQoderLocalQuota({ home, platform, env })
-        : null;
+      const local =
+        result.primary_window?.limit_credits === 0
+          ? readQoderLocalQuota({ home, platform, env })
+          : null;
       if (local) {
         result.quota_exceeded = local.quota_exceeded === true;
         result.primary_window.reset_at = null;
@@ -719,7 +872,8 @@ async function fetchQoderLimits({
       }
       if (activityWindow) {
         result.secondary_window = activityWindow;
-        result.source += activitySource === "disk-cache" ? "+cached-activity" : "+activity";
+        result.source +=
+          activitySource === "disk-cache" ? "+cached-activity" : "+activity";
       }
       const liveResult = {
         ...result,
@@ -737,7 +891,8 @@ async function fetchQoderLimits({
   if (local) {
     if (activityWindow) {
       local.secondary_window = activityWindow;
-      local.source += activitySource === "disk-cache" ? "+cached-activity" : "+activity";
+      local.source +=
+        activitySource === "disk-cache" ? "+cached-activity" : "+activity";
     }
     writeQoderLimitsCache(local, { home, nowMs });
     return local;
@@ -746,17 +901,22 @@ async function fetchQoderLimits({
     return {
       configured: true,
       error: null,
-      plan_label: typeof rpcAuth?.userType === "string" ? rpcAuth.userType : null,
+      plan_label:
+        typeof rpcAuth?.userType === "string" ? rpcAuth.userType : null,
       primary_window: null,
       secondary_window: activityWindow,
-      source: activitySource === "disk-cache" ? "cached-activity" : "local-ipc+provider-api",
+      source:
+        activitySource === "disk-cache"
+          ? "cached-activity"
+          : "local-ipc+provider-api",
     };
   }
   if (lastError) {
     return {
       configured: true,
       error: lastError.message || "Qoder usage fetch failed.",
-      auth_action_required: lastError.code === "AUTH_EXPIRED" ? "reauth" : undefined,
+      auth_action_required:
+        lastError.code === "AUTH_EXPIRED" ? "reauth" : undefined,
     };
   }
   return { configured: false };

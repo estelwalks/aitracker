@@ -45,9 +45,13 @@ async function buildDoctorReport({
 function buildRuntimeChecks(runtime = {}) {
   const checks = [];
   const baseUrl =
-    typeof runtime.baseUrl === "string" && runtime.baseUrl.trim() ? runtime.baseUrl.trim() : null;
+    typeof runtime.baseUrl === "string" && runtime.baseUrl.trim()
+      ? runtime.baseUrl.trim()
+      : null;
   const deviceToken =
-    typeof runtime.deviceToken === "string" && runtime.deviceToken.trim() ? "set" : "unset";
+    typeof runtime.deviceToken === "string" && runtime.deviceToken.trim()
+      ? "set"
+      : "unset";
   const dashboardUrl =
     typeof runtime.dashboardUrl === "string" && runtime.dashboardUrl.trim()
       ? runtime.dashboardUrl.trim()
@@ -116,7 +120,9 @@ function buildRuntimeChecks(runtime = {}) {
   checks.push({
     id: "runtime.auto_retry_no_spawn",
     status: "ok",
-    detail: autoRetryNoSpawn ? "auto retry spawn disabled" : "auto retry spawn enabled",
+    detail: autoRetryNoSpawn
+      ? "auto retry spawn disabled"
+      : "auto retry spawn enabled",
     critical: false,
     meta: {
       auto_retry_no_spawn: autoRetryNoSpawn,
@@ -333,7 +339,10 @@ function buildDiagnosticsChecks(diagnostics) {
       status: "ok",
       detail: `native ide=${fmt(kiro.ide_present)} cli=${fmt(kiro.cli_present)}; ${wslPart} (mode ${kiro.wsl_mode})`,
       critical: false,
-      meta: { wsl_mode: kiro.wsl_mode, wsl_installs: kiro.wsl_installs || null },
+      meta: {
+        wsl_mode: kiro.wsl_mode,
+        wsl_installs: kiro.wsl_installs || null,
+      },
     });
   }
 

@@ -7,11 +7,26 @@ import { gzipSync } from "node:zlib";
 
 import { prepareSkillInstall } from "./install.server.ts";
 
-function writeTarString(block: Buffer, offset: number, length: number, value: string): void {
-  block.write(value, offset, Math.min(length, Buffer.byteLength(value)), "utf8");
+function writeTarString(
+  block: Buffer,
+  offset: number,
+  length: number,
+  value: string,
+): void {
+  block.write(
+    value,
+    offset,
+    Math.min(length, Buffer.byteLength(value)),
+    "utf8",
+  );
 }
 
-function writeTarOctal(block: Buffer, offset: number, length: number, value: number): void {
+function writeTarOctal(
+  block: Buffer,
+  offset: number,
+  length: number,
+  value: number,
+): void {
   const encoded = value.toString(8).padStart(length - 1, "0");
   block.write(`${encoded}\0`, offset, length, "ascii");
 }
@@ -45,7 +60,9 @@ function tarGzip(entries: Array<{ path: string; content: string }>): Buffer {
   return gzipSync(Buffer.concat(blocks));
 }
 
-function archiveResponse(entries: Array<{ path: string; content: string }>): Response {
+function archiveResponse(
+  entries: Array<{ path: string; content: string }>,
+): Response {
   const archive = tarGzip(entries);
   const body = new Uint8Array(archive.length);
   body.set(archive);
@@ -80,9 +97,13 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
             { path: "example-skill/reference.md", content: "Reference\n" },
           ]),
         installFn: async ({ sourcePath, targetAgent }) => {
-          assert.equal(await readFile(join(sourcePath, "SKILL.md"), "utf8"), "# Example Skill\n");
+          assert.equal(
+            await readFile(join(sourcePath, "SKILL.md"), "utf8"),
+            "# Example Skill\n",
+          );
           calls.push(targetAgent);
-          if (targetAgent === "Codex") throw new Error("目标位置已存在同名 Skill");
+          if (targetAgent === "Codex")
+            throw new Error("目标位置已存在同名 Skill");
         },
       },
     );

@@ -49,7 +49,9 @@ export function PageHeader({
           <h1 className="text-xl font-semibold tracking-[-0.025em]">{title}</h1>
           {status}
         </div>
-        {desc && <p className="mt-1 text-[12px] text-muted-foreground">{desc}</p>}
+        {desc && (
+          <p className="mt-1 text-[12px] text-muted-foreground">{desc}</p>
+        )}
       </div>
       {children}
     </div>
@@ -99,8 +101,16 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border-strong px-6 py-12 text-center">
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
-      {desc && <p className="mt-1 max-w-md text-[13px] text-muted-foreground">{desc}</p>}
-      {actions && <div className="mt-4 flex flex-wrap justify-center gap-2">{actions}</div>}
+      {desc && (
+        <p className="mt-1 max-w-md text-[13px] text-muted-foreground">
+          {desc}
+        </p>
+      )}
+      {actions && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -143,7 +153,11 @@ export function TTButton({
 }
 
 export function Dot({ className = "" }: { className?: string }) {
-  return <span className={`inline-block size-2 shrink-0 rounded-full ${className}`} />;
+  return (
+    <span
+      className={`inline-block size-2 shrink-0 rounded-full ${className}`}
+    />
+  );
 }
 
 export function StatusBadge({
@@ -169,12 +183,22 @@ export function StatusBadge({
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: string; hint?: ReactNode }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: ReactNode;
+}) {
   return (
     <div className="px-4 py-3">
       <div className="tt-label">{label}</div>
       <div className="tt-num mt-1 text-lg">{value}</div>
-      {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
+      {hint && (
+        <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
+      )}
     </div>
   );
 }

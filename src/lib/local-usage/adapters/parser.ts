@@ -29,7 +29,10 @@ function firstValue(record: JsonObject, paths: string[] | undefined): unknown {
   return undefined;
 }
 
-function textValue(record: JsonObject, paths: string[] | undefined): string | undefined {
+function textValue(
+  record: JsonObject,
+  paths: string[] | undefined,
+): string | undefined {
   const value = firstValue(record, paths);
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
@@ -46,7 +49,10 @@ function tokenValue(record: JsonObject, paths: string[] | undefined): number {
   return 0;
 }
 
-function timestampValue(record: JsonObject, mapping: UsageFieldMapping): Date | undefined {
+function timestampValue(
+  record: JsonObject,
+  mapping: UsageFieldMapping,
+): Date | undefined {
   const raw = firstValue(record, mapping.timestamp);
   if (typeof raw !== "string" && typeof raw !== "number") {
     return undefined;
@@ -61,7 +67,9 @@ export function recordsFromJson(
 ): { records: JsonObject[]; mappingMatched: boolean } {
   if (Array.isArray(value)) {
     return {
-      records: value.map(objectValue).filter((record): record is JsonObject => record != null),
+      records: value
+        .map(objectValue)
+        .filter((record): record is JsonObject => record != null),
       mappingMatched: true,
     };
   }
@@ -74,7 +82,9 @@ export function recordsFromJson(
     const records = valueAtPath(root, path);
     if (Array.isArray(records)) {
       return {
-        records: records.map(objectValue).filter((record): record is JsonObject => record != null),
+        records: records
+          .map(objectValue)
+          .filter((record): record is JsonObject => record != null),
         mappingMatched: true,
       };
     }
@@ -93,19 +103,31 @@ export function eventFromMappedRecord(
   }
 
   const inputTokens = tokenValue(record, adapter.mapping.inputTokens);
-  const cachedInputTokens = tokenValue(record, adapter.mapping.cachedInputTokens);
-  const cacheCreationInputTokens = tokenValue(record, adapter.mapping.cacheCreationInputTokens);
+  const cachedInputTokens = tokenValue(
+    record,
+    adapter.mapping.cachedInputTokens,
+  );
+  const cacheCreationInputTokens = tokenValue(
+    record,
+    adapter.mapping.cacheCreationInputTokens,
+  );
   const outputTokens = tokenValue(record, adapter.mapping.outputTokens);
-  const reasoningOutputTokens = tokenValue(record, adapter.mapping.reasoningOutputTokens);
+  const reasoningOutputTokens = tokenValue(
+    record,
+    adapter.mapping.reasoningOutputTokens,
+  );
   const mappedTotalTokens = tokenValue(record, adapter.mapping.totalTokens);
-  const componentTotal = inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+  const componentTotal =
+    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
   const totalTokens = componentTotal > 0 ? componentTotal : mappedTotalTokens;
   if (totalTokens === 0) {
     return undefined;
   }
   const sessionId =
-    sessionIdFromStructuredValue(adapter.source, firstValue(record, adapter.mapping.sessionId)) ??
-    fallbackSessionId;
+    sessionIdFromStructuredValue(
+      adapter.source,
+      firstValue(record, adapter.mapping.sessionId),
+    ) ?? fallbackSessionId;
 
   return {
     source: adapter.source,

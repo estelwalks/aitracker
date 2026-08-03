@@ -9,43 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TokensRouteImport } from './routes/tokens'
-import { Route as SkillsRouteImport } from './routes/skills'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SecurityRouteImport } from './routes/security'
-import { Route as MemoryRouteImport } from './routes/memory'
-import { Route as MarketRouteImport } from './routes/market'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MarketRouteImport } from './routes/market'
+import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as SecurityRouteImport } from './routes/security'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SkillsRouteImport } from './routes/skills'
+import { Route as TokensRouteImport } from './routes/tokens'
 
-const TokensRoute = TokensRouteImport.update({
-  id: '/tokens',
-  path: '/tokens',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SkillsRoute = SkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SecurityRoute = SecurityRouteImport.update({
-  id: '/security',
-  path: '/security',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MemoryRoute = MemoryRouteImport.update({
-  id: '/memory',
-  path: '/memory',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketRoute = MarketRouteImport.update({
@@ -53,9 +28,34 @@ const MarketRoute = MarketRouteImport.update({
   path: '/market',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TokensRoute = TokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -136,46 +136,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/tokens': {
-      id: '/tokens'
-      path: '/tokens'
-      fullPath: '/tokens'
-      preLoaderRoute: typeof TokensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/skills': {
-      id: '/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof SkillsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/security': {
-      id: '/security'
-      path: '/security'
-      fullPath: '/security'
-      preLoaderRoute: typeof SecurityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/memory': {
-      id: '/memory'
-      path: '/memory'
-      fullPath: '/memory'
-      preLoaderRoute: typeof MemoryRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/market': {
@@ -185,11 +150,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tokens': {
+      id: '/tokens'
+      path: '/tokens'
+      fullPath: '/tokens'
+      preLoaderRoute: typeof TokensRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

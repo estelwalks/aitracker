@@ -7,20 +7,58 @@ const { resolveAntigravitySkillDirs } = require("./antigravity-paths");
 
 const DEFAULT_REPOS = [
   { owner: "anthropics", name: "skills", branch: "main", enabled: true },
-  { owner: "ComposioHQ", name: "awesome-claude-skills", branch: "master", enabled: true },
+  {
+    owner: "ComposioHQ",
+    name: "awesome-claude-skills",
+    branch: "master",
+    enabled: true,
+  },
   { owner: "cexll", name: "myclaude", branch: "master", enabled: true },
   { owner: "JimLiu", name: "baoyu-skills", branch: "main", enabled: true },
 ];
 
 const TARGETS = {
-  claude: { id: "claude", label: "Claude", dir: () => path.join(os.homedir(), ".claude", "skills") },
-  codex: { id: "codex", label: "Codex", dir: () => path.join(os.homedir(), ".codex", "skills") },
-  grok: { id: "grok", label: "Grok", dir: () => path.join(resolveGrokHome(process.env), "skills") },
-  antigravity: { id: "antigravity", label: "Antigravity", dirs: () => resolveAntigravitySkillDirs(process.env) },
-  gemini: { id: "gemini", label: "Gemini", dir: () => path.join(os.homedir(), ".gemini", "skills") },
-  opencode: { id: "opencode", label: "OpenCode", dir: () => path.join(os.homedir(), ".config", "opencode", "skills") },
-  hermes: { id: "hermes", label: "Hermes", dir: () => path.join(os.homedir(), ".hermes", "skills") },
-  agents: { id: "agents", label: "Agents", visible: false, dir: () => path.join(os.homedir(), ".agents", "skills") },
+  claude: {
+    id: "claude",
+    label: "Claude",
+    dir: () => path.join(os.homedir(), ".claude", "skills"),
+  },
+  codex: {
+    id: "codex",
+    label: "Codex",
+    dir: () => path.join(os.homedir(), ".codex", "skills"),
+  },
+  grok: {
+    id: "grok",
+    label: "Grok",
+    dir: () => path.join(resolveGrokHome(process.env), "skills"),
+  },
+  antigravity: {
+    id: "antigravity",
+    label: "Antigravity",
+    dirs: () => resolveAntigravitySkillDirs(process.env),
+  },
+  gemini: {
+    id: "gemini",
+    label: "Gemini",
+    dir: () => path.join(os.homedir(), ".gemini", "skills"),
+  },
+  opencode: {
+    id: "opencode",
+    label: "OpenCode",
+    dir: () => path.join(os.homedir(), ".config", "opencode", "skills"),
+  },
+  hermes: {
+    id: "hermes",
+    label: "Hermes",
+    dir: () => path.join(os.homedir(), ".hermes", "skills"),
+  },
+  agents: {
+    id: "agents",
+    label: "Agents",
+    visible: false,
+    dir: () => path.join(os.homedir(), ".agents", "skills"),
+  },
 };
 
 // Dual contract: a target exposes either dir() → string (single path) or
@@ -105,8 +143,14 @@ function appendActivity(event) {
     fs.appendFileSync(activityPath(), `${record}\n`, { mode: 0o600 });
     const stat = fs.statSync(activityPath());
     if (stat.size > 256 * 1024) {
-      const lines = fs.readFileSync(activityPath(), "utf8").split("\n").filter(Boolean).slice(-ACTIVITY_MAX);
-      fs.writeFileSync(activityPath(), `${lines.join("\n")}\n`, { mode: 0o600 });
+      const lines = fs
+        .readFileSync(activityPath(), "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .slice(-ACTIVITY_MAX);
+      fs.writeFileSync(activityPath(), `${lines.join("\n")}\n`, {
+        mode: 0o600,
+      });
     }
   } catch (_e) {
     // best-effort
@@ -148,7 +192,9 @@ function readJson(file, fallback) {
 
 function writeJson(file, value) {
   ensureDir(path.dirname(file));
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, {
+    mode: 0o600,
+  });
 }
 
 function readRegistry() {
@@ -169,7 +215,8 @@ function saveRegistry(registry) {
 function sanitizePathSegment(value) {
   const segment = String(value || "").trim();
   if (!segment || segment === "." || segment === "..") return null;
-  if (segment.includes("/") || segment.includes("\\") || segment.includes("\0")) return null;
+  if (segment.includes("/") || segment.includes("\\") || segment.includes("\0"))
+    return null;
   return segment;
 }
 
@@ -177,9 +224,18 @@ function sanitizeRelativePath(value) {
   const input = String(value || "").trim();
   const raw = input.replace(/\\/g, "/");
   if (!raw || raw.includes("\0")) return null;
-  if (path.posix.isAbsolute(raw) || path.win32.isAbsolute(input) || path.win32.isAbsolute(raw)) return null;
+  if (
+    path.posix.isAbsolute(raw) ||
+    path.win32.isAbsolute(input) ||
+    path.win32.isAbsolute(raw)
+  )
+    return null;
   const parts = raw.split("/").filter(Boolean);
-  if (!parts.length || parts.some((part) => part === "." || part === ".." || part.includes(":"))) return null;
+  if (
+    !parts.length ||
+    parts.some((part) => part === "." || part === ".." || part.includes(":"))
+  )
+    return null;
   return parts.join("/");
 }
 
@@ -288,7 +344,8 @@ function scanSkillDirectories(rootDir) {
       }
       // Direct symlinked skills are accepted above, but symlinked group folders
       // are not traversed so the scan stays within the target skills tree.
-      if (entry.isDirectory() && depth + 1 < MAX_LOCAL_SKILL_SCAN_DEPTH) walk(full, rel, depth + 1);
+      if (entry.isDirectory() && depth + 1 < MAX_LOCAL_SKILL_SCAN_DEPTH)
+        walk(full, rel, depth + 1);
     }
   };
   walk(rootDir);
@@ -325,7 +382,8 @@ function hashDirectory(dir) {
         } catch (_e) {
           continue;
         }
-        const execBit = process.platform === "win32" ? 0 : stat.mode & 0o111 ? 1 : 0;
+        const execBit =
+          process.platform === "win32" ? 0 : stat.mode & 0o111 ? 1 : 0;
         hash.update(`${rel} ${execBit} `);
         try {
           hash.update(fs.readFileSync(abs));
@@ -372,7 +430,9 @@ async function fetchJson(url) {
       signal: controller.signal,
     });
     if (response.status === 429 || response.status === 403) {
-      throw new RateLimitError(`GitHub rate-limited this request (HTTP ${response.status}). Try again later.`);
+      throw new RateLimitError(
+        `GitHub rate-limited this request (HTTP ${response.status}). Try again later.`,
+      );
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
@@ -390,7 +450,9 @@ async function fetchText(url) {
       signal: controller.signal,
     });
     if (response.status === 429 || response.status === 403) {
-      throw new RateLimitError(`GitHub rate-limited this request (HTTP ${response.status}). Try again later.`);
+      throw new RateLimitError(
+        `GitHub rate-limited this request (HTTP ${response.status}). Try again later.`,
+      );
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.text();
@@ -415,7 +477,8 @@ function githubDocUrl(owner, name, branch, filePath) {
 
 async function getRepoTree(repo) {
   const branches = [];
-  if (repo.branch && !String(repo.branch).match(/^head$/i)) branches.push(repo.branch);
+  if (repo.branch && !String(repo.branch).match(/^head$/i))
+    branches.push(repo.branch);
   if (!branches.includes("main")) branches.push("main");
   if (!branches.includes("master")) branches.push("master");
 
@@ -445,7 +508,8 @@ function sourceSignatureFromTree(tree, sourceDir) {
       (entry) =>
         entry?.type === "blob" &&
         entry.sha &&
-        (entry.path === sourceDir || String(entry.path || "").startsWith(prefix)),
+        (entry.path === sourceDir ||
+          String(entry.path || "").startsWith(prefix)),
     )
     .map((entry) => `${entry.path}:${entry.sha}`)
     .sort();
@@ -471,47 +535,62 @@ async function discoverRepoSkills(repoInput) {
   if (!repo.owner || !repo.name || !repo.enabled) return [];
   const { branch, tree } = await getRepoTree(repo);
   const skillFiles = tree
-    .filter((entry) => entry?.type === "blob" && /(^|\/)SKILL\.md$/i.test(entry.path || ""))
+    .filter(
+      (entry) =>
+        entry?.type === "blob" && /(^|\/)SKILL\.md$/i.test(entry.path || ""),
+    )
     .slice(0, 200);
 
-  const skills = await mapWithConcurrency(skillFiles, DISCOVER_CONCURRENCY, async (entry) => {
-    const docPath = entry.path.replace(/\\/g, "/");
-    // Strip the marker case-insensitively (SKILL.md or legacy skill.md) so a
-    // lowercase-marker repo derives the right directory instead of falling
-    // through to repo.name — mirrors findSkillMarker() on the local side.
-    const directory = docPath.replace(/(^|\/)(?:SKILL|skill)\.md$/i, "") || repo.name;
-    const installName = installNameFromDirectory(directory || repo.name);
-    if (!installName) return null;
-    let metadata = { name: installName, description: "" };
-    try {
-      metadata = readSkillMetadata(await fetchText(githubRawUrl(repo.owner, repo.name, branch, docPath)), installName);
-    } catch (error) {
-      if (error instanceof RateLimitError) throw error;
-      // Keep the skill discoverable even if metadata fetch fails.
-    }
-    return {
-      key: `${repo.owner}/${repo.name}:${directory || repo.name}`,
-      name: metadata.name,
-      description: metadata.description,
-      directory: directory || repo.name,
-      readmeUrl: githubDocUrl(repo.owner, repo.name, branch, docPath),
-      repoOwner: repo.owner,
-      repoName: repo.name,
-      repoBranch: branch,
-    };
-  });
+  const skills = await mapWithConcurrency(
+    skillFiles,
+    DISCOVER_CONCURRENCY,
+    async (entry) => {
+      const docPath = entry.path.replace(/\\/g, "/");
+      // Strip the marker case-insensitively (SKILL.md or legacy skill.md) so a
+      // lowercase-marker repo derives the right directory instead of falling
+      // through to repo.name — mirrors findSkillMarker() on the local side.
+      const directory =
+        docPath.replace(/(^|\/)(?:SKILL|skill)\.md$/i, "") || repo.name;
+      const installName = installNameFromDirectory(directory || repo.name);
+      if (!installName) return null;
+      let metadata = { name: installName, description: "" };
+      try {
+        metadata = readSkillMetadata(
+          await fetchText(githubRawUrl(repo.owner, repo.name, branch, docPath)),
+          installName,
+        );
+      } catch (error) {
+        if (error instanceof RateLimitError) throw error;
+        // Keep the skill discoverable even if metadata fetch fails.
+      }
+      return {
+        key: `${repo.owner}/${repo.name}:${directory || repo.name}`,
+        name: metadata.name,
+        description: metadata.description,
+        directory: directory || repo.name,
+        readmeUrl: githubDocUrl(repo.owner, repo.name, branch, docPath),
+        repoOwner: repo.owner,
+        repoName: repo.name,
+        repoBranch: branch,
+      };
+    },
+  );
   return skills.filter(Boolean);
 }
 
 function dedupeSkills(skills) {
   const byKey = new Map();
-  for (const skill of skills) byKey.set(buildSkillKey(skill).toLowerCase(), skill);
-  return Array.from(byKey.values()).sort((a, b) => a.name.localeCompare(b.name));
+  for (const skill of skills)
+    byKey.set(buildSkillKey(skill).toLowerCase(), skill);
+  return Array.from(byKey.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 }
 
 function readDiscoverCache(fingerprint) {
   const data = readJson(discoverCachePath(), null);
-  if (!data || typeof data !== "object" || !Array.isArray(data.skills)) return null;
+  if (!data || typeof data !== "object" || !Array.isArray(data.skills))
+    return null;
   if (data.fingerprint !== fingerprint) return null;
   if (!Number.isFinite(data.generatedAt)) return null;
   if (Date.now() - data.generatedAt > DISCOVER_CACHE_TTL_MS) return null;
@@ -519,7 +598,11 @@ function readDiscoverCache(fingerprint) {
 }
 
 function writeDiscoverCache(fingerprint, skills) {
-  writeJson(discoverCachePath(), { fingerprint, generatedAt: Date.now(), skills });
+  writeJson(discoverCachePath(), {
+    fingerprint,
+    generatedAt: Date.now(),
+    skills,
+  });
 }
 
 function invalidateDiscoverCache() {
@@ -532,8 +615,11 @@ function invalidateDiscoverCache() {
 
 async function discoverSkills({ force = false } = {}) {
   const registry = readRegistry();
-  const enabled = registry.repos.map(normalizeRepo).filter((repo) => repo.enabled);
-  if (!enabled.length) return { skills: [], cached: false, generatedAt: Date.now() };
+  const enabled = registry.repos
+    .map(normalizeRepo)
+    .filter((repo) => repo.enabled);
+  if (!enabled.length)
+    return { skills: [], cached: false, generatedAt: Date.now() };
 
   const fingerprint = enabled
     .map((repo) => `${repo.owner}/${repo.name}@${repo.branch}`)
@@ -542,14 +628,24 @@ async function discoverSkills({ force = false } = {}) {
 
   if (!force) {
     const cached = readDiscoverCache(fingerprint);
-    if (cached) return { skills: cached.skills, cached: true, generatedAt: cached.generatedAt };
+    if (cached)
+      return {
+        skills: cached.skills,
+        cached: true,
+        generatedAt: cached.generatedAt,
+      };
   }
 
   const settled = await Promise.allSettled(enabled.map(discoverRepoSkills));
-  const merged = dedupeSkills(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
+  const merged = dedupeSkills(
+    settled.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    ),
+  );
   if (!merged.length) {
     const rateLimited = settled.find(
-      (result) => result.status === "rejected" && result.reason instanceof RateLimitError,
+      (result) =>
+        result.status === "rejected" && result.reason instanceof RateLimitError,
     );
     if (rateLimited) throw rateLimited.reason;
   }
@@ -627,7 +723,8 @@ function syncSkillToTarget(directory, targetId) {
   const target = TARGETS[targetId];
   if (!target) throw new Error(`Unsupported target: ${targetId}`);
   const source = managedSkillPath(directory);
-  if (!fs.existsSync(source)) throw new Error(`Managed skill not found: ${directory}`);
+  if (!fs.existsSync(source))
+    throw new Error(`Managed skill not found: ${directory}`);
   for (const baseDir of targetDirs(target)) {
     const dest = targetSkillPath(baseDir, directory);
     if (!dest) throw new Error(`Invalid skill directory: ${directory}`);
@@ -700,7 +797,9 @@ function listInstalledSkills() {
       return { ...skill, managed: true, targets, targetStates };
     });
 
-  const managedDirs = new Set(managed.map((skill) => skill.directory.toLowerCase()));
+  const managedDirs = new Set(
+    managed.map((skill) => skill.directory.toLowerCase()),
+  );
   const unmanaged = new Map();
   for (const target of Object.values(TARGETS)) {
     for (const dir of targetDirs(target)) {
@@ -708,7 +807,10 @@ function listInstalledSkills() {
         if (!directory || managedDirs.has(directory.toLowerCase())) continue;
         const skillPath = findSkillMarker(path.join(dir, directory));
         if (!skillPath) continue;
-        const metadata = readSkillMetadata(fs.readFileSync(skillPath, "utf8"), installNameFromDirectory(directory) || directory);
+        const metadata = readSkillMetadata(
+          fs.readFileSync(skillPath, "utf8"),
+          installNameFromDirectory(directory) || directory,
+        );
         const key = directory.toLowerCase();
         if (!unmanaged.has(key)) {
           unmanaged.set(key, {
@@ -726,19 +828,24 @@ function listInstalledSkills() {
             targets: [],
             // Complete map (all agents default "off") so the frontend can trust
             // targetStates as the single source of truth — same shape as managed.
-            targetStates: Object.fromEntries(Object.keys(TARGETS).map((id) => [id, "off"])),
+            targetStates: Object.fromEntries(
+              Object.keys(TARGETS).map((id) => [id, "off"]),
+            ),
             targetPaths: {},
           });
         }
         const skill = unmanaged.get(key);
         if (!skill.targets.includes(target.id)) skill.targets.push(target.id);
         skill.targetStates[target.id] = "synced";
-        if (!skill.targetPaths[target.id]) skill.targetPaths[target.id] = path.join(dir, directory);
+        if (!skill.targetPaths[target.id])
+          skill.targetPaths[target.id] = path.join(dir, directory);
       }
     }
   }
 
-  return [...managed, ...unmanaged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return [...managed, ...unmanaged.values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
 }
 
 async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
@@ -752,7 +859,8 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
     repoName: String(skillInput?.repoName || ""),
     repoBranch: String(skillInput?.repoBranch || "main") || "main",
   };
-  if (!skill.repoOwner || !skill.repoName) throw new Error("Missing GitHub repository information");
+  if (!skill.repoOwner || !skill.repoName)
+    throw new Error("Missing GitHub repository information");
   const sourceDir = sanitizeRelativePath(skill.directory);
   // GitHub-sourced skills keep the historical flat install name even when
   // sourceDirectory is nested; local nested-skill support uses importLocalSkill().
@@ -763,7 +871,8 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
   const existingConflict = registry.skills.find(
     (entry) =>
       entry.directory.toLowerCase() === installName.toLowerCase() &&
-      `${entry.repoOwner}/${entry.repoName}`.toLowerCase() !== `${skill.repoOwner}/${skill.repoName}`.toLowerCase(),
+      `${entry.repoOwner}/${entry.repoName}`.toLowerCase() !==
+        `${skill.repoOwner}/${skill.repoName}`.toLowerCase(),
   );
   if (existingConflict) {
     throw new Error(
@@ -777,9 +886,13 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
     branch: skill.repoBranch,
   });
   const files = tree.filter(
-    (entry) => entry?.type === "blob" && (entry.path === sourceDir || String(entry.path || "").startsWith(`${sourceDir}/`)),
+    (entry) =>
+      entry?.type === "blob" &&
+      (entry.path === sourceDir ||
+        String(entry.path || "").startsWith(`${sourceDir}/`)),
   );
-  if (!files.some((entry) => /(^|\/)SKILL\.md$/i.test(entry.path))) throw new Error("SKILL.md not found in selected directory");
+  if (!files.some((entry) => /(^|\/)SKILL\.md$/i.test(entry.path)))
+    throw new Error("SKILL.md not found in selected directory");
 
   const dest = managedSkillPath(installName);
   const temp = path.join(dataDir(), "tmp", `${installName}-${Date.now()}`);
@@ -787,12 +900,20 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
   ensureDir(temp);
   try {
     for (const entry of files) {
-      const relative = entry.path === sourceDir ? path.basename(entry.path) : entry.path.slice(sourceDir.length + 1);
+      const relative =
+        entry.path === sourceDir
+          ? path.basename(entry.path)
+          : entry.path.slice(sourceDir.length + 1);
       const safeRelative = sanitizeRelativePath(relative);
       if (!safeRelative) continue;
       const out = path.join(temp, safeRelative);
       ensureDir(path.dirname(out));
-      fs.writeFileSync(out, await fetchText(githubRawUrl(skill.repoOwner, skill.repoName, branch, entry.path)));
+      fs.writeFileSync(
+        out,
+        await fetchText(
+          githubRawUrl(skill.repoOwner, skill.repoName, branch, entry.path),
+        ),
+      );
     }
     removePath(dest);
     ensureDir(path.dirname(dest));
@@ -813,7 +934,12 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
     description: metadata.description || skill.description,
     directory: installName,
     sourceDirectory: sourceDir,
-    readmeUrl: githubDocUrl(skill.repoOwner, skill.repoName, branch, `${sourceDir}/SKILL.md`),
+    readmeUrl: githubDocUrl(
+      skill.repoOwner,
+      skill.repoName,
+      branch,
+      `${sourceDir}/SKILL.md`,
+    ),
     repoOwner: skill.repoOwner,
     repoName: skill.repoName,
     repoBranch: branch,
@@ -824,21 +950,34 @@ async function installSkill(skillInput, targetIds = ["claude", "codex"]) {
     targets: selectedTargets,
   };
 
-  registry.skills = registry.skills.filter((entry) => entry.id !== installed.id && entry.directory.toLowerCase() !== installName.toLowerCase());
+  registry.skills = registry.skills.filter(
+    (entry) =>
+      entry.id !== installed.id &&
+      entry.directory.toLowerCase() !== installName.toLowerCase(),
+  );
   registry.skills.push(installed);
   saveRegistry(registry);
 
   for (const id of selectedTargets) syncSkillToTarget(installName, id);
-  appendActivity({ action: "install", name: installed.name, directory: installName, targets: selectedTargets, source: `${skill.repoOwner}/${skill.repoName}` });
+  appendActivity({
+    action: "install",
+    name: installed.name,
+    directory: installName,
+    targets: selectedTargets,
+    source: `${skill.repoOwner}/${skill.repoName}`,
+  });
   return { ...installed, managed: true, targets: selectedTargets };
 }
 
 function uninstallSkill(id) {
   const registry = readRegistry();
-  const skill = registry.skills.find((entry) => entry.id === id || entry.key === id);
+  const skill = registry.skills.find(
+    (entry) => entry.id === id || entry.key === id,
+  );
   if (!skill) throw new Error("Managed skill not found");
   const ssotPath = managedSkillPath(skill.directory);
-  for (const targetId of Object.keys(TARGETS)) removeSkillFromTarget(skill.directory, targetId);
+  for (const targetId of Object.keys(TARGETS))
+    removeSkillFromTarget(skill.directory, targetId);
   // Move SSOT copy into a trash bucket so it can be restored briefly. The
   // registry entry is retained but flagged so restoreSkill can re-link it.
   if (fs.existsSync(ssotPath)) {
@@ -857,8 +996,17 @@ function uninstallSkill(id) {
       registry.skills = [...others, skill];
       saveRegistry(registry);
       purgeExpiredTrash();
-      appendActivity({ action: "uninstall", name: skill.name, directory: skill.directory });
-      return { ok: true, trashed: true, restoreId: skill.id, ttlMs: TRASH_TTL_MS };
+      appendActivity({
+        action: "uninstall",
+        name: skill.name,
+        directory: skill.directory,
+      });
+      return {
+        ok: true,
+        trashed: true,
+        restoreId: skill.id,
+        ttlMs: TRASH_TTL_MS,
+      };
     } catch (_e) {
       removePath(ssotPath);
       removeEmptyAncestors(path.dirname(ssotPath), ssotDir());
@@ -866,7 +1014,11 @@ function uninstallSkill(id) {
   }
   registry.skills = registry.skills.filter((entry) => entry.id !== skill.id);
   saveRegistry(registry);
-  appendActivity({ action: "uninstall", name: skill.name, directory: skill.directory });
+  appendActivity({
+    action: "uninstall",
+    name: skill.name,
+    directory: skill.directory,
+  });
   return { ok: true, trashed: false };
 }
 
@@ -878,7 +1030,9 @@ function purgeExpiredTrash() {
     registry.skills = registry.skills.filter((skill) => {
       if (!skill.trashedAt) return true;
       if (now - skill.trashedAt < TRASH_TTL_MS) return true;
-      const trashPath = skill.trashedDirectory ? path.join(trashDir(), skill.trashedDirectory) : null;
+      const trashPath = skill.trashedDirectory
+        ? path.join(trashDir(), skill.trashedDirectory)
+        : null;
       if (trashPath) removePath(trashPath);
       dirty = true;
       return false;
@@ -891,7 +1045,9 @@ function purgeExpiredTrash() {
 
 function restoreSkill(id) {
   const registry = readRegistry();
-  const skill = registry.skills.find((entry) => entry.id === id || entry.key === id);
+  const skill = registry.skills.find(
+    (entry) => entry.id === id || entry.key === id,
+  );
   if (!skill || !skill.trashedAt) throw new Error("Nothing to restore");
   if (Date.now() - skill.trashedAt > TRASH_TTL_MS) {
     throw new Error("Restore window expired");
@@ -902,29 +1058,44 @@ function restoreSkill(id) {
   ensureDir(path.dirname(ssotPath));
   removePath(ssotPath);
   fs.renameSync(trashPath, ssotPath);
-  const targets = Array.isArray(skill.previousTargets) ? skill.previousTargets : [];
+  const targets = Array.isArray(skill.previousTargets)
+    ? skill.previousTargets
+    : [];
   skill.targets = targets;
   delete skill.trashedAt;
   delete skill.trashedDirectory;
   delete skill.previousTargets;
   saveRegistry(registry);
   for (const targetId of targets) syncSkillToTarget(skill.directory, targetId);
-  appendActivity({ action: "restore", name: skill.name, directory: skill.directory, targets });
+  appendActivity({
+    action: "restore",
+    name: skill.name,
+    directory: skill.directory,
+    targets,
+  });
   return { ...skill, managed: true, targets };
 }
 
 function setSkillTargets(id, targetIds) {
   const registry = readRegistry();
-  const skill = registry.skills.find((entry) => entry.id === id || entry.key === id);
+  const skill = registry.skills.find(
+    (entry) => entry.id === id || entry.key === id,
+  );
   if (!skill) throw new Error("Managed skill not found");
   const selectedTargets = targetIds.filter((targetId) => TARGETS[targetId]);
   for (const targetId of Object.keys(TARGETS)) {
-    if (selectedTargets.includes(targetId)) syncSkillToTarget(skill.directory, targetId);
+    if (selectedTargets.includes(targetId))
+      syncSkillToTarget(skill.directory, targetId);
     else removeSkillFromTarget(skill.directory, targetId);
   }
   skill.targets = selectedTargets;
   saveRegistry(registry);
-  appendActivity({ action: "set_targets", name: skill.name, directory: skill.directory, targets: selectedTargets });
+  appendActivity({
+    action: "set_targets",
+    name: skill.name,
+    directory: skill.directory,
+    targets: selectedTargets,
+  });
   return { ...skill, managed: true, targets: selectedTargets };
 }
 
@@ -947,10 +1118,15 @@ function importLocalSkill(directory, targetIds = []) {
   const sourceDir = sanitizeLocalSkillPath(directory);
   if (!sourceDir) throw new Error("Invalid skill directory");
   const registry = readRegistry();
-  const existing = registry.skills.find((entry) => String(entry.directory || "").toLowerCase() === sourceDir.toLowerCase());
+  const existing = registry.skills.find(
+    (entry) =>
+      String(entry.directory || "").toLowerCase() === sourceDir.toLowerCase(),
+  );
   if (existing) {
     if (!String(existing.id || existing.key || "").startsWith("local:")) {
-      throw new Error(`Skill directory "${sourceDir}" is already managed by another installed skill`);
+      throw new Error(
+        `Skill directory "${sourceDir}" is already managed by another installed skill`,
+      );
     }
     if (!targetIds || !targetIds.length) {
       return { ...existing, managed: true, targets: existing.targets || [] };
@@ -964,9 +1140,16 @@ function importLocalSkill(directory, targetIds = []) {
   const dest = managedSkillPath(sourceDir);
   copyDir(source.path, dest);
   const skillMarker = findSkillMarker(dest);
-  const metadata = readSkillMetadata(skillMarker ? fs.readFileSync(skillMarker, "utf8") : "", installNameFromDirectory(sourceDir));
-  const discoveredTargets = Object.keys(TARGETS).filter((targetId) => scanTargetSkill(sourceDir, targetId));
-  const selectedTargets = (targetIds.length ? targetIds : discoveredTargets).filter((targetId) => TARGETS[targetId]);
+  const metadata = readSkillMetadata(
+    skillMarker ? fs.readFileSync(skillMarker, "utf8") : "",
+    installNameFromDirectory(sourceDir),
+  );
+  const discoveredTargets = Object.keys(TARGETS).filter((targetId) =>
+    scanTargetSkill(sourceDir, targetId),
+  );
+  const selectedTargets = (
+    targetIds.length ? targetIds : discoveredTargets
+  ).filter((targetId) => TARGETS[targetId]);
   const skill = {
     id: `local:${sourceDir}`,
     key: `local:${sourceDir}`,
@@ -986,10 +1169,16 @@ function importLocalSkill(directory, targetIds = []) {
   registry.skills.push(skill);
   saveRegistry(registry);
   for (const targetId of Object.keys(TARGETS)) {
-    if (selectedTargets.includes(targetId)) syncSkillToTarget(sourceDir, targetId);
+    if (selectedTargets.includes(targetId))
+      syncSkillToTarget(sourceDir, targetId);
     else removeSkillFromTarget(sourceDir, targetId);
   }
-  appendActivity({ action: "import", name: skill.name, directory: sourceDir, targets: selectedTargets });
+  appendActivity({
+    action: "import",
+    name: skill.name,
+    directory: sourceDir,
+    targets: selectedTargets,
+  });
   return { ...skill, managed: true, targets: selectedTargets };
 }
 
@@ -997,8 +1186,13 @@ function deleteLocalSkill(directory, targetIds = []) {
   const installName = sanitizeLocalSkillPath(directory);
   if (!installName) throw new Error("Invalid skill directory");
   const selectedTargets = targetIds.length ? targetIds : Object.keys(TARGETS);
-  for (const targetId of selectedTargets) removeSkillFromTarget(installName, targetId);
-  appendActivity({ action: "delete_local", directory: installName, targets: selectedTargets });
+  for (const targetId of selectedTargets)
+    removeSkillFromTarget(installName, targetId);
+  appendActivity({
+    action: "delete_local",
+    directory: installName,
+    targets: selectedTargets,
+  });
   return { ok: true };
 }
 
@@ -1008,16 +1202,24 @@ function listRepos() {
 
 function addRepo(repoInput) {
   const repo = normalizeRepo(repoInput);
-  if (!repo.owner || !repo.name) throw new Error("Repository owner and name are required");
-  if (!OWNER_NAME_PATTERN.test(repo.owner) || !OWNER_NAME_PATTERN.test(repo.name)) {
-    throw new Error("Repository owner and name may only contain letters, digits, '.', '_', or '-'");
+  if (!repo.owner || !repo.name)
+    throw new Error("Repository owner and name are required");
+  if (
+    !OWNER_NAME_PATTERN.test(repo.owner) ||
+    !OWNER_NAME_PATTERN.test(repo.name)
+  ) {
+    throw new Error(
+      "Repository owner and name may only contain letters, digits, '.', '_', or '-'",
+    );
   }
   if (!OWNER_NAME_PATTERN.test(repo.branch)) {
     throw new Error("Repository branch contains unsupported characters");
   }
   const registry = readRegistry();
   registry.repos = registry.repos.filter(
-    (entry) => `${entry.owner}/${entry.name}`.toLowerCase() !== `${repo.owner}/${repo.name}`.toLowerCase(),
+    (entry) =>
+      `${entry.owner}/${entry.name}`.toLowerCase() !==
+      `${repo.owner}/${repo.name}`.toLowerCase(),
   );
   registry.repos.push(repo);
   saveRegistry(registry);
@@ -1028,7 +1230,9 @@ function addRepo(repoInput) {
 function removeRepo(owner, name) {
   const registry = readRegistry();
   registry.repos = registry.repos.filter(
-    (entry) => `${entry.owner}/${entry.name}`.toLowerCase() !== `${owner}/${name}`.toLowerCase(),
+    (entry) =>
+      `${entry.owner}/${entry.name}`.toLowerCase() !==
+      `${owner}/${name}`.toLowerCase(),
   );
   saveRegistry(registry);
   invalidateDiscoverCache();
@@ -1040,16 +1244,27 @@ async function searchSkillsSh(query, limit = 20, offset = 0) {
   if (q.length < 2) return { query: q, totalCount: 0, skills: [] };
   const url = new URL("https://skills.sh/api/search");
   url.searchParams.set("q", q);
-  url.searchParams.set("limit", String(Math.max(1, Math.min(50, Number(limit) || 20))));
+  url.searchParams.set(
+    "limit",
+    String(Math.max(1, Math.min(50, Number(limit) || 20))),
+  );
   url.searchParams.set("offset", String(Math.max(0, Number(offset) || 0)));
   const data = await fetchJson(url.toString());
   const skills = Array.isArray(data?.skills)
     ? data.skills
         .map((entry) => {
           const [owner, repoName] = String(entry?.source || "").split("/", 2);
-          if (!owner || !repoName || owner.includes(".") || repoName.includes(".")) return null;
+          if (
+            !owner ||
+            !repoName ||
+            owner.includes(".") ||
+            repoName.includes(".")
+          )
+            return null;
           return {
-            key: String(entry.id || `${owner}/${repoName}:${entry.skillId || entry.name}`),
+            key: String(
+              entry.id || `${owner}/${repoName}:${entry.skillId || entry.name}`,
+            ),
             name: String(entry.name || entry.skillId || "Skill"),
             description: "",
             directory: String(entry.skillId || entry.name || ""),
@@ -1084,7 +1299,11 @@ function updateCachePath() {
 async function checkUpdates({ force = false } = {}) {
   const registry = readRegistry();
   const managed = registry.skills.filter(
-    (skill) => !skill.trashedAt && skill.repoOwner && skill.repoName && skill.sourceSignature,
+    (skill) =>
+      !skill.trashedAt &&
+      skill.repoOwner &&
+      skill.repoName &&
+      skill.sourceSignature,
   );
   const fingerprint = managed
     .map((skill) => `${skill.id}@${skill.sourceSignature}`)
@@ -1101,7 +1320,11 @@ async function checkUpdates({ force = false } = {}) {
       cached.updates &&
       typeof cached.updates === "object"
     ) {
-      return { updates: cached.updates, checkedAt: cached.checkedAt, cached: true };
+      return {
+        updates: cached.updates,
+        checkedAt: cached.checkedAt,
+        cached: true,
+      };
     }
   }
 
@@ -1110,25 +1333,37 @@ async function checkUpdates({ force = false } = {}) {
     const branch = skill.repoBranch || "main";
     const key = `${skill.repoOwner}/${skill.repoName}@${branch}`.toLowerCase();
     if (!byRepo.has(key)) {
-      byRepo.set(key, { owner: skill.repoOwner, name: skill.repoName, branch, skills: [] });
+      byRepo.set(key, {
+        owner: skill.repoOwner,
+        name: skill.repoName,
+        branch,
+        skills: [],
+      });
     }
     byRepo.get(key).skills.push(skill);
   }
 
   const updates = {};
-  await mapWithConcurrency(Array.from(byRepo.values()), UPDATE_CHECK_CONCURRENCY, async (repo) => {
-    let tree;
-    try {
-      ({ tree } = await getRepoTree(repo));
-    } catch (error) {
-      if (error instanceof RateLimitError) throw error;
-      return; // leave this repo's skills as unknown (omitted)
-    }
-    for (const skill of repo.skills) {
-      const signature = sourceSignatureFromTree(tree, skill.sourceDirectory || skill.directory);
-      if (signature) updates[skill.id] = signature !== skill.sourceSignature;
-    }
-  });
+  await mapWithConcurrency(
+    Array.from(byRepo.values()),
+    UPDATE_CHECK_CONCURRENCY,
+    async (repo) => {
+      let tree;
+      try {
+        ({ tree } = await getRepoTree(repo));
+      } catch (error) {
+        if (error instanceof RateLimitError) throw error;
+        return; // leave this repo's skills as unknown (omitted)
+      }
+      for (const skill of repo.skills) {
+        const signature = sourceSignatureFromTree(
+          tree,
+          skill.sourceDirectory || skill.directory,
+        );
+        if (signature) updates[skill.id] = signature !== skill.sourceSignature;
+      }
+    },
+  );
 
   const checkedAt = Date.now();
   writeJson(updateCachePath(), { fingerprint, checkedAt, updates });
@@ -1168,32 +1403,47 @@ async function fetchPopularSkillsSh({ force = false, limit = 60 } = {}) {
       Number.isFinite(cached.generatedAt) &&
       Date.now() - cached.generatedAt < POPULAR_CACHE_TTL_MS
     ) {
-      return { skills: cached.skills.slice(0, cap), cached: true, generatedAt: cached.generatedAt };
+      return {
+        skills: cached.skills.slice(0, cap),
+        cached: true,
+        generatedAt: cached.generatedAt,
+      };
     }
   }
 
-  const lists = await mapWithConcurrency(POPULAR_SEED_QUERIES, DISCOVER_CONCURRENCY, async (q) => {
-    try {
-      return (await searchSkillsSh(q, 30, 0)).skills;
-    } catch (error) {
-      if (error instanceof RateLimitError) throw error;
-      return [];
-    }
-  });
+  const lists = await mapWithConcurrency(
+    POPULAR_SEED_QUERIES,
+    DISCOVER_CONCURRENCY,
+    async (q) => {
+      try {
+        return (await searchSkillsSh(q, 30, 0)).skills;
+      } catch (error) {
+        if (error instanceof RateLimitError) throw error;
+        return [];
+      }
+    },
+  );
 
   const byKey = new Map();
   for (const list of lists) {
     for (const skill of list) {
-      const key = String(skill.key || `${skill.repoOwner}/${skill.repoName}:${skill.directory}`).toLowerCase();
+      const key = String(
+        skill.key || `${skill.repoOwner}/${skill.repoName}:${skill.directory}`,
+      ).toLowerCase();
       const prev = byKey.get(key);
-      if (!prev || (skill.installs || 0) > (prev.installs || 0)) byKey.set(key, skill);
+      if (!prev || (skill.installs || 0) > (prev.installs || 0))
+        byKey.set(key, skill);
     }
   }
   const skills = Array.from(byKey.values())
     .sort((a, b) => (b.installs || 0) - (a.installs || 0))
     .slice(0, 200);
   writeJson(popularCachePath(), { generatedAt: Date.now(), skills });
-  return { skills: skills.slice(0, cap), cached: false, generatedAt: Date.now() };
+  return {
+    skills: skills.slice(0, cap),
+    cached: false,
+    generatedAt: Date.now(),
+  };
 }
 
 module.exports = {

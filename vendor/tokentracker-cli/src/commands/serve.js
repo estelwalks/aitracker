@@ -49,7 +49,11 @@ function buildPortInUseHint(port) {
 }
 
 function isPortUnavailableError(error) {
-  return error?.code === "EADDRINUSE" || error?.code === "EACCES" || error?.code === "EPERM";
+  return (
+    error?.code === "EADDRINUSE" ||
+    error?.code === "EACCES" ||
+    error?.code === "EPERM"
+  );
 }
 
 function getLocalServerUrl(port) {
@@ -72,9 +76,16 @@ async function cmdServe(argv) {
   }
 
   try {
-    const { installLocalTrackerApp, repairRuntimeIntegrations } = require("./init");
+    const {
+      installLocalTrackerApp,
+      repairRuntimeIntegrations,
+    } = require("./init");
     await installLocalTrackerApp({ appDir: path.join(trackerDir, "app") });
-    const repairResult = await repairRuntimeIntegrations({ trackerDir, binDir, safeMode: true });
+    const repairResult = await repairRuntimeIntegrations({
+      trackerDir,
+      binDir,
+      safeMode: true,
+    });
     for (const warning of repairResult?.warnings || []) {
       process.stdout.write(
         `Runtime integration repair warning (${warning.integration}): ${warning.error}\n`,
@@ -107,7 +118,8 @@ async function cmdServe(argv) {
   //     for the full 10s fetch timeout when offline / behind a firewall.
   const { cacheDir } = await resolveTrackerPaths();
   ensurePricingLoaded({ cachePath: path.join(cacheDir, "pricing.json") }).catch(
-    (e) => process.stdout.write(`Pricing refresh warning: ${e?.message || e}\n`),
+    (e) =>
+      process.stdout.write(`Pricing refresh warning: ${e?.message || e}\n`),
   );
 
   if (!dashboardDir) {
@@ -131,7 +143,10 @@ async function cmdServe(argv) {
 
   const server = http.createServer(async (req, res) => {
     try {
-      const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+      const url = new URL(
+        req.url || "/",
+        `http://${req.headers.host || "localhost"}`,
+      );
 
       // CORS preflight
       if (req.method === "OPTIONS") {
@@ -145,9 +160,9 @@ async function cmdServe(argv) {
 
       // API routes
       if (
-        url.pathname.startsWith("/functions/")
-        || url.pathname.startsWith("/api/")
-        || url.pathname.startsWith("/proxy/")
+        url.pathname.startsWith("/functions/") ||
+        url.pathname.startsWith("/api/") ||
+        url.pathname.startsWith("/proxy/")
       ) {
         const handled = await handleApi(req, res, url);
         if (handled) return;
@@ -185,7 +200,9 @@ async function cmdServe(argv) {
       allowFallback: !opts.portExplicit,
       ensurePortFreeFn: opts.portExplicit ? ensurePortFree : null,
       onRetry: (failedPort) => {
-        process.stdout.write(`Port ${failedPort} unavailable, trying ${failedPort + 1}...\n`);
+        process.stdout.write(
+          `Port ${failedPort} unavailable, trying ${failedPort + 1}...\n`,
+        );
       },
     });
   } catch (e) {
@@ -231,7 +248,9 @@ async function cmdServe(argv) {
   // continuous and starved provider notify syncs.
   const nativeBackgroundSync = startNativeBackgroundSync({
     onError: (e) =>
-      process.stdout.write(`Background local sync warning: ${e?.message || e}\n`),
+      process.stdout.write(
+        `Background local sync warning: ${e?.message || e}\n`,
+      ),
   });
 
   // Anonymous daily heartbeat (see src/lib/telemetry.js for the privacy
@@ -274,7 +293,9 @@ function startNativeBackgroundSync({
   clearIntervalFn = clearInterval,
   onError = () => {},
 } = {}) {
-  const normalizedShell = String(appShell || "").trim().toLowerCase();
+  const normalizedShell = String(appShell || "")
+    .trim()
+    .toLowerCase();
   if (normalizedShell !== "windows") return null;
 
   // Run the periodic fallback sync in a child process, not in-process:
@@ -282,29 +303,42 @@ function startNativeBackgroundSync({
   // would otherwise freeze this server's event loop (and every dashboard
   // endpoint) once a minute. sync.lock is file-based, so the child contends
   // with hook-fired syncs exactly like an in-process run did.
-  const sync = runSync || ((args) => new Promise((resolve, reject) => {
-    const child = cp.spawn(
-      process.execPath,
-      [path.join(__dirname, "..", "..", "bin", "tracker.js"), "sync", ...args],
-      { stdio: "ignore", windowsHide: true },
-    );
-    child.unref();
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`background sync exited with ${code ?? `signal ${signal}`}`));
-      }
-    });
-  }));
+  const sync =
+    runSync ||
+    ((args) =>
+      new Promise((resolve, reject) => {
+        const child = cp.spawn(
+          process.execPath,
+          [
+            path.join(__dirname, "..", "..", "bin", "tracker.js"),
+            "sync",
+            ...args,
+          ],
+          { stdio: "ignore", windowsHide: true },
+        );
+        child.unref();
+        child.once("error", reject);
+        child.once("exit", (code, signal) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(
+              new Error(
+                `background sync exited with ${code ?? `signal ${signal}`}`,
+              ),
+            );
+          }
+        });
+      }));
   let inFlight = null;
   const run = () => {
     if (inFlight) return inFlight;
     const pending = Promise.resolve()
       .then(() => sync(["--auto", "--background", "--all-local-sources"]))
       .catch((error) => {
-        try { onError(error); } catch (_e) {}
+        try {
+          onError(error);
+        } catch (_e) {}
       })
       .finally(() => {
         if (inFlight === pending) inFlight = null;
@@ -328,8 +362,15 @@ function startNativeBackgroundSync({
 
 function findPidOnPort(port) {
   try {
-    const out = cp.execFileSync("lsof", ["-ti", `tcp:${port}`], { encoding: "utf8", timeout: 5000 });
-    const pids = out.trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    const out = cp.execFileSync("lsof", ["-ti", `tcp:${port}`], {
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    const pids = out
+      .trim()
+      .split(/\s+/)
+      .map(Number)
+      .filter((n) => Number.isFinite(n) && n > 0);
     return pids;
   } catch (_e) {
     return [];
@@ -345,7 +386,9 @@ async function ensurePortFree(port) {
   const targets = pids.filter((p) => p !== self);
   if (targets.length === 0) return;
 
-  process.stdout.write(`Stopping previous server on port ${port} (pid ${targets.join(", ")})...\n`);
+  process.stdout.write(
+    `Stopping previous server on port ${port} (pid ${targets.join(", ")})...\n`,
+  );
   for (const pid of targets) {
     try {
       process.kill(pid, "SIGTERM");
@@ -369,15 +412,17 @@ async function ensurePortFree(port) {
 
 function isApiPath(pathname) {
   return (
-    pathname.startsWith("/api/")
-    || pathname.startsWith("/functions/")
-    || pathname.startsWith("/proxy/")
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/functions/") ||
+    pathname.startsWith("/proxy/")
   );
 }
 
 function isStaticAssetPath(pathname) {
   if (pathname.startsWith("/assets/")) return true;
-  return STATIC_ASSET_EXTENSIONS.has(path.posix.extname(pathname).toLowerCase());
+  return STATIC_ASSET_EXTENSIONS.has(
+    path.posix.extname(pathname).toLowerCase(),
+  );
 }
 
 function shouldServeSpaFallback(req, url) {
@@ -479,7 +524,10 @@ function parsePort(value) {
   return Number.isFinite(n) && n > 0 && n < 65536 ? n : null;
 }
 
-function isRunningUnderWsl(env = process.env, readFileFn = fssync.readFileSync) {
+function isRunningUnderWsl(
+  env = process.env,
+  readFileFn = fssync.readFileSync,
+) {
   if (process.platform !== "linux") return false;
   if (env.WSL_DISTRO_NAME || env.WSL_INTEROP) return true;
   try {

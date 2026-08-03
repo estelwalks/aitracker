@@ -1,7 +1,11 @@
 const os = require("node:os");
 const path = require("node:path");
 
-const { readJsonStrict, writeFileAtomic, chmod600IfPossible } = require("../lib/fs");
+const {
+  readJsonStrict,
+  writeFileAtomic,
+  chmod600IfPossible,
+} = require("../lib/fs");
 const { resolveTrackerPaths } = require("../lib/tracker-paths");
 const { collectTrackerDiagnostics } = require("../lib/diagnostics");
 const { resolveRuntimeConfig } = require("../lib/runtime-config");
@@ -15,7 +19,9 @@ async function cmdDoctor(argv = []) {
 
   const configStatus = await readJsonStrict(configPath);
   const config =
-    configStatus.status === "ok" && isPlainObject(configStatus.value) ? configStatus.value : {};
+    configStatus.status === "ok" && isPlainObject(configStatus.value)
+      ? configStatus.value
+      : {};
   const runtime = resolveRuntimeConfig({
     cli: { baseUrl: opts.baseUrl },
     config,

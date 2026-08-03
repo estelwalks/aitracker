@@ -10,7 +10,9 @@ const DEFAULT_TOKEN_ENDPOINT = "https://auth.x.ai/oauth2/token";
 const ACCESS_TOKEN_EXPIRY_SKEW_MS = 60_000;
 
 function grokAuthError() {
-  const error = new Error("Not logged in to Grok Build. Run `grok login` in Terminal to authenticate.");
+  const error = new Error(
+    "Not logged in to Grok Build. Run `grok login` in Terminal to authenticate.",
+  );
   error.code = "GROK_AUTH_REQUIRED";
   return error;
 }
@@ -59,7 +61,8 @@ async function fetchGrokBillingAttempt(fetchImpl, url, headers, deadlineMs) {
       } catch (_error) {
         // The status remains authoritative even if discarding the body fails.
       }
-      if (response.status === 401 || response.status === 403) throw grokAuthError();
+      if (response.status === 401 || response.status === 403)
+        throw grokAuthError();
       return { ok: false, status: response.status };
     }
     return { ok: true, body: await response.json() };
@@ -67,7 +70,10 @@ async function fetchGrokBillingAttempt(fetchImpl, url, headers, deadlineMs) {
 }
 
 function resolveGrokHome({ home, env = process.env } = {}) {
-  if (typeof env.TOKENTRACKER_GROK_HOME === "string" && env.TOKENTRACKER_GROK_HOME.trim()) {
+  if (
+    typeof env.TOKENTRACKER_GROK_HOME === "string" &&
+    env.TOKENTRACKER_GROK_HOME.trim()
+  ) {
     return path.resolve(env.TOKENTRACKER_GROK_HOME.trim());
   }
   if (typeof env.GROK_HOME === "string" && env.GROK_HOME.trim()) {
@@ -134,7 +140,8 @@ function normalizeGrokPeriodType(value) {
   if (upper.includes("WEEK")) return "weekly";
   if (upper.includes("MONTH")) return "monthly";
   // Prefer explicit DAILY / DAY over accidental "HOUR_OF_DAY" style matches.
-  if (upper.includes("DAILY") || /(^|_)DAY($|_)/.test(upper) || upper === "DAY") return "daily";
+  if (upper.includes("DAILY") || /(^|_)DAY($|_)/.test(upper) || upper === "DAY")
+    return "daily";
   return null;
 }
 
@@ -149,7 +156,8 @@ function inferGrokPeriodTypeFromDates(startIso, endIso) {
   if (!startIso || !endIso) return null;
   const startMs = Date.parse(startIso);
   const endMs = Date.parse(endIso);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs)
+    return null;
   const days = (endMs - startMs) / 86_400_000;
   if (days > 0.5 && days <= 1.5) return "daily";
   if (days > 1.5 && days <= 8) return "weekly";
@@ -189,19 +197,26 @@ function loadGrokAuthEntry({ home, env } = {}) {
   let fallback = null;
   try {
     const parsed = JSON.parse(fs.readFileSync(authPath, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
     for (const [scopeKey, value] of Object.entries(parsed)) {
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
       const key = typeof value.key === "string" ? value.key.trim() : "";
       const refreshToken =
-        typeof value.refresh_token === "string" ? value.refresh_token.trim() : "";
+        typeof value.refresh_token === "string"
+          ? value.refresh_token.trim()
+          : "";
       // Entries with an access token win outright. A refresh-token-only entry
       // is only usable when a client id is resolvable, and must not shadow a
       // later keyed entry — keep it as a fallback instead.
       if (key) {
         return { entry: value, authPath, scopeKey, authFile: parsed };
       }
-      if (refreshToken && !fallback && resolveGrokOidcClientId(value, scopeKey)) {
+      if (
+        refreshToken &&
+        !fallback &&
+        resolveGrokOidcClientId(value, scopeKey)
+      ) {
         fallback = { entry: value, authPath, scopeKey, authFile: parsed };
       }
     }
@@ -213,20 +228,33 @@ function loadGrokAuthEntry({ home, env } = {}) {
 
 function readGrokAccessToken({ home, env } = {}) {
   const loaded = loadGrokAuthEntry({ home, env });
-  const key = typeof loaded?.entry?.key === "string" ? loaded.entry.key.trim() : "";
+  const key =
+    typeof loaded?.entry?.key === "string" ? loaded.entry.key.trim() : "";
   return key || null;
 }
 
-function isGrokAccessTokenExpired(expiresAt, nowMs = Date.now(), skewMs = ACCESS_TOKEN_EXPIRY_SKEW_MS) {
+function isGrokAccessTokenExpired(
+  expiresAt,
+  nowMs = Date.now(),
+  skewMs = ACCESS_TOKEN_EXPIRY_SKEW_MS,
+) {
   if (expiresAt == null || expiresAt === "") return false;
-  const ts = typeof expiresAt === "number" ? expiresAt : Date.parse(String(expiresAt));
+  const ts =
+    typeof expiresAt === "number" ? expiresAt : Date.parse(String(expiresAt));
   if (!Number.isFinite(ts)) return false;
-  const skew = Number.isFinite(skewMs) && skewMs >= 0 ? skewMs : ACCESS_TOKEN_EXPIRY_SKEW_MS;
+  const skew =
+    Number.isFinite(skewMs) && skewMs >= 0
+      ? skewMs
+      : ACCESS_TOKEN_EXPIRY_SKEW_MS;
   return ts <= nowMs + skew;
 }
 
 function resolveGrokOidcClientId(entry, scopeKey) {
-  if (entry && typeof entry.oidc_client_id === "string" && entry.oidc_client_id.trim()) {
+  if (
+    entry &&
+    typeof entry.oidc_client_id === "string" &&
+    entry.oidc_client_id.trim()
+  ) {
     return entry.oidc_client_id.trim();
   }
   if (typeof scopeKey === "string" && scopeKey.includes("::")) {
@@ -237,17 +265,27 @@ function resolveGrokOidcClientId(entry, scopeKey) {
 }
 
 function resolveGrokOidcIssuer(entry) {
-  if (entry && typeof entry.oidc_issuer === "string" && entry.oidc_issuer.trim()) {
+  if (
+    entry &&
+    typeof entry.oidc_issuer === "string" &&
+    entry.oidc_issuer.trim()
+  ) {
     return entry.oidc_issuer.trim().replace(/\/$/, "");
   }
   return DEFAULT_OIDC_ISSUER;
 }
 
 function resolveGrokTokenEndpoint(entry, env = process.env) {
-  if (typeof env.TOKENTRACKER_GROK_TOKEN_ENDPOINT === "string" && env.TOKENTRACKER_GROK_TOKEN_ENDPOINT.trim()) {
+  if (
+    typeof env.TOKENTRACKER_GROK_TOKEN_ENDPOINT === "string" &&
+    env.TOKENTRACKER_GROK_TOKEN_ENDPOINT.trim()
+  ) {
     return env.TOKENTRACKER_GROK_TOKEN_ENDPOINT.trim();
   }
-  if (typeof env.GROK_OIDC_TOKEN_ENDPOINT === "string" && env.GROK_OIDC_TOKEN_ENDPOINT.trim()) {
+  if (
+    typeof env.GROK_OIDC_TOKEN_ENDPOINT === "string" &&
+    env.GROK_OIDC_TOKEN_ENDPOINT.trim()
+  ) {
     return env.GROK_OIDC_TOKEN_ENDPOINT.trim();
   }
   const issuer = resolveGrokOidcIssuer(entry);
@@ -256,7 +294,9 @@ function resolveGrokTokenEndpoint(entry, env = process.env) {
 }
 
 function grokEntryRefreshToken(entry) {
-  return entry && typeof entry.refresh_token === "string" ? entry.refresh_token.trim() : "";
+  return entry && typeof entry.refresh_token === "string"
+    ? entry.refresh_token.trim()
+    : "";
 }
 
 function grokEntryAccessToken(entry) {
@@ -275,7 +315,9 @@ async function refreshGrokTokens({
   timeoutMs = DEFAULT_BILLING_TIMEOUT_MS,
 } = {}) {
   if (typeof refreshToken !== "string" || !refreshToken.trim()) {
-    const err = new Error("Grok refresh skipped: no refresh_token in auth.json");
+    const err = new Error(
+      "Grok refresh skipped: no refresh_token in auth.json",
+    );
     err.code = "NO_REFRESH_TOKEN";
     throw err;
   }
@@ -295,11 +337,16 @@ async function refreshGrokTokens({
   // endpoint must not block fetchGrokLimits (and its poller) indefinitely.
   // The timer stays armed through the body reads below, not just the headers.
   const normalizedTimeoutMs =
-    Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_BILLING_TIMEOUT_MS;
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : DEFAULT_BILLING_TIMEOUT_MS;
   const controller = new AbortController();
   const timeoutError = new Error("Grok token refresh timed out.");
   timeoutError.code = "GROK_REFRESH_TIMEOUT";
-  const timer = setTimeout(() => controller.abort(timeoutError), normalizedTimeoutMs);
+  const timer = setTimeout(
+    () => controller.abort(timeoutError),
+    normalizedTimeoutMs,
+  );
 
   try {
     const res = await fetchImpl(tokenEndpoint, {
@@ -318,7 +365,9 @@ async function refreshGrokTokens({
         const payload = await res.json();
         oauthError =
           (typeof payload?.error === "string" && payload.error) ||
-          (payload?.error && typeof payload.error === "object" && payload.error.code) ||
+          (payload?.error &&
+            typeof payload.error === "object" &&
+            payload.error.code) ||
           null;
       } catch (_error) {
         // Status remains authoritative.
@@ -338,7 +387,9 @@ async function refreshGrokTokens({
 
     const payload = await res.json();
     const accessToken =
-      typeof payload?.access_token === "string" ? payload.access_token.trim() : "";
+      typeof payload?.access_token === "string"
+        ? payload.access_token.trim()
+        : "";
     if (!accessToken) {
       const err = new Error("Grok token refresh response missing access_token");
       err.code = "REFRESH_INVALID_RESPONSE";
@@ -354,7 +405,10 @@ async function refreshGrokTokens({
     const expiresIn = Number(payload?.expires_in);
     if (Number.isFinite(expiresIn) && expiresIn > 0) {
       expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
-    } else if (typeof payload?.expires_at === "string" && payload.expires_at.trim()) {
+    } else if (
+      typeof payload?.expires_at === "string" &&
+      payload.expires_at.trim()
+    ) {
       const parsed = Date.parse(payload.expires_at.trim());
       if (Number.isFinite(parsed)) expiresAt = new Date(parsed).toISOString();
     }
@@ -363,10 +417,14 @@ async function refreshGrokTokens({
       access_token: accessToken,
       refresh_token: nextRefresh,
       expires_at: expiresAt,
-      token_type: typeof payload?.token_type === "string" ? payload.token_type : null,
+      token_type:
+        typeof payload?.token_type === "string" ? payload.token_type : null,
     };
   } catch (error) {
-    if (controller.signal.aborted && controller.signal.reason === timeoutError) {
+    if (
+      controller.signal.aborted &&
+      controller.signal.reason === timeoutError
+    ) {
       throw timeoutError;
     }
     throw error;
@@ -375,9 +433,17 @@ async function refreshGrokTokens({
   }
 }
 
-async function persistGrokRefreshedAuth(authPath, authFile, scopeKey, entry, newTokens) {
+async function persistGrokRefreshedAuth(
+  authPath,
+  authFile,
+  scopeKey,
+  entry,
+  newTokens,
+) {
   if (!authPath || !scopeKey || !entry || !newTokens?.access_token) {
-    throw new Error("Grok auth persist requires auth path, scope, entry, and access_token");
+    throw new Error(
+      "Grok auth persist requires auth path, scope, entry, and access_token",
+    );
   }
   const nextEntry = {
     ...entry,
@@ -398,7 +464,9 @@ async function persistGrokRefreshedAuth(authPath, authFile, scopeKey, entry, new
   };
   const tmp = `${authPath}.tmp.${process.pid}.${Date.now()}`;
   try {
-    await fs.promises.writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`, { mode: 0o600 });
+    await fs.promises.writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`, {
+      mode: 0o600,
+    });
     await fs.promises.rename(tmp, authPath);
   } catch (error) {
     // Never leave a tmp file holding fresh tokens behind.
@@ -437,7 +505,9 @@ async function resolveGrokAccessToken({
   const accessToken = grokEntryAccessToken(loaded.entry);
   const refreshToken = grokEntryRefreshToken(loaded.entry);
   const expired = isGrokAccessTokenExpired(loaded.entry.expires_at, nowMs);
-  const canRefresh = Boolean(refreshToken && resolveGrokOidcClientId(loaded.entry, loaded.scopeKey));
+  const canRefresh = Boolean(
+    refreshToken && resolveGrokOidcClientId(loaded.entry, loaded.scopeKey),
+  );
   const needsRefresh = forceRefresh || !accessToken || expired;
 
   if (!needsRefresh) {
@@ -509,11 +579,15 @@ function normalizeGrokBillingResponse(body) {
   }
 
   const currentPeriod =
-    config.currentPeriod && typeof config.currentPeriod === "object" ? config.currentPeriod : null;
+    config.currentPeriod && typeof config.currentPeriod === "object"
+      ? config.currentPeriod
+      : null;
 
   const periodStart =
-    grokIsoReset(currentPeriod?.start) || grokIsoReset(config.billingPeriodStart);
-  const resetAt = grokIsoReset(currentPeriod?.end) || grokIsoReset(config.billingPeriodEnd);
+    grokIsoReset(currentPeriod?.start) ||
+    grokIsoReset(config.billingPeriodStart);
+  const resetAt =
+    grokIsoReset(currentPeriod?.end) || grokIsoReset(config.billingPeriodEnd);
 
   let periodType = normalizeGrokPeriodType(currentPeriod?.type);
   if (!periodType) {
@@ -530,7 +604,12 @@ function normalizeGrokBillingResponse(body) {
   // Legacy monthly credit counters (pre-unified / non-format=credits responses).
   const monthlyLimit = grokValNumber(config.monthlyLimit);
   const used = grokValNumber(config.used);
-  if (usedPercent === null && Number.isFinite(monthlyLimit) && monthlyLimit > 0 && Number.isFinite(used)) {
+  if (
+    usedPercent === null &&
+    Number.isFinite(monthlyLimit) &&
+    monthlyLimit > 0 &&
+    Number.isFinite(used)
+  ) {
     usedPercent = (used / monthlyLimit) * 100;
     if (!periodType) periodType = "monthly";
   }
@@ -555,7 +634,11 @@ function normalizeGrokBillingResponse(body) {
   const primaryWindow = buildWindow({ usedPercent, resetAt });
 
   let secondaryWindow = null;
-  if (Number.isFinite(onDemandCap) && onDemandCap > 0 && Number.isFinite(onDemandUsed)) {
+  if (
+    Number.isFinite(onDemandCap) &&
+    onDemandCap > 0 &&
+    Number.isFinite(onDemandUsed)
+  ) {
     secondaryWindow = buildWindow({
       usedPercent: (onDemandUsed / onDemandCap) * 100,
       resetAt,
@@ -563,7 +646,9 @@ function normalizeGrokBillingResponse(body) {
   }
 
   if (!primaryWindow && !secondaryWindow) {
-    throw new Error("Could not parse Grok billing: no quota windows in response");
+    throw new Error(
+      "Could not parse Grok billing: no quota windows in response",
+    );
   }
 
   return {
@@ -572,7 +657,8 @@ function normalizeGrokBillingResponse(body) {
     monthly_credits_used: used,
     // Effective percent used for the primary bar (API creditUsagePercent, or
     // productUsage / legacy monthly counters when the raw field is absent).
-    credit_usage_percent: usedPercent == null ? null : clampPercent(usedPercent),
+    credit_usage_percent:
+      usedPercent == null ? null : clampPercent(usedPercent),
     on_demand_cap: onDemandCap,
     on_demand_used: onDemandUsed,
     billing_period_start: periodStart,
@@ -588,7 +674,12 @@ function normalizeGrokBillingResponse(body) {
  */
 async function fetchGrokBilling(
   accessToken,
-  { fetchImpl = fetch, baseUrl, env, timeoutMs = DEFAULT_BILLING_TIMEOUT_MS } = {},
+  {
+    fetchImpl = fetch,
+    baseUrl,
+    env,
+    timeoutMs = DEFAULT_BILLING_TIMEOUT_MS,
+  } = {},
 ) {
   const root = (baseUrl || resolveGrokBillingBaseUrl(env)).replace(/\/$/, "");
   const headers = {
@@ -596,7 +687,9 @@ async function fetchGrokBilling(
     Accept: "application/json",
   };
   const normalizedTimeoutMs =
-    Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_BILLING_TIMEOUT_MS;
+    Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : DEFAULT_BILLING_TIMEOUT_MS;
   const deadlineMs = Date.now() + normalizedTimeoutMs;
 
   const creditsUrl = `${root}/v1/billing?format=credits`;
@@ -626,10 +719,17 @@ async function fetchGrokBilling(
       deadlineMs,
     );
   } catch (error) {
-    if (error?.code === "GROK_AUTH_REQUIRED" || error?.code === "GROK_BILLING_TIMEOUT") throw error;
-    throw new Error(`Grok billing request failed (format=credits: ${creditsFailure})`, {
-      cause: error,
-    });
+    if (
+      error?.code === "GROK_AUTH_REQUIRED" ||
+      error?.code === "GROK_BILLING_TIMEOUT"
+    )
+      throw error;
+    throw new Error(
+      `Grok billing request failed (format=credits: ${creditsFailure})`,
+      {
+        cause: error,
+      },
+    );
   }
   if (!legacyResult.ok) {
     throw new Error(
@@ -639,7 +739,13 @@ async function fetchGrokBilling(
   return legacyResult.body;
 }
 
-async function fetchGrokLimits({ home, env, fetchImpl = fetch, timeoutMs, nowMs } = {}) {
+async function fetchGrokLimits({
+  home,
+  env,
+  fetchImpl = fetch,
+  timeoutMs,
+  nowMs,
+} = {}) {
   if (!isGrokInstalled({ home, env })) {
     return { configured: false };
   }
@@ -667,7 +773,11 @@ async function fetchGrokLimits({ home, env, fetchImpl = fetch, timeoutMs, nowMs 
   try {
     let body;
     try {
-      body = await fetchGrokBilling(resolved.accessToken, { fetchImpl, env, timeoutMs });
+      body = await fetchGrokBilling(resolved.accessToken, {
+        fetchImpl,
+        env,
+        timeoutMs,
+      });
     } catch (error) {
       // Access token rejected — refresh once when a refresh_token is available.
       if (
@@ -685,7 +795,11 @@ async function fetchGrokLimits({ home, env, fetchImpl = fetch, timeoutMs, nowMs 
         if (!retry.accessToken) {
           throw retry.error || grokReauthError();
         }
-        body = await fetchGrokBilling(retry.accessToken, { fetchImpl, env, timeoutMs });
+        body = await fetchGrokBilling(retry.accessToken, {
+          fetchImpl,
+          env,
+          timeoutMs,
+        });
       } else {
         throw error;
       }

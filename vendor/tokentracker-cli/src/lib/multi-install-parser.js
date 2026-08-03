@@ -1,12 +1,24 @@
 const wsl = require("./wsl-probe");
-const { ensureNamespacedCursors, ensureFlatCursor } = require("./install-resolver");
+const {
+  ensureNamespacedCursors,
+  ensureFlatCursor,
+} = require("./install-resolver");
 
 function emptyResult() {
   return { recordsProcessed: 0, eventsAggregated: 0, bucketsQueued: 0 };
 }
 
-async function multiInstallParse({ paths, parserFn, providerName, cursors, getParams, onProgress, detectInstall, ...shared }) {
-  const installKeys = Object.keys(paths).filter(k => paths[k]);
+async function multiInstallParse({
+  paths,
+  parserFn,
+  providerName,
+  cursors,
+  getParams,
+  onProgress,
+  detectInstall,
+  ...shared
+}) {
+  const installKeys = Object.keys(paths).filter((k) => paths[k]);
   if (installKeys.length === 0) return emptyResult();
   const env = shared.env || process.env;
 
@@ -28,7 +40,13 @@ async function multiInstallParse({ paths, parserFn, providerName, cursors, getPa
     });
   }
 
-  const activeKeys = resolveMigrationSeedKeys({ paths, installKeys, providerName, cursors, detectInstall });
+  const activeKeys = resolveMigrationSeedKeys({
+    paths,
+    installKeys,
+    providerName,
+    cursors,
+    detectInstall,
+  });
   const ns = ensureNamespacedCursors(cursors, providerName, activeKeys);
   let recordsProcessed = 0;
   let eventsAggregated = 0;
@@ -39,7 +57,9 @@ async function multiInstallParse({ paths, parserFn, providerName, cursors, getPa
     cursors[providerName] = ns[key];
     try {
       const result = await parserFn({
-        ...getParams(paths[key], key), ...shared, cursors,
+        ...getParams(paths[key], key),
+        ...shared,
+        cursors,
         onProgress: wrapProgress(onProgress, key),
       });
       ns[key] = cursors[providerName];
@@ -65,9 +85,18 @@ async function multiInstallParse({ paths, parserFn, providerName, cursors, getPa
 // probe error all fall back to seeding every namespace: an install re-parsed
 // without its dedup state would double-count its entire history, and a
 // bounded backfill gap is the cheaper failure.
-function resolveMigrationSeedKeys({ paths, installKeys, providerName, cursors, detectInstall }) {
+function resolveMigrationSeedKeys({
+  paths,
+  installKeys,
+  providerName,
+  cursors,
+  detectInstall,
+}) {
   if (typeof detectInstall !== "function") return installKeys;
-  const state = cursors[providerName] && typeof cursors[providerName] === "object" ? cursors[providerName] : {};
+  const state =
+    cursors[providerName] && typeof cursors[providerName] === "object"
+      ? cursors[providerName]
+      : {};
   const isFlat = state.native === undefined && state.wsl === undefined;
   if (!isFlat || Object.keys(state).length === 0) return installKeys;
 
@@ -76,7 +105,7 @@ function resolveMigrationSeedKeys({ paths, installKeys, providerName, cursors, d
     let owns = false;
     try {
       owns = detectInstall(paths[key], state, key) === true;
-    } catch (_e) { }
+    } catch (_e) {}
     if (owns) hits.push(key);
   }
   return hits.length === 1 ? hits : installKeys;
@@ -103,7 +132,10 @@ function mergeBothFileSources({ resolveFiles, env }) {
   const seen = new Set();
   const merged = [];
   for (const f of [...nativeFiles, ...wslFiles]) {
-    if (!seen.has(f)) { seen.add(f); merged.push(f); }
+    if (!seen.has(f)) {
+      seen.add(f);
+      merged.push(f);
+    }
   }
   return merged;
 }

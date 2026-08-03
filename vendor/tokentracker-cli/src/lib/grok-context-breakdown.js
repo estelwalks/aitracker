@@ -69,7 +69,8 @@ function timestampToIso(value) {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    if (/^[0-9]+(?:\.[0-9]+)?$/.test(trimmed)) return timestampToIso(Number(trimmed));
+    if (/^[0-9]+(?:\.[0-9]+)?$/.test(trimmed))
+      return timestampToIso(Number(trimmed));
     const dt = new Date(trimmed);
     return Number.isFinite(dt.getTime()) ? dt.toISOString() : null;
   }
@@ -191,10 +192,13 @@ function mapGrokToolName(rawName) {
   const lower = name.toLowerCase();
   if (lower === "read_file" || lower === "read") return "Read";
   if (lower === "write" || lower === "write_file") return "Write";
-  if (lower === "search_replace" || lower === "str_replace" || lower === "edit") return "Edit";
+  if (lower === "search_replace" || lower === "str_replace" || lower === "edit")
+    return "Edit";
   if (lower === "grep") return "Grep";
-  if (lower === "list_dir" || lower === "glob" || lower === "find") return "Glob";
-  if (lower === "run_terminal_command" || lower === "bash" || lower === "shell") return "Bash";
+  if (lower === "list_dir" || lower === "glob" || lower === "find")
+    return "Glob";
+  if (lower === "run_terminal_command" || lower === "bash" || lower === "shell")
+    return "Bash";
   if (lower === "todo_write" || lower === "todowrite") return "TodoWrite";
   if (lower === "web_search" || lower === "websearch") return "WebSearch";
   if (lower === "web_fetch" || lower === "webfetch") return "WebFetch";
@@ -209,9 +213,12 @@ function extractToolName(update, meta) {
     update?._meta?.["x.ai/tool"]?.name ||
     update?._meta?.["x.ai/tool"]?.label ||
     null;
-  const fromUpdateParams = meta?.updateParams?.title || meta?.updateParams?.name || null;
+  const fromUpdateParams =
+    meta?.updateParams?.title || meta?.updateParams?.name || null;
   const fromUpdate = update?.title || update?.name || null;
-  return mapGrokToolName(fromMetaTool || fromUpdateParams || fromUpdate || "unknown");
+  return mapGrokToolName(
+    fromMetaTool || fromUpdateParams || fromUpdate || "unknown",
+  );
 }
 
 function extractExecCommand(update) {
@@ -247,12 +254,23 @@ function outputSizeBucket(lines, chars) {
 
 function readUsageTotals(usage) {
   if (!usage || typeof usage !== "object") return null;
-  const inputRaw = Math.max(0, Number(usage.inputTokens ?? usage.input_tokens ?? 0) || 0);
+  const inputRaw = Math.max(
+    0,
+    Number(usage.inputTokens ?? usage.input_tokens ?? 0) || 0,
+  );
   const cached = Math.max(
     0,
-    Number(usage.cachedReadTokens ?? usage.cache_read_input_tokens ?? usage.cached_input_tokens ?? 0) || 0,
+    Number(
+      usage.cachedReadTokens ??
+        usage.cache_read_input_tokens ??
+        usage.cached_input_tokens ??
+        0,
+    ) || 0,
   );
-  const output = Math.max(0, Number(usage.outputTokens ?? usage.output_tokens ?? 0) || 0);
+  const output = Math.max(
+    0,
+    Number(usage.outputTokens ?? usage.output_tokens ?? 0) || 0,
+  );
   const reasoning = Math.max(
     0,
     Number(usage.reasoningTokens ?? usage.reasoning_output_tokens ?? 0) || 0,
@@ -260,7 +278,10 @@ function readUsageTotals(usage) {
   const nonCachedInput = Math.max(0, inputRaw - cached);
   // Prefer the reported totalTokens (authoritative billable total). Fallback
   // includes reasoning so a missing total still matches usage-parser shape.
-  let total = Math.max(0, Number(usage.totalTokens ?? usage.total_tokens ?? 0) || 0);
+  let total = Math.max(
+    0,
+    Number(usage.totalTokens ?? usage.total_tokens ?? 0) || 0,
+  );
   if (total <= 0) total = nonCachedInput + cached + output + reasoning;
   if (total <= 0) return null;
   return {
@@ -278,7 +299,8 @@ function readUsageTotals(usage) {
 // ---------------------------------------------------------------------------
 
 function ensureTool(map, name) {
-  if (!map.has(name)) map.set(name, { name, raw_name: name, calls: 0, totals: emptyTotals() });
+  if (!map.has(name))
+    map.set(name, { name, raw_name: name, calls: 0, totals: emptyTotals() });
   return map.get(name);
 }
 
@@ -305,7 +327,9 @@ function finalizeToolRows(map) {
       calls: row.calls,
       totals: roundTotals(row.totals),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
 function finalizeExecRows(map) {
@@ -320,10 +344,16 @@ function finalizeExecRows(map) {
       output_lines: row.output_lines,
       totals: roundTotals(row.totals),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
-function fileParseCacheKey(updatesPath, { from, to, timeZoneContext } = {}, stat) {
+function fileParseCacheKey(
+  updatesPath,
+  { from, to, timeZoneContext } = {},
+  stat,
+) {
   return [
     CACHE_SCHEMA_VERSION,
     updatesPath,
@@ -346,7 +376,10 @@ function rememberFileParse(key, value) {
   }
 }
 
-async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } = {}) {
+async function parseGrokUpdatesFile(
+  updatesPath,
+  { from, to, timeZoneContext } = {},
+) {
   let stat = null;
   try {
     stat = fs.statSync(updatesPath);
@@ -355,7 +388,11 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
   }
   if (!stat.isFile() || stat.size <= 0) return null;
 
-  const cacheKey = fileParseCacheKey(updatesPath, { from, to, timeZoneContext }, stat);
+  const cacheKey = fileParseCacheKey(
+    updatesPath,
+    { from, to, timeZoneContext },
+    stat,
+  );
   const hit = FILE_PARSE_CACHE.get(cacheKey);
   if (hit) {
     rememberFileParse(cacheKey, hit);
@@ -377,14 +414,21 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
 
   function getTurn(key) {
     if (!turns.has(key)) {
-      turns.set(key, { tools: [], execs: [], sawThought: false, sawMessage: false });
+      turns.set(key, {
+        tools: [],
+        execs: [],
+        sawThought: false,
+        sawMessage: false,
+      });
     }
     return turns.get(key);
   }
 
   function buildExecDetails(command, status) {
     const kind = inferExecCommandKind(command);
-    const failed = String(status || "").toLowerCase() === "failed" || String(status || "").toLowerCase() === "error";
+    const failed =
+      String(status || "").toLowerCase() === "failed" ||
+      String(status || "").toLowerCase() === "error";
     return {
       kind,
       exitKey: failed ? "failed:unknown" : "completed:0",
@@ -428,7 +472,8 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
         ? {
             input_tokens: delta.input_tokens * bashShare,
             cached_input_tokens: delta.cached_input_tokens * bashShare,
-            cache_creation_input_tokens: delta.cache_creation_input_tokens * bashShare,
+            cache_creation_input_tokens:
+              delta.cache_creation_input_tokens * bashShare,
             output_tokens: delta.output_tokens * bashShare,
             reasoning_output_tokens: delta.reasoning_output_tokens * bashShare,
             total_tokens: delta.total_tokens * bashShare,
@@ -442,16 +487,23 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
         const attributed = {
           input_tokens: execDelta.input_tokens * per,
           cached_input_tokens: execDelta.cached_input_tokens * per,
-          cache_creation_input_tokens: execDelta.cache_creation_input_tokens * per,
+          cache_creation_input_tokens:
+            execDelta.cache_creation_input_tokens * per,
           output_tokens: execDelta.output_tokens * per,
           reasoning_output_tokens: execDelta.reasoning_output_tokens * per,
           total_tokens: execDelta.total_tokens * per,
         };
         addInto(ensureExec(byExecKind, details.kind).totals, attributed);
         addInto(ensureExec(byExecExit, details.exitKey).totals, attributed);
-        addInto(ensureExec(byExecExecutable, details.executable).totals, attributed);
+        addInto(
+          ensureExec(byExecExecutable, details.executable).totals,
+          attributed,
+        );
         addInto(ensureExec(byExecCommand, details.command).totals, attributed);
-        addInto(ensureExec(byExecDuration, details.duration).totals, attributed);
+        addInto(
+          ensureExec(byExecDuration, details.duration).totals,
+          attributed,
+        );
         addInto(ensureExec(byExecOutput, details.output).totals, attributed);
         absorbExecStats(byExecKind, details.kind, details);
         absorbExecStats(byExecExit, details.exitKey, details);
@@ -513,14 +565,18 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
         if (toolName === "Bash") {
           const cmd = extractExecCommand(update);
           if (cmd) {
-            const status = update.status || meta.updateParams?.status || "completed";
+            const status =
+              update.status || meta.updateParams?.status || "completed";
             turn.execs.push(buildExecDetails(cmd, status));
           }
         }
         continue;
       }
 
-      if (sessionUpdate === "agent_thought_chunk" || meta.updateType === "AgentThoughtChunk") {
+      if (
+        sessionUpdate === "agent_thought_chunk" ||
+        meta.updateType === "AgentThoughtChunk"
+      ) {
         getTurn(promptId).sawThought = true;
         continue;
       }
@@ -548,7 +604,12 @@ async function parseGrokUpdatesFile(updatesPath, { from, to, timeZoneContext } =
 
       // Prefer per-model split when present (sum models into one turn total —
       // already aggregated in usage.totalTokens).
-      const turnState = turns.get(promptId) || { tools: [], execs: [], sawThought: false, sawMessage: false };
+      const turnState = turns.get(promptId) || {
+        tools: [],
+        execs: [],
+        sawThought: false,
+        sawMessage: false,
+      };
       attributeTurn(usage, turnState);
       turns.delete(promptId);
     }
@@ -601,7 +662,12 @@ function mergeRows(map, rows) {
     const key = rawName || name;
     if (!key) continue;
     if (!map.has(key)) {
-      map.set(key, { name, raw_name: rawName, calls: 0, totals: emptyTotals() });
+      map.set(key, {
+        name,
+        raw_name: rawName,
+        calls: 0,
+        totals: emptyTotals(),
+      });
     }
     const cur = map.get(key);
     cur.name = name;
@@ -620,7 +686,10 @@ function mergeExecRows(map, rows) {
     cur.calls += Number(row.calls || 0);
     cur.failures += Number(row.failures || 0);
     cur.duration_ms += Number(row.duration_ms || 0);
-    cur.max_duration_ms = Math.max(cur.max_duration_ms, Number(row.max_duration_ms || 0));
+    cur.max_duration_ms = Math.max(
+      cur.max_duration_ms,
+      Number(row.max_duration_ms || 0),
+    );
     cur.output_chars += Number(row.output_chars || 0);
     cur.output_lines += Number(row.output_lines || 0);
     addInto(cur.totals, row.totals || {});
@@ -638,7 +707,13 @@ function buildGrokInventorySignature(sessions) {
     .digest("hex");
 }
 
-function buildGrokResultCacheKey({ from, to, top, timeZoneContext, inventorySig }) {
+function buildGrokResultCacheKey({
+  from,
+  to,
+  top,
+  timeZoneContext,
+  inventorySig,
+}) {
   // Include inventorySig so a changed session file cannot serve a stale aggregate.
   // Unchanged files still skip re-parse via FILE_PARSE_CACHE (Codex-style).
   return [
@@ -660,7 +735,8 @@ async function computeGrokContextBreakdown(options = {}) {
     timeZoneContext = null,
     env = process.env,
   } = options;
-  const limitedTop = Number.isFinite(top) && top > 0 ? Math.min(Math.floor(top), 200) : 50;
+  const limitedTop =
+    Number.isFinite(top) && top > 0 ? Math.min(Math.floor(top), 200) : 50;
   const sessions = discoverGrokSessionFiles(env);
   const inventorySig = buildGrokInventorySignature(sessions);
   const cacheKey = buildGrokResultCacheKey({
@@ -705,7 +781,8 @@ async function computeGrokContextBreakdownUncached({
   sessions = null,
   cacheKey = null,
 } = {}) {
-  const limitedTop = Number.isFinite(top) && top > 0 ? Math.min(Math.floor(top), 200) : 50;
+  const limitedTop =
+    Number.isFinite(top) && top > 0 ? Math.min(Math.floor(top), 200) : 50;
   const sessionList = sessions || discoverGrokSessionFiles(env);
   const resultCacheKey =
     cacheKey ||
@@ -756,7 +833,12 @@ async function computeGrokContextBreakdownUncached({
     if (row.name === "text_response") continue;
     const cat = categorizeTool(row.raw_name || row.name);
     if (!byCategory.has(cat)) {
-      byCategory.set(cat, { name: cat, calls: 0, totals: emptyTotals(), tools: [] });
+      byCategory.set(cat, {
+        name: cat,
+        calls: 0,
+        totals: emptyTotals(),
+        tools: [],
+      });
     }
     const target = byCategory.get(cat);
     target.calls += Number(row.calls || 0);
@@ -773,16 +855,25 @@ async function computeGrokContextBreakdownUncached({
       calls: Math.round(c.calls || 0),
       totals: roundTotals(c.totals),
       tools: (c.tools || [])
-        .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0))
+        .sort(
+          (a, b) =>
+            (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+        )
         .slice(0, limitedTop),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 
   // Message breakdown: residual "text_response" tools + reasoning/output split
   const textResponse = toolRows.find((r) => r.name === "text_response");
   const textTotals = textResponse?.totals || emptyTotals();
   const reasoning = Number(grand.reasoning_output_tokens || 0);
-  const assistantOut = Math.max(0, Number(grand.output_tokens || 0) - Math.min(reasoning, Number(grand.output_tokens || 0)));
+  const assistantOut = Math.max(
+    0,
+    Number(grand.output_tokens || 0) -
+      Math.min(reasoning, Number(grand.output_tokens || 0)),
+  );
   // For Grok, cached reads dominate conversation history; non-cached input is
   // closer to "current user/context injection". Heuristic only — matches Codex
   // message_breakdown intent without reading message bodies.
@@ -825,7 +916,9 @@ async function computeGrokContextBreakdownUncached({
         total_tokens: assistantOut,
       }),
     },
-  ].sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+  ].sort(
+    (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+  );
 
   const serializeExecRows = (rows) =>
     (rows || []).slice(0, limitedTop).map((r) => ({
@@ -854,10 +947,15 @@ async function computeGrokContextBreakdownUncached({
       },
     },
     tool_calls_breakdown: {
-      total_calls: Math.round(toolRows.reduce((a, r) => a + Number(r.calls || 0), 0)),
+      total_calls: Math.round(
+        toolRows.reduce((a, r) => a + Number(r.calls || 0), 0),
+      ),
       tools: toolRowsLimited,
       categories: categoryRows.slice(0, limitedTop),
-      tools_total: toolRows.reduce((a, r) => a + Math.round(r.totals?.total_tokens || 0), 0),
+      tools_total: toolRows.reduce(
+        (a, r) => a + Math.round(r.totals?.total_tokens || 0),
+        0,
+      ),
       privacy: {
         includes_inputs: false,
         note: "Aggregated tool names only; no tool arguments or outputs are included.",

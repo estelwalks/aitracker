@@ -31,11 +31,7 @@ const desktopApi: TrustToolsDesktopApi = Object.freeze({
       Record<string, unknown>
     >,
   setPreference: (key: string, value: unknown) =>
-    ipcRenderer.invoke(
-      desktopIpc.setPreference,
-      key,
-      value,
-    ) as Promise<void>,
+    ipcRenderer.invoke(desktopIpc.setPreference, key, value) as Promise<void>,
 });
 
 contextBridge.exposeInMainWorld("trustToolsDesktop", desktopApi);

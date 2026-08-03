@@ -20,7 +20,9 @@ function exactOrSnapshot(...names: string[]) {
     name.toLowerCase().replaceAll("_", "-").replaceAll(".", "-"),
   );
   return (model: string) =>
-    normalizedNames.some((name) => model === name || model.startsWith(`${name}-20`));
+    normalizedNames.some(
+      (name) => model === name || model.startsWith(`${name}-20`),
+    );
 }
 
 function includesAll(...parts: string[]) {

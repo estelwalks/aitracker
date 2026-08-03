@@ -49,7 +49,10 @@ function normalizeAntigravityModel(model) {
   if (/^gemini-3\.\d+-flash/.test(lower)) return "gemini-2.5-flash";
   if (/^gemini-3\.\d+-pro/.test(lower)) return "gemini-2.5-pro";
   if (/^claude-(sonnet|opus|haiku)-4\.\d+/.test(lower)) {
-    return lower.replace(/^claude-(sonnet|opus|haiku)-4\.(\d+)/, "claude-$1-4-$2");
+    return lower.replace(
+      /^claude-(sonnet|opus|haiku)-4\.(\d+)/,
+      "claude-$1-4-$2",
+    );
   }
   if (lower.startsWith("gpt-oss-120b")) return "antigravity-gpt-oss-120b";
 
@@ -91,7 +94,9 @@ function normalizeClaudeModel(model) {
   // "openrouter/anthropic/...") so only the bare Claude id reaches the cleanup
   // and lookups below. Without this the "/" is flattened to "-" by the regex
   // step, breaking both the exact and provider-prefix-strip matches.
-  const base = model.includes("/") ? model.slice(model.lastIndexOf("/") + 1) : model;
+  const base = model.includes("/")
+    ? model.slice(model.lastIndexOf("/") + 1)
+    : model;
   let m = base
     .trim()
     .replace(/\([^)]*\)/g, " ")
@@ -113,7 +118,10 @@ function normalizeClaudeModel(model) {
   // genuinely version-first (`claude-3-5-sonnet`, `claude-3-opus`) and must stay
   // untouched.
   if (/^claude-(?:[4-9]|\d{2,})[.-]\d+-(?:sonnet|opus|haiku)/.test(m)) {
-    return m.replace(/^claude-(\d+)[.-](\d+)-(sonnet|opus|haiku)/, "claude-$3-$1-$2");
+    return m.replace(
+      /^claude-(\d+)[.-](\d+)-(sonnet|opus|haiku)/,
+      "claude-$3-$1-$2",
+    );
   }
 
   return m;
@@ -138,7 +146,14 @@ function normalizeCursorModel(model) {
     return isFast ? "cursor-grok-4.5-fast" : "cursor-grok-4.5";
   }
 
-  const decorations = new Set(["thinking", "xhigh", "high", "medium", "low", "fast"]);
+  const decorations = new Set([
+    "thinking",
+    "xhigh",
+    "high",
+    "medium",
+    "low",
+    "fast",
+  ]);
   m = parts.filter((part) => !decorations.has(part)).join("-");
   if (m.startsWith("claude-")) return normalizeClaudeModel(m);
   return m;
@@ -217,22 +232,35 @@ function lookupPricing(model, { curated, litellm, source } = {}) {
     return { hit: false, source: "empty", value: null };
   }
   const normalize =
-    typeof source === "string" ? SOURCE_MODEL_NORMALIZERS[source.toLowerCase()] : null;
+    typeof source === "string"
+      ? SOURCE_MODEL_NORMALIZERS[source.toLowerCase()]
+      : null;
   const lookupModel = normalize ? normalize(model) : model;
   const lower = lookupModel.toLowerCase();
   const dotForm = buildDotRestoredModel(lookupModel);
 
   // 1. CURATED exact
   if (curated.exact && curated.exact[lookupModel]) {
-    return { hit: true, source: "curated:exact", value: curated.exact[lookupModel] };
+    return {
+      hit: true,
+      source: "curated:exact",
+      value: curated.exact[lookupModel],
+    };
   }
   const curatedDotExact = lookupExactCaseInsensitive(curated.exact, dotForm);
   if (curatedDotExact) {
     return { hit: true, source: "curated:exact-dot", value: curatedDotExact };
   }
-  const curatedDotContainedExact = lookupContainedExactCaseInsensitive(curated.exact, dotForm);
+  const curatedDotContainedExact = lookupContainedExactCaseInsensitive(
+    curated.exact,
+    dotForm,
+  );
   if (curatedDotContainedExact) {
-    return { hit: true, source: "curated:exact-dot", value: curatedDotContainedExact };
+    return {
+      hit: true,
+      source: "curated:exact-dot",
+      value: curatedDotContainedExact,
+    };
   }
 
   // 2. LiteLLM exact
@@ -245,7 +273,11 @@ function lookupPricing(model, { curated, litellm, source } = {}) {
   }
 
   // 3. CURATED alias (literal mapping like "auto" -> "composer-1")
-  if (curated.alias && curated.alias[lookupModel] && curated.exact[curated.alias[lookupModel]]) {
+  if (
+    curated.alias &&
+    curated.alias[lookupModel] &&
+    curated.exact[curated.alias[lookupModel]]
+  ) {
     return {
       hit: true,
       source: "curated:alias",
@@ -266,10 +298,18 @@ function lookupPricing(model, { curated, litellm, source } = {}) {
       const needle = match.toLowerCase();
       if (!curated.exact[ref]) continue;
       if (lower.includes(needle)) {
-        return { hit: true, source: "curated:fuzzy", value: curated.exact[ref] };
+        return {
+          hit: true,
+          source: "curated:fuzzy",
+          value: curated.exact[ref],
+        };
       }
       if (dotForm && dotForm.includes(needle)) {
-        return { hit: true, source: "curated:fuzzy", value: curated.exact[ref] };
+        return {
+          hit: true,
+          source: "curated:fuzzy",
+          value: curated.exact[ref],
+        };
       }
     }
   }
@@ -298,7 +338,12 @@ function lookupPricing(model, { curated, litellm, source } = {}) {
         if (best === null || key < best) best = key;
       }
     }
-    if (best) return { hit: true, source: "litellm:prefix-strip", value: litellm[best] };
+    if (best)
+      return {
+        hit: true,
+        source: "litellm:prefix-strip",
+        value: litellm[best],
+      };
   }
 
   // 6. LiteLLM reverse substring (longest-key first)
@@ -337,10 +382,14 @@ function convertLitellmEntry(entry) {
     out.output = roundToTenDecimals(entry.output_cost_per_token * 1_000_000);
   }
   if (typeof entry.cache_read_input_token_cost === "number") {
-    out.cache_read = roundToTenDecimals(entry.cache_read_input_token_cost * 1_000_000);
+    out.cache_read = roundToTenDecimals(
+      entry.cache_read_input_token_cost * 1_000_000,
+    );
   }
   if (typeof entry.cache_creation_input_token_cost === "number") {
-    out.cache_write = roundToTenDecimals(entry.cache_creation_input_token_cost * 1_000_000);
+    out.cache_write = roundToTenDecimals(
+      entry.cache_creation_input_token_cost * 1_000_000,
+    );
   }
   return Object.keys(out).length ? out : null;
 }

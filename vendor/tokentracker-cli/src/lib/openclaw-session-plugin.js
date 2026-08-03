@@ -15,7 +15,8 @@ function resolveOpenclawSessionPluginPaths({
   if (!trackerDir) throw new Error("trackerDir is required");
 
   const openclawConfigPath =
-    normalizeString(env.OPENCLAW_CONFIG_PATH) || path.join(home, ".openclaw", "openclaw.json");
+    normalizeString(env.OPENCLAW_CONFIG_PATH) ||
+    path.join(home, ".openclaw", "openclaw.json");
 
   const openclawHome =
     normalizeString(env.TOKENTRACKER_OPENCLAW_HOME) ||
@@ -49,26 +50,38 @@ async function installOpenclawSessionPlugin({
     openclawHome: paths.openclawHome,
   });
 
-  const installResult = runOpenclawCli(["plugins", "install", "--link", paths.pluginEntryDir], env);
+  const installResult = runOpenclawCli(
+    ["plugins", "install", "--link", paths.pluginEntryDir],
+    env,
+  );
   if (installResult.skippedReason) {
     return { configured: false, ...paths, ...installResult };
   }
 
-  const enableResult = runOpenclawCli(["plugins", "enable", paths.pluginId], env);
+  const enableResult = runOpenclawCli(
+    ["plugins", "enable", paths.pluginId],
+    env,
+  );
   if (enableResult.skippedReason) {
     return {
       configured: false,
       ...paths,
       skippedReason: enableResult.skippedReason,
       error: enableResult.error,
-      stdout: `${installResult.stdout || ""}\n${enableResult.stdout || ""}`.trim(),
-      stderr: `${installResult.stderr || ""}\n${enableResult.stderr || ""}`.trim(),
+      stdout:
+        `${installResult.stdout || ""}\n${enableResult.stdout || ""}`.trim(),
+      stderr:
+        `${installResult.stderr || ""}\n${enableResult.stderr || ""}`.trim(),
       code: enableResult.code,
     };
   }
 
   const policyResult = await ensureOpenclawSessionPluginPolicy(paths);
-  const state = await probeOpenclawSessionPluginState({ home, trackerDir, env });
+  const state = await probeOpenclawSessionPluginState({
+    home,
+    trackerDir,
+    env,
+  });
   return {
     configured: state.configured,
     changed:
@@ -77,8 +90,10 @@ async function installOpenclawSessionPlugin({
       /already enabled/i.test(enableResult.stdout || "") ||
       policyResult.changed,
     ...paths,
-    stdout: `${installResult.stdout || ""}\n${enableResult.stdout || ""}`.trim(),
-    stderr: `${installResult.stderr || ""}\n${enableResult.stderr || ""}`.trim(),
+    stdout:
+      `${installResult.stdout || ""}\n${enableResult.stdout || ""}`.trim(),
+    stderr:
+      `${installResult.stderr || ""}\n${enableResult.stderr || ""}`.trim(),
     code: enableResult.code,
   };
 }
@@ -89,7 +104,8 @@ async function ensureOpenclawSessionPluginFiles({
   packageName = "tokentracker-cli",
   openclawHome,
 } = {}) {
-  if (!pluginDir || !trackerDir) throw new Error("pluginDir and trackerDir are required");
+  if (!pluginDir || !trackerDir)
+    throw new Error("pluginDir and trackerDir are required");
 
   const pluginEntryDir = path.join(pluginDir, OPENCLAW_SESSION_PLUGIN_ID);
   await fs.mkdir(pluginEntryDir, { recursive: true });
@@ -153,16 +169,21 @@ async function probeOpenclawSessionPluginState({
 
   const pluginEntry = cfg?.plugins?.entries?.[pluginId];
   const enabled = pluginEntry ? pluginEntry.enabled !== false : false;
-  const conversationAccess = pluginEntry?.hooks?.allowConversationAccess === true;
+  const conversationAccess =
+    pluginEntry?.hooks?.allowConversationAccess === true;
 
-  const loadPaths = Array.isArray(cfg?.plugins?.load?.paths) ? cfg.plugins.load.paths : [];
+  const loadPaths = Array.isArray(cfg?.plugins?.load?.paths)
+    ? cfg.plugins.load.paths
+    : [];
   const normalizedPluginEntryDir = path.resolve(pluginEntryDir);
   const linked = loadPaths.some(
     (entry) => path.resolve(String(entry || "")) === normalizedPluginEntryDir,
   );
 
   const installs =
-    cfg?.plugins?.installs && typeof cfg.plugins.installs === "object" ? cfg.plugins.installs : {};
+    cfg?.plugins?.installs && typeof cfg.plugins.installs === "object"
+      ? cfg.plugins.installs
+      : {};
   const installEntry = installs[pluginId];
   const installed = Boolean(installEntry);
 
@@ -177,7 +198,10 @@ async function probeOpenclawSessionPluginState({
   };
 }
 
-async function ensureOpenclawSessionPluginPolicy({ openclawConfigPath, pluginId } = {}) {
+async function ensureOpenclawSessionPluginPolicy({
+  openclawConfigPath,
+  pluginId,
+} = {}) {
   if (!openclawConfigPath || !pluginId) {
     throw new Error("openclawConfigPath and pluginId are required");
   }
@@ -186,7 +210,11 @@ async function ensureOpenclawSessionPluginPolicy({ openclawConfigPath, pluginId 
   if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) {
     cfg = {};
   }
-  if (!cfg.plugins || typeof cfg.plugins !== "object" || Array.isArray(cfg.plugins)) {
+  if (
+    !cfg.plugins ||
+    typeof cfg.plugins !== "object" ||
+    Array.isArray(cfg.plugins)
+  ) {
     cfg.plugins = {};
   }
   if (
@@ -199,7 +227,9 @@ async function ensureOpenclawSessionPluginPolicy({ openclawConfigPath, pluginId 
 
   const existingEntry = cfg.plugins.entries[pluginId];
   const entry =
-    existingEntry && typeof existingEntry === "object" && !Array.isArray(existingEntry)
+    existingEntry &&
+    typeof existingEntry === "object" &&
+    !Array.isArray(existingEntry)
       ? existingEntry
       : {};
   cfg.plugins.entries[pluginId] = entry;
@@ -209,7 +239,11 @@ async function ensureOpenclawSessionPluginPolicy({ openclawConfigPath, pluginId 
     entry.enabled = true;
     changed = true;
   }
-  if (!entry.hooks || typeof entry.hooks !== "object" || Array.isArray(entry.hooks)) {
+  if (
+    !entry.hooks ||
+    typeof entry.hooks !== "object" ||
+    Array.isArray(entry.hooks)
+  ) {
     entry.hooks = {};
     changed = true;
   }
@@ -221,7 +255,11 @@ async function ensureOpenclawSessionPluginPolicy({ openclawConfigPath, pluginId 
     changed = true;
   }
 
-  await fs.writeFile(openclawConfigPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
+  await fs.writeFile(
+    openclawConfigPath,
+    `${JSON.stringify(cfg, null, 2)}\n`,
+    "utf8",
+  );
   return { changed: true };
 }
 
@@ -238,7 +276,11 @@ async function removeOpenclawSessionPluginConfig({
     cfg = JSON.parse(await fs.readFile(openclawConfigPath, "utf8"));
   } catch (err) {
     if (err?.code === "ENOENT" || err?.code === "ENOTDIR") {
-      return { removed: false, skippedReason: "openclaw-config-missing", ...paths };
+      return {
+        removed: false,
+        skippedReason: "openclaw-config-missing",
+        ...paths,
+      };
     }
     return {
       removed: false,
@@ -251,7 +293,10 @@ async function removeOpenclawSessionPluginConfig({
   let changed = false;
   const plugins = cfg?.plugins;
 
-  if (plugins?.entries && Object.prototype.hasOwnProperty.call(plugins.entries, pluginId)) {
+  if (
+    plugins?.entries &&
+    Object.prototype.hasOwnProperty.call(plugins.entries, pluginId)
+  ) {
     delete plugins.entries[pluginId];
     changed = true;
     if (Object.keys(plugins.entries).length === 0) delete plugins.entries;
@@ -299,7 +344,11 @@ async function removeOpenclawSessionPluginConfig({
   }
 
   if (changed) {
-    await fs.writeFile(openclawConfigPath, `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
+    await fs.writeFile(
+      openclawConfigPath,
+      `${JSON.stringify(cfg, null, 2)}\n`,
+      "utf8",
+    );
   }
 
   const hadFiles = await fs
@@ -335,7 +384,8 @@ function runOpenclawCli(args, env = process.env) {
   } catch (err) {
     return {
       code: 1,
-      skippedReason: err?.code === "ENOENT" ? "openclaw-cli-missing" : "openclaw-cli-error",
+      skippedReason:
+        err?.code === "ENOENT" ? "openclaw-cli-missing" : "openclaw-cli-error",
       error: err?.message || String(err),
       stdout: "",
       stderr: "",
@@ -356,7 +406,9 @@ function runOpenclawCli(args, env = process.env) {
     return {
       code: Number(res.status || 1),
       skippedReason: "openclaw-plugins-install-failed",
-      error: (res.stderr || res.stdout || "").trim() || "openclaw plugins install failed",
+      error:
+        (res.stderr || res.stdout || "").trim() ||
+        "openclaw plugins install failed",
       stdout: res.stdout || "",
       stderr: res.stderr || "",
     };
@@ -390,7 +442,8 @@ function buildSessionPluginMeta() {
     {
       id: OPENCLAW_SESSION_PLUGIN_ID,
       name: "TokenTracker OpenClaw Session Sync",
-      description: "Trigger tokentracker sync on OpenClaw agent/session lifecycle events.",
+      description:
+        "Trigger tokentracker sync on OpenClaw agent/session lifecycle events.",
       configSchema: {
         type: "object",
         additionalProperties: false,
@@ -402,7 +455,11 @@ function buildSessionPluginMeta() {
   )}\n`;
 }
 
-function buildSessionPluginIndex({ trackerDir, packageName = "tokentracker-cli", openclawHome }) {
+function buildSessionPluginIndex({
+  trackerDir,
+  packageName = "tokentracker-cli",
+  openclawHome,
+}) {
   const trackerBinPath = path.join(trackerDir, "app", "bin", "tracker.js");
   const fallbackPkg = packageName || "tokentracker-cli";
   const safeOpenclawHome = openclawHome || path.join(os.homedir(), ".openclaw");

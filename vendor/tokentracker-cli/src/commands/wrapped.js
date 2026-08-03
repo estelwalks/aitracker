@@ -5,7 +5,10 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 const { resolveTrackerPaths } = require("../lib/tracker-paths");
-const { aggregateWrapped, formatCompact } = require("../lib/wrapped-aggregator");
+const {
+  aggregateWrapped,
+  formatCompact,
+} = require("../lib/wrapped-aggregator");
 
 async function readQueueRows(queuePath) {
   if (!fs.existsSync(queuePath)) return [];
@@ -63,7 +66,9 @@ function renderAscii(wrapped) {
   lines.push(center(""));
   lines.push(`╠${border}╣`);
   lines.push(row("Total tokens", formatCompact(wrapped.totals.tokens)));
-  lines.push(row("Conversations", wrapped.totals.conversations.toLocaleString("en-US")));
+  lines.push(
+    row("Conversations", wrapped.totals.conversations.toLocaleString("en-US")),
+  );
   lines.push(row("Active days", `${wrapped.totals.active_days} / 365`));
   lines.push(row("Tools used", String(wrapped.totals.sources)));
   lines.push(row("Models used", String(wrapped.totals.models)));
@@ -77,7 +82,10 @@ function renderAscii(wrapped) {
   }
   if (wrapped.longest_streak.days > 0) {
     lines.push(
-      row("Longest streak", `${wrapped.longest_streak.days} days (${wrapped.longest_streak.from} → ${wrapped.longest_streak.to})`),
+      row(
+        "Longest streak",
+        `${wrapped.longest_streak.days} days (${wrapped.longest_streak.from} → ${wrapped.longest_streak.to})`,
+      ),
     );
   }
   lines.push(`╠${border}╣`);
@@ -85,14 +93,24 @@ function renderAscii(wrapped) {
   if (wrapped.top.sources.length > 0) {
     lines.push(row("Top tools", ""));
     for (const s of wrapped.top.sources.slice(0, 3)) {
-      lines.push(row(`  ${s.source}`, `${formatCompact(s.tokens)} (${(s.share * 100).toFixed(0)}%)`));
+      lines.push(
+        row(
+          `  ${s.source}`,
+          `${formatCompact(s.tokens)} (${(s.share * 100).toFixed(0)}%)`,
+        ),
+      );
     }
   }
   if (wrapped.top.models.length > 0) {
     lines.push(`╠${border}╣`);
     lines.push(row("Top models", ""));
     for (const m of wrapped.top.models.slice(0, 3)) {
-      lines.push(row(`  ${m.model}`, `${formatCompact(m.tokens)} (${(m.share * 100).toFixed(0)}%)`));
+      lines.push(
+        row(
+          `  ${m.model}`,
+          `${formatCompact(m.tokens)} (${(m.share * 100).toFixed(0)}%)`,
+        ),
+      );
     }
   }
   if (wrapped.top.days.length > 0) {
@@ -128,7 +146,9 @@ async function cmdWrapped(argv = []) {
   const rows = await readQueueRows(queuePath);
   if (rows.length === 0) {
     if (opts.json) {
-      process.stdout.write(JSON.stringify({ error: "no data" }, null, 2) + "\n");
+      process.stdout.write(
+        JSON.stringify({ error: "no data" }, null, 2) + "\n",
+      );
     } else {
       process.stdout.write(
         "No queue data found yet. Run `tracker sync` first to ingest some history.\n",

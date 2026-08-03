@@ -16,7 +16,9 @@ function parseJwtExpirationMs(token) {
   const parts = token.split(".");
   if (parts.length < 2 || !parts[1]) return null;
   try {
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const payload = JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf8"),
+    );
     const exp = Number(payload?.exp);
     return Number.isFinite(exp) ? exp * 1000 : null;
   } catch (_e) {
@@ -37,7 +39,9 @@ function isTokenStale(lastRefreshIso, nowMs = Date.now(), accessToken = null) {
 
 async function refreshCodexTokens({ refreshToken, fetchImpl = fetch }) {
   if (typeof refreshToken !== "string" || refreshToken.length === 0) {
-    const err = new Error("Codex refresh skipped: no refresh_token in auth.json");
+    const err = new Error(
+      "Codex refresh skipped: no refresh_token in auth.json",
+    );
     err.code = "NO_REFRESH_TOKEN";
     throw err;
   }
@@ -68,15 +72,18 @@ async function refreshCodexTokens({ refreshToken, fetchImpl = fetch }) {
       // Ignore parse failure — surface the generic reason.
     }
     const reason = String(openaiErrorCode || "").toLowerCase();
-    let message = "Codex refresh token was rejected. Run `codex login` to re-authenticate.";
+    let message =
+      "Codex refresh token was rejected. Run `codex login` to re-authenticate.";
     if (reason === "refresh_token_expired") {
-      message = "Codex refresh token expired. Run `codex login` to re-authenticate.";
+      message =
+        "Codex refresh token expired. Run `codex login` to re-authenticate.";
     } else if (reason === "refresh_token_reused") {
       message =
         "Codex refresh token was already used, likely by another Codex process. " +
         "Run `codex login` to re-authenticate.";
     } else if (reason === "refresh_token_invalidated") {
-      message = "Codex refresh token was revoked. Run `codex login` to re-authenticate.";
+      message =
+        "Codex refresh token was revoked. Run `codex login` to re-authenticate.";
     }
     const err = new Error(message);
     err.code = "REFRESH_TOKEN_EXPIRED";
@@ -92,7 +99,11 @@ async function refreshCodexTokens({ refreshToken, fetchImpl = fetch }) {
   }
 
   const body = await res.json();
-  if (!body || typeof body.access_token !== "string" || body.access_token.length === 0) {
+  if (
+    !body ||
+    typeof body.access_token !== "string" ||
+    body.access_token.length === 0
+  ) {
     const err = new Error("Codex token refresh response missing access_token");
     err.code = "REFRESH_INVALID_RESPONSE";
     throw err;
@@ -123,7 +134,9 @@ async function persistRefreshedAuth(authPath, currentAuth, newTokens) {
   };
 
   const tmp = `${authPath}.tmp.${process.pid}.${Date.now()}`;
-  await fs.promises.writeFile(tmp, JSON.stringify(merged, null, 2), { mode: 0o600 });
+  await fs.promises.writeFile(tmp, JSON.stringify(merged, null, 2), {
+    mode: 0o600,
+  });
   await fs.promises.rename(tmp, authPath);
   return merged;
 }

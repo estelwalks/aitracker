@@ -1,7 +1,12 @@
 const fssync = require("node:fs");
 const path = require("node:path");
 
-const DEFAULT_EXEC_OPTS = { timeout: 15000, windowsHide: true, maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] };
+const DEFAULT_EXEC_OPTS = {
+  timeout: 15000,
+  windowsHide: true,
+  maxBuffer: 1024 * 1024,
+  stdio: ["ignore", "pipe", "ignore"],
+};
 
 let _cachedDistros = null;
 const _cachedWslUsers = new Map();
@@ -29,7 +34,10 @@ function parseWslListVerbose(raw) {
   if (typeof raw !== "string") return [];
   const distros = [];
   for (const line of raw.split(/\r?\n/)) {
-    const clean = line.replace(/\0/g, "").replace(/\uFEFF/g, "").trim();
+    const clean = line
+      .replace(/\0/g, "")
+      .replace(/\uFEFF/g, "")
+      .trim();
     if (!clean) continue;
     const cells = clean.split(/\s+/);
     let isDefault = false;
@@ -41,7 +49,11 @@ function parseWslListVerbose(raw) {
     const name = cells[idx];
     if (!name || name === "NAME") continue;
     const version = parseInt(cells[cells.length - 1], 10);
-    distros.push({ name, version: Number.isFinite(version) ? version : null, isDefault });
+    distros.push({
+      name,
+      version: Number.isFinite(version) ? version : null,
+      isDefault,
+    });
   }
   return distros;
 }
@@ -58,7 +70,9 @@ function probeWslDistros(deps = {}) {
     return [];
   }
   const distros = parseWslListVerbose(raw);
-  const sorted = distros.sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
+  const sorted = distros.sort(
+    (a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0),
+  );
   if (!hasDeps) _cachedDistros = sorted;
   return sorted;
 }
@@ -131,8 +145,10 @@ function lookupWslUser(distroName, runWsl, useCache) {
   }
   let user = "";
   try {
-    user = String(runWsl(["-d", distroName, "-e", "whoami"], { utf16: false }) || "").trim();
-  } catch (_e) { }
+    user = String(
+      runWsl(["-d", distroName, "-e", "whoami"], { utf16: false }) || "",
+    ).trim();
+  } catch (_e) {}
   if (useCache) _cachedWslUsers.set(distroName, user);
   return user;
 }
@@ -142,19 +158,22 @@ function discoverWslHome(providerDir, deps = {}) {
 
   const runWsl = deps.runWsl || defaultRunWsl;
   const existsSync = deps.existsSync || fssync.existsSync;
-  const distros = deps.runWsl ? probeWslDistros({ runWsl: deps.runWsl }) : probeWslDistros();
+  const distros = deps.runWsl
+    ? probeWslDistros({ runWsl: deps.runWsl })
+    : probeWslDistros();
   const useCache = !deps.runWsl;
   for (const distro of distros) {
     const user = lookupWslUser(distro.name, runWsl, useCache);
     if (!user) continue;
-    const roots = distro.version === 1
-      ? ["\\\\wsl.localhost\\", "\\\\wsl$\\"]
-      : ["\\\\wsl$\\", "\\\\wsl.localhost\\"];
+    const roots =
+      distro.version === 1
+        ? ["\\\\wsl.localhost\\", "\\\\wsl$\\"]
+        : ["\\\\wsl$\\", "\\\\wsl.localhost\\"];
     for (const root of roots) {
       const candidate = `${root}${distro.name}\\home\\${user}\\${providerDir}`;
       try {
         if (existsSync(candidate)) return candidate;
-      } catch (_e) { }
+      } catch (_e) {}
     }
   }
   return null;
@@ -208,12 +227,14 @@ function snapshotSqliteDb(dbPath) {
     const src = dbPath + suffix;
     try {
       if (fssync.existsSync(src)) fssync.copyFileSync(src, target + suffix);
-    } catch (_e) { }
+    } catch (_e) {}
   }
   return {
     path: target,
     cleanup() {
-      try { fssync.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_e) { }
+      try {
+        fssync.rmSync(tmpRoot, { recursive: true, force: true });
+      } catch (_e) {}
     },
   };
 }

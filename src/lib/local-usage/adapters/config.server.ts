@@ -43,7 +43,10 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, allowed: Set<string>): boolean {
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: Set<string>,
+): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
@@ -98,7 +101,9 @@ function parsePath(value: unknown): UsageAdapterPath | undefined {
     !hasOnlyKeys(path, PATH_KEYS) ||
     !safeRelativePath(path.root) ||
     !safeGlob(path.glob) ||
-    (path.format !== "json" && path.format !== "jsonl" && path.format !== "sqlite")
+    (path.format !== "json" &&
+      path.format !== "jsonl" &&
+      path.format !== "sqlite")
   ) {
     return undefined;
   }
@@ -138,7 +143,11 @@ function parseMapping(value: unknown): UsageFieldMapping | undefined {
       parsed[key as keyof UsageFieldMapping] = paths;
     }
   }
-  if (parsed.inputTokens == null && parsed.outputTokens == null && parsed.totalTokens == null) {
+  if (
+    parsed.inputTokens == null &&
+    parsed.outputTokens == null &&
+    parsed.totalTokens == null
+  ) {
     return undefined;
   }
   return parsed;
@@ -178,7 +187,10 @@ function parseAdapter(value: unknown): ExternalUsageAdapterConfig | undefined {
 
 export async function loadExternalUsageAdapters(
   configFilePath: string,
-): Promise<{ adapters: UsageAdapterContract[]; diagnostics: LocalUsageDiagnostic[] }> {
+): Promise<{
+  adapters: UsageAdapterContract[];
+  diagnostics: LocalUsageDiagnostic[];
+}> {
   let raw: unknown;
   try {
     raw = JSON.parse(await readFile(configFilePath, "utf8")) as unknown;
@@ -212,7 +224,9 @@ export async function loadExternalUsageAdapters(
       mapping: adapter.mapping,
       query: adapter.query,
       maxFileSizeBytes:
-        adapter.query == null ? GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES : 512 * 1024 * 1024,
+        adapter.query == null
+          ? GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES
+          : 512 * 1024 * 1024,
       kind: "external",
     })),
     diagnostics: [],
@@ -251,7 +265,8 @@ export function parseExternalUsageAdapterFile(raw: unknown): {
           source: "custom:config",
           code: "config-invalid",
           count: 1,
-          message: "外部 Token 适配配置包含非法路径、glob、只读查询或字段映射。",
+          message:
+            "外部 Token 适配配置包含非法路径、glob、只读查询或字段映射。",
         },
       ],
     };

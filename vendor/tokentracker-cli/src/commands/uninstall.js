@@ -20,9 +20,14 @@ const {
   buildGeminiHookCommand,
   removeGeminiHook,
 } = require("../lib/gemini-config");
-const { resolveOpencodeConfigDir, removeOpencodePlugin } = require("../lib/opencode-config");
+const {
+  resolveOpencodeConfigDir,
+  removeOpencodePlugin,
+} = require("../lib/opencode-config");
 const { removeOpenclawHookConfig } = require("../lib/openclaw-hook");
-const { removeOpenclawSessionPluginConfig } = require("../lib/openclaw-session-plugin");
+const {
+  removeOpenclawSessionPluginConfig,
+} = require("../lib/openclaw-session-plugin");
 const { removeGrokHook } = require("../lib/grok-hook");
 const { resolveTrackerPaths } = require("../lib/tracker-paths");
 
@@ -35,16 +40,29 @@ async function cmdUninstall(argv) {
   const codeHome = process.env.CODE_HOME || path.join(home, ".code");
   const codeConfigPath = path.join(codeHome, "config.toml");
   const claudeSettingsPath = path.join(home, ".claude", "settings.json");
-  const codebuddyDir = process.env.CODEBUDDY_HOME || path.join(home, ".codebuddy");
+  const codebuddyDir =
+    process.env.CODEBUDDY_HOME || path.join(home, ".codebuddy");
   const codebuddySettingsPath = path.join(codebuddyDir, "settings.json");
-  const workbuddyDir = process.env.WORKBUDDY_HOME || path.join(home, ".workbuddy");
+  const workbuddyDir =
+    process.env.WORKBUDDY_HOME || path.join(home, ".workbuddy");
   const workbuddySettingsPath = path.join(workbuddyDir, "settings.json");
   const geminiConfigDir = resolveGeminiConfigDir({ home, env: process.env });
-  const geminiSettingsPath = resolveGeminiSettingsPath({ configDir: geminiConfigDir });
-  const opencodeConfigDir = resolveOpencodeConfigDir({ home, env: process.env });
+  const geminiSettingsPath = resolveGeminiSettingsPath({
+    configDir: geminiConfigDir,
+  });
+  const opencodeConfigDir = resolveOpencodeConfigDir({
+    home,
+    env: process.env,
+  });
   const notifyPath = path.join(binDir, "notify.cjs");
-  const notifyOriginalPath = path.join(trackerDir, "codex_notify_original.json");
-  const codeNotifyOriginalPath = path.join(trackerDir, "code_notify_original.json");
+  const notifyOriginalPath = path.join(
+    trackerDir,
+    "codex_notify_original.json",
+  );
+  const codeNotifyOriginalPath = path.join(
+    trackerDir,
+    "code_notify_original.json",
+  );
   const codexNotifyCmd = buildCodexNotifyCmd(notifyPath);
   const codeNotifyCmd = buildEveryCodeNotifyCmd(notifyPath);
   const claudeHookCommand = buildClaudeHookCommand(notifyPath);
@@ -92,7 +110,10 @@ async function cmdUninstall(argv) {
       })
     : { removed: false, skippedReason: "config-missing" };
   const geminiRemove = geminiConfigExists
-    ? await removeGeminiHook({ settingsPath: geminiSettingsPath, hookCommand: geminiHookCommand })
+    ? await removeGeminiHook({
+        settingsPath: geminiSettingsPath,
+        hookCommand: geminiHookCommand,
+      })
     : { removed: false, skippedReason: "config-missing" };
   const opencodeRemove = opencodeConfigExists
     ? await removeOpencodePlugin({ configDir: opencodeConfigDir })
@@ -102,22 +123,39 @@ async function cmdUninstall(argv) {
     trackerDir,
     env: process.env,
   });
-  const openclawHookRemove = await removeOpenclawHookConfig({ home, trackerDir, env: process.env });
-  const grokHookRemove = await removeGrokHook({ home, trackerDir, env: process.env });
+  const openclawHookRemove = await removeOpenclawHookConfig({
+    home,
+    trackerDir,
+    env: process.env,
+  });
+  const grokHookRemove = await removeGrokHook({
+    home,
+    trackerDir,
+    env: process.env,
+  });
 
   // Remove installed notify handler.
   await fs.unlink(notifyPath).catch(() => {});
 
   // Remove local app runtime (installed by init for notify-driven sync).
-  await fs.rm(path.join(trackerDir, "app"), { recursive: true, force: true }).catch(() => {});
+  await fs
+    .rm(path.join(trackerDir, "app"), { recursive: true, force: true })
+    .catch(() => {});
 
   // Deliberately NOT removed by --purge: the machine-identity seed lets a
   // reinstall reuse the same cloud device row instead of double-counting the
   // replayed history under a new device (issue #176).
-  const machineIdSeedPath = path.join(home, ".config", "tokentracker", "machine-id");
+  const machineIdSeedPath = path.join(
+    home,
+    ".config",
+    "tokentracker",
+    "machine-id",
+  );
   let machineIdSeedKept = false;
   if (opts.purge) {
-    await fs.rm(path.join(home, ".tokentracker"), { recursive: true, force: true }).catch(() => {});
+    await fs
+      .rm(path.join(home, ".tokentracker"), { recursive: true, force: true })
+      .catch(() => {});
     machineIdSeedKept = await fs.access(machineIdSeedPath).then(
       () => true,
       () => false,
@@ -134,7 +172,7 @@ async function cmdUninstall(argv) {
             ? "- Codex notify: skipped (no backup; not installed)"
             : codexRestore?.skippedReason === "current-not-managed"
               ? "- Codex notify: skipped (current notify is not managed by TokenTracker)"
-            : "- Codex notify: no change"
+              : "- Codex notify: no change"
         : "- Codex notify: skipped (config.toml not found)",
       codeConfigExists
         ? codeRestore?.restored
@@ -143,7 +181,7 @@ async function cmdUninstall(argv) {
             ? "- Every Code notify: skipped (no backup; not installed)"
             : codeRestore?.skippedReason === "current-not-managed"
               ? "- Every Code notify: skipped (current notify is not managed by TokenTracker)"
-            : "- Every Code notify: no change"
+              : "- Every Code notify: no change"
         : "- Every Code notify: skipped (config.toml not found)",
       claudeConfigExists
         ? claudeRemove?.removed
@@ -184,7 +222,8 @@ async function cmdUninstall(argv) {
         : `- Opencode plugin: skipped (${opencodeConfigDir} not found)`,
       openclawSessionPluginRemove?.removed
         ? `- OpenClaw session plugin removed: ${openclawSessionPluginRemove.openclawConfigPath}`
-        : openclawSessionPluginRemove?.skippedReason === "openclaw-config-missing"
+        : openclawSessionPluginRemove?.skippedReason ===
+            "openclaw-config-missing"
           ? "- OpenClaw session plugin: skipped (openclaw config not found)"
           : "- OpenClaw session plugin: no change",
       openclawHookRemove?.removed
@@ -195,9 +234,13 @@ async function cmdUninstall(argv) {
       grokHookRemove?.removed
         ? `- Grok Build hook removed: ${grokHookRemove.hookPath}`
         : "- Grok Build hook: no change",
-      opts.purge ? `- Purged: ${path.join(home, ".tokentracker")}` : "- Purge: skipped (use --purge)",
+      opts.purge
+        ? `- Purged: ${path.join(home, ".tokentracker")}`
+        : "- Purge: skipped (use --purge)",
       ...(machineIdSeedKept
-        ? [`- Kept: ${machineIdSeedPath} (cloud device identity — a reinstall reuses the same device; delete it to fully reset)`]
+        ? [
+            `- Kept: ${machineIdSeedPath} (cloud device identity — a reinstall reuses the same device; delete it to fully reset)`,
+          ]
         : []),
       "",
     ].join("\n"),

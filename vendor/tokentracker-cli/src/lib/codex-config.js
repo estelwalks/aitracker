@@ -40,7 +40,8 @@ function isManagedNotifyCmd(cmd, expectedNotify) {
   const notifyIndexOf = (parts) =>
     parts.findIndex(
       (part) =>
-        typeof part === "string" && part.replace(/\\/g, "/").endsWith("notify.cjs"),
+        typeof part === "string" &&
+        part.replace(/\\/g, "/").endsWith("notify.cjs"),
     );
 
   const index = notifyIndexOf(cmd);
@@ -50,7 +51,10 @@ function isManagedNotifyCmd(cmd, expectedNotify) {
   if (!Array.isArray(expectedNotify)) return true;
   const expectedIndex = notifyIndexOf(expectedNotify);
   if (expectedIndex === -1) return true;
-  return arraysEqual(cmd.slice(index + 1), expectedNotify.slice(expectedIndex + 1));
+  return arraysEqual(
+    cmd.slice(index + 1),
+    expectedNotify.slice(expectedIndex + 1),
+  );
 }
 
 async function upsertNotify({
@@ -64,7 +68,9 @@ async function upsertNotify({
   const originalText = await fs.readFile(configPath, "utf8").catch(() => null);
   if (originalText == null) {
     const label =
-      typeof configLabel === "string" && configLabel.length > 0 ? configLabel : "Config";
+      typeof configLabel === "string" && configLabel.length > 0
+        ? configLabel
+        : "Config";
     throw new Error(`${label} not found: ${configPath}`);
   }
 
@@ -81,7 +87,8 @@ async function upsertNotify({
     // absence instead. Reachable when the backup file is gone but the config
     // entry is not, e.g. after the user deletes ~/.tokentracker.
     const hasForeignNotify =
-      Array.isArray(existingNotify) && !isManagedNotifyCmd(existingNotify, notifyCmd);
+      Array.isArray(existingNotify) &&
+      !isManagedNotifyCmd(existingNotify, notifyCmd);
     if (captureOriginal && (hasForeignNotify || replaceOriginal)) {
       await ensureDir(path.dirname(notifyOriginalPath));
       const existing = await readJson(notifyOriginalPath);
@@ -103,12 +110,18 @@ async function upsertNotify({
   return { changed: false, backupPath: null };
 }
 
-async function restoreNotify({ configPath, notifyOriginalPath, expectedNotify }) {
+async function restoreNotify({
+  configPath,
+  notifyOriginalPath,
+  expectedNotify,
+}) {
   const text = await fs.readFile(configPath, "utf8").catch(() => null);
   if (text == null) return { restored: false, skippedReason: "config-missing" };
 
   const original = await readJson(notifyOriginalPath);
-  const originalNotify = Array.isArray(original?.notify) ? original.notify : null;
+  const originalNotify = Array.isArray(original?.notify)
+    ? original.notify
+    : null;
   const currentNotify = extractNotify(text);
 
   if (!originalNotify && expectedNotify && currentNotify == null) {
@@ -119,7 +132,9 @@ async function restoreNotify({ configPath, notifyOriginalPath, expectedNotify })
     return { restored: false, skippedReason: "current-not-managed" };
   }
 
-  const updated = originalNotify ? setNotify(text, originalNotify) : removeNotify(text);
+  const updated = originalNotify
+    ? setNotify(text, originalNotify)
+    : removeNotify(text);
   if (updated === text) return { restored: false, skippedReason: "no-change" };
 
   const backupPath = `${configPath}.bak.${new Date().toISOString().replace(/[:.]/g, "-")}`;
@@ -156,7 +171,11 @@ async function upsertCodexNotify({
   });
 }
 
-async function restoreCodexNotify({ codexConfigPath, notifyOriginalPath, notifyCmd }) {
+async function restoreCodexNotify({
+  codexConfigPath,
+  notifyOriginalPath,
+  notifyCmd,
+}) {
   return restoreNotify({
     configPath: codexConfigPath,
     notifyOriginalPath,
@@ -189,7 +208,11 @@ async function upsertEveryCodeNotify({
   });
 }
 
-async function restoreEveryCodeNotify({ codeConfigPath, notifyOriginalPath, notifyCmd }) {
+async function restoreEveryCodeNotify({
+  codeConfigPath,
+  notifyOriginalPath,
+  notifyCmd,
+}) {
   return restoreNotify({
     configPath: codeConfigPath,
     notifyOriginalPath,
@@ -520,7 +543,9 @@ function isTomlTableHeader(line) {
 }
 
 function isTopLevelTomlBoundary(line) {
-  return /^\s*(?:\[\[?[^\]]+\]\]?|(?:[A-Za-z0-9_-]+|"[^"]+"|'[^']+')(?:\s*\.\s*(?:[A-Za-z0-9_-]+|"[^"]+"|'[^']+'))*\s*=)/.test(line);
+  return /^\s*(?:\[\[?[^\]]+\]\]?|(?:[A-Za-z0-9_-]+|"[^"]+"|'[^']+')(?:\s*\.\s*(?:[A-Za-z0-9_-]+|"[^"]+"|'[^']+'))*\s*=)/.test(
+    line,
+  );
 }
 
 function isTomlArrayTrailer(text) {

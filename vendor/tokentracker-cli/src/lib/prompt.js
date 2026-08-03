@@ -1,7 +1,10 @@
 const readline = require("node:readline");
 
 async function prompt(label) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   const value = await new Promise((resolve) => rl.question(label, resolve));
   rl.close();
   return String(value || "").trim();

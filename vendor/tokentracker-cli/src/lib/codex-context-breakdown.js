@@ -50,7 +50,12 @@ function mergeRows(map, rows) {
     const key = rawName || name;
     if (!key) continue;
     if (!map.has(key)) {
-      map.set(key, { name, raw_name: rawName, calls: 0, totals: emptyTotals() });
+      map.set(key, {
+        name,
+        raw_name: rawName,
+        calls: 0,
+        totals: emptyTotals(),
+      });
     }
     const cur = map.get(key);
     cur.name = name;
@@ -80,7 +85,10 @@ function mergeExecRows(map, rows) {
     cur.calls += Number(row.calls || 0);
     cur.failures += Number(row.failures || 0);
     cur.duration_ms += Number(row.duration_ms || 0);
-    cur.max_duration_ms = Math.max(cur.max_duration_ms, Number(row.max_duration_ms || 0));
+    cur.max_duration_ms = Math.max(
+      cur.max_duration_ms,
+      Number(row.max_duration_ms || 0),
+    );
     cur.output_chars += Number(row.output_chars || 0);
     cur.output_lines += Number(row.output_lines || 0);
     mergeRollupTotals(cur.totals, row.totals || {});
@@ -136,7 +144,9 @@ function mergeParsedSessionResults(previous, delta) {
 // ---------------------------------------------------------------------------
 
 function normalizePeriod(period) {
-  const p = String(period || "").trim().toLowerCase();
+  const p = String(period || "")
+    .trim()
+    .toLowerCase();
   if (!p) return null;
   if (["day", "week", "month", "total"].includes(p)) return p;
   return null;
@@ -149,7 +159,8 @@ function buildDateRange({ period, date }) {
   if (!Number.isFinite(end.getTime())) return null;
 
   let start;
-  if (period === "day") start = new Date(`${anchor.toISOString().slice(0, 10)}T00:00:00Z`);
+  if (period === "day")
+    start = new Date(`${anchor.toISOString().slice(0, 10)}T00:00:00Z`);
   else if (period === "week") start = new Date(end.getTime() - 6 * 86400_000);
   else if (period === "month") start = new Date(end.getTime() - 29 * 86400_000);
   else if (period === "total") start = null;
@@ -178,7 +189,14 @@ function cacheTimeZoneKey(timeZoneContext) {
 }
 
 function statIdentity(filePath, stat) {
-  return JSON.stringify([filePath, stat.dev, stat.ino, stat.size, stat.mtimeMs, stat.ctimeMs]);
+  return JSON.stringify([
+    filePath,
+    stat.dev,
+    stat.ino,
+    stat.size,
+    stat.mtimeMs,
+    stat.ctimeMs,
+  ]);
 }
 
 function contentStatIdentity(filePath, stat) {
@@ -196,7 +214,8 @@ function isUnlinkedResumeSnapshot(filePath, before, after) {
     before &&
     after &&
     Number(after.nlink) === 0 &&
-    contentStatIdentity(filePath, before) === contentStatIdentity(filePath, after),
+    contentStatIdentity(filePath, before) ===
+      contentStatIdentity(filePath, after),
   );
 }
 
@@ -240,23 +259,22 @@ function selectAppendHashPaths(candidateGroups) {
   // its hash state for subsequent append-only refreshes.
   let newest = null;
   for (const entries of candidateGroups.values()) {
-    if (
-      entries.length !== 1 ||
-      !rolloutSessionIdFromPath(entries[0].filePath)
-    ) continue;
+    if (entries.length !== 1 || !rolloutSessionIdFromPath(entries[0].filePath))
+      continue;
     const entry = entries[0];
     if (!newest) {
       newest = entry;
       continue;
     }
-    const mtimeDelta = Number(entry.stat?.mtimeMs || 0) -
-      Number(newest.stat?.mtimeMs || 0);
-    const ctimeDelta = Number(entry.stat?.ctimeMs || 0) -
-      Number(newest.stat?.ctimeMs || 0);
+    const mtimeDelta =
+      Number(entry.stat?.mtimeMs || 0) - Number(newest.stat?.mtimeMs || 0);
+    const ctimeDelta =
+      Number(entry.stat?.ctimeMs || 0) - Number(newest.stat?.ctimeMs || 0);
     if (
       mtimeDelta > 0 ||
       (mtimeDelta === 0 && ctimeDelta > 0) ||
-      (mtimeDelta === 0 && ctimeDelta === 0 &&
+      (mtimeDelta === 0 &&
+        ctimeDelta === 0 &&
         entry.filePath.localeCompare(newest.filePath) < 0)
     ) {
       newest = entry;
@@ -265,11 +283,7 @@ function selectAppendHashPaths(candidateGroups) {
   return newest ? new Set([newest.filePath]) : new Set();
 }
 
-async function digestFilePrefix(
-  sourceHandle,
-  endOffset,
-  diagnostics = null,
-) {
+async function digestFilePrefix(sourceHandle, endOffset, diagnostics = null) {
   const end = Math.max(0, Number(endOffset) || 0);
   const hash = crypto.createHash("sha256");
   if (end === 0) return hash.digest("hex");
@@ -297,7 +311,8 @@ async function openValidatedResumeFile(cached, entry, diagnostics = null) {
     typeof cached.contentHashState.copy !== "function" ||
     cached.appendable !== true ||
     cached.filePath !== entry.filePath
-  ) return null;
+  )
+    return null;
   const previous = cached.stat;
   const current = entry.stat;
   if (
@@ -320,7 +335,8 @@ async function openValidatedResumeFile(cached, entry, diagnostics = null) {
     if (
       statIdentity(entry.filePath, opened) !==
       statIdentity(entry.filePath, current)
-    ) return null;
+    )
+      return null;
 
     const expected = cached.contentHashState.copy().digest("hex");
     const actual = await digestFilePrefix(
@@ -335,7 +351,8 @@ async function openValidatedResumeFile(cached, entry, diagnostics = null) {
       statIdentity(entry.filePath, current) !==
         statIdentity(entry.filePath, afterValidation) &&
       !isUnlinkedResumeSnapshot(entry.filePath, current, afterValidation)
-    ) return null;
+    )
+      return null;
     keepOpen = true;
     return handle;
   } catch {
@@ -369,7 +386,13 @@ function splitCapturedParse(parsed) {
     contentHashState = null,
     ...result
   } = parsed;
-  return { parsed: result, resumeState, endOffset, appendable, contentHashState };
+  return {
+    parsed: result,
+    resumeState,
+    endOffset,
+    appendable,
+    contentHashState,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +413,7 @@ async function computeCodexContextBreakdown({
 } = {}) {
   let fromKey = from;
   let toKey = to;
-  if ((!fromKey && !toKey) && normalizePeriod(period)) {
+  if (!fromKey && !toKey && normalizePeriod(period)) {
     const range = buildDateRange({ period: normalizePeriod(period), date });
     fromKey = range?.from || null;
     toKey = range?.to || null;
@@ -399,7 +422,10 @@ async function computeCodexContextBreakdown({
   const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
   const roots = codexDir
     ? [codexDir]
-    : [path.join(codexHome, "sessions"), path.join(codexHome, "archived_sessions")];
+    : [
+        path.join(codexHome, "sessions"),
+        path.join(codexHome, "archived_sessions"),
+      ];
   const baseDir = roots.join(path.delimiter);
   const diagnostics = {
     cache_hit: false,
@@ -448,7 +474,8 @@ async function computeCodexContextBreakdown({
 
   const candidateGroups = new Map();
   for (const entry of candidates) {
-    const sessionKey = rolloutSessionIdFromPath(entry.filePath) || entry.filePath;
+    const sessionKey =
+      rolloutSessionIdFromPath(entry.filePath) || entry.filePath;
     if (!candidateGroups.has(sessionKey)) candidateGroups.set(sessionKey, []);
     candidateGroups.get(sessionKey).push(entry);
   }
@@ -458,10 +485,16 @@ async function computeCodexContextBreakdown({
     const filePaths = entries.map((entry) => entry.filePath);
     const cacheable = Boolean(rolloutSessionIdFromPath(filePaths[0]));
     const parsedCacheKey = cacheable
-      ? parsedGroupCacheKey(entries, { from: fromKey, to: toKey, timeZoneContext })
+      ? parsedGroupCacheKey(entries, {
+          from: fromKey,
+          to: toKey,
+          timeZoneContext,
+        })
       : null;
     const signature = parsedGroupSignature(entries);
-    const cachedGroup = parsedCacheKey ? PARSED_GROUP_CACHE.get(parsedCacheKey) : null;
+    const cachedGroup = parsedCacheKey
+      ? PARSED_GROUP_CACHE.get(parsedCacheKey)
+      : null;
     let parsed = null;
     if (cachedGroup?.signature === signature) {
       // Cacheable groups are partitioned by rollout UUID, so their token event
@@ -511,7 +544,9 @@ async function computeCodexContextBreakdown({
             )
           ) {
             try {
-              const expectedSnapshot = resumed.contentHashState.copy().digest("hex");
+              const expectedSnapshot = resumed.contentHashState
+                .copy()
+                .digest("hex");
               const actualSnapshot = await digestFilePrefix(
                 resumeHandle,
                 singleEntry.stat.size,
@@ -525,7 +560,10 @@ async function computeCodexContextBreakdown({
           if (stableAfterParse) {
             const delta = splitCapturedParse(resumed);
             captured = {
-              parsed: mergeParsedSessionResults(cachedGroup.parsed, delta.parsed),
+              parsed: mergeParsedSessionResults(
+                cachedGroup.parsed,
+                delta.parsed,
+              ),
               resumeState: delta.resumeState,
               endOffset: delta.endOffset,
               appendable: delta.appendable,
@@ -559,7 +597,8 @@ async function computeCodexContextBreakdown({
               to: toKey,
               timeZoneContext,
               diagnostics,
-              seenTokenEvents: filePaths.length === 1 ? new Set() : seenTokenEvents,
+              seenTokenEvents:
+                filePaths.length === 1 ? new Set() : seenTokenEvents,
               endOffset: freshEndOffset,
               captureResumeState: Boolean(singleEntry),
               captureContentHash: appendHashEligible,
@@ -612,14 +651,30 @@ async function computeCodexContextBreakdown({
     mergeExecRows(byExecOutput, s.execCommandBreakdown?.byOutput);
   }
 
-  const toolRows = finalizeToolRows(new Map([...byTool.entries()].map(([k, v]) => [k, v])));
-  const skillRows = finalizeSkillRows(new Map([...bySkill.entries()].map(([k, v]) => [k, v])));
-  const execTypeRows = finalizeExecRows(new Map([...byExecType.entries()].map(([k, v]) => [k, v])));
-  const execExitRows = finalizeExecRows(new Map([...byExecExit.entries()].map(([k, v]) => [k, v])));
-  const execExecutableRows = finalizeExecRows(new Map([...byExecExecutable.entries()].map(([k, v]) => [k, v])));
-  const execCommandRows = finalizeExecRows(new Map([...byExecCommand.entries()].map(([k, v]) => [k, v])));
-  const execDurationRows = finalizeExecRows(new Map([...byExecDuration.entries()].map(([k, v]) => [k, v])));
-  const execOutputRows = finalizeExecRows(new Map([...byExecOutput.entries()].map(([k, v]) => [k, v])));
+  const toolRows = finalizeToolRows(
+    new Map([...byTool.entries()].map(([k, v]) => [k, v])),
+  );
+  const skillRows = finalizeSkillRows(
+    new Map([...bySkill.entries()].map(([k, v]) => [k, v])),
+  );
+  const execTypeRows = finalizeExecRows(
+    new Map([...byExecType.entries()].map(([k, v]) => [k, v])),
+  );
+  const execExitRows = finalizeExecRows(
+    new Map([...byExecExit.entries()].map(([k, v]) => [k, v])),
+  );
+  const execExecutableRows = finalizeExecRows(
+    new Map([...byExecExecutable.entries()].map(([k, v]) => [k, v])),
+  );
+  const execCommandRows = finalizeExecRows(
+    new Map([...byExecCommand.entries()].map(([k, v]) => [k, v])),
+  );
+  const execDurationRows = finalizeExecRows(
+    new Map([...byExecDuration.entries()].map(([k, v]) => [k, v])),
+  );
+  const execOutputRows = finalizeExecRows(
+    new Map([...byExecOutput.entries()].map(([k, v]) => [k, v])),
+  );
   const limitedTop = Number.isFinite(top) ? top : 20;
   const toolRowsLimited = toolRows.slice(0, limitedTop).map((r) => ({
     name: r.name,
@@ -636,7 +691,12 @@ async function computeCodexContextBreakdown({
   for (const row of toolRows) {
     const cat = categorizeTool(row.raw_name || row.name);
     if (!byCategory.has(cat)) {
-      byCategory.set(cat, { name: cat, calls: 0, totals: emptyTotals(), tools: new Map() });
+      byCategory.set(cat, {
+        name: cat,
+        calls: 0,
+        totals: emptyTotals(),
+        tools: new Map(),
+      });
     }
     const target = byCategory.get(cat);
     target.calls += row.calls || 0;
@@ -648,7 +708,9 @@ async function computeCodexContextBreakdown({
       name: c.name,
       calls: Math.round(c.calls || 0),
       totals: roundTotals(c.totals),
-      tools: finalizeToolRows(new Map([...c.tools.entries()].map(([k, v]) => [k, v])))
+      tools: finalizeToolRows(
+        new Map([...c.tools.entries()].map(([k, v]) => [k, v])),
+      )
         .slice(0, limitedTop)
         .map((r) => ({
           name: r.name,
@@ -656,21 +718,32 @@ async function computeCodexContextBreakdown({
           totals: roundTotals(r.totals),
         })),
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 
-  const textResponse = toolRows.find((row) => (row.raw_name || row.name) === "text_response");
+  const textResponse = toolRows.find(
+    (row) => (row.raw_name || row.name) === "text_response",
+  );
   const textResponseTotals = textResponse?.totals || emptyTotals();
   const textResponseHistoryWeight = Math.max(
     0,
-    Number(textResponseTotals.cached_input_tokens || 0) + Number(textResponseTotals.cache_creation_input_tokens || 0),
+    Number(textResponseTotals.cached_input_tokens || 0) +
+      Number(textResponseTotals.cache_creation_input_tokens || 0),
   );
-  const textResponseInputWeight = Math.max(0, Number(textResponseTotals.input_tokens || 0));
+  const textResponseInputWeight = Math.max(
+    0,
+    Number(textResponseTotals.input_tokens || 0),
+  );
   const textResponseOutputWeight = Math.max(
     0,
-    Number(textResponseTotals.output_tokens || 0) - Number(textResponseTotals.reasoning_output_tokens || 0),
+    Number(textResponseTotals.output_tokens || 0) -
+      Number(textResponseTotals.reasoning_output_tokens || 0),
   );
   const displayedMessageTotal =
-    textResponseInputWeight + textResponseHistoryWeight + textResponseOutputWeight;
+    textResponseInputWeight +
+    textResponseHistoryWeight +
+    textResponseOutputWeight;
   const messageAlloc = allocateByLargestRemainder(
     displayedMessageTotal,
     {
@@ -683,8 +756,14 @@ async function computeCodexContextBreakdown({
   const historyAlloc = allocateByLargestRemainder(
     messageAlloc.conversation_history || 0,
     {
-      cached_input_tokens: Math.max(0, Number(textResponseTotals.cached_input_tokens || 0)),
-      cache_creation_input_tokens: Math.max(0, Number(textResponseTotals.cache_creation_input_tokens || 0)),
+      cached_input_tokens: Math.max(
+        0,
+        Number(textResponseTotals.cached_input_tokens || 0),
+      ),
+      cache_creation_input_tokens: Math.max(
+        0,
+        Number(textResponseTotals.cache_creation_input_tokens || 0),
+      ),
     },
     ["cached_input_tokens", "cache_creation_input_tokens"],
   );
@@ -710,7 +789,8 @@ async function computeCodexContextBreakdown({
       totals: roundTotals({
         input_tokens: 0,
         cached_input_tokens: historyAlloc.cached_input_tokens || 0,
-        cache_creation_input_tokens: historyAlloc.cache_creation_input_tokens || 0,
+        cache_creation_input_tokens:
+          historyAlloc.cache_creation_input_tokens || 0,
         output_tokens: 0,
         reasoning_output_tokens: 0,
         total_tokens: textResponseHistory,
@@ -728,25 +808,30 @@ async function computeCodexContextBreakdown({
         total_tokens: textResponseOutput,
       }),
     },
-  ].sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+  ].sort(
+    (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+  );
 
-  const serializeExecRows = (rows) => rows.slice(0, limitedTop).map((r) => ({
-    name: r.name,
-    calls: r.calls,
-    failures: r.failures,
-    duration_ms: r.duration_ms,
-    max_duration_ms: r.max_duration_ms,
-    output_chars: r.output_chars,
-    output_lines: r.output_lines,
-    totals: roundTotals(r.totals),
-  }));
+  const serializeExecRows = (rows) =>
+    rows.slice(0, limitedTop).map((r) => ({
+      name: r.name,
+      calls: r.calls,
+      failures: r.failures,
+      duration_ms: r.duration_ms,
+      max_duration_ms: r.max_duration_ms,
+      output_chars: r.output_chars,
+      output_lines: r.output_lines,
+      totals: roundTotals(r.totals),
+    }));
 
   const result = {
     source: "codex",
     scope: "supported",
     breakdown_status: "ok",
     totals: grand,
-    session_count: new Set(sessions.map((session) => session.sessionId || session.filePath)).size,
+    session_count: new Set(
+      sessions.map((session) => session.sessionId || session.filePath),
+    ).size,
     message_count: sessions.reduce((a, s) => a + (s.turnCount || 0), 0),
     message_breakdown: {
       categories: messageBreakdown,
@@ -756,17 +841,24 @@ async function computeCodexContextBreakdown({
       },
     },
     tool_calls_breakdown: {
-      total_calls: Math.round(toolRows.reduce((a, r) => a + Number(r.calls || 0), 0)),
+      total_calls: Math.round(
+        toolRows.reduce((a, r) => a + Number(r.calls || 0), 0),
+      ),
       tools: toolRowsLimited,
       categories: categoryRows.slice(0, limitedTop),
-      tools_total: toolRows.reduce((a, r) => a + Math.round(r.totals?.total_tokens || 0), 0),
+      tools_total: toolRows.reduce(
+        (a, r) => a + Math.round(r.totals?.total_tokens || 0),
+        0,
+      ),
       privacy: {
         includes_inputs: false,
         note: "Aggregated tool names only; no tool arguments or outputs are included.",
       },
     },
     skills_breakdown: {
-      total_calls: Math.round(skillRows.reduce((a, r) => a + Number(r.calls || 0), 0)),
+      total_calls: Math.round(
+        skillRows.reduce((a, r) => a + Number(r.calls || 0), 0),
+      ),
       skills: skillRowsLimited,
       privacy: {
         includes_inputs: false,

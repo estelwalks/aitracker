@@ -126,7 +126,10 @@ export class BrowserMockClientDataSource implements ClientDataSource {
     this.latencyMs = Math.max(0, options.latencyMs ?? 0);
   }
 
-  private async respond<T>(value: T, options?: ClientDataRequestOptions): Promise<T> {
+  private async respond<T>(
+    value: T,
+    options?: ClientDataRequestOptions,
+  ): Promise<T> {
     await delay(this.latencyMs, options?.signal);
     return value;
   }
@@ -139,11 +142,17 @@ export class BrowserMockClientDataSource implements ClientDataSource {
     return this.respond(tokenData, options);
   }
 
-  getTokenDetail(request: TokenDetailRequest, options?: ClientDataRequestOptions) {
+  getTokenDetail(
+    request: TokenDetailRequest,
+    options?: ClientDataRequestOptions,
+  ) {
     return this.respond(rowDetail(request.row, request.dimension), options);
   }
 
-  getTokenSourceTree(row: TokenDetailRequest["row"], options?: ClientDataRequestOptions) {
+  getTokenSourceTree(
+    row: TokenDetailRequest["row"],
+    options?: ClientDataRequestOptions,
+  ) {
     return this.respond(sourceTree(row), options);
   }
 
@@ -164,6 +173,8 @@ export class BrowserMockClientDataSource implements ClientDataSource {
   }
 }
 
-export function createBrowserMockClientDataSource(options?: BrowserMockClientDataSourceOptions) {
+export function createBrowserMockClientDataSource(
+  options?: BrowserMockClientDataSourceOptions,
+) {
   return new BrowserMockClientDataSource(options);
 }

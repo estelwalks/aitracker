@@ -28,7 +28,11 @@ const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const readline = require("node:readline");
-const { listClaudeProjectFiles, listRolloutFilesDeep, claudeMessageDedupKey } = require("./rollout");
+const {
+  listClaudeProjectFiles,
+  listRolloutFilesDeep,
+  claudeMessageDedupKey,
+} = require("./rollout");
 const { parseCodexRolloutFile } = require("./codex-rollout-parser");
 const { computeRowCost } = require("./pricing");
 
@@ -64,9 +68,17 @@ const EDIT_TOOLS = new Set([
   "create_file",
   "write_file",
 ]);
-const PLACEHOLDER_MODELS = new Set(["<synthetic>", "synthetic", "<unknown>", "unknown"]);
+const PLACEHOLDER_MODELS = new Set([
+  "<synthetic>",
+  "synthetic",
+  "<unknown>",
+  "unknown",
+]);
 const CLAUDE_MEM_OBSERVER_PROJECT_SUFFIX = "--claude-mem-observer-sessions";
-const CODEX_SUBAGENT_TOOLS = new Set(["spawn_agent", "multi_agent_v1__spawn_agent"]);
+const CODEX_SUBAGENT_TOOLS = new Set([
+  "spawn_agent",
+  "multi_agent_v1__spawn_agent",
+]);
 const CODEX_SIGNAL_TOOLS = new Set([...EDIT_TOOLS, ...CODEX_SUBAGENT_TOOLS]);
 const GROK_SUBAGENT_TOOLS = new Set(["spawn_subagent", "spawn_agent"]);
 
@@ -82,7 +94,11 @@ function resolveSessionSidecarPath(home = os.homedir()) {
 }
 
 function sessionHash(source, id) {
-  return crypto.createHash("sha256").update(`${source}\0${id || "unknown"}`).digest("hex").slice(0, 24);
+  return crypto
+    .createHash("sha256")
+    .update(`${source}\0${id || "unknown"}`)
+    .digest("hex")
+    .slice(0, 24);
 }
 
 function finite(value) {
@@ -92,16 +108,38 @@ function finite(value) {
 
 function tokenTotals(usage) {
   const input_tokens = finite(usage?.input_tokens);
-  const cached_input_tokens = finite(usage?.cache_read_input_tokens ?? usage?.cached_input_tokens);
-  const cache_creation_input_tokens = finite(usage?.cache_creation_input_tokens);
+  const cached_input_tokens = finite(
+    usage?.cache_read_input_tokens ?? usage?.cached_input_tokens,
+  );
+  const cache_creation_input_tokens = finite(
+    usage?.cache_creation_input_tokens,
+  );
   const output_tokens = finite(usage?.output_tokens);
   const reasoning_output_tokens = finite(usage?.reasoning_output_tokens);
-  const total_tokens = input_tokens + cached_input_tokens + cache_creation_input_tokens + output_tokens;
-  return { input_tokens, cached_input_tokens, cache_creation_input_tokens, output_tokens, reasoning_output_tokens, total_tokens };
+  const total_tokens =
+    input_tokens +
+    cached_input_tokens +
+    cache_creation_input_tokens +
+    output_tokens;
+  return {
+    input_tokens,
+    cached_input_tokens,
+    cache_creation_input_tokens,
+    output_tokens,
+    reasoning_output_tokens,
+    total_tokens,
+  };
 }
 
 function addTotals(target, delta) {
-  for (const key of ["input_tokens", "cached_input_tokens", "cache_creation_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens"]) {
+  for (const key of [
+    "input_tokens",
+    "cached_input_tokens",
+    "cache_creation_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+    "total_tokens",
+  ]) {
     target[key] = finite(target[key]) + finite(delta?.[key]);
   }
 }
@@ -111,7 +149,8 @@ function emptyTotals() {
 }
 
 function safeTimestamp(value) {
-  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) return null;
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value)))
+    return null;
   return new Date(value).toISOString();
 }
 
@@ -131,8 +170,10 @@ function emptyBounds() {
 function updateBounds(bounds, value) {
   const timestamp = safeTimestamp(value);
   if (!timestamp) return;
-  if (!bounds.started_at || timestamp < bounds.started_at) bounds.started_at = timestamp;
-  if (!bounds.ended_at || timestamp > bounds.ended_at) bounds.ended_at = timestamp;
+  if (!bounds.started_at || timestamp < bounds.started_at)
+    bounds.started_at = timestamp;
+  if (!bounds.ended_at || timestamp > bounds.ended_at)
+    bounds.ended_at = timestamp;
   const ms = Date.parse(timestamp);
   if (!Number.isFinite(ms)) return;
   if (Number.isFinite(bounds._last_ts_ms)) {
@@ -159,24 +200,42 @@ function extractClaudePrompt(obj) {
   if (!obj || obj.type !== "user" || obj.isMeta) return null;
   const content = obj.message?.content;
   if (Array.isArray(content)) {
-    if (content.length > 0 && content.every((block) => block?.type === "tool_result")) return null;
+    if (
+      content.length > 0 &&
+      content.every((block) => block?.type === "tool_result")
+    )
+      return null;
     const text = content
-      .filter((block) => block?.type === "text" && typeof block.text === "string")
+      .filter(
+        (block) => block?.type === "text" && typeof block.text === "string",
+      )
       .map((block) => block.text)
       .join("\n")
       .trim();
     if (!text) return null;
-    if (text === "[Request interrupted by user]" || text.startsWith("<task-notification>")) return null;
+    if (
+      text === "[Request interrupted by user]" ||
+      text.startsWith("<task-notification>")
+    )
+      return null;
     return text;
   }
   if (typeof content !== "string") return null;
   const text = content.trim();
-  if (!text || text === "[Request interrupted by user]" || text.startsWith("<task-notification>")) return null;
+  if (
+    !text ||
+    text === "[Request interrupted by user]" ||
+    text.startsWith("<task-notification>")
+  )
+    return null;
   return text;
 }
 
 function promptFingerprint(prompt) {
-  return crypto.createHash("sha256").update(prompt.replace(/\s+/g, " ")).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(prompt.replace(/\s+/g, " "))
+    .digest("hex");
 }
 
 // Normalize a session title into a single short line. Titles come ONLY from
@@ -191,12 +250,15 @@ function cleanSessionTitle(value) {
 }
 
 function extractCodexPrompt(obj) {
-  if (obj?.type !== "event_msg" || obj.payload?.type !== "user_message") return null;
+  if (obj?.type !== "event_msg" || obj.payload?.type !== "user_message")
+    return null;
   if (typeof obj.payload.message === "string") {
     const message = obj.payload.message.trim();
     return message || null;
   }
-  const elements = Array.isArray(obj.payload.text_elements) ? obj.payload.text_elements : [];
+  const elements = Array.isArray(obj.payload.text_elements)
+    ? obj.payload.text_elements
+    : [];
   const text = elements
     .map((item) => {
       if (typeof item === "string") return item;
@@ -211,13 +273,16 @@ function extractCodexPrompt(obj) {
 }
 
 function canonicalToolName(value) {
-  const name = String(value || "").trim().toLowerCase();
+  const name = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!name) return "";
   return name.replace(/^functions[.:/]/, "").replace(/^tools[.:/]/, "");
 }
 
 function extractCodexSignalTools(payload) {
-  if (!payload || !["function_call", "custom_tool_call"].includes(payload.type)) return [];
+  if (!payload || !["function_call", "custom_tool_call"].includes(payload.type))
+    return [];
   const directName = canonicalToolName(payload.name);
   if (directName && directName !== "exec") return [directName];
   if (directName !== "exec" || typeof payload.input !== "string") return [];
@@ -234,16 +299,24 @@ function finalizeRecord(record) {
   delete record._last_ts_ms;
   record.active_ms = Math.max(0, finite(record.active_ms));
   record.duration_ms = record.active_ms;
-  record.total_tokens = finite(record.total_tokens || record.tokens?.total_tokens);
-  record.cost_usd = computeRowCost({ source: record.source, model: record.model, ...record.tokens });
+  record.total_tokens = finite(
+    record.total_tokens || record.tokens?.total_tokens,
+  );
+  record.cost_usd = computeRowCost({
+    source: record.source,
+    model: record.model,
+    ...record.tokens,
+  });
   record.productive = record.edit_turns > 0;
   // A first-pass delivery has exactly one user turn containing an observed
   // edit and no repeated user request. The legacy one_shot field stays as an
   // API/CSV alias, but now follows this cross-provider definition.
   record.first_pass = record.edit_turns === 1 && record.retry_turns === 0;
   record.one_shot = record.first_pass;
-  record.tokens_per_edit = record.edit_turns > 0 ? record.total_tokens / record.edit_turns : null;
-  record.cost_per_edit = record.edit_turns > 0 ? record.cost_usd / record.edit_turns : null;
+  record.tokens_per_edit =
+    record.edit_turns > 0 ? record.total_tokens / record.edit_turns : null;
+  record.cost_per_edit =
+    record.edit_turns > 0 ? record.cost_usd / record.edit_turns : null;
   return record;
 }
 
@@ -291,7 +364,11 @@ async function scanClaudeSession(filePath) {
 
   for await (const line of lines) {
     let obj;
-    try { obj = JSON.parse(line); } catch { continue; }
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
     updateBounds(bounds, obj.timestamp || obj.message?.timestamp);
     if (typeof obj.sessionId === "string" && obj.sessionId) {
       rawSessionId = obj.sessionId;
@@ -309,7 +386,8 @@ async function scanClaudeSession(filePath) {
       const prompt = extractClaudePrompt(obj);
       if (!prompt) continue;
       const fingerprint = promptFingerprint(prompt);
-      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint) retryTurns += 1;
+      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint)
+        retryTurns += 1;
       lastPromptFingerprint = fingerprint;
       closeTurn();
       turns += 1;
@@ -326,17 +404,23 @@ async function scanClaudeSession(filePath) {
     const candidateModel = normalizeSessionModel(obj.message.model);
     if (candidateModel) model = candidateModel;
     addTotals(tokens, tokenTotals(obj.message.usage));
-    const content = Array.isArray(obj.message.content) ? obj.message.content : [];
+    const content = Array.isArray(obj.message.content)
+      ? obj.message.content
+      : [];
     for (const block of content) {
       if (!block || block.type !== "tool_use") continue;
       const name = String(block.name || "").toLowerCase();
       if (EDIT_TOOLS.has(name)) currentHadEdit = true;
       if (name === "agent" || name === "task") {
         subagentCalls += 1;
-        const subtype = typeof block.input?.subagent_type === "string"
-          ? block.input.subagent_type.trim().slice(0, 64)
-          : "unspecified";
-        subagentTypes.set(subtype || "unspecified", (subagentTypes.get(subtype || "unspecified") || 0) + 1);
+        const subtype =
+          typeof block.input?.subagent_type === "string"
+            ? block.input.subagent_type.trim().slice(0, 64)
+            : "unspecified";
+        subagentTypes.set(
+          subtype || "unspecified",
+          (subagentTypes.get(subtype || "unspecified") || 0) + 1,
+        );
       }
     }
   }
@@ -361,7 +445,12 @@ async function scanClaudeSession(filePath) {
     subagent_calls: subagentCalls,
     subagent_types: Object.fromEntries([...subagentTypes.entries()].sort()),
     tokens,
-    provenance: { source: "local-session-log", confidence: "observed", retry_confidence: "inferred", content_retained: false },
+    provenance: {
+      source: "local-session-log",
+      confidence: "observed",
+      retry_confidence: "inferred",
+      content_retained: false,
+    },
   });
 }
 
@@ -395,7 +484,11 @@ async function scanCodexDeliverySignals(filePath) {
 
   for await (const line of lines) {
     let obj;
-    try { obj = JSON.parse(line); } catch { continue; }
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
     updateBounds(bounds, obj.timestamp);
     if (obj.type === "turn_context") {
       hasTurnContext = true;
@@ -405,7 +498,8 @@ async function scanCodexDeliverySignals(filePath) {
     const prompt = extractCodexPrompt(obj);
     if (prompt) {
       const fingerprint = promptFingerprint(prompt);
-      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint) retryTurns += 1;
+      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint)
+        retryTurns += 1;
       lastPromptFingerprint = fingerprint;
       if (!hasTurnContext) beginTurn(String(obj.timestamp || turns + 1));
       continue;
@@ -418,7 +512,8 @@ async function scanCodexDeliverySignals(filePath) {
     for (const name of toolNames) {
       if (!CODEX_SUBAGENT_TOOLS.has(name)) continue;
       subagentCalls += 1;
-      const displayName = name === "multi_agent_v1__spawn_agent" ? "spawn_agent" : name;
+      const displayName =
+        name === "multi_agent_v1__spawn_agent" ? "spawn_agent" : name;
       subagentTypes.set(displayName, (subagentTypes.get(displayName) || 0) + 1);
     }
   }
@@ -443,9 +538,10 @@ async function scanCodexSession(filePath) {
   // Older Codex rollouts can omit turn_context.model. The shared parser then
   // falls back to model_provider (for example "openai"), which is provenance
   // rather than a model and must not become a model-table row.
-  const model = parsedModel && parsedModel.toLowerCase() !== provider?.toLowerCase()
-    ? parsedModel
-    : "unknown";
+  const model =
+    parsedModel && parsedModel.toLowerCase() !== provider?.toLowerCase()
+      ? parsedModel
+      : "unknown";
   // Codex's own thread title from session_index.jsonl (Codex-authored
   // metadata, keyed by session id). Null when Codex never named the thread —
   // the UI then falls back to the project name.
@@ -468,7 +564,12 @@ async function scanCodexSession(filePath) {
     subagent_calls: signals.subagentCalls,
     subagent_types: signals.subagentTypes,
     tokens: parsed.totals || emptyTotals(),
-    provenance: { source: "local-session-log", confidence: "observed", retry_confidence: "inferred", content_retained: false },
+    provenance: {
+      source: "local-session-log",
+      confidence: "observed",
+      retry_confidence: "inferred",
+      content_retained: false,
+    },
   });
 }
 
@@ -478,7 +579,10 @@ async function scanCodexSession(filePath) {
 // counters). Billable tokens come only from turn_completed.usage — the same
 // authority as the Grok usage parser — not from context-window totalTokens.
 function resolveGrokHome(home = os.homedir(), env = process.env) {
-  if (typeof env.TOKENTRACKER_GROK_HOME === "string" && env.TOKENTRACKER_GROK_HOME.trim()) {
+  if (
+    typeof env.TOKENTRACKER_GROK_HOME === "string" &&
+    env.TOKENTRACKER_GROK_HOME.trim()
+  ) {
     return path.resolve(env.TOKENTRACKER_GROK_HOME.trim());
   }
   if (typeof env.GROK_HOME === "string" && env.GROK_HOME.trim()) {
@@ -505,7 +609,8 @@ function readJsonFileSync(filePath) {
 
 function grokTimestampIso(obj) {
   const metaMs = Number(obj?.params?._meta?.agentTimestampMs);
-  if (Number.isFinite(metaMs) && metaMs > 0) return new Date(metaMs).toISOString();
+  if (Number.isFinite(metaMs) && metaMs > 0)
+    return new Date(metaMs).toISOString();
   const top = Number(obj?.timestamp);
   if (!Number.isFinite(top) || top <= 0) return null;
   // Grok writes unix seconds on the envelope; ms values are already > 1e12.
@@ -521,7 +626,9 @@ function grokUsageTotals(usage) {
   if (!usage || typeof usage !== "object") return emptyTotals();
   const inputRaw = finite(usage.inputTokens ?? usage.input_tokens);
   const cached_input_tokens = finite(
-    usage.cachedReadTokens ?? usage.cache_read_input_tokens ?? usage.cached_input_tokens,
+    usage.cachedReadTokens ??
+      usage.cache_read_input_tokens ??
+      usage.cached_input_tokens,
   );
   const cache_creation_input_tokens = finite(
     usage.cachedWriteTokens ?? usage.cache_creation_input_tokens,
@@ -533,11 +640,12 @@ function grokUsageTotals(usage) {
   const input_tokens = Math.max(0, inputRaw - cached_input_tokens);
   let total_tokens = finite(usage.totalTokens ?? usage.total_tokens);
   if (total_tokens <= 0) {
-    total_tokens = input_tokens
-      + cached_input_tokens
-      + cache_creation_input_tokens
-      + output_tokens
-      + reasoning_output_tokens;
+    total_tokens =
+      input_tokens +
+      cached_input_tokens +
+      cache_creation_input_tokens +
+      output_tokens +
+      reasoning_output_tokens;
   }
   return {
     input_tokens,
@@ -557,9 +665,10 @@ function pickGrokModel(usage, fallback) {
     for (const [name, entry] of Object.entries(modelUsage)) {
       const normalized = normalizeSessionModel(name);
       if (!normalized) continue;
-      const tokens = finite(entry?.totalTokens ?? entry?.total_tokens)
-        + finite(entry?.inputTokens ?? entry?.input_tokens)
-        + finite(entry?.outputTokens ?? entry?.output_tokens);
+      const tokens =
+        finite(entry?.totalTokens ?? entry?.total_tokens) +
+        finite(entry?.inputTokens ?? entry?.input_tokens) +
+        finite(entry?.outputTokens ?? entry?.output_tokens);
       if (tokens >= bestTokens) {
         bestTokens = tokens;
         bestName = normalized;
@@ -614,7 +723,9 @@ async function listGrokSessionFiles(sessionsRoot) {
           found.push(updatesPath);
           continue;
         }
-      } catch { /* not a session leaf */ }
+      } catch {
+        /* not a session leaf */
+      }
       await walk(full, depth + 1);
     }
   }
@@ -630,18 +741,26 @@ async function scanGrokSession(filePath) {
   const tokens = emptyTotals();
   const bounds = emptyBounds();
   const dirName = path.basename(path.dirname(filePath));
-  let observedSessionId = typeof summary?.info?.id === "string" && summary.info.id
-    ? summary.info.id
-    : (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(dirName) ? dirName : null);
-  let cwd = typeof summary?.info?.cwd === "string" && summary.info.cwd
-    ? summary.info.cwd
-    : null;
+  let observedSessionId =
+    typeof summary?.info?.id === "string" && summary.info.id
+      ? summary.info.id
+      : /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(dirName)
+        ? dirName
+        : null;
+  let cwd =
+    typeof summary?.info?.cwd === "string" && summary.info.cwd
+      ? summary.info.cwd
+      : null;
   // Prefer agent-authored generated_title over free-form session_summary when
   // both exist; both are Grok metadata, never the raw user prompt body.
-  const title = cleanSessionTitle(summary.generated_title)
-    || cleanSessionTitle(summary.session_summary)
-    || null;
-  let model = pickGrokModel(null, signals.primaryModelId || summary.current_model_id);
+  const title =
+    cleanSessionTitle(summary.generated_title) ||
+    cleanSessionTitle(summary.session_summary) ||
+    null;
+  let model = pickGrokModel(
+    null,
+    signals.primaryModelId || summary.current_model_id,
+  );
   let turns = 0;
   let editTurns = 0;
   let retryTurns = 0;
@@ -659,7 +778,8 @@ async function scanGrokSession(filePath) {
     currentHadEdit = false;
     if (userChunkBuffer) {
       const fingerprint = promptFingerprint(userChunkBuffer);
-      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint) retryTurns += 1;
+      if (lastPromptFingerprint && fingerprint === lastPromptFingerprint)
+        retryTurns += 1;
       lastPromptFingerprint = fingerprint;
     }
     openUserTurn = false;
@@ -670,13 +790,19 @@ async function scanGrokSession(filePath) {
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   for await (const line of lines) {
     let obj;
-    try { obj = JSON.parse(line); } catch { continue; }
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
     updateBounds(bounds, grokTimestampIso(obj));
-    const params = obj.params && typeof obj.params === "object" ? obj.params : {};
+    const params =
+      obj.params && typeof obj.params === "object" ? obj.params : {};
     if (typeof params.sessionId === "string" && params.sessionId) {
       observedSessionId = params.sessionId;
     }
-    const update = params.update && typeof params.update === "object" ? params.update : null;
+    const update =
+      params.update && typeof params.update === "object" ? params.update : null;
     if (!update) continue;
     const sessionUpdate = update.sessionUpdate;
 
@@ -730,10 +856,16 @@ async function scanGrokSession(filePath) {
   if (turns === 0 && finite(signals.turnCount) > 0) {
     turns = finite(signals.turnCount);
   }
-  if (!Number.isFinite(Date.parse(bounds.started_at || "")) && summary.created_at) {
+  if (
+    !Number.isFinite(Date.parse(bounds.started_at || "")) &&
+    summary.created_at
+  ) {
     updateBounds(bounds, summary.created_at);
   }
-  if (!Number.isFinite(Date.parse(bounds.ended_at || "")) && (summary.last_active_at || summary.updated_at)) {
+  if (
+    !Number.isFinite(Date.parse(bounds.ended_at || "")) &&
+    (summary.last_active_at || summary.updated_at)
+  ) {
     updateBounds(bounds, summary.last_active_at || summary.updated_at);
   }
   if ((!model || model === "unknown") && signals.primaryModelId) {
@@ -757,7 +889,12 @@ async function scanGrokSession(filePath) {
     subagent_calls: subagentCalls,
     subagent_types: Object.fromEntries([...subagentTypes.entries()].sort()),
     tokens,
-    provenance: { source: "local-session-log", confidence: "observed", retry_confidence: "inferred", content_retained: false },
+    provenance: {
+      source: "local-session-log",
+      confidence: "observed",
+      retry_confidence: "inferred",
+      content_retained: false,
+    },
   });
 }
 
@@ -773,17 +910,29 @@ async function discoverSessionFiles(home) {
   // real Claude Code sessions. They contain <synthetic>/haiku bookkeeping and
   // no user coding outcome, so scanning them both slows the card dramatically
   // and dilutes its efficiency metrics.
-  const claude = allClaude.filter((filePath) => !filePath
-    .split(path.sep)
-    .some((segment) => segment.endsWith(CLAUDE_MEM_OBSERVER_PROJECT_SUFFIX)));
+  const claude = allClaude.filter(
+    (filePath) =>
+      !filePath
+        .split(path.sep)
+        .some((segment) =>
+          segment.endsWith(CLAUDE_MEM_OBSERVER_PROJECT_SUFFIX),
+        ),
+  );
   const codexBySession = new Map();
   const mtimeOf = (filePath) => {
-    try { return fs.statSync(filePath).mtimeMs; } catch { return -Infinity; }
+    try {
+      return fs.statSync(filePath).mtimeMs;
+    } catch {
+      return -Infinity;
+    }
   };
   for (const filePath of [...codex, ...archived]) {
-    const id = path.basename(filePath).match(/([0-9a-f-]{36})\.jsonl$/i)?.[1] || filePath;
+    const id =
+      path.basename(filePath).match(/([0-9a-f-]{36})\.jsonl$/i)?.[1] ||
+      filePath;
     const previous = codexBySession.get(id);
-    if (!previous || mtimeOf(filePath) > mtimeOf(previous)) codexBySession.set(id, filePath);
+    if (!previous || mtimeOf(filePath) > mtimeOf(previous))
+      codexBySession.set(id, filePath);
   }
   return { claude, codex: [...codexBySession.values()], grok };
 }
@@ -794,7 +943,9 @@ function filesSignature(files) {
     try {
       const stat = fs.statSync(filePath);
       hash.update(`${filePath}\0${stat.size}\0${stat.mtimeMs}\n`);
-    } catch { /* vanished during discovery */ }
+    } catch {
+      /* vanished during discovery */
+    }
   }
   return hash.digest("hex");
 }
@@ -840,12 +991,18 @@ function loadCodexTitleIndex(filePath) {
       for (const line of fs.readFileSync(indexPath, "utf8").split("\n")) {
         if (!line.trim()) continue;
         let obj;
-        try { obj = JSON.parse(line); } catch { continue; }
+        try {
+          obj = JSON.parse(line);
+        } catch {
+          continue;
+        }
         const id = typeof obj?.id === "string" ? obj.id : null;
         const name = cleanSessionTitle(obj?.thread_name);
         if (id && name) titles.set(id, name);
       }
-    } catch { /* no index yet */ }
+    } catch {
+      /* no index yet */
+    }
   }
   codexTitleIndexCache.set(indexPath, { statKey, titles });
   return titles;
@@ -870,8 +1027,14 @@ function analyticsEntryStatKey(source, filePath) {
 
 function readSidecar(sidecarPath) {
   try {
-    return fs.readFileSync(sidecarPath, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
-  } catch { return []; }
+    return fs
+      .readFileSync(sidecarPath, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  } catch {
+    return [];
+  }
 }
 
 async function writeAtomic(filePath, content) {
@@ -881,14 +1044,20 @@ async function writeAtomic(filePath, content) {
   await fsp.rename(temp, filePath);
 }
 
-async function buildSessionAnalyticsInternal({ home = os.homedir(), force = false, cacheTtlMs = 5 * 60_000 } = {}) {
+async function buildSessionAnalyticsInternal({
+  home = os.homedir(),
+  force = false,
+  cacheTtlMs = 5 * 60_000,
+} = {}) {
   const sidecarPath = resolveSessionSidecarPath(home);
   const metaPath = `${sidecarPath}.meta.json`;
   let previousMeta = null;
   if (!force) {
     try {
       previousMeta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      const checkedAt = Date.parse(previousMeta.checked_at || previousMeta.generated_at || "");
+      const checkedAt = Date.parse(
+        previousMeta.checked_at || previousMeta.generated_at || "",
+      );
       if (
         previousMeta.version === SIDECAR_VERSION &&
         Number.isFinite(checkedAt) &&
@@ -896,7 +1065,9 @@ async function buildSessionAnalyticsInternal({ home = os.homedir(), force = fals
       ) {
         return readSidecar(sidecarPath);
       }
-    } catch { /* first run */ }
+    } catch {
+      /* first run */
+    }
   }
   const discovered = await discoverSessionFiles(home);
   // Codex thread titles are stored separately from rollout files. Include the
@@ -911,26 +1082,49 @@ async function buildSessionAnalyticsInternal({ home = os.homedir(), force = fals
     ...discovered.grok.map(grokSummaryPathFor),
     ...discovered.grok.map(grokSignalsPathFor),
   ]);
-  if (!force && previousMeta?.version === SIDECAR_VERSION && previousMeta.signature === signature) {
-    await writeAtomic(metaPath, `${JSON.stringify({ ...previousMeta, checked_at: new Date().toISOString() })}\n`);
+  if (
+    !force &&
+    previousMeta?.version === SIDECAR_VERSION &&
+    previousMeta.signature === signature
+  ) {
+    await writeAtomic(
+      metaPath,
+      `${JSON.stringify({ ...previousMeta, checked_at: new Date().toISOString() })}\n`,
+    );
     return readSidecar(sidecarPath);
   }
 
-  const previousRows = !force && previousMeta?.version === SIDECAR_VERSION
-    ? readSidecar(sidecarPath)
-    : [];
-  const previousRowsByFile = new Map(previousRows
-    .filter((row) => typeof row?._cache_key === "string")
-    .map((row) => [row._cache_key, row]));
-  const previousFiles = previousMeta?.version === SIDECAR_VERSION && previousMeta.files
-    ? previousMeta.files
-    : {};
+  const previousRows =
+    !force && previousMeta?.version === SIDECAR_VERSION
+      ? readSidecar(sidecarPath)
+      : [];
+  const previousRowsByFile = new Map(
+    previousRows
+      .filter((row) => typeof row?._cache_key === "string")
+      .map((row) => [row._cache_key, row]),
+  );
+  const previousFiles =
+    previousMeta?.version === SIDECAR_VERSION && previousMeta.files
+      ? previousMeta.files
+      : {};
   const nextFiles = {};
   const sessions = [];
   const entries = [
-    ...discovered.claude.map((filePath) => ({ source: "claude", filePath, scan: scanClaudeSession })),
-    ...discovered.codex.map((filePath) => ({ source: "codex", filePath, scan: scanCodexSession })),
-    ...discovered.grok.map((filePath) => ({ source: "grok", filePath, scan: scanGrokSession })),
+    ...discovered.claude.map((filePath) => ({
+      source: "claude",
+      filePath,
+      scan: scanClaudeSession,
+    })),
+    ...discovered.codex.map((filePath) => ({
+      source: "codex",
+      filePath,
+      scan: scanCodexSession,
+    })),
+    ...discovered.grok.map((filePath) => ({
+      source: "grok",
+      filePath,
+      scan: scanGrokSession,
+    })),
   ];
   // Files we could not turn into a row (permission denied, half-written line,
   // vanished mid-scan). Swallowing these silently made sessions disappear with
@@ -955,7 +1149,9 @@ async function buildSessionAnalyticsInternal({ home = os.homedir(), force = fals
         // pretend it never existed either.
         skippedFiles += 1;
         if (!process.env.NODE_TEST_CONTEXT) {
-          console.warn(`[session-analytics] skipped ${entry.source} session file: ${error?.message || error}`);
+          console.warn(
+            `[session-analytics] skipped ${entry.source} session file: ${error?.message || error}`,
+          );
         }
       }
     }
@@ -966,20 +1162,30 @@ async function buildSessionAnalyticsInternal({ home = os.homedir(), force = fals
     sessions.push(row);
     nextFiles[cacheKey] = { stat_key: statKey };
   }
-  sessions.sort((a, b) => String(b.ended_at || "").localeCompare(String(a.ended_at || "")));
-  const content = sessions.map((row) => JSON.stringify(row)).join("\n") + (sessions.length ? "\n" : "");
+  sessions.sort((a, b) =>
+    String(b.ended_at || "").localeCompare(String(a.ended_at || "")),
+  );
+  const content =
+    sessions.map((row) => JSON.stringify(row)).join("\n") +
+    (sessions.length ? "\n" : "");
   await writeAtomic(sidecarPath, content);
   const generatedAt = new Date().toISOString();
-  await writeAtomic(metaPath, `${JSON.stringify({
-    version: SIDECAR_VERSION,
-    signature,
-    generated_at: generatedAt,
-    checked_at: generatedAt,
-    files: nextFiles,
-  })}\n`);
+  await writeAtomic(
+    metaPath,
+    `${JSON.stringify({
+      version: SIDECAR_VERSION,
+      signature,
+      generated_at: generatedAt,
+      checked_at: generatedAt,
+      files: nextFiles,
+    })}\n`,
+  );
   // Non-enumerable so the array still behaves exactly like a plain row list
   // for every existing caller (map/filter/JSON of the rows is unaffected).
-  Object.defineProperty(sessions, "skippedFiles", { value: skippedFiles, enumerable: false });
+  Object.defineProperty(sessions, "skippedFiles", {
+    value: skippedFiles,
+    enumerable: false,
+  });
   return sessions;
 }
 
@@ -990,7 +1196,8 @@ async function buildSessionAnalyticsInternal({ home = os.homedir(), force = fals
 const sessionAnalyticsBuilds = new Map();
 
 function buildSessionAnalytics(options = {}) {
-  const normalizedOptions = options && typeof options === "object" ? options : {};
+  const normalizedOptions =
+    options && typeof options === "object" ? options : {};
   const home = path.resolve(String(normalizedOptions.home || os.homedir()));
   const force = Boolean(normalizedOptions.force);
   const existing = sessionAnalyticsBuilds.get(home);
@@ -1001,12 +1208,14 @@ function buildSessionAnalytics(options = {}) {
   // — never run two scans at once, they race the atomic sidecar write.
   if (existing && (!force || existing.force)) return existing.promise;
 
-  const run = () => buildSessionAnalyticsInternal({ ...normalizedOptions, home, force });
+  const run = () =>
+    buildSessionAnalyticsInternal({ ...normalizedOptions, home, force });
   const promise = existing ? existing.promise.then(run, run) : run();
   const entry = { promise, force: force || Boolean(existing?.force) };
   sessionAnalyticsBuilds.set(home, entry);
   const clear = () => {
-    if (sessionAnalyticsBuilds.get(home) === entry) sessionAnalyticsBuilds.delete(home);
+    if (sessionAnalyticsBuilds.get(home) === entry)
+      sessionAnalyticsBuilds.delete(home);
   };
   promise.then(clear, clear);
   return promise;
@@ -1025,8 +1234,13 @@ function withinDayRange(row, from, to) {
   return true;
 }
 
-function summarizeSessions(sessions, { from = "", to = "", includeSessions = true } = {}) {
-  const filtered = (sessions || []).filter((row) => withinDayRange(row, from, to));
+function summarizeSessions(
+  sessions,
+  { from = "", to = "", includeSessions = true } = {},
+) {
+  const filtered = (sessions || []).filter((row) =>
+    withinDayRange(row, from, to),
+  );
   const byModel = new Map();
   const subagents = new Map();
   for (const row of filtered) {
@@ -1056,7 +1270,13 @@ function summarizeSessions(sessions, { from = "", to = "", includeSessions = tru
     }
     byModel.set(key, agg);
     for (const [name, calls] of Object.entries(row.subagent_types || {})) {
-      const sub = subagents.get(name) || { name, calls: 0, sessions: 0, total_tokens: 0, cost_usd: 0 };
+      const sub = subagents.get(name) || {
+        name,
+        calls: 0,
+        sessions: 0,
+        total_tokens: 0,
+        cost_usd: 0,
+      };
       sub.calls += finite(calls);
       sub.sessions += 1;
       // Token allocation is an explicit estimate because vendor logs do not
@@ -1067,40 +1287,99 @@ function summarizeSessions(sessions, { from = "", to = "", includeSessions = tru
       subagents.set(name, sub);
     }
   }
-  const by_model = [...byModel.values()].map((row) => ({
-    ...row,
-    productive_rate: row.sessions ? row.productive_sessions / row.sessions : null,
-    one_shot_rate: row.productive_sessions ? row.one_shot_sessions / row.productive_sessions : null,
-    edit_sessions: row.productive_sessions,
-    first_pass_sessions: row.one_shot_sessions,
-    edit_session_rate: row.sessions ? row.productive_sessions / row.sessions : null,
-    first_pass_rate: row.productive_sessions ? row.one_shot_sessions / row.productive_sessions : null,
-    tokens_per_edit: row.edit_turns ? row.edit_tokens / row.edit_turns : null,
-    cost_per_edit: row.edit_turns ? row.edit_cost_usd / row.edit_turns : null,
-  })).sort((a, b) => b.edit_turns - a.edit_turns || b.productive_sessions - a.productive_sessions || b.sessions - a.sessions);
-  const totals = by_model.reduce((acc, row) => {
-    for (const key of ["sessions", "productive_sessions", "one_shot_sessions", "edit_turns", "retries", "total_tokens", "cost_usd", "edit_tokens", "edit_cost_usd"]) acc[key] += finite(row[key]);
-    return acc;
-  }, { sessions: 0, productive_sessions: 0, one_shot_sessions: 0, edit_turns: 0, retries: 0, total_tokens: 0, cost_usd: 0, edit_tokens: 0, edit_cost_usd: 0 });
+  const by_model = [...byModel.values()]
+    .map((row) => ({
+      ...row,
+      productive_rate: row.sessions
+        ? row.productive_sessions / row.sessions
+        : null,
+      one_shot_rate: row.productive_sessions
+        ? row.one_shot_sessions / row.productive_sessions
+        : null,
+      edit_sessions: row.productive_sessions,
+      first_pass_sessions: row.one_shot_sessions,
+      edit_session_rate: row.sessions
+        ? row.productive_sessions / row.sessions
+        : null,
+      first_pass_rate: row.productive_sessions
+        ? row.one_shot_sessions / row.productive_sessions
+        : null,
+      tokens_per_edit: row.edit_turns ? row.edit_tokens / row.edit_turns : null,
+      cost_per_edit: row.edit_turns ? row.edit_cost_usd / row.edit_turns : null,
+    }))
+    .sort(
+      (a, b) =>
+        b.edit_turns - a.edit_turns ||
+        b.productive_sessions - a.productive_sessions ||
+        b.sessions - a.sessions,
+    );
+  const totals = by_model.reduce(
+    (acc, row) => {
+      for (const key of [
+        "sessions",
+        "productive_sessions",
+        "one_shot_sessions",
+        "edit_turns",
+        "retries",
+        "total_tokens",
+        "cost_usd",
+        "edit_tokens",
+        "edit_cost_usd",
+      ])
+        acc[key] += finite(row[key]);
+      return acc;
+    },
+    {
+      sessions: 0,
+      productive_sessions: 0,
+      one_shot_sessions: 0,
+      edit_turns: 0,
+      retries: 0,
+      total_tokens: 0,
+      cost_usd: 0,
+      edit_tokens: 0,
+      edit_cost_usd: 0,
+    },
+  );
   return {
     available: filtered.length > 0,
     // Local filesystem paths and raw session ids are required internally for
     // Git attribution and the local-only session browser, but never leave the
     // Node process through API/CSV payloads.
     sessions: includeSessions
-      ? filtered.map(({ project_ref: _projectRef, session_id: _sessionId, title: _title, _cache_key: _cacheKey, ...row }) => row)
+      ? filtered.map(
+          ({
+            project_ref: _projectRef,
+            session_id: _sessionId,
+            title: _title,
+            _cache_key: _cacheKey,
+            ...row
+          }) => row,
+        )
       : [],
     session_count: filtered.length,
     summary: {
       ...totals,
-      productive_rate: totals.sessions ? totals.productive_sessions / totals.sessions : null,
-      one_shot_rate: totals.productive_sessions ? totals.one_shot_sessions / totals.productive_sessions : null,
+      productive_rate: totals.sessions
+        ? totals.productive_sessions / totals.sessions
+        : null,
+      one_shot_rate: totals.productive_sessions
+        ? totals.one_shot_sessions / totals.productive_sessions
+        : null,
       edit_sessions: totals.productive_sessions,
       first_pass_sessions: totals.one_shot_sessions,
-      edit_session_rate: totals.sessions ? totals.productive_sessions / totals.sessions : null,
-      first_pass_rate: totals.productive_sessions ? totals.one_shot_sessions / totals.productive_sessions : null,
-      tokens_per_edit: totals.edit_turns ? totals.edit_tokens / totals.edit_turns : null,
-      cost_per_edit: totals.edit_turns ? totals.edit_cost_usd / totals.edit_turns : null,
+      edit_session_rate: totals.sessions
+        ? totals.productive_sessions / totals.sessions
+        : null,
+      first_pass_rate: totals.productive_sessions
+        ? totals.one_shot_sessions / totals.productive_sessions
+        : null,
+      tokens_per_edit: totals.edit_turns
+        ? totals.edit_tokens / totals.edit_turns
+        : null,
+      cost_per_edit: totals.edit_turns
+        ? totals.edit_cost_usd / totals.edit_turns
+        : null,
     },
     by_model,
     subagents: [...subagents.values()].sort((a, b) => b.calls - a.calls),
@@ -1177,7 +1456,8 @@ function mergeSessionFragments(rows) {
     cur.turns = finite(cur.turns) + finite(row.turns);
     cur.edit_turns = finite(cur.edit_turns) + finite(row.edit_turns);
     cur.retry_turns = finite(cur.retry_turns) + finite(row.retry_turns);
-    cur.subagent_calls = finite(cur.subagent_calls) + finite(row.subagent_calls);
+    cur.subagent_calls =
+      finite(cur.subagent_calls) + finite(row.subagent_calls);
     cur.total_tokens = finite(cur.total_tokens) + finite(row.total_tokens);
     cur.cost_usd = finite(cur.cost_usd) + finite(row.cost_usd);
     cur.productive = Boolean(cur.productive) || Boolean(row.productive);
@@ -1198,8 +1478,10 @@ function mergeSessionFragments(rows) {
         cur.project_ref = row.project_ref;
       }
     }
-    if (row.started_at && (!cur.started_at || row.started_at < cur.started_at)) cur.started_at = row.started_at;
-    if (row.ended_at && (!cur.ended_at || row.ended_at > cur.ended_at)) cur.ended_at = row.ended_at;
+    if (row.started_at && (!cur.started_at || row.started_at < cur.started_at))
+      cur.started_at = row.started_at;
+    if (row.ended_at && (!cur.ended_at || row.ended_at > cur.ended_at))
+      cur.ended_at = row.ended_at;
   }
   const merged = [];
   for (const row of byHash.values()) {
@@ -1207,7 +1489,8 @@ function mergeSessionFragments(rows) {
     // Active time is additive across fragments (see IDLE_GAP_MS); the
     // wall-clock span between first and last line is not.
     row.duration_ms = finite(row.active_ms);
-    row.first_pass = finite(row.edit_turns) === 1 && finite(row.retry_turns) === 0;
+    row.first_pass =
+      finite(row.edit_turns) === 1 && finite(row.retry_turns) === 0;
     row.one_shot = row.first_pass;
     merged.push(row);
   }
@@ -1218,7 +1501,10 @@ function mergeSessionFragments(rows) {
 // summarizeSessions (cloud/CSV safe), this retains session_id + project_ref so
 // the UI can offer one-click resume. Callers must only expose it over the
 // local API.
-function listSessionsForBrowser(sessions, { from = "", to = "", limit = 0 } = {}) {
+function listSessionsForBrowser(
+  sessions,
+  { from = "", to = "", limit = 0 } = {},
+) {
   const filtered = mergeSessionFragments(sessions)
     // Only sessions that actually spent tokens are worth listing. This drops
     // two kinds of noise: non-session logs under ~/.claude/projects
@@ -1227,7 +1513,9 @@ function listSessionsForBrowser(sessions, { from = "", to = "", limit = 0 } = {}
     // no model, no cost and nothing to analyze.
     .filter((row) => finite(row.total_tokens) > 0)
     .filter((row) => withinDayRange(row, from, to));
-  filtered.sort((a, b) => String(b.ended_at || "").localeCompare(String(a.ended_at || "")));
+  filtered.sort((a, b) =>
+    String(b.ended_at || "").localeCompare(String(a.ended_at || "")),
+  );
   const cap = Number(limit) > 0 ? Number(limit) : 0;
   const limited = cap > 0 ? filtered.slice(0, cap) : filtered;
   return {
@@ -1246,9 +1534,33 @@ function listSessionsForBrowser(sessions, { from = "", to = "", limit = 0 } = {}
 }
 
 function sessionsToCsv(rows) {
-  const columns = ["session_hash", "source", "project_key", "model", "started_at", "ended_at", "duration_ms", "turns", "edit_turns", "retry_turns", "subagent_calls", "total_tokens", "cost_usd", "productive", "first_pass", "one_shot"];
+  const columns = [
+    "session_hash",
+    "source",
+    "project_key",
+    "model",
+    "started_at",
+    "ended_at",
+    "duration_ms",
+    "turns",
+    "edit_turns",
+    "retry_turns",
+    "subagent_calls",
+    "total_tokens",
+    "cost_usd",
+    "productive",
+    "first_pass",
+    "one_shot",
+  ];
   const escape = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-  return [columns.join(","), ...(rows || []).map((row) => columns.map((key) => escape(row[key])).join(","))].join("\n") + "\n";
+  return (
+    [
+      columns.join(","),
+      ...(rows || []).map((row) =>
+        columns.map((key) => escape(row[key])).join(","),
+      ),
+    ].join("\n") + "\n"
+  );
 }
 
 module.exports = {

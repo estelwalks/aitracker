@@ -1,5 +1,9 @@
 import { parseMarketApiResponse } from "./schema.ts";
-import { marketCacheKey, readMarketCache, writeMarketCache } from "./cache.server.ts";
+import {
+  marketCacheKey,
+  readMarketCache,
+  writeMarketCache,
+} from "./cache.server.ts";
 import type { MarketListResult } from "./types.ts";
 
 const MARKET_API = "https://ai.trusttools.cn/api";
@@ -16,7 +20,10 @@ export async function fetchMarketSkills(
 ): Promise<MarketListResult> {
   const key = marketCacheKey(query.page, query.limit, query.search);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
 
   try {
     const url = new URL(`${MARKET_API}/skills`);
@@ -28,7 +35,8 @@ export async function fetchMarketSkills(
       headers: { accept: "application/json" },
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`市场接口请求失败（HTTP ${response.status}）`);
+    if (!response.ok)
+      throw new Error(`市场接口请求失败（HTTP ${response.status}）`);
 
     const parsed = parseMarketApiResponse(await response.json());
     const result: MarketListResult = {
@@ -66,7 +74,9 @@ export function buildDownloadUrl(skill: {
   slug: string;
   repoPath: string;
 }): URL {
-  const segments = [skill.repoOwner, skill.repoName, skill.slug].map(encodeURIComponent);
+  const segments = [skill.repoOwner, skill.repoName, skill.slug].map(
+    encodeURIComponent,
+  );
   const url = new URL(`${MARKET_API}/skills/${segments.join("/")}/download`);
   url.searchParams.set("repo_path", skill.repoPath);
   return url;

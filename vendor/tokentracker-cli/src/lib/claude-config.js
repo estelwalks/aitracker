@@ -6,12 +6,20 @@ const { ensureDir, readJson, writeJson } = require("./fs");
 const DEFAULT_EVENT = "SessionEnd";
 const CLAUDE_USAGE_EVENTS = ["Stop", DEFAULT_EVENT];
 
-async function upsertClaudeHook({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
+async function upsertClaudeHook({
+  settingsPath,
+  hookCommand,
+  event = DEFAULT_EVENT,
+}) {
   return upsertClaudeHooks({ settingsPath, hookCommand, events: [event] });
 }
 
 async function upsertClaudeUsageHooks({ settingsPath, hookCommand }) {
-  return upsertClaudeHooks({ settingsPath, hookCommand, events: CLAUDE_USAGE_EVENTS });
+  return upsertClaudeHooks({
+    settingsPath,
+    hookCommand,
+    events: CLAUDE_USAGE_EVENTS,
+  });
 }
 
 async function upsertClaudeHooks({ settingsPath, hookCommand, events }) {
@@ -26,7 +34,9 @@ async function upsertClaudeHooks({ settingsPath, hookCommand, events }) {
     const normalized = normalizeEntriesForCommand(entries, hookCommand);
     let nextEntries = normalized.entries;
     if (!hasHook(nextEntries, hookCommand)) {
-      nextEntries = nextEntries.concat([{ hooks: [{ type: "command", command: hookCommand }] }]);
+      nextEntries = nextEntries.concat([
+        { hooks: [{ type: "command", command: hookCommand }] },
+      ]);
       changed = true;
     }
     if (normalized.changed) changed = true;
@@ -38,16 +48,27 @@ async function upsertClaudeHooks({ settingsPath, hookCommand, events }) {
   if (!changed) return { changed: false, backupPath: null };
 
   const nextSettings = { ...settings, hooks: nextHooks };
-  const backupPath = await writeClaudeSettings({ settingsPath, settings: nextSettings });
+  const backupPath = await writeClaudeSettings({
+    settingsPath,
+    settings: nextSettings,
+  });
   return { changed: true, backupPath };
 }
 
-async function removeClaudeHook({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
+async function removeClaudeHook({
+  settingsPath,
+  hookCommand,
+  event = DEFAULT_EVENT,
+}) {
   return removeClaudeHooks({ settingsPath, hookCommand, events: [event] });
 }
 
 async function removeClaudeUsageHooks({ settingsPath, hookCommand }) {
-  return removeClaudeHooks({ settingsPath, hookCommand, events: CLAUDE_USAGE_EVENTS });
+  return removeClaudeHooks({
+    settingsPath,
+    hookCommand,
+    events: CLAUDE_USAGE_EVENTS,
+  });
 }
 
 async function removeClaudeHooks({ settingsPath, hookCommand, events }) {
@@ -76,12 +97,23 @@ async function removeClaudeHooks({ settingsPath, hookCommand, events }) {
   if (Object.keys(nextHooks).length > 0) nextSettings.hooks = nextHooks;
   else delete nextSettings.hooks;
 
-  const backupPath = await writeClaudeSettings({ settingsPath, settings: nextSettings });
+  const backupPath = await writeClaudeSettings({
+    settingsPath,
+    settings: nextSettings,
+  });
   return { removed: true, skippedReason: null, backupPath };
 }
 
-async function isClaudeHookConfigured({ settingsPath, hookCommand, event = DEFAULT_EVENT }) {
-  return areClaudeHooksConfigured({ settingsPath, hookCommand, events: [event] });
+async function isClaudeHookConfigured({
+  settingsPath,
+  hookCommand,
+  event = DEFAULT_EVENT,
+}) {
+  return areClaudeHooksConfigured({
+    settingsPath,
+    hookCommand,
+    events: [event],
+  });
 }
 
 async function areClaudeUsageHooksConfigured({ settingsPath, hookCommand }) {
@@ -130,7 +162,9 @@ function normalizeEntries(raw) {
 
 function normalizeEventList(events) {
   const values = Array.isArray(events) ? events : [];
-  return Array.from(new Set(values.filter((event) => typeof event === "string" && event)));
+  return Array.from(
+    new Set(values.filter((event) => typeof event === "string" && event)),
+  );
 }
 
 function normalizeCommand(cmd) {
@@ -155,14 +189,17 @@ function stripHookFromEntry(entry, hookCommand) {
   if (!entry || typeof entry !== "object") return { entry, removed: false };
 
   if (entry.command) {
-    if (commandsEqual(entry.command, hookCommand)) return { entry: null, removed: true };
+    if (commandsEqual(entry.command, hookCommand))
+      return { entry: null, removed: true };
     return { entry, removed: false };
   }
 
   const hooks = Array.isArray(entry.hooks) ? entry.hooks : null;
   if (!hooks) return { entry, removed: false };
 
-  const nextHooks = hooks.filter((hook) => !commandsEqual(hook?.command, hookCommand));
+  const nextHooks = hooks.filter(
+    (hook) => !commandsEqual(hook?.command, hookCommand),
+  );
   if (nextHooks.length === hooks.length) return { entry, removed: false };
   if (nextHooks.length === 0) return { entry: null, removed: true };
 

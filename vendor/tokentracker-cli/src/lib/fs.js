@@ -67,7 +67,10 @@ function parseLockOwner(raw) {
 }
 
 function heartbeatPathFor(lockPath, token) {
-  const tokenDigest = crypto.createHash("sha256").update(token, "utf8").digest("hex");
+  const tokenDigest = crypto
+    .createHash("sha256")
+    .update(token, "utf8")
+    .digest("hex");
   return `${lockPath}.heartbeat.${tokenDigest}`;
 }
 
@@ -105,7 +108,10 @@ async function existingLockCanBeReclaimed(lockPath) {
       // the conservative live-PID behavior.
       let heartbeatHandle = null;
       try {
-        heartbeatHandle = await fs.open(heartbeatPathFor(lockPath, owner.token), "r");
+        heartbeatHandle = await fs.open(
+          heartbeatPathFor(lockPath, owner.token),
+          "r",
+        );
         const heartbeat = await heartbeatHandle.stat();
         return Date.now() - heartbeat.mtimeMs > LOCK_STALE_MS;
       } catch (_e) {
@@ -171,7 +177,9 @@ async function releaseOwnedLock(
         serializeRelease: false,
       });
       if (transitionGuard) break;
-      await new Promise((resolve) => setTimeout(resolve, TRANSITION_GUARD_RETRY_MS));
+      await new Promise((resolve) =>
+        setTimeout(resolve, TRANSITION_GUARD_RETRY_MS),
+      );
     }
     if (!transitionGuard) {
       clearInterval(heartbeatTimer);
@@ -219,7 +227,11 @@ async function openLock(
     let heartbeatHandle = null;
     try {
       await handle.writeFile(
-        JSON.stringify({ pid: process.pid, token, createdAt: new Date().toISOString() }) + "\n",
+        JSON.stringify({
+          pid: process.pid,
+          token,
+          createdAt: new Date().toISOString(),
+        }) + "\n",
         "utf8",
       );
       heartbeatHandle = await fs.open(heartbeatPath, "wx");
@@ -296,7 +308,9 @@ async function openLock(
           if (staleOwner) {
             // The heartbeat name contains the old token, so it cannot belong
             // to a replacement lease created after the atomic rename.
-            await fs.unlink(heartbeatPathFor(lockPath, staleOwner.token)).catch(() => {});
+            await fs
+              .unlink(heartbeatPathFor(lockPath, staleOwner.token))
+              .catch(() => {});
           }
           return await openLock(lockPath, {
             quietIfLocked,

@@ -39,8 +39,10 @@ function dayKeyToIsoBounds(from, to) {
   if (!from && !to) return { fromIso: null, toIso: null };
   const fromDate = from ? new Date(`${from}T00:00:00Z`) : null;
   const toDate = to ? new Date(`${to}T23:59:59Z`) : null;
-  if (fromDate && Number.isFinite(fromDate.getTime())) fromDate.setUTCHours(fromDate.getUTCHours() - 14);
-  if (toDate && Number.isFinite(toDate.getTime())) toDate.setUTCHours(toDate.getUTCHours() + 14);
+  if (fromDate && Number.isFinite(fromDate.getTime()))
+    fromDate.setUTCHours(fromDate.getUTCHours() - 14);
+  if (toDate && Number.isFinite(toDate.getTime()))
+    toDate.setUTCHours(toDate.getUTCHours() + 14);
   return {
     fromIso: fromDate ? fromDate.toISOString() : null,
     toIso: toDate ? toDate.toISOString() : null,
@@ -84,8 +86,14 @@ function getZonedParts(date, timeZoneContext = {}) {
   if (Number.isFinite(offsetMinutes)) {
     const shifted = new Date(dt.getTime() - Number(offsetMinutes) * 60_000);
     return [
-      { type: "year", value: String(shifted.getUTCFullYear()).padStart(4, "0") },
-      { type: "month", value: String(shifted.getUTCMonth() + 1).padStart(2, "0") },
+      {
+        type: "year",
+        value: String(shifted.getUTCFullYear()).padStart(4, "0"),
+      },
+      {
+        type: "month",
+        value: String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+      },
       { type: "day", value: String(shifted.getUTCDate()).padStart(2, "0") },
     ];
   }
@@ -102,7 +110,10 @@ function timestampDayKey(timestamp, timeZoneContext) {
   return ts.slice(0, 10);
 }
 
-function isTimestampInRequestedDayRange(timestamp, { from, to, timeZoneContext } = {}) {
+function isTimestampInRequestedDayRange(
+  timestamp,
+  { from, to, timeZoneContext } = {},
+) {
   if (!from && !to) return true;
   const day = timestampDayKey(timestamp, timeZoneContext);
   if (!day) return false;
@@ -153,9 +164,13 @@ function listJsonlFiles(rootDir) {
 
 function rolloutPathDay(filePath) {
   const normalized = String(filePath || "").replaceAll("\\", "/");
-  const fileMatch = path.basename(normalized).match(/(?:^|rollout-)(\d{4})-(\d{2})-(\d{2})/);
+  const fileMatch = path
+    .basename(normalized)
+    .match(/(?:^|rollout-)(\d{4})-(\d{2})-(\d{2})/);
   if (fileMatch) return `${fileMatch[1]}-${fileMatch[2]}-${fileMatch[3]}`;
-  const directoryMatch = normalized.match(/.*\/(\d{4})\/(\d{2})\/(\d{2})(?:\/|$)/);
+  const directoryMatch = normalized.match(
+    /.*\/(\d{4})\/(\d{2})\/(\d{2})(?:\/|$)/,
+  );
   return directoryMatch
     ? `${directoryMatch[1]}-${directoryMatch[2]}-${directoryMatch[3]}`
     : null;
@@ -175,7 +190,9 @@ function metadataRangeBounds(from, to, timeZoneContext) {
     const dstGuardMs = 2 * 60 * 60 * 1000;
     const fromUtc = from ? Date.parse(`${from}T00:00:00.000Z`) : null;
     const afterTo = to ? nextDayKey(to) : null;
-    const toUtcExclusive = afterTo ? Date.parse(`${afterTo}T00:00:00.000Z`) : null;
+    const toUtcExclusive = afterTo
+      ? Date.parse(`${afterTo}T00:00:00.000Z`)
+      : null;
     return {
       fromMs: Number.isFinite(fromUtc)
         ? fromUtc + offsetMinutes * 60_000 - dstGuardMs
@@ -192,12 +209,16 @@ function metadataRangeBounds(from, to, timeZoneContext) {
   };
 }
 
-function isConservativeRangeCandidate(filePath, stat, {
-  from = null,
-  to = null,
-  timeZoneContext = null,
-  metadataBounds = null,
-} = {}) {
+function isConservativeRangeCandidate(
+  filePath,
+  stat,
+  {
+    from = null,
+    to = null,
+    timeZoneContext = null,
+    metadataBounds = null,
+  } = {},
+) {
   if (!from && !to) return true;
   // With no lower bound, a later-path rewrite can still contain an event at or
   // before `to`. There is no metadata-only exclusion that can prove otherwise.
@@ -212,17 +233,16 @@ function isConservativeRangeCandidate(filePath, stat, {
   // therefore a reason to parse, never a reason to exclude. ctime also catches
   // cold-process inode replacement/truncation when a writer preserves mtime.
   // Future-dated decoys are kept conservatively; correctness wins over an open.
-  const bounds = metadataBounds || metadataRangeBounds(from, to, timeZoneContext);
+  const bounds =
+    metadataBounds || metadataRangeBounds(from, to, timeZoneContext);
   const fromMs = bounds.fromMs;
   const toMs = bounds.toMs;
   const mtimeMs = Number(stat?.mtimeMs);
   const ctimeMs = Number(stat?.ctimeMs);
-  const changedAfterStart = (value) => (
-    Number.isFinite(value) && (!Number.isFinite(fromMs) || value >= fromMs)
-  );
-  const changedInsideRange = (value) => (
-    changedAfterStart(value) && (!Number.isFinite(toMs) || value <= toMs)
-  );
+  const changedAfterStart = (value) =>
+    Number.isFinite(value) && (!Number.isFinite(fromMs) || value >= fromMs);
+  const changedInsideRange = (value) =>
+    changedAfterStart(value) && (!Number.isFinite(toMs) || value <= toMs);
   if (pathDay < from) {
     return changedAfterStart(mtimeMs) || changedAfterStart(ctimeMs);
   }
@@ -239,7 +259,10 @@ function isConservativeRangeCandidate(filePath, stat, {
   return changedInsideRange(mtimeMs) || changedInsideRange(ctimeMs);
 }
 
-function isRolloutPathInRequestedRange(filePath, { from = null, to = null } = {}) {
+function isRolloutPathInRequestedRange(
+  filePath,
+  { from = null, to = null } = {},
+) {
   const pathDay = rolloutPathDay(filePath);
   if (!pathDay) return true;
   if (from && pathDay < from) return false;
@@ -248,7 +271,10 @@ function isRolloutPathInRequestedRange(filePath, { from = null, to = null } = {}
 }
 
 function discoveryInventoryKey(roots) {
-  return roots.map((root) => path.resolve(root)).sort().join("\0");
+  return roots
+    .map((root) => path.resolve(root))
+    .sort()
+    .join("\0");
 }
 
 function getDiscoveryInventory(roots, nowMs) {
@@ -278,11 +304,17 @@ function getDiscoveryInventory(roots, nowMs) {
 function discoverCodexSessionFiles(rootDirs, options = {}) {
   const diagnostics = options.diagnostics || null;
   const roots = Array.isArray(rootDirs) ? rootDirs : [rootDirs];
-  const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+  const nowMs = Number.isFinite(Number(options.nowMs))
+    ? Number(options.nowMs)
+    : Date.now();
   const inventory = getDiscoveryInventory(roots.filter(Boolean), nowMs);
   const candidateOptions = {
     ...options,
-    metadataBounds: metadataRangeBounds(options.from, options.to, options.timeZoneContext),
+    metadataBounds: metadataRangeBounds(
+      options.from,
+      options.to,
+      options.timeZoneContext,
+    ),
   };
   const bounded = Boolean(options.from || options.to);
   const auditAgeMs = nowMs - Number(inventory.lastFullAuditAtMs || 0);
@@ -291,7 +323,7 @@ function discoverCodexSessionFiles(rootDirs, options = {}) {
     !bounded ||
     !Number.isFinite(auditAgeMs) ||
     auditAgeMs < 0 ||
-    auditAgeMs >= DISCOVERY_FULL_AUDIT_INTERVAL_MS
+    auditAgeMs >= DISCOVERY_FULL_AUDIT_INTERVAL_MS,
   );
   if (diagnostics) diagnostics.full_metadata_audit = fullMetadataAudit;
   const entries = [];
@@ -312,7 +344,12 @@ function discoverCodexSessionFiles(rootDirs, options = {}) {
         stack.push(filePath);
         continue;
       }
-      if (!child.isFile() || !child.name.endsWith(".jsonl") || visited.has(filePath)) continue;
+      if (
+        !child.isFile() ||
+        !child.name.endsWith(".jsonl") ||
+        visited.has(filePath)
+      )
+        continue;
       visited.add(filePath);
       if (diagnostics) diagnostics.discovered_files += 1;
       const cached = inventory.files.get(filePath) || null;
@@ -323,7 +360,7 @@ function discoverCodexSessionFiles(rootDirs, options = {}) {
         fullMetadataAudit ||
         !cached ||
         cachedCandidate ||
-        isRolloutPathInRequestedRange(filePath, options)
+        isRolloutPathInRequestedRange(filePath, options),
       );
       let stat = cached;
       if (shouldStat) {
@@ -390,7 +427,8 @@ function extractTokenCount(obj) {
 function normalizeToolName(payload) {
   const name = payload?.name || "";
   const ns = payload?.namespace || null;
-  if (ns && typeof ns === "string" && ns.startsWith("mcp__")) return `${ns}${name}`;
+  if (ns && typeof ns === "string" && ns.startsWith("mcp__"))
+    return `${ns}${name}`;
   return name || "unknown";
 }
 
@@ -398,7 +436,9 @@ function extractSkillNameFromFunctionCall(payload, diagnostics = null) {
   if (!payload || payload.name !== "exec_command") return null;
   const args = safeJsonParse(payload.arguments || "{}", diagnostics) || {};
   const cmd = String(args.cmd || "");
-  const match = cmd.match(/(?:^|\/)skills\/(?:\.system\/)?([^/\s]+)\/SKILL\.md\b/);
+  const match = cmd.match(
+    /(?:^|\/)skills\/(?:\.system\/)?([^/\s]+)\/SKILL\.md\b/,
+  );
   return match ? match[1] : null;
 }
 
@@ -406,7 +446,9 @@ function formatToolDisplayName(name) {
   if (typeof name !== "string" || !name.startsWith("mcp__")) return name;
   const parts = name.split("__");
   if (parts.length < 3) return name;
-  const server = String(parts[1] || "").replace(/^plugin_/, "").replace(/_/g, "-");
+  const server = String(parts[1] || "")
+    .replace(/^plugin_/, "")
+    .replace(/_/g, "-");
   const tool = parts.slice(2).join("__") || name;
   return server ? `${server}/${tool}` : tool;
 }
@@ -492,7 +534,9 @@ function finalizeToolRows(map) {
         totals: row.totals,
       };
     })
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
 function finalizeSkillRows(map) {
@@ -502,7 +546,9 @@ function finalizeSkillRows(map) {
       calls: row.calls,
       totals: row.totals,
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
 function finalizeExecRows(map) {
@@ -517,28 +563,35 @@ function finalizeExecRows(map) {
       output_lines: row.output_lines,
       totals: row.totals,
     }))
-    .sort((a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0));
+    .sort(
+      (a, b) => (b.totals?.total_tokens || 0) - (a.totals?.total_tokens || 0),
+    );
 }
 
 // ---------------------------------------------------------------------------
 // Main parser
 // ---------------------------------------------------------------------------
 
-async function parseCodexRolloutFile(filePath, {
-  from = null,
-  to = null,
-  timeZoneContext = null,
-  diagnostics = null,
-  seenTokenEvents = null,
-  startOffset = 0,
-  endOffset = null,
-  resumeState = null,
-  captureResumeState = false,
-  captureContentHash = false,
-  contentHashState = null,
-  sourceHandle = null,
-} = {}) {
-  const filePaths = (Array.isArray(filePath) ? filePath : [filePath]).filter(Boolean);
+async function parseCodexRolloutFile(
+  filePath,
+  {
+    from = null,
+    to = null,
+    timeZoneContext = null,
+    diagnostics = null,
+    seenTokenEvents = null,
+    startOffset = 0,
+    endOffset = null,
+    resumeState = null,
+    captureResumeState = false,
+    captureContentHash = false,
+    contentHashState = null,
+    sourceHandle = null,
+  } = {},
+) {
+  const filePaths = (Array.isArray(filePath) ? filePath : [filePath]).filter(
+    Boolean,
+  );
   const primaryFilePath = filePaths[0] || String(filePath || "");
   const isResuming = Boolean(resumeState && filePaths.length === 1);
   const initialOffset = Math.max(0, Number(startOffset) || 0);
@@ -556,7 +609,9 @@ async function parseCodexRolloutFile(filePath, {
       }
     }
     if (initialOffset > 0 && !contentHasher) {
-      const error = new Error("Codex rollout append is missing its prefix hash state");
+      const error = new Error(
+        "Codex rollout append is missing its prefix hash state",
+      );
       error.code = CODEX_RESUME_INVALIDATED;
       throw error;
     }
@@ -576,7 +631,9 @@ async function parseCodexRolloutFile(filePath, {
   let pendingToolNames = isResuming
     ? Array.from(resumeState.pendingToolNames || [])
     : [];
-  let pendingSkills = isResuming ? Array.from(resumeState.pendingSkills || []) : [];
+  let pendingSkills = isResuming
+    ? Array.from(resumeState.pendingSkills || [])
+    : [];
   let pendingExecDetails = isResuming
     ? Array.from(resumeState.pendingExecDetails || [])
     : [];
@@ -622,16 +679,27 @@ async function parseCodexRolloutFile(filePath, {
   function getExecKeys(p) {
     if (!p || typeof p !== "object") return;
     const cmdArr = Array.isArray(p.command) ? p.command : null;
-    const cmd = cmdArr && cmdArr.length > 0 ? String(cmdArr[cmdArr.length - 1] || "") : "";
-    const kind = p.parsed_cmd?.[0]?.type && p.parsed_cmd[0].type !== "unknown"
-      ? p.parsed_cmd[0].type
-      : inferExecCommandKind(cmd);
+    const cmd =
+      cmdArr && cmdArr.length > 0
+        ? String(cmdArr[cmdArr.length - 1] || "")
+        : "";
+    const kind =
+      p.parsed_cmd?.[0]?.type && p.parsed_cmd[0].type !== "unknown"
+        ? p.parsed_cmd[0].type
+        : inferExecCommandKind(cmd);
 
     const status = String(p.status || "unknown");
-    const exit = Number.isFinite(Number(p.exit_code)) ? Number(p.exit_code) : null;
+    const exit = Number.isFinite(Number(p.exit_code))
+      ? Number(p.exit_code)
+      : null;
     const exitKey = `${status}:${exit === null ? "unknown" : exit}`;
 
-    const dur = p.duration ? Math.round((Number(p.duration.secs || 0) * 1000) + Number(p.duration.nanos || 0) / 1e6) : 0;
+    const dur = p.duration
+      ? Math.round(
+          Number(p.duration.secs || 0) * 1000 +
+            Number(p.duration.nanos || 0) / 1e6,
+        )
+      : 0;
     const output = String(p.aggregated_output || p.stdout || "");
     const outputChars = output.length;
     const outputLines = output ? output.split("\n").length : 0;
@@ -704,7 +772,8 @@ async function parseCodexRolloutFile(filePath, {
         addInto(row.totals, {
           input_tokens: delta.input_tokens * skillShare,
           cached_input_tokens: delta.cached_input_tokens * skillShare,
-          cache_creation_input_tokens: delta.cache_creation_input_tokens * skillShare,
+          cache_creation_input_tokens:
+            delta.cache_creation_input_tokens * skillShare,
           output_tokens: delta.output_tokens * skillShare,
           reasoning_output_tokens: delta.reasoning_output_tokens * skillShare,
           total_tokens: delta.total_tokens * skillShare,
@@ -715,15 +784,20 @@ async function parseCodexRolloutFile(filePath, {
     // Attribute exec_command_end rows to exec stats; note these are not a
     // token source — we attach the same tool-shared delta to the command
     // classifier so users can find high-cost command families.
-    const execToolShare = tools.includes("exec_command") ? (1 / tools.length) : 0;
-    const execDelta = execToolShare > 0 ? {
-      input_tokens: delta.input_tokens * execToolShare,
-      cached_input_tokens: delta.cached_input_tokens * execToolShare,
-      cache_creation_input_tokens: delta.cache_creation_input_tokens * execToolShare,
-      output_tokens: delta.output_tokens * execToolShare,
-      reasoning_output_tokens: delta.reasoning_output_tokens * execToolShare,
-      total_tokens: delta.total_tokens * execToolShare,
-    } : null;
+    const execToolShare = tools.includes("exec_command") ? 1 / tools.length : 0;
+    const execDelta =
+      execToolShare > 0
+        ? {
+            input_tokens: delta.input_tokens * execToolShare,
+            cached_input_tokens: delta.cached_input_tokens * execToolShare,
+            cache_creation_input_tokens:
+              delta.cache_creation_input_tokens * execToolShare,
+            output_tokens: delta.output_tokens * execToolShare,
+            reasoning_output_tokens:
+              delta.reasoning_output_tokens * execToolShare,
+            total_tokens: delta.total_tokens * execToolShare,
+          }
+        : null;
 
     if (execDelta && pendingExecDetails.length > 0) {
       const perExecShare = 1 / pendingExecDetails.length;
@@ -731,17 +805,25 @@ async function parseCodexRolloutFile(filePath, {
         const attributed = {
           input_tokens: execDelta.input_tokens * perExecShare,
           cached_input_tokens: execDelta.cached_input_tokens * perExecShare,
-          cache_creation_input_tokens: execDelta.cache_creation_input_tokens * perExecShare,
+          cache_creation_input_tokens:
+            execDelta.cache_creation_input_tokens * perExecShare,
           output_tokens: execDelta.output_tokens * perExecShare,
-          reasoning_output_tokens: execDelta.reasoning_output_tokens * perExecShare,
+          reasoning_output_tokens:
+            execDelta.reasoning_output_tokens * perExecShare,
           total_tokens: execDelta.total_tokens * perExecShare,
         };
 
         addInto(ensureExec(byExecKind, details.kind).totals, attributed);
         addInto(ensureExec(byExecExit, details.exitKey).totals, attributed);
-        addInto(ensureExec(byExecExecutable, details.executable).totals, attributed);
+        addInto(
+          ensureExec(byExecExecutable, details.executable).totals,
+          attributed,
+        );
         addInto(ensureExec(byExecCommand, details.command).totals, attributed);
-        addInto(ensureExec(byExecDuration, details.duration).totals, attributed);
+        addInto(
+          ensureExec(byExecDuration, details.duration).totals,
+          attributed,
+        );
         addInto(ensureExec(byExecOutput, details.output).totals, attributed);
 
         absorbExecEnd(details);
@@ -786,7 +868,9 @@ async function parseCodexRolloutFile(filePath, {
       return true;
     }
     if (isResuming && lastTokenTimestamp && timestamp < lastTokenTimestamp) {
-      const error = new Error("Codex rollout append is not timestamp-monotonic");
+      const error = new Error(
+        "Codex rollout append is not timestamp-monotonic",
+      );
       error.code = CODEX_RESUME_INVALIDATED;
       throw error;
     }
@@ -816,7 +900,11 @@ async function parseCodexRolloutFile(filePath, {
   })) {
     const ts = typeof obj?.timestamp === "string" ? obj.timestamp : null;
     if (!ts) continue;
-    const inRequestedRange = isTimestampInRequestedDayRange(ts, { from, to, timeZoneContext });
+    const inRequestedRange = isTimestampInRequestedDayRange(ts, {
+      from,
+      to,
+      timeZoneContext,
+    });
 
     if (obj.type === "session_meta") {
       const p = obj.payload || {};
@@ -851,16 +939,27 @@ async function parseCodexRolloutFile(filePath, {
       const info = tokenCount.info;
       const lastUsage = info?.last_token_usage;
       const totalUsage = info?.total_token_usage;
-      const rawDelta = consumeUsageDelta(usageDeltaState, lastUsage, totalUsage);
+      const rawDelta = consumeUsageDelta(
+        usageDeltaState,
+        lastUsage,
+        totalUsage,
+      );
       const delta = rawDelta ? normalizeUsage(rawDelta) : null;
       const isNewResumeEvent = noteTokenEvent(ts, lastUsage, totalUsage);
       if (inRequestedRange) {
-        const eventSessionId = sessionId || rolloutSessionIdFromPath(primaryFilePath) || primaryFilePath;
+        const eventSessionId =
+          sessionId ||
+          rolloutSessionIdFromPath(primaryFilePath) ||
+          primaryFilePath;
         const eventKey = `${eventSessionId}:${ts}:${usageEventSignature(lastUsage, totalUsage)}`;
-        if (!isNewResumeEvent || (seenTokenEvents && seenTokenEvents.has(eventKey))) {
+        if (
+          !isNewResumeEvent ||
+          (seenTokenEvents && seenTokenEvents.has(eventKey))
+        ) {
           attributeTurn(null);
         } else {
-          if (seenTokenEvents && delta?.total_tokens > 0) seenTokenEvents.add(eventKey);
+          if (seenTokenEvents && delta?.total_tokens > 0)
+            seenTokenEvents.add(eventKey);
           attributeTurn(delta);
         }
       } else {
@@ -873,7 +972,8 @@ async function parseCodexRolloutFile(filePath, {
   }
 
   const result = {
-    sessionId: sessionId || rolloutSessionIdFromPath(primaryFilePath) || primaryFilePath,
+    sessionId:
+      sessionId || rolloutSessionIdFromPath(primaryFilePath) || primaryFilePath,
     cwd,
     model: model || provider,
     provider,
@@ -909,12 +1009,14 @@ async function parseCodexRolloutFile(filePath, {
       pendingSkills,
       pendingExecDetails,
       lastTokenTimestamp,
-      lastTimestampEventSignatures: Array.from(materializeLastTimestampSignatures()),
+      lastTimestampEventSignatures: Array.from(
+        materializeLastTimestampSignatures(),
+      ),
     };
     result.endOffset = readProgress.endOffset;
-    result.appendable = Boolean(contentHasher) && (
-      readProgress.endOffset === 0 || readProgress.lastByte === 0x0a
-    );
+    result.appendable =
+      Boolean(contentHasher) &&
+      (readProgress.endOffset === 0 || readProgress.lastByte === 0x0a);
     result.contentHashState = contentHasher;
   }
   return result;
@@ -936,41 +1038,52 @@ function parseCodexLine(lineBuffer, diagnostics) {
   }
 }
 
-async function* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
-  startOffset = 0,
-  endOffset = null,
-  readProgress = null,
-  contentHasher = null,
-  sourceHandle = null,
-} = {}) {
+async function* readCodexObjectsIncremental(
+  filePath,
+  diagnostics,
+  fileIndex,
+  {
+    startOffset = 0,
+    endOffset = null,
+    readProgress = null,
+    contentHasher = null,
+    sourceHandle = null,
+  } = {},
+) {
   const start = Math.max(0, Number(startOffset) || 0);
   const requestedEnd = Number(endOffset);
-  const hasBoundedEnd = endOffset !== null && endOffset !== undefined &&
-    Number.isFinite(requestedEnd) && requestedEnd >= 0;
+  const hasBoundedEnd =
+    endOffset !== null &&
+    endOffset !== undefined &&
+    Number.isFinite(requestedEnd) &&
+    requestedEnd >= 0;
   if (hasBoundedEnd && requestedEnd <= start) {
     if (readProgress) readProgress.endOffset = start;
     return;
   }
 
   if (diagnostics) diagnostics.opened_files += 1;
-  const stream = sourceHandle && typeof sourceHandle.read === "function"
-    ? null
-    : fs.createReadStream(filePath, {
-        start,
-        ...(hasBoundedEnd ? { end: requestedEnd - 1 } : {}),
-      });
-  const chunks = stream || (async function* readStableHandleChunks() {
-    const buffer = Buffer.allocUnsafe(64 * 1024);
-    const limit = hasBoundedEnd ? requestedEnd : Number.MAX_SAFE_INTEGER;
-    let offset = start;
-    while (offset < limit) {
-      const length = Math.min(buffer.length, limit - offset);
-      const result = await sourceHandle.read(buffer, 0, length, offset);
-      if (!result.bytesRead) break;
-      offset += result.bytesRead;
-      yield buffer.subarray(0, result.bytesRead);
-    }
-  })();
+  const stream =
+    sourceHandle && typeof sourceHandle.read === "function"
+      ? null
+      : fs.createReadStream(filePath, {
+          start,
+          ...(hasBoundedEnd ? { end: requestedEnd - 1 } : {}),
+        });
+  const chunks =
+    stream ||
+    (async function* readStableHandleChunks() {
+      const buffer = Buffer.allocUnsafe(64 * 1024);
+      const limit = hasBoundedEnd ? requestedEnd : Number.MAX_SAFE_INTEGER;
+      let offset = start;
+      while (offset < limit) {
+        const length = Math.min(buffer.length, limit - offset);
+        const result = await sourceHandle.read(buffer, 0, length, offset);
+        if (!result.bytesRead) break;
+        offset += result.bytesRead;
+        yield buffer.subarray(0, result.bytesRead);
+      }
+    })();
   const fragments = [];
   let fragmentsBytes = 0;
   let nextChunkOffset = start;
@@ -987,7 +1100,8 @@ async function* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
         readProgress.lastByte = chunk[chunk.length - 1];
       }
       if (diagnostics) {
-        diagnostics.bytes_read = Number(diagnostics.bytes_read || 0) + chunk.length;
+        diagnostics.bytes_read =
+          Number(diagnostics.bytes_read || 0) + chunk.length;
       }
 
       let cursor = 0;
@@ -1005,9 +1119,10 @@ async function* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
         }
 
         const tail = chunk.subarray(cursor, newline);
-        const lineBuffer = fragments.length > 0
-          ? Buffer.concat([...fragments, tail], fragmentsBytes + tail.length)
-          : tail;
+        const lineBuffer =
+          fragments.length > 0
+            ? Buffer.concat([...fragments, tail], fragmentsBytes + tail.length)
+            : tail;
         fragments.length = 0;
         fragmentsBytes = 0;
 
@@ -1024,12 +1139,14 @@ async function* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
     }
 
     if (fragmentsBytes > 0) {
-      const lineBuffer = fragments.length === 1
-        ? fragments[0]
-        : Buffer.concat(fragments, fragmentsBytes);
+      const lineBuffer =
+        fragments.length === 1
+          ? fragments[0]
+          : Buffer.concat(fragments, fragmentsBytes);
       const obj = parseCodexLine(lineBuffer, diagnostics);
       if (obj) {
-        if (readProgress) readProgress.endOffset = lineStartOffset + fragmentsBytes;
+        if (readProgress)
+          readProgress.endOffset = lineStartOffset + fragmentsBytes;
         yield { obj, fileIndex, lineIndex };
       }
     }
@@ -1040,12 +1157,17 @@ async function* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
   }
 }
 
-async function* readCodexObjectsFull(filePath, diagnostics, fileIndex, {
-  startOffset = 0,
-  endOffset = null,
-  readProgress = null,
-  contentHasher = null,
-} = {}) {
+async function* readCodexObjectsFull(
+  filePath,
+  diagnostics,
+  fileIndex,
+  {
+    startOffset = 0,
+    endOffset = null,
+    readProgress = null,
+    contentHasher = null,
+  } = {},
+) {
   yield* readCodexObjectsIncremental(filePath, diagnostics, fileIndex, {
     startOffset,
     endOffset,
@@ -1054,17 +1176,28 @@ async function* readCodexObjectsFull(filePath, diagnostics, fileIndex, {
   });
 }
 
-async function* readCodexObjects(filePath, diagnostics, fileIndex, options = {}) {
+async function* readCodexObjects(
+  filePath,
+  diagnostics,
+  fileIndex,
+  options = {},
+) {
   const start = Math.max(0, Number(options.startOffset) || 0);
-  const reader = start > 0 || options.sourceHandle
-    ? readCodexObjectsIncremental
-    : readCodexObjectsFull;
+  const reader =
+    start > 0 || options.sourceHandle
+      ? readCodexObjectsIncremental
+      : readCodexObjectsFull;
   yield* reader(filePath, diagnostics, fileIndex, options);
 }
 
 async function* iterateCodexObjects(filePaths, diagnostics, options = {}) {
   if (filePaths.length <= 1) {
-    for await (const record of readCodexObjects(filePaths[0], diagnostics, 0, options)) {
+    for await (const record of readCodexObjects(
+      filePaths[0],
+      diagnostics,
+      0,
+      options,
+    )) {
       yield record.obj;
     }
     return;
@@ -1076,29 +1209,42 @@ async function* iterateCodexObjects(filePaths, diagnostics, options = {}) {
   // cumulative baseline is established exactly once.
   const records = [];
   for (let fileIndex = 0; fileIndex < filePaths.length; fileIndex += 1) {
-    for await (const record of readCodexObjects(filePaths[fileIndex], diagnostics, fileIndex)) {
+    for await (const record of readCodexObjects(
+      filePaths[fileIndex],
+      diagnostics,
+      fileIndex,
+    )) {
       records.push(record);
     }
   }
   records.sort((a, b) => {
-    const aTimestamp = typeof a.obj?.timestamp === "string" ? a.obj.timestamp : "";
-    const bTimestamp = typeof b.obj?.timestamp === "string" ? b.obj.timestamp : "";
-    return aTimestamp.localeCompare(bTimestamp) || a.fileIndex - b.fileIndex || a.lineIndex - b.lineIndex;
+    const aTimestamp =
+      typeof a.obj?.timestamp === "string" ? a.obj.timestamp : "";
+    const bTimestamp =
+      typeof b.obj?.timestamp === "string" ? b.obj.timestamp : "";
+    return (
+      aTimestamp.localeCompare(bTimestamp) ||
+      a.fileIndex - b.fileIndex ||
+      a.lineIndex - b.lineIndex
+    );
   });
   const firstFileByRecord = new Map();
   for (const record of records) {
     const semanticKey = JSON.stringify(record.obj);
     const firstFile = firstFileByRecord.get(semanticKey);
     if (firstFile !== undefined && firstFile !== record.fileIndex) continue;
-    if (firstFile === undefined) firstFileByRecord.set(semanticKey, record.fileIndex);
+    if (firstFile === undefined)
+      firstFileByRecord.set(semanticKey, record.fileIndex);
     yield record.obj;
   }
 }
 
 function rolloutSessionIdFromPath(filePath) {
-  const match = path.basename(String(filePath || "")).match(
-    /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i,
-  );
+  const match = path
+    .basename(String(filePath || ""))
+    .match(
+      /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i,
+    );
   return match ? match[1] : null;
 }
 

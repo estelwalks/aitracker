@@ -42,7 +42,10 @@ test("未知模型不会显示为零费用", () => {
 });
 
 test("已知与未知事件混合时保留已知小计并明确部分未知", () => {
-  const cost = estimateUsageCost([event(), event({ model: "unknown-local-model" })]);
+  const cost = estimateUsageCost([
+    event(),
+    event({ model: "unknown-local-model" }),
+  ]);
   assert.equal(cost.knownUsd, 35.5);
   assert.equal(cost.pricedEvents, 1);
   assert.equal(cost.unknownEvents, 1);
@@ -50,12 +53,21 @@ test("已知与未知事件混合时保留已知小计并明确部分未知", ()
 });
 
 test("按模型和 Token 类型聚合真实事件", () => {
-  const events = [event(), event({ model: "gpt-5.4", inputTokens: 10, totalTokens: 2_000_010 })];
+  const events = [
+    event(),
+    event({ model: "gpt-5.4", inputTokens: 10, totalTokens: 2_000_010 }),
+  ];
   const models = aggregatePricedUsage(events, "model");
   const tokenTypes = aggregatePricedUsage(events, "tokenType");
   assert.equal(models.length, 2);
-  assert.equal(tokenTypes.find((row) => row.key === "input")?.totalTokens, 1_000_010);
-  assert.equal(tokenTypes.find((row) => row.key === "reasoning")?.totalTokens, 400_000);
+  assert.equal(
+    tokenTypes.find((row) => row.key === "input")?.totalTokens,
+    1_000_010,
+  );
+  assert.equal(
+    tokenTypes.find((row) => row.key === "reasoning")?.totalTokens,
+    400_000,
+  );
 });
 
 test("本周从周一开始筛选", () => {

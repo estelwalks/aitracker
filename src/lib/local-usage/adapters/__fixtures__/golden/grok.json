@@ -1,1 +1,12 @@
-{"source":"grok","timestamp":"2026-07-27T09:04:00.000Z","model":"grok-model","project":"/work/grok","inputTokens":14,"cachedInputTokens":0,"cacheCreationInputTokens":0,"outputTokens":7,"reasoningOutputTokens":0,"totalTokens":21}
+{
+  "source": "grok",
+  "timestamp": "2026-07-27T09:04:00.000Z",
+  "model": "grok-model",
+  "project": "/work/grok",
+  "inputTokens": 14,
+  "cachedInputTokens": 0,
+  "cacheCreationInputTokens": 0,
+  "outputTokens": 7,
+  "reasoningOutputTokens": 0,
+  "totalTokens": 21
+}

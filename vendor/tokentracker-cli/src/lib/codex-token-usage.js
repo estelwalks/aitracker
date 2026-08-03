@@ -22,9 +22,10 @@ function canonicalUsage(value) {
   const out = {};
   let sawNumber = false;
   for (const field of USAGE_FIELDS) {
-    const raw = field === "cache_creation_input_tokens"
-      ? value.cache_creation_input_tokens ?? value.cache_write_input_tokens
-      : value[field];
+    const raw =
+      field === "cache_creation_input_tokens"
+        ? (value.cache_creation_input_tokens ?? value.cache_write_input_tokens)
+        : value[field];
     const number = Number(raw);
     if (Number.isFinite(number) && number >= 0) {
       out[field] = Math.floor(number);
@@ -72,7 +73,9 @@ function diffUsage(totalUsage, previousUsage) {
 function totalsReset(totalUsage, previousUsage) {
   const total = canonicalUsage(totalUsage);
   const previous = canonicalUsage(previousUsage);
-  return Boolean(total && previous && total.total_tokens < previous.total_tokens);
+  return Boolean(
+    total && previous && total.total_tokens < previous.total_tokens,
+  );
 }
 
 function createUsageDeltaState({ lastTotal = null, baselines = null } = {}) {
@@ -141,7 +144,10 @@ function consumeUsageDelta(state, lastUsage, totalUsage) {
   const active = canonicalUsage(state.lastTotal);
   if (active && !totalsReset(total, active)) {
     const delta = diffUsage(total, active);
-    if (!last || Number(delta?.total_tokens || 0) <= Number(last.total_tokens || 0)) {
+    if (
+      !last ||
+      Number(delta?.total_tokens || 0) <= Number(last.total_tokens || 0)
+    ) {
       const activeIndex = findBaselineIndex(state, active);
       touchBaselineAt(state, activeIndex, total);
       return delta;
@@ -160,7 +166,9 @@ function consumeUsageDelta(state, lastUsage, totalUsage) {
 function findBaselineIndex(state, usage) {
   const signature = usageSignature(usage);
   if (signature === null) return -1;
-  return state.baselines.findIndex((baseline) => usageSignature(baseline) === signature);
+  return state.baselines.findIndex(
+    (baseline) => usageSignature(baseline) === signature,
+  );
 }
 
 function touchBaselineAt(state, index, usage) {

@@ -8,10 +8,7 @@ const path = require("node:path");
 const os = require("node:os");
 
 const curatedOverrides = require("./curated-overrides.json");
-const {
-  lookupPricing,
-  buildLitellmPerMillionMap,
-} = require("./matcher");
+const { lookupPricing, buildLitellmPerMillionMap } = require("./matcher");
 const { loadLitellmData } = require("./litellm-fetcher");
 
 const ZERO_PRICING = { input: 0, output: 0, cache_read: 0, cache_write: 0 };
@@ -60,7 +57,9 @@ async function ensurePricingLoaded(opts = {}) {
       const cachePath = opts.cachePath || defaultCachePath();
       const { data, source } = await loadLitellmData({ ...opts, cachePath });
       state.litellmRawMap = data || {};
-      state.litellmPerMillionMap = buildLitellmPerMillionMap(state.litellmRawMap);
+      state.litellmPerMillionMap = buildLitellmPerMillionMap(
+        state.litellmRawMap,
+      );
       state.source = source;
       state.loaded = true;
       state.revision += 1;
@@ -119,9 +118,11 @@ function computeRowCost(row) {
   // Pi can route a turn through a subscription-backed Copilot provider. Pi's
   // usage record reports a zero marginal cost for those turns; do not
   // reinterpret the Claude model name as an Anthropic API bill.
-  if (PI_SUBSCRIPTION_SOURCES.has(String(row?.source || "").toLowerCase())) return 0;
+  if (PI_SUBSCRIPTION_SOURCES.has(String(row?.source || "").toLowerCase()))
+    return 0;
   const pricing = getModelPricing(row.model, { source: row.source });
-  const reasoningIncludedInOutput = row.source === "codex" || row.source === "every-code";
+  const reasoningIncludedInOutput =
+    row.source === "codex" || row.source === "every-code";
   const reasoningCost = reasoningIncludedInOutput
     ? 0
     : (row.reasoning_output_tokens || 0) * (pricing.output || 0);

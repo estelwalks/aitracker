@@ -71,7 +71,10 @@ export interface StaticScanReport {
 }
 
 export interface SkillDownloadInspection {
-  skill: Pick<MarketSkill, "name" | "repoOwner" | "repoName" | "repoPath" | "slug"> &
+  skill: Pick<
+    MarketSkill,
+    "name" | "repoOwner" | "repoName" | "repoPath" | "slug"
+  > &
     Partial<Pick<MarketSkill, "updatedAt">> & {
       version?: string | null;
     };

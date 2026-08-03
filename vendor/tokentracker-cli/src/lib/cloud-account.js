@@ -33,24 +33,34 @@ function accountSlugFor(usageSlug) {
 // top level or nested under `session`, in camelCase or snake_case.
 function accessTokenFromRefreshPayload(data) {
   if (!data || typeof data !== "object") return null;
-  const session = data.session && typeof data.session === "object" ? data.session : null;
+  const session =
+    data.session && typeof data.session === "object" ? data.session : null;
   const raw =
     (typeof data.accessToken === "string" && data.accessToken) ||
     (typeof data.access_token === "string" && data.access_token) ||
-    (session && typeof session.accessToken === "string" && session.accessToken) ||
-    (session && typeof session.access_token === "string" && session.access_token) ||
+    (session &&
+      typeof session.accessToken === "string" &&
+      session.accessToken) ||
+    (session &&
+      typeof session.access_token === "string" &&
+      session.access_token) ||
     null;
   return raw && raw.length > 0 ? raw : null;
 }
 
 function refreshTokenFromRefreshPayload(data) {
   if (!data || typeof data !== "object") return null;
-  const session = data.session && typeof data.session === "object" ? data.session : null;
+  const session =
+    data.session && typeof data.session === "object" ? data.session : null;
   const raw =
     (typeof data.refreshToken === "string" && data.refreshToken) ||
     (typeof data.refresh_token === "string" && data.refresh_token) ||
-    (session && typeof session.refreshToken === "string" && session.refreshToken) ||
-    (session && typeof session.refresh_token === "string" && session.refresh_token) ||
+    (session &&
+      typeof session.refreshToken === "string" &&
+      session.refreshToken) ||
+    (session &&
+      typeof session.refresh_token === "string" &&
+      session.refresh_token) ||
     null;
   return raw && raw.length > 0 ? raw : null;
 }
@@ -59,7 +69,10 @@ function decodeJwtExpMs(token) {
   try {
     const part = String(token || "").split(".")[1];
     if (!part) return 0;
-    const json = Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const json = Buffer.from(
+      part.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64",
+    ).toString("utf8");
     const payload = JSON.parse(json);
     if (payload && Number.isFinite(payload.exp)) return payload.exp * 1000;
   } catch {
@@ -108,14 +121,22 @@ async function mintAccessToken({
     tokenCache.accessToken &&
     tokenCache.expMs - skewMs > now()
   ) {
-    return { accessToken: tokenCache.accessToken, refreshToken: null, csrfToken: null };
+    return {
+      accessToken: tokenCache.accessToken,
+      refreshToken: null,
+      csrfToken: null,
+    };
   }
 
-  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
   if (anonKey) headers.apikey = anonKey;
 
   let timeoutId;
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
   const signal = controller ? controller.signal : undefined;
 
   if (controller && timeoutMs && timeoutMs > 0) {
@@ -184,14 +205,19 @@ async function fetchAccountFunction({
   if (searchParams && typeof searchParams.entries === "function") {
     for (const [key, value] of searchParams.entries()) {
       if (key === "account" || key === "scope") continue;
-      if (value != null && value !== "") url.searchParams.set(key, String(value));
+      if (value != null && value !== "")
+        url.searchParams.set(key, String(value));
     }
   }
-  const headers = { Accept: "application/json", Authorization: `Bearer ${accessToken}` };
+  const headers = {
+    Accept: "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
   if (anonKey) headers.apikey = anonKey;
 
   let timeoutId;
-  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
   const signal = controller ? controller.signal : undefined;
 
   if (controller && timeoutMs && timeoutMs > 0) {
@@ -201,9 +227,15 @@ async function fetchAccountFunction({
   }
 
   try {
-    const res = await fetchImpl(url.toString(), { method: "GET", headers, signal });
+    const res = await fetchImpl(url.toString(), {
+      method: "GET",
+      headers,
+      signal,
+    });
     if (!res || !res.ok) {
-      const err = new Error(`Account fetch failed with HTTP ${res ? res.status : "?"}`);
+      const err = new Error(
+        `Account fetch failed with HTTP ${res ? res.status : "?"}`,
+      );
       err.status = res ? res.status : 0;
       throw err;
     }
@@ -265,7 +297,11 @@ async function fetchAccountUsage({
     fetchImpl,
     timeoutMs: getRemainingTimeout(),
   });
-  return { data, rotatedRefreshToken: minted.refreshToken, rotatedCsrfToken: minted.csrfToken };
+  return {
+    data,
+    rotatedRefreshToken: minted.refreshToken,
+    rotatedCsrfToken: minted.csrfToken,
+  };
 }
 
 module.exports = {

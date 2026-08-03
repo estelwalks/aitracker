@@ -83,7 +83,11 @@ function parsePagination(value: unknown): MarketPagination {
 export function parseMarketApiResponse(
   value: unknown,
 ): Omit<MarketListResult, "source" | "fetchedAt" | "warning"> {
-  if (!isRecord(value) || value.success !== true || !Array.isArray(value.data)) {
+  if (
+    !isRecord(value) ||
+    value.success !== true ||
+    !Array.isArray(value.data)
+  ) {
     throw new Error("市场接口返回格式无效");
   }
 
@@ -93,11 +97,16 @@ export function parseMarketApiResponse(
   };
 }
 
-export function parseMarketQuery(value: unknown): { page: number; limit: number; search: string } {
+export function parseMarketQuery(value: unknown): {
+  page: number;
+  limit: number;
+  search: string;
+} {
   if (!isRecord(value)) throw new Error("市场查询参数无效");
 
   const page = typeof value.page === "number" ? value.page : Number(value.page);
-  const limit = typeof value.limit === "number" ? value.limit : Number(value.limit);
+  const limit =
+    typeof value.limit === "number" ? value.limit : Number(value.limit);
   const search = typeof value.search === "string" ? value.search.trim() : "";
 
   if (!Number.isInteger(page) || page < 1) throw new Error("页码必须是正整数");
@@ -115,9 +124,18 @@ export function parseInstallRequest(value: unknown): {
 } {
   if (!isRecord(value)) throw new Error("安装参数无效");
   if (!isRecord(value.skill)) throw new Error("Skill 参数无效");
-  const required = ["name", "repoOwner", "repoName", "repoPath", "slug"] as const;
+  const required = [
+    "name",
+    "repoOwner",
+    "repoName",
+    "repoPath",
+    "slug",
+  ] as const;
   for (const field of required) {
-    if (typeof value.skill[field] !== "string" || value.skill[field].trim() === "") {
+    if (
+      typeof value.skill[field] !== "string" ||
+      value.skill[field].trim() === ""
+    ) {
       throw new Error(`Skill 安装字段 ${field} 无效`);
     }
   }
@@ -127,7 +145,9 @@ export function parseInstallRequest(value: unknown): {
   const agents = [...new Set(value.agents)];
   if (
     agents.some(
-      (agent) => typeof agent !== "string" || !MARKET_AGENTS.includes(agent as MarketAgent),
+      (agent) =>
+        typeof agent !== "string" ||
+        !MARKET_AGENTS.includes(agent as MarketAgent),
     )
   ) {
     throw new Error("包含不支持的 Agent");

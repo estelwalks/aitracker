@@ -17,16 +17,17 @@ class PhysicalJsonlLimitError extends Error {
 const fatalUtf8Decoder = new TextDecoder("utf-8", { fatal: true });
 
 function decodePhysicalLine(buffer, { stripCr = false } = {}) {
-  const content = stripCr && buffer.length > 0 && buffer[buffer.length - 1] === 0x0d
-    ? buffer.subarray(0, buffer.length - 1)
-    : buffer;
+  const content =
+    stripCr && buffer.length > 0 && buffer[buffer.length - 1] === 0x0d
+      ? buffer.subarray(0, buffer.length - 1)
+      : buffer;
   return fatalUtf8Decoder.decode(content);
 }
 
-async function* physicalJsonlRecords(input, {
-  invalidUtf8 = "throw",
-  maxPhysicalBytes = Infinity,
-} = {}) {
+async function* physicalJsonlRecords(
+  input,
+  { invalidUtf8 = "throw", maxPhysicalBytes = Infinity } = {},
+) {
   if (invalidUtf8 !== "throw" && invalidUtf8 !== "record") {
     throw new TypeError(`unsupported invalidUtf8 policy: ${invalidUtf8}`);
   }
@@ -53,9 +54,13 @@ async function* physicalJsonlRecords(input, {
       if (physicalBytesRead + physicalBytes > byteLimit) {
         throw new PhysicalJsonlLimitError(byteLimit);
       }
-      const lineBuffer = fragments.length === 0
-        ? fragment
-        : Buffer.concat([...fragments, fragment], fragmentsBytes + fragment.length);
+      const lineBuffer =
+        fragments.length === 0
+          ? fragment
+          : Buffer.concat(
+              [...fragments, fragment],
+              fragmentsBytes + fragment.length,
+            );
       fragments.length = 0;
       fragmentsBytes = 0;
       physicalBytesRead += physicalBytes;
@@ -83,9 +88,10 @@ async function* physicalJsonlRecords(input, {
   }
 
   if (fragmentsBytes > 0) {
-    const lineBuffer = fragments.length === 1
-      ? fragments[0]
-      : Buffer.concat(fragments, fragmentsBytes);
+    const lineBuffer =
+      fragments.length === 1
+        ? fragments[0]
+        : Buffer.concat(fragments, fragmentsBytes);
     let line = null;
     let utf8Valid = true;
     try {

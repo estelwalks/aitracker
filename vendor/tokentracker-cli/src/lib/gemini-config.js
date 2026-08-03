@@ -8,8 +8,12 @@ const DEFAULT_EVENT = "SessionEnd";
 const DEFAULT_HOOK_NAME = "tokentracker";
 const DEFAULT_MATCHER = "exit|clear|logout|prompt_input_exit|other";
 
-function resolveGeminiConfigDir({ home = os.homedir(), env = process.env } = {}) {
-  const explicit = typeof env.GEMINI_HOME === "string" ? env.GEMINI_HOME.trim() : "";
+function resolveGeminiConfigDir({
+  home = os.homedir(),
+  env = process.env,
+} = {}) {
+  const explicit =
+    typeof env.GEMINI_HOME === "string" ? env.GEMINI_HOME.trim() : "";
   if (explicit) return path.resolve(explicit);
   return path.join(home, ".gemini");
 }
@@ -32,12 +36,17 @@ async function upsertGeminiHook({
   const hooks = normalizeHooks(settings.hooks);
   const entries = normalizeEntries(hooks[event]);
 
-  const normalized = normalizeEntriesForHook(entries, { hookCommand, hookName });
+  const normalized = normalizeEntriesForHook(entries, {
+    hookCommand,
+    hookName,
+  });
   let nextEntries = normalized.entries;
   let changed = normalized.changed || enableResult.changed;
 
   if (!hasHook(nextEntries, { hookCommand, hookName })) {
-    nextEntries = nextEntries.concat([buildHookEntry({ hookCommand, hookName, matcher })]);
+    nextEntries = nextEntries.concat([
+      buildHookEntry({ hookCommand, hookName, matcher }),
+    ]);
     changed = true;
   }
 
@@ -45,7 +54,10 @@ async function upsertGeminiHook({
 
   const nextHooks = { ...hooks, [event]: nextEntries };
   const nextSettings = { ...baseSettings, hooks: nextHooks };
-  const backupPath = await writeGeminiSettings({ settingsPath, settings: nextSettings });
+  const backupPath = await writeGeminiSettings({
+    settingsPath,
+    settings: nextSettings,
+  });
   return { changed: true, backupPath };
 }
 
@@ -61,7 +73,8 @@ async function removeGeminiHook({
   const settings = normalizeSettings(existing);
   const hooks = normalizeHooks(settings.hooks);
   const entries = normalizeEntries(hooks[event]);
-  if (entries.length === 0) return { removed: false, skippedReason: "hook-missing" };
+  if (entries.length === 0)
+    return { removed: false, skippedReason: "hook-missing" };
 
   let removed = false;
   const nextEntries = [];
@@ -81,7 +94,10 @@ async function removeGeminiHook({
   if (Object.keys(nextHooks).length > 0) nextSettings.hooks = nextHooks;
   else delete nextSettings.hooks;
 
-  const backupPath = await writeGeminiSettings({ settingsPath, settings: nextSettings });
+  const backupPath = await writeGeminiSettings({
+    settingsPath,
+    settings: nextSettings,
+  });
   return { removed: true, skippedReason: null, backupPath };
 }
 
@@ -111,7 +127,8 @@ function buildHookEntry({ hookCommand, hookName, matcher }) {
     command: hookCommand,
   };
   const entry = { hooks: [hook] };
-  if (typeof matcher === "string" && matcher.length > 0) entry.matcher = matcher;
+  if (typeof matcher === "string" && matcher.length > 0)
+    entry.matcher = matcher;
   return entry;
 }
 
@@ -162,16 +179,23 @@ function hookMatches(hook, { hookCommand, hookName, requireCommand = false }) {
   return Boolean(commandMatches || nameMatches);
 }
 
-function entryMatches(entry, { hookCommand, hookName, requireCommand = false }) {
+function entryMatches(
+  entry,
+  { hookCommand, hookName, requireCommand = false },
+) {
   if (!entry || typeof entry !== "object") return false;
   if (entry.command || entry.name)
     return hookMatches(entry, { hookCommand, hookName, requireCommand });
   if (!Array.isArray(entry.hooks)) return false;
-  return entry.hooks.some((hook) => hookMatches(hook, { hookCommand, hookName, requireCommand }));
+  return entry.hooks.some((hook) =>
+    hookMatches(hook, { hookCommand, hookName, requireCommand }),
+  );
 }
 
 function hasHook(entries, { hookCommand, hookName }) {
-  return entries.some((entry) => entryMatches(entry, { hookCommand, hookName }));
+  return entries.some((entry) =>
+    entryMatches(entry, { hookCommand, hookName }),
+  );
 }
 
 function normalizeEntriesForHook(entries, { hookCommand, hookName }) {
@@ -244,7 +268,8 @@ function stripHookFromEntry(entry, { hookCommand, hookName }) {
   if (!hooks) return { entry, removed: false };
 
   const nextHooks = hooks.filter(
-    (hook) => !hookMatches(hook, { hookCommand, hookName, requireCommand: true }),
+    (hook) =>
+      !hookMatches(hook, { hookCommand, hookName, requireCommand: true }),
   );
   if (nextHooks.length === hooks.length) return { entry, removed: false };
   if (nextHooks.length === 0) return { entry: null, removed: true };

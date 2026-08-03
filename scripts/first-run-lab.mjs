@@ -15,7 +15,12 @@ async function prepareEmptyHome() {
 }
 
 async function seedWorkbuddyUsage() {
-  const sessionDirectory = join(labHome, ".workbuddy", "projects", "first-run-demo");
+  const sessionDirectory = join(
+    labHome,
+    ".workbuddy",
+    "projects",
+    "first-run-demo",
+  );
   await mkdir(sessionDirectory, { recursive: true });
   const record = {
     id: "first-run-demo-response",
@@ -40,7 +45,9 @@ async function seedWorkbuddyUsage() {
     `${JSON.stringify(record)}\n`,
     "utf8",
   );
-  process.stdout.write(`已写入无对话正文的 WorkBuddy 测试用量：${sessionDirectory}\n`);
+  process.stdout.write(
+    `已写入无对话正文的 WorkBuddy 测试用量：${sessionDirectory}\n`,
+  );
 }
 
 async function launchDesktop() {

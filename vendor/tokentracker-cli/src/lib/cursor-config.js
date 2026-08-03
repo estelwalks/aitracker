@@ -8,12 +8,21 @@ const { readSqliteFirstValue } = require("./sqlite-reader");
 
 // ── Path resolution ──
 
-function resolveCursorPaths({ home, platform = process.platform, env = process.env } = {}) {
+function resolveCursorPaths({
+  home,
+  platform = process.platform,
+  env = process.env,
+} = {}) {
   const h = home || os.homedir();
   const pathForPlatform = platform === "win32" ? path.win32 : path.posix;
   let appDir;
   if (platform === "darwin") {
-    appDir = pathForPlatform.join(h, "Library", "Application Support", "Cursor");
+    appDir = pathForPlatform.join(
+      h,
+      "Library",
+      "Application Support",
+      "Cursor",
+    );
   } else if (platform === "win32") {
     const appData =
       (typeof env.APPDATA === "string" && env.APPDATA.trim()) ||
@@ -27,7 +36,12 @@ function resolveCursorPaths({ home, platform = process.platform, env = process.e
   }
   return {
     appDir,
-    stateDbPath: pathForPlatform.join(appDir, "User", "globalStorage", "state.vscdb"),
+    stateDbPath: pathForPlatform.join(
+      appDir,
+      "User",
+      "globalStorage",
+      "state.vscdb",
+    ),
     cliConfigPath: pathForPlatform.join(h, ".cursor", "cli-config.json"),
   };
 }
@@ -77,7 +91,11 @@ function readCursorAccessTokenFromStateDb(stateDbPath, deps = {}) {
  *   - other WorkOS subjects:        "github|…", "oidc|…"      → kept verbatim
  */
 function extractCursorSessionToken({ home, platform, env, deps } = {}) {
-  const { stateDbPath, cliConfigPath } = resolveCursorPaths({ home, platform, env });
+  const { stateDbPath, cliConfigPath } = resolveCursorPaths({
+    home,
+    platform,
+    env,
+  });
 
   // 1. Extract JWT from SQLite
   if (!fs.existsSync(stateDbPath)) {
@@ -135,7 +153,8 @@ function extractUserIdFromJwt(jwt) {
 
 // ── API client ──
 
-const CURSOR_CSV_URL = "https://cursor.com/api/dashboard/export-usage-events-csv?strategy=tokens";
+const CURSOR_CSV_URL =
+  "https://cursor.com/api/dashboard/export-usage-events-csv?strategy=tokens";
 const CURSOR_SUMMARY_URL = "https://cursor.com/api/usage-summary";
 const CURSOR_SOURCE_SCOPE = "account";
 
@@ -163,14 +182,26 @@ function fetchCursorUsageCsv({ cookie, timeoutMs = 30000 }) {
       (res) => {
         if (res.statusCode === 401 || res.statusCode === 403) {
           res.resume();
-          return reject(new Error("Cursor session expired — re-login in Cursor to refresh"));
+          return reject(
+            new Error("Cursor session expired — re-login in Cursor to refresh"),
+          );
         }
-        if (res.statusCode === 308 || res.statusCode === 301 || res.statusCode === 302) {
+        if (
+          res.statusCode === 308 ||
+          res.statusCode === 301 ||
+          res.statusCode === 302
+        ) {
           // Follow redirect once
           const location = res.headers.location;
           res.resume();
-          if (!location) return reject(new Error(`Cursor API redirect without Location header`));
-          return fetchUrlRaw({ urlStr: location, cookie, timeoutMs }).then(resolve, reject);
+          if (!location)
+            return reject(
+              new Error(`Cursor API redirect without Location header`),
+            );
+          return fetchUrlRaw({ urlStr: location, cookie, timeoutMs }).then(
+            resolve,
+            reject,
+          );
         }
         if (res.statusCode !== 200) {
           res.resume();
@@ -197,7 +228,11 @@ function fetchCursorUsageCsv({ cookie, timeoutMs = 30000 }) {
  * Fetch Cursor usage summary JSON.
  * Returns parsed JSON body or throws on error.
  */
-function fetchCursorUsageSummary({ cookie, timeoutMs = 30000, fetchImpl = fetch }) {
+function fetchCursorUsageSummary({
+  cookie,
+  timeoutMs = 30000,
+  fetchImpl = fetch,
+}) {
   return fetchImpl(CURSOR_SUMMARY_URL, {
     method: "GET",
     headers: {
@@ -240,7 +275,9 @@ function fetchUrlRaw({ urlStr, cookie, timeoutMs }) {
       (res) => {
         if (res.statusCode !== 200) {
           res.resume();
-          return reject(new Error(`Cursor API returned ${res.statusCode} from ${urlStr}`));
+          return reject(
+            new Error(`Cursor API returned ${res.statusCode} from ${urlStr}`),
+          );
         }
         let data = "";
         res.on("data", (chunk) => {
@@ -294,7 +331,16 @@ function parseCursorCsv(csvText) {
   const kindIdx = columnIndex.get("Kind");
   const maxModeIdx = columnIndex.get("Max Mode");
 
-  const required = [dateIdx, modelIdx, inputWithIdx, inputWithoutIdx, cacheReadIdx, outputIdx, totalIdx, costIdx];
+  const required = [
+    dateIdx,
+    modelIdx,
+    inputWithIdx,
+    inputWithoutIdx,
+    cacheReadIdx,
+    outputIdx,
+    totalIdx,
+    costIdx,
+  ];
   if (required.some((idx) => idx === undefined)) return [];
 
   const minFields = Math.max(...required) + 1;
@@ -310,9 +356,12 @@ function parseCursorCsv(csvText) {
       date: stripQuotes(fields[dateIdx]),
       kind: kindIdx !== undefined ? stripQuotes(fields[kindIdx]) : "unknown",
       model: stripQuotes(fields[modelIdx]),
-      maxMode: maxModeIdx !== undefined ? stripQuotes(fields[maxModeIdx]) : "No",
+      maxMode:
+        maxModeIdx !== undefined ? stripQuotes(fields[maxModeIdx]) : "No",
       sourceScope: CURSOR_SOURCE_SCOPE,
-      billableKind: isCursorBillableKind(kindIdx !== undefined ? fields[kindIdx] : "unknown")
+      billableKind: isCursorBillableKind(
+        kindIdx !== undefined ? fields[kindIdx] : "unknown",
+      )
         ? "billable"
         : "non_billable",
       inputTokens: inputWithoutCache,
@@ -323,7 +372,12 @@ function parseCursorCsv(csvText) {
       cost: toFloat(fields[costIdx]),
     };
 
-    if (record.totalTokens <= 0 && record.inputTokens <= 0 && record.outputTokens <= 0) continue;
+    if (
+      record.totalTokens <= 0 &&
+      record.inputTokens <= 0 &&
+      record.outputTokens <= 0
+    )
+      continue;
 
     records.push(record);
   }
@@ -363,7 +417,9 @@ function normalizeCursorUsage(record) {
 }
 
 function isCursorBillableKind(kind) {
-  const normalized = String(kind || "").trim().toLowerCase();
+  const normalized = String(kind || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return true;
   if (normalized.includes("no charge")) return false;
   if (normalized === "free") return false;

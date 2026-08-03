@@ -37,7 +37,10 @@ const {
   normalizeState: normalizeUploadState,
 } = require("../lib/upload-throttle");
 const { collectTrackerDiagnostics } = require("../lib/diagnostics");
-const { detectPassiveProviders, isPassiveModeActive } = require("../lib/passive-mode");
+const {
+  detectPassiveProviders,
+  isPassiveModeActive,
+} = require("../lib/passive-mode");
 const { probeOpenclawHookState } = require("../lib/openclaw-hook");
 const {
   probeOpenclawSessionPluginState,
@@ -89,11 +92,15 @@ function formatResolvedPaths(paths, filename) {
   const active = [];
   if (paths.native) {
     const file = filename ? path.join(paths.native, filename) : paths.native;
-    try { if (fssync.existsSync(file)) active.push(`native: ${file}`); } catch (_e) {}
+    try {
+      if (fssync.existsSync(file)) active.push(`native: ${file}`);
+    } catch (_e) {}
   }
   if (paths.wsl) {
     const file = filename ? path.join(paths.wsl, filename) : paths.wsl;
-    try { if (fssync.existsSync(file)) active.push(`WSL: ${file}`); } catch (_e) {}
+    try {
+      if (fssync.existsSync(file)) active.push(`WSL: ${file}`);
+    } catch (_e) {}
   }
   return active;
 }
@@ -232,8 +239,11 @@ async function cmdStatus(argv = []) {
   const kimiInstalled = fssync.existsSync(path.join(kimiHome, "sessions"));
 
   const kimiCodeWireFiles = resolveKimiCodeWireFiles(process.env);
-  const kimiCodeHome = process.env.KIMI_CODE_HOME || path.join(home, ".kimi-code");
-  const kimiCodeInstalled = fssync.existsSync(path.join(kimiCodeHome, "sessions"));
+  const kimiCodeHome =
+    process.env.KIMI_CODE_HOME || path.join(home, ".kimi-code");
+  const kimiCodeInstalled = fssync.existsSync(
+    path.join(kimiCodeHome, "sessions"),
+  );
 
   // Kiro CLI — reads the legacy SQLite/session files and Kiro CLI 2.13+
   // event sessions. End-user dashboards show them merged under "Kiro"; this
@@ -246,16 +256,25 @@ async function cmdStatus(argv = []) {
   let kiroCliWsl = null; // { db, sessionFiles }
   if (
     process.platform === "win32" &&
-    !process.env.KIRO_CLI_DB_PATH && !process.env.KIRO_HOME &&
+    !process.env.KIRO_CLI_DB_PATH &&
+    !process.env.KIRO_HOME &&
     wsl.shouldProbeWsl(process.env)
   ) {
     const wslKiroHomeDir = wsl.discoverWslHome(".kiro");
     const wslCliDataDir = wsl.discoverWslHome(".local/share/kiro-cli");
     const wslHomeRoot = wslKiroHomeDir
       ? path.dirname(wslKiroHomeDir)
-      : (wslCliDataDir ? path.dirname(path.dirname(path.dirname(wslCliDataDir))) : null);
+      : wslCliDataDir
+        ? path.dirname(path.dirname(path.dirname(wslCliDataDir)))
+        : null;
     if (wslHomeRoot) {
-      const wslDb = path.join(wslHomeRoot, ".local", "share", "kiro-cli", "data.sqlite3");
+      const wslDb = path.join(
+        wslHomeRoot,
+        ".local",
+        "share",
+        "kiro-cli",
+        "data.sqlite3",
+      );
       const wslFiles = resolveKiroCliSessionFiles({
         ...process.env,
         KIRO_CLI_DB_PATH: wslDb,
@@ -266,49 +285,70 @@ async function cmdStatus(argv = []) {
       }
     }
   }
-  const kiroCliPaths = process.platform === "win32"
-    ? wsl.resolveAllWin32Paths({
-      nativeValue: kiroCliNativePresent ? kiroCliDbPath : null,
-      wslValue: kiroCliWsl ? kiroCliWsl.db : null,
-      env: process.env,
-      platform: "win32",
-    })
-    : { native: kiroCliNativePresent ? kiroCliDbPath : null, wsl: null };
+  const kiroCliPaths =
+    process.platform === "win32"
+      ? wsl.resolveAllWin32Paths({
+          nativeValue: kiroCliNativePresent ? kiroCliDbPath : null,
+          wslValue: kiroCliWsl ? kiroCliWsl.db : null,
+          env: process.env,
+          platform: "win32",
+        })
+      : { native: kiroCliNativePresent ? kiroCliDbPath : null, wsl: null };
   // Non-both modes park the picked value in the native slot — label by
   // marker identity, not slot name. A session-files-only install has no DB
   // on disk; show the sessions dir instead of a nonexistent DB path.
-  const kiroCliMarkers = [kiroCliPaths.native, kiroCliPaths.wsl].filter(Boolean);
+  const kiroCliMarkers = [kiroCliPaths.native, kiroCliPaths.wsl].filter(
+    Boolean,
+  );
   const kiroCliActive = kiroCliMarkers.map((m) => {
     if (kiroCliWsl && m === kiroCliWsl.db) {
-      const shown = fssync.existsSync(m) || kiroCliWsl.sessionFiles.length === 0
-        ? m
-        : path.dirname(kiroCliWsl.sessionFiles[0]);
+      const shown =
+        fssync.existsSync(m) || kiroCliWsl.sessionFiles.length === 0
+          ? m
+          : path.dirname(kiroCliWsl.sessionFiles[0]);
       return `WSL: ${shown}`;
     }
-    const shown = fssync.existsSync(m) || kiroCliSessionFiles.length === 0
-      ? m
-      : path.dirname(kiroCliSessionFiles[0]);
+    const shown =
+      fssync.existsSync(m) || kiroCliSessionFiles.length === 0
+        ? m
+        : path.dirname(kiroCliSessionFiles[0]);
     return `native: ${shown}`;
   });
   const kiroCliFileCount =
     (kiroCliMarkers.includes(kiroCliDbPath) ? kiroCliSessionFiles.length : 0) +
-    (kiroCliWsl && kiroCliMarkers.includes(kiroCliWsl.db) ? kiroCliWsl.sessionFiles.length : 0);
+    (kiroCliWsl && kiroCliMarkers.includes(kiroCliWsl.db)
+      ? kiroCliWsl.sessionFiles.length
+      : 0);
   const kiroCliDbFound = kiroCliMarkers.some((m) => {
-    try { return fssync.existsSync(m); } catch (_e) { return false; }
+    try {
+      return fssync.existsSync(m);
+    } catch (_e) {
+      return false;
+    }
   });
   const kiroCliInstalled = kiroCliMarkers.length > 0;
 
   // Kiro IDE — passive scan of globalStorage dev_data (SQLite or JSONL).
   const kiroIdeNativeBase = resolveKiroBasePath(process.env);
-  const wslKiroIdeBase = process.platform === "win32" && wsl.shouldProbeWsl(process.env)
-    ? wsl.discoverWslHome(".config/Kiro/User/globalStorage/kiro.kiroagent")
-    : null;
-  const kiroIdePaths = resolveInstallPaths({ nativeValue: kiroIdeNativeBase, wslValue: wslKiroIdeBase });
-  const kiroIdeHasData = (base) => Boolean(base)
-    && (fssync.existsSync(resolveKiroDbPath(base)) || fssync.existsSync(resolveKiroJsonlPath(base)));
+  const wslKiroIdeBase =
+    process.platform === "win32" && wsl.shouldProbeWsl(process.env)
+      ? wsl.discoverWslHome(".config/Kiro/User/globalStorage/kiro.kiroagent")
+      : null;
+  const kiroIdePaths = resolveInstallPaths({
+    nativeValue: kiroIdeNativeBase,
+    wslValue: wslKiroIdeBase,
+  });
+  const kiroIdeHasData = (base) =>
+    Boolean(base) &&
+    (fssync.existsSync(resolveKiroDbPath(base)) ||
+      fssync.existsSync(resolveKiroJsonlPath(base)));
   const kiroIdeActive = [kiroIdePaths.native, kiroIdePaths.wsl]
     .filter((base) => kiroIdeHasData(base))
-    .map((base) => (wslKiroIdeBase && base === wslKiroIdeBase ? `WSL: ${base}` : `native: ${base}`));
+    .map((base) =>
+      wslKiroIdeBase && base === wslKiroIdeBase
+        ? `WSL: ${base}`
+        : `native: ${base}`,
+    );
   const kiroIdeInstalled = kiroIdeActive.length > 0;
 
   // Claude Code — dual-install aware projects scan (#307). Mirrors sync:
@@ -319,16 +359,22 @@ async function cmdStatus(argv = []) {
   {
     const claudeHomesStatus = [];
     if (process.platform !== "win32" || wsl.shouldProbeNative(process.env)) {
-      claudeHomesStatus.push({ dir: path.join(home, ".claude"), label: "native" });
+      claudeHomesStatus.push({
+        dir: path.join(home, ".claude"),
+        label: "native",
+      });
     }
-    const wslClaudeHomeStatus = process.platform === "win32" && wsl.shouldProbeWsl(process.env)
-      ? wsl.discoverWslHome(".claude")
-      : null;
-    if (wslClaudeHomeStatus) claudeHomesStatus.push({ dir: wslClaudeHomeStatus, label: "WSL" });
+    const wslClaudeHomeStatus =
+      process.platform === "win32" && wsl.shouldProbeWsl(process.env)
+        ? wsl.discoverWslHome(".claude")
+        : null;
+    if (wslClaudeHomeStatus)
+      claudeHomesStatus.push({ dir: wslClaudeHomeStatus, label: "WSL" });
     for (const { dir, label } of claudeHomesStatus) {
       const projects = path.join(dir, "projects");
       try {
-        if (fssync.existsSync(projects)) claudeCodeActive.push(`${label}: ${projects}`);
+        if (fssync.existsSync(projects))
+          claudeCodeActive.push(`${label}: ${projects}`);
       } catch (_e) {}
     }
   }
@@ -343,7 +389,9 @@ async function cmdStatus(argv = []) {
   // CodeBuddy — passive scan only (no hooks). Surface the file count so
   // operators can confirm JSONL sessions and extension logs are discovered.
   const codebuddyHome = resolveCodebuddyHome(process.env);
-  const codebuddyInstalled = Boolean(codebuddyHome && fssync.existsSync(codebuddyHome));
+  const codebuddyInstalled = Boolean(
+    codebuddyHome && fssync.existsSync(codebuddyHome),
+  );
   const codebuddyFiles = codebuddyInstalled
     ? resolveCodebuddyProjectFiles(process.env)
     : [];
@@ -351,7 +399,9 @@ async function cmdStatus(argv = []) {
   // WorkBuddy — passive scan (sibling Claude-Code fork). Surface both the
   // recursive JSONL count and SQLite fallback so operators can confirm coverage.
   const workbuddyHome = resolveWorkbuddyHome(process.env);
-  const workbuddyInstalled = Boolean(workbuddyHome && fssync.existsSync(workbuddyHome));
+  const workbuddyInstalled = Boolean(
+    workbuddyHome && fssync.existsSync(workbuddyHome),
+  );
   const workbuddyFiles = workbuddyInstalled
     ? resolveWorkbuddyProjectFiles(process.env)
     : [];
@@ -361,57 +411,90 @@ async function cmdStatus(argv = []) {
 
   // oh-my-pi — passive scan only (no hooks).
   const ompAgentDir = resolveOmpAgentDir(process.env);
-  const ompInstalled = Boolean(ompAgentDir) && fssync.existsSync(path.join(ompAgentDir, "sessions"));
+  const ompInstalled =
+    Boolean(ompAgentDir) &&
+    fssync.existsSync(path.join(ompAgentDir, "sessions"));
   const ompFiles = ompInstalled ? resolveOmpSessionFiles(process.env) : [];
 
   // pi (@mariozechner/pi-coding-agent) — passive scan only (no hooks).
   // Skip when its agent dir collides with omp's; sync would dedupe anyway.
   const piCollides = piAgentDirCollidesWithOmp(process.env);
   const piAgentDir = resolvePiAgentDir(process.env);
-  const piInstalled = !piCollides && Boolean(piAgentDir) && fssync.existsSync(path.join(piAgentDir, "sessions"));
+  const piInstalled =
+    !piCollides &&
+    Boolean(piAgentDir) &&
+    fssync.existsSync(path.join(piAgentDir, "sessions"));
   const piFiles = piInstalled ? resolvePiSessionFiles(process.env) : [];
 
   // Craft Agents — passive scan only (no hooks).
   const craftConfigDir = resolveCraftConfigDir(process.env);
-  const craftInstalled = Boolean(craftConfigDir && fssync.existsSync(craftConfigDir));
-  const craftFiles = craftInstalled ? resolveCraftSessionFiles(process.env) : [];
+  const craftInstalled = Boolean(
+    craftConfigDir && fssync.existsSync(craftConfigDir),
+  );
+  const craftFiles = craftInstalled
+    ? resolveCraftSessionFiles(process.env)
+    : [];
 
   // Kilo CLI (kilo.ai @kilocode/plugin) — passive scan of kilo.db.
-  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
+  const xdgDataHome =
+    process.env.XDG_DATA_HOME || path.join(home, ".local", "share");
   const kiloHome = process.env.KILO_HOME || path.join(xdgDataHome, "kilo");
-  const kiloNativeValue = process.platform === "win32" && typeof process.env.APPDATA === "string"
-    ? path.join(process.env.APPDATA.trim(), "kilo", "kilo.db")
-    : path.join(kiloHome, "kilo.db");
-  const wslKiloDir = process.platform === "win32" && wsl.shouldProbeWsl(process.env)
-    ? wsl.discoverWslHome(".local/share/kilo")
-    : null;
-  const kiloPaths = resolveInstallPaths({ nativeValue: kiloNativeValue, wslValue: wslKiloDir ? path.join(wslKiloDir, "kilo.db") : null });
+  const kiloNativeValue =
+    process.platform === "win32" && typeof process.env.APPDATA === "string"
+      ? path.join(process.env.APPDATA.trim(), "kilo", "kilo.db")
+      : path.join(kiloHome, "kilo.db");
+  const wslKiloDir =
+    process.platform === "win32" && wsl.shouldProbeWsl(process.env)
+      ? wsl.discoverWslHome(".local/share/kilo")
+      : null;
+  const kiloPaths = resolveInstallPaths({
+    nativeValue: kiloNativeValue,
+    wslValue: wslKiloDir ? path.join(wslKiloDir, "kilo.db") : null,
+  });
   const kiloActive = formatResolvedPaths(kiloPaths);
   const kiloInstalled = kiloActive.length > 0;
   const kiloDbPath = kiloActive.join(" | ");
 
   // Mimo (mimocode — OpenCode-fork SQLite) — passive scan of mimocode.db.
   const mimoHome = process.env.MIMO_HOME || path.join(xdgDataHome, "mimocode");
-  const mimoNativeValue = process.platform === "win32" && typeof process.env.APPDATA === "string"
-    ? path.join(process.env.APPDATA.trim(), "mimocode", "mimocode.db")
-    : path.join(mimoHome, "mimocode.db");
-  const wslMimoDir = process.platform === "win32" && wsl.shouldProbeWsl(process.env)
-    ? wsl.discoverWslHome(".local/share/mimocode")
-    : null;
-  const mimoPaths = resolveInstallPaths({ nativeValue: mimoNativeValue, wslValue: wslMimoDir ? path.join(wslMimoDir, "mimocode.db") : null });
+  const mimoNativeValue =
+    process.platform === "win32" && typeof process.env.APPDATA === "string"
+      ? path.join(process.env.APPDATA.trim(), "mimocode", "mimocode.db")
+      : path.join(mimoHome, "mimocode.db");
+  const wslMimoDir =
+    process.platform === "win32" && wsl.shouldProbeWsl(process.env)
+      ? wsl.discoverWslHome(".local/share/mimocode")
+      : null;
+  const mimoPaths = resolveInstallPaths({
+    nativeValue: mimoNativeValue,
+    wslValue: wslMimoDir ? path.join(wslMimoDir, "mimocode.db") : null,
+  });
   const mimoActive = formatResolvedPaths(mimoPaths);
   const mimoInstalled = mimoActive.length > 0;
   const mimoDbPath = mimoActive.join(" | ");
 
   // ZCode (Z.ai's coding agent — OpenCode-fork SQLite) — passive scan of db.sqlite.
   const zcodeHome = process.env.ZCODE_HOME || path.join(home, ".zcode");
-  const zcodeNativeValue = process.platform === "win32" && typeof process.env.APPDATA === "string"
-    ? path.join(process.env.APPDATA.trim(), ".zcode", "cli", "db", "db.sqlite")
-    : path.join(zcodeHome, "cli", "db", "db.sqlite");
-  const wslZcodeDir = process.platform === "win32" && wsl.shouldProbeWsl(process.env)
-    ? wsl.discoverWslHome(".zcode")
-    : null;
-  const zcodePaths = resolveInstallPaths({ nativeValue: zcodeNativeValue, wslValue: wslZcodeDir ? path.join(wslZcodeDir, "cli", "db", "db.sqlite") : null });
+  const zcodeNativeValue =
+    process.platform === "win32" && typeof process.env.APPDATA === "string"
+      ? path.join(
+          process.env.APPDATA.trim(),
+          ".zcode",
+          "cli",
+          "db",
+          "db.sqlite",
+        )
+      : path.join(zcodeHome, "cli", "db", "db.sqlite");
+  const wslZcodeDir =
+    process.platform === "win32" && wsl.shouldProbeWsl(process.env)
+      ? wsl.discoverWslHome(".zcode")
+      : null;
+  const zcodePaths = resolveInstallPaths({
+    nativeValue: zcodeNativeValue,
+    wslValue: wslZcodeDir
+      ? path.join(wslZcodeDir, "cli", "db", "db.sqlite")
+      : null,
+  });
   const zcodeActive = formatResolvedPaths(zcodePaths);
   const zcodeInstalled = zcodeActive.length > 0;
   const zcodeDbPath = zcodeActive.join(" | ");
@@ -430,31 +513,39 @@ async function cmdStatus(argv = []) {
   // Unlike the native/WSL pair other providers resolve to, this is an open-ended
   // list: multi-org installs keep one DB per org (and on Windows they all sit
   // inside WSL), so the resolver already returns only paths that exist.
-  const claudeScienceActive = resolveClaudeScienceDbPaths({ home, env: process.env });
+  const claudeScienceActive = resolveClaudeScienceDbPaths({
+    home,
+    env: process.env,
+  });
   const claudeScienceInstalled = claudeScienceActive.length > 0;
   const claudeScienceDbPath = claudeScienceActive.join(" | ");
 
   // OpenCode (JSON files + SQLite DB) — passive scan of storage/message/ and opencode.db.
-  const opencodeStorageNativeValue = process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
-  const wslOpencodeStorageDir = process.platform === "win32" && shouldProbeWsl(process.env)
-    ? discoverWslHome(".local/share/opencode")
-    : null;
+  const opencodeStorageNativeValue =
+    process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
+  const wslOpencodeStorageDir =
+    process.platform === "win32" && shouldProbeWsl(process.env)
+      ? discoverWslHome(".local/share/opencode")
+      : null;
   const opencodeStoragePaths = resolveInstallPaths({
     nativeValue: opencodeStorageNativeValue,
     wslValue: wslOpencodeStorageDir,
   });
   const opencodeStorageActive = formatResolvedPaths(opencodeStoragePaths);
 
-  const opencodeDbNativeValue = process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
-  const wslOpencodeDbDir = process.platform === "win32" && shouldProbeWsl(process.env)
-    ? discoverWslHome(".local/share/opencode")
-    : null;
+  const opencodeDbNativeValue =
+    process.env.OPENCODE_HOME || path.join(xdgDataHome, "opencode");
+  const wslOpencodeDbDir =
+    process.platform === "win32" && shouldProbeWsl(process.env)
+      ? discoverWslHome(".local/share/opencode")
+      : null;
   const opencodeDbPaths = resolveInstallPaths({
     nativeValue: opencodeDbNativeValue,
     wslValue: wslOpencodeDbDir,
   });
   const opencodeDbActive = formatResolvedPaths(opencodeDbPaths, "opencode.db");
-  const opencodeInstalled = opencodeStorageActive.length > 0 || opencodeDbActive.length > 0;
+  const opencodeInstalled =
+    opencodeStorageActive.length > 0 || opencodeDbActive.length > 0;
 
   // Every Code (passive sessions scan)
   const codePaths = resolveInstallPaths({
@@ -484,7 +575,15 @@ async function cmdStatus(argv = []) {
       path.join(geminiPaths.native, "antigravity-ide", "brain"),
       path.join(geminiPaths.native, "antigravity-cli", "brain"),
     ];
-    if (dirs.some(d => { try { return fssync.existsSync(d); } catch (_) { return false; } })) {
+    if (
+      dirs.some((d) => {
+        try {
+          return fssync.existsSync(d);
+        } catch (_) {
+          return false;
+        }
+      })
+    ) {
       antigravityActive.push(`native: ${geminiPaths.native}`);
     }
   }
@@ -494,7 +593,15 @@ async function cmdStatus(argv = []) {
       path.join(geminiPaths.wsl, "antigravity-ide", "brain"),
       path.join(geminiPaths.wsl, "antigravity-cli", "brain"),
     ];
-    if (dirs.some(d => { try { return fssync.existsSync(d); } catch (_) { return false; } })) {
+    if (
+      dirs.some((d) => {
+        try {
+          return fssync.existsSync(d);
+        } catch (_) {
+          return false;
+        }
+      })
+    ) {
       antigravityActive.push(`WSL: ${geminiPaths.wsl}`);
     }
   }
@@ -546,10 +653,15 @@ async function cmdStatus(argv = []) {
   const droidInstalled = droidSettingsFiles.length > 0;
 
   // Grok Build (xAI TUI)
-  const grokHookState = await probeGrokHookState({ home, trackerDir, env: process.env });
-  const grokSessions = grokHookState.hasGrokInstall || grokHookState.sessionsDir
-    ? resolveGrokBuildSessions(process.env)
-    : [];
+  const grokHookState = await probeGrokHookState({
+    home,
+    trackerDir,
+    env: process.env,
+  });
+  const grokSessions =
+    grokHookState.hasGrokInstall || grokHookState.sessionsDir
+      ? resolveGrokBuildSessions(process.env)
+      : [];
   const grokInstalled = grokHookState.hasGrokInstall || grokSessions.length > 0;
 
   // Hermes Agent — SQLite state.db, resolved via override / native Windows
@@ -557,21 +669,31 @@ async function cmdStatus(argv = []) {
   // on Windows, the discovered distros so WSL users can debug "why no sync"
   // without guessing the right UNC alias (#87).
   const hermesPaths = resolveInstallPaths({
-    nativeValue: process.env.TOKENTRACKER_HERMES_HOME || (process.platform === "win32" && typeof process.env.LOCALAPPDATA === "string"
-      ? path.join(process.env.LOCALAPPDATA.trim(), "hermes")
-      : path.join(home, ".hermes")),
+    nativeValue:
+      process.env.TOKENTRACKER_HERMES_HOME ||
+      (process.platform === "win32" &&
+      typeof process.env.LOCALAPPDATA === "string"
+        ? path.join(process.env.LOCALAPPDATA.trim(), "hermes")
+        : path.join(home, ".hermes")),
     wslDir: ".hermes",
   });
   const hermesActive = formatResolvedPaths(hermesPaths, "state.db");
   const hermesInstalled = hermesActive.length > 0;
   const hermesPath = hermesActive.join(" | ");
-  const wslDistros = process.platform === "win32" && shouldProbeWsl(process.env) ? probeWslDistros() : [];
+  const wslDistros =
+    process.platform === "win32" && shouldProbeWsl(process.env)
+      ? probeWslDistros()
+      : [];
 
   const copilotToken = readCopilotOauthToken({ home });
   const copilotOtel = describeCopilotOtelStatus({ home, env: process.env });
   const copilotAppDbPaths = resolveCopilotAppDbPaths(process.env);
   const copilotAppExistingPaths = copilotAppDbPaths.filter((p) => {
-    try { return fssync.existsSync(p); } catch (_e) { return false; }
+    try {
+      return fssync.existsSync(p);
+    } catch (_e) {
+      return false;
+    }
   });
   const copilotStorePaths = Array.from(
     new Set([
@@ -580,7 +702,11 @@ async function cmdStatus(argv = []) {
     ]),
   );
   const copilotStoreExistingPaths = copilotStorePaths.filter((p) => {
-    try { return fssync.existsSync(p); } catch (_e) { return false; }
+    try {
+      return fssync.existsSync(p);
+    } catch (_e) {
+      return false;
+    }
   });
   const copilotStoreDetails = [];
   const copilotStoreInspectionErrors = [];
@@ -613,7 +739,9 @@ async function cmdStatus(argv = []) {
   );
   const missingAdoptedCopilotStores = adoptedCopilotStores
     .map(([dbPath]) => dbPath)
-    .filter((dbPath) => !existingCopilotStoreKeys.has(copilotStatusPathKey(dbPath)));
+    .filter(
+      (dbPath) => !existingCopilotStoreKeys.has(copilotStatusPathKey(dbPath)),
+    );
   const copilotStoreDegradedReasons = [
     ...missingAdoptedCopilotStores.map(
       (dbPath) => `canonical store unavailable: ${dbPath}`,
@@ -736,7 +864,9 @@ async function cmdStatus(argv = []) {
         claude: claudeHookConfigured,
         gemini: geminiHookConfigured,
         opencode_plugin: opencodePluginConfigured,
-        openclaw_session_plugin: Boolean(openclawSessionPluginState?.configured),
+        openclaw_session_plugin: Boolean(
+          openclawSessionPluginState?.configured,
+        ),
         openclaw_session_plugin_conversation_access: Boolean(
           openclawSessionPluginState?.conversationAccess,
         ),
@@ -746,16 +876,25 @@ async function cmdStatus(argv = []) {
         grok: grokInstalled ? Boolean(grokHookState?.configured) : null,
       },
       providers: {
-        kimi_code: kimiInstalled || kimiCodeInstalled
-          ? { installed: true, files: kimiWireFiles.length + kimiCodeWireFiles.length }
-          : { installed: false },
+        kimi_code:
+          kimiInstalled || kimiCodeInstalled
+            ? {
+                installed: true,
+                files: kimiWireFiles.length + kimiCodeWireFiles.length,
+              }
+            : { installed: false },
         kiro_cli: kiroCliInstalled
           ? {
               installed: true,
               detail: kiroCliActive.join(" | "),
-              database: kiroCliMarkers.find((m) => {
-                try { return fssync.existsSync(m); } catch (_e) { return false; }
-              }) || null,
+              database:
+                kiroCliMarkers.find((m) => {
+                  try {
+                    return fssync.existsSync(m);
+                  } catch (_e) {
+                    return false;
+                  }
+                }) || null,
               files: kiroCliFileCount,
             }
           : { installed: false },
@@ -804,12 +943,18 @@ async function cmdStatus(argv = []) {
         roocode: roocodeInstalled
           ? { installed: true, files: roocodeTaskFiles.length }
           : { installed: false },
-        zed: zedInstalled ? { installed: true, detail: zedDbPath } : { installed: false },
+        zed: zedInstalled
+          ? { installed: true, detail: zedDbPath }
+          : { installed: false },
         goose: gooseInstalled
           ? { installed: true, detail: gooseDbPath }
           : { installed: false },
         droid: droidInstalled
-          ? { installed: true, files: droidSettingsFiles.length, detail: droidSessionsDir }
+          ? {
+              installed: true,
+              files: droidSettingsFiles.length,
+              detail: droidSessionsDir,
+            }
           : { installed: false },
         grok_build: grokInstalled
           ? {
@@ -839,7 +984,10 @@ async function cmdStatus(argv = []) {
         ? {
             wsl_mode: getWslMode(),
             wsl_mode_invalid: isInvalidWslMode(),
-            wsl_distros: wslDistros.map((d) => ({ name: d.name, version: d.version })),
+            wsl_distros: wslDistros.map((d) => ({
+              name: d.name,
+              version: d.version,
+            })),
           }
         : {}),
       subscriptions,
@@ -881,7 +1029,7 @@ async function cmdStatus(argv = []) {
       `- OpenClaw session plugin conversation access: ${openclawSessionPluginState?.conversationAccess ? "set" : "unset"}`,
       `- OpenClaw hook (legacy): ${openclawHookState?.configured ? "set" : "unset"}`,
       kimiInstalled || kimiCodeInstalled
-        ? `- Kimi Code: passive reader (${kimiWireFiles.length + kimiCodeWireFiles.length} wire.jsonl file${(kimiWireFiles.length + kimiCodeWireFiles.length) !== 1 ? "s" : ""} found, directories: ${kimiActive.join(" | ") || "none"})`
+        ? `- Kimi Code: passive reader (${kimiWireFiles.length + kimiCodeWireFiles.length} wire.jsonl file${kimiWireFiles.length + kimiCodeWireFiles.length !== 1 ? "s" : ""} found, directories: ${kimiActive.join(" | ") || "none"})`
         : null,
       kiroCliInstalled
         ? `- Kiro CLI: passive reader (${kiroCliFileCount} session file${kiroCliFileCount !== 1 ? "s" : ""} found, SQLite ${kiroCliDbFound ? "found" : "not found"}, installs: ${kiroCliActive.join(" | ")}; tokens approximated from char lengths and merged under 'kiro')`
@@ -907,18 +1055,10 @@ async function cmdStatus(argv = []) {
       anythingllmInstalled
         ? `- AnythingLLM Desktop: passive reader (${anythingllmDbPath})`
         : null,
-      kiloInstalled
-        ? `- Kilo CLI: passive reader (${kiloDbPath})`
-        : null,
-      mimoInstalled
-        ? `- Mimo: passive reader (${mimoDbPath})`
-        : null,
-      zcodeInstalled
-        ? `- ZCode: passive reader (${zcodeDbPath})`
-        : null,
-      qoderInstalled
-        ? `- Qoder: passive reader (${qoderDbPath})`
-        : null,
+      kiloInstalled ? `- Kilo CLI: passive reader (${kiloDbPath})` : null,
+      mimoInstalled ? `- Mimo: passive reader (${mimoDbPath})` : null,
+      zcodeInstalled ? `- ZCode: passive reader (${zcodeDbPath})` : null,
+      qoderInstalled ? `- Qoder: passive reader (${qoderDbPath})` : null,
       claudeScienceInstalled
         ? `- Claude Science: passive reader (${claudeScienceDbPath})`
         : null,
@@ -934,7 +1074,7 @@ async function cmdStatus(argv = []) {
       antigravityInstalled
         ? `- Antigravity: brain found (${antigravityActive.join(" | ")})`
         : null,
-      (!geminiCliInstalled && !antigravityInstalled && geminiInstalledStatus)
+      !geminiCliInstalled && !antigravityInstalled && geminiInstalledStatus
         ? `- Gemini CLI / Antigravity: home found (${geminiActive.join(" | ")})`
         : null,
       codexInstalledStatus
@@ -974,18 +1114,22 @@ async function cmdStatus(argv = []) {
         ? `- Grok Build (xAI): ${grokHookState.configured ? "hook installed" : "detected"} (${grokSessions.length} session${grokSessions.length !== 1 ? "s" : ""} found, hook: ${grokHookState.configured ? "yes" : "no"})`
         : null,
       ...copilotLines,
-      ...(process.platform === "win32" ? (() => {
-        const wslMode = getWslMode();
-        const modeInvalid = isInvalidWslMode();
-        const modeSuffix = modeInvalid ? ` (invalid TOKENTRACKER_WSL_MODE ignored)` : "";
-        const lines = [
-          `- WSL mode: ${wslMode}${modeSuffix}`,
-        ];
-        if (wslDistros.length > 0) {
-          lines.push(`  distros: ${wslDistros.map((d) => `${d.name} (v${d.version ?? "?"})`).join(", ")}`);
-        }
-        return lines;
-      })() : []),
+      ...(process.platform === "win32"
+        ? (() => {
+            const wslMode = getWslMode();
+            const modeInvalid = isInvalidWslMode();
+            const modeSuffix = modeInvalid
+              ? ` (invalid TOKENTRACKER_WSL_MODE ignored)`
+              : "";
+            const lines = [`- WSL mode: ${wslMode}${modeSuffix}`];
+            if (wslDistros.length > 0) {
+              lines.push(
+                `  distros: ${wslDistros.map((d) => `${d.name} (v${d.version ?? "?"})`).join(", ")}`,
+              );
+            }
+            return lines;
+          })()
+        : []),
       ...subscriptionLines,
       "",
     ]
@@ -1113,7 +1257,8 @@ function parseArgs(argv) {
 // newline).
 function renderLightTable(summary) {
   const rows = [];
-  const push = (k, v) => rows.push([k, v == null || v === "" ? "—" : String(v)]);
+  const push = (k, v) =>
+    rows.push([k, v == null || v === "" ? "—" : String(v)]);
 
   push("Version", summary.version);
   push("Base URL", summary.base_url);
@@ -1125,7 +1270,8 @@ function renderLightTable(summary) {
   push("Last upload", summary.last_upload);
   push("Next upload after", summary.next_upload_after);
   push("Backoff until", summary.backoff_until);
-  if (summary.last_upload_error) push("Last upload error", summary.last_upload_error);
+  if (summary.last_upload_error)
+    push("Last upload error", summary.last_upload_error);
 
   for (const [name, state] of Object.entries(summary.hooks || {})) {
     push(`Hook · ${name}`, state ? "set" : "unset");
@@ -1133,11 +1279,15 @@ function renderLightTable(summary) {
 
   for (const [name, info] of Object.entries(summary.providers || {})) {
     const detail = [];
-    if (typeof info.installed === "boolean") detail.push(info.installed ? "installed" : "not installed");
-    if (typeof info.files === "number") detail.push(`${info.files} file${info.files !== 1 ? "s" : ""}`);
+    if (typeof info.installed === "boolean")
+      detail.push(info.installed ? "installed" : "not installed");
+    if (typeof info.files === "number")
+      detail.push(`${info.files} file${info.files !== 1 ? "s" : ""}`);
     if (info.detail) detail.push(info.detail);
     if (Array.isArray(info.wsl_distros) && info.wsl_distros.length) {
-      detail.push(`WSL: ${info.wsl_distros.map((d) => `${d.name} (v${d.version ?? "?"})`).join(", ")}`);
+      detail.push(
+        `WSL: ${info.wsl_distros.map((d) => `${d.name} (v${d.version ?? "?"})`).join(", ")}`,
+      );
     }
     push(`Provider · ${name}`, detail.length ? detail.join(", ") : "—");
   }
@@ -1193,7 +1343,10 @@ function renderLightTable(summary) {
     push("Passive mode active", summary.passive_mode.active ? "yes" : "no");
     for (const p of summary.passive_mode.providers || []) {
       if (p.passive) {
-        push(`Passive · ${p.name}`, `hook ${p.hook_failure_reason || "missing"}, logs present`);
+        push(
+          `Passive · ${p.name}`,
+          `hook ${p.hook_failure_reason || "missing"}, logs present`,
+        );
       }
     }
   }
@@ -1201,7 +1354,11 @@ function renderLightTable(summary) {
   const keyWidth = Math.max(...rows.map(([k]) => k.length), 8);
   const valWidth = Math.max(...rows.map(([, v]) => v.length), 8);
   const sep = `+${"-".repeat(keyWidth + 2)}+${"-".repeat(valWidth + 2)}+`;
-  const lines = [sep, `| ${"Key".padEnd(keyWidth)} | ${"Value".padEnd(valWidth)} |`, sep];
+  const lines = [
+    sep,
+    `| ${"Key".padEnd(keyWidth)} | ${"Value".padEnd(valWidth)} |`,
+    sep,
+  ];
   for (const [k, v] of rows) {
     lines.push(`| ${k.padEnd(keyWidth)} | ${v.padEnd(valWidth)} |`);
   }

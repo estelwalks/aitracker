@@ -99,7 +99,11 @@ async function listTranscriptFiles(rootDir) {
         } catch (_e) {
           continue;
         }
-        out.push({ path: full, size: stat.size, mtimeMs: Math.floor(stat.mtimeMs) });
+        out.push({
+          path: full,
+          size: stat.size,
+          mtimeMs: Math.floor(stat.mtimeMs),
+        });
       }
     }
   }
@@ -110,7 +114,8 @@ async function listTranscriptFiles(rootDir) {
 
 function fingerprintFiles(files) {
   const hash = crypto.createHash("sha256");
-  for (const file of files) hash.update(`${file.path}:${file.size}:${file.mtimeMs}\n`);
+  for (const file of files)
+    hash.update(`${file.path}:${file.size}:${file.mtimeMs}\n`);
   return `${files.length}:${hash.digest("hex")}`;
 }
 
@@ -152,7 +157,8 @@ async function scanFile(filePath, skillMap, seenBlockIds) {
       // can split the turn's usage evenly across them.
       const blocks = [];
       for (const block of content) {
-        if (!block || block.type !== "tool_use" || block.name !== "Skill") continue;
+        if (!block || block.type !== "tool_use" || block.name !== "Skill")
+          continue;
         const id = typeof block.id === "string" ? block.id : null;
         if (id && seenBlockIds.has(id)) continue;
         const skillName = String(block?.input?.skill || "").trim();
@@ -170,7 +176,8 @@ async function scanFile(filePath, skillMap, seenBlockIds) {
       for (const block of blocks) {
         const entry = ensureSkill(skillMap, block.skillName);
         entry.invocations += 1;
-        if (ts && (!entry.lastUsedAt || ts > entry.lastUsedAt)) entry.lastUsedAt = ts;
+        if (ts && (!entry.lastUsedAt || ts > entry.lastUsedAt))
+          entry.lastUsedAt = ts;
         addScaledTokens(entry.tokens, turnTokens, share);
         if (!entry.models[model]) entry.models[model] = emptyTokens();
         addScaledTokens(entry.models[model], turnTokens, share);
@@ -202,7 +209,10 @@ function serialize(skillMap, meta) {
       lastUsedAt: entry.lastUsedAt,
       tokens: roundTokens(entry.tokens),
       models: Object.fromEntries(
-        Object.entries(entry.models).map(([model, tokens]) => [model, roundTokens(tokens)]),
+        Object.entries(entry.models).map(([model, tokens]) => [
+          model,
+          roundTokens(tokens),
+        ]),
       ),
     }))
     .sort((a, b) => b.invocations - a.invocations);
@@ -246,12 +256,17 @@ async function scanSkillUsage({ home, force = false } = {}) {
     fingerprint,
     generatedAt: Date.now(),
     scannedFiles: files.length,
-    totalInvocations: Array.from(skillMap.values()).reduce((sum, s) => sum + s.invocations, 0),
+    totalInvocations: Array.from(skillMap.values()).reduce(
+      (sum, s) => sum + s.invocations,
+      0,
+    ),
   });
 
   try {
     fssync.mkdirSync(dataDir(home), { recursive: true });
-    fssync.writeFileSync(usageCachePath(home), `${JSON.stringify(result)}\n`, { mode: 0o600 });
+    fssync.writeFileSync(usageCachePath(home), `${JSON.stringify(result)}\n`, {
+      mode: 0o600,
+    });
   } catch (_e) {
     // best-effort cache write
   }

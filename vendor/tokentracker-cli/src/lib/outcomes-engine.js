@@ -28,7 +28,12 @@ function resolveOutcomesPath() {
 }
 
 function resolveAutoOutcomesPath() {
-  return path.join(os.homedir(), ".tokentracker", "tracker", "auto-outcomes.jsonl");
+  return path.join(
+    os.homedir(),
+    ".tokentracker",
+    "tracker",
+    "auto-outcomes.jsonl",
+  );
 }
 
 // The ONLY fields ever lifted off an outcome record. Anything not on this list
@@ -36,7 +41,8 @@ function resolveAutoOutcomesPath() {
 // the enforcement point for the metadata-only privacy invariant.
 function sanitizeOutcome(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const timestamp = typeof raw.timestamp === "string" ? raw.timestamp.trim() : "";
+  const timestamp =
+    typeof raw.timestamp === "string" ? raw.timestamp.trim() : "";
   if (!timestamp) return null; // an outcome with no time can't be joined to $ rows
 
   // `accepted` is the gate signal: a merged PR / passed task. Strictly boolean
@@ -44,7 +50,9 @@ function sanitizeOutcome(raw) {
   const accepted = raw.accepted === true;
 
   const model =
-    typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : "unknown";
+    typeof raw.model === "string" && raw.model.trim()
+      ? raw.model.trim()
+      : "unknown";
   // `tool` mirrors the queue row's `source` (claude, codex, cursor, …). Accept
   // either key so writers can use whichever they have on hand.
   const toolRaw =
@@ -58,10 +66,18 @@ function sanitizeOutcome(raw) {
   if (typeof raw.task_type === "string" && raw.task_type.trim()) {
     out.task_type = raw.task_type.trim();
   }
-  for (const key of ["status", "session_hash", "commit_hash", "confidence", "methodology"]) {
-    if (typeof raw[key] === "string" && raw[key].trim()) out[key] = raw[key].trim();
+  for (const key of [
+    "status",
+    "session_hash",
+    "commit_hash",
+    "confidence",
+    "methodology",
+  ]) {
+    if (typeof raw[key] === "string" && raw[key].trim())
+      out[key] = raw[key].trim();
   }
-  if (Number.isFinite(Number(raw.parent_count))) out.parent_count = Number(raw.parent_count);
+  if (Number.isFinite(Number(raw.parent_count)))
+    out.parent_count = Number(raw.parent_count);
   return out;
 }
 
@@ -94,12 +110,16 @@ function readOutcomesData(outcomesPath) {
     else malformed += 1;
   }
   if (malformed > 0) {
-    console.error(`[outcomes] skipped ${malformed} malformed/invalid line(s) in ${outcomesPath}`);
+    console.error(
+      `[outcomes] skipped ${malformed} malformed/invalid line(s) in ${outcomesPath}`,
+    );
   }
   return out;
 }
 
-function readAllOutcomesData(paths = [resolveOutcomesPath(), resolveAutoOutcomesPath()]) {
+function readAllOutcomesData(
+  paths = [resolveOutcomesPath(), resolveAutoOutcomesPath()],
+) {
   const dedup = new Map();
   for (const outcomePath of paths) {
     for (const row of readOutcomesData(outcomePath)) {
@@ -151,10 +171,13 @@ function combineRow(key, cost, out) {
   // quality per dollar = accepted, gate-passing outcomes ÷ dollars spent.
   // Null (not zero) when we can't form the ratio — no spend or no outcomes —
   // so the UI can distinguish "0 quality" from "not enough data".
-  const quality_per_dollar = cost_usd > 0 && outcomes > 0 ? accepted / cost_usd : null;
+  const quality_per_dollar =
+    cost_usd > 0 && outcomes > 0 ? accepted / cost_usd : null;
   // Effective Tokens: the share of tokens that produced accepted work.
-  const effective_tokens = acceptance_rate === null ? null : total_tokens * acceptance_rate;
-  const effective_cost_usd = acceptance_rate === null ? null : cost_usd * acceptance_rate;
+  const effective_tokens =
+    acceptance_rate === null ? null : total_tokens * acceptance_rate;
+  const effective_cost_usd =
+    acceptance_rate === null ? null : cost_usd * acceptance_rate;
   return {
     key,
     cost_usd,
@@ -195,7 +218,11 @@ function combine(costMap, outMap) {
  * @param {Array} outcomes   sanitized outcome records (from readOutcomesData)
  * @param {{from?:string,to?:string}} [window]
  */
-function computeQualityPerDollar(queueRows, outcomes, { from = "", to = "" } = {}) {
+function computeQualityPerDollar(
+  queueRows,
+  outcomes,
+  { from = "", to = "" } = {},
+) {
   const modelCost = new Map();
   const toolCost = new Map();
   for (const row of queueRows || []) {
@@ -240,7 +267,12 @@ function computeQualityPerDollar(queueRows, outcomes, { from = "", to = "" } = {
     { accepted: totalAccepted, outcomes: totalOutcomes },
   );
 
-  return { available: outcomes && outcomes.length > 0, by_model, by_tool, totals };
+  return {
+    available: outcomes && outcomes.length > 0,
+    by_model,
+    by_tool,
+    totals,
+  };
 }
 
 module.exports = {

@@ -44,7 +44,9 @@ const SCRAPED_NUMBER_PATTERN = "([0-9]+(?:\\.[0-9]+)?)";
 // inside that window's own object, and `"?` tolerates both the unquoted SSR
 // form (`usagePercent:2`) and a quoted JSON form (`"usagePercent":2`).
 function windowFieldRegex(windowKey, field) {
-  return new RegExp(`${windowKey}[^}]*?${field}"?\\s*[:=]+\\s*${SCRAPED_NUMBER_PATTERN}`);
+  return new RegExp(
+    `${windowKey}[^}]*?${field}"?\\s*[:=]+\\s*${SCRAPED_NUMBER_PATTERN}`,
+  );
 }
 
 const DASHBOARD_URL_PREFIX = "https://opencode.ai/workspace/";
@@ -98,7 +100,10 @@ function parseWindowUsage(html, windowKey) {
   if (!Number.isFinite(usagePercent)) return null;
   const resetMatch = windowFieldRegex(windowKey, "resetInSec").exec(html);
   const resetInSec = resetMatch ? Number(resetMatch[1]) : 0;
-  return { usagePercent, resetInSec: Number.isFinite(resetInSec) ? resetInSec : 0 };
+  return {
+    usagePercent,
+    resetInSec: Number.isFinite(resetInSec) ? resetInSec : 0,
+  };
 }
 
 // Parse "1 hour 56 minutes" / "6 days 2 hours" / "26 days 17 hours" into
@@ -131,7 +136,9 @@ function parseDataSlotFormat(html) {
     const labelMatch = content.match(/data-slot="usage-label">([^<]+)</);
     if (!labelMatch) continue;
     const label = labelMatch[1].trim().toLowerCase();
-    const usageMatch = content.match(/data-slot="usage-value">[^0-9]*(\d+(?:\.\d+)?)/);
+    const usageMatch = content.match(
+      /data-slot="usage-value">[^0-9]*(\d+(?:\.\d+)?)/,
+    );
     if (!usageMatch) continue;
     const usagePercent = Number(usageMatch[1]);
     const resetMatch = content.match(
@@ -204,13 +211,13 @@ async function resolveWorkspaceId(authCookie, fetchImpl, timeoutMs) {
   const instanceId = `server-fn:${crypto.randomUUID()}`;
 
   const headers = {
-    "Cookie": `auth=${authCookie}`,
+    Cookie: `auth=${authCookie}`,
     "X-Server-Id": serverId,
     "X-Server-Instance": instanceId,
     "User-Agent": USER_AGENT,
-    "Origin": "https://opencode.ai",
-    "Referer": "https://opencode.ai",
-    "Accept": "text/javascript, application/json;q=0.9, */*;q=0.8"
+    Origin: "https://opencode.ai",
+    Referer: "https://opencode.ai",
+    Accept: "text/javascript, application/json;q=0.9, */*;q=0.8",
   };
 
   const getUrl = `https://opencode.ai/_server?id=${serverId}`;
@@ -241,14 +248,16 @@ async function resolveWorkspaceId(authCookie, fetchImpl, timeoutMs) {
       response = await withTimeout(fetchImpl, timeoutMs)(postUrl, {
         method: "POST",
         headers: postHeaders,
-        body: "[]"
+        body: "[]",
       });
       text = await response.text();
       ids = parseWorkspaceIds(text);
     } catch (postErr) {
       // GET returned content but no workspace IDs; POST also failed.
       // Wrap both signals so the caller can surface a useful diagnostic.
-      throw new Error(`GET returned no workspace IDs and POST fallback failed: ${postErr.message}`);
+      throw new Error(
+        `GET returned no workspace IDs and POST fallback failed: ${postErr.message}`,
+      );
     }
   }
 
@@ -283,8 +292,13 @@ function looksSignedOut(text) {
   const l = String(text).toLowerCase();
   // Use specific phrases to avoid false positives on workspace names containing
   // common words like "login" (e.g. a workspace named "loginServiceApp").
-  return l.includes("please log in") || l.includes("sign in to") || l.includes("auth/authorize")
-    || l.includes("not associated with an account") || l.includes('actor of type "public"');
+  return (
+    l.includes("please log in") ||
+    l.includes("sign in to") ||
+    l.includes("auth/authorize") ||
+    l.includes("not associated with an account") ||
+    l.includes('actor of type "public"')
+  );
 }
 
 // --- Local opencode.db cost aggregation (auth-free source) ------------------
@@ -349,14 +363,21 @@ function discoverOpencodeDbPaths({ home, env = process.env } = {}) {
   } catch (_e) {
     return [];
   }
-  return entries.filter(isOpencodeDbFilename).sort().map((n) => path.join(dir, n));
+  return entries
+    .filter(isOpencodeDbFilename)
+    .sort()
+    .map((n) => path.join(dir, n));
 }
 
 function weekStartMs(nowMs) {
   const d = new Date(nowMs);
   const day = d.getUTCDay(); // 0=Sun..6=Sat
   const sinceMonday = day === 0 ? 6 : day - 1;
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - sinceMonday);
+  return Date.UTC(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDate() - sinceMonday,
+  );
 }
 
 // Calendar-month bounds (UTC). OpenCode Go's true monthly reset is the
@@ -391,7 +412,13 @@ function buildLocalWindow({ used, limit, resetMs }) {
 // so we sum in SQLite and return a single row rather than streaming every
 // opencode-go turn into JS — keeps the limits poll cheap, cf. the spawnSync
 // freeze lesson).
-function buildGoAggregateSql({ sessionStart, weekStart, weekEnd, monthStart, monthEnd }) {
+function buildGoAggregateSql({
+  sessionStart,
+  weekStart,
+  weekEnd,
+  monthStart,
+  monthEnd,
+}) {
   return (
     "SELECT " +
     `COALESCE(SUM(CASE WHEN createdMs >= ${sessionStart} THEN cost ELSE 0 END), 0) AS sessionCost, ` +
@@ -413,7 +440,12 @@ function buildGoAggregateSql({ sessionStart, weekStart, weekEnd, monthStart, mon
 
 // Returns { source:'local', primary/secondary/tertiary_window } or null when no
 // opencode.db / no opencode-go rows are found.
-async function collectOpencodeGoLocal({ home, env = process.env, nowMs = Date.now(), sqliteOptions = {} } = {}) {
+async function collectOpencodeGoLocal({
+  home,
+  env = process.env,
+  nowMs = Date.now(),
+  sqliteOptions = {},
+} = {}) {
   const paths = discoverOpencodeDbPaths({ home, env });
   if (paths.length === 0) return null;
 
@@ -421,7 +453,13 @@ async function collectOpencodeGoLocal({ home, env = process.env, nowMs = Date.no
   const weekStart = weekStartMs(nowMs);
   const weekEnd = weekStart + WEEK_MS;
   const { startMs: monthStart, endMs: monthEnd } = monthBoundsMs(nowMs);
-  const sql = buildGoAggregateSql({ sessionStart, weekStart, weekEnd, monthStart, monthEnd });
+  const sql = buildGoAggregateSql({
+    sessionStart,
+    weekStart,
+    weekEnd,
+    monthStart,
+    monthEnd,
+  });
 
   let agg = null;
   for (const dbPath of paths) {
@@ -439,25 +477,48 @@ async function collectOpencodeGoLocal({ home, env = process.env, nowMs = Date.no
     if (!row) continue;
     const rowCount = Number(row.rowCount) || 0;
     if (rowCount <= 0) continue;
-    if (!agg) agg = { sessionCost: 0, weeklyCost: 0, monthlyCost: 0, sessionOldest: null, rowCount: 0 };
+    if (!agg)
+      agg = {
+        sessionCost: 0,
+        weeklyCost: 0,
+        monthlyCost: 0,
+        sessionOldest: null,
+        rowCount: 0,
+      };
     agg.sessionCost += Number(row.sessionCost) || 0;
     agg.weeklyCost += Number(row.weeklyCost) || 0;
     agg.monthlyCost += Number(row.monthlyCost) || 0;
     agg.rowCount += rowCount;
     const oldest = row.sessionOldest == null ? null : Number(row.sessionOldest);
     if (oldest != null && Number.isFinite(oldest)) {
-      agg.sessionOldest = agg.sessionOldest == null ? oldest : Math.min(agg.sessionOldest, oldest);
+      agg.sessionOldest =
+        agg.sessionOldest == null
+          ? oldest
+          : Math.min(agg.sessionOldest, oldest);
     }
   }
   if (!agg || agg.rowCount <= 0) return null;
 
   const limits = goDollarLimits(env);
-  const sessionReset = (agg.sessionOldest != null ? agg.sessionOldest : nowMs) + SESSION_MS;
+  const sessionReset =
+    (agg.sessionOldest != null ? agg.sessionOldest : nowMs) + SESSION_MS;
   return {
     source: "local",
-    primary_window: buildLocalWindow({ used: agg.sessionCost, limit: limits.session, resetMs: sessionReset }),
-    secondary_window: buildLocalWindow({ used: agg.weeklyCost, limit: limits.weekly, resetMs: weekEnd }),
-    tertiary_window: buildLocalWindow({ used: agg.monthlyCost, limit: limits.monthly, resetMs: monthEnd }),
+    primary_window: buildLocalWindow({
+      used: agg.sessionCost,
+      limit: limits.session,
+      resetMs: sessionReset,
+    }),
+    secondary_window: buildLocalWindow({
+      used: agg.weeklyCost,
+      limit: limits.weekly,
+      resetMs: weekEnd,
+    }),
+    tertiary_window: buildLocalWindow({
+      used: agg.monthlyCost,
+      limit: limits.monthly,
+      resetMs: monthEnd,
+    }),
   };
 }
 
@@ -479,17 +540,30 @@ async function scrapeOpencodeGoWeb({ cfg, fetchImpl, nowMs, timeoutMs }) {
   let workspaceId = cfg.workspaceId;
   if (!workspaceId) {
     try {
-      workspaceId = await resolveWorkspaceId(cfg.authCookie, fetchImpl, timeoutMs);
+      workspaceId = await resolveWorkspaceId(
+        cfg.authCookie,
+        fetchImpl,
+        timeoutMs,
+      );
     } catch (err) {
-      return { configured: true, error: `Failed to resolve Workspace ID: ${sanitizeMessage(err?.message || err)}` };
+      return {
+        configured: true,
+        error: `Failed to resolve Workspace ID: ${sanitizeMessage(err?.message || err)}`,
+      };
     }
     if (!workspaceId) {
-      return { configured: true, error: "Could not auto-resolve OpenCode Workspace ID from cookie. Please set OPENCODE_GO_WORKSPACE_ID manually." };
+      return {
+        configured: true,
+        error:
+          "Could not auto-resolve OpenCode Workspace ID from cookie. Please set OPENCODE_GO_WORKSPACE_ID manually.",
+      };
     }
   }
 
   const url =
-    DASHBOARD_URL_PREFIX + encodeURIComponent(workspaceId) + DASHBOARD_URL_SUFFIX;
+    DASHBOARD_URL_PREFIX +
+    encodeURIComponent(workspaceId) +
+    DASHBOARD_URL_SUFFIX;
 
   let response;
   try {
@@ -508,7 +582,8 @@ async function scrapeOpencodeGoWeb({ cfg, fetchImpl, nowMs, timeoutMs }) {
   if (response.status === 401 || response.status === 403) {
     return {
       configured: true,
-      error: "Not signed in to OpenCode Go. Refresh the auth cookie in OPENCODE_GO_AUTH_COOKIE.",
+      error:
+        "Not signed in to OpenCode Go. Refresh the auth cookie in OPENCODE_GO_AUTH_COOKIE.",
     };
   }
   if (!response.ok) {
@@ -559,16 +634,30 @@ async function fetchOpencodeGoLimits({
   // local DB estimate when the scrape can't authenticate/parse (the #225 case).
   if (cfg) {
     const web = await scrapeOpencodeGoWeb({ cfg, fetchImpl, nowMs, timeoutMs });
-    if (web && !web.error && (web.primary_window || web.secondary_window || web.tertiary_window)) {
+    if (
+      web &&
+      !web.error &&
+      (web.primary_window || web.secondary_window || web.tertiary_window)
+    ) {
       return { ...web, source: "web" };
     }
-    const local = await collectOpencodeGoLocal({ home, env, nowMs, sqliteOptions });
+    const local = await collectOpencodeGoLocal({
+      home,
+      env,
+      nowMs,
+      sqliteOptions,
+    });
     if (local) return localGoResult(local);
     return web || { configured: true, error: "OpenCode Go unavailable" };
   }
 
   // No cookie → the local opencode.db is the zero-config source.
-  const local = await collectOpencodeGoLocal({ home, env, nowMs, sqliteOptions });
+  const local = await collectOpencodeGoLocal({
+    home,
+    env,
+    nowMs,
+    sqliteOptions,
+  });
   if (local) return localGoResult(local);
   return { configured: false };
 }

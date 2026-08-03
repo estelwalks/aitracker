@@ -33,13 +33,16 @@ let statusCache = new Map();
 
 function normalizeStatusPayload(payload, spec, nowMs) {
   const indicator = payload?.status?.indicator;
-  if (typeof indicator !== "string" || !VALID_INDICATORS.has(indicator)) return null;
-  const description = typeof payload?.status?.description === "string"
-    ? payload.status.description.trim()
-    : "";
-  const updatedAt = typeof payload?.page?.updated_at === "string" && payload.page.updated_at
-    ? payload.page.updated_at
-    : new Date(nowMs).toISOString();
+  if (typeof indicator !== "string" || !VALID_INDICATORS.has(indicator))
+    return null;
+  const description =
+    typeof payload?.status?.description === "string"
+      ? payload.status.description.trim()
+      : "";
+  const updatedAt =
+    typeof payload?.page?.updated_at === "string" && payload.page.updated_at
+      ? payload.page.updated_at
+      : new Date(nowMs).toISOString();
   return {
     indicator,
     description: description || null,
@@ -54,7 +57,10 @@ function normalizeStatusPayload(payload, spec, nowMs) {
  * no status page, the probe fails with no usable last-good reading, or the
  * payload is malformed.
  */
-async function fetchProviderServiceStatus(providerId, { fetchImpl = fetch, nowMs = Date.now() } = {}) {
+async function fetchProviderServiceStatus(
+  providerId,
+  { fetchImpl = fetch, nowMs = Date.now() } = {},
+) {
   const spec = STATUS_PAGE_SPECS[providerId];
   if (!spec) return null;
 
@@ -83,7 +89,11 @@ async function fetchProviderServiceStatus(providerId, { fetchImpl = fetch, nowMs
     // fall through to last-good handling below
   }
 
-  if (!data && cached?.data && nowMs - cached.fetchedAtMs < STATUS_LAST_GOOD_MAX_AGE_MS) {
+  if (
+    !data &&
+    cached?.data &&
+    nowMs - cached.fetchedAtMs < STATUS_LAST_GOOD_MAX_AGE_MS
+  ) {
     // Probe failed: keep serving the previous reading (without refreshing its
     // clock, so a dead status page eventually ages out to null).
     return cached.data;
