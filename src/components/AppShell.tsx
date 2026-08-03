@@ -1,8 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  BarChart3,
   Blocks,
-  Brain,
+  Database,
+  History,
   Home,
   Menu,
   PanelLeftClose,
@@ -18,11 +18,11 @@ import { useI18n } from "../lib/i18n/context";
 
 const navItems = [
   { to: "/", i18nKey: "nav.dashboard", icon: Home },
-  { to: "/tokens", i18nKey: "nav.tokens", icon: BarChart3 },
   { to: "/skills", i18nKey: "nav.skills", icon: Blocks },
   { to: "/market", i18nKey: "nav.market", icon: Store },
   { to: "/security", i18nKey: "nav.security", icon: ShieldCheck },
-  { to: "/memory", i18nKey: "nav.memory", icon: Brain },
+  { to: "/sessions", i18nKey: "nav.sessions", icon: History },
+  { to: "/sources", i18nKey: "nav.sources", icon: Database },
   { to: "/settings", i18nKey: "nav.settings", icon: Settings },
 ] as const;
 
