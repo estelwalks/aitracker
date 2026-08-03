@@ -159,19 +159,9 @@ export function UsageTrendChart({
 
   // For the hour grain the daily bySource map isn't available; recompute the
   // per-source series from the events so the legend and tooltip stay accurate.
-  // Fill missing source keys with 0 so recharts stacks zero-contribution tools
-  // correctly instead of interpolating undefined gaps.
   const chartDataWithSources: TrendPoint[] = useMemo(() => {
-    const raw =
-      grain === "hour" ? aggregateHourlyBySource(events, topSources) : chartData;
-    const sourceKeys = topSources.map((s) => s.key);
-    return raw.map((point) => {
-      const filled: TrendPoint = { ...point };
-      for (const key of sourceKeys) {
-        if (!(key in filled)) filled[key] = 0;
-      }
-      return filled;
-    });
+    if (grain === "hour") return aggregateHourlyBySource(events, topSources);
+    return chartData;
   }, [chartData, events, grain, topSources]);
 
   const visibleSeries = topSources.filter(
@@ -427,7 +417,7 @@ function TrendTooltip({
                 style={{ background: source.color }}
               />
               <span className="w-24 truncate">{source.name}</span>
-              <span className="tt-num ml-auto">{value.toLocaleString()}</span>
+              <span className="tt-num ml-auto">{formatTokens(value)}</span>
               <span className="tt-num w-12 text-right text-muted-foreground">
                 {share.toFixed(1)}%
               </span>
