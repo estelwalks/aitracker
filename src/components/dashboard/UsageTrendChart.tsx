@@ -19,7 +19,6 @@ import {
   type UsageTimeGrain,
 } from "../../lib/local-usage/presentation";
 import type {
-  LocalUsageDaily,
   LocalUsageEvent,
   LocalUsageSource,
 } from "../../lib/local-usage";
@@ -43,7 +42,6 @@ interface TrendPoint {
 
 export interface UsageTrendChartProps {
   events: LocalUsageEvent[];
-  daily: LocalUsageDaily[];
   period: UsagePeriod;
   customFrom?: string;
   customTo?: string;
@@ -101,6 +99,44 @@ function aggregateByMonth(events: LocalUsageEvent[]) {
 }
 
 /**
+ * Aggregate events by calendar day, building per-source columns that match
+ * topSources keys (both derived from event.source). This replaces the
+ * daily.bySource snapshot read so source keys are always consistent.
+ */
+function aggregateDailyBySource(
+  events: LocalUsageEvent[],
+  sources: { key: LocalUsageSource; name: string; color: string }[],
+): TrendPoint[] {
+  const buckets = new Map<
+    string,
+    { label: string; total: number; bySource: Map<string, number> }
+  >();
+  for (const event of events) {
+    const date = event.timestamp.slice(0, 10);
+    const bucket = buckets.get(date) ?? {
+      label: date.slice(5),
+      total: 0,
+      bySource: new Map(),
+    };
+    bucket.total += event.totalTokens;
+    bucket.bySource.set(
+      event.source,
+      (bucket.bySource.get(event.source) ?? 0) + event.totalTokens,
+    );
+    buckets.set(date, bucket);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => {
+      const point: TrendPoint = { key, label: value.label, total: value.total };
+      for (const source of sources) {
+        point[source.key] = value.bySource.get(source.key) ?? 0;
+      }
+      return point;
+    });
+}
+
+/**
  * FR-004 — Token consumption trend, stacked-area OR multi-line, per AI tool.
  * Summary line shows 区间合计 / 均值 / 峰值(含峰值时刻) / 环比变化, with an
  * interactive legend below that hides/excludes a tool's series on click, a
@@ -109,7 +145,6 @@ function aggregateByMonth(events: LocalUsageEvent[]) {
  */
 export function UsageTrendChart({
   events,
-  daily,
   period,
   customFrom,
   customTo,
@@ -139,30 +174,14 @@ export function UsageTrendChart({
         }));
     }, [events]);
 
-  const chartData: TrendPoint[] = useMemo(() => {
-    if (grain === "month") return aggregateByMonth(events);
-    // Day grain — reuse the snapshot's pre-aggregated daily rows so per-source
-    // splits stay consistent with the rest of the dashboard. The hour grain is
-    // handled entirely by `chartDataWithSources` below.
-    return daily.map((day) => ({
-      key: day.date,
-      label: day.date.slice(5),
-      total: day.totalTokens,
-      ...Object.fromEntries(
-        Object.entries(day.bySource).map(([source, counts]) => [
-          source,
-          counts.totalTokens,
-        ]),
-      ),
-    }));
-  }, [events, daily, grain]);
-
-  // For the hour grain the daily bySource map isn't available; recompute the
-  // per-source series from the events so the legend and tooltip stay accurate.
+  // Recompute chart data from events for all grains so source keys are
+  // guaranteed to match `topSources` (both come from event.source).
   const chartDataWithSources: TrendPoint[] = useMemo(() => {
-    if (grain === "hour") return aggregateHourlyBySource(events, topSources);
-    return chartData;
-  }, [chartData, events, grain, topSources]);
+    if (grain === "month") return aggregateByMonth(events);
+    if (grain === "hour")
+      return aggregateHourlyBySource(events, topSources);
+    return aggregateDailyBySource(events, topSources);
+  }, [events, grain, topSources]);
 
   const visibleSeries = topSources.filter(
     (item) => !hiddenSources.includes(item.key),
