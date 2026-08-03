@@ -236,7 +236,7 @@ function SecurityRuleManager({
   onChange: (rules: UserSecurityRule[]) => void;
 }) {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<SecurityRuleKind>("恶意 URL");
+  const [kind, setKind] = useState<SecurityRuleKind>("远程命令执行");
   const [pattern, setPattern] = useState("");
 
   const addRule = () => {

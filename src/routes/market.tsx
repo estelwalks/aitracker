@@ -448,7 +448,7 @@ function InstallDialog({
     <Modal title={`安装 ${skill.name}`} onClose={onClose}>
       <div className="space-y-4 p-4">
         <div>
-          <div className="tt-label mb-2">选择 Agent（支持 8 个目标）</div>
+          <div className="tt-label mb-2">{`选择 Agent（支持 ${MARKET_AGENTS.length} 个目标）`}</div>
           <div className="grid grid-cols-2 gap-2">
             {MARKET_AGENTS.map((agent) => (
               <label

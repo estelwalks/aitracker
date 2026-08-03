@@ -336,7 +336,7 @@ function SkillsPage() {
             <div className="p-4">
               <EmptyState
                 title="未扫描到 Skill"
-                desc="已检查 8 个 Agent 常见路径；也可以前往设置确认本机环境。"
+                desc={`已检查 ${SKILL_AGENTS.length} 个 Agent 常见路径；也可以前往设置确认本机环境。`}
                 actions={
                   <Link to="/settings">
                     <TTButton>打开设置</TTButton>

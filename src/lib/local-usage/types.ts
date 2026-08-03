@@ -1,33 +1,20 @@
+import { AI_TOOL_IDS } from "../tools/catalog.ts";
+
+/**
+ * The known usage source ids.
+ *
+ * The primary set is the 27 PRD v1.2 tools, derived from `AI_TOOL_IDS` (the
+ * single source of truth in `src/lib/tools/catalog.ts`). Two legacy adapter
+ * source ids (`aipy`, `cline`) are retained on top of the PRD list because the
+ * builtin usage adapters in `adapters/catalog.ts` and their golden fixtures
+ * still reference them — see BUILTIN_USAGE_ADAPTERS. `windsurf`/`qoder` etc.
+ * are intentionally NOT included; they were never wired to an adapter.
+ */
+const LEGACY_ADAPTER_SOURCES = ["aipy", "cline"] as const;
+
 export const KNOWN_LOCAL_USAGE_SOURCES = [
-  "claude-code",
-  "codex",
-  "cursor",
-  "gemini-cli",
-  "antigravity",
-  "kiro",
-  "kimi-code",
-  "opencode",
-  "openclaw",
-  "every-code",
-  "hermes",
-  "grok",
-  "codebuddy",
-  "github-copilot",
-  "omp",
-  "pi",
-  "craft",
-  "kilo-cli",
-  "kilocode",
-  "cline",
-  "roo-code",
-  "zed",
-  "goose",
-  "droid",
-  "mimo",
-  "zcode",
-  "anythingllm",
-  "aipy",
-  "workbuddy",
+  ...AI_TOOL_IDS,
+  ...LEGACY_ADAPTER_SOURCES,
 ] as const;
 
 export type KnownLocalUsageSource = (typeof KNOWN_LOCAL_USAGE_SOURCES)[number];

@@ -376,8 +376,8 @@ function SecurityReportPanel({ report }: { report: SecurityReport }) {
 
       {report.risks.length === 0 ? (
         <div className="mt-4 flex items-center gap-2 rounded-sm border border-ok/30 bg-ok/10 p-3 text-[13px] text-ok">
-          <Check className="size-4" /> 静态规则未检出恶意
-          URL、危险命令或敏感信息。
+          <Check className="size-4" /> 静态规则未检出恶意命令、
+          密钥泄露或提示注入等风险。
         </div>
       ) : (
         <ul className="mt-4 space-y-2">
