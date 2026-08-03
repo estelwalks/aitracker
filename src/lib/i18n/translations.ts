@@ -1,11 +1,11 @@
 export const zh = {
   nav: {
-    dashboard: "首页总览",
-    tokens: "Token 分析",
+    dashboard: "首页大盘",
     skills: "Skill 管理",
     market: "Skill 市场",
     security: "安全检测",
-    memory: "AI 记忆",
+    sessions: "会话恢复",
+    sources: "数据来源",
     settings: "设置",
   },
   dashboard: {
@@ -43,11 +43,11 @@ export type Translations = WidenLiteral<typeof zh>;
 export const en: Translations = {
   nav: {
     dashboard: "Dashboard",
-    tokens: "Token Analysis",
     skills: "Skills",
     market: "Market",
     security: "Security",
-    memory: "Memory",
+    sessions: "Sessions",
+    sources: "Data Sources",
     settings: "Settings",
   },
   dashboard: {
