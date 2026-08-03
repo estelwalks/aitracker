@@ -80,7 +80,7 @@ const request = {
     repoName: "repo",
     repoPath: "skills/example-skill/SKILL.md",
   },
-  agents: ["Claude Code", "Codex"] as const,
+  agents: ["Claude Code", "Codex CLI"] as const,
 };
 
 test("prepareSkillInstall extracts, installs per target, reports failures, and cleans temp files", async () => {
@@ -102,7 +102,7 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
             "# Example Skill\n",
           );
           calls.push(targetAgent);
-          if (targetAgent === "Codex")
+          if (targetAgent === "Codex CLI")
             throw new Error("目标位置已存在同名 Skill");
         },
       },
@@ -110,12 +110,12 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
 
     assert.equal(result.installed, false);
     assert.equal(result.reason, "partial");
-    assert.deepEqual(calls, ["Claude Code", "Codex"]);
+    assert.deepEqual(calls, ["Claude Code", "Codex CLI"]);
     assert.deepEqual(
       result.targets.map(({ agent, installed }) => ({ agent, installed })),
       [
         { agent: "Claude Code", installed: true },
-        { agent: "Codex", installed: false },
+        { agent: "Codex CLI", installed: false },
       ],
     );
     assert.deepEqual(await readdir(tempRoot), []);

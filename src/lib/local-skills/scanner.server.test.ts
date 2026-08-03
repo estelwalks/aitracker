@@ -24,7 +24,7 @@ test("scans common agent roots without treating mtime as usage evidence", async 
   const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
   const trusttoolsDirectory = join(root, ".trusttools");
   const claudeSkill = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "example");
-  const codexSkill = join(root, SKILL_ROOT_SUFFIXES.Codex, "example");
+  const codexSkill = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "example");
   await mkdir(claudeSkill, { recursive: true });
   await mkdir(codexSkill, { recursive: true });
   await writeFile(join(claudeSkill, "SKILL.md"), "# Example");
@@ -36,7 +36,10 @@ test("scans common agent roots without treating mtime as usage evidence", async 
     now: new Date(),
   });
 
-  assert.equal(Object.keys(snapshot.roots).length, 8);
+  // Skill agents are now derived from the 27-tool catalog: the 5 tools that
+  // expose a skills directory (Claude Code, Codex CLI, Cursor, Gemini CLI,
+  // OpenCode).
+  assert.equal(Object.keys(snapshot.roots).length, 5);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 2);
   assert.equal(snapshot.skills[0].health, "unknown");
@@ -46,7 +49,7 @@ test("scans common agent roots without treating mtime as usage evidence", async 
 test("uses structured Skill calls as the only activity evidence", async () => {
   const root = await mkdtemp(join(tmpdir(), "trusttools-skills-usage-"));
   const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "example");
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "example");
   await mkdir(skillPath, { recursive: true });
   await writeFile(join(skillPath, "SKILL.md"), "# Example");
 
@@ -78,7 +81,7 @@ test("uses structured Skill calls as the only activity evidence", async () => {
 test("reads real version and source from SKILL.md frontmatter and changes fingerprint", async () => {
   const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
   const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "versioned");
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "versioned");
   try {
     await mkdir(skillPath, { recursive: true });
     await writeFile(
@@ -117,7 +120,11 @@ test("reads real version and source from SKILL.md frontmatter and changes finger
 test("marks an update only when persisted market evidence is truly newer", async () => {
   const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
   const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "market-skill");
+  const skillPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Codex CLI"],
+    "market-skill",
+  );
   try {
     await mkdir(skillPath, { recursive: true });
     await mkdir(trusttoolsDirectory, { recursive: true });
@@ -245,7 +252,7 @@ test("installs a validated market skill from the controlled temporary directory"
     `market-${randomUUID()}`,
     name,
   );
-  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES.Codex, name);
+  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES["Codex CLI"], name);
   const trusttoolsDirectory = await mkdtemp(
     join(tmpdir(), "trusttools-origin-"),
   );
@@ -259,7 +266,7 @@ test("installs a validated market skill from the controlled temporary directory"
     await installMarketSkill(
       {
         sourcePath,
-        targetAgent: "Codex",
+        targetAgent: "Codex CLI",
         origin: {
           name,
           slug: name,
@@ -298,7 +305,7 @@ test("rejects a market source outside the controlled temporary directory", async
   try {
     await writeFile(join(sourcePath, "SKILL.md"), "# Outside");
     await assert.rejects(
-      installMarketSkill({ sourcePath, targetAgent: "Codex" }),
+      installMarketSkill({ sourcePath, targetAgent: "Codex CLI" }),
       /不属于受控临时目录/,
     );
   } finally {
@@ -322,7 +329,7 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
     await symlink(linkedFile, join(sourcePath, "reference.md"));
 
     await assert.rejects(
-      installMarketSkill({ sourcePath, targetAgent: "Codex" }),
+      installMarketSkill({ sourcePath, targetAgent: "Codex CLI" }),
       /不允许包含符号链接/,
     );
   } finally {
@@ -344,7 +351,7 @@ test("deduplicates batch paths and keeps successful trash results when another i
       return {
         id: randomUUID(),
         skillName: "ok",
-        agent: "Codex",
+        agent: "Codex CLI",
         originalPath: path,
         trashedAt: "2026-07-28T00:00:00.000Z",
         expiresAt: "2026-07-28T00:05:00.000Z",

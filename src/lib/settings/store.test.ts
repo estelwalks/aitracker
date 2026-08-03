@@ -22,14 +22,14 @@ test("keeps valid security rules and filters invalid patterns", () => {
         {
           id: "valid",
           name: "自定义危险参数",
-          kind: "危险命令",
+          kind: "远程命令执行",
           pattern: "--danger",
           enabled: true,
         },
         {
           id: "invalid",
           name: "损坏规则",
-          kind: "敏感信息",
+          kind: "密钥泄露",
           pattern: "[",
           enabled: true,
         },
@@ -39,6 +39,24 @@ test("keeps valid security rules and filters invalid patterns", () => {
 
   assert.equal(settings.securityRules.length, 1);
   assert.equal(settings.securityRules[0]?.id, "valid");
+});
+
+test("drops legacy 3-kind persisted rules silently", () => {
+  const settings = parseSettings(
+    JSON.stringify({
+      securityRules: [
+        {
+          id: "legacy",
+          name: "旧版规则",
+          kind: "危险命令",
+          pattern: "rm",
+          enabled: true,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(settings.securityRules.length, 0);
 });
 
 test("旧版设置迁移时补充空的服务商预算", () => {
