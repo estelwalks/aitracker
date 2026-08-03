@@ -222,7 +222,7 @@ export function UsageTrendChart({
   const mom = computeMoM(visibleTotal, previousTotal ?? 0);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col" style={{ height: "100%" }}>
       <div className="mb-2 flex items-center justify-end">
         <Segmented
           value={mode}
