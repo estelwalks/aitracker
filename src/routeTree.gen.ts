@@ -11,14 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MarketRouteImport } from './routes/market'
-import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
-import { Route as TokensRouteImport } from './routes/tokens'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,11 +26,6 @@ const IndexRoute = IndexRouteImport.update({
 const MarketRoute = MarketRouteImport.update({
   id: '/market',
   path: '/market',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MemoryRoute = MemoryRouteImport.update({
-  id: '/memory',
-  path: '/memory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SecurityRoute = SecurityRouteImport.update({
@@ -65,99 +58,80 @@ const SourcesRoute = SourcesRouteImport.update({
   path: '/sources',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TokensRoute = TokensRouteImport.update({
-  id: '/tokens',
-  path: '/tokens',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/market': typeof MarketRoute
-  '/memory': typeof MemoryRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
-  '/tokens': typeof TokensRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/market': typeof MarketRoute
-  '/memory': typeof MemoryRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
-  '/tokens': typeof TokensRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/market': typeof MarketRoute
-  '/memory': typeof MemoryRoute
   '/security': typeof SecurityRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
-  '/tokens': typeof TokensRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/market'
-    | '/memory'
     | '/security'
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
     | '/sources'
-    | '/tokens'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/market'
-    | '/memory'
     | '/security'
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
     | '/sources'
-    | '/tokens'
   id:
     | '__root__'
     | '/'
     | '/market'
-    | '/memory'
     | '/security'
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
     | '/sources'
-    | '/tokens'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   MarketRoute: typeof MarketRoute
-  MemoryRoute: typeof MemoryRoute
   SecurityRoute: typeof SecurityRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
-  TokensRoute: typeof TokensRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -174,13 +148,6 @@ declare module '@tanstack/react-router' {
       path: '/market'
       fullPath: '/market'
       preLoaderRoute: typeof MarketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/memory': {
-      id: '/memory'
-      path: '/memory'
-      fullPath: '/memory'
-      preLoaderRoute: typeof MemoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/security': {
@@ -225,27 +192,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tokens': {
-      id: '/tokens'
-      path: '/tokens'
-      fullPath: '/tokens'
-      preLoaderRoute: typeof TokensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MarketRoute: MarketRoute,
-  MemoryRoute: MemoryRoute,
   SecurityRoute: SecurityRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
-  TokensRoute: TokensRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

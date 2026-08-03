@@ -180,10 +180,9 @@ const chartColors = [
 
 const periodOptions: { value: UsagePeriod; label: string }[] = [
   { value: "today", label: "今日" },
-  { value: "week", label: "本周" },
   { value: "7d", label: "近 7 天" },
   { value: "30d", label: "近 30 天" },
-  { value: "month", label: "本月" },
+  { value: "all", label: "全部" },
   { value: "custom", label: "自定义" },
 ];
 
@@ -194,6 +193,7 @@ const periodLabels: Record<UsagePeriod, string> = {
   "30d": "近 30 天",
   month: "本月",
   year: "本年",
+  all: "全部",
   custom: "自定义区间",
 };
 
@@ -410,7 +410,7 @@ function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            to="/tokens"
+            to="/"
             className="tt-button inline-flex items-center gap-1.5"
             title="生成海报"
           >
@@ -521,14 +521,14 @@ function Dashboard() {
             <div key="kpis" className="dashboard-widget dashboard-widget-kpis">
               <div className="dashboard-kpis">
                 <KpiCard
-                  to="/tokens"
+                  to="/"
                   label={primaryTokenLabel}
                   value={formatTokens(primaryTokenTotals.totalTokens)}
                   hint={`${primaryTokenTotals.events.toLocaleString()} 个真实事件`}
                   accent
                 />
                 <KpiCard
-                  to="/tokens"
+                  to="/"
                   label="区间费用"
                   value={formatCost(selectedCost, "CNY")}
                   hint={
@@ -538,7 +538,7 @@ function Dashboard() {
                   }
                 />
                 <KpiCard
-                  to="/tokens"
+                  to="/"
                   label="缓存节省"
                   value={formatMoneyCny(cacheCost.cacheSavingsUsd)}
                   hint={`命中率 ${cacheHitRate.toFixed(0)}% · ${formatTokens(cachedTokens)} 缓存 Token`}
@@ -867,7 +867,7 @@ function Dashboard() {
                 title="最近活动"
                 action={
                   <Link
-                    to="/tokens"
+                    to="/"
                     className="flex items-center gap-1 text-xs text-primary hover:underline"
                   >
                     查看全部 <ArrowRight className="size-3" />
@@ -968,7 +968,7 @@ function KpiCard({
   tone,
   icon,
 }: {
-  to: "/tokens" | "/skills" | "/security";
+  to: "/" | "/skills" | "/security";
   label: string;
   value: string;
   hint: ReactNode;
