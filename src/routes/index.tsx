@@ -1,6 +1,15 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowRight, Database, Image, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  Database,
+  Download,
+  FileDown,
+  Image,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import RGL, {
   WidthProvider,
   type Layout,
@@ -16,26 +25,33 @@ import {
   Panel,
   Segmented,
   StatusBadge,
+  TTButton,
 } from "../components/tt";
-import { UsageHeatmap } from "../components/UsageHeatmap";
 import { UsageTrendChart } from "../components/dashboard/UsageTrendChart";
 import { ContextBreakdown } from "../components/dashboard/ContextBreakdown";
 import { UsageHeatmapPanel } from "../components/dashboard/UsageHeatmapPanel";
 import { ModelDistribution } from "../components/dashboard/ModelDistribution";
+import { UsageDetailTable } from "../components/dashboard/UsageDetailTable";
+import {
+  TokenPoster,
+  type PosterData,
+  type PosterPeriod,
+} from "../components/TokenPoster";
 import {
   getLocalUsageSnapshot,
   refreshLocalUsageSnapshot,
 } from "../lib/local-usage";
 import {
+  aggregateEventsByTime,
   cacheRate,
   computeMoM,
   createEmptyUsageSnapshot,
   filterDailyUsage,
   filterUsageEvents,
   formatDateTime,
-  formatEventTime,
   formatTokens,
   previousPeriodTotal,
+  resolveUsageRange,
   shareOf,
   sourceLabel,
   totalsFromDaily,
@@ -47,12 +63,18 @@ import {
   applyPricingSnapshot,
   estimateEventCost,
   estimateUsageCost,
-  formatCost,
   formatMoney,
 } from "../lib/pricing";
 import { getPricingSnapshot } from "../lib/pricing/server-fns";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
 import type { SkillHealth, SkillSnapshot } from "../lib/local-skills/types";
+import { AI_TOOLS } from "../lib/tools/catalog";
+import {
+  toExportCsv,
+  toExportJson,
+  downloadExport,
+  type ExportRow,
+} from "../lib/export";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -321,8 +343,64 @@ function Dashboard() {
     }
   };
 
+  // FR-008 - Token poster modal state.
+  const [showPoster, setShowPoster] = useState(false);
+
+  // FR-032 - Export dropdown state.
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const posterData = useMemo(
+    () =>
+      buildPosterData(
+        selectedEvents,
+        selectedTotals,
+        selectedCost,
+        period,
+        from,
+        to,
+      ),
+    [selectedEvents, selectedTotals, selectedCost, period, from, to],
+  );
+
+  const handleExport = (format: "csv" | "json") => {
+    const rows: ExportRow[] = selectedEvents.map((event) => {
+      const cost = estimateEventCost(event);
+      return {
+        timestamp: event.timestamp,
+        source: event.source,
+        model: event.model,
+        project: event.project,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        cachedInputTokens: event.cachedInputTokens,
+        cacheCreationInputTokens: event.cacheCreationInputTokens,
+        reasoningOutputTokens: event.reasoningOutputTokens,
+        ...(cost.unknownEvents === 0 ? { cost: cost.knownUsd } : {}),
+      };
+    });
+    const sourceLabels: Record<string, string> = {};
+    for (const event of selectedEvents) {
+      if (!(event.source in sourceLabels)) {
+        sourceLabels[event.source] = sourceLabel(event.source);
+      }
+    }
+    const content =
+      format === "csv"
+        ? toExportCsv(rows, sourceLabels)
+        : toExportJson(rows, sourceLabels);
+    downloadExport(content, format, Date.now());
+    setShowExportMenu(false);
+  };
+
   if (snapshot.mode === "empty") {
-    return <EmptyDashboard snapshot={snapshot} error={error} />;
+    return (
+      <OnboardingDashboard
+        snapshot={snapshot}
+        error={error}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+      />
+    );
   }
 
   return (
@@ -336,14 +414,6 @@ function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to="/"
-            className="tt-button inline-flex items-center gap-1.5"
-            title="生成海报"
-          >
-            <Image className="size-4" />
-            <span>生成海报</span>
-          </Link>
           <details className="dashboard-settings">
             <summary className="tt-button">看板设置</summary>
             <div className="dashboard-settings-popover">
@@ -355,7 +425,7 @@ function Dashboard() {
                     provider: "AI 客户端",
                     models: "最近模型",
                     heatmap: "热力图",
-                    activity: "最近活动",
+                    activity: "消耗明细",
                   };
                   return (
                     <label key={section}>
@@ -424,6 +494,52 @@ function Dashboard() {
         <span className="ml-auto text-muted-foreground">
           {periodGrainLabel(period)}
         </span>
+        <button
+          type="button"
+          onClick={() => setShowPoster(true)}
+          disabled={selectedEvents.length === 0}
+          className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+          title="生成 Token 海报"
+        >
+          <Image className="size-3.5" />
+          导出海报
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            disabled={selectedEvents.length === 0}
+            className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+            title="导出 CSV / JSON"
+          >
+            <Download className="size-3.5" />
+            导出数据
+          </button>
+          {showExportMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowExportMenu(false)}
+              />
+              <div className="absolute right-0 top-full z-20 mt-1 flex w-32 flex-col gap-0.5 rounded-sm border border-border bg-surface p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => handleExport("csv")}
+                  className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                >
+                  <FileDown className="size-3.5" /> CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport("json")}
+                  className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                >
+                  <FileDown className="size-3.5" /> JSON
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => void handleRefresh()}
@@ -583,62 +699,10 @@ function Dashboard() {
             <div key="activity" className="dashboard-widget">
               <Panel
                 className="dashboard-activity"
-                title="最近活动"
-                action={
-                  <Link
-                    to="/"
-                    className="flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    查看全部 <ArrowRight className="size-3" />
-                  </Link>
-                }
-                bodyClassName="p-0"
+                title="消耗明细"
+                bodyClassName="p-3"
               >
-                <div className="tt-xscroll">
-                  <table className="w-full min-w-[760px] text-[13px]">
-                    <thead>
-                      <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
-                        <th className="px-4 py-2.5 font-normal">时间</th>
-                        <th className="px-4 py-2.5 font-normal">来源</th>
-                        <th className="px-4 py-2.5 font-normal">模型</th>
-                        <th className="px-4 py-2.5 font-normal">项目</th>
-                        <th className="px-4 py-2.5 text-right font-normal">
-                          Token
-                        </th>
-                        <th className="px-4 py-2.5 text-right font-normal">
-                          估算费用
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {snapshot.recent.slice(0, 10).map((event, index) => (
-                        <tr
-                          key={`${event.timestamp}-${event.model}-${index}`}
-                          className="border-b border-border last:border-0 hover:bg-accent/40"
-                        >
-                          <td className="tt-num px-4 py-2.5 text-muted-foreground">
-                            {formatEventTime(event.timestamp)}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {sourceLabel(event.source)}
-                          </td>
-                          <td className="tt-num max-w-48 truncate px-4 py-2.5">
-                            {event.model}
-                          </td>
-                          <td className="max-w-56 truncate px-4 py-2.5 text-muted-foreground">
-                            {event.project}
-                          </td>
-                          <td className="tt-num px-4 py-2.5 text-right">
-                            {formatTokens(event.totalTokens)}
-                          </td>
-                          <td className="tt-num px-4 py-2.5 text-right">
-                            {formatCost(estimateEventCost(event), "CNY")}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <UsageDetailTable events={selectedEvents} />
               </Panel>
             </div>
           ),
@@ -665,6 +729,13 @@ function Dashboard() {
           </ResponsiveGridLayout>
         );
       })()}
+      {showPoster && (
+        <TokenPoster
+          data={posterData}
+          filePeriod={(period === "all" ? "30d" : period) as PosterPeriod}
+          onClose={() => setShowPoster(false)}
+        />
+      )}
     </>
   );
 }
@@ -770,13 +841,168 @@ function buildSkillHealth(snapshot: SkillSnapshot | null) {
   };
 }
 
-function EmptyDashboard({
+/**
+ * FR-013 - Onboarding / empty-state / error views.
+ *
+ * Three branches:
+ * 1. Data load failed -> error + "重新加载" button.
+ * 2. No AI tools detected -> welcome view with 3 core capabilities, the 27-tool
+ *    list, and a "开始扫描" button that triggers a full re-scan.
+ * 3. Tools detected but no log data -> per-tool status + hint.
+ */
+function OnboardingDashboard({
   snapshot,
   error,
+  onRefresh,
+  refreshing,
 }: {
   snapshot: LocalUsageSnapshot;
   error: string | null;
+  onRefresh: () => void;
+  refreshing: boolean;
 }) {
+  if (error) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="本地用量"
+          title="首页总览"
+          desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
+          status={<StatusBadge tone="danger">读取失败</StatusBadge>}
+        />
+        <EmptyState
+          icon={<Database className="size-8" />}
+          title="数据读取失败"
+          desc={`真实数据读取失败：${error}`}
+          actions={
+            <TTButton
+              variant="primary"
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              重新加载
+            </TTButton>
+          }
+        />
+      </>
+    );
+  }
+
+  const detectedSources = snapshot.sources.filter(
+    (s) => s.available || s.detected,
+  );
+  const hasTools = detectedSources.length > 0;
+  const hasEvents = snapshot.events > 0;
+
+  if (!hasTools) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="本地用量"
+          title="首页总览"
+          desc="把散落在各 AI 工具的 token、skill、会话，统一收回你手里。"
+          status={<StatusBadge tone="warn">未检测到 AI 工具</StatusBadge>}
+        />
+        <div className="grid gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <CapabilityCard
+              icon={<Activity className="size-6" />}
+              title="Token 追踪"
+              desc="统一扫描 27 款 AI 编码工具的本机日志，按日/模型/项目维度汇总真实消耗。"
+            />
+            <CapabilityCard
+              icon={<Sparkles className="size-6" />}
+              title="Skill 管理"
+              desc="集中管理 Claude Code、Codex、Cursor 等工具的 Skills，健康度一目了然。"
+            />
+            <CapabilityCard
+              icon={<ShieldCheck className="size-6" />}
+              title="安全检测"
+              desc="对本机 AI 生成代码进行安全审计，每日 AI 审查限额可控。"
+            />
+          </div>
+          <Panel title="受支持的 AI 工具（27 款）">
+            <div className="flex flex-wrap gap-2">
+              {AI_TOOLS.map((tool) => (
+                <span
+                  key={tool.id}
+                  className="inline-flex items-center rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs text-muted-foreground"
+                >
+                  {tool.nameZh}
+                </span>
+              ))}
+            </div>
+          </Panel>
+          <div className="flex justify-center py-2">
+            <TTButton
+              variant="primary"
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              {refreshing ? "扫描中…" : "开始扫描"}
+            </TTButton>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!hasEvents) {
+    return (
+      <>
+        <PageHeader
+          eyebrow="本地用量"
+          title="首页总览"
+          desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
+          status={<StatusBadge tone="warn">暂无使用记录</StatusBadge>}
+        />
+        <Panel title="检测到的 AI 工具">
+          <div className="flex flex-col gap-2">
+            {detectedSources.map((source) => (
+              <div
+                key={source.source}
+                className="flex items-center justify-between border-b border-border/60 px-1 py-2 last:border-0"
+              >
+                <div className="flex items-center gap-2">
+                  <Dot className="bg-ok" />
+                  <span className="text-sm">{sourceLabel(source.source)}</span>
+                </div>
+                <span className="tt-num text-xs text-muted-foreground">
+                  {source.events > 0
+                    ? `${source.events} 条记录`
+                    : "工具刚安装尚未使用"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <EmptyState
+          icon={<Database className="size-8" />}
+          title="暂无使用记录"
+          desc="检测到已安装的 AI 工具，但尚未发现可解析的使用日志。使用对应工具后点击刷新。"
+          actions={
+            <TTButton
+              variant="primary"
+              onClick={onRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              {refreshing ? "扫描中…" : "重新扫描"}
+            </TTButton>
+          }
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -788,23 +1014,79 @@ function EmptyDashboard({
       <EmptyState
         icon={<Database className="size-8" />}
         title="未发现本地日志"
-        desc={
-          error
-            ? `真实数据读取失败：${error}`
-            : "未在本机发现任何受支持客户端的可解析使用日志，不会回退到 Mock 数据。"
-        }
+        desc="未在本机发现任何受支持客户端的可解析使用日志，不会回退到 Mock 数据。"
       />
-      <Panel
-        className="mt-3"
-        title="周 × 时使用热力图"
-        action={
-          <span className="text-[10px] text-muted-foreground">
-            无事件时不生成模拟数据
-          </span>
-        }
-      >
-        <UsageHeatmap events={[]} />
-      </Panel>
     </>
   );
+}
+
+function CapabilityCard({
+  icon,
+  title,
+  desc,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="tt-panel flex flex-col gap-2 p-4">
+      <div className="text-primary">{icon}</div>
+      <h3 className="text-sm font-medium">{title}</h3>
+      <p className="text-xs text-muted-foreground">{desc}</p>
+    </div>
+  );
+}
+
+/**
+ * FR-008 - Build the {@link PosterData} shape from the current selection.
+ *
+ * Reconstructs the poster data from the period-filtered events, totals, and
+ * cost estimate. Trend points are daily token totals; providers are source
+ * breakdowns; models are the top 3 by tokens.
+ */
+function buildPosterData(
+  events: LocalUsageSnapshot["details"],
+  totals: ReturnType<typeof totalsFromDaily>,
+  cost: ReturnType<typeof estimateUsageCost>,
+  period: UsagePeriod,
+  from: string,
+  to: string,
+): PosterData {
+  const range = resolveUsageRange(period, from, to);
+  const rangeLabel =
+    range.valid && range.from && range.to ? `${range.from} ~ ${range.to}` : "";
+
+  const trend = aggregateEventsByTime(events, "day").map((b) => b.totalTokens);
+
+  const sourceRows = aggregatePricedUsage(events, "source").filter(
+    (r) => r.totalTokens > 0,
+  );
+  const providers = sourceRows.map((r) => ({
+    name: sourceLabel(r.key),
+    value: r.totalTokens,
+  }));
+
+  const modelRows = aggregatePricedUsage(events, "model").filter(
+    (r) => r.totalTokens > 0,
+  );
+  const grandTotal = modelRows.reduce((s, r) => s + r.totalTokens, 0);
+  const models = modelRows.slice(0, 3).map((r) => ({
+    name: r.key,
+    tokens: formatTokens(r.totalTokens),
+    pct: shareOf(r.totalTokens, grandTotal),
+  }));
+
+  return {
+    periodLabel: periodLabels[period],
+    rangeLabel,
+    tokens: totals.totalTokens,
+    costLabel: formatMoney(cost.knownUsd, "CNY"),
+    savedLabel: formatMoney(cost.cacheSavingsUsd, "CNY"),
+    hitRate: cacheRate(totals),
+    trend,
+    providers,
+    models,
+    unknownPriceModels: cost.unknownModels.length,
+  };
 }
