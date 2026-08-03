@@ -64,7 +64,7 @@ export function ModelDistribution({ events }: ModelDistributionProps) {
 
   if (models.length === 0) {
     return (
-      <div className="flex min-h-40 flex-col">
+      <div className="flex flex-col" style={{ minHeight: 160 }}>
         <div className="mb-2 flex items-center justify-end">
           <Segmented
             value={view}
@@ -84,7 +84,7 @@ export function ModelDistribution({ events }: ModelDistributionProps) {
   }
 
   return (
-    <div className="flex h-full min-h-40 flex-col">
+    <div className="flex flex-col" style={{ minHeight: 160, maxHeight: 360 }}>
       <div className="mb-2 flex items-center justify-between">
         <span className="tt-num text-[11px] text-muted-foreground">
           {models.length} 个模型 · {formatTokens(totalTokens)} ·{" "}
