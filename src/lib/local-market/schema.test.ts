@@ -49,13 +49,23 @@ test("parseMarketApiResponse rejects malformed contracts", () => {
   );
 });
 
-test("parseMarketQuery enforces pagination and search bounds", () => {
+test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
   assert.deepEqual(
     parseMarketQuery({ page: 2, limit: 20, search: "  测试  " }),
     {
       page: 2,
       limit: 20,
       search: "测试",
+      sort: "downloads",
+    },
+  );
+  assert.deepEqual(
+    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "latest" }),
+    {
+      page: 1,
+      limit: 14,
+      search: "",
+      sort: "latest",
     },
   );
   assert.throws(
@@ -65,5 +75,9 @@ test("parseMarketQuery enforces pagination and search bounds", () => {
   assert.throws(
     () => parseMarketQuery({ page: 1, limit: 100, search: "" }),
     /每页/,
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 1, limit: 20, search: "", sort: "invalid" }),
+    /排序/,
   );
 });

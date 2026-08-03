@@ -4,8 +4,16 @@ import type {
   MarketListResult,
   MarketPagination,
   MarketSkill,
+  MarketSort,
   SkillDownloadInspection,
 } from "./types.ts";
+
+const VALID_SORTS: readonly MarketSort[] = [
+  "downloads",
+  "latest",
+  "stars",
+  "tokens",
+];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -101,6 +109,7 @@ export function parseMarketQuery(value: unknown): {
   page: number;
   limit: number;
   search: string;
+  sort: MarketSort;
 } {
   if (!isRecord(value)) throw new Error("市场查询参数无效");
 
@@ -115,7 +124,12 @@ export function parseMarketQuery(value: unknown): {
   }
   if (search.length > 100) throw new Error("搜索关键词不能超过 100 个字符");
 
-  return { page, limit, search };
+  const sortRaw = typeof value.sort === "string" ? value.sort : "downloads";
+  if (!VALID_SORTS.includes(sortRaw as MarketSort)) {
+    throw new Error("排序参数无效");
+  }
+
+  return { page, limit, search, sort: sortRaw as MarketSort };
 }
 
 export function parseInstallRequest(value: unknown): {
