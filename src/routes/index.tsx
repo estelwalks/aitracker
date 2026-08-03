@@ -709,7 +709,6 @@ function Dashboard() {
                 <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
                 <UsageTrendChart
                   events={selectedEvents}
-                  daily={selectedDaily}
                   period={period}
                   customFrom={from}
                   customTo={to}
