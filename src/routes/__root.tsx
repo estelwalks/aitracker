@@ -174,7 +174,9 @@ function LocalUsageAutoRefresh() {
       if (
         refreshing ||
         document.visibilityState !== "visible" ||
-        (pathname !== "/" && pathname !== "/tokens")
+        (pathname !== "/" &&
+          pathname !== "/sessions" &&
+          pathname !== "/sources")
       ) {
         return;
       }
