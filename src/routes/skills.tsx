@@ -580,15 +580,8 @@ function SkillsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="本地技能资产"
         title="Skill 管理"
         desc={`${snapshot.healthBasis} 扫描于 ${formatTime(snapshot.generatedAt)}`}
-        status={
-          <StatusBadge tone="ok">
-            <Dot className="size-1 bg-ok" /> {snapshot.skills.length} 个真实
-            Skill
-          </StatusBadge>
-        }
       />
 
       {/* Filter bar */}

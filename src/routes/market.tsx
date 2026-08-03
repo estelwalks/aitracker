@@ -198,25 +198,7 @@ function MarketPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="TrustTools 市场接口"
-        title="Skill 市场"
-        desc="仅收录通过安全扫描的 Skill"
-        status={
-          <StatusBadge
-            tone={error || result.source === "cache" ? "warn" : "ok"}
-          >
-            <Dot
-              className={`size-1 ${error || result.source === "cache" ? "bg-warn" : "bg-ok"}`}
-            />
-            {error
-              ? "网络不可用"
-              : result.source === "cache"
-                ? "本地缓存"
-                : "实时数据"}
-          </StatusBadge>
-        }
-      />
+      <PageHeader title="Skill 市场" desc="仅收录通过安全扫描的 Skill" />
 
       {/* Stats cards (FR-021) */}
       <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">

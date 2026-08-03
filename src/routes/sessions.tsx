@@ -164,7 +164,6 @@ function SessionsPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
-          eyebrow="本地会话"
           title="会话恢复"
           desc="浏览本地历史会话并一键复制恢复命令"
         />

@@ -266,15 +266,8 @@ function SettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="本机偏好"
         title="设置"
         desc="一般配置保存在当前设备；系统级选项仅在桌面客户端生效"
-        status={
-          <StatusBadge tone={loaded ? "ok" : "warn"}>
-            <Dot className={`size-1 ${loaded ? "bg-ok" : "bg-warn"}`} />
-            {loaded ? "已载入本机设置" : "正在载入"}
-          </StatusBadge>
-        }
       />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">

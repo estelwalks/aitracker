@@ -299,17 +299,8 @@ function SecurityPage() {
   return (
     <>
       <PageHeader
-        eyebrow="本地安全扫描"
         title="安全检测"
         desc="文本文件由浏览器本地扫描；tar 压缩包仅发送到本机 Server Function 安全解包，不上传外网"
-        status={
-          <StatusBadge tone={remaining === 0 ? "warn" : "ok"}>
-            <Dot
-              className={`size-1 ${remaining === 0 ? "bg-warn" : "bg-ok"}`}
-            />
-            今日剩余 {remaining} 次
-          </StatusBadge>
-        }
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-sm border border-border bg-surface-2 p-3 text-[12px] text-muted-foreground">
