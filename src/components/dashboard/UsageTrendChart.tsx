@@ -129,6 +129,7 @@ export function UsageTrendChart({
         );
       }
       return [...totals.entries()]
+        .filter(([_key, value]) => value > 0)
         .sort((left, right) => right[1] - left[1])
         .slice(0, 5)
         .map(([key, _value], index) => ({
