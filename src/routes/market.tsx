@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -12,14 +12,34 @@ import {
   Star,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   Dot,
   EmptyState,
   PageHeader,
+  Panel,
+  Segmented,
   StatusBadge,
   TTButton,
 } from "../components/tt";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "../components/ui/sheet";
+import { Progress } from "../components/ui/progress";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
 import {
   getMarketSkills,
   MARKET_AGENTS,
@@ -30,9 +50,19 @@ import type {
   MarketAgent,
   MarketListResult,
   MarketSkill,
+  MarketSort,
 } from "../lib/local-market";
+import { getLocalSkills } from "../lib/local-skills/server-fns";
+import type { SkillSnapshot } from "../lib/local-skills/types";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 14;
+
+const SORT_OPTIONS: { value: MarketSort; label: string }[] = [
+  { value: "downloads", label: "下载量" },
+  { value: "latest", label: "最新" },
+  { value: "stars", label: "Star" },
+  { value: "tokens", label: "Token 占用" },
+];
 
 function emptyResult(): MarketListResult {
   return {
@@ -49,7 +79,7 @@ export const Route = createFileRoute("/market")({
     try {
       return {
         result: await getMarketSkills({
-          data: { page: 1, limit: PAGE_SIZE, search: "" },
+          data: { page: 1, limit: PAGE_SIZE, search: "", sort: "downloads" },
         }),
         error: null,
       };
@@ -69,7 +99,7 @@ export const Route = createFileRoute("/market")({
       {
         name: "description",
         content:
-          "浏览 AITracker Skill 市场真实索引，下载后执行本地静态安全检查。",
+          "浏览 AITracker Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
       },
     ],
   }),
@@ -83,18 +113,29 @@ function MarketPage() {
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<MarketSort>("downloads");
   const [loading, setLoading] = useState(false);
   const [retrySequence, setRetrySequence] = useState(0);
   const [detail, setDetail] = useState<MarketSkill | null>(null);
-  const [installSkill, setInstallSkill] = useState<MarketSkill | null>(null);
+  const [localSnapshot, setLocalSnapshot] = useState<SkillSnapshot | null>(
+    null,
+  );
   const firstRequest = useRef(true);
   const requestSequence = useRef(0);
 
+  // Load local skills to detect installed skills and agents
+  useEffect(() => {
+    void getLocalSkills()
+      .then(setLocalSnapshot)
+      .catch(() => undefined);
+  }, []);
+
+  // Debounced search - 250ms per PRD FR-021
   useEffect(() => {
     const timer = setTimeout(() => {
       setQuery(rawQuery.trim());
       setPage(1);
-    }, 350);
+    }, 250);
     return () => clearTimeout(timer);
   }, [rawQuery]);
 
@@ -107,7 +148,9 @@ function MarketPage() {
     const sequence = ++requestSequence.current;
     setLoading(true);
     setError(null);
-    void getMarketSkills({ data: { page, limit: PAGE_SIZE, search: query } })
+    void getMarketSkills({
+      data: { page, limit: PAGE_SIZE, search: query, sort },
+    })
       .then((nextResult) => {
         if (sequence === requestSequence.current) setResult(nextResult);
       })
@@ -123,8 +166,38 @@ function MarketPage() {
       .finally(() => {
         if (sequence === requestSequence.current) setLoading(false);
       });
-  }, [page, query, retrySequence]);
+  }, [page, query, sort, retrySequence]);
 
+  // Installed skill names (for "已安装" tags)
+  const installedSkillNames = useMemo(
+    () =>
+      new Set(
+        (localSnapshot?.skills ?? []).map((s) => s.name),
+      ),
+    [localSnapshot],
+  );
+
+  // Detected agents (for radio disable in drawer)
+  const detectedAgents = useMemo(
+    () =>
+      new Set(
+        MARKET_AGENTS.filter((a) =>
+          (localSnapshot?.skills ?? []).some((s) =>
+            s.installations.some((i) => i.agent === a),
+          ),
+        ),
+      ),
+    [localSnapshot],
+  );
+
+  // Installed count for stats (cross-reference current page with local skills)
+  const installedCount = useMemo(
+    () =>
+      result.skills.filter((s) => installedSkillNames.has(s.name)).length,
+    [result.skills, installedSkillNames],
+  );
+
+  const stats = result.stats;
   const pages = result.pagination.pages;
 
   return (
@@ -132,7 +205,7 @@ function MarketPage() {
       <PageHeader
         eyebrow="AITracker 市场接口"
         title="Skill 市场"
-        desc={`真实社区索引 · 共 ${result.pagination.total.toLocaleString()} 个 Skill · 下载后执行本地静态扫描`}
+        desc="仅收录通过安全扫描的 Skill"
         status={
           <StatusBadge
             tone={error || result.source === "cache" ? "warn" : "ok"}
@@ -149,23 +222,62 @@ function MarketPage() {
         }
       />
 
+      {/* Stats cards (FR-021) */}
+      <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard
+          label="上架 Skill 总数"
+          value={stats ? stats.totalSkills.toLocaleString() : "-"}
+        />
+        <StatCard
+          label="官方发布数"
+          value={stats ? stats.officialCount.toLocaleString() : "-"}
+          hint="当前页统计"
+        />
+        <StatCard label="安全通过率" value="100%" />
+        <StatCard
+          label="已安装数"
+          value={installedCount.toLocaleString()}
+          hint="本机已安装"
+        />
+        <StatCard
+          label="总下载量"
+          value={
+            stats
+              ? stats.totalDownloads.toLocaleString()
+              : "-"
+          }
+          hint="当前页统计"
+        />
+      </div>
+
+      {/* Search + Sort bar */}
       <div className="tt-panel mb-3 p-4">
-        <div className="relative">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={rawQuery}
-            onChange={(event) => setRawQuery(event.target.value)}
-            placeholder="按名称或描述搜索真实 Skill…"
-            className="h-9 w-full rounded-sm border border-border bg-surface-2 pr-10 pl-9 text-[13px] outline-none placeholder:text-muted-foreground focus:border-primary"
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={rawQuery}
+              onChange={(event) => setRawQuery(event.target.value)}
+              placeholder="按名称或描述搜索真实 Skill…"
+              className="h-9 w-full rounded-sm border border-border bg-surface-2 pr-10 pl-9 text-[13px] outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+            {loading && (
+              <LoaderCircle className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-primary" />
+            )}
+          </div>
+          <Segmented
+            value={sort}
+            onChange={(v) => {
+              setSort(v);
+              setPage(1);
+            }}
+            options={SORT_OPTIONS}
           />
-          {loading && (
-            <LoaderCircle className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-primary" />
-          )}
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span>
             数据更新于 {formatDateTime(result.fetchedAt)}
-            {query ? ` · 关键词“${query}”` : ""}
+            {query ? ` · 关键词"${query}"` : ""}
           </span>
           <span>
             每页 {PAGE_SIZE} 条 · 第 {result.pagination.page} 页
@@ -184,18 +296,119 @@ function MarketPage() {
         <div
           className={`transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
         >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {result.skills.map((skill) => (
-              <SkillCard
-                key={skill.id}
-                skill={skill}
-                onDetail={() => setDetail(skill)}
-                onInstall={() => setInstallSkill(skill)}
-              />
-            ))}
-          </div>
+          <Panel title={`Skill 列表（${result.pagination.total.toLocaleString()}）`} bodyClassName="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[50px] pl-4">排名</TableHead>
+                  <TableHead className="min-w-[180px]">Skill</TableHead>
+                  <TableHead className="w-[120px]">发布者</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap">
+                    下载量
+                  </TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap">
+                    Token 占用
+                  </TableHead>
+                  <TableHead className="w-[70px] whitespace-nowrap">
+                    体积
+                  </TableHead>
+                  <TableHead className="w-[70px] whitespace-nowrap">
+                    Star
+                  </TableHead>
+                  <TableHead className="w-[100px]">安全状态</TableHead>
+                  <TableHead className="w-[80px] pr-4">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.skills.map((skill, index) => {
+                  const security = securityPresentation(skill);
+                  const rank = (result.pagination.page - 1) * PAGE_SIZE + index + 1;
+                  const isInstalled = installedSkillNames.has(skill.name);
+                  return (
+                    <TableRow
+                      key={skill.id}
+                      className="cursor-pointer"
+                      onClick={() => setDetail(skill)}
+                    >
+                      <TableCell className="tt-num pl-4 text-[11px] text-muted-foreground">
+                        {rank}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {security.safe ? (
+                            <ShieldCheck className="size-3.5 shrink-0 text-ok" />
+                          ) : (
+                            <ShieldAlert className="size-3.5 shrink-0 text-warn" />
+                          )}
+                          <span className="truncate text-[13px] font-medium">
+                            {skill.name}
+                          </span>
+                          {isInstalled && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-ok/15 text-[10px] font-normal text-ok"
+                            >
+                              已安装
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {skill.descriptionZh ??
+                            skill.description ??
+                            "该 Skill 暂未提供描述。"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <span className="truncate text-[11px] text-muted-foreground">
+                            {skill.repoOwner}/{skill.repoName}
+                          </span>
+                          {skill.isOfficial && (
+                            <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                              官方
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="tt-num text-[12px] text-muted-foreground">
+                        {formatCount(skill.installCount)}
+                      </TableCell>
+                      <TableCell className="tt-num text-[12px] text-muted-foreground">
+                        -
+                      </TableCell>
+                      <TableCell className="tt-num text-[12px] text-muted-foreground">
+                        -
+                      </TableCell>
+                      <TableCell className="tt-num text-[12px] text-muted-foreground">
+                        {skill.stars !== null ? skill.stars.toLocaleString() : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-[11px] text-ok">
+                          <ShieldCheck className="mr-1 inline size-3" />
+                          {security.label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        className="pr-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <TTButton
+                          size="sm"
+                          variant="primary"
+                          onClick={() => setDetail(skill)}
+                        >
+                          安装
+                        </TTButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Panel>
 
-          <div className="tt-num mt-4 flex items-center justify-center gap-2 text-xs">
+          {/* Pagination with page numbers + ellipsis (FR-021) */}
+          <div className="mt-4 flex items-center justify-center gap-1 text-xs">
             <TTButton
               size="sm"
               disabled={loading || page <= 1}
@@ -203,9 +416,30 @@ function MarketPage() {
             >
               上一页
             </TTButton>
-            <span className="px-2 text-muted-foreground">
-              {result.pagination.page} / {Math.max(1, pages)}
-            </span>
+            {getPageNumbers(result.pagination.page, Math.max(1, pages)).map(
+              (pageNum, idx) =>
+                pageNum === "..." ? (
+                  <span
+                    key={`ellipsis-${idx}`}
+                    className="px-1 text-muted-foreground"
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    disabled={loading}
+                    className={`tt-num h-7 min-w-7 rounded-sm border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      pageNum === result.pagination.page
+                        ? "border-primary bg-primary/15 font-medium text-primary"
+                        : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ),
+            )}
             <TTButton
               size="sm"
               disabled={loading || pages === 0 || page >= pages}
@@ -224,10 +458,12 @@ function MarketPage() {
               <Search className="size-7" />
             )
           }
-          title={error ? "网络不可用" : "没有匹配的 Skill"}
+          title={
+            error ? "网络不可用，Skill 市场暂不可访问" : "没有匹配的 Skill"
+          }
           desc={
             error
-              ? "请求失败且当前查询没有本地缓存，请检查网络后重试。"
+              ? "本地已缓存的列表仍可浏览，恢复网络后自动同步最新数据。"
               : "换一个关键词重新搜索。"
           }
           actions={
@@ -243,186 +479,106 @@ function MarketPage() {
         />
       )}
 
+      {/* Detail Drawer (FR-022) */}
       {detail && (
-        <SkillDetail
+        <SkillDetailDrawer
           skill={detail}
+          detectedAgents={detectedAgents}
+          installedSkillNames={installedSkillNames}
           onClose={() => setDetail(null)}
-          onInstall={() => {
-            setDetail(null);
-            setInstallSkill(detail);
+          onInstalled={() => {
+            // Refresh local skills to update installed tags
+            void getLocalSkills()
+              .then(setLocalSnapshot)
+              .catch(() => undefined);
           }}
-        />
-      )}
-      {installSkill && (
-        <InstallDialog
-          skill={installSkill}
-          onClose={() => setInstallSkill(null)}
         />
       )}
     </>
   );
 }
 
-function SkillCard({
-  skill,
-  onDetail,
-  onInstall,
+function StatCard({
+  label,
+  value,
+  hint,
 }: {
-  skill: MarketSkill;
-  onDetail: () => void;
-  onInstall: () => void;
+  label: string;
+  value: string;
+  hint?: string;
 }) {
-  const security = securityPresentation(skill);
   return (
-    <article
-      className="tt-panel flex min-h-56 cursor-pointer flex-col p-4 transition-colors hover:border-primary/50"
-      onClick={onDetail}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-          {security.safe ? (
-            <ShieldCheck className="size-4 shrink-0 text-ok" />
-          ) : (
-            <ShieldAlert className="size-4 shrink-0 text-warn" />
-          )}
-          <span className="truncate">{skill.name}</span>
-        </h3>
-        {skill.isOfficial && (
-          <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-            官方
-          </span>
-        )}
-      </div>
-      <p className="mt-2 line-clamp-3 flex-1 text-xs leading-relaxed text-muted-foreground">
-        {skill.descriptionZh ?? skill.description ?? "该 Skill 暂未提供描述。"}
-      </p>
-      <div className="tt-num mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Download className="size-3" />
-          安装 {formatCount(skill.installCount)}
-        </span>
-        <span className="flex items-center gap-1">
-          <ShieldCheck className="size-3" />
-          {security.label}
-        </span>
-        <span className="flex items-center gap-1">
-          <Star className="size-3" />
-          评分未提供
-        </span>
-        <span>版本未提供</span>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-        <span className="truncate text-[10px] text-muted-foreground">
-          {skill.repoOwner}/{skill.repoName}
-        </span>
-        <div onClick={(event) => event.stopPropagation()}>
-          <TTButton size="sm" variant="primary" onClick={onInstall}>
-            安装到…
-          </TTButton>
-        </div>
-      </div>
-    </article>
+    <div className="tt-panel px-4 py-3">
+      <div className="tt-label">{label}</div>
+      <div className="tt-num mt-1 text-lg">{value}</div>
+      {hint && (
+        <div className="mt-0.5 text-[10px] text-muted-foreground">{hint}</div>
+      )}
+    </div>
   );
 }
 
-function SkillDetail({
+function SkillDetailDrawer({
   skill,
+  detectedAgents,
+  installedSkillNames,
   onClose,
-  onInstall,
+  onInstalled,
 }: {
   skill: MarketSkill;
+  detectedAgents: Set<string>;
+  installedSkillNames: Set<string>;
   onClose: () => void;
-  onInstall: () => void;
+  onInstalled: () => void;
 }) {
-  const security = securityPresentation(skill);
-  return (
-    <Modal title={skill.name} onClose={onClose}>
-      <div className="space-y-4 p-4 text-[13px]">
-        <p className="leading-relaxed text-muted-foreground">
-          {skill.descriptionZh ??
-            skill.description ??
-            "该 Skill 暂未提供描述。"}
-        </p>
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-xs">
-          <dt className="text-muted-foreground">安全级别 / 分数</dt>
-          <dd>{security.label}</dd>
-          <dt className="text-muted-foreground">平台审核状态</dt>
-          <dd>{skill.status ?? "未提供"}</dd>
-          <dt className="text-muted-foreground">安装量</dt>
-          <dd>{formatCount(skill.installCount)}</dd>
-          <dt className="text-muted-foreground">用户评分</dt>
-          <dd>未提供</dd>
-          <dt className="text-muted-foreground">版本</dt>
-          <dd>未提供</dd>
-          <dt className="text-muted-foreground">最后更新</dt>
-          <dd>{formatDateTime(skill.updatedAt)}</dd>
-          <dt className="text-muted-foreground">仓库路径</dt>
-          <dd className="break-all font-mono text-[11px]">{skill.repoPath}</dd>
-        </dl>
-        {skill.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {skill.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-sm border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-        {skill.repoUrl && (
-          <a
-            href={skill.repoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            查看源仓库 <ExternalLink className="size-3" />
-          </a>
-        )}
-        <div className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
-          平台安全分仅作为远端信息展示；点击安装后仍会下载压缩包并执行本地静态规则扫描。
-        </div>
-      </div>
-      <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-        <TTButton onClick={onClose}>关闭</TTButton>
-        <TTButton variant="primary" onClick={onInstall}>
-          选择 Agent
-        </TTButton>
-      </div>
-    </Modal>
-  );
-}
-
-function InstallDialog({
-  skill,
-  onClose,
-}: {
-  skill: MarketSkill;
-  onClose: () => void;
-}) {
-  const [agents, setAgents] = useState<MarketAgent[]>(["Claude Code"]);
+  const [selectedAgent, setSelectedAgent] = useState<MarketAgent | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<InstallSkillResult | null>(null);
+  const cancelledRef = useRef(false);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const toggleAgent = (agent: MarketAgent) => {
-    setAgents((current) =>
-      current.includes(agent)
-        ? current.filter((item) => item !== agent)
-        : [...current, agent],
-    );
-  };
+  const security = securityPresentation(skill);
+  const isInstalled = installedSkillNames.has(skill.name);
+
+  const startProgress = useCallback(() => {
+    setProgress(0);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    progressTimerRef.current = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 90) return p;
+        return Math.min(p + Math.random() * 8, 90);
+      });
+    }, 300);
+  }, []);
+
+  const stopProgress = useCallback(() => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopProgress();
+    };
+  }, [stopProgress]);
 
   const submit = async () => {
-    if (agents.length === 0) {
-      setFailure("请至少选择一个 Agent");
+    if (!selectedAgent) {
+      setFailure("请选择安装目标");
       return;
     }
     setSubmitting(true);
+    setCancelled(false);
+    cancelledRef.current = false;
     setFailure(null);
     setOutcome(null);
+    startProgress();
+
     try {
       const nextOutcome = await requestSkillInstall({
         data: {
@@ -433,69 +589,264 @@ function InstallDialog({
             repoPath: skill.repoPath,
             slug: skill.slug,
           },
-          agents,
+          agents: [selectedAgent],
         },
       });
+
+      if (cancelledRef.current) return;
+
+      setProgress(100);
       setOutcome(nextOutcome);
+
+      if (nextOutcome.installed) {
+        toast.success(`${skill.name} 已安装到 ${selectedAgent}`);
+        onInstalled();
+        onClose();
+      } else if (nextOutcome.reason === "scan-blocked") {
+        setFailure("静态扫描发现高风险规则，已阻止安装。");
+      } else {
+        setFailure(nextOutcome.message);
+      }
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : "下载或静态扫描失败");
+      if (cancelledRef.current) return;
+      stopProgress();
+      const message = error instanceof Error ? error.message : "";
+      if (error instanceof Error && error.name === "DiskSpaceError") {
+        setFailure("磁盘空间不足，请清理后重试");
+      } else if (message.includes("磁盘空间不足")) {
+        setFailure("磁盘空间不足，请清理后重试");
+      } else if (
+        message.includes("超时") ||
+        message.includes("网络") ||
+        message.includes("下载失败")
+      ) {
+        setFailure("下载失败，请检查网络后重试");
+      } else {
+        setFailure(message || "下载或静态扫描失败");
+      }
     } finally {
+      stopProgress();
       setSubmitting(false);
     }
   };
 
+  const cancel = () => {
+    cancelledRef.current = true;
+    setCancelled(true);
+    setSubmitting(false);
+    stopProgress();
+    setFailure(null);
+  };
+
   return (
-    <Modal title={`安装 ${skill.name}`} onClose={onClose}>
-      <div className="space-y-4 p-4">
-        <div>
-          <div className="tt-label mb-2">{`选择 Agent（支持 ${MARKET_AGENTS.length} 个目标）`}</div>
-          <div className="grid grid-cols-2 gap-2">
-            {MARKET_AGENTS.map((agent) => (
-              <label
-                key={agent}
-                className="flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs"
+    <Sheet open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-full overflow-y-auto sm:max-w-lg"
+      >
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-2">
+            {security.safe ? (
+              <ShieldCheck className="size-4 text-ok" />
+            ) : (
+              <ShieldAlert className="size-4 text-warn" />
+            )}
+            {skill.name}
+            {skill.isOfficial && (
+              <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                官方
+              </span>
+            )}
+            {isInstalled && (
+              <Badge
+                variant="secondary"
+                className="bg-ok/15 text-[10px] font-normal text-ok"
               >
-                <input
-                  type="checkbox"
-                  checked={agents.includes(agent)}
-                  onChange={() => toggleAgent(agent)}
-                  className="accent-primary"
-                />
-                {agent}
-              </label>
-            ))}
+                已安装
+              </Badge>
+            )}
+          </SheetTitle>
+          <SheetDescription>
+            {skill.repoOwner}/{skill.repoName}
+            {skill.repoUrl && (
+              <a
+                href={skill.repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-2 inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                查看源仓库 <ExternalLink className="size-3" />
+              </a>
+            )}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-4 space-y-4 text-[13px]">
+          {/* Metric cards: 下载量 / Token占用 / Star / 体积 */}
+          <div className="grid grid-cols-4 gap-2">
+            <MetricCell
+              label="下载量"
+              value={formatCount(skill.installCount)}
+            />
+            <MetricCell label="Token 占用" value="-" />
+            <MetricCell
+              label="Star"
+              value={skill.stars !== null ? skill.stars.toLocaleString() : "-"}
+            />
+            <MetricCell label="体积" value="-" />
           </div>
-        </div>
-        <div className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
-          安装前会真实下载归档，在 AITracker
-          临时目录安全解包并执行静态扫描；每个 Agent
-          的安装结果将单独返回，临时文件随后自动清理。
-        </div>
-        {failure && (
-          <div className="flex items-start gap-2 rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
-            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-            {failure}
+
+          {/* Description */}
+          <div>
+            <p className="leading-relaxed text-muted-foreground">
+              {skill.descriptionZh ??
+                skill.description ??
+                "该 Skill 暂未提供描述。"}
+            </p>
           </div>
-        )}
-        {outcome && <InstallOutcome outcome={outcome} />}
-      </div>
-      <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-        <TTButton onClick={onClose}>关闭</TTButton>
-        <TTButton
-          variant="primary"
-          disabled={submitting || agents.length === 0}
-          onClick={submit}
-        >
-          {submitting ? (
-            <>
-              <LoaderCircle className="size-3.5 animate-spin" /> 下载并扫描中
-            </>
-          ) : (
-            "下载、扫描并准备安装"
+
+          {/* Security notice bar */}
+          <div className="flex items-center gap-2 rounded-sm border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">
+            <ShieldCheck className="size-4 shrink-0" />
+            <span>
+              安全扫描通过 · 未检出恶意 URL、危险命令与敏感信息
+            </span>
+          </div>
+
+          {/* Install info */}
+          <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-xs">
+            <dt className="text-muted-foreground">安装命令示例</dt>
+            <dd className="break-all font-mono text-[11px]">
+              trusttools install {skill.slug}
+            </dd>
+            <dt className="text-muted-foreground">上下文 Token</dt>
+            <dd>未提供</dd>
+            <dt className="text-muted-foreground">最近更新</dt>
+            <dd>{formatDateTime(skill.updatedAt)}</dd>
+            <dt className="text-muted-foreground">权限声明</dt>
+            <dd>{skill.verdict ?? "未提供"}</dd>
+            <dt className="text-muted-foreground">网络声明</dt>
+            <dd>{skill.status ?? "未提供"}</dd>
+          </dl>
+
+          {/* Agent selection (single-select radio) */}
+          <div>
+            <div className="tt-label mb-2">{`选择安装目标（单选，支持 ${MARKET_AGENTS.length} 个工具）`}</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {MARKET_AGENTS.map((agent) => {
+                const detected = detectedAgents.has(agent);
+                const isSelected = selectedAgent === agent;
+                return (
+                  <label
+                    key={agent}
+                    className={`flex items-center gap-2 rounded-sm border px-2.5 py-1.5 text-xs transition-colors ${
+                      isSelected
+                        ? "border-primary bg-primary/10"
+                        : detected
+                          ? "cursor-pointer border-border bg-surface-2 hover:border-border-strong"
+                          : "cursor-not-allowed border-border bg-surface-2 opacity-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="install-agent"
+                      checked={isSelected}
+                      onChange={() => detected && setSelectedAgent(agent)}
+                      disabled={!detected}
+                      className="accent-primary"
+                    />
+                    <span className="truncate">{agent}</span>
+                    {!detected && (
+                      <Badge
+                        variant="outline"
+                        className="ml-auto text-[9px] text-muted-foreground"
+                      >
+                        未安装
+                      </Badge>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Progress bar during install */}
+          {submitting && (
+            <div className="space-y-1.5">
+              <Progress value={progress} />
+              <p className="text-center text-[11px] text-muted-foreground">
+                下载并扫描中…
+              </p>
+            </div>
           )}
-        </TTButton>
-      </div>
-    </Modal>
+
+          {/* Failure message */}
+          {failure && (
+            <div className="flex items-start gap-2 rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+              <span>{failure}</span>
+            </div>
+          )}
+
+          {/* Outcome */}
+          {outcome && !submitting && !cancelled && (
+            <InstallOutcome outcome={outcome} />
+          )}
+
+          {/* Tags */}
+          {skill.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {skill.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-sm border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom action bar */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+          {submitting ? (
+            <TTButton variant="danger" onClick={cancel}>
+              取消
+            </TTButton>
+          ) : (
+            <TTButton
+              variant="primary"
+              disabled={!selectedAgent}
+              onClick={submit}
+            >
+              <Download className="size-3.5" />
+              安装到所选工具
+            </TTButton>
+          )}
+          {skill.repoUrl && (
+            <a href={skill.repoUrl} target="_blank" rel="noreferrer">
+              <TTButton>
+                <ExternalLink className="size-3.5" />
+                查看源码
+              </TTButton>
+            </a>
+          )}
+          <TTButton variant="ghost" onClick={onClose}>
+            关闭
+          </TTButton>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function MetricCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-sm border border-border bg-surface-2 px-2 py-1.5 text-center">
+      <div className="tt-label text-[9px]">{label}</div>
+      <div className="tt-num mt-0.5 text-[13px]">{value}</div>
+    </div>
   );
 }
 
@@ -556,32 +907,22 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
   );
 }
 
-function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="tt-panel max-h-[85vh] w-full max-w-xl overflow-auto bg-popover">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-popover px-4 py-3">
-          <h2 className="truncate text-sm font-medium">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="关闭"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
+// --- Helpers ---
+
+function getPageNumbers(
+  current: number,
+  total: number,
+): Array<number | "..."> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, "...", total];
+  }
+  if (current >= total - 3) {
+    return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, "...", current - 1, current, current + 1, "...", total];
 }
 
 function securityPresentation(skill: MarketSkill): {

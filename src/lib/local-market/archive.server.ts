@@ -7,8 +7,8 @@ import type {
 } from "./types.ts";
 import { buildDownloadUrl } from "./api.server.ts";
 
-const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
-const MAX_UNPACKED_BYTES = 40 * 1024 * 1024;
+export const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
+export const MAX_UNPACKED_BYTES = 40 * 1024 * 1024;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_ENTRIES = 1_000;
 const DOWNLOAD_TIMEOUT_MS = 15_000;

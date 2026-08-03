@@ -6,6 +6,8 @@ export type {
   MarketListResult,
   MarketPagination,
   MarketSkill,
+  MarketSort,
+  MarketStats,
   SkillDownloadInspection,
   StaticScanFinding,
   StaticScanReport,
