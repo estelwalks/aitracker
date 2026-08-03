@@ -223,7 +223,7 @@ export function UsageTrendChart({
           value={mode}
           onChange={(value) => setMode(value as TrendChartMode)}
           options={[
-            { value: "area", label: "堆叠面积" },
+            { value: "area", label: "面积图" },
             { value: "line", label: "多折线" },
           ]}
         />
@@ -279,12 +279,11 @@ export function UsageTrendChart({
                 <Area
                   key={item.key}
                   type="monotone"
-                  stackId="usage"
                   dataKey={item.key}
                   name={item.name}
                   stroke={item.color}
                   fill={item.color}
-                  fillOpacity={0.22}
+                  fillOpacity={0.18}
                   isAnimationActive={false}
                 />
               ) : (
