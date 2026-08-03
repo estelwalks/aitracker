@@ -358,3 +358,19 @@
     border-bottom: 1px solid;
   }
 }
+
+/* Dashboard trend summary row */
+.dashboard-trend-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-border);
+}
+.dashboard-trend-summary > * {
+  background: color-mix(in oklab, var(--color-surface-2) 40%, transparent);
+  padding: 0.5rem 0.75rem;
+}
