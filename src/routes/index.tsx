@@ -144,8 +144,8 @@ const dashboardLayouts: Layouts = {
   lg: [
     { i: "kpis", x: 0, y: 0, w: 12, h: 3, minW: 6, minH: 2 },
     { i: "trend", x: 0, y: 3, w: 8, h: 10, minW: 5, minH: 7 },
-    { i: "provider", x: 8, y: 3, w: 4, h: 6, minW: 3, minH: 5 },
-    { i: "models", x: 8, y: 9, w: 4, h: 5, minW: 3, minH: 4 },
+    { i: "provider", x: 8, y: 3, w: 4, h: 7, minW: 3, minH: 5 },
+    { i: "models", x: 8, y: 10, w: 4, h: 7, minW: 3, minH: 5 },
     { i: "heatmap", x: 0, y: 13, w: 8, h: 8, minW: 5, minH: 6 },
     { i: "activity", x: 0, y: 21, w: 12, h: 7, minW: 6, minH: 5 },
   ],
@@ -743,9 +743,13 @@ function Dashboard() {
                     </div>
                   </Link>
 
-                  {/* Token breakdown cards */}
+                  {/* Token breakdown cards — input & output only */}
                   {tokenTypeRows
-                    .filter((r) => r.totalTokens > 0)
+                    .filter(
+                      (r) =>
+                        ["input", "output"].includes(r.key) &&
+                        r.totalTokens > 0,
+                    )
                     .map((row) => (
                       <div
                         key={row.key}
