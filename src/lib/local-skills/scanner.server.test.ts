@@ -36,10 +36,10 @@ test("scans common agent roots without treating mtime as usage evidence", async 
     now: new Date(),
   });
 
-  // Skill agents are now derived from the 27-tool catalog: the 5 tools that
+  // Skill agents are now derived from the 27-tool catalog: the 9 tools that
   // expose a skills directory (Claude Code, Codex CLI, Cursor, Gemini CLI,
-  // OpenCode).
-  assert.equal(Object.keys(snapshot.roots).length, 5);
+  // OpenCode, Grok Build, Antigravity, Hermes Agent, OpenClaw).
+  assert.equal(Object.keys(snapshot.roots).length, 9);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 2);
   assert.equal(snapshot.skills[0].health, "unknown");

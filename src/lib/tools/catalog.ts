@@ -67,7 +67,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "openclaw",
     nameZh: "OpenClaw",
     detectRoots: [".openclaw"],
-    skillRootSuffix: null,
+    skillRootSuffix: ".openclaw/skills",
   },
   {
     id: "every-code",
@@ -79,7 +79,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "hermes",
     nameZh: "Hermes Agent",
     detectRoots: [".hermes"],
-    skillRootSuffix: null,
+    skillRootSuffix: ".hermes/skills",
   },
   {
     id: "github-copilot",
@@ -115,7 +115,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "grok",
     nameZh: "Grok Build",
     detectRoots: [".grok"],
-    skillRootSuffix: null,
+    skillRootSuffix: ".grok/skills",
   },
   {
     id: "kilo-cli",
@@ -138,7 +138,7 @@ export const AI_TOOLS: readonly AiTool[] = [
       ".gemini/antigravity",
       "Library/Application Support/Antigravity",
     ],
-    skillRootSuffix: null,
+    skillRootSuffix: ".gemini/antigravity/skills",
   },
   {
     id: "pi",
