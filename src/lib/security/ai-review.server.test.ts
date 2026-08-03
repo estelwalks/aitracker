@@ -5,7 +5,7 @@ import { reviewSecurityRisks } from "./ai-review.server.ts";
 import type { SecurityRisk } from "./scanner.ts";
 
 const risk: SecurityRisk = {
-  kind: "敏感信息",
+  kind: "密钥泄露",
   severity: "高危",
   source: "内置规则",
   ruleName: "访问密钥特征",

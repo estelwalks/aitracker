@@ -23,6 +23,7 @@ import {
 import { createHash, randomUUID } from "node:crypto";
 
 import type { LocalUsageEvent } from "../local-usage/types.ts";
+import { AI_TOOLS } from "../tools/catalog.ts";
 import {
   SKILL_AGENTS,
   type BatchTrashResult,
@@ -73,16 +74,16 @@ export interface MarketSkillOriginInput {
   updatedAt?: string | null;
 }
 
-export const SKILL_ROOT_SUFFIXES: Record<SkillAgent, string> = {
-  "Claude Code": ".claude/skills",
-  Codex: ".codex/skills",
-  Cursor: ".cursor/skills",
-  Windsurf: ".codeium/windsurf/skills",
-  Cline: ".cline/skills",
-  "Roo Code": ".roo/skills",
-  "Gemini CLI": ".gemini/skills",
-  OpenCode: ".config/opencode/skills",
-};
+/**
+ * Skill root suffix per agent label, derived from the catalog. Keyed by
+ * `SkillAgent` (the tool `nameZh`); value is the HOME-relative skill dir.
+ */
+export const SKILL_ROOT_SUFFIXES = Object.fromEntries(
+  AI_TOOLS.filter((tool) => tool.skillRootSuffix !== null).map((tool) => [
+    tool.nameZh,
+    tool.skillRootSuffix,
+  ]),
+) as Record<SkillAgent, string>;
 
 export interface HealthThresholds {
   lowFrequencyCount?: number;

@@ -94,7 +94,7 @@ test("scans plain tar text entries with built-in and user rules", async () => {
       {
         id: "unsafe-mode",
         name: "禁止不安全模式",
-        kind: "危险命令",
+        kind: "远程命令执行",
         pattern: "--unsafe-mode",
         enabled: true,
       },

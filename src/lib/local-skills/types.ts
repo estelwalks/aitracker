@@ -1,13 +1,11 @@
-export const SKILL_AGENTS = [
-  "Claude Code",
-  "Codex",
-  "Cursor",
-  "Windsurf",
-  "Cline",
-  "Roo Code",
-  "Gemini CLI",
-  "OpenCode",
-] as const;
+import { SKILL_TOOL_NAMES } from "../tools/catalog.ts";
+
+/**
+ * Skill agent labels — derived from the catalog as the `nameZh` of every tool
+ * that exposes a skills directory (`skillRootSuffix !== null`). Kept as a
+ * `readonly` tuple so `SkillAgent` is a narrow literal union.
+ */
+export const SKILL_AGENTS = SKILL_TOOL_NAMES as readonly [string, ...string[]];
 
 export type SkillAgent = (typeof SKILL_AGENTS)[number];
 export type SkillHealth = "active" | "low" | "doze" | "dead" | "unknown";
