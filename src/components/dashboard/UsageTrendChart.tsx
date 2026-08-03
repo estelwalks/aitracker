@@ -222,7 +222,7 @@ export function UsageTrendChart({
   const mom = computeMoM(visibleTotal, previousTotal ?? 0);
 
   return (
-    <div className="flex flex-col" style={{ height: "100%" }}>
+    <div className="flex flex-col">
       <div className="mb-2 flex items-center justify-end">
         <Segmented
           value={mode}
@@ -263,7 +263,7 @@ export function UsageTrendChart({
           }
         />
       </div>
-      <div className="min-h-0 flex-1">
+      <div style={{ height: 220 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartDataWithSources}
