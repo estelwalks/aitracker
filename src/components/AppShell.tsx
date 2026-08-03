@@ -9,7 +9,6 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -25,7 +24,6 @@ const nav = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [bannerOpen, setBannerOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
@@ -114,26 +112,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200"
         style={{ paddingLeft: collapsed ? 56 : sidebarWidth }}
       >
-        {bannerOpen && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warn/30 bg-warn/10 px-4 py-2 text-[13px] text-foreground md:px-6">
-            <span className="tt-num rounded-sm bg-warn/20 px-1.5 py-0.5 text-[11px] text-warn">
-              预警
-            </span>
-            <span className="min-w-0 flex-1 text-muted-foreground">
-              本月费用已达预算的 <span className="tt-num text-warn">18%</span>
-              ，按当前速度预计月底
-              <span className="tt-num text-warn"> ¥312.40</span>，在预算内。
-            </span>
-            <button
-              onClick={() => setBannerOpen(false)}
-              className="ml-auto text-muted-foreground hover:text-foreground"
-              aria-label="关闭预警"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-
         <main className="tt-scroll min-w-0 flex-1 px-3 py-4 pb-14 sm:px-4 md:px-6 2xl:px-8">
           <div className="tt-container">{children}</div>
         </main>
