@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Area,
@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowRight, Database, Image, Shield } from "lucide-react";
+import { ArrowRight, Database, Image, RefreshCw } from "lucide-react";
 import RGL, {
   WidthProvider,
   type Layout,
@@ -32,13 +32,20 @@ import {
   StatusBadge,
 } from "../components/tt";
 import { UsageHeatmap } from "../components/UsageHeatmap";
-import { getLocalUsageSnapshot } from "../lib/local-usage";
 import {
+  getLocalUsageSnapshot,
+  refreshLocalUsageSnapshot,
+} from "../lib/local-usage";
+import {
+  cacheRate,
+  computeMoM,
   createEmptyUsageSnapshot,
   filterDailyUsage,
+  filterUsageEvents,
   formatDateTime,
   formatEventTime,
   formatTokens,
+  previousPeriodTotal,
   shareOf,
   sourceLabel,
   totalsFromDaily,
@@ -50,31 +57,17 @@ import type {
   LocalUsageSource,
 } from "../lib/local-usage";
 import {
+  aggregatePricedUsage,
   applyPricingSnapshot,
-  currentUsdToCny,
   estimateEventCost,
   estimateUsageCost,
   filterEventsByPeriod,
   formatCost,
-  totalsFromEvents,
+  formatMoney,
 } from "../lib/pricing";
 import { getPricingSnapshot } from "../lib/pricing/server-fns";
-import {
-  DAILY_SCAN_LIMIT,
-  readDailyScanCount,
-} from "../lib/security/daily-limit";
-import type { ProviderBudget } from "../lib/settings/store";
-import type { BudgetIndicator } from "../components/UsageHeatmap";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
 import type { SkillHealth, SkillSnapshot } from "../lib/local-skills/types";
-import {
-  buildProviderBudgetIndicators,
-  readRemainingSecurityScans,
-  resolveEventProvider,
-  type ProviderAwareUsageEvent,
-  type ProviderBudgetIndicators,
-} from "../lib/local-usage/provider-utils";
-import { useTrustToolsSettings } from "../lib/settings/store";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -205,6 +198,7 @@ function daysAgo(days: number): string {
 
 function Dashboard() {
   const { snapshot, error, skills, pricing } = Route.useLoaderData();
+  const router = useRouter();
   applyPricingSnapshot(pricing);
   const [period, setPeriod] = useState<UsagePeriod>("today");
   const [from, setFrom] = useState(daysAgo(14));
@@ -266,16 +260,6 @@ function Dashboard() {
     return () => media.removeEventListener("change", updateViewport);
   }, []);
 
-  // localStorage is only available on the client; keep the value null during
-  // SSR and the first client render so the rendered text matches the server
-  // HTML, then populate it after mount.
-  const [remainingSecurityScans, setRemainingSecurityScans] = useState<
-    number | null
-  >(null);
-  useEffect(() => {
-    setRemainingSecurityScans(readRemainingSecurityScans(window.localStorage));
-  }, []);
-
   const updateDashboardSections = (section: DashboardSection) => {
     setDashboardSections((current) => {
       const next = { ...current, [section]: !current[section] };
@@ -307,60 +291,72 @@ function Dashboard() {
     [selectedDaily],
   );
   const selectedEvents = useMemo(
-    () => filterEventsByPeriod(snapshot.details, period, from, to),
+    () => filterUsageEvents(snapshot.details, period, from, to),
     [snapshot.details, period, from, to],
   );
   const selectedCost = useMemo(
     () => estimateUsageCost(selectedEvents),
     [selectedEvents],
   );
-  const todayEvents = useMemo(
-    () => filterEventsByPeriod(snapshot.details, "today"),
-    [snapshot.details],
-  );
   const sevenDayEvents = useMemo(
     () => filterEventsByPeriod(snapshot.details, "7d"),
     [snapshot.details],
   );
-  const primaryTokenEvents =
-    sevenDayEvents.length > 0 ? sevenDayEvents : todayEvents;
-  const primaryTokenLabel =
-    sevenDayEvents.length > 0 ? "近 7 天 Token" : "今日 Token";
-  const primaryTokenTotals = useMemo(
-    () => totalsFromEvents(primaryTokenEvents),
-    [primaryTokenEvents],
-  );
-  const cacheCost = useMemo(
-    () => estimateUsageCost(primaryTokenEvents),
-    [primaryTokenEvents],
-  );
-  const cachedTokens = primaryTokenTotals.cachedInputTokens;
-  const cacheHitRate =
-    primaryTokenTotals.totalTokens > 0
-      ? (cachedTokens / primaryTokenTotals.totalTokens) * 100
-      : 0;
   const skillHealth = buildSkillHealth(skills);
-  const { settings } = useTrustToolsSettings();
-  const budgetIndicators = useMemo(
+
+  // KPI Row 1 — period-driven headline metrics.
+  const intervalCostCny = formatMoney(selectedCost.knownUsd, "CNY");
+  const intervalCostHint =
+    selectedCost.unknownEvents > 0
+      ? "部分模型价格未知，金额为已知下限"
+      : `${periodLabels[period]} · 按本地模型目录估算`;
+  const tokenMoM = useMemo(
     () =>
-      settings.providerBudgets.length > 0
-        ? buildProviderBudgetIndicators(
-            snapshot.details as ProviderAwareUsageEvent[],
-            settings.providerBudgets,
-            settings.alertThreshold,
-          )
-        : [],
-    [snapshot.details, settings.providerBudgets, settings.alertThreshold],
-  );
-  const exceededProviders = useMemo(
-    () =>
-      budgetIndicators.filter((indicator) =>
-        indicator.periods.some(
-          (p) => p.state === "exceeded" || p.state === "warning",
-        ),
+      computeMoM(
+        selectedTotals.totalTokens,
+        previousPeriodTotal(
+          snapshot.details,
+          "totalTokens",
+          period,
+          from,
+          to,
+        ) ?? 0,
       ),
-    [budgetIndicators],
+    [selectedTotals.totalTokens, snapshot.details, period, from, to],
   );
+  const cacheSavingsCny = formatMoney(selectedCost.cacheSavingsUsd, "CNY");
+  const cacheHitRate = cacheRate(selectedTotals);
+
+  // KPI Row 2 — token composition breakdown for the selected range.
+  const tokenTypeRows = useMemo(
+    () =>
+      aggregatePricedUsage(selectedEvents, "tokenType").filter(
+        (row) => row.totalTokens > 0,
+      ),
+    [selectedEvents],
+  );
+  const tokenRowBy = (key: string) =>
+    tokenTypeRows.find((row) => row.key === key)?.totalTokens ?? 0;
+
+  // Manual refresh: re-scan logs then re-run loaders. Mirrors the
+  // LocalUsageAutoRefresh effect in __root.tsx but is user-triggered.
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastSync, setLastSync] = useState(snapshot.generatedAt);
+  useEffect(() => {
+    setLastSync(snapshot.generatedAt);
+  }, [snapshot.generatedAt]);
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refreshLocalUsageSnapshot();
+      await router.invalidate();
+      setLastSync(new Date().toISOString());
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const topSources: SourceSeries[] = snapshot.bySource
     .slice(0, 5)
     .map((source, index) => ({
@@ -404,8 +400,8 @@ function Dashboard() {
         <div>
           <h1>首页总览</h1>
           <p>
-            近 7 天 · {snapshot.events.toLocaleString()} 条真实事件 · 更新于{" "}
-            {formatDateTime(snapshot.generatedAt)}
+            {periodLabels[period]} · {snapshot.events.toLocaleString()}{" "}
+            条真实事件 · 最近同步 {formatDateTime(lastSync)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -465,55 +461,51 @@ function Dashboard() {
         </div>
       </div>
 
-      {exceededProviders.length > 0 && (
-        <div className="mb-3 space-y-2">
-          {exceededProviders.map((indicator) =>
-            indicator.periods
-              .filter((p) => p.state === "exceeded" || p.state === "warning")
-              .map((p) => (
-                <div
-                  key={`${indicator.provider}-${p.key}`}
-                  className={`rounded-sm border px-4 py-2.5 text-sm ${
-                    p.state === "exceeded"
-                      ? "border-danger/50 bg-danger/10 text-danger"
-                      : "border-warn/50 bg-warn/10 text-warn"
-                  }`}
-                >
-                  <strong>{indicator.provider}</strong> {p.label} {p.message}
-                  {p.budgetCny > 0 && (
-                    <span className="ml-2 text-xs opacity-75">
-                      (预算 {p.budgetCny.toFixed(0)} 元，已用{" "}
-                      {p.spentCny.toFixed(0)} 元)
-                    </span>
-                  )}
-                </div>
-              )),
-          )}
-        </div>
-      )}
-
-      {period === "custom" && (
-        <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
-          <span className="tt-label">趋势区间</span>
-          <input
-            type="date"
-            value={from}
-            max={to}
-            onChange={(event) => setFrom(event.target.value)}
-            className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
-            aria-label="开始日期"
+      {/* Global time-range selector — drives every dashboard module. */}
+      <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
+        <span className="tt-label">时间范围</span>
+        <Segmented
+          value={period}
+          onChange={(value) => setPeriod(value)}
+          options={periodOptions}
+        />
+        {period === "custom" && (
+          <>
+            <input
+              type="date"
+              value={from}
+              max={to}
+              onChange={(event) => setFrom(event.target.value)}
+              className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
+              aria-label="开始日期"
+            />
+            <span className="text-muted-foreground">至</span>
+            <input
+              type="date"
+              value={to}
+              min={from}
+              onChange={(event) => setTo(event.target.value)}
+              className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
+              aria-label="结束日期"
+            />
+          </>
+        )}
+        <span className="ml-auto text-muted-foreground">
+          {periodGrainLabel(period)}
+        </span>
+        <button
+          type="button"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+          title="立即重新扫描本机日志"
+        >
+          <RefreshCw
+            className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
           />
-          <span className="text-muted-foreground">至</span>
-          <input
-            type="date"
-            value={to}
-            min={from}
-            onChange={(event) => setTo(event.target.value)}
-            className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
-            aria-label="结束日期"
-          />
-        </div>
-      )}
+          {refreshing ? "同步中…" : "立即刷新"}
+        </button>
+      </div>
 
       {(() => {
         const widgets: ReactNode[] = [
@@ -522,32 +514,35 @@ function Dashboard() {
               <div className="dashboard-kpis">
                 <KpiCard
                   to="/"
-                  label={primaryTokenLabel}
-                  value={formatTokens(primaryTokenTotals.totalTokens)}
-                  hint={`${primaryTokenTotals.events.toLocaleString()} 个真实事件`}
+                  label="区间总费用"
+                  value={intervalCostCny}
+                  hint={intervalCostHint}
                   accent
                 />
                 <KpiCard
                   to="/"
-                  label="区间费用"
-                  value={formatCost(selectedCost, "CNY")}
+                  label="Token 消耗总量"
+                  value={formatTokens(selectedTotals.totalTokens)}
                   hint={
-                    selectedCost.unknownEvents > 0
-                      ? "部分模型价格未知，金额为已知下限"
-                      : `${periodLabels[period]} · 按本地模型目录估算`
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>
+                        {selectedTotals.events.toLocaleString()} 个真实事件
+                      </span>
+                      <MoMBadge value={tokenMoM} goodWhenDown />
+                    </span>
                   }
                 />
                 <KpiCard
                   to="/"
-                  label="缓存节省"
-                  value={formatMoneyCny(cacheCost.cacheSavingsUsd)}
-                  hint={`命中率 ${cacheHitRate.toFixed(0)}% · ${formatTokens(cachedTokens)} 缓存 Token`}
+                  label="缓存命中节省费用"
+                  value={cacheSavingsCny}
+                  hint={`命中率 ${cacheHitRate.toFixed(0)}%`}
                   tone="ok"
                 />
                 <KpiCard
                   to="/skills"
-                  label="活跃 Skill 数"
-                  value={`${skillHealth.active} / ${skillHealth.total}`}
+                  label="本地 Skill 总数"
+                  value={`${skillHealth.total}`}
                   hint={
                     <span className="dashboard-health">
                       {skillHealth.rows.map((item) => (
@@ -558,16 +553,43 @@ function Dashboard() {
                     </span>
                   }
                 />
+              </div>
+              <div className="dashboard-kpis dashboard-kpis-secondary">
                 <KpiCard
-                  to="/security"
-                  label="安全扫描"
-                  value={
-                    remainingSecurityScans == null
-                      ? `- / ${DAILY_SCAN_LIMIT}`
-                      : `${remainingSecurityScans} / ${DAILY_SCAN_LIMIT}`
-                  }
-                  hint="今日剩余安全扫描次数"
-                  icon={<Shield className="size-4" />}
+                  to="/"
+                  label="区间总 Token"
+                  value={formatTokens(selectedTotals.totalTokens)}
+                  hint={`${selectedTotals.events.toLocaleString()} 个事件`}
+                />
+                <KpiCard
+                  to="/"
+                  label="区间总费用"
+                  value={intervalCostCny}
+                  hint={intervalCostHint}
+                />
+                <KpiCard
+                  to="/"
+                  label="输入 Token"
+                  value={formatTokens(tokenRowBy("input"))}
+                  hint={`${shareOf(tokenRowBy("input"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
+                />
+                <KpiCard
+                  to="/"
+                  label="输出 Token"
+                  value={formatTokens(tokenRowBy("output"))}
+                  hint={`${shareOf(tokenRowBy("output"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
+                />
+                <KpiCard
+                  to="/"
+                  label="缓存读 Token"
+                  value={formatTokens(tokenRowBy("cacheRead"))}
+                  hint={`${shareOf(tokenRowBy("cacheRead"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
+                />
+                <KpiCard
+                  to="/"
+                  label="缓存写 Token"
+                  value={formatTokens(tokenRowBy("cacheWrite"))}
+                  hint={`${shareOf(tokenRowBy("cacheWrite"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
                 />
               </div>
             </div>
@@ -588,11 +610,6 @@ function Dashboard() {
                         { value: "bar", label: "柱状+趋势" },
                         { value: "line", label: "折线" },
                       ]}
-                    />
-                    <Segmented
-                      value={period}
-                      onChange={setPeriod}
-                      options={periodOptions.slice(0, 5)}
                     />
                   </div>
                 }
@@ -954,7 +971,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-surface-2/50 px-3 py-2">
       <div className="tt-label">{label}</div>
-      <div className="tt-num mt-0.5 text-sm">{value}</div>
+      <div className="tt-num mt-0.5 text-sm tabular-nums">{value}</div>
     </div>
   );
 }
@@ -966,7 +983,6 @@ function KpiCard({
   hint,
   accent = false,
   tone,
-  icon,
 }: {
   to: "/" | "/skills" | "/security";
   label: string;
@@ -974,16 +990,16 @@ function KpiCard({
   hint: ReactNode;
   accent?: boolean;
   tone?: "ok";
-  icon?: ReactNode;
 }) {
   return (
     <Link
       to={to}
       className={`dashboard-kpi ${accent ? "dashboard-kpi-accent" : ""}`}
     >
-      {icon && <span className="dashboard-kpi-icon">{icon}</span>}
       <span className="tt-label">{label}</span>
-      <strong className={`tt-num ${tone === "ok" ? "text-ok" : ""}`}>
+      <strong
+        className={`tt-num tabular-nums ${tone === "ok" ? "text-ok" : ""}`}
+      >
         {value}
       </strong>
       <span className="dashboard-kpi-hint">{hint}</span>
@@ -991,13 +1007,52 @@ function KpiCard({
   );
 }
 
-function formatMoneyCny(usd: number): string {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(usd * currentUsdToCny());
+/**
+ * Render a 环比 (period-over-period) delta badge. `value` is the percentage
+ * returned by `computeMoM` (null when there is no previous window, e.g. "全部"
+ * or no history) — null renders "−−". For consumption metrics (tokens/cost)
+ * a decrease is good, so `goodWhenDown` colors it green; a rise is red.
+ */
+function MoMBadge({
+  value,
+  goodWhenDown = false,
+}: {
+  value: number | null;
+  goodWhenDown?: boolean;
+}) {
+  if (value == null || !Number.isFinite(value)) {
+    return <span className="tt-num text-muted-foreground">环比 −−</span>;
+  }
+  const up = value > 0;
+  const good = goodWhenDown ? !up : up;
+  const arrow = up ? "▲" : value < 0 ? "▼" : "·";
+  return (
+    <span className={`tt-num ${good ? "text-ok" : "text-danger"}`}>
+      环比 {arrow} {Math.abs(value).toFixed(1)}%
+    </span>
+  );
+}
+
+/**
+ * Map the selected period to the aggregation grain the dashboard uses and a
+ * short label for the selector area. "今日" buckets hourly, the rolling
+ * windows daily, "全部" monthly, and "自定义" defers to the picked span.
+ */
+function periodGrainLabel(period: UsagePeriod): string {
+  switch (period) {
+    case "today":
+    case "week":
+      return "粒度 · 小时";
+    case "7d":
+    case "30d":
+    case "month":
+      return "粒度 · 日";
+    case "year":
+    case "all":
+      return "粒度 · 月";
+    case "custom":
+      return "粒度 · 日";
+  }
 }
 
 function buildSkillHealth(snapshot: SkillSnapshot | null) {
