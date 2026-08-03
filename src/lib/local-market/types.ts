@@ -43,12 +43,22 @@ export interface MarketPagination {
   pages: number;
 }
 
+export type MarketSort = "downloads" | "latest" | "stars" | "tokens";
+
+export interface MarketStats {
+  totalSkills: number;
+  officialCount: number;
+  totalDownloads: number;
+  installedCount: number;
+}
+
 export interface MarketListResult {
   skills: MarketSkill[];
   pagination: MarketPagination;
   source: "network" | "cache";
   fetchedAt: string;
   warning: string | null;
+  stats?: MarketStats;
 }
 
 export type ScanSeverity = "critical" | "warning" | "info";

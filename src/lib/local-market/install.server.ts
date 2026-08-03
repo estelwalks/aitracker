@@ -1,3 +1,4 @@
+import { statfs } from "node:fs/promises";
 import {
   lstat,
   mkdir,
@@ -9,6 +10,7 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
+import { MAX_UNPACKED_BYTES } from "./archive.server.ts";
 import { downloadAndInspectSkill } from "./archive.server.ts";
 import type { TarEntry } from "./archive.server.ts";
 import type {
@@ -17,6 +19,29 @@ import type {
   SkillDownloadInspection,
 } from "./types.ts";
 import type { SkillAgent } from "../local-skills/types.ts";
+
+export class DiskSpaceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DiskSpaceError";
+  }
+}
+
+async function checkDiskSpace(
+  requiredBytes: number,
+  path: string,
+): Promise<void> {
+  try {
+    const stats = await statfs(path);
+    const freeBytes = stats.bavail * stats.bsize;
+    if (freeBytes < requiredBytes) {
+      throw new DiskSpaceError("磁盘空间不足，请清理后重试");
+    }
+  } catch (error) {
+    if (error instanceof DiskSpaceError) throw error;
+    // statfs not available or path missing — skip check (best-effort)
+  }
+}
 
 export interface InstallRequest {
   skill: SkillDownloadInspection["skill"];
@@ -140,6 +165,14 @@ export async function prepareSkillInstall(
   request: InstallRequest,
   dependencies: InstallDependencies = {},
 ): Promise<InstallSkillResult> {
+  const temporaryParent =
+    dependencies.tempRoot ?? join(homedir(), ".trusttools", "tmp");
+
+  // Disk-space precheck: ensure at least MAX_UNPACKED_BYTES free before downloading
+  await checkDiskSpace(MAX_UNPACKED_BYTES, homedir());
+
+  await mkdir(temporaryParent, { recursive: true, mode: 0o700 });
+
   const downloaded = await downloadAndInspectSkill(request.skill, {
     fetcher: dependencies.fetcher,
   });
@@ -158,9 +191,6 @@ export async function prepareSkillInstall(
     };
   }
 
-  const temporaryParent =
-    dependencies.tempRoot ?? join(homedir(), ".trusttools", "tmp");
-  await mkdir(temporaryParent, { recursive: true, mode: 0o700 });
   const temporaryDirectory = await mkdtemp(join(temporaryParent, "market-"));
 
   try {
