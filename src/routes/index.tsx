@@ -705,7 +705,7 @@ function Dashboard() {
               </div>
 
               {/* Chart area with grid background overlay */}
-              <div className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25" style={{ height: 320 }}>
+              <div className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25" style={{ height: 380 }}>
                 <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
                 <UsageTrendChart
                   events={selectedEvents}
