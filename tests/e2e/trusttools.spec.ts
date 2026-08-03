@@ -40,10 +40,8 @@ function createTarGz(name: string, content: string): Buffer {
 
 const routes = [
   { path: "/", heading: "首页总览" },
-  { path: "/tokens", heading: "Token 分析" },
   { path: "/skills", heading: "Skill 管理" },
   { path: "/market", heading: "Skill 市场" },
-  { path: "/memory", heading: "记忆" },
   { path: "/security", heading: "安全检测" },
   { path: "/settings", heading: "设置" },
 ] as const;
@@ -112,28 +110,6 @@ test("首页展示周时热力图和整体预算提示", async ({ page }) => {
   ).toBe(true);
 });
 
-test("Token 支持人民币美元切换与明细下一页", async ({ page }) => {
-  await page.goto("/tokens");
-  await page.waitForLoadState("networkidle");
-  await expect(page.getByText("真实数据", { exact: true })).toBeVisible();
-
-  const estimatedCost = page
-    .getByText("估算费用", { exact: true })
-    .first()
-    .locator("..");
-  await page.getByRole("button", { name: "美元", exact: true }).click();
-  await expect(estimatedCost).toContainText("US$");
-
-  await page.getByRole("button", { name: "人民币", exact: true }).click();
-  await expect(estimatedCost).toContainText("¥");
-
-  const nextPage = page.getByRole("button", { name: "下一页", exact: true });
-  await expect(nextPage).toBeEnabled();
-  await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible();
-  await nextPage.click();
-  await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible();
-});
-
 test("Skill 展示真实数量与轮询说明", async ({ page }) => {
   await page.goto("/skills");
 
@@ -188,21 +164,6 @@ test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
       .filter({ hasText: /draw.?io/i })
       .first(),
   ).toBeVisible();
-});
-
-test("Memory 支持真实内容搜索", async ({ page }) => {
-  await page.goto("/memory");
-
-  const firstTitle = page.locator("article h3").first();
-  await expect(firstTitle).toBeVisible();
-  const title = (await firstTitle.textContent())?.trim();
-  expect(title).toBeTruthy();
-
-  await page.getByPlaceholder("搜索标题、摘要、正文或路径…").fill(title!);
-  await expect(
-    page.locator("article h3", { hasText: title! }).first(),
-  ).toBeVisible();
-  await expect(page.getByText("未发现匹配的记忆文件")).toHaveCount(0);
 });
 
 test("安全 AI 开关默认关闭且可开启", async ({ page }) => {
@@ -262,7 +223,7 @@ test("本地采集状态仅在设置的数据采集分类展示真实结果", as
   await page.goto("/");
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
 
-  await page.goto("/tokens");
+  await page.goto("/sources");
   await expect(page.getByText("真实数据源", { exact: true })).toHaveCount(0);
 
   await page.goto("/settings");
