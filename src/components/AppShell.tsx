@@ -1,143 +1,96 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Blocks,
-  Database,
-  History,
   Home,
-  Menu,
+  MessagesSquare,
+  Database,
+  Blocks,
+  Store,
+  ShieldCheck,
+  Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  Settings,
-  ShieldCheck,
-  Store,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { useI18n } from "../lib/i18n/context";
-
-const navItems = [
-  { to: "/", i18nKey: "nav.dashboard", icon: Home },
-  { to: "/skills", i18nKey: "nav.skills", icon: Blocks },
-  { to: "/market", i18nKey: "nav.market", icon: Store },
-  { to: "/security", i18nKey: "nav.security", icon: ShieldCheck },
-  { to: "/sessions", i18nKey: "nav.sessions", icon: History },
-  { to: "/sources", i18nKey: "nav.sources", icon: Database },
-  { to: "/settings", i18nKey: "nav.settings", icon: Settings },
+const nav = [
+  { to: "/", label: "首页", icon: Home },
+  { to: "/skills", label: "Skill 管理", icon: Blocks },
+  { to: "/market", label: "Skill 市场", icon: Store },
+  { to: "/security", label: "安全检测", icon: ShieldCheck },
+  { to: "/sessions", label: "会话恢复", icon: MessagesSquare },
+  { to: "/sources", label: "数据来源", icon: Database },
+  { to: "/settings", label: "设置", icon: Settings },
 ] as const;
 
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-bold text-primary-foreground shadow-[0_0_20px_color-mix(in_oklab,var(--color-primary)_20%,transparent)]">
-        T
-      </div>
-      {!compact && (
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-sm font-semibold tracking-tight">
-            AITracker
-          </div>
-          <div className="tt-num mt-0.5 text-[9px] tracking-[0.04em] text-muted-foreground">
-            V3.0.1
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktop, setDesktop] = useState(false);
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const sidebarWidth = collapsed ? 64 : 240;
+  const [bannerOpen, setBannerOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(200);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 768px)");
-    const sync = () => {
-      setDesktop(media.matches);
-      if (media.matches) setMobileOpen(false);
+    const onResize = () => {
+      const w = window.innerWidth;
+      if (w < 1024) setCollapsed(true);
+      // 侧边栏宽度随桌面视口平滑缩放，浏览器缩放时不挤压内容
+      setSidebarWidth(Math.round(Math.min(240, Math.max(168, w * 0.13))));
     };
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  const renderedNavItems = useMemo(
-    () =>
-      navItems.map((item) => {
-        const active =
-          item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-        const Icon = item.icon;
-        const label = t(item.i18nKey);
-        return (
-          <Link
-            key={item.to}
-            to={item.to}
-            title={collapsed ? label : undefined}
-            aria-current={active ? "page" : undefined}
-            className={`group relative flex h-10 items-center gap-3 rounded-sm px-3 text-[13px] transition-colors ${
-              active
-                ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-            }`}
-          >
-            {active && (
-              <span className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r bg-primary" />
-            )}
-            <Icon
-              className={`size-4 shrink-0 transition-colors ${active ? "text-primary" : "group-hover:text-foreground"}`}
-              strokeWidth={1.75}
-            />
-            {!collapsed && <span className="truncate">{label}</span>}
-          </Link>
-        );
-      }),
-    [t, collapsed, pathname],
-  );
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {mobileOpen && (
-        <button
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-label="关闭导航"
-        />
-      )}
-
+    <div className="flex min-h-screen bg-background text-foreground">
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200 md:z-30 md:translate-x-0 md:transition-[width] ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        style={desktop ? { width: sidebarWidth } : undefined}
+        className="fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200"
+        style={{ width: collapsed ? 56 : sidebarWidth }}
       >
-        <div className="flex h-[64px] items-center justify-between px-4">
-          <Brand compact={desktop && collapsed} />
-          <button
-            className="text-muted-foreground hover:text-foreground md:hidden"
-            onClick={() => setMobileOpen(false)}
-            aria-label="关闭导航"
-          >
-            <X className="size-4" />
-          </button>
+        <div className="flex h-14 items-center gap-2 px-3">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-bold text-primary-foreground">
+            T
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-semibold">AITracker</div>
+              <div className="tt-num text-[10px] text-muted-foreground">
+                v1.0.0.1
+              </div>
+            </div>
+          )}
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-2">{renderedNavItems}</nav>
+        <nav className="mt-2 flex-1 space-y-0.5 px-1.5">
+          {nav.map((item) => {
+            const active =
+              item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                title={item.label}
+                className={`relative flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-sm transition-colors ${
+                  active
+                    ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                }`}
+              >
+                {active && (
+                  <span className="absolute top-1.5 bottom-1.5 -left-1.5 w-[3px] rounded-r bg-primary" />
+                )}
+                <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                {!collapsed && <span className="truncate">{item.label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
 
-        <div className="border-t border-sidebar-border p-2">
+        <div className="border-t border-sidebar-border p-1.5">
           <button
-            onClick={() => setCollapsed((value) => !value)}
-            className="hidden h-9 w-full items-center gap-3 rounded-sm px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground md:flex"
-            aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" strokeWidth={1.75} />
@@ -146,28 +99,59 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
             {!collapsed && <span>收起</span>}
           </button>
+          <div className="flex h-7 items-center gap-2 px-2.5">
+            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-ok" />
+            {!collapsed && (
+              <span className="text-[11px] text-muted-foreground">
+                本地服务已连接
+              </span>
+            )}
+          </div>
         </div>
       </aside>
 
       <div
-        className="flex min-h-screen min-w-0 flex-col transition-[padding] duration-200"
-        style={{ paddingLeft: desktop ? sidebarWidth : 0 }}
+        className="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200"
+        style={{ paddingLeft: collapsed ? 56 : sidebarWidth }}
       >
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-xl md:hidden">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="flex size-8 items-center justify-center rounded-sm border border-border bg-surface text-muted-foreground"
-            aria-label="打开导航"
-          >
-            <Menu className="size-4" />
-          </button>
-          <Brand />
-          <span className="size-2 rounded-full bg-ok" title="本地数据就绪" />
-        </header>
+        {bannerOpen && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warn/30 bg-warn/10 px-4 py-2 text-[13px] text-foreground md:px-6">
+            <span className="tt-num rounded-sm bg-warn/20 px-1.5 py-0.5 text-[11px] text-warn">
+              预警
+            </span>
+            <span className="min-w-0 flex-1 text-muted-foreground">
+              本月费用已达预算的 <span className="tt-num text-warn">18%</span>
+              ，按当前速度预计月底
+              <span className="tt-num text-warn"> ¥312.40</span>，在预算内。
+            </span>
+            <button
+              onClick={() => setBannerOpen(false)}
+              className="ml-auto text-muted-foreground hover:text-foreground"
+              aria-label="关闭预警"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
 
-        <main className="tt-scroll min-w-0 flex-1 px-3 py-4 sm:px-5 md:px-7 md:py-5 2xl:px-8">
+        <main className="tt-scroll min-w-0 flex-1 px-3 py-4 pb-14 sm:px-4 md:px-6 2xl:px-8">
           <div className="tt-container">{children}</div>
         </main>
+
+        <div
+          className="fixed right-0 bottom-0 z-20 flex h-8 items-center gap-3 overflow-hidden border-t border-border bg-sidebar px-3 text-[11px] whitespace-nowrap text-muted-foreground transition-[left] duration-200 md:gap-5 md:px-4"
+          style={{ left: collapsed ? 56 : sidebarWidth }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-ok" /> 本地 API 已连接
+          </span>
+          <span className="hidden items-center gap-1.5 md:flex">
+            <span className="size-1.5 rounded-full bg-primary" /> 数据采集：实时
+          </span>
+          <span className="tt-num ml-auto shrink-0">
+            上次更新 2026-07-27 10:24:07
+          </span>
+        </div>
       </div>
     </div>
   );

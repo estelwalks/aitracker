@@ -125,7 +125,6 @@ function SourcesPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
-          eyebrow="本地采集"
           title="数据来源"
           desc={`27 个 AI 工具的探测状态 · 更新于 ${formatDateTime(summary.generatedAt)}`}
         />

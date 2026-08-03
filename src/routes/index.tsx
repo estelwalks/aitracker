@@ -1,7 +1,18 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Activity,
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
   Database,
   Download,
   FileDown,
@@ -349,6 +360,50 @@ function Dashboard() {
   // FR-032 - Export dropdown state.
   const [showExportMenu, setShowExportMenu] = useState(false);
 
+  // KPI metric card horizontal scroll navigation.
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const [metricNav, setMetricNav] = useState({ page: 0, pages: 1 });
+
+  const syncMetricNav = useCallback(() => {
+    const el = summaryRef.current;
+    if (!el) return;
+    const pageW = el.clientWidth;
+    const pages = Math.max(1, Math.ceil(el.scrollWidth / pageW - 0.02));
+    const page = Math.min(pages - 1, Math.round(el.scrollLeft / pageW));
+    setMetricNav((p) =>
+      p.page === page && p.pages === pages ? p : { page, pages },
+    );
+  }, []);
+
+  useEffect(() => {
+    syncMetricNav();
+    window.addEventListener("resize", syncMetricNav);
+    return () => window.removeEventListener("resize", syncMetricNav);
+  }, [syncMetricNav]);
+
+  const goMetricPage = useCallback(
+    (next: number) => {
+      const el = summaryRef.current;
+      if (!el) return;
+      const p = Math.max(0, Math.min(metricNav.pages - 1, next));
+      el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
+    },
+    [metricNav.pages],
+  );
+
+  // Trend summary stats: total, avg, peak from the selected daily range.
+  const trendStats = useMemo(() => {
+    const dailyTokens = selectedDaily.map((d) => d.totalTokens);
+    const sum = selectedTotals.totalTokens;
+    const avg =
+      selectedDaily.length > 0 ? Math.round(sum / selectedDaily.length) : 0;
+    const peak = dailyTokens.length > 0 ? Math.max(...dailyTokens) : 0;
+    const peakIdx = dailyTokens.indexOf(peak);
+    const peakLabel =
+      peakIdx >= 0 && selectedDaily[peakIdx] ? selectedDaily[peakIdx].date : "";
+    return { sum, avg, peak, peakLabel };
+  }, [selectedDaily, selectedTotals.totalTokens]);
+
   const posterData = useMemo(
     () =>
       buildPosterData(
@@ -403,262 +458,449 @@ function Dashboard() {
     );
   }
 
+  // -- Token type label map for KPI cards --
+  const tokenTypeLabelMap: Record<string, string> = {
+    input: "输入 Token",
+    output: "输出 Token",
+    cacheRead: "缓存读 Token",
+    cacheWrite: "缓存写 Token",
+    reasoningOutput: "推理输出 Token",
+  };
+
+  // -- Helpers for MoM display in KPI cards --
+  const renderMomIndicator = (mom: number | null) => {
+    if (mom == null || !Number.isFinite(mom)) {
+      return <span className="text-muted-foreground">环比 −−</span>;
+    }
+    const up = mom > 0;
+    const absPct = `${Math.abs(mom).toFixed(1)}%`;
+    if (mom === 0) {
+      return <span className="text-muted-foreground">环比 0%</span>;
+    }
+    return (
+      <span
+        className={`inline-flex items-center gap-0.5 ${up ? "text-danger" : "text-ok"}`}
+      >
+        {up ? (
+          <ArrowUpRight className="size-3.5" />
+        ) : (
+          <ArrowDownRight className="size-3.5" />
+        )}
+        <span>{absPct}</span>
+      </span>
+    );
+  };
+
   return (
     <>
-      <div className="dashboard-intro">
-        <div>
-          <h1>首页总览</h1>
-          <p>
-            {periodLabels[period]} · {snapshot.events.toLocaleString()}{" "}
-            条真实事件 · 最近同步 {formatDateTime(lastSync)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <details className="dashboard-settings">
-            <summary className="tt-button">看板设置</summary>
-            <div className="dashboard-settings-popover">
-              {(Object.keys(dashboardDefaults) as DashboardSection[]).map(
-                (section) => {
-                  const labels: Record<DashboardSection, string> = {
-                    kpis: "5 个 KPI",
-                    trend: "趋势",
-                    provider: "AI 客户端",
-                    models: "最近模型",
-                    heatmap: "热力图",
-                    activity: "消耗明细",
-                  };
-                  return (
-                    <label key={section}>
-                      <input
-                        type="checkbox"
-                        checked={dashboardSections[section]}
-                        onChange={() => updateDashboardSections(section)}
-                      />
-                      {labels[section]}
-                    </label>
-                  );
-                },
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setDashboardSections(dashboardDefaults);
-                  setLayouts(dashboardLayouts);
-                  window.localStorage.removeItem(
-                    "trusttools-dashboard-sections",
-                  );
-                  window.localStorage.removeItem(
-                    "trusttools-dashboard-layouts",
-                  );
-                }}
-              >
-                恢复默认
-              </button>
-            </div>
-          </details>
-          <StatusBadge tone="ok">
-            <Dot className="size-1 bg-ok" /> 数据已更新
-          </StatusBadge>
-        </div>
-      </div>
+      {/* ---- Sticky Header Bar ---- */}
+      <div className="sticky top-0 z-30 -mx-3 mb-3 border-b border-border bg-background/85 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 2xl:-mx-8 2xl:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="text-base font-semibold tracking-tight">首页总览</h1>
+            <span className="truncate text-[12px] text-muted-foreground">
+              统计区间：{periodLabels[period]} · 最近同步{" "}
+              {formatDateTime(lastSync)}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented
+              value={period}
+              onChange={(value) => setPeriod(value)}
+              options={periodOptions}
+            />
+            {period === "custom" && (
+              <>
+                <input
+                  type="date"
+                  value={from}
+                  max={to}
+                  onChange={(event) => setFrom(event.target.value)}
+                  className="rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs outline-none"
+                  aria-label="开始日期"
+                />
+                <span className="text-xs text-muted-foreground">至</span>
+                <input
+                  type="date"
+                  value={to}
+                  min={from}
+                  onChange={(event) => setTo(event.target.value)}
+                  className="rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs outline-none"
+                  aria-label="结束日期"
+                />
+              </>
+            )}
+            <span className="text-[10px] text-muted-foreground">
+              {periodGrainLabel(period)}
+            </span>
 
-      {/* Global time-range selector — drives every dashboard module. */}
-      <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 px-4 py-2 text-xs">
-        <span className="tt-label">时间范围</span>
-        <Segmented
-          value={period}
-          onChange={(value) => setPeriod(value)}
-          options={periodOptions}
-        />
-        {period === "custom" && (
-          <>
-            <input
-              type="date"
-              value={from}
-              max={to}
-              onChange={(event) => setFrom(event.target.value)}
-              className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
-              aria-label="开始日期"
-            />
-            <span className="text-muted-foreground">至</span>
-            <input
-              type="date"
-              value={to}
-              min={from}
-              onChange={(event) => setTo(event.target.value)}
-              className="rounded-sm border border-border bg-surface-2 px-2 py-1 outline-none"
-              aria-label="结束日期"
-            />
-          </>
-        )}
-        <span className="ml-auto text-muted-foreground">
-          {periodGrainLabel(period)}
-        </span>
-        <button
-          type="button"
-          onClick={() => setShowPoster(true)}
-          disabled={selectedEvents.length === 0}
-          className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-          title="生成 Token 海报"
-        >
-          <Image className="size-3.5" />
-          导出海报
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowExportMenu(!showExportMenu)}
-            disabled={selectedEvents.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-            title="导出 CSV / JSON"
-          >
-            <Download className="size-3.5" />
-            导出数据
-          </button>
-          {showExportMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowExportMenu(false)}
-              />
-              <div className="absolute right-0 top-full z-20 mt-1 flex w-32 flex-col gap-0.5 rounded-sm border border-border bg-surface p-1 shadow-lg">
+            {/* Dashboard settings */}
+            <details className="relative">
+              <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong">
+                看板设置
+              </summary>
+              <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-sm border border-border bg-surface p-2 shadow-lg">
+                {(Object.keys(dashboardDefaults) as DashboardSection[]).map(
+                  (section) => {
+                    const labels: Record<DashboardSection, string> = {
+                      kpis: "5 个 KPI",
+                      trend: "趋势",
+                      provider: "AI 客户端",
+                      models: "最近模型",
+                      heatmap: "热力图",
+                      activity: "消耗明细",
+                    };
+                    return (
+                      <label
+                        key={section}
+                        className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-xs transition-colors hover:bg-accent"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={dashboardSections[section]}
+                          onChange={() => updateDashboardSections(section)}
+                          className="size-3"
+                        />
+                        {labels[section]}
+                      </label>
+                    );
+                  },
+                )}
                 <button
                   type="button"
-                  onClick={() => handleExport("csv")}
-                  className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                  onClick={() => {
+                    setDashboardSections(dashboardDefaults);
+                    setLayouts(dashboardLayouts);
+                    window.localStorage.removeItem(
+                      "trusttools-dashboard-sections",
+                    );
+                    window.localStorage.removeItem(
+                      "trusttools-dashboard-layouts",
+                    );
+                  }}
+                  className="mt-1 w-full rounded-sm px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <FileDown className="size-3.5" /> CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("json")}
-                  className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
-                >
-                  <FileDown className="size-3.5" /> JSON
+                  恢复默认
                 </button>
               </div>
-            </>
-          )}
+            </details>
+
+            {/* Export Poster */}
+            <button
+              type="button"
+              onClick={() => setShowPoster(true)}
+              disabled={selectedEvents.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+              title="生成 Token 海报"
+            >
+              <Image className="size-3.5" />
+              导出海报
+            </button>
+
+            {/* Export Data */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                disabled={selectedEvents.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+                title="导出 CSV / JSON"
+              >
+                <Download className="size-3.5" />
+                导出数据
+              </button>
+              {showExportMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowExportMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full z-20 mt-1 flex w-32 flex-col gap-0.5 rounded-sm border border-border bg-surface p-1 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => handleExport("csv")}
+                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                    >
+                      <FileDown className="size-3.5" /> CSV
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExport("json")}
+                      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent"
+                    >
+                      <FileDown className="size-3.5" /> JSON
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Refresh */}
+            <button
+              type="button"
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+              title="立即重新扫描本机日志"
+            >
+              <RefreshCw
+                className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              {refreshing ? "同步中…" : "立即刷新"}
+            </button>
+
+            {/* Status badge */}
+            <StatusBadge tone="ok">
+              <Dot className="size-1 bg-ok" /> 已同步
+            </StatusBadge>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleRefresh()}
-          disabled={refreshing}
-          className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-          title="立即重新扫描本机日志"
-        >
-          <RefreshCw
-            className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
-          />
-          {refreshing ? "同步中…" : "立即刷新"}
-        </button>
       </div>
 
       {(() => {
         const widgets: ReactNode[] = [
+          // ---- KPI Metric Cards (horizontal scroll) ----
           visibleWidgets.includes("kpis") && (
-            <div key="kpis" className="dashboard-widget dashboard-widget-kpis">
-              <div className="dashboard-kpis">
-                <KpiCard
-                  to="/"
-                  label="区间总费用"
-                  value={intervalCostCny}
-                  hint={intervalCostHint}
-                  accent
-                />
-                <KpiCard
-                  to="/"
-                  label="Token 消耗总量"
-                  value={formatTokens(selectedTotals.totalTokens)}
-                  hint={
-                    <span className="inline-flex items-center gap-1.5">
-                      <span>
-                        {selectedTotals.events.toLocaleString()} 个真实事件
+            <div key="kpis" className="dashboard-widget">
+              <div className="group/metrics relative">
+                <div
+                  ref={summaryRef}
+                  onScroll={syncMetricNav}
+                  className="tt-xscroll flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
+                >
+                  {/* Card: 区间费用 */}
+                  <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                    <div className="tt-label whitespace-nowrap font-mono uppercase">
+                      区间费用
+                    </div>
+                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                      {intervalCostCny}
+                    </div>
+                    <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                      {intervalCostHint}
+                    </div>
+                  </div>
+
+                  {/* Card: Token 总量 */}
+                  <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                    <div className="tt-label whitespace-nowrap font-mono uppercase">
+                      Token 总量
+                    </div>
+                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                      {formatTokens(selectedTotals.totalTokens)}
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-1 text-xs">
+                      {renderMomIndicator(tokenMoM)}
+                      <span className="text-muted-foreground">vs 上一区间</span>
+                    </div>
+                  </div>
+
+                  {/* Card: 缓存节省 */}
+                  <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                    <div className="tt-label whitespace-nowrap font-mono uppercase">
+                      缓存节省
+                    </div>
+                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl text-ok">
+                      {cacheSavingsCny}
+                    </div>
+                    <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                      命中率{" "}
+                      <span className="tt-num text-foreground">
+                        {cacheHitRate.toFixed(0)}%
                       </span>
-                      <MoMBadge value={tokenMoM} goodWhenDown />
-                    </span>
-                  }
-                />
-                <KpiCard
-                  to="/"
-                  label="缓存命中节省费用"
-                  value={cacheSavingsCny}
-                  hint={`命中率 ${cacheHitRate.toFixed(0)}%`}
-                  tone="ok"
-                />
-                <KpiCard
-                  to="/skills"
-                  label="本地 Skill 总数"
-                  value={`${skillHealth.total}`}
-                  hint={
-                    <span className="dashboard-health">
-                      {skillHealth.rows.map((item) => (
-                        <span key={item.health}>
-                          <Dot className={item.dot} /> {item.count}
-                        </span>
-                      ))}
-                    </span>
-                  }
-                />
-              </div>
-              <div className="dashboard-kpis dashboard-kpis-secondary">
-                <KpiCard
-                  to="/"
-                  label="区间总 Token"
-                  value={formatTokens(selectedTotals.totalTokens)}
-                  hint={`${selectedTotals.events.toLocaleString()} 个事件`}
-                />
-                <KpiCard
-                  to="/"
-                  label="区间总费用"
-                  value={intervalCostCny}
-                  hint={intervalCostHint}
-                />
-                <KpiCard
-                  to="/"
-                  label="输入 Token"
-                  value={formatTokens(tokenRowBy("input"))}
-                  hint={`${shareOf(tokenRowBy("input"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
-                />
-                <KpiCard
-                  to="/"
-                  label="输出 Token"
-                  value={formatTokens(tokenRowBy("output"))}
-                  hint={`${shareOf(tokenRowBy("output"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
-                />
-                <KpiCard
-                  to="/"
-                  label="缓存读 Token"
-                  value={formatTokens(tokenRowBy("cacheRead"))}
-                  hint={`${shareOf(tokenRowBy("cacheRead"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
-                />
-                <KpiCard
-                  to="/"
-                  label="缓存写 Token"
-                  value={formatTokens(tokenRowBy("cacheWrite"))}
-                  hint={`${shareOf(tokenRowBy("cacheWrite"), selectedTotals.totalTokens).toFixed(0)}% 占比`}
-                />
+                    </div>
+                  </div>
+
+                  {/* Card: Skill 数 */}
+                  <Link
+                    to="/skills"
+                    className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
+                  >
+                    <div className="tt-label whitespace-nowrap font-mono uppercase">
+                      Skill 数
+                    </div>
+                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                      {skillHealth.total}
+                      <span className="text-base text-muted-foreground">
+                        {" "}
+                        个
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs">
+                      {skillHealth.rows
+                        .filter((r) => r.count > 0)
+                        .map((item) => (
+                          <span
+                            key={item.health}
+                            className="inline-flex items-center gap-0.5"
+                          >
+                            <span
+                              className={`inline-block size-1.5 rounded-full ${item.dot}`}
+                            />
+                            {item.count}
+                          </span>
+                        ))}
+                    </div>
+                  </Link>
+
+                  {/* Token breakdown cards */}
+                  {tokenTypeRows
+                    .filter((r) => r.totalTokens > 0)
+                    .map((row) => (
+                      <div
+                        key={row.key}
+                        className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
+                      >
+                        <div className="tt-label whitespace-nowrap font-mono uppercase">
+                          {tokenTypeLabelMap[row.key] ?? row.key}
+                        </div>
+                        <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                          {formatTokens(row.totalTokens)}
+                        </div>
+                        <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                          {shareOf(
+                            row.totalTokens,
+                            selectedTotals.totalTokens,
+                          ).toFixed(0)}
+                          % 占比
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Pagination: fade edge + dots + chevrons */}
+                {metricNav.pages > 1 && (
+                  <>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background to-transparent" />
+                    <div className="mt-2 flex items-center justify-end gap-3">
+                      <span className="text-[10px] tracking-[0.18em] text-muted-foreground">
+                        {String(metricNav.page + 1).padStart(2, "0")} /{" "}
+                        {String(metricNav.pages).padStart(2, "0")}
+                      </span>
+                      <div className="flex items-center gap-[3px]">
+                        {Array.from({ length: metricNav.pages }).map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            aria-label={`第 ${i + 1} 组指标`}
+                            onClick={() => goMetricPage(i)}
+                            className={`h-[6px] transition-all ${
+                              i === metricNav.page
+                                ? "w-6 bg-primary shadow-[0_0_8px_0_var(--color-primary)]"
+                                : "w-[6px] bg-border hover:bg-primary/60"
+                            }`}
+                            style={{
+                              clipPath:
+                                "polygon(3px 0,100% 0,calc(100% - 3px) 100%,0 100%)",
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {(
+                          [
+                            {
+                              dir: -1,
+                              label: "上一组指标",
+                              Icon: ChevronLeft,
+                            },
+                            {
+                              dir: 1,
+                              label: "下一组指标",
+                              Icon: ChevronRight,
+                            },
+                          ] as const
+                        ).map(({ dir, label, Icon }) => {
+                          const disabled =
+                            dir < 0
+                              ? metricNav.page === 0
+                              : metricNav.page >= metricNav.pages - 1;
+                          return (
+                            <button
+                              key={label}
+                              type="button"
+                              aria-label={label}
+                              disabled={disabled}
+                              onClick={() => goMetricPage(metricNav.page + dir)}
+                              className="grid size-6 place-items-center rounded-sm border border-border bg-surface-2 text-muted-foreground transition-all hover:border-primary/60 hover:text-primary hover:shadow-[0_0_10px_-2px_var(--color-primary)] disabled:pointer-events-none disabled:opacity-25"
+                            >
+                              <Icon className="size-3.5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ),
 
+          // ---- Trend Chart ----
           dashboardSections.trend && (
             <div key="trend" className="dashboard-widget">
-              <Panel
-                className="dashboard-trend"
-                title="Token 消耗趋势（按 AI 客户端分色）"
-              >
-                <UsageTrendChart
-                  events={selectedEvents}
-                  daily={selectedDaily}
-                  period={period}
-                  customFrom={from}
-                  customTo={to}
-                />
+              <Panel title="Token 消耗趋势（按 AI 客户端分色）">
+                {/* Summary stats grid */}
+                <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
+                  <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                    <div className="tt-label font-mono uppercase">区间合计</div>
+                    <div className="tt-num mt-0.5 text-sm">
+                      {formatTokens(trendStats.sum)}
+                    </div>
+                  </div>
+                  <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                    <div className="tt-label font-mono uppercase">均值</div>
+                    <div className="tt-num mt-0.5 text-sm">
+                      {formatTokens(trendStats.avg)}
+                    </div>
+                  </div>
+                  <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                    <div className="tt-label font-mono uppercase">峰值</div>
+                    <div className="tt-num mt-0.5 text-sm">
+                      {formatTokens(trendStats.peak)}
+                    </div>
+                    {trendStats.peakLabel && (
+                      <div className="text-[10px] text-muted-foreground">
+                        {trendStats.peakLabel}
+                      </div>
+                    )}
+                  </div>
+                  <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                    <div className="tt-label font-mono uppercase">环比</div>
+                    <div
+                      className={`tt-num mt-0.5 text-sm ${
+                        tokenMoM != null
+                          ? tokenMoM > 0
+                            ? "text-danger"
+                            : tokenMoM < 0
+                              ? "text-ok"
+                              : ""
+                          : ""
+                      }`}
+                    >
+                      {tokenMoM != null && Number.isFinite(tokenMoM)
+                        ? `${tokenMoM > 0 ? "+" : ""}${tokenMoM.toFixed(1)}%`
+                        : "−−"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart area with grid background overlay */}
+                <div className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25">
+                  <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
+                  <UsageTrendChart
+                    events={selectedEvents}
+                    daily={selectedDaily}
+                    period={period}
+                    customFrom={from}
+                    customTo={to}
+                  />
+                </div>
               </Panel>
             </div>
           ),
 
+          // ---- Provider / Context Breakdown ----
           dashboardSections.provider && (
             <div key="provider" className="dashboard-widget">
               <Panel
@@ -671,6 +913,7 @@ function Dashboard() {
             </div>
           ),
 
+          // ---- Model Distribution ----
           dashboardSections.models && (
             <div key="models" className="dashboard-widget">
               <Panel title="模型分布">
@@ -679,6 +922,7 @@ function Dashboard() {
             </div>
           ),
 
+          // ---- Heatmap ----
           dashboardSections.heatmap && (
             <div key="heatmap" className="dashboard-widget">
               <Panel
@@ -695,12 +939,13 @@ function Dashboard() {
             </div>
           ),
 
+          // ---- Detail Table ----
           dashboardSections.activity && (
             <div key="activity" className="dashboard-widget">
               <Panel
                 className="dashboard-activity"
                 title="消耗明细"
-                bodyClassName="p-3"
+                bodyClassName="p-0"
               >
                 <UsageDetailTable events={selectedEvents} />
               </Panel>
@@ -865,10 +1110,8 @@ function OnboardingDashboard({
     return (
       <>
         <PageHeader
-          eyebrow="本地用量"
           title="首页总览"
           desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
-          status={<StatusBadge tone="danger">读取失败</StatusBadge>}
         />
         <EmptyState
           icon={<Database className="size-8" />}
@@ -901,10 +1144,8 @@ function OnboardingDashboard({
     return (
       <>
         <PageHeader
-          eyebrow="本地用量"
           title="首页总览"
           desc="把散落在各 AI 工具的 token、skill、会话，统一收回你手里。"
-          status={<StatusBadge tone="warn">未检测到 AI 工具</StatusBadge>}
         />
         <div className="grid gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -957,10 +1198,8 @@ function OnboardingDashboard({
     return (
       <>
         <PageHeader
-          eyebrow="本地用量"
           title="首页总览"
           desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
-          status={<StatusBadge tone="warn">暂无使用记录</StatusBadge>}
         />
         <Panel title="检测到的 AI 工具">
           <div className="flex flex-col gap-2">
@@ -1006,10 +1245,8 @@ function OnboardingDashboard({
   return (
     <>
       <PageHeader
-        eyebrow="本地用量"
         title="首页总览"
         desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
-        status={<StatusBadge tone="warn">暂无数据</StatusBadge>}
       />
       <EmptyState
         icon={<Database className="size-8" />}
