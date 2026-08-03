@@ -17,7 +17,6 @@ import { ThemeProvider } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { refreshLocalUsageSnapshot } from "../lib/local-usage";
 import { seedDailyCountFromPlatform } from "../lib/security/daily-limit";
-import { parseSettings } from "../lib/settings/store";
 
 function NotFoundComponent() {
   return (
@@ -180,15 +179,7 @@ function LocalUsageAutoRefresh() {
       ) {
         return;
       }
-      const frequency = parseSettings(
-        window.localStorage.getItem("trusttools.settings.v1"),
-      ).collectionFrequency;
-      const interval =
-        frequency === "realtime"
-          ? 5_000
-          : frequency === "5m"
-            ? 5 * 60_000
-            : 30 * 60_000;
+      const interval = 5_000;
       if (!force && Date.now() - lastRefresh < interval) return;
 
       refreshing = true;

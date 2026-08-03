@@ -43,7 +43,6 @@ import {
   requestAiSecurityReview,
   requestSecurityArchiveScan,
 } from "../lib/security/server-fns";
-import { useAITrackerSettings } from "../lib/settings/store";
 
 export const Route = createFileRoute("/security")({
   head: () => ({
@@ -143,7 +142,6 @@ function SecurityPage() {
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("全部");
   const [updatingRules, setUpdatingRules] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-  const { settings } = useAITrackerSettings();
   const [used, setUsed] = useState(() =>
     typeof window === "undefined" ? 0 : readDailyScanCount(window.localStorage),
   );
@@ -210,7 +208,7 @@ function SecurityPage() {
           data: {
             name: archive.name,
             base64: await readFileAsBase64(archive),
-            userRules: settings.securityRules,
+            userRules: [],
             aiReviewEnabled,
           },
         });
@@ -225,7 +223,7 @@ function SecurityPage() {
         const inputs = await readSelectedFiles(files);
         if (inputs.length === 0)
           throw new Error("未找到可读取的文本文件（单文件上限 2MB）");
-        next = scanSecurityFiles(inputs, settings.securityRules);
+        next = scanSecurityFiles(inputs, []);
         if (aiReviewEnabled) {
           next.aiReview = await requestAiSecurityReview({ data: next.risks });
         }

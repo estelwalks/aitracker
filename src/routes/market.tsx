@@ -170,10 +170,7 @@ function MarketPage() {
 
   // Installed skill names (for "已安装" tags)
   const installedSkillNames = useMemo(
-    () =>
-      new Set(
-        (localSnapshot?.skills ?? []).map((s) => s.name),
-      ),
+    () => new Set((localSnapshot?.skills ?? []).map((s) => s.name)),
     [localSnapshot],
   );
 
@@ -192,8 +189,7 @@ function MarketPage() {
 
   // Installed count for stats (cross-reference current page with local skills)
   const installedCount = useMemo(
-    () =>
-      result.skills.filter((s) => installedSkillNames.has(s.name)).length,
+    () => result.skills.filter((s) => installedSkillNames.has(s.name)).length,
     [result.skills, installedSkillNames],
   );
 
@@ -241,11 +237,7 @@ function MarketPage() {
         />
         <StatCard
           label="总下载量"
-          value={
-            stats
-              ? stats.totalDownloads.toLocaleString()
-              : "-"
-          }
+          value={stats ? stats.totalDownloads.toLocaleString() : "-"}
           hint="当前页统计"
         />
       </div>
@@ -296,7 +288,10 @@ function MarketPage() {
         <div
           className={`transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
         >
-          <Panel title={`Skill 列表（${result.pagination.total.toLocaleString()}）`} bodyClassName="p-0">
+          <Panel
+            title={`Skill 列表（${result.pagination.total.toLocaleString()}）`}
+            bodyClassName="p-0"
+          >
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -322,7 +317,8 @@ function MarketPage() {
               <TableBody>
                 {result.skills.map((skill, index) => {
                   const security = securityPresentation(skill);
-                  const rank = (result.pagination.page - 1) * PAGE_SIZE + index + 1;
+                  const rank =
+                    (result.pagination.page - 1) * PAGE_SIZE + index + 1;
                   const isInstalled = installedSkillNames.has(skill.name);
                   return (
                     <TableRow
@@ -380,7 +376,9 @@ function MarketPage() {
                         -
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
-                        {skill.stars !== null ? skill.stars.toLocaleString() : "-"}
+                        {skill.stars !== null
+                          ? skill.stars.toLocaleString()
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         <span className="text-[11px] text-ok">
@@ -639,11 +637,13 @@ function SkillDetailDrawer({
   };
 
   return (
-    <Sheet open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent
-        side="right"
-        className="w-full overflow-y-auto sm:max-w-lg"
-      >
+    <Sheet
+      open={true}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             {security.safe ? (
@@ -708,9 +708,7 @@ function SkillDetailDrawer({
           {/* Security notice bar */}
           <div className="flex items-center gap-2 rounded-sm border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">
             <ShieldCheck className="size-4 shrink-0" />
-            <span>
-              安全扫描通过 · 未检出恶意 URL、危险命令与敏感信息
-            </span>
+            <span>安全扫描通过 · 未检出恶意 URL、危险命令与敏感信息</span>
           </div>
 
           {/* Install info */}
@@ -909,10 +907,7 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
 
 // --- Helpers ---
 
-function getPageNumbers(
-  current: number,
-  total: number,
-): Array<number | "..."> {
+function getPageNumbers(current: number, total: number): Array<number | "..."> {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);
   }
