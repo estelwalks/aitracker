@@ -143,8 +143,8 @@ function ModelDonut({
       : []),
   ];
   return (
-    <div className="grid flex-1 grid-rows-[1fr_auto] gap-2">
-      <div className="relative min-h-0">
+    <div className="flex flex-col gap-2">
+      <div className="relative" style={{ height: 160 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -224,8 +224,8 @@ function ModelBars({
       : []),
   ];
   return (
-    <div className="grid flex-1 grid-rows-[1fr_auto] gap-2">
-      <div className="min-h-0">
+    <div className="flex flex-col gap-2">
+      <div style={{ height: 160 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
