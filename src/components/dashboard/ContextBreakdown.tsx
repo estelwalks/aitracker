@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import {
   buildContextBreakdown,
   type LocalUsageContextBreakdownRow,
@@ -8,9 +9,17 @@ import {
   formatTokens,
   shareOf,
   sourceLabel,
+  cacheRate,
 } from "../../lib/local-usage/presentation";
 import { estimateUsageCost, formatCost } from "../../lib/pricing";
-import type { LocalUsageEvent } from "../../lib/local-usage";
+import type {
+  LocalUsageEvent,
+  LocalUsageBreakdown,
+} from "../../lib/local-usage";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 const categoryColors = [
   "var(--color-chart-1)",
@@ -22,170 +31,19 @@ const categoryColors = [
 
 const RICH_CONTEXT_SOURCES = new Set(["claude-code", "codex", "grok"]);
 
-type DimensionKey = "category" | "tool" | "skill" | "command" | "tokenType";
+type DimensionKey = "model" | "tool" | "mcp" | "skill" | "tokenType";
 
 const dimensionLabels: Record<DimensionKey, string> = {
-  category: "工具类别",
-  tool: "工具",
+  model: "模型",
+  tool: "工具调用",
+  mcp: "MCP",
   skill: "Skill",
-  command: "命令",
-  tokenType: "Token 类型",
+  tokenType: "Token类型",
 };
 
-/**
- * FR-005 — Context attribution panel.
- *
- * Two axes:
- *  - Axis A (left): tool ranking with each tool's share %, searchable by name.
- *    "全部工具" aggregate option shows the overall breakdown; selecting a tool
- *    filters to its events.
- *  - Axis B (right): Messages / Tool / Reasoning / MCP / Skill composition for
- *    the selected tool. Only Claude/Codex/Grok carry rich context logs; other
- *    tools degrade to a Token-type breakdown or show an empty state.
- */
-export interface ContextBreakdownProps {
-  events: LocalUsageEvent[];
-}
-
-export function ContextBreakdown({ events }: ContextBreakdownProps) {
-  const [selectedSource, setSelectedSource] = useState<string>("__all__");
-  const [query, setQuery] = useState("");
-  const [dimension, setDimension] = useState<DimensionKey>("category");
-
-  const toolRows = useMemo(() => buildToolRanking(events), [events]);
-  const filteredTools = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (normalized.length === 0) return toolRows;
-    return toolRows.filter((row) =>
-      sourceLabel(row.source).toLowerCase().includes(normalized),
-    );
-  }, [toolRows, query]);
-
-  const scopedEvents = useMemo(
-    () =>
-      selectedSource === "__all__"
-        ? events
-        : events.filter((event) => event.source === selectedSource),
-    [events, selectedSource],
-  );
-
-  const selectedToolTokens = scopedEvents.reduce(
-    (sum, event) => sum + event.totalTokens,
-    0,
-  );
-  const selectedToolCost = useMemo(
-    () => estimateUsageCost(scopedEvents),
-    [scopedEvents],
-  );
-
-  const breakdown = useMemo(
-    () => buildContextBreakdown(scopedEvents),
-    [scopedEvents],
-  );
-  const sourceHasRichContext = useMemo(() => {
-    if (selectedSource === "__all__") {
-      return events.some((event) => RICH_CONTEXT_SOURCES.has(event.source));
-    }
-    return RICH_CONTEXT_SOURCES.has(selectedSource);
-  }, [events, selectedSource]);
-
-  const dimensionRows = useMemo(() => {
-    if (dimension === "tokenType") return buildTokenTypeRows(scopedEvents);
-    const rows =
-      dimension === "category"
-        ? breakdown.categories
-        : dimension === "tool"
-          ? breakdown.tools
-          : dimension === "skill"
-            ? breakdown.skills
-            : breakdown.commands;
-    return rows.filter((row) => row.totalTokens > 0);
-  }, [dimension, breakdown, scopedEvents]);
-
-  const aggregateLabel =
-    selectedSource === "__all__" ? "全部工具" : sourceLabel(selectedSource);
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="tt-num">
-          {formatTokens(selectedToolTokens)} ·{" "}
-          {formatCost(selectedToolCost, "CNY")}
-        </span>
-        <span>{aggregateLabel}</span>
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(140px,200px)_1fr]">
-        {/* Axis A — tool ranking */}
-        <div className="flex min-h-0 flex-col">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索工具…"
-            aria-label="搜索工具"
-            className="mb-2 w-full rounded-sm border border-border bg-surface-2 px-2 py-1 text-[11px] outline-none"
-          />
-          <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
-            <ToolRanking
-              toolRows={filteredTools}
-              selectedSource={selectedSource}
-              totalTokens={toolRows.reduce(
-                (sum, row) => sum + row.totalTokens,
-                0,
-              )}
-              onSelect={setSelectedSource}
-            />
-          </div>
-        </div>
-
-        {/* Axis B — composition breakdown */}
-        <div className="flex min-h-0 flex-col">
-          <div className="mb-2 flex flex-wrap gap-1">
-            {(
-              [
-                "category",
-                "tool",
-                "skill",
-                "command",
-                "tokenType",
-              ] as DimensionKey[]
-            ).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setDimension(key)}
-                disabled={!sourceHasRichContext && key !== "tokenType"}
-                className={`rounded-sm border px-2 py-1 text-[11px] transition-colors ${
-                  dimension === key
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-border-strong"
-                } disabled:cursor-not-allowed disabled:opacity-40`}
-              >
-                {dimensionLabels[key]}
-              </button>
-            ))}
-          </div>
-          {!sourceHasRichContext && dimension !== "tokenType" ? (
-            <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-              该工具暂无上下文构成数据
-            </div>
-          ) : dimensionRows.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-              当前维度暂无数据
-            </div>
-          ) : (
-            <DimensionList
-              rows={dimensionRows}
-              dimension={dimension}
-              totalTokens={breakdown.totals.totalTokens}
-              scopedTokens={selectedToolTokens}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// Data builders
+// ---------------------------------------------------------------------------
 
 interface ToolRankRow {
   source: string;
@@ -209,6 +67,399 @@ function buildToolRanking(events: LocalUsageEvent[]): ToolRankRow[] {
         left.source.localeCompare(right.source),
     );
 }
+
+interface ModelBreakdownRow extends LocalUsageContextBreakdownRow {
+  cost: ReturnType<typeof estimateUsageCost>;
+}
+
+function buildModelBreakdown(events: LocalUsageEvent[]): ModelBreakdownRow[] {
+  const groups = new Map<string, LocalUsageEvent[]>();
+  for (const event of events) {
+    const list = groups.get(event.model) ?? [];
+    list.push(event);
+    groups.set(event.model, list);
+  }
+
+  return [...groups.entries()]
+    .map(([model, modelEvents]) => {
+      const row: LocalUsageContextBreakdownRow = {
+        key: model,
+        calls: modelEvents.length,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: 0,
+      };
+      for (const e of modelEvents) {
+        row.inputTokens += e.inputTokens;
+        row.cachedInputTokens += e.cachedInputTokens;
+        row.cacheCreationInputTokens += e.cacheCreationInputTokens;
+        row.outputTokens += e.outputTokens;
+        row.reasoningOutputTokens += e.reasoningOutputTokens;
+        row.totalTokens += e.totalTokens;
+      }
+      return { ...row, cost: estimateUsageCost(modelEvents) };
+    })
+    .sort(
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        left.key.localeCompare(right.key),
+    );
+}
+
+function buildTokenTypeRows(
+  events: LocalUsageEvent[],
+): LocalUsageContextBreakdownRow[] {
+  const totals = events.reduce(
+    (acc, event) => {
+      acc.inputTokens += event.inputTokens;
+      acc.cachedInputTokens += event.cachedInputTokens;
+      acc.cacheCreationInputTokens += event.cacheCreationInputTokens;
+      acc.outputTokens += event.outputTokens;
+      acc.reasoningOutputTokens += event.reasoningOutputTokens;
+      acc.totalTokens += event.totalTokens;
+      return acc;
+    },
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+    },
+  );
+  const mapped = breakdownComposition({
+    key: "totals",
+    events: events.length,
+    ...totals,
+  });
+  return mapped.map((item) => ({
+    key: item.label,
+    calls: 0,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens: item.value,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// SegBar – thin 5-segment coloured bar for token composition
+// ---------------------------------------------------------------------------
+
+function SegBar({
+  composition,
+  total,
+}: {
+  composition: { label: string; value: number; color: string }[];
+  total: number;
+}) {
+  if (total === 0 || composition.length === 0) return null;
+  return (
+    <div className="mt-1 flex h-[3px] w-full overflow-hidden rounded-[2px] bg-surface-2">
+      {composition.map((seg, i) => (
+        <span
+          key={i}
+          className="block h-full"
+          title={`${seg.label} ${formatTokens(seg.value)}`}
+          style={{
+            width: `${(seg.value / total) * 100}%`,
+            background: seg.color,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SourceDetail – expanded view for "模型" tab rows
+// ---------------------------------------------------------------------------
+
+function SourceDetail({
+  row,
+  scopedTokens,
+}: {
+  row: ModelBreakdownRow;
+  scopedTokens: number;
+}) {
+  const composition = breakdownComposition(
+    row as unknown as LocalUsageBreakdown,
+  );
+
+  return (
+    <div className="border-t border-border/60 bg-surface-2/40 px-3 py-2">
+      <div className="grid grid-cols-4 gap-x-3 gap-y-1">
+        {composition.map((seg, i) => {
+          const share = scopedTokens > 0 ? shareOf(seg.value, scopedTokens) : 0;
+          return (
+            <div
+              key={i}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground"
+            >
+              <span
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ background: seg.color }}
+              />
+              <span className="truncate">{seg.label}</span>
+              <span className="tt-num ml-auto">{formatTokens(seg.value)}</span>
+              <span className="tt-num w-8 text-right">{share.toFixed(1)}%</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex items-center justify-between border-t border-border/40 pt-1 text-[10px] text-muted-foreground">
+        <span className="tt-num">
+          总计 {formatTokens(row.totalTokens)} · {formatCost(row.cost, "CNY")}
+        </span>
+        <span className="tt-num">调用 {row.calls} 次</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EntityDetail – 8-cell stats grid for tool / mcp / skill / tokenType rows
+// ---------------------------------------------------------------------------
+
+interface EntityMetrics {
+  callCount: number | null;
+  distinctSessions: number | null;
+  avgTokensPerCall: number | null;
+  costEstimate: ReturnType<typeof estimateUsageCost> | null;
+  cacheHitPercent: number | null;
+}
+
+function computeEntityMetrics(
+  row: LocalUsageContextBreakdownRow,
+  scopedEvents: LocalUsageEvent[],
+): EntityMetrics {
+  const matchingEvents = scopedEvents.filter((event) => {
+    const tools = event.context?.tools ?? [];
+    return tools.some((tool) => tool.name === row.key);
+  });
+
+  const sessions = new Set(
+    matchingEvents
+      .filter((e) => e.sessionId?.trim())
+      .map((e) => e.sessionId!.trim()),
+  );
+
+  return {
+    callCount: row.calls > 0 ? row.calls : null,
+    distinctSessions: sessions.size > 0 ? sessions.size : null,
+    avgTokensPerCall:
+      row.calls > 0 && row.totalTokens > 0
+        ? Math.round(row.totalTokens / row.calls)
+        : null,
+    costEstimate:
+      matchingEvents.length > 0 ? estimateUsageCost(matchingEvents) : null,
+    cacheHitPercent:
+      row.inputTokens + row.cachedInputTokens + row.cacheCreationInputTokens > 0
+        ? Math.round(cacheRate(row) * 10) / 10
+        : null,
+  };
+}
+
+function dash(value: number | string | null): string {
+  if (value == null) return "--";
+  if (typeof value === "number") return String(value);
+  return value;
+}
+
+function EntityDetail({
+  metrics,
+  row,
+}: {
+  metrics: EntityMetrics;
+  row: LocalUsageContextBreakdownRow;
+}) {
+  const cells: { label: string; value: string }[] = [
+    { label: "调用次数", value: dash(metrics.callCount) },
+    { label: "涉及会话", value: dash(metrics.distinctSessions) },
+    {
+      label: "单次均耗",
+      value:
+        metrics.avgTokensPerCall != null
+          ? formatTokens(metrics.avgTokensPerCall)
+          : "--",
+    },
+    {
+      label: "费用",
+      value:
+        metrics.costEstimate != null
+          ? formatCost(metrics.costEstimate, "CNY")
+          : "--",
+    },
+    {
+      label: "缓存命中",
+      value:
+        metrics.cacheHitPercent != null ? `${metrics.cacheHitPercent}%` : "--",
+    },
+    { label: "平均耗时", value: "--" },
+    { label: "失败率", value: "--" },
+    { label: "最近使用", value: "--" },
+  ];
+
+  return (
+    <div className="border-t border-border/60 bg-surface-2/40 px-3 py-2">
+      <div className="grid grid-cols-4 gap-x-2 gap-y-1.5">
+        {cells.map((cell, i) => (
+          <div key={i} className="flex flex-col text-[10px]">
+            <span className="text-muted-foreground/70">{cell.label}</span>
+            <span className="tt-num mt-0.5 text-foreground/80">
+              {cell.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Expandable model row
+// ---------------------------------------------------------------------------
+
+function ExpandableModelRow({
+  row,
+  index,
+  isExpanded,
+  onToggle,
+  scopedTokens,
+}: {
+  row: ModelBreakdownRow;
+  index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  scopedTokens: number;
+}) {
+  const composition = breakdownComposition(
+    row as unknown as LocalUsageBreakdown,
+  );
+  const share = scopedTokens > 0 ? shareOf(row.totalTokens, scopedTokens) : 0;
+
+  return (
+    <div className="border-b border-border/60 last:border-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] hover:bg-accent/30"
+      >
+        {isExpanded ? (
+          <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+        )}
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: categoryColors[index % categoryColors.length] }}
+        />
+        <span className="truncate">{row.key}</span>
+        <span className="tt-num ml-auto w-14 text-right">
+          {formatTokens(row.totalTokens)}
+        </span>
+        <span className="tt-num w-14 whitespace-nowrap text-right text-muted-foreground">
+          {formatCost(row.cost, "CNY")}
+        </span>
+        <span className="tt-num w-9 whitespace-nowrap text-right text-muted-foreground">
+          {share.toFixed(1)}%
+        </span>
+      </button>
+      <div className="px-2 pb-1.5">
+        <SegBar composition={composition} total={row.totalTokens} />
+      </div>
+      {isExpanded && <SourceDetail row={row} scopedTokens={scopedTokens} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Expandable entity row (tool / mcp / skill / tokenType)
+// ---------------------------------------------------------------------------
+
+function ExpandableEntityRow({
+  row,
+  index,
+  isExpanded,
+  onToggle,
+  scopedEvents,
+  scopedTokens,
+  dimension,
+}: {
+  row: LocalUsageContextBreakdownRow;
+  index: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  scopedEvents: LocalUsageEvent[];
+  scopedTokens: number;
+  dimension: DimensionKey;
+}) {
+  const share = scopedTokens > 0 ? shareOf(row.totalTokens, scopedTokens) : 0;
+  const maxTokens = scopedTokens || row.totalTokens || 1;
+  const barWidth = Math.max(2, (row.totalTokens / maxTokens) * 100);
+  const metrics = useMemo(
+    () =>
+      dimension !== "tokenType"
+        ? computeEntityMetrics(row, scopedEvents)
+        : ({
+            callCount: null,
+            distinctSessions: null,
+            avgTokensPerCall: null,
+            costEstimate: null,
+            cacheHitPercent: null,
+          } satisfies EntityMetrics),
+    [row, scopedEvents, dimension],
+  );
+
+  return (
+    <div className="border-b border-border/60 last:border-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] hover:bg-accent/30"
+      >
+        {isExpanded ? (
+          <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+        )}
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: categoryColors[index % categoryColors.length] }}
+        />
+        <span className="truncate" title={row.key}>
+          {dimensionLabel(dimension, row.key)}
+        </span>
+        <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+          <span
+            className="block h-full rounded-full"
+            style={{
+              width: `${barWidth}%`,
+              background: categoryColors[index % categoryColors.length],
+            }}
+          />
+        </span>
+        <span className="tt-num w-14 text-right">
+          {formatTokens(row.totalTokens)}
+        </span>
+        <span className="tt-num w-9 text-right text-muted-foreground">
+          {share.toFixed(1)}%
+        </span>
+      </button>
+      {isExpanded && <EntityDetail metrics={metrics} row={row} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ToolRanking – left panel (unchanged)
+// ---------------------------------------------------------------------------
 
 function ToolRanking({
   toolRows,
@@ -287,128 +538,223 @@ function ToolRanking({
   );
 }
 
-function DimensionList({
-  rows,
-  dimension,
-  totalTokens,
-  scopedTokens,
-}: {
-  rows: LocalUsageContextBreakdownRow[];
-  dimension: DimensionKey;
-  totalTokens: number;
-  scopedTokens: number;
-}) {
-  // For the category/tool/skill/command dimensions the breakdown totals are
-  // scoped to the selected tool. For tokenType we report against the selected
-  // tool's own total — passed in as scopedTokens.
-  const base = dimension === "tokenType" ? scopedTokens : totalTokens;
-  const effectiveBase =
-    base > 0 ? base : rows.reduce((sum, r) => sum + r.totalTokens, 0);
-  const max = rows.reduce((max, r) => Math.max(max, r.totalTokens), 0) || 1;
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export interface ContextBreakdownProps {
+  events: LocalUsageEvent[];
+}
+
+export function ContextBreakdown({ events }: ContextBreakdownProps) {
+  const [selectedSource, setSelectedSource] = useState<string>("__all__");
+  const [query, setQuery] = useState("");
+  const [dimension, setDimension] = useState<DimensionKey>("model");
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  // --- Tool ranking (left panel) ---
+
+  const toolRows = useMemo(() => buildToolRanking(events), [events]);
+  const filteredTools = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (normalized.length === 0) return toolRows;
+    return toolRows.filter((row) =>
+      sourceLabel(row.source).toLowerCase().includes(normalized),
+    );
+  }, [toolRows, query]);
+
+  const scopedEvents = useMemo(
+    () =>
+      selectedSource === "__all__"
+        ? events
+        : events.filter((event) => event.source === selectedSource),
+    [events, selectedSource],
+  );
+
+  const selectedToolTokens = scopedEvents.reduce(
+    (sum, event) => sum + event.totalTokens,
+    0,
+  );
+  const selectedToolCost = useMemo(
+    () => estimateUsageCost(scopedEvents),
+    [scopedEvents],
+  );
+
+  const breakdown = useMemo(
+    () => buildContextBreakdown(scopedEvents),
+    [scopedEvents],
+  );
+  const sourceHasRichContext = useMemo(() => {
+    if (selectedSource === "__all__") {
+      return events.some((event) => RICH_CONTEXT_SOURCES.has(event.source));
+    }
+    return RICH_CONTEXT_SOURCES.has(selectedSource);
+  }, [events, selectedSource]);
+
+  // --- Available dimension tabs ---
+
+  const availableTabs = useMemo<DimensionKey[]>(() => {
+    if (selectedSource === "__all__") return ["model"];
+    if (sourceHasRichContext)
+      return ["model", "tool", "mcp", "skill", "tokenType"];
+    return ["model", "tokenType"];
+  }, [selectedSource, sourceHasRichContext]);
+
+  // Keep dimension in sync when tabs change
+  useEffect(() => {
+    if (!availableTabs.includes(dimension)) {
+      setDimension(availableTabs[0]);
+      setExpandedKeys(new Set());
+    }
+  }, [availableTabs, dimension]);
+
+  const handleDimensionChange = (key: DimensionKey) => {
+    if (key !== dimension) {
+      setDimension(key);
+      setExpandedKeys(new Set());
+    }
+  };
+
+  // --- Dimension rows ---
+
+  const modelRows = useMemo(
+    () => buildModelBreakdown(scopedEvents),
+    [scopedEvents],
+  );
+
+  const dimensionRows = useMemo(():
+    LocalUsageContextBreakdownRow[] | ModelBreakdownRow[] => {
+    switch (dimension) {
+      case "model":
+        return modelRows;
+      case "tool":
+        return breakdown.tools.filter((r) => r.totalTokens > 0);
+      case "mcp":
+        return breakdown.categories.filter(
+          (r) => r.key === "mcp" && r.totalTokens > 0,
+        );
+      case "skill":
+        return breakdown.skills.filter((r) => r.totalTokens > 0);
+      case "tokenType":
+        return buildTokenTypeRows(scopedEvents);
+    }
+  }, [dimension, breakdown, scopedEvents, modelRows]);
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // --- Labels ---
+
+  const aggregateLabel =
+    selectedSource === "__all__" ? "全部工具" : sourceLabel(selectedSource);
+
+  // --- Render ---
+
   return (
-    <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
-      <div className="flex flex-col">
-        {rows.map((row, index) => {
-          const share =
-            effectiveBase > 0 ? shareOf(row.totalTokens, effectiveBase) : 0;
-          const width = Math.max(2, (row.totalTokens / max) * 100);
-          return (
-            <div
-              key={`${dimension}-${row.key}`}
-              className="flex items-center gap-2 border-b border-border/60 px-2 py-1.5 text-[11px] last:border-0"
-            >
-              <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{
-                  background: categoryColors[index % categoryColors.length],
-                }}
-              />
-              <span className="w-32 shrink-0 truncate" title={row.key}>
-                {dimensionLabel(dimension, row.key)}
-              </span>
-              <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
-                <span
-                  className="block h-full rounded-full"
-                  style={{
-                    width: `${width}%`,
-                    background: categoryColors[index % categoryColors.length],
-                  }}
-                />
-              </span>
-              <span className="tt-num w-14 text-right">
-                {formatTokens(row.totalTokens)}
-              </span>
-              <span className="tt-num w-10 text-right text-muted-foreground">
-                {share.toFixed(1)}%
-              </span>
+    <div className="flex h-full flex-col">
+      <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
+        <span className="tt-num">
+          {formatTokens(selectedToolTokens)} ·{" "}
+          {formatCost(selectedToolCost, "CNY")}
+        </span>
+        <span>{aggregateLabel}</span>
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(140px,200px)_1fr]">
+        {/* Axis A — tool ranking */}
+        <div className="flex min-h-0 flex-col">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索工具…"
+            aria-label="搜索工具"
+            className="mb-2 w-full rounded-sm border border-border bg-surface-2 px-2 py-1 text-[11px] outline-none"
+          />
+          <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+            <ToolRanking
+              toolRows={filteredTools}
+              selectedSource={selectedSource}
+              totalTokens={toolRows.reduce(
+                (sum, row) => sum + row.totalTokens,
+                0,
+              )}
+              onSelect={setSelectedSource}
+            />
+          </div>
+        </div>
+
+        {/* Axis B — dimension breakdown */}
+        <div className="flex min-h-0 flex-col">
+          <div className="mb-2 flex flex-wrap gap-1">
+            {availableTabs.map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleDimensionChange(key)}
+                className={`rounded-sm border px-2 py-1 text-[11px] transition-colors ${
+                  dimension === key
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:border-border-strong"
+                }`}
+              >
+                {dimensionLabels[key]}
+              </button>
+            ))}
+          </div>
+          {dimensionRows.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
+              当前维度暂无数据
             </div>
-          );
-        })}
+          ) : (
+            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+              <div className="flex flex-col">
+                {dimension === "model"
+                  ? (dimensionRows as ModelBreakdownRow[]).map((row, index) => (
+                      <ExpandableModelRow
+                        key={`model-${row.key}`}
+                        row={row}
+                        index={index}
+                        isExpanded={expandedKeys.has(row.key)}
+                        onToggle={() => toggleExpand(row.key)}
+                        scopedTokens={selectedToolTokens}
+                      />
+                    ))
+                  : (dimensionRows as LocalUsageContextBreakdownRow[]).map(
+                      (row, index) => (
+                        <ExpandableEntityRow
+                          key={`${dimension}-${row.key}`}
+                          row={row}
+                          index={index}
+                          isExpanded={expandedKeys.has(row.key)}
+                          onToggle={() => toggleExpand(row.key)}
+                          scopedEvents={scopedEvents}
+                          scopedTokens={selectedToolTokens}
+                          dimension={dimension}
+                        />
+                      ),
+                    )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function buildTokenTypeRows(
-  events: LocalUsageEvent[],
-): LocalUsageContextBreakdownRow[] {
-  // Reuse the presentation breakdownComposition on a synthesized totals row.
-  // For per-source scoping we aggregate the events first.
-  const totals = events.reduce(
-    (acc, event) => {
-      acc.inputTokens += event.inputTokens;
-      acc.cachedInputTokens += event.cachedInputTokens;
-      acc.cacheCreationInputTokens += event.cacheCreationInputTokens;
-      acc.outputTokens += event.outputTokens;
-      acc.reasoningOutputTokens += event.reasoningOutputTokens;
-      acc.totalTokens += event.totalTokens;
-      return acc;
-    },
-    {
-      inputTokens: 0,
-      cachedInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      outputTokens: 0,
-      reasoningOutputTokens: 0,
-      totalTokens: 0,
-    },
-  );
-  const mapped = breakdownComposition({
-    key: "totals",
-    events: events.length,
-    ...totals,
-  });
-  return mapped.map((item) => ({
-    key: item.label,
-    calls: 0,
-    inputTokens: 0,
-    cachedInputTokens: 0,
-    cacheCreationInputTokens: 0,
-    outputTokens: 0,
-    reasoningOutputTokens: 0,
-    totalTokens: item.value,
-  }));
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function dimensionLabel(dimension: DimensionKey, key: string): string {
-  if (dimension === "category") return categoryLabel(key);
   if (dimension === "tokenType") return tokenTypeLabel(key);
   return key;
-}
-
-function categoryLabel(key: string): string {
-  const map: Record<string, string> = {
-    messages: "对话消息",
-    execution: "执行",
-    planning: "规划",
-    agent: "代理",
-    browser: "浏览器",
-    mcp: "MCP",
-    skills: "Skill",
-    other: "其他",
-    text_response: "纯文本回复",
-  };
-  return map[key] ?? key;
 }
 
 function tokenTypeLabel(key: string): string {
