@@ -12,9 +12,7 @@ import {
 } from "recharts";
 import { Segmented } from "../tt";
 import {
-  computeMoM,
   formatTokens,
-  previousPeriodTotal,
   shareOf,
   sourceLabel,
   type UsagePeriod,
@@ -194,32 +192,9 @@ export function UsageTrendChart({
     (sum, value) => sum + value,
     0,
   );
-  const visibleCount = chartDataWithSources.length;
-  const mean = visibleCount > 0 ? visibleTotal / visibleCount : 0;
-
-  const peakPoint = useMemo(() => {
-    let best: { label: string; total: number } | null = null;
-    for (const point of chartDataWithSources) {
-      // Recompute the per-bucket total over visible sources so the peak honors
-      // hidden legends — otherwise toggling a tool off wouldn't move the peak.
-      const total = topSources.reduce((sum, source) => {
-        if (hiddenSet.has(source.key)) return sum;
-        const value = point[source.key];
-        return sum + (typeof value === "number" ? value : 0);
-      }, 0);
-      if (best == null || total > best.total) {
-        best = { label: String(point.label), total };
-      }
-    }
-    return best;
-  }, [chartDataWithSources, topSources, hiddenSet]);
-
-  const previousTotal = useMemo(
-    () =>
-      previousPeriodTotal(events, "totalTokens", period, customFrom, customTo),
-    [events, period, customFrom, customTo],
-  );
-  const mom = computeMoM(visibleTotal, previousTotal ?? 0);
+  const mean = chartDataWithSources.length > 0
+    ? visibleTotal / chartDataWithSources.length
+    : 0;
 
   return (
     <div className="flex flex-col">
@@ -233,37 +208,7 @@ export function UsageTrendChart({
           ]}
         />
       </div>
-      <div className="dashboard-trend-summary">
-        <TrendMetric label="区间合计" value={formatTokens(visibleTotal)} />
-        <TrendMetric
-          label="均值"
-          value={formatTokens(mean)}
-          hint={`${visibleCount} 个${grainLabelUnit(grain)}`}
-        />
-        <TrendMetric
-          label="峰值"
-          value={formatTokens(peakPoint?.total ?? 0)}
-          hint={peakPoint ? peakPoint.label : undefined}
-        />
-        <TrendMetric
-          label="环比变化"
-          value={
-            mom == null || !Number.isFinite(mom)
-              ? "−−"
-              : `${mom > 0 ? "+" : ""}${mom.toFixed(1)}%`
-          }
-          tone={
-            mom == null
-              ? undefined
-              : mom > 0
-                ? "up"
-                : mom < 0
-                  ? "down"
-                  : undefined
-          }
-        />
-      </div>
-      <div style={{ height: 220 }}>
+      <div style={{ height: 260 }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartDataWithSources}
@@ -431,34 +376,6 @@ function grainLabelUnit(grain: UsageTimeGrain | "month"): string {
   if (grain === "hour") return "时段";
   if (grain === "day") return "天";
   return "月";
-}
-
-function TrendMetric({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "up" | "down";
-}) {
-  const toneClass =
-    tone === "up" ? "text-danger" : tone === "down" ? "text-ok" : undefined;
-  return (
-    <div className="bg-surface-2/50 px-3 py-2">
-      <div className="tt-label">{label}</div>
-      <div className={`tt-num mt-0.5 text-sm tabular-nums ${toneClass ?? ""}`}>
-        {value}
-      </div>
-      {hint && (
-        <div className="tt-num mt-0.5 text-[10px] text-muted-foreground">
-          {hint}
-        </div>
-      )}
-    </div>
-  );
 }
 
 interface TrendTooltipProps {
