@@ -52,7 +52,11 @@ WHERE e.usage IS NOT NULL AND e.usage <> ''
     mapping: {
       timestamp: ["timestamp"],
       sessionId: ["sessionId"],
-      model: ["providerData.requestModelName", "providerData.requestModelId", "providerData.model"],
+      model: [
+        "providerData.requestModelName",
+        "providerData.requestModelId",
+        "providerData.model",
+      ],
       project: ["cwd"],
       inputTokens: [
         "providerData.rawUsage.prompt_cache_miss_tokens",
@@ -68,8 +72,13 @@ WHERE e.usage IS NOT NULL AND e.usage <> ''
         "message.usage.output_tokens",
         "providerData.usage.output_tokens",
       ],
-      reasoningOutputTokens: ["providerData.rawUsage.completion_thinking_tokens"],
-      totalTokens: ["message.usage.total_tokens", "providerData.usage.total_tokens"],
+      reasoningOutputTokens: [
+        "providerData.rawUsage.completion_thinking_tokens",
+      ],
+      totalTokens: [
+        "message.usage.total_tokens",
+        "providerData.usage.total_tokens",
+      ],
     },
   },
 } as const satisfies Record<string, ExternalUsageAdapterConfig>;

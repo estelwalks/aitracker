@@ -3,17 +3,27 @@ import { useMemo, useState } from "react";
 import { FileText, Folder, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { EmptyState, PageHeader, Panel, StatusBadge, TTButton } from "../components/tt";
+import {
+  EmptyState,
+  PageHeader,
+  Panel,
+  StatusBadge,
+  TTButton,
+} from "../components/tt";
 import { getLocalMemory } from "../lib/local-memory/server-fns";
 import type { MemorySnapshot } from "../lib/local-memory/types";
 import { useAITrackerSettings } from "../lib/settings/store";
 
 export const Route = createFileRoute("/memory")({
-  loader: () => getLocalMemory({ data: { customPaths: [], includeDefaults: true } }),
+  loader: () =>
+    getLocalMemory({ data: { customPaths: [], includeDefaults: true } }),
   head: () => ({
     meta: [
       { title: "记忆 · AITracker V3.0" },
-      { name: "description", content: "发现并只读聚合本机 Markdown 记忆文件。" },
+      {
+        name: "description",
+        content: "发现并只读聚合本机 Markdown 记忆文件。",
+      },
     ],
   }),
   component: MemoryPage,
@@ -41,7 +51,8 @@ function MemoryPage() {
         },
       });
       setSnapshot(next);
-      if (!quiet) toast.success(`已读取 ${next.entries.length} 个本地 Markdown 文件`);
+      if (!quiet)
+        toast.success(`已读取 ${next.entries.length} 个本地 Markdown 文件`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "记忆扫描失败");
     } finally {
@@ -76,10 +87,13 @@ function MemoryPage() {
         eyebrow="本地记忆"
         title="记忆"
         desc="真实读取 CLAUDE.md、AGENTS.md 等本地 Markdown；页面内全文搜索，只读不改写"
-        status={<StatusBadge tone="ok">{snapshot.entries.length} 个文件</StatusBadge>}
+        status={
+          <StatusBadge tone="ok">{snapshot.entries.length} 个文件</StatusBadge>
+        }
       >
         <TTButton disabled={busy} onClick={() => refresh()}>
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} /> 刷新
+          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
+          刷新
         </TTButton>
       </PageHeader>
 
@@ -108,7 +122,9 @@ function MemoryPage() {
             }`}
           >
             <Folder className="size-3.5 text-muted-foreground" /> 全部
-            <span className="tt-num ml-auto text-[11px]">{snapshot.entries.length}</span>
+            <span className="tt-num ml-auto text-[11px]">
+              {snapshot.entries.length}
+            </span>
           </button>
           {sources.map(([name, count]) => (
             <button
@@ -127,7 +143,8 @@ function MemoryPage() {
           ))}
           <div className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
             已检查 {snapshot.scannedPaths.length} 个入口
-            {snapshot.warnings.length > 0 && ` · ${snapshot.warnings.length} 个路径无法读取`}
+            {snapshot.warnings.length > 0 &&
+              ` · ${snapshot.warnings.length} 个路径无法读取`}
           </div>
         </Panel>
 
@@ -146,7 +163,9 @@ function MemoryPage() {
             shown.map((entry) => (
               <article
                 key={entry.id}
-                onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
+                onClick={() =>
+                  setExpanded(expanded === entry.id ? null : entry.id)
+                }
                 className="tt-panel cursor-pointer p-4 hover:border-primary/40"
               >
                 <h3 className="text-[13px] font-medium">{entry.title}</h3>
@@ -154,7 +173,9 @@ function MemoryPage() {
                   {expanded === entry.id ? entry.content : entry.summary}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                  <span>{new Date(entry.modifiedAt).toLocaleString("zh-CN")}</span>
+                  <span>
+                    {new Date(entry.modifiedAt).toLocaleString("zh-CN")}
+                  </span>
                   <span>来源：{entry.source}</span>
                   <span>项目：{entry.project}</span>
                   <span className="tt-num break-all">{entry.path}</span>
@@ -164,13 +185,21 @@ function MemoryPage() {
           )}
           {pages > 1 && (
             <div className="flex items-center justify-center gap-2">
-              <TTButton size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
+              <TTButton
+                size="sm"
+                disabled={page === 1}
+                onClick={() => setPage(page - 1)}
+              >
                 上一页
               </TTButton>
               <span className="tt-num text-xs">
                 {page} / {pages}
               </span>
-              <TTButton size="sm" disabled={page === pages} onClick={() => setPage(page + 1)}>
+              <TTButton
+                size="sm"
+                disabled={page === pages}
+                onClick={() => setPage(page + 1)}
+              >
                 下一页
               </TTButton>
             </div>

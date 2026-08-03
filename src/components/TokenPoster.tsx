@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clipboard, Download, Image as ImageIcon, RefreshCw, X } from "lucide-react";
+import {
+  Clipboard,
+  Download,
+  Image as ImageIcon,
+  RefreshCw,
+  X,
+} from "lucide-react";
 
 import { Segmented, TTButton } from "./tt";
 
-export type PosterPeriod = "today" | "week" | "month" | "year" | "custom" | "7d" | "30d";
+export type PosterPeriod =
+  "today" | "week" | "month" | "year" | "custom" | "7d" | "30d";
 
 export type PosterData = {
   periodLabel: string;
@@ -23,7 +30,8 @@ type SkinKey = "dark" | "light";
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
-const SANS = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif';
+const SANS =
+  '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif';
 
 const skins = {
   dark: {
@@ -56,7 +64,11 @@ function rank(tokens: number) {
   return ["克制主义者", "每一个 Token 都花在刀刃上"];
 }
 
-function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKey) {
+function drawPoster(
+  canvas: HTMLCanvasElement,
+  data: PosterData,
+  skinKey: SkinKey,
+) {
   const context = canvas.getContext("2d");
   if (context == null) return;
   const skin = skins[skinKey];
@@ -179,7 +191,8 @@ function drawTrend(
   const values = data.trend.length > 0 ? data.trend : [0];
   const maximum = Math.max(...values, 1);
   const gap = 14;
-  const width = (WIDTH - margin * 2 - gap * (values.length - 1)) / values.length;
+  const width =
+    (WIDTH - margin * 2 - gap * (values.length - 1)) / values.length;
   const height = 220;
   values.forEach((value, index) => {
     const barHeight = Math.max(4, (value / maximum) * height);
@@ -240,7 +253,12 @@ function drawModels(
     context.fillStyle = skin.line;
     context.fillRect(margin + 350, rowY - 8, 390, 16);
     context.fillStyle = skin.palette[index % skin.palette.length];
-    context.fillRect(margin + 350, rowY - 8, (390 * Math.max(2, model.pct)) / 100, 16);
+    context.fillRect(
+      margin + 350,
+      rowY - 8,
+      (390 * Math.max(2, model.pct)) / 100,
+      16,
+    );
     context.textAlign = "right";
     context.fillStyle = skin.muted;
     context.fillText(model.tokens, WIDTH - margin, rowY);
@@ -260,14 +278,19 @@ function fitText(
     return;
   }
   let shortened = value;
-  while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) {
+  while (
+    shortened.length > 1 &&
+    context.measureText(`${shortened}…`).width > maxWidth
+  ) {
     shortened = shortened.slice(0, -1);
   }
   context.fillText(`${shortened}…`, x, y);
 }
 
 function canvasBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
 }
 
 export function TokenPoster({
@@ -311,7 +334,10 @@ export function TokenPoster({
   const copy = async () => {
     const canvas = canvasRef.current;
     if (canvas == null) return;
-    if (typeof ClipboardItem === "undefined" || navigator.clipboard?.write == null) {
+    if (
+      typeof ClipboardItem === "undefined" ||
+      navigator.clipboard?.write == null
+    ) {
       setMessage("当前浏览器不支持复制图片，请使用“下载 PNG”。");
       return;
     }
@@ -321,7 +347,9 @@ export function TokenPoster({
       return;
     }
     try {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
       setMessage("图片已复制到剪贴板。");
     } catch {
       setMessage("浏览器拒绝剪贴板访问，请授权后重试或下载 PNG。");
@@ -340,7 +368,9 @@ export function TokenPoster({
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2 text-[13px] font-medium">
             <ImageIcon className="size-4" /> 生成 Token 海报
-            <span className="tt-num text-[10px] text-muted-foreground">1080 × 1920</span>
+            <span className="tt-num text-[10px] text-muted-foreground">
+              1080 × 1920
+            </span>
           </div>
           <button
             type="button"

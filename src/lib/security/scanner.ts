@@ -1,4 +1,8 @@
-import { parseUserSecurityRules, type SecurityRuleKind, type UserSecurityRule } from "./rules.ts";
+import {
+  parseUserSecurityRules,
+  type SecurityRuleKind,
+  type UserSecurityRule,
+} from "./rules.ts";
 
 export type SecurityRiskKind = SecurityRuleKind;
 export type SecuritySeverity = "高危" | "中危" | "低危";
@@ -46,7 +50,8 @@ const RULES: Array<{
     name: "短链接",
     kind: "恶意 URL",
     severity: "中危",
-    pattern: /\b(?:https?:\/\/)?(?:bit\.ly|tinyurl\.com|t\.co|is\.gd|cutt\.ly)\/[\w/?=&.-]+/i,
+    pattern:
+      /\b(?:https?:\/\/)?(?:bit\.ly|tinyurl\.com|t\.co|is\.gd|cutt\.ly)\/[\w/?=&.-]+/i,
     message: "发现短链接，无法直接确认最终目标",
   },
   {
@@ -67,7 +72,8 @@ const RULES: Array<{
     name: "下载后执行脚本",
     kind: "危险命令",
     severity: "高危",
-    pattern: /\b(?:curl|wget)\b[^\n|;&]*(?:\||&&|;)\s*(?:sudo\s+)?(?:bash|sh|zsh)\b/i,
+    pattern:
+      /\b(?:curl|wget)\b[^\n|;&]*(?:\||&&|;)\s*(?:sudo\s+)?(?:bash|sh|zsh)\b/i,
     message: "发现下载后直接执行脚本的命令",
   },
   {
@@ -81,14 +87,16 @@ const RULES: Array<{
     name: "访问密钥特征",
     kind: "敏感信息",
     severity: "高危",
-    pattern: /\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})\b/,
+    pattern:
+      /\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})\b/,
     message: "发现疑似真实访问密钥",
   },
   {
     name: "硬编码凭据",
     kind: "敏感信息",
     severity: "中危",
-    pattern: /\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*["'][^"'\n]{8,}["']/i,
+    pattern:
+      /\b(?:api[_-]?key|secret|token|password)\b\s*[:=]\s*["'][^"'\n]{8,}["']/i,
     message: "发现疑似硬编码凭据",
   },
 ];

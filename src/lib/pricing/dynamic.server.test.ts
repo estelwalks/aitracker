@@ -28,7 +28,12 @@ test("loads dynamic prices, official overrides, tiered Doubao pricing, and lates
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
     if (url.includes("frankfurter")) {
-      return Response.json({ date: "2026-07-28", base: "USD", quote: "CNY", rate: 8 });
+      return Response.json({
+        date: "2026-07-28",
+        base: "USD",
+        quote: "CNY",
+        rate: 8,
+      });
     }
     return Response.json({
       "glm-5.2": {
@@ -52,7 +57,10 @@ test("loads dynamic prices, official overrides, tiered Doubao pricing, and lates
     assert.equal(snapshot.exchangeRateSource, "live");
     assert.equal(snapshot.usdToCny, 8);
     assert.equal(snapshot.prices["glm-5-2"]?.inputUsdPerMillion, 1.4);
-    assert.equal(snapshot.prices["minimax-m2-7-highspeed"]?.outputUsdPerMillion, 2.4);
+    assert.equal(
+      snapshot.prices["minimax-m2-7-highspeed"]?.outputUsdPerMillion,
+      2.4,
+    );
     assert.equal(snapshot.prices["doubao-seed-2-0-code"]?.tiers?.length, 3);
 
     applyPricingSnapshot(snapshot);

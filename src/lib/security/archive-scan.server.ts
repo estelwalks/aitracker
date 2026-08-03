@@ -3,7 +3,11 @@ import { gunzipSync } from "node:zlib";
 import { parseTarArchive } from "../local-market/archive.server.ts";
 import { reviewSecurityRisks } from "./ai-review.server.ts";
 import { parseUserSecurityRules, type UserSecurityRule } from "./rules.ts";
-import { scanSecurityFiles, type SecurityInputFile, type SecurityReport } from "./scanner.ts";
+import {
+  scanSecurityFiles,
+  type SecurityInputFile,
+  type SecurityReport,
+} from "./scanner.ts";
 
 export const MAX_SECURITY_ARCHIVE_BYTES = 20 * 1024 * 1024;
 export const MAX_SECURITY_ARCHIVE_UNPACKED_BYTES = 40 * 1024 * 1024;
@@ -42,7 +46,10 @@ function decodeArchiveBase64(base64: string): Buffer {
   }
 
   const archive = Buffer.from(base64, "base64");
-  if (archive.byteLength === 0 || archive.byteLength > MAX_SECURITY_ARCHIVE_BYTES) {
+  if (
+    archive.byteLength === 0 ||
+    archive.byteLength > MAX_SECURITY_ARCHIVE_BYTES
+  ) {
     throw new Error("压缩包为空或超过 20 MB 限制");
   }
   if (archive.toString("base64") !== base64) {
@@ -62,7 +69,9 @@ function unpackArchive(name: string, archive: Buffer): Buffer {
   if (!isGzip) throw new Error("文件不是有效的 gzip 压缩包");
 
   try {
-    return gunzipSync(archive, { maxOutputLength: MAX_SECURITY_ARCHIVE_UNPACKED_BYTES });
+    return gunzipSync(archive, {
+      maxOutputLength: MAX_SECURITY_ARCHIVE_UNPACKED_BYTES,
+    });
   } catch {
     throw new Error("压缩包解压失败或解压后体积超过 40 MB 限制");
   }
@@ -89,7 +98,8 @@ function toSecurityFiles(entries: ReturnType<typeof parseTarArchive>): {
     }
   }
 
-  if (files.length === 0) throw new Error("压缩包中没有可扫描的 UTF-8 文本文件");
+  if (files.length === 0)
+    throw new Error("压缩包中没有可扫描的 UTF-8 文本文件");
   return { files, unpackedBytes };
 }
 
@@ -104,7 +114,10 @@ export async function scanUploadedSecurityArchive(
 
   const entries = parseTarArchive(unpacked);
   const { files, unpackedBytes } = toSecurityFiles(entries);
-  const report = scanSecurityFiles(files, parseUserSecurityRules(input.userRules));
+  const report = scanSecurityFiles(
+    files,
+    parseUserSecurityRules(input.userRules),
+  );
   if (input.aiReviewEnabled) {
     report.aiReview = await reviewSecurityRisks(report.risks);
   }

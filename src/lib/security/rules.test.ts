@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseUserSecurityRules, validateSecurityRulePattern } from "./rules.ts";
+import {
+  parseUserSecurityRules,
+  validateSecurityRulePattern,
+} from "./rules.ts";
 
 test("validates regular expression before saving", () => {
-  assert.equal(validateSecurityRulePattern("https?://evil\\.example").valid, true);
+  assert.equal(
+    validateSecurityRulePattern("https?://evil\\.example").valid,
+    true,
+  );
   assert.equal(validateSecurityRulePattern("[").valid, false);
   assert.equal(validateSecurityRulePattern("").valid, false);
 });

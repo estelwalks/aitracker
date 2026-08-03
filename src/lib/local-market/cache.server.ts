@@ -12,7 +12,11 @@ interface MarketCache {
   entries: Record<string, MarketListResult>;
 }
 
-export function marketCacheKey(page: number, limit: number, search: string): string {
+export function marketCacheKey(
+  page: number,
+  limit: number,
+  search: string,
+): string {
   return `${page}:${limit}:${search.toLocaleLowerCase()}`;
 }
 
@@ -36,16 +40,24 @@ async function readCacheFile(): Promise<MarketCache> {
   return { version: CACHE_VERSION, entries: {} };
 }
 
-export async function readMarketCache(key: string): Promise<MarketListResult | null> {
+export async function readMarketCache(
+  key: string,
+): Promise<MarketListResult | null> {
   const cache = await readCacheFile();
   return cache.entries[key] ?? null;
 }
 
-export async function writeMarketCache(key: string, result: MarketListResult): Promise<void> {
+export async function writeMarketCache(
+  key: string,
+  result: MarketListResult,
+): Promise<void> {
   const cache = await readCacheFile();
   cache.entries[key] = result;
   const temporaryFile = `${CACHE_FILE}.${process.pid}.tmp`;
   await mkdir(dirname(CACHE_FILE), { recursive: true, mode: 0o700 });
-  await writeFile(temporaryFile, JSON.stringify(cache), { encoding: "utf8", mode: 0o600 });
+  await writeFile(temporaryFile, JSON.stringify(cache), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   await rename(temporaryFile, CACHE_FILE);
 }

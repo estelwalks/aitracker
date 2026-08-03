@@ -5,23 +5,25 @@ import type { UsageAdapterConfigState } from "./adapter-config.server.ts";
 
 export const getLocalUsageSnapshot = createServerFn({ method: "GET" }).handler(
   async (): Promise<LocalUsageSnapshot> => {
-    const { getCachedLocalUsageSnapshot } = await import("./snapshot.server.ts");
+    const { getCachedLocalUsageSnapshot } =
+      await import("./snapshot.server.ts");
     return getCachedLocalUsageSnapshot();
   },
 );
 
-export const refreshLocalUsageSnapshot = createServerFn({ method: "POST" }).handler(
-  async (): Promise<LocalUsageSnapshot> => {
-    const { clearLocalUsageSnapshotCache, getCachedLocalUsageSnapshot } =
-      await import("./snapshot.server.ts");
-    clearLocalUsageSnapshotCache();
-    return getCachedLocalUsageSnapshot();
-  },
-);
+export const refreshLocalUsageSnapshot = createServerFn({
+  method: "POST",
+}).handler(async (): Promise<LocalUsageSnapshot> => {
+  const { clearLocalUsageSnapshotCache, getCachedLocalUsageSnapshot } =
+    await import("./snapshot.server.ts");
+  clearLocalUsageSnapshotCache();
+  return getCachedLocalUsageSnapshot();
+});
 
 export const getUsageAdapterConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<UsageAdapterConfigState> => {
-    const { readUsageAdapterConfig } = await import("./adapter-config.server.ts");
+    const { readUsageAdapterConfig } =
+      await import("./adapter-config.server.ts");
     return readUsageAdapterConfig();
   },
 );
@@ -34,10 +36,11 @@ export const saveUsageAdapterConfig = createServerFn({ method: "POST" })
     return text;
   })
   .handler(async ({ data }): Promise<UsageAdapterConfigState> => {
-    const [{ writeUsageAdapterConfig }, { clearLocalUsageSnapshotCache }] = await Promise.all([
-      import("./adapter-config.server.ts"),
-      import("./snapshot.server.ts"),
-    ]);
+    const [{ writeUsageAdapterConfig }, { clearLocalUsageSnapshotCache }] =
+      await Promise.all([
+        import("./adapter-config.server.ts"),
+        import("./snapshot.server.ts"),
+      ]);
     const state = await writeUsageAdapterConfig(data);
     clearLocalUsageSnapshotCache();
     return state;

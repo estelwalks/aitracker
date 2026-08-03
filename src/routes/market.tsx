@@ -13,8 +13,18 @@ import {
   X,
 } from "lucide-react";
 
-import { Dot, EmptyState, PageHeader, StatusBadge, TTButton } from "../components/tt";
-import { getMarketSkills, MARKET_AGENTS, requestSkillInstall } from "../lib/local-market";
+import {
+  Dot,
+  EmptyState,
+  PageHeader,
+  StatusBadge,
+  TTButton,
+} from "../components/tt";
+import {
+  getMarketSkills,
+  MARKET_AGENTS,
+  requestSkillInstall,
+} from "../lib/local-market";
 import type {
   InstallSkillResult,
   MarketAgent,
@@ -38,13 +48,18 @@ export const Route = createFileRoute("/market")({
   loader: async () => {
     try {
       return {
-        result: await getMarketSkills({ data: { page: 1, limit: PAGE_SIZE, search: "" } }),
+        result: await getMarketSkills({
+          data: { page: 1, limit: PAGE_SIZE, search: "" },
+        }),
         error: null,
       };
     } catch (error) {
       return {
         result: emptyResult(),
-        error: error instanceof Error ? error.message : "网络不可用：Skill 市场加载失败",
+        error:
+          error instanceof Error
+            ? error.message
+            : "网络不可用：Skill 市场加载失败",
       };
     }
   },
@@ -53,7 +68,8 @@ export const Route = createFileRoute("/market")({
       { title: "Skill 市场 · AITracker V3.0" },
       {
         name: "description",
-        content: "浏览 AITracker Skill 市场真实索引，下载后执行本地静态安全检查。",
+        content:
+          "浏览 AITracker Skill 市场真实索引，下载后执行本地静态安全检查。",
       },
     ],
   }),
@@ -98,7 +114,9 @@ function MarketPage() {
       .catch((requestError) => {
         if (sequence === requestSequence.current) {
           setError(
-            requestError instanceof Error ? requestError.message : "网络不可用：Skill 市场加载失败",
+            requestError instanceof Error
+              ? requestError.message
+              : "网络不可用：Skill 市场加载失败",
           );
         }
       })
@@ -116,9 +134,17 @@ function MarketPage() {
         title="Skill 市场"
         desc={`真实社区索引 · 共 ${result.pagination.total.toLocaleString()} 个 Skill · 下载后执行本地静态扫描`}
         status={
-          <StatusBadge tone={error || result.source === "cache" ? "warn" : "ok"}>
-            <Dot className={`size-1 ${error || result.source === "cache" ? "bg-warn" : "bg-ok"}`} />
-            {error ? "网络不可用" : result.source === "cache" ? "本地缓存" : "实时数据"}
+          <StatusBadge
+            tone={error || result.source === "cache" ? "warn" : "ok"}
+          >
+            <Dot
+              className={`size-1 ${error || result.source === "cache" ? "bg-warn" : "bg-ok"}`}
+            />
+            {error
+              ? "网络不可用"
+              : result.source === "cache"
+                ? "本地缓存"
+                : "实时数据"}
           </StatusBadge>
         }
       />
@@ -155,7 +181,9 @@ function MarketPage() {
       )}
 
       {result.skills.length > 0 ? (
-        <div className={`transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}>
+        <div
+          className={`transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
+        >
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {result.skills.map((skill) => (
               <SkillCard
@@ -189,10 +217,18 @@ function MarketPage() {
         </div>
       ) : (
         <EmptyState
-          icon={error ? <ShieldAlert className="size-7" /> : <Search className="size-7" />}
+          icon={
+            error ? (
+              <ShieldAlert className="size-7" />
+            ) : (
+              <Search className="size-7" />
+            )
+          }
           title={error ? "网络不可用" : "没有匹配的 Skill"}
           desc={
-            error ? "请求失败且当前查询没有本地缓存，请检查网络后重试。" : "换一个关键词重新搜索。"
+            error
+              ? "请求失败且当前查询没有本地缓存，请检查网络后重试。"
+              : "换一个关键词重新搜索。"
           }
           actions={
             error ? (
@@ -217,7 +253,12 @@ function MarketPage() {
           }}
         />
       )}
-      {installSkill && <InstallDialog skill={installSkill} onClose={() => setInstallSkill(null)} />}
+      {installSkill && (
+        <InstallDialog
+          skill={installSkill}
+          onClose={() => setInstallSkill(null)}
+        />
+      )}
     </>
   );
 }
@@ -298,7 +339,9 @@ function SkillDetail({
     <Modal title={skill.name} onClose={onClose}>
       <div className="space-y-4 p-4 text-[13px]">
         <p className="leading-relaxed text-muted-foreground">
-          {skill.descriptionZh ?? skill.description ?? "该 Skill 暂未提供描述。"}
+          {skill.descriptionZh ??
+            skill.description ??
+            "该 Skill 暂未提供描述。"}
         </p>
         <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-xs">
           <dt className="text-muted-foreground">安全级别 / 分数</dt>
@@ -352,7 +395,13 @@ function SkillDetail({
   );
 }
 
-function InstallDialog({ skill, onClose }: { skill: MarketSkill; onClose: () => void }) {
+function InstallDialog({
+  skill,
+  onClose,
+}: {
+  skill: MarketSkill;
+  onClose: () => void;
+}) {
   const [agents, setAgents] = useState<MarketAgent[]>(["Claude Code"]);
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -360,7 +409,9 @@ function InstallDialog({ skill, onClose }: { skill: MarketSkill; onClose: () => 
 
   const toggleAgent = (agent: MarketAgent) => {
     setAgents((current) =>
-      current.includes(agent) ? current.filter((item) => item !== agent) : [...current, agent],
+      current.includes(agent)
+        ? current.filter((item) => item !== agent)
+        : [...current, agent],
     );
   };
 
@@ -416,7 +467,8 @@ function InstallDialog({ skill, onClose }: { skill: MarketSkill; onClose: () => 
           </div>
         </div>
         <div className="rounded-sm border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
-          安装前会真实下载归档，在 AITracker 临时目录安全解包并执行静态扫描；每个 Agent
+          安装前会真实下载归档，在 AITracker
+          临时目录安全解包并执行静态扫描；每个 Agent
           的安装结果将单独返回，临时文件随后自动清理。
         </div>
         {failure && (
@@ -429,7 +481,11 @@ function InstallDialog({ skill, onClose }: { skill: MarketSkill; onClose: () => 
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
         <TTButton onClick={onClose}>关闭</TTButton>
-        <TTButton variant="primary" disabled={submitting || agents.length === 0} onClick={submit}>
+        <TTButton
+          variant="primary"
+          disabled={submitting || agents.length === 0}
+          onClick={submit}
+        >
           {submitting ? (
             <>
               <LoaderCircle className="size-3.5 animate-spin" /> 下载并扫描中
@@ -444,7 +500,8 @@ function InstallDialog({ skill, onClose }: { skill: MarketSkill; onClose: () => 
 }
 
 function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
-  const failed = outcome.reason === "scan-blocked" || outcome.reason === "failed";
+  const failed =
+    outcome.reason === "scan-blocked" || outcome.reason === "failed";
   const completed = outcome.reason === "installed";
   return (
     <div
@@ -472,19 +529,27 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
       </div>
       <ul className="space-y-1 border-t border-border pt-2 text-[11px]">
         {outcome.targets.map((target) => (
-          <li key={target.agent} className={target.installed ? "text-ok" : "text-danger"}>
-            {target.installed ? "成功" : "失败"} · {target.agent} · {target.message}
+          <li
+            key={target.agent}
+            className={target.installed ? "text-ok" : "text-danger"}
+          >
+            {target.installed ? "成功" : "失败"} · {target.agent} ·{" "}
+            {target.message}
           </li>
         ))}
       </ul>
       {outcome.inspection.scan.findings.length > 0 && (
         <ul className="max-h-32 space-y-1 overflow-auto border-t border-border pt-2 text-[11px]">
-          {outcome.inspection.scan.findings.slice(0, 20).map((finding, index) => (
-            <li key={`${finding.path}:${finding.line}:${finding.rule}:${index}`}>
-              [{finding.severity}] {finding.path}
-              {finding.line ? `:${finding.line}` : ""} · {finding.message}
-            </li>
-          ))}
+          {outcome.inspection.scan.findings
+            .slice(0, 20)
+            .map((finding, index) => (
+              <li
+                key={`${finding.path}:${finding.line}:${finding.rule}:${index}`}
+              >
+                [{finding.severity}] {finding.path}
+                {finding.line ? `:${finding.line}` : ""} · {finding.message}
+              </li>
+            ))}
         </ul>
       )}
     </div>
@@ -519,12 +584,20 @@ function Modal({
   );
 }
 
-function securityPresentation(skill: MarketSkill): { safe: boolean; label: string } {
+function securityPresentation(skill: MarketSkill): {
+  safe: boolean;
+  label: string;
+} {
   const verdict = skill.verdict?.toLocaleLowerCase();
   const safe = verdict === "allow" || (skill.securityScore ?? -1) >= 80;
-  const level = skill.securityLevel && skill.securityLevel !== "NONE" ? skill.securityLevel : null;
+  const level =
+    skill.securityLevel && skill.securityLevel !== "NONE"
+      ? skill.securityLevel
+      : null;
   const score =
-    skill.securityScore === null ? "安全分未提供" : `安全分 ${skill.securityScore.toFixed(0)}`;
+    skill.securityScore === null
+      ? "安全分未提供"
+      : `安全分 ${skill.securityScore.toFixed(0)}`;
   return {
     safe,
     label: [level, score, skill.verdict].filter(Boolean).join(" · "),

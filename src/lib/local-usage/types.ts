@@ -69,7 +69,8 @@ export const LOCAL_USAGE_TOOL_CATEGORIES = [
   "other",
 ] as const;
 
-export type LocalUsageToolCategory = (typeof LOCAL_USAGE_TOOL_CATEGORIES)[number];
+export type LocalUsageToolCategory =
+  (typeof LOCAL_USAGE_TOOL_CATEGORIES)[number];
 
 export interface LocalUsageToolCall {
   name: string;
@@ -83,20 +84,13 @@ export interface LocalUsageSkillCall {
 }
 
 export type LocalUsageCommandDurationBucket =
-  | "under-1s"
-  | "1s-10s"
-  | "10s-60s"
-  | "over-60s"
-  | "unknown";
+  "under-1s" | "1s-10s" | "10s-60s" | "over-60s" | "unknown";
 
 export type LocalUsageCommandOutputSizeBucket =
-  | "empty"
-  | "under-1k"
-  | "1k-10k"
-  | "over-10k"
-  | "unknown";
+  "empty" | "under-1k" | "1k-10k" | "over-10k" | "unknown";
 
-export type LocalUsageCommandExitStatus = "success" | "failure" | "interrupted" | "unknown";
+export type LocalUsageCommandExitStatus =
+  "success" | "failure" | "interrupted" | "unknown";
 
 export interface LocalUsageCommandStat {
   kind: "exec_command";

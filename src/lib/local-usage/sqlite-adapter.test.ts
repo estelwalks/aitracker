@@ -8,7 +8,10 @@ import test from "node:test";
 import { scanLocalUsage } from "./scanner.server.ts";
 
 test("scans a configured read-only SQLite usage source", async () => {
-  const root = join(tmpdir(), `trusttools-sqlite-adapter-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `trusttools-sqlite-adapter-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const sourceDirectory = join(homeDirectory, ".aipy-test");
   const configDirectory = join(homeDirectory, ".trusttools");
@@ -66,7 +69,9 @@ test("scans a configured read-only SQLite usage source", async () => {
       cacheDirectory: join(root, "cache"),
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
-    const event = snapshot.details.find((candidate) => candidate.source === "custom:aipy-test");
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "custom:aipy-test",
+    );
     assert.equal(event?.model, "aipy-test-model");
     assert.equal(event?.inputTokens, 40);
     assert.equal(event?.outputTokens, 8);
@@ -79,7 +84,10 @@ test("scans a configured read-only SQLite usage source", async () => {
 });
 
 test("falls back to WorkBuddy SQLite usage when detailed JSONL is unavailable", async () => {
-  const root = join(tmpdir(), `trusttools-workbuddy-sqlite-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `trusttools-workbuddy-sqlite-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const workbuddyDirectory = join(homeDirectory, ".workbuddy");
   const databasePath = join(workbuddyDirectory, "workbuddy.db");
@@ -108,8 +116,12 @@ test("falls back to WorkBuddy SQLite usage when detailed JSONL is unavailable", 
       cacheDirectory: join(root, "cache"),
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
-    const summary = snapshot.sources.find((source) => source.source === "workbuddy");
-    const event = snapshot.details.find((candidate) => candidate.source === "workbuddy");
+    const summary = snapshot.sources.find(
+      (source) => source.source === "workbuddy",
+    );
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "workbuddy",
+    );
     assert.equal(summary?.detected, true);
     assert.equal(summary?.available, true);
     assert.equal(event?.model, "workbuddy-auto");
@@ -123,12 +135,22 @@ test("falls back to WorkBuddy SQLite usage when detailed JSONL is unavailable", 
 });
 
 test("auto-detects built-in Aipy without Claude Code or Codex", async () => {
-  const root = join(tmpdir(), `trusttools-aipy-builtin-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `trusttools-aipy-builtin-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
-  const sourceDirectory = join(homeDirectory, "Library", "Application Support", "aipy-pro");
+  const sourceDirectory = join(
+    homeDirectory,
+    "Library",
+    "Application Support",
+    "aipy-pro",
+  );
   const databasePath = join(sourceDirectory, "aipy");
   await mkdir(sourceDirectory, { recursive: true });
-  await mkdir(join(homeDirectory, ".workbuddy", "projects"), { recursive: true });
+  await mkdir(join(homeDirectory, ".workbuddy", "projects"), {
+    recursive: true,
+  });
 
   const database = new DatabaseSync(databasePath);
   database.exec(`
@@ -160,17 +182,23 @@ test("auto-detects built-in Aipy without Claude Code or Codex", async () => {
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
     const aipy = snapshot.sources.find((source) => source.source === "aipy");
-    const workbuddy = snapshot.sources.find((source) => source.source === "workbuddy");
+    const workbuddy = snapshot.sources.find(
+      (source) => source.source === "workbuddy",
+    );
 
     assert.equal(snapshot.mode, "real");
     assert.equal(aipy?.detected, true);
     assert.equal(aipy?.events, 1);
-    const event = snapshot.details.find((candidate) => candidate.source === "aipy");
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "aipy",
+    );
     assert.equal(event?.totalTokens, 150);
     assert.equal(event?.reasoningOutputTokens, 10);
     assert.equal(workbuddy?.detected, true);
     assert.equal(workbuddy?.available, false);
-    assert.ok(snapshot.sources.every((source) => source.source !== "custom:aipy"));
+    assert.ok(
+      snapshot.sources.every((source) => source.source !== "custom:aipy"),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

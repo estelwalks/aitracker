@@ -14,14 +14,19 @@ export interface UsageAdapterConfigState {
 }
 
 export async function readUsageAdapterConfig(): Promise<UsageAdapterConfigState> {
-  const text = await readFile(CONFIG_PATH, "utf8").catch((error: NodeJS.ErrnoException) => {
-    if (error.code === "ENOENT") return `${JSON.stringify(EMPTY_CONFIG, null, 2)}\n`;
-    throw error;
-  });
+  const text = await readFile(CONFIG_PATH, "utf8").catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT")
+        return `${JSON.stringify(EMPTY_CONFIG, null, 2)}\n`;
+      throw error;
+    },
+  );
   return { path: CONFIG_PATH, text };
 }
 
-export async function writeUsageAdapterConfig(text: string): Promise<UsageAdapterConfigState> {
+export async function writeUsageAdapterConfig(
+  text: string,
+): Promise<UsageAdapterConfigState> {
   let raw: unknown;
   try {
     raw = JSON.parse(text) as unknown;

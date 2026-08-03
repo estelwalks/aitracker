@@ -28,12 +28,16 @@ function comparableSnapshot(snapshot: LocalUsageSnapshot): unknown {
     ...snapshot,
     generatedAt: undefined,
     sources: snapshot.sources.map(
-      ({ filesParsed: _filesParsed, filesReused: _filesReused, ...source }) => source,
+      ({ filesParsed: _filesParsed, filesReused: _filesReused, ...source }) =>
+        source,
     ),
   };
 }
 
-async function timedScan(cacheDirectory: string, now: Date): Promise<BenchmarkScan> {
+async function timedScan(
+  cacheDirectory: string,
+  now: Date,
+): Promise<BenchmarkScan> {
   const startedAt = performance.now();
   const snapshot = await scanLocalUsage({ cacheDirectory, now });
   return {
@@ -43,15 +47,22 @@ async function timedScan(cacheDirectory: string, now: Date): Promise<BenchmarkSc
 }
 
 export async function benchmarkLocalUsagePersistentCache(): Promise<LocalUsageCacheBenchmark> {
-  const cacheDirectory = await mkdtemp(join(tmpdir(), "trusttools-local-usage-"));
+  const cacheDirectory = await mkdtemp(
+    join(tmpdir(), "trusttools-local-usage-"),
+  );
   const now = new Date();
 
   try {
     const cold = await timedScan(cacheDirectory, now);
     const warm = await timedScan(cacheDirectory, now);
-    assert.deepEqual(comparableSnapshot(warm.snapshot), comparableSnapshot(cold.snapshot));
+    assert.deepEqual(
+      comparableSnapshot(warm.snapshot),
+      comparableSnapshot(cold.snapshot),
+    );
 
-    const cacheFile = await stat(join(cacheDirectory, "local-usage-index-v10.json"));
+    const cacheFile = await stat(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+    );
     return {
       coldMs: cold.durationMs,
       warmMs: warm.durationMs,

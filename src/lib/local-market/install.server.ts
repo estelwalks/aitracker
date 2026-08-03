@@ -1,10 +1,21 @@
-import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import { downloadAndInspectSkill } from "./archive.server.ts";
 import type { TarEntry } from "./archive.server.ts";
-import type { InstallSkillResult, MarketAgent, SkillDownloadInspection } from "./types.ts";
+import type {
+  InstallSkillResult,
+  MarketAgent,
+  SkillDownloadInspection,
+} from "./types.ts";
 import type { SkillAgent } from "../local-skills/types.ts";
 
 export interface InstallRequest {
@@ -42,7 +53,10 @@ function safeInstallName(value: string): string {
   return name;
 }
 
-async function extractEntries(entries: TarEntry[], destination: string): Promise<void> {
+async function extractEntries(
+  entries: TarEntry[],
+  destination: string,
+): Promise<void> {
   const destinationRealPath = await realpath(destination);
   for (const entry of entries) {
     const targetPath = resolve(destinationRealPath, entry.path);
@@ -63,7 +77,11 @@ async function extractEntries(entries: TarEntry[], destination: string): Promise
       await lstat(targetPath);
       throw new Error(`下载包包含重复条目：${entry.path}`);
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith("下载包包含重复条目")) throw error;
+      if (
+        error instanceof Error &&
+        error.message.startsWith("下载包包含重复条目")
+      )
+        throw error;
     }
     await writeFile(targetPath, entry.content, { flag: "wx", mode: 0o600 });
   }
@@ -76,21 +94,29 @@ async function findSkillRoot(
 ): Promise<string> {
   const candidates = entries
     .filter(
-      (entry) => entry.type === "file" && basename(entry.path).toLocaleLowerCase() === "skill.md",
+      (entry) =>
+        entry.type === "file" &&
+        basename(entry.path).toLocaleLowerCase() === "skill.md",
     )
     .map((entry) => dirname(entry.path));
   const uniqueCandidates = [...new Set(candidates)];
   if (uniqueCandidates.length === 0) throw new Error("下载包中未找到 SKILL.md");
 
-  const preferredNames = new Set([safeInstallName(skill.slug), safeInstallName(skill.name)]);
-  const preferred = uniqueCandidates.filter((candidate) => preferredNames.has(basename(candidate)));
+  const preferredNames = new Set([
+    safeInstallName(skill.slug),
+    safeInstallName(skill.name),
+  ]);
+  const preferred = uniqueCandidates.filter((candidate) =>
+    preferredNames.has(basename(candidate)),
+  );
   const selected =
     uniqueCandidates.length === 1
       ? uniqueCandidates[0]
       : preferred.length === 1
         ? preferred[0]
         : undefined;
-  if (!selected) throw new Error("下载包包含多个 Skill 根目录，无法安全确定安装目标");
+  if (!selected)
+    throw new Error("下载包包含多个 Skill 根目录，无法安全确定安装目标");
 
   const destinationRealPath = await realpath(destination);
   const rootRealPath = await realpath(resolve(destinationRealPath, selected));
@@ -105,7 +131,8 @@ async function defaultInstallFn(input: {
   targetAgent: SkillAgent;
   origin: InstallRequest["skill"];
 }): Promise<void> {
-  const { installMarketSkill } = await import("../local-skills/scanner.server.ts");
+  const { installMarketSkill } =
+    await import("../local-skills/scanner.server.ts");
   await installMarketSkill(input);
 }
 
@@ -131,18 +158,27 @@ export async function prepareSkillInstall(
     };
   }
 
-  const temporaryParent = dependencies.tempRoot ?? join(homedir(), ".trusttools", "tmp");
+  const temporaryParent =
+    dependencies.tempRoot ?? join(homedir(), ".trusttools", "tmp");
   await mkdir(temporaryParent, { recursive: true, mode: 0o700 });
   const temporaryDirectory = await mkdtemp(join(temporaryParent, "market-"));
 
   try {
     await extractEntries(downloaded.entries, temporaryDirectory);
-    const sourcePath = await findSkillRoot(downloaded.entries, temporaryDirectory, request.skill);
+    const sourcePath = await findSkillRoot(
+      downloaded.entries,
+      temporaryDirectory,
+      request.skill,
+    );
     const installFn = dependencies.installFn ?? defaultInstallFn;
     const targets: InstallSkillResult["targets"] = [];
     for (const agent of request.agents) {
       try {
-        await installFn({ sourcePath, targetAgent: agent, origin: request.skill });
+        await installFn({
+          sourcePath,
+          targetAgent: agent,
+          origin: request.skill,
+        });
         targets.push({ agent, installed: true, message: "安装成功" });
       } catch (error) {
         targets.push({
@@ -155,7 +191,11 @@ export async function prepareSkillInstall(
 
     const succeeded = targets.filter((target) => target.installed).length;
     const reason =
-      succeeded === targets.length ? "installed" : succeeded === 0 ? "failed" : "partial";
+      succeeded === targets.length
+        ? "installed"
+        : succeeded === 0
+          ? "failed"
+          : "partial";
     return {
       installed: reason === "installed",
       reason,
