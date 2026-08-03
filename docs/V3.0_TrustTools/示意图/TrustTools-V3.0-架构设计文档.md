@@ -4,18 +4,19 @@
 | ---- | ------------------- |
 | 文档类型 | 架构设计文档 (ARCH)       |
 | 项目名称 | TrustTools V3.0     |
-| 版本   | v2.0                |
+| 版本   | v2.1                |
 | 创建日期 | 2026-07-24 14:08:36 |
-| 更新日期 | 2026-07-27 15:18:44 |
+| 更新日期 | 2026-07-31          |
 | 生成工具 | architecture-design |
 | 文档状态 | 草稿                  |
 
 ## 修订记录
 
-| 版本   | 修改时间                | 修改内容                                                                        |
-| ---- | ------------------- | --------------------------------------------------------------------------- |
-| v2.0 | 2026-07-27 15:18:44 | 基于需求简报 v1.9、PRD v2.1 和 ADR v1.2 重构；采用全栈 TypeScript、Electron 多进程模块化单体和独立采集内核 |
-| v1.0 | 2026-07-24 14:08:36 | 旧版初始架构，已被 v2.0 取代                                                           |
+| 版本   | 修改时间       | 修改内容                                                           |
+| ---- | ---------- | -------------------------------------------------------------- |
+| v2.1 | 2026-07-31 | 同步 PRD v5.0：删除 Memory 模块、工具数 10+→5、删除浏览器插件、macOS 优先；根目录旧版已归档 |
+| v2.0 | 2026-07-27 | 基于需求简报 v1.9、PRD v2.1 和 ADR v1.2 重构；采用全栈 TypeScript、Electron 多进程模块化单体 |
+| v1.0 | 2026-07-24 | 旧版初始架构，已被 v2.0 取代；已归档至 docs/archive/                           |
 
 ---
 
@@ -23,14 +24,14 @@
 
 ### 1.1 问题陈述
 
-TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户本机已有 AI 工具产生的日志、会话元数据、SQLite 数据库和 Skill/Memory 目录中提取可用指标，统一提供：
+TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户本机已有 AI 工具产生的日志、会话元数据、SQLite 数据库和 Skill 目录中提取可用指标，统一提供：
 
-- Token 消耗、费用和多维下钻
-- Skill 发现、健康度、清理和多 Agent 安装
-- Skill 静态安全检测和条件式 AI 审查
-- TrustTools Web Skill 库搜索、下载和版本检查
-- Memory 目录聚合和浏览
-- macOS、Windows Electron 客户端
+- Token 消耗、费用和下钻
+- Skill 发现、统计、清理和安装
+- Skill 静态安全检测
+- TrustTools Web Skill 库搜索和下载
+- 会话扫描与恢复
+- macOS Electron 客户端
 
 系统不是 AI 聊天客户端，也不是云端 SaaS 后端。核心价值来自“在不上传用户完整对话的前提下，把本地 AI 资产和消耗数据变成可信、可解释、可管理的信息”。
 
@@ -39,7 +40,7 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 | 目标                   | 架构含义                    |
 | -------------------- | ----------------------- |
 | 安装后 2 分钟内看到 Token 数据 | 首次扫描必须可分阶段、可并发、可流式反馈    |
-| 覆盖 10+ AI 工具         | 数据采集必须是 Adapter 扩展模型    |
+| 覆盖 5 核心 AI 工具         | 数据采集必须是 Adapter 扩展模型    |
 | Token 计数准确率 ≥95%     | 需要可追溯事件、测量语义、去重和官方基准对账  |
 | 安全检测 30 秒内出报告        | 静态扫描必须本地执行；AI 路径需要超时和降级 |
 | Skill 市场安装 <15 秒     | 下载、检查、安装要有明确事务和失败恢复     |
@@ -51,17 +52,16 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 2. **隐私优先：** prompt、回复、工具参数和完整对话正文不进入 TrustTools 持久层。
 3. **低认知负担：** 适配 1 名负责人 + Codex 的研发模式，减少语言、进程和部署种类。
 4. **独立开源：** TokenTracker 只作为数据源行为参考，接口、代码、数据模型和测试全部独立。
-5. **跨平台：** 同一 TypeScript 核心覆盖 macOS 和 Windows，平台差异封装在适配边缘。
-6. **可演进：** 新增 Provider、Skill 目标或 Memory 来源时，不修改稳定核心。
+5. **跨平台：** 同一 TypeScript 核心覆盖 macOS，Windows 后续版本补充。
+6. **可演进：** 新增 Provider、Skill 目标或会话来源时，不修改稳定核心。
 
 ### 1.4 非目标
 
 - 不做账户、团队、跨设备同步或云端备份。
-- 不在 V1.0 提供浏览器插件。
+- 不在 V1.0 提供浏览器插件、Windows 客户端、命令行模式或浏览器模式。
 - 不执行不受信任 Skill；只做静态检查和用户决定。
 - 不构建本地微服务集群。
 - 不复刻 TokenTracker 的 CLI、HTTP API、queue/cursor schema 或 UI。
-- 不为未来假设的海量用户设计云端水平扩展。
 
 ## 2. 输入验证、假设与约束
 
@@ -98,7 +98,7 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 
 ### 2.3 不可变约束
 
-- GUI 使用 Electron，支持 macOS 13+（Apple Silicon + Intel）和 Windows 10/11 x64。
+- GUI 使用 Electron，MVP 支持 macOS 13+（Apple Silicon + Intel）；Windows 10/11 x64 为后续版本目标。
 - 核心运行时采用 TypeScript，不默认携带 Python。
 - Renderer 无 Node.js 权限；Electron Main 不承载领域业务。
 - SQLite 是 TrustTools 本地在线事实源。
@@ -123,7 +123,7 @@ TrustTools 使用这些信息重新实现 TypeScript Adapter。TokenTracker 的 
 
 - `better-sqlite3` 与 `node:sqlite` 在 PoC 后二选一。
 - AI 审查模型、供应商和数据出机政策待确认。
-- 10+ Provider 的具体顺序可按样本可得性调整。
+- 5 核心 Provider 为 Wave 1，后续版本扩展。
 - Hook 默认关闭；若被动采集无法满足时，可对单个 Provider 提供用户授权的 trigger-only hook。
 
 ## 3. 架构驱动因素
@@ -136,9 +136,9 @@ TrustTools 使用这些信息重新实现 TypeScript Adapter。TokenTracker 的 
 | P0  | 本地隐私               | Privacy Projection、最小日志、无对话持久化           |
 | P0  | 独立开源               | Clean Room、独立 contract/schema/tests、来源登记 |
 | P0  | 单人 + Codex 可维护性    | 单仓库、模块化单体、单语言、自动化门禁                      |
-| P0  | macOS/Windows 一致交付 | 平台适配层、同一领域核心、目标平台构建                      |
+| P0  | macOS 一致交付 | 平台适配层、同一领域核心                             |
 | P1  | 首次 2 分钟可见          | 分层扫描、优先 Provider、进度事件、增量聚合               |
-| P1  | 10+ Provider 扩展    | Source Adapter、能力描述、独立兼容性测试              |
+| P1  | Provider 扩展        | Source Adapter、能力描述、独立兼容性测试              |
 | P1  | 后台资源 <200MB        | Utility Process、有限 worker、流式读取、聚合表       |
 | P1  | 离线可用               | 本地核心无云依赖，市场和 AI 明确降级                     |
 | P2  | Skill 市场体验         | 外部 API Adapter、下载暂存、原子安装、回滚              |
@@ -167,7 +167,7 @@ TrustTools 使用这些信息重新实现 TypeScript Adapter。TokenTracker 的 
 #### QA-04：断网
 
 - **触发：** TrustTools Web API、定价源或 AI 服务不可达。
-- **响应：** Token、Skill、本地静态扫描和 Memory 继续工作。
+- **响应：** Token、Skill 和本地静态扫描继续工作。
 - **结果：** 市场与 AI 功能明确降级，不阻塞本地启动和查询。
 
 #### QA-05：恶意或超大 Skill
@@ -246,14 +246,14 @@ flowchart TD
 
 后续详细设计按以下限界上下文展开：
 
-| 上下文                | 核心职责                  | 主要状态                                |
-| ------------------ | --------------------- | ----------------------------------- |
-| Usage Intelligence | 数据采集、归一化、费用、下钻和预警     | usage facts、checkpoints、aggregates  |
-| Skill Assets       | Skill 发现、健康度、安装、清理、恢复 | skill inventory、installations、trash |
-| Skill Security     | 本地静态扫描、报告、检测次数、AI 适配  | scan jobs、findings、quota            |
-| Skill Distribution | Web Skill 搜索、下载、版本和更新 | catalog cache、downloads、versions    |
-| Memory Index       | 目录配置、隐私投影、索引和浏览       | memory sources、metadata index       |
-| Desktop Platform   | 窗口、托盘、自启、更新、权限、任务监管   | app settings、runtime health         |
+| 上下文                | 核心职责                | 主要状态                                |
+| ------------------ | ------------------- | ----------------------------------- |
+| Usage Intelligence | 数据采集、归一化、费用和下钻     | usage facts、checkpoints、aggregates  |
+| Skill Assets       | Skill 发现、统计、安装、清理  | skill inventory、installations       |
+| Skill Security     | 本地静态扫描、报告、检测次数     | scan jobs、findings、quota            |
+| Skill Distribution | Web Skill 搜索、下载      | catalog cache、downloads             |
+| Session Recovery   | 会话扫描、恢复            | session sources、recovery state      |
+| Desktop Platform   | 窗口、托盘、自启、权限、任务监管   | app settings、runtime health         |
 
 边界之间不共享内部表结构，只通过 Application Service 和领域事件协作；物理上仍使用同一个 SQLite 数据库和同一个 Utility Process。
 

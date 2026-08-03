@@ -4,9 +4,9 @@
 |------|-----|
 | 文档类型 | 架构决策记录 (ADR) |
 | 项目名称 | TrustTools V3.0 |
-| 版本 | v1.2 |
+| 版本 | v1.3 |
 | 创建日期 | 2026-07-27 14:49:27 |
-| 更新日期 | 2026-07-27 15:00:47 |
+| 更新日期 | 2026-07-31 |
 | 生成工具 | tech-selection |
 | 文档状态 | 草稿 |
 
@@ -14,6 +14,7 @@
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.3 | 2026-07-31 | 同步 PRD v5.0：删除 Memory 模块，替换为 Session Recovery；更新架构图 |
 | v1.2 | 2026-07-27 15:00:47 | 纳入 TokenTracker 固定快照研究；新增独立采集内核、数据源接口重构和 Clean Room ADR |
 | v1.1 | 2026-07-27 14:54:39 | 调整为全栈 TypeScript 架构；Python 从核心后端降为可选 parser sidecar |
 | v1.0 | 2026-07-27 14:49:27 | 初始版本 |
@@ -190,7 +191,7 @@ proposed
 
 ### 背景
 
-产品需要多维下钻、分页、时间聚合、Skill 索引、记忆搜索和迁移。JSONL 不适合承担综合在线查询。
+产品需要多维下钻、分页、时间聚合、Skill 索引、会话搜索和迁移。JSONL 不适合承担综合在线查询。
 
 ### 决策
 
@@ -521,22 +522,22 @@ flowchart LR
         W --> T["Token Parsers"]
         W --> S["Skill 管理"]
         W --> SEC["静态安全扫描"]
-        W --> MEM["记忆索引"]
+        W --> SESSION["会话恢复"]
         W --> MARKET["Skill 市场适配器"]
     end
 
     T --> DB[("SQLite WAL")]
     S --> DB
     SEC --> DB
-    MEM --> DB
+    SESSION --> DB
     MARKET --> DB
 
     T --> PIPE["独立采集内核<br/>Discover → Read → Normalize → Dedup"]
     PIPE --> FS["本地 AI 工具数据"]
     S --> FS
-    MEM --> FS
+    SESSION --> FS
     MARKET -->|"HTTPS，可降级"| WEB["TrustTools API"]
-    SEC -.->|"隐私边界待确认"| AI["AI 审查适配器"]
+    SEC -.->|"隐私边界待确认"| AI["AI 审查适配器（MVP 不做）"]
     W -.->|"仅经 PoC 证明必要"| PY["可选 Python Parser Sidecar"]
 ```
 
