@@ -47,6 +47,12 @@ const STATUS_FILTERS: Array<{ key: UsageSourceStatus | "all"; label: string }> =
     { key: "not-installed", label: "未安装" },
   ];
 
+const LOG_PARSING_LABEL: Record<UsageSourceEntry["usageLogParsing"], string> = {
+  native: "原生支持",
+  adapter: "适配器支持",
+  unsupported: "待支持",
+};
+
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   try {
@@ -220,12 +226,19 @@ function SourceRow({ entry }: { entry: UsageSourceEntry }) {
 
       <span className={`tt-num text-[12px] ${meta.color}`}>{meta.label}</span>
 
-      {entry.status === "has-data" && (
+      {entry.events > 0 && (
         <span className="tt-num text-[11px] text-muted-foreground">
           采集事件 {entry.events.toLocaleString()}
-          {entry.malformedLines > 0 && (
-            <span className="text-warn"> · 异常 {entry.malformedLines}</span>
-          )}
+        </span>
+      )}
+
+      <span className="tt-num text-[11px] text-muted-foreground">
+        日志解析：{LOG_PARSING_LABEL[entry.usageLogParsing]}
+      </span>
+
+      {entry.malformedLines > 0 && (
+        <span className="tt-num text-[11px] text-warn">
+          异常 {entry.malformedLines}
         </span>
       )}
 
@@ -245,7 +258,7 @@ function SourceRow({ entry }: { entry: UsageSourceEntry }) {
       )}
 
       <span className="tt-num hidden w-full text-[10px] text-muted-foreground/70 lg:block">
-        {entry.paths.join(" · ") || "—"}
+        探测路径：{entry.paths.join(" · ") || "—"}
       </span>
     </li>
   );

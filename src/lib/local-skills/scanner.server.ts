@@ -24,6 +24,10 @@ import { createHash } from "node:crypto";
 import type { LocalUsageEvent } from "../local-usage/types.ts";
 import { AI_TOOLS } from "../tools/catalog.ts";
 import {
+  detectToolInstallations,
+  type ToolInstallationFact,
+} from "../tools/detection.server.ts";
+import {
   SKILL_AGENTS,
   type BatchUninstallResult,
   type LocalSkill,
@@ -104,6 +108,25 @@ function rootsFor(homeDirectory: string): Record<SkillAgent, string> {
       join(homeDirectory, SKILL_ROOT_SUFFIXES[agent]),
     ]),
   ) as Record<SkillAgent, string>;
+}
+
+function agentInstallationFacts(
+  facts: readonly ToolInstallationFact[],
+): Record<SkillAgent, { installed: boolean; detectedPaths: string[] }> {
+  const factsById = new Map(facts.map((fact) => [fact.id, fact]));
+  return Object.fromEntries(
+    SKILL_AGENTS.map((agent) => {
+      const tool = AI_TOOLS.find((candidate) => candidate.nameZh === agent);
+      const fact = tool == null ? undefined : factsById.get(tool.id);
+      return [
+        agent,
+        {
+          installed: fact?.installed ?? false,
+          detectedPaths: fact?.detectedPaths ?? [],
+        },
+      ];
+    }),
+  ) as Record<SkillAgent, { installed: boolean; detectedPaths: string[] }>;
 }
 
 function cleanScalar(value: string): string {
@@ -645,10 +668,12 @@ export async function scanLocalSkills(
   const now = options.now ?? new Date();
   const roots = rootsFor(homeDirectory);
   const trusttoolsDirectory = options.trusttoolsDirectory ?? TRUSTTOOLS_DIR;
-  const [origins, blacklist] = await Promise.all([
+  const [origins, blacklist, installationFacts] = await Promise.all([
     readOrigins(join(trusttoolsDirectory, "skill-origins.json")),
     readBlacklist(join(trusttoolsDirectory, "skill-blacklist.json")),
+    detectToolInstallations(AI_TOOLS, homeDirectory),
   ]);
+  const agents = agentInstallationFacts(installationFacts);
   const { installations, descriptions } = await scanInstallations(
     roots,
     origins,
@@ -718,6 +743,7 @@ export async function scanLocalSkills(
     healthBasis:
       "活跃度只依据本地日志中的结构化 Skill 调用；文件修改时间仅作安装信息展示。",
     roots,
+    agents,
     skills,
     blacklist,
   };
