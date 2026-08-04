@@ -432,6 +432,53 @@ test("resumeSafe is false and resumeCommand null for a malicious id", async () =
   });
 });
 
+test("只使用明确的本地元数据标记异常中断或丢失，不从缺失记录猜测", async () => {
+  await withTempHome(async (home) => {
+    const projectDir = join(home, ".claude", "projects", "demo");
+    await mkdir(projectDir, { recursive: true });
+    const interruptedId = "claude-interrupted-aaaaaaaaaaaaaaaa";
+    const ordinaryId = "claude-ordinary-bbbbbbbbbbbbbbbbbbbb";
+    const lostId = "claude-lost-cccccccccccccccccccccccc";
+
+    await writeFile(
+      join(projectDir, `${interruptedId}.jsonl`),
+      `${JSON.stringify({
+        timestamp: "2026-08-01T09:00:00.000Z",
+        sessionId: interruptedId,
+        status: "cancelled",
+      })}\n`,
+    );
+    // A timestamp-only record is incomplete metadata, not proof of failure.
+    await writeFile(
+      join(projectDir, `${ordinaryId}.jsonl`),
+      `${JSON.stringify({
+        timestamp: "2026-08-01T10:00:00.000Z",
+        sessionId: ordinaryId,
+      })}\n`,
+    );
+    await writeFile(
+      join(projectDir, `${lostId}.jsonl`),
+      `${JSON.stringify({
+        timestamp: "2026-08-01T11:00:00.000Z",
+        sessionId: lostId,
+        state: "session_lost",
+      })}\n`,
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const byId = new Map(
+      summary.sessions.map((session) => [session.sessionId, session]),
+    );
+
+    assert.equal(byId.get(interruptedId)?.status, "interrupted");
+    assert.match(byId.get(interruptedId)?.statusReason ?? "", /明确标记/);
+    assert.equal(byId.get(lostId)?.status, "lost");
+    assert.match(byId.get(lostId)?.statusReason ?? "", /明确标记/);
+    assert.equal(byId.get(ordinaryId)?.status, "available");
+    assert.equal(byId.get(ordinaryId)?.statusReason, null);
+  });
+});
+
 test("durationMs uses ACTIVE time — ignores an idle gap > 30 min", async () => {
   await withTempHome(async (home) => {
     const projectDir = join(home, ".claude", "projects", "demo");

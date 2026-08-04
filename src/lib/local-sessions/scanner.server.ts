@@ -4,12 +4,14 @@ import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
 
+import { estimateSessionCost } from "./cost.ts";
 import { buildResumeCommand, isResumeSafeId } from "./resume-id.ts";
 import type {
   SessionRecord,
   SessionSource,
   SessionSummary,
   SessionTokenCounts,
+  SessionStatus,
 } from "./types.ts";
 
 /**
@@ -58,6 +60,8 @@ interface SessionFragment {
   turns: number;
   editTurns: number;
   subagentCalls: number;
+  /** Explicit terminal state found in structured local metadata only. */
+  terminalStatus: Extract<SessionStatus, "interrupted" | "lost"> | null;
 }
 
 function asObject(value: unknown): JsonObject | undefined {
@@ -74,6 +78,52 @@ function tokenValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? Math.trunc(value)
     : 0;
+}
+
+type ExplicitTerminalStatus = Extract<SessionStatus, "interrupted" | "lost">;
+
+/**
+ * Only recognize exact structured status values.  We intentionally do not
+ * infer an interruption from a timestamp gap, an incomplete token record, or
+ * error/message text: any of those can occur during a healthy resumable turn.
+ */
+function explicitTerminalStatus(
+  ...metadata: Array<JsonObject | undefined>
+): ExplicitTerminalStatus | undefined {
+  for (const item of metadata) {
+    if (item == null) continue;
+    for (const key of ["status", "state", "outcome", "type", "subtype"]) {
+      const raw = stringValue(item[key]);
+      if (raw == null) continue;
+      const value = raw.trim().toLowerCase().replaceAll("-", "_");
+      if (value === "lost" || value === "session_lost") return "lost";
+      if (
+        value === "interrupted" ||
+        value === "cancelled" ||
+        value === "canceled" ||
+        value === "aborted" ||
+        value === "turn_interrupted" ||
+        value === "turn_cancelled" ||
+        value === "turn_canceled" ||
+        value === "turn_aborted"
+      ) {
+        return "interrupted";
+      }
+    }
+  }
+  return undefined;
+}
+
+function mergeTerminalStatus(
+  current: ExplicitTerminalStatus | null,
+  next: ExplicitTerminalStatus | undefined,
+): ExplicitTerminalStatus | null {
+  // An explicit lost marker is stronger than a prior interruption marker.
+  if (current === "lost" || next === "lost") return "lost";
+  if (current === "interrupted" || next === "interrupted") {
+    return "interrupted";
+  }
+  return null;
 }
 
 function timestampFromMs(ms: number): RecordTimestamp {
@@ -267,6 +317,7 @@ function createEmptyFragment(
     turns: 0,
     editTurns: 0,
     subagentCalls: 0,
+    terminalStatus: null,
   };
 }
 
@@ -296,15 +347,17 @@ async function scanClaudeCodeSessions(
       isAssistant?: boolean;
       isEditTurn?: boolean;
       subagent?: boolean;
+      terminalStatus?: ExplicitTerminalStatus;
     }[] = [];
 
     await readJsonLines(file.path, (record) => {
       const recordType = stringValue(record.type);
+      const terminalStatus = explicitTerminalStatus(record);
       // Title from the agent-authored ai-title record.
       if (recordType === "ai-title") {
         const aiTitle = stringValue(record.aiTitle);
         if (aiTitle != null) {
-          local.push({ title: aiTitle });
+          local.push({ title: aiTitle, terminalStatus });
         }
         return;
       }
@@ -393,6 +446,7 @@ async function scanClaudeCodeSessions(
         isAssistant,
         isEditTurn: isEditTurn || undefined,
         subagent: subagent || undefined,
+        terminalStatus,
       });
     });
 
@@ -434,6 +488,10 @@ async function scanClaudeCodeSessions(
       if (entry.isEditTurn) {
         fragment.editTurns += 1;
       }
+      fragment.terminalStatus = mergeTerminalStatus(
+        fragment.terminalStatus,
+        entry.terminalStatus,
+      );
     }
     // turns = number of assistant turns (≈ user turns that got a reply).
     fragment.turns += assistantSeen;
@@ -522,11 +580,17 @@ async function scanCodexSessions(
     let assistantTurns = 0;
     let editTurns = 0;
     let subagentCalls = 0;
+    let terminalStatus: ExplicitTerminalStatus | undefined;
 
     await readJsonLines(file.path, (record) => {
       const recordType = stringValue(record.type);
       const payload = asObject(record.payload);
       const payloadType = stringValue(payload?.type);
+      terminalStatus =
+        mergeTerminalStatus(
+          terminalStatus ?? null,
+          explicitTerminalStatus(record, payload),
+        ) ?? undefined;
 
       // session_meta carries the authoritative id and (sometimes) cwd.
       if (recordType === "session_meta" || payloadType === "session_meta") {
@@ -671,6 +735,10 @@ async function scanCodexSessions(
     fragment.turns += assistantTurns;
     fragment.editTurns += editTurns;
     fragment.subagentCalls += subagentCalls;
+    fragment.terminalStatus = mergeTerminalStatus(
+      fragment.terminalStatus,
+      terminalStatus,
+    );
     fragments.set(sessionId, fragment);
   }
 
@@ -768,11 +836,17 @@ async function scanGrokSessions(
     let editTurns = 0;
     let subagentCalls = 0;
     let pendingEditTurn = false;
+    let terminalStatus: ExplicitTerminalStatus | undefined;
 
     await readJsonLines(updatesPath, (record) => {
       const recordType = stringValue(record.type);
       const params = asObject(record.params);
       const meta = asObject(params?._meta);
+      terminalStatus =
+        mergeTerminalStatus(
+          terminalStatus ?? null,
+          explicitTerminalStatus(record, params, meta),
+        ) ?? undefined;
 
       // sessionId fallback: params.sessionId inside updates.jsonl.
       if (resolvedId == null) {
@@ -869,6 +943,10 @@ async function scanGrokSessions(
     fragment.turns += assistantTurns;
     fragment.editTurns += editTurns;
     fragment.subagentCalls += subagentCalls;
+    fragment.terminalStatus = mergeTerminalStatus(
+      fragment.terminalStatus,
+      terminalStatus,
+    );
     fragments.set(resolvedId, fragment);
   }
 
@@ -891,7 +969,18 @@ function fragmentToRecord(fragment: SessionFragment): SessionRecord {
     (endedMs != null ? new Date(endedMs).toISOString() : startedAt);
 
   const projectRef = fragment.projectRef ?? "unknown";
-  return {
+  const resumeSafe = isResumeSafeId(fragment.sessionId);
+  const status: SessionStatus =
+    fragment.terminalStatus ?? (resumeSafe ? "available" : "unavailable");
+  const statusReason =
+    status === "lost"
+      ? "本地会话元数据明确标记为丢失。"
+      : status === "interrupted"
+        ? "本地会话元数据明确标记为已中断。"
+        : status === "unavailable"
+          ? "会话 ID 不符合安全格式，未生成恢复命令。"
+          : null;
+  const record = {
     sessionId: fragment.sessionId,
     source: fragment.source,
     title: fragment.title,
@@ -909,9 +998,12 @@ function fragmentToRecord(fragment: SessionFragment): SessionRecord {
     retryTurns: 0,
     totals: fragment.totals,
     subagentCalls: fragment.subagentCalls,
-    resumeSafe: isResumeSafeId(fragment.sessionId),
+    status,
+    statusReason,
+    resumeSafe,
     resumeCommand: buildResumeCommand(fragment.source, fragment.sessionId),
   };
+  return { ...record, cost: estimateSessionCost(record) };
 }
 
 function dedupeAndSort(sessions: SessionRecord[]): SessionRecord[] {
