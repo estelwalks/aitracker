@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Segmented } from "../tt";
 import {
   formatTokens,
   shareOf,
@@ -42,6 +41,9 @@ export interface UsageTrendChartProps {
   period: UsagePeriod;
   customFrom?: string;
   customTo?: string;
+  /** 图表模式（受控）：堆叠面积 / 多序列折线。由父级持有并渲染切换控件。 */
+  mode: TrendChartMode;
+  onModeChange: (mode: TrendChartMode) => void;
 }
 
 /**
@@ -145,8 +147,9 @@ export function UsageTrendChart({
   period,
   customFrom,
   customTo,
+  mode,
+  onModeChange,
 }: UsageTrendChartProps) {
-  const [mode, setMode] = useState<TrendChartMode>("area");
   const [hiddenSources, setHiddenSources] = useState<LocalUsageSource[]>([]);
 
   const grain = grainForPeriod(period);
@@ -215,16 +218,6 @@ export function UsageTrendChart({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-2 flex items-center justify-end">
-        <Segmented
-          value={mode}
-          onChange={(value) => setMode(value as TrendChartMode)}
-          options={[
-            { value: "area", label: "面积图" },
-            { value: "line", label: "多折线" },
-          ]}
-        />
-      </div>
       <div
         className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25"
         style={{ height: 260 }}
