@@ -235,11 +235,12 @@ function SourceRow({ entry }: { entry: UsageSourceEntry }) {
 
       {entry.status === "not-installed" && (
         <a
-          href="#"
+          href={`https://duckduckgo.com/?q=${encodeURIComponent(`${entry.nameZh} AI coding tool download`)}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-[11px] text-primary hover:underline"
-          onClick={(event) => event.preventDefault()}
         >
-          下载安装
+          下载安装 ↗
         </a>
       )}
 

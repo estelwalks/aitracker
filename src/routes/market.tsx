@@ -352,10 +352,12 @@ function MarketPage() {
                         {formatCount(skill.installCount)}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
-                        -
+                        {skill.tokens !== null
+                          ? skill.tokens.toLocaleString()
+                          : "-"}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
-                        -
+                        {skill.size !== null ? formatBytes(skill.size) : "-"}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
                         {skill.stars !== null
@@ -670,12 +672,20 @@ function SkillDetailDrawer({
               label="下载量"
               value={formatCount(skill.installCount)}
             />
-            <MetricCell label="Token 占用" value="-" />
+            <MetricCell
+              label="Token 占用"
+              value={
+                skill.tokens !== null ? skill.tokens.toLocaleString() : "-"
+              }
+            />
             <MetricCell
               label="Star"
               value={skill.stars !== null ? skill.stars.toLocaleString() : "-"}
             />
-            <MetricCell label="体积" value="-" />
+            <MetricCell
+              label="体积"
+              value={skill.size !== null ? formatBytes(skill.size) : "-"}
+            />
           </div>
 
           {/* Description */}

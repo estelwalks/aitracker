@@ -121,6 +121,36 @@ function formatTime(value: string): string {
   }).format(new Date(value));
 }
 
+/**
+ * 近 7 天日均调用（仅 Codex 等产 context.skills 的来源可见，否则为 0）。
+ */
+function dailyAvg(daily?: { date: string; calls: number }[]): number {
+  if (!daily || daily.length === 0) return 0;
+  // 取序列中最近 7 个日期点求均值
+  const tail = daily.slice(-7);
+  const sum = tail.reduce((acc, point) => acc + point.calls, 0);
+  return Math.round(sum / tail.length);
+}
+
+/**
+ * 使用趋势：近 7 天 vs 前 7 天的日均差值方向（↑/↓/−）。
+ * 数据不足或无序列时返回 "−"。
+ */
+function trendOf(daily?: { date: string; calls: number }[]): "↑" | "↓" | "−" {
+  if (!daily || daily.length < 2) return "−";
+  const recent = daily.slice(-7).reduce((acc, p) => acc + p.calls, 0);
+  const priorSlice = daily.slice(-14, -7);
+  if (priorSlice.length === 0) return recent > 0 ? "↑" : "−";
+  const prior =
+    priorSlice.reduce((acc, p) => acc + p.calls, 0) / priorSlice.length;
+  const recentAvg = recent / Math.min(7, daily.slice(-7).length);
+  if (prior === 0) return recentAvg > 0 ? "↑" : "−";
+  const delta = (recentAvg - prior) / prior;
+  if (delta > 0.1) return "↑";
+  if (delta < -0.1) return "↓";
+  return "−";
+}
+
 // --- Sync state types ---
 
 type SyncScopeState = {
@@ -726,6 +756,15 @@ function SkillsPage() {
                     </span>
                   </TableHead>
                   <TableHead className="min-w-[100px]">描述</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-right">
+                    调用
+                  </TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-right">
+                    日均
+                  </TableHead>
+                  <TableHead className="w-[60px] whitespace-nowrap text-center">
+                    趋势
+                  </TableHead>
                   <TableHead className="w-[200px]">安装位置</TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap">
                     最近使用时间
@@ -784,6 +823,30 @@ function SkillsPage() {
                         <span className="line-clamp-2 text-[12px] text-muted-foreground">
                           {skill.description ?? "—"}
                         </span>
+                      </TableCell>
+                      <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
+                        {skill.usageCount.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
+                        {dailyAvg(skill.daily)}
+                      </TableCell>
+                      <TableCell className="tt-num text-center text-[12px]">
+                        {(() => {
+                          const t = trendOf(skill.daily);
+                          return (
+                            <span
+                              className={
+                                t === "↑"
+                                  ? "text-ok"
+                                  : t === "↓"
+                                    ? "text-danger"
+                                    : "text-muted-foreground"
+                              }
+                            >
+                              {t}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">

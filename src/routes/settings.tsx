@@ -409,13 +409,28 @@ function SettingsPage() {
                   <button
                     key={item.id}
                     onClick={() => setTheme(item.id)}
-                    className={`rounded-sm border p-3 text-left ${
+                    className={`overflow-hidden rounded-sm border text-left ${
                       theme === item.id ? "border-primary" : "border-border"
                     }`}
                   >
-                    <div className="text-[13px] font-medium">{item.label}</div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      {item.desc}
+                    {/* 迷你主题预览：把主题类套在缩略图容器上，使 CSS 变量局部生效 */}
+                    <div
+                      className={`flex items-center gap-1.5 border-b border-border/60 bg-background px-2 py-2 ${item.cls}`}
+                    >
+                      <span className="h-6 w-1.5 shrink-0 rounded-sm bg-sidebar" />
+                      <div className="flex flex-1 flex-col gap-1">
+                        <span className="h-1.5 w-3/4 rounded-full bg-primary/70" />
+                        <span className="h-1.5 w-1/2 rounded-full bg-muted-foreground/40" />
+                      </div>
+                      <span className="size-2.5 shrink-0 rounded-full bg-ok" />
+                    </div>
+                    <div className="px-2 py-1.5">
+                      <div className="text-[13px] font-medium">
+                        {item.label}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        {item.desc}
+                      </div>
                     </div>
                   </button>
                 ))}
