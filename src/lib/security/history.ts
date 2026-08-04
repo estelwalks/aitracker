@@ -65,13 +65,22 @@ function parseHistory(value: unknown): SecurityReport[] {
       !Array.isArray(candidate.risks) ||
       (candidate.verdict !== "安全" &&
         candidate.verdict !== "可疑" &&
-        candidate.verdict !== "危险") ||
-      !candidate.aiReview ||
-      typeof candidate.aiReview !== "object"
+        candidate.verdict !== "危险")
     ) {
       continue;
     }
-    reports.push(candidate as SecurityReport);
+    // 兼容早期本地历史：缺少耗时/名称时只补展示字段，绝不补写或读取源码。
+    reports.push({
+      ...(candidate as SecurityReport),
+      targetName:
+        typeof candidate.targetName === "string" && candidate.targetName
+          ? candidate.targetName
+          : "SKILL.md",
+      durationMs:
+        typeof candidate.durationMs === "number" && candidate.durationMs >= 0
+          ? candidate.durationMs
+          : 0,
+    });
   }
   return reports;
 }

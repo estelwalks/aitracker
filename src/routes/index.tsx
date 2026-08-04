@@ -969,7 +969,7 @@ function OnboardingDashboard({
             <CapabilityCard
               icon={<ShieldCheck className="size-6" />}
               title="安全检测"
-              desc="对本机 AI 生成代码进行安全审计，每日 AI 审查限额可控。"
+              desc="对选择的 SKILL.md 执行 11 维本地静态检测，不上传源码。"
             />
           </div>
           <Panel title="受支持的 AI 工具（27 款）">
