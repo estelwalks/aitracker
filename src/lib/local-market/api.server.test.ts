@@ -35,8 +35,9 @@ test("fetchMarketSkills sends pagination, keyword, and sort to the API", async (
   const result = await fetchMarketSkills(
     { page: 1, limit: 20, search: "测试", sort: "downloads" },
     {
-      fetcher: async (input) => {
-        requestedUrl = String(input);
+      fetcher: async (input, init) => {
+        // 仅捕获列表请求（GET）；体积预取的 HEAD 不应覆盖记录的列表 URL。
+        if (init?.method !== "HEAD") requestedUrl = String(input);
         return new Response(JSON.stringify(validResponse), {
           status: 200,
           headers: { "content-type": "application/json" },
