@@ -662,7 +662,7 @@ function Dashboard() {
         </div>
 
         <div key="trend" className="dashboard-widget">
-          <Panel title="Token 消耗趋势（按 AI 客户端分色）">
+          <Panel title="Token 消耗趋势 · 按模型（单位：K Tokens）">
             {/* Summary stats grid */}
             <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
