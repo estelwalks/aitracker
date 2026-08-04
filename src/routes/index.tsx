@@ -30,7 +30,10 @@ import {
   StatusBadge,
   TTButton,
 } from "../components/tt";
-import { UsageTrendChart } from "../components/dashboard/UsageTrendChart";
+import {
+  UsageTrendChart,
+  type TrendChartMode,
+} from "../components/dashboard/UsageTrendChart";
 import { ContextBreakdown } from "../components/dashboard/ContextBreakdown";
 import { UsageHeatmapPanel } from "../components/dashboard/UsageHeatmapPanel";
 import { ModelDistribution } from "../components/dashboard/ModelDistribution";
@@ -152,6 +155,7 @@ function Dashboard() {
   const [period, setPeriod] = useState<UsagePeriod>("today");
   const [from, setFrom] = useState(daysAgo(14));
   const [to, setTo] = useState(daysAgo(0));
+  const [trendMode, setTrendMode] = useState<TrendChartMode>("area");
 
   const selectedDaily = useMemo(
     () => filterDailyUsage(snapshot.daily, period, from, to),
@@ -662,7 +666,19 @@ function Dashboard() {
         </div>
 
         <div key="trend" className="dashboard-widget">
-          <Panel title="Token 消耗趋势 · 按模型（单位：K Tokens）">
+          <Panel
+            title="Token 消耗趋势 · 按模型（单位：K Tokens）"
+            action={
+              <Segmented
+                value={trendMode}
+                onChange={(v) => setTrendMode(v as TrendChartMode)}
+                options={[
+                  { value: "area", label: "堆叠面积" },
+                  { value: "line", label: "多序列折线" },
+                ]}
+              />
+            }
+          >
             {/* Summary stats grid */}
             <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
@@ -708,19 +724,15 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* Chart area with grid background overlay */}
-            <div
-              className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25"
-              style={{ height: 380 }}
-            >
-              <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
-              <UsageTrendChart
-                events={selectedEvents}
-                period={period}
-                customFrom={from}
-                customTo={to}
-              />
-            </div>
+            {/* Chart area（图表框由 UsageTrendChart 内部渲染，避免双层框） */}
+            <UsageTrendChart
+              events={selectedEvents}
+              period={period}
+              customFrom={from}
+              customTo={to}
+              mode={trendMode}
+              onModeChange={setTrendMode}
+            />
           </Panel>
         </div>
 
