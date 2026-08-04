@@ -31,7 +31,7 @@ function match(name: string) {
 
 const brandColor: Record<string, string> = {
   claude: "#d97757",
-  codex: "#10a37f",
+  codex: "currentColor",
   cursor: "#8b8b8b",
   gemini: "#4285f4",
   kimi: "#7c5cff",
@@ -53,10 +53,24 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
   };
 
   if (kind === "claude")
-    // Anthropic 官方 logo（simple-icons，CC0）
     return (
       <svg {...common} fill={fill}>
-        <path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" />
+        {Array.from({ length: 8 }, (_, i) => {
+          const a = (i * 180) / 8 + 11.25;
+          const r = (a * Math.PI) / 180;
+          const w = 1.5;
+          return (
+            <rect
+              key={i}
+              x={12 - w / 2}
+              y={2}
+              width={w}
+              height={20}
+              rx={w / 2}
+              transform={`rotate(${(r * 180) / Math.PI} 12 12)`}
+            />
+          );
+        })}
       </svg>
     );
 
