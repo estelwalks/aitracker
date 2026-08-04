@@ -477,290 +477,282 @@ function Dashboard() {
       </div>
 
       <div className="flex flex-col gap-4">
+        <div key="kpis" className="dashboard-widget">
+          <div className="group/metrics relative">
+            <div
+              ref={summaryRef}
+              onScroll={syncMetricNav}
+              className="tt-xscroll flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
+            >
+              {/* Card: 区间费用 */}
+              <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                <div className="tt-label whitespace-nowrap font-mono uppercase">
+                  区间费用
+                </div>
+                <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                  {intervalCostCny}
+                </div>
+                <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                  {intervalCostHint}
+                </div>
+              </div>
 
-          <div key="kpis" className="dashboard-widget">
-            <div className="group/metrics relative">
-              <div
-                ref={summaryRef}
-                onScroll={syncMetricNav}
-                className="tt-xscroll flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-1"
+              {/* Card: Token 总量 */}
+              <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                <div className="tt-label whitespace-nowrap font-mono uppercase">
+                  Token 总量
+                </div>
+                <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                  {formatTokens(selectedTotals.totalTokens)}
+                </div>
+                <div className="mt-1.5 flex items-center gap-1 text-xs">
+                  {renderMomIndicator(tokenMoM)}
+                  <span className="text-muted-foreground">vs 上一区间</span>
+                </div>
+              </div>
+
+              {/* Card: 缓存节省 */}
+              <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
+                <div className="tt-label whitespace-nowrap font-mono uppercase">
+                  缓存节省
+                </div>
+                <div className="tt-num mt-1.5 whitespace-nowrap text-2xl text-ok">
+                  {cacheSavingsCny}
+                </div>
+                <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                  命中率{" "}
+                  <span className="tt-num text-foreground">
+                    {cacheHitRate.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card: Skill 数 */}
+              <Link
+                to="/skills"
+                className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
               >
-                {/* Card: 区间费用 */}
-                <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
-                  <div className="tt-label whitespace-nowrap font-mono uppercase">
-                    区间费用
-                  </div>
-                  <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                    {intervalCostCny}
-                  </div>
-                  <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                    {intervalCostHint}
-                  </div>
+                <div className="tt-label whitespace-nowrap font-mono uppercase">
+                  Skill 数
                 </div>
-
-                {/* Card: Token 总量 */}
-                <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
-                  <div className="tt-label whitespace-nowrap font-mono uppercase">
-                    Token 总量
-                  </div>
-                  <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                    {formatTokens(selectedTotals.totalTokens)}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-1 text-xs">
-                    {renderMomIndicator(tokenMoM)}
-                    <span className="text-muted-foreground">vs 上一区间</span>
-                  </div>
+                <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                  {skillHealth.total}
+                  <span className="text-base text-muted-foreground"> 个</span>
                 </div>
-
-                {/* Card: 缓存节省 */}
-                <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
-                  <div className="tt-label whitespace-nowrap font-mono uppercase">
-                    缓存节省
-                  </div>
-                  <div className="tt-num mt-1.5 whitespace-nowrap text-2xl text-ok">
-                    {cacheSavingsCny}
-                  </div>
-                  <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                    命中率{" "}
-                    <span className="tt-num text-foreground">
-                      {cacheHitRate.toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card: Skill 数 */}
-                <Link
-                  to="/skills"
-                  className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
-                >
-                  <div className="tt-label whitespace-nowrap font-mono uppercase">
-                    Skill 数
-                  </div>
-                  <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                    {skillHealth.total}
-                    <span className="text-base text-muted-foreground">
-                      {" "}
-                      个
-                    </span>
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs">
-                    {skillHealth.rows
-                      .filter((r) => r.count > 0)
-                      .map((item) => (
+                <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs">
+                  {skillHealth.rows
+                    .filter((r) => r.count > 0)
+                    .map((item) => (
+                      <span
+                        key={item.health}
+                        className="inline-flex items-center gap-0.5"
+                      >
                         <span
-                          key={item.health}
-                          className="inline-flex items-center gap-0.5"
-                        >
-                          <span
-                            className={`inline-block size-1.5 rounded-full ${item.dot}`}
-                          />
-                          {item.count}
-                        </span>
-                      ))}
-                  </div>
-                </Link>
-
-                {/* Token breakdown cards — input & output only */}
-                {tokenTypeRows
-                  .filter(
-                    (r) =>
-                      ["input", "output"].includes(r.key) &&
-                      r.totalTokens > 0,
-                  )
-                  .map((row) => (
-                    <div
-                      key={row.key}
-                      className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
-                    >
-                      <div className="tt-label whitespace-nowrap font-mono uppercase">
-                        {tokenTypeLabelMap[row.key] ?? row.key}
-                      </div>
-                      <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                        {formatTokens(row.totalTokens)}
-                      </div>
-                      <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                        {shareOf(
-                          row.totalTokens,
-                          selectedTotals.totalTokens,
-                        ).toFixed(0)}
-                        % 占比
-                      </div>
-                    </div>
-                  ))}
-              </div>
-
-              {/* Pagination: fade edge + dots + chevrons */}
-              {metricNav.pages > 1 && (
-                <>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background to-transparent" />
-                  <div className="mt-2 flex items-center justify-end gap-3">
-                    <span className="text-[10px] tracking-[0.18em] text-muted-foreground">
-                      {String(metricNav.page + 1).padStart(2, "0")} /{" "}
-                      {String(metricNav.pages).padStart(2, "0")}
-                    </span>
-                    <div className="flex items-center gap-[3px]">
-                      {Array.from({ length: metricNav.pages }).map((_, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          aria-label={`第 ${i + 1} 组指标`}
-                          onClick={() => goMetricPage(i)}
-                          className={`h-[6px] transition-all ${
-                            i === metricNav.page
-                              ? "w-6 bg-primary shadow-[0_0_8px_0_var(--color-primary)]"
-                              : "w-[6px] bg-border hover:bg-primary/60"
-                          }`}
-                          style={{
-                            clipPath:
-                              "polygon(3px 0,100% 0,calc(100% - 3px) 100%,0 100%)",
-                          }}
+                          className={`inline-block size-1.5 rounded-full ${item.dot}`}
                         />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {(
-                        [
-                          {
-                            dir: -1,
-                            label: "上一组指标",
-                            Icon: ChevronLeft,
-                          },
-                          {
-                            dir: 1,
-                            label: "下一组指标",
-                            Icon: ChevronRight,
-                          },
-                        ] as const
-                      ).map(({ dir, label, Icon }) => {
-                        const disabled =
-                          dir < 0
-                            ? metricNav.page === 0
-                            : metricNav.page >= metricNav.pages - 1;
-                        return (
-                          <button
-                            key={label}
-                            type="button"
-                            aria-label={label}
-                            disabled={disabled}
-                            onClick={() => goMetricPage(metricNav.page + dir)}
-                            className="grid size-6 place-items-center rounded-sm border border-border bg-surface-2 text-muted-foreground transition-all hover:border-primary/60 hover:text-primary hover:shadow-[0_0_10px_-2px_var(--color-primary)] disabled:pointer-events-none disabled:opacity-25"
-                          >
-                            <Icon className="size-3.5" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+                        {item.count}
+                      </span>
+                    ))}
+                </div>
+              </Link>
 
-
-          <div key="trend" className="dashboard-widget">
-            <Panel title="Token 消耗趋势（按 AI 客户端分色）">
-              {/* Summary stats grid */}
-              <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
-                <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                  <div className="tt-label font-mono uppercase">区间合计</div>
-                  <div className="tt-num mt-0.5 text-sm">
-                    {formatTokens(trendStats.sum)}
-                  </div>
-                </div>
-                <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                  <div className="tt-label font-mono uppercase">均值</div>
-                  <div className="tt-num mt-0.5 text-sm">
-                    {formatTokens(trendStats.avg)}
-                  </div>
-                </div>
-                <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                  <div className="tt-label font-mono uppercase">峰值</div>
-                  <div className="tt-num mt-0.5 text-sm">
-                    {formatTokens(trendStats.peak)}
-                  </div>
-                  {trendStats.peakLabel && (
-                    <div className="text-[10px] text-muted-foreground">
-                      {trendStats.peakLabel}
-                    </div>
-                  )}
-                </div>
-                <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                  <div className="tt-label font-mono uppercase">环比</div>
+              {/* Token breakdown cards — input & output only */}
+              {tokenTypeRows
+                .filter(
+                  (r) =>
+                    ["input", "output"].includes(r.key) && r.totalTokens > 0,
+                )
+                .map((row) => (
                   <div
-                    className={`tt-num mt-0.5 text-sm ${
-                      tokenMoM != null
-                        ? tokenMoM > 0
-                          ? "text-danger"
-                          : tokenMoM < 0
-                            ? "text-ok"
-                            : ""
-                        : ""
-                    }`}
+                    key={row.key}
+                    className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
                   >
-                    {tokenMoM != null && Number.isFinite(tokenMoM)
-                      ? `${tokenMoM > 0 ? "+" : ""}${tokenMoM.toFixed(1)}%`
-                      : "−−"}
+                    <div className="tt-label whitespace-nowrap font-mono uppercase">
+                      {tokenTypeLabelMap[row.key] ?? row.key}
+                    </div>
+                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                      {formatTokens(row.totalTokens)}
+                    </div>
+                    <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                      {shareOf(
+                        row.totalTokens,
+                        selectedTotals.totalTokens,
+                      ).toFixed(0)}
+                      % 占比
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Pagination: fade edge + dots + chevrons */}
+            {metricNav.pages > 1 && (
+              <>
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-background to-transparent" />
+                <div className="mt-2 flex items-center justify-end gap-3">
+                  <span className="text-[10px] tracking-[0.18em] text-muted-foreground">
+                    {String(metricNav.page + 1).padStart(2, "0")} /{" "}
+                    {String(metricNav.pages).padStart(2, "0")}
+                  </span>
+                  <div className="flex items-center gap-[3px]">
+                    {Array.from({ length: metricNav.pages }).map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        aria-label={`第 ${i + 1} 组指标`}
+                        onClick={() => goMetricPage(i)}
+                        className={`h-[6px] transition-all ${
+                          i === metricNav.page
+                            ? "w-6 bg-primary shadow-[0_0_8px_0_var(--color-primary)]"
+                            : "w-[6px] bg-border hover:bg-primary/60"
+                        }`}
+                        style={{
+                          clipPath:
+                            "polygon(3px 0,100% 0,calc(100% - 3px) 100%,0 100%)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {(
+                      [
+                        {
+                          dir: -1,
+                          label: "上一组指标",
+                          Icon: ChevronLeft,
+                        },
+                        {
+                          dir: 1,
+                          label: "下一组指标",
+                          Icon: ChevronRight,
+                        },
+                      ] as const
+                    ).map(({ dir, label, Icon }) => {
+                      const disabled =
+                        dir < 0
+                          ? metricNav.page === 0
+                          : metricNav.page >= metricNav.pages - 1;
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          aria-label={label}
+                          disabled={disabled}
+                          onClick={() => goMetricPage(metricNav.page + dir)}
+                          className="grid size-6 place-items-center rounded-sm border border-border bg-surface-2 text-muted-foreground transition-all hover:border-primary/60 hover:text-primary hover:shadow-[0_0_10px_-2px_var(--color-primary)] disabled:pointer-events-none disabled:opacity-25"
+                        >
+                          <Icon className="size-3.5" />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div key="trend" className="dashboard-widget">
+          <Panel title="Token 消耗趋势（按 AI 客户端分色）">
+            {/* Summary stats grid */}
+            <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
+              <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                <div className="tt-label font-mono uppercase">区间合计</div>
+                <div className="tt-num mt-0.5 text-sm">
+                  {formatTokens(trendStats.sum)}
+                </div>
               </div>
-
-              {/* Chart area with grid background overlay */}
-              <div className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25" style={{ height: 380 }}>
-                <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
-                <UsageTrendChart
-                  events={selectedEvents}
-                  period={period}
-                  customFrom={from}
-                  customTo={to}
-                />
+              <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                <div className="tt-label font-mono uppercase">均值</div>
+                <div className="tt-num mt-0.5 text-sm">
+                  {formatTokens(trendStats.avg)}
+                </div>
               </div>
-            </Panel>
-          </div>
+              <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                <div className="tt-label font-mono uppercase">峰值</div>
+                <div className="tt-num mt-0.5 text-sm">
+                  {formatTokens(trendStats.peak)}
+                </div>
+                {trendStats.peakLabel && (
+                  <div className="text-[10px] text-muted-foreground">
+                    {trendStats.peakLabel}
+                  </div>
+                )}
+              </div>
+              <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
+                <div className="tt-label font-mono uppercase">环比</div>
+                <div
+                  className={`tt-num mt-0.5 text-sm ${
+                    tokenMoM != null
+                      ? tokenMoM > 0
+                        ? "text-danger"
+                        : tokenMoM < 0
+                          ? "text-ok"
+                          : ""
+                      : ""
+                  }`}
+                >
+                  {tokenMoM != null && Number.isFinite(tokenMoM)
+                    ? `${tokenMoM > 0 ? "+" : ""}${tokenMoM.toFixed(1)}%`
+                    : "−−"}
+                </div>
+              </div>
+            </div>
 
-
-          <div key="provider" className="dashboard-widget">
-            <Panel
-              className="dashboard-context"
-              title="上下文构成"
-              action={<span className="tt-label">按工具 · 按维度</span>}
+            {/* Chart area with grid background overlay */}
+            <div
+              className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25"
+              style={{ height: 380 }}
             >
-              <ContextBreakdown events={selectedEvents} />
-            </Panel>
-          </div>
+              <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
+              <UsageTrendChart
+                events={selectedEvents}
+                period={period}
+                customFrom={from}
+                customTo={to}
+              />
+            </div>
+          </Panel>
+        </div>
 
+        <div key="provider" className="dashboard-widget">
+          <Panel
+            className="dashboard-context"
+            title="上下文构成"
+            action={<span className="tt-label">按工具 · 按维度</span>}
+          >
+            <ContextBreakdown events={selectedEvents} />
+          </Panel>
+        </div>
 
-          <div key="models" className="dashboard-widget">
-            <Panel title="模型分布">
-              <ModelDistribution events={selectedEvents} />
-            </Panel>
-          </div>
+        <div key="models" className="dashboard-widget">
+          <Panel title="模型分布">
+            <ModelDistribution events={selectedEvents} />
+          </Panel>
+        </div>
 
+        <div key="heatmap" className="dashboard-widget">
+          <Panel
+            className="dashboard-heatmap"
+            title="7 × 24 消耗热力图"
+            action={
+              <span className="text-[10px] text-muted-foreground">
+                按周导航 · 本机时区
+              </span>
+            }
+          >
+            <UsageHeatmapPanel events={selectedEvents} />
+          </Panel>
+        </div>
 
-          <div key="heatmap" className="dashboard-widget">
-            <Panel
-              className="dashboard-heatmap"
-              title="7 × 24 消耗热力图"
-              action={
-                <span className="text-[10px] text-muted-foreground">
-                  按周导航 · 本机时区
-                </span>
-              }
-            >
-              <UsageHeatmapPanel events={selectedEvents} />
-            </Panel>
-          </div>
-
-
-          <div key="activity" className="dashboard-widget">
-            <Panel
-              className="dashboard-activity"
-              title="消耗明细"
-              bodyClassName="p-0"
-            >
-              <UsageDetailTable events={selectedEvents} />
-            </Panel>
-          </div>
-
+        <div key="activity" className="dashboard-widget">
+          <Panel
+            className="dashboard-activity"
+            title="消耗明细"
+            bodyClassName="p-0"
+          >
+            <UsageDetailTable events={selectedEvents} />
+          </Panel>
+        </div>
       </div>
       {showPoster && (
         <TokenPoster

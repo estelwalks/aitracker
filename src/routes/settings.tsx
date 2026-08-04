@@ -39,9 +39,8 @@ import {
 export const Route = createFileRoute("/settings")({
   loader: async () => {
     try {
-      const { getStorageUsageFn } = await import(
-        "../lib/local-usage/prune.server"
-      );
+      const { getStorageUsageFn } =
+        await import("../lib/local-usage/prune.server");
       const usage = await getStorageUsageFn();
       return { storageUsage: usage, storageError: null };
     } catch (error) {
@@ -246,9 +245,8 @@ function SettingsPage() {
   const handleClearData = async () => {
     setClearingData(true);
     try {
-      const { pruneLocalDataFn } = await import(
-        "../lib/local-usage/prune.server"
-      );
+      const { pruneLocalDataFn } =
+        await import("../lib/local-usage/prune.server");
       const result = await pruneLocalDataFn();
       setStorageUsage(result.usage);
       toast.success("本地数据已清除");

@@ -18,10 +18,7 @@ import {
   type UsagePeriod,
   type UsageTimeGrain,
 } from "../../lib/local-usage/presentation";
-import type {
-  LocalUsageEvent,
-  LocalUsageSource,
-} from "../../lib/local-usage";
+import type { LocalUsageEvent, LocalUsageSource } from "../../lib/local-usage";
 
 export type TrendChartMode = "area" | "line";
 
@@ -178,8 +175,7 @@ export function UsageTrendChart({
   // guaranteed to match `topSources` (both come from event.source).
   const chartDataWithSources: TrendPoint[] = useMemo(() => {
     if (grain === "month") return aggregateByMonth(events);
-    if (grain === "hour")
-      return aggregateHourlyBySource(events, topSources);
+    if (grain === "hour") return aggregateHourlyBySource(events, topSources);
     return aggregateDailyBySource(events, topSources);
   }, [events, grain, topSources]);
 
@@ -212,9 +208,10 @@ export function UsageTrendChart({
     (sum, value) => sum + value,
     0,
   );
-  const mean = chartDataWithSources.length > 0
-    ? visibleTotal / chartDataWithSources.length
-    : 0;
+  const mean =
+    chartDataWithSources.length > 0
+      ? visibleTotal / chartDataWithSources.length
+      : 0;
 
   return (
     <div className="flex flex-col">
