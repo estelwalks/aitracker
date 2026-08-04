@@ -32,6 +32,10 @@ export interface MarketSkill {
   isFeatured: boolean | null;
   updatedAt: string | null;
   lastScannedAt: string | null;
+  /** Skill 上下文 Token 估算（来自市场接口 token_estimate.total_tokens）。 */
+  tokens: number | null;
+  /** 压缩包体积（字节）；市场接口不返回，按需 HEAD 预取，缺失为 null。 */
+  size: number | null;
   version: null;
   rating: null;
 }

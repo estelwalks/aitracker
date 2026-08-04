@@ -71,9 +71,21 @@ function parseSkill(value: unknown): MarketSkill {
     isFeatured: optionalBoolean(value.is_featured),
     updatedAt: optionalString(value.updated_at),
     lastScannedAt: optionalString(value.last_scanned_at),
+    tokens: tokenEstimate(value.token_estimate),
+    // 市场接口不在列表项返回体积字段；体积由调用方按需 HEAD 预取后回填。
+    size: optionalNumber(value.size ?? value.compressed_bytes),
     version: null,
     rating: null,
   };
+}
+
+/**
+ * 从市场接口的 token_estimate 对象中提取总 Token 数。
+ * 接口返回 {total_tokens, ...}；缺失或形态不符时为 null。
+ */
+function tokenEstimate(value: unknown): number | null {
+  if (!isRecord(value)) return null;
+  return optionalNumber(value.total_tokens);
 }
 
 function parsePagination(value: unknown): MarketPagination {
