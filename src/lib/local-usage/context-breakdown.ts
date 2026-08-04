@@ -88,14 +88,6 @@ function splitInteger(value: number, parts: number, index: number): number {
   return base + (index < value % parts ? 1 : 0);
 }
 
-function splitCounts(
-  event: LocalUsageEvent,
-  parts: number,
-  index: number,
-): LocalTokenCounts {
-  return splitTokenCounts(distributableCounts(event), parts, index);
-}
-
 function splitTokenCounts(
   counts: LocalTokenCounts,
   parts: number,
@@ -241,16 +233,45 @@ export function buildContextBreakdown(
     addCounts(totals, distributableCounts(event));
     addMessageRoleRows(messageRoles, event);
     const eventTools = uniqueTools(event);
+
+    // 归因模型（参考 AITracker）：input 系列（input/cached/cacheCreation）
+    // 只归 messageRoles，不进 tools；output（减 reasoning）按工具 calls 权重
+    // 分摊给 tools/categories；reasoning 单独归因。这样 messages + tools +
+    // reasoning 互不重复，合计 = total。
+    const reasoningTokens = Math.min(
+      event.reasoningOutputTokens,
+      event.outputTokens,
+    );
+    const distributableOutput = event.outputTokens - reasoningTokens;
+
     if (eventTools.length === 0) {
-      addRow(messages, "text_response", distributableCounts(event), 1);
-      addRow(categories, "messages", distributableCounts(event), 1);
-      addRow(tools, "text_response", distributableCounts(event), 1);
+      // 无工具：output 归 assistant_reply（messageRoles 已含）；input 已归
+      // messageRoles。这里只补 messages/categories 聚合视图。
+      const outputCounts: LocalTokenCounts = {
+        ...emptyCounts(),
+        outputTokens: distributableOutput,
+        totalTokens: distributableOutput,
+      };
+      addRow(messages, "text_response", outputCounts, 1);
+      addRow(categories, "messages", outputCounts, 1);
       continue;
     }
 
+    // 按工具 calls 权重分摊 output（无字符长度，用 calls 近似）
+    const totalCalls = eventTools.reduce((s, t) => s + t.calls, 0) || 1;
     const allocations = new Map<string, LocalTokenCounts>();
+    let allocated = 0;
     for (const [index, tool] of eventTools.entries()) {
-      const counts = splitCounts(event, eventTools.length, index);
+      const share =
+        index === eventTools.length - 1
+          ? distributableOutput - allocated // 末位兜底，避免取整误差
+          : Math.floor((distributableOutput * tool.calls) / totalCalls);
+      allocated += share;
+      const counts: LocalTokenCounts = {
+        ...emptyCounts(),
+        outputTokens: share,
+        totalTokens: share,
+      };
       allocations.set(`${tool.category}:${tool.name}`, counts);
       addRow(categories, tool.category, counts, tool.calls);
       addRow(tools, tool.name, counts, tool.calls);
