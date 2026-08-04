@@ -16,6 +16,7 @@ import type {
   LocalUsageEvent,
   LocalUsageBreakdown,
 } from "../../lib/local-usage";
+import { Panel } from "../tt";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -678,34 +679,33 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
     });
   };
 
-  // --- Labels ---
-
-  const aggregateLabel =
-    selectedSource === "__all__" ? "全部工具" : sourceLabel(selectedSource);
-
   // --- Render ---
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="tt-num">
+    <Panel
+      title="AI 工具构成 · 上下文来源"
+      bodyClassName="p-0"
+      action={
+        <span className="tt-num text-[10px] text-muted-foreground">
           {formatTokens(selectedToolTokens)} ·{" "}
           {formatCost(selectedToolCost, "CNY")}
         </span>
-        <span>{aggregateLabel}</span>
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-[minmax(140px,200px)_1fr]">
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,168px)_minmax(0,1fr)]">
         {/* Axis A — tool ranking */}
-        <div className="flex min-h-0 flex-col">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索工具…"
-            aria-label="搜索工具"
-            className="mb-2 w-full rounded-sm border border-border bg-surface-2 px-2 py-1 text-[11px] outline-none"
-          />
-          <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+        <div className="flex min-h-0 flex-col border-border sm:border-r">
+          <div className="border-b border-border p-2">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="筛选 AI 工具…"
+              aria-label="筛选 AI 工具"
+              className="h-6 w-full rounded-sm border border-border bg-surface-2 px-2 text-[11px] outline-none placeholder:text-muted-foreground focus:border-primary"
+            />
+          </div>
+          <div className="tt-xscroll max-h-[340px] min-h-0 flex-1 overflow-auto">
             <ToolRanking
               toolRows={filteredTools}
               selectedSource={selectedSource}
@@ -773,7 +773,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
           )}
         </div>
       </div>
-    </div>
+    </Panel>
   );
 }
 
