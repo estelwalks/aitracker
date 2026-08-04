@@ -1,29 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, ChevronDown, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import {
   buildContextBreakdown,
   type LocalUsageContextBreakdownRow,
+  type LocalUsageObservedContextRow,
 } from "../../lib/local-usage/context-breakdown";
 import {
-  breakdownComposition,
   formatTokens,
   shareOf,
   sourceLabel,
-  cacheRate,
 } from "../../lib/local-usage/presentation";
 import { estimateUsageCost, formatCost } from "../../lib/pricing";
-import type {
-  LocalUsageEvent,
-  LocalUsageBreakdown,
-} from "../../lib/local-usage";
+import type { LocalUsageEvent } from "../../lib/local-usage";
 import { Panel } from "../tt";
 import { BrandIcon, brandColorOf } from "../BrandIcon";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+type DimensionKey =
+  "model" | "messages" | "reasoning" | "tool" | "mcp" | "skill";
 
-const categoryColors = [
+const DIMENSIONS: { key: DimensionKey; label: string }[] = [
+  { key: "model", label: "模型" },
+  { key: "messages", label: "Messages" },
+  { key: "reasoning", label: "Reasoning" },
+  { key: "tool", label: "Tool calls" },
+  { key: "mcp", label: "MCP" },
+  { key: "skill", label: "Skills" },
+];
+
+const CATEGORY_COLORS = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
   "var(--color-chart-3)",
@@ -31,50 +35,30 @@ const categoryColors = [
   "var(--color-chart-5)",
 ];
 
-const RICH_CONTEXT_SOURCES = new Set(["claude-code", "codex", "grok"]);
-
-type DimensionKey =
-  "model" | "messages" | "reasoning" | "tool" | "mcp" | "skill" | "tokenType";
-
-const dimensionLabels: Record<DimensionKey, string> = {
-  model: "模型",
-  messages: "Messages",
-  reasoning: "推理",
-  tool: "工具调用",
-  mcp: "MCP",
-  skill: "Skill",
-  tokenType: "Token类型",
-};
-
-/** messageRoles 键 → 中文展示标签 */
-const messageRoleLabels: Record<string, string> = {
-  conversation_history: "对话历史",
-  system_prefix: "系统提示词",
-  user_input: "用户输入",
-  assistant_reply: "助手回复",
-  reasoning: "推理",
-};
-
-// ---------------------------------------------------------------------------
-// Data builders
-// ---------------------------------------------------------------------------
-
 interface ToolRankRow {
   source: string;
   totalTokens: number;
-  events: number;
+}
+
+interface ModelRow extends LocalUsageContextBreakdownRow {
+  cost: ReturnType<typeof estimateUsageCost>;
+}
+
+interface SourceChild {
+  label: string;
+  value: string;
 }
 
 function buildToolRanking(events: LocalUsageEvent[]): ToolRankRow[] {
-  const map = new Map<string, { totalTokens: number; events: number }>();
+  const groups = new Map<string, number>();
   for (const event of events) {
-    const row = map.get(event.source) ?? { totalTokens: 0, events: 0 };
-    row.totalTokens += event.totalTokens;
-    row.events += 1;
-    map.set(event.source, row);
+    groups.set(
+      event.source,
+      (groups.get(event.source) ?? 0) + event.totalTokens,
+    );
   }
-  return [...map.entries()]
-    .map(([source, value]) => ({ source, ...value }))
+  return [...groups]
+    .map(([source, totalTokens]) => ({ source, totalTokens }))
     .sort(
       (left, right) =>
         right.totalTokens - left.totalTokens ||
@@ -82,39 +66,24 @@ function buildToolRanking(events: LocalUsageEvent[]): ToolRankRow[] {
     );
 }
 
-interface ModelBreakdownRow extends LocalUsageContextBreakdownRow {
-  cost: ReturnType<typeof estimateUsageCost>;
-}
-
-function buildModelBreakdown(events: LocalUsageEvent[]): ModelBreakdownRow[] {
+function buildModelRows(events: LocalUsageEvent[]): ModelRow[] {
   const groups = new Map<string, LocalUsageEvent[]>();
   for (const event of events) {
-    const list = groups.get(event.model) ?? [];
-    list.push(event);
-    groups.set(event.model, list);
+    const group = groups.get(event.model) ?? [];
+    group.push(event);
+    groups.set(event.model, group);
   }
-
-  return [...groups.entries()]
-    .map(([model, modelEvents]) => {
-      const row: LocalUsageContextBreakdownRow = {
-        key: model,
+  return [...groups]
+    .map(([key, modelEvents]) => {
+      // buildContextBreakdown normalizes output to output-without-reasoning,
+      // while preserving the scanner's total and cache conventions.
+      const totals = buildContextBreakdown(modelEvents).totals;
+      return {
+        key: key || "未知模型",
         calls: modelEvents.length,
-        inputTokens: 0,
-        cachedInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        outputTokens: 0,
-        reasoningOutputTokens: 0,
-        totalTokens: 0,
+        ...totals,
+        cost: estimateUsageCost(modelEvents),
       };
-      for (const e of modelEvents) {
-        row.inputTokens += e.inputTokens;
-        row.cachedInputTokens += e.cachedInputTokens;
-        row.cacheCreationInputTokens += e.cacheCreationInputTokens;
-        row.outputTokens += e.outputTokens;
-        row.reasoningOutputTokens += e.reasoningOutputTokens;
-        row.totalTokens += e.totalTokens;
-      }
-      return { ...row, cost: estimateUsageCost(modelEvents) };
     })
     .sort(
       (left, right) =>
@@ -123,328 +92,205 @@ function buildModelBreakdown(events: LocalUsageEvent[]): ModelBreakdownRow[] {
     );
 }
 
-function buildTokenTypeRows(
-  events: LocalUsageEvent[],
+function directMessageRows(
+  totals: LocalUsageContextBreakdownRow,
 ): LocalUsageContextBreakdownRow[] {
-  const totals = events.reduce(
-    (acc, event) => {
-      acc.inputTokens += event.inputTokens;
-      acc.cachedInputTokens += event.cachedInputTokens;
-      acc.cacheCreationInputTokens += event.cacheCreationInputTokens;
-      acc.outputTokens += event.outputTokens;
-      acc.reasoningOutputTokens += event.reasoningOutputTokens;
-      acc.totalTokens += event.totalTokens;
-      return acc;
-    },
-    {
+  const entries = [
+    ["输入", "inputTokens"],
+    ["缓存读取", "cachedInputTokens"],
+    ["缓存写入", "cacheCreationInputTokens"],
+    ["输出", "outputTokens"],
+  ] as const;
+  return entries
+    .map(([key, field]) => ({
+      key,
+      calls: 0,
       inputTokens: 0,
       cachedInputTokens: 0,
       cacheCreationInputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 0,
-      totalTokens: 0,
-    },
-  );
-  const mapped = breakdownComposition({
-    key: "totals",
-    events: events.length,
-    ...totals,
-  });
-  return mapped.map((item) => ({
-    key: item.label,
-    calls: 0,
-    inputTokens: 0,
-    cachedInputTokens: 0,
-    cacheCreationInputTokens: 0,
-    outputTokens: 0,
-    reasoningOutputTokens: 0,
-    totalTokens: item.value,
-  }));
+      totalTokens: totals[field],
+    }))
+    .filter((row) => row.totalTokens > 0);
 }
 
-// ---------------------------------------------------------------------------
-// SegBar – thin 5-segment coloured bar for token composition
-// ---------------------------------------------------------------------------
+function observedRowsFor(
+  dimension: Extract<DimensionKey, "tool" | "mcp" | "skill">,
+  events: LocalUsageEvent[],
+): LocalUsageObservedContextRow[] {
+  const breakdown = buildContextBreakdown(events);
+  if (dimension === "tool") return breakdown.observedTools;
+  if (dimension === "mcp") return breakdown.observedMcp;
+  return breakdown.observedSkills;
+}
 
-function SegBar({
-  composition,
-  total,
+function toolCallCount(rows: LocalUsageObservedContextRow[]): number {
+  return rows.reduce((total, row) => total + row.calls, 0);
+}
+
+function SourceNode({
+  color,
+  label,
+  value,
+  children,
 }: {
-  composition: { label: string; value: number; color: string }[];
-  total: number;
+  color: string;
+  label: string;
+  value: string;
+  children: SourceChild[];
 }) {
-  if (total === 0 || composition.length === 0) return null;
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = children.length > 0;
   return (
-    <div className="mt-1 flex h-[3px] w-full overflow-hidden rounded-[2px] bg-surface-2">
-      {composition.map((seg, i) => (
+    <div className="border-b border-border/60 last:border-0">
+      <button
+        type="button"
+        disabled={!canExpand}
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] enabled:hover:bg-accent/30 disabled:cursor-default"
+      >
+        {canExpand ? (
+          expanded ? (
+            <ChevronDown className="size-3 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3 text-muted-foreground" />
+          )
+        ) : (
+          <span className="size-3" />
+        )}
         <span
-          key={i}
-          className="block h-full"
-          title={`${seg.label} ${formatTokens(seg.value)}`}
-          style={{
-            width: `${(seg.value / total) * 100}%`,
-            background: seg.color,
-          }}
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: color }}
         />
-      ))}
+        <span>{label}</span>
+        <span className="tt-num ml-auto text-muted-foreground">{value}</span>
+      </button>
+      {expanded && (
+        <div className="space-y-1 bg-surface-2/40 px-5 py-2 text-[10px] text-muted-foreground">
+          {children.map((child) => (
+            <div key={child.label} className="flex gap-2">
+              <span className="min-w-0 flex-1 truncate">{child.label}</span>
+              <span className="tt-num shrink-0">{child.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// SourceDetail – expanded view for "模型" tab rows
-// ---------------------------------------------------------------------------
 
 function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
   const breakdown = useMemo(() => buildContextBreakdown(events), [events]);
-  const total = breakdown.totals.totalTokens || 1;
-
-  // 构建上下文来源树（对齐原型 5 节点）：
-  // 会话消息 / 工具调用 / 推理 / MCP / Skill
-  const roleBy = (key: string) =>
-    breakdown.messageRoles.find((r) => r.key === key)?.totalTokens ?? 0;
-  const messagesTokens =
-    roleBy("conversation_history") +
-    roleBy("system_prefix") +
-    roleBy("user_input") +
-    roleBy("assistant_reply");
-  const reasoningTokens = roleBy("reasoning");
-  const mcpTokens =
-    breakdown.categories.find((c) => c.key === "mcp")?.totalTokens ?? 0;
-  // 工具调用 = 真实工具（排除 text_response 无 context fallback、排除 mcp_）
-  const realTools = breakdown.tools.filter(
-    (t) => t.key !== "text_response" && !t.key.startsWith("mcp_"),
-  );
-  const toolTokens = realTools.reduce((s, t) => s + t.totalTokens, 0);
-  const skillTokens = breakdown.skills.reduce((s, t) => s + t.totalTokens, 0);
-
-  const nodes = [
-    {
-      label: "会话消息 Messages",
-      tokens: messagesTokens,
-      color: "var(--color-chart-1)",
-      children: [
-        { label: "对话历史", value: roleBy("conversation_history") },
-        { label: "用户输入", value: roleBy("user_input") },
-        { label: "助手回复", value: roleBy("assistant_reply") },
-        { label: "系统提示词", value: roleBy("system_prefix") },
-      ].filter((c) => c.value > 0),
-    },
-    {
-      label: "工具调用 Tool calls",
-      tokens: toolTokens,
-      color: "var(--color-chart-2)",
-      children: realTools
-        .filter((t) => t.totalTokens > 0)
-        .slice(0, 6)
-        .map((t) => ({ label: t.key, value: t.totalTokens })),
-    },
-    {
-      label: "推理 Reasoning",
-      tokens: reasoningTokens,
-      color: "var(--color-chart-3)",
-      children:
-        reasoningTokens > 0
-          ? [{ label: "思考链", value: reasoningTokens }]
-          : [],
-    },
-    {
-      label: "MCP 服务 MCP servers",
-      tokens: mcpTokens,
-      color: "var(--color-chart-5)",
-      children: breakdown.tools
-        .filter((t) => t.key.startsWith("mcp_") && t.totalTokens > 0)
-        .slice(0, 5)
-        .map((t) => ({ label: t.key, value: t.totalTokens })),
-    },
-    {
-      label: "Skill 注入 Skills",
-      tokens: skillTokens,
-      color: "var(--color-chart-4)",
-      children: breakdown.skills
-        .filter((s) => s.totalTokens > 0)
-        .slice(0, 5)
-        .map((s) => ({ label: s.key, value: s.totalTokens })),
-    },
-  ].filter((n) => n.tokens > 0);
-
-  // 底部汇总
-  const cacheHit = cacheRate(breakdown.totals);
-  const skillCount = breakdown.skills.filter((s) => s.totalTokens > 0).length;
-  const mcpCount = breakdown.tools.filter(
-    (t) => t.key.startsWith("mcp_") && t.totalTokens > 0,
-  ).length;
-  const sessionCount = new Set(events.map((e) => e.sessionId).filter(Boolean))
-    .size;
-
-  return (
-    <div className="mt-2 border-l-2 border-primary/40 pl-3">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
-        {nodes.map((n) => (
-          <div key={n.label} className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{ background: n.color }}
-              />
-              <span className="truncate text-[10px] text-muted-foreground">
-                {n.label}
-              </span>
-            </div>
-            <div className="tt-num pl-3 text-[11px]">
-              {formatTokens(n.tokens)}
-              <span className="ml-1 text-muted-foreground">
-                {((n.tokens / total) * 100).toFixed(1)}%
-              </span>
-            </div>
-            {n.children.length > 0 && (
-              <ul className="tt-num mt-0.5 space-y-0.5 pl-3 text-[10px] text-muted-foreground">
-                {n.children.map((c) => (
-                  <li key={c.label} className="flex justify-between gap-2">
-                    <span className="truncate">{c.label.split(" ")[0]}</span>
-                    <span>{formatTokens(c.value)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </div>
-      <p className="tt-num mt-2 text-[10px] text-muted-foreground">
-        缓存命中 <span className="text-ok">{cacheHit.toFixed(0)}%</span> ·{" "}
-        {skillCount} skills · {mcpCount} MCP · {sessionCount} 会话
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// EntityDetail – 8-cell stats grid for tool / mcp / skill / tokenType rows
-// ---------------------------------------------------------------------------
-
-interface EntityMetrics {
-  callCount: number | null;
-  distinctSessions: number | null;
-  avgTokensPerCall: number | null;
-  costEstimate: ReturnType<typeof estimateUsageCost> | null;
-  cacheHitPercent: number | null;
-}
-
-function computeEntityMetrics(
-  row: LocalUsageContextBreakdownRow,
-  scopedEvents: LocalUsageEvent[],
-): EntityMetrics {
-  const matchingEvents = scopedEvents.filter((event) => {
-    const tools = event.context?.tools ?? [];
-    return tools.some((tool) => tool.name === row.key);
+  const total = breakdown.totals.totalTokens;
+  const messages = directMessageRows({
+    key: "messages",
+    calls: 0,
+    ...breakdown.totals,
   });
-
-  const sessions = new Set(
-    matchingEvents
-      .filter((e) => e.sessionId?.trim())
-      .map((e) => e.sessionId!.trim()),
-  );
-
-  return {
-    callCount: row.calls > 0 ? row.calls : null,
-    distinctSessions: sessions.size > 0 ? sessions.size : null,
-    avgTokensPerCall:
-      row.calls > 0 && row.totalTokens > 0
-        ? Math.round(row.totalTokens / row.calls)
-        : null,
-    costEstimate:
-      matchingEvents.length > 0 ? estimateUsageCost(matchingEvents) : null,
-    cacheHitPercent:
-      row.inputTokens + row.cachedInputTokens + row.cacheCreationInputTokens > 0
-        ? Math.round(cacheRate(row) * 10) / 10
-        : null,
-  };
-}
-
-function dash(value: number | string | null): string {
-  if (value == null) return "--";
-  if (typeof value === "number") return String(value);
-  return value;
-}
-
-function EntityDetail({
-  metrics,
-  row,
-}: {
-  metrics: EntityMetrics;
-  row: LocalUsageContextBreakdownRow;
-}) {
-  const cells: { label: string; value: string }[] = [
-    { label: "调用次数", value: dash(metrics.callCount) },
-    { label: "涉及会话", value: dash(metrics.distinctSessions) },
-    {
-      label: "单次均耗",
-      value:
-        metrics.avgTokensPerCall != null
-          ? formatTokens(metrics.avgTokensPerCall)
-          : "--",
-    },
-    {
-      label: "费用",
-      value:
-        metrics.costEstimate != null
-          ? formatCost(metrics.costEstimate, "CNY")
-          : "--",
-    },
-    {
-      label: "缓存命中",
-      value:
-        metrics.cacheHitPercent != null ? `${metrics.cacheHitPercent}%` : "--",
-    },
-    { label: "平均耗时", value: "--" },
-    { label: "失败率", value: "--" },
-    { label: "最近使用", value: "--" },
-  ];
+  const messageTokens = messages.reduce((sum, row) => sum + row.totalTokens, 0);
+  const observedTools = breakdown.observedTools;
+  const observedMcp = breakdown.observedMcp;
+  const observedSkills = breakdown.observedSkills;
+  const hasParsedContext = events.some((event) => event.context != null);
+  const tokenValue = (tokens: number) =>
+    `${formatTokens(tokens)} · ${shareOf(tokens, total).toFixed(1)}%`;
+  const callChildren = (rows: LocalUsageObservedContextRow[]): SourceChild[] =>
+    rows.map((row) => ({
+      label: row.key,
+      value: `${row.calls} 次 · ${row.events} 条记录`,
+    }));
 
   return (
-    <div className="border-t border-border/60 bg-surface-2/40 px-3 py-2">
-      <div className="grid grid-cols-4 gap-x-2 gap-y-1.5">
-        {cells.map((cell, i) => (
-          <div key={i} className="flex flex-col text-[10px]">
-            <span className="text-muted-foreground/70">{cell.label}</span>
-            <span className="tt-num mt-0.5 text-foreground/80">
-              {cell.value}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="mt-1 border-l-2 border-primary/40">
+      <SourceNode
+        color={CATEGORY_COLORS[0]}
+        label="Messages"
+        value={tokenValue(messageTokens)}
+        children={messages.map((row) => ({
+          label: row.key,
+          value: formatTokens(row.totalTokens),
+        }))}
+      />
+      <SourceNode
+        color={CATEGORY_COLORS[1]}
+        label="Tool calls"
+        value={
+          observedTools.length > 0
+            ? `${toolCallCount(observedTools)} 次调用`
+            : "无可解析记录"
+        }
+        children={callChildren(observedTools)}
+      />
+      <SourceNode
+        color={CATEGORY_COLORS[2]}
+        label="Reasoning"
+        value={tokenValue(breakdown.totals.reasoningOutputTokens)}
+        children={
+          breakdown.totals.reasoningOutputTokens > 0
+            ? [
+                {
+                  label: "日志直接记录的推理 Token",
+                  value: formatTokens(breakdown.totals.reasoningOutputTokens),
+                },
+              ]
+            : []
+        }
+      />
+      <SourceNode
+        color={CATEGORY_COLORS[4]}
+        label="MCP"
+        value={
+          observedMcp.length > 0
+            ? `${toolCallCount(observedMcp)} 次调用`
+            : "无可解析记录"
+        }
+        children={callChildren(observedMcp)}
+      />
+      <SourceNode
+        color={CATEGORY_COLORS[3]}
+        label="Skills"
+        value={
+          observedSkills.length > 0
+            ? `${toolCallCount(observedSkills)} 次调用`
+            : "无可解析记录"
+        }
+        children={callChildren(observedSkills)}
+      />
+      <p className="border-t border-border/60 px-3 py-2 text-[10px] text-muted-foreground">
+        Token 仅来自请求级 usage 字段；Tool calls、MCP 与 Skills
+        是独立的日志调用记录，不参与 Token 占比或费用分摊。
+      </p>
+      {!hasParsedContext && (
+        <p className="px-3 py-2 text-[10px] text-muted-foreground">
+          此工具日志仅提供请求级 Token；未检测到可解析的 Tools、MCP 或 Skills
+          记录，因此不会进行逐调用 Token 估算。
+        </p>
+      )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Expandable model row
-// ---------------------------------------------------------------------------
-
-function ExpandableModelRow({
+function ModelRow({
   row,
   index,
-  isExpanded,
+  expanded,
   onToggle,
-  scopedTokens,
-  scopedEvents,
+  totalTokens,
+  events,
 }: {
-  row: ModelBreakdownRow;
+  row: ModelRow;
   index: number;
-  isExpanded: boolean;
+  expanded: boolean;
   onToggle: () => void;
-  scopedTokens: number;
-  scopedEvents: LocalUsageEvent[];
+  totalTokens: number;
+  events: LocalUsageEvent[];
 }) {
   const modelEvents = useMemo(
-    () => scopedEvents.filter((e) => e.model === row.key),
-    [scopedEvents, row.key],
+    () => events.filter((event) => (event.model || "未知模型") === row.key),
+    [events, row.key],
   );
-  const composition = breakdownComposition(
-    row as unknown as LocalUsageBreakdown,
-  );
-  const share = scopedTokens > 0 ? shareOf(row.totalTokens, scopedTokens) : 0;
-
+  const share = shareOf(row.totalTokens, totalTokens);
   return (
     <div className="border-b border-border/60 last:border-0">
       <button
@@ -452,115 +298,107 @@ function ExpandableModelRow({
         onClick={onToggle}
         className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] hover:bg-accent/30"
       >
-        {isExpanded ? (
+        {expanded ? (
           <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
         ) : (
           <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
         )}
         <span
           className="size-1.5 shrink-0 rounded-full"
-          style={{ background: categoryColors[index % categoryColors.length] }}
+          style={{
+            background: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+          }}
         />
-        <span className="truncate">{row.key}</span>
-        <span className="tt-num ml-auto w-14 text-right">
-          {formatTokens(row.totalTokens)}
-        </span>
-        <span className="tt-num w-14 whitespace-nowrap text-right text-muted-foreground">
-          {formatCost(row.cost, "CNY")}
-        </span>
-        <span className="tt-num w-9 whitespace-nowrap text-right text-muted-foreground">
-          {share.toFixed(1)}%
-        </span>
-      </button>
-      <div className="px-2 pb-1.5">
-        <SegBar composition={composition} total={row.totalTokens} />
-      </div>
-      {isExpanded && <SourceDetail events={modelEvents} />}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Expandable entity row (tool / mcp / skill / tokenType)
-// ---------------------------------------------------------------------------
-
-function ExpandableEntityRow({
-  row,
-  index,
-  isExpanded,
-  onToggle,
-  scopedEvents,
-  scopedTokens,
-  dimension,
-}: {
-  row: LocalUsageContextBreakdownRow;
-  index: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-  scopedEvents: LocalUsageEvent[];
-  scopedTokens: number;
-  dimension: DimensionKey;
-}) {
-  const share = scopedTokens > 0 ? shareOf(row.totalTokens, scopedTokens) : 0;
-  const maxTokens = scopedTokens || row.totalTokens || 1;
-  const barWidth = Math.max(2, (row.totalTokens / maxTokens) * 100);
-  const metrics = useMemo(
-    () =>
-      dimension !== "tokenType"
-        ? computeEntityMetrics(row, scopedEvents)
-        : ({
-            callCount: null,
-            distinctSessions: null,
-            avgTokensPerCall: null,
-            costEstimate: null,
-            cacheHitPercent: null,
-          } satisfies EntityMetrics),
-    [row, scopedEvents, dimension],
-  );
-
-  return (
-    <div className="border-b border-border/60 last:border-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] hover:bg-accent/30"
-      >
-        {isExpanded ? (
-          <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
-        )}
-        <span
-          className="size-1.5 shrink-0 rounded-full"
-          style={{ background: categoryColors[index % categoryColors.length] }}
-        />
-        <span className="truncate" title={row.key}>
-          {dimensionLabel(dimension, row.key)}
-        </span>
-        <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
-          <span
-            className="block h-full rounded-full"
-            style={{
-              width: `${barWidth}%`,
-              background: categoryColors[index % categoryColors.length],
-            }}
-          />
-        </span>
+        <span className="min-w-0 flex-1 truncate">{row.key}</span>
         <span className="tt-num w-14 text-right">
           {formatTokens(row.totalTokens)}
+        </span>
+        <span className="tt-num w-14 text-right text-muted-foreground">
+          {formatCost(row.cost, "CNY")}
         </span>
         <span className="tt-num w-9 text-right text-muted-foreground">
           {share.toFixed(1)}%
         </span>
       </button>
-      {isExpanded && <EntityDetail metrics={metrics} row={row} />}
+      {expanded && <SourceDetail events={modelEvents} />}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// ToolRanking – left panel (unchanged)
-// ---------------------------------------------------------------------------
+function TokenRow({
+  row,
+  index,
+  totalTokens,
+}: {
+  row: LocalUsageContextBreakdownRow;
+  index: number;
+  totalTokens: number;
+}) {
+  const share = shareOf(row.totalTokens, totalTokens);
+  return (
+    <div className="flex items-center gap-2 border-b border-border/60 px-2 py-2 text-[11px] last:border-0">
+      <span
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ background: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}
+      />
+      <span className="min-w-0 flex-1 truncate">{row.key}</span>
+      <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+        <span
+          className="block h-full rounded-full"
+          style={{
+            width: `${Math.max(0, Math.min(100, share))}%`,
+            background: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+          }}
+        />
+      </span>
+      <span className="tt-num w-14 text-right">
+        {formatTokens(row.totalTokens)}
+      </span>
+      <span className="tt-num w-9 text-right text-muted-foreground">
+        {share.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function ObservedCallRow({
+  row,
+  index,
+}: {
+  row: LocalUsageObservedContextRow;
+  index: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-b border-border/60 last:border-0">
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-center gap-1.5 px-2 py-2 text-left text-[11px] hover:bg-accent/30"
+      >
+        {expanded ? (
+          <ChevronDown className="size-3 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-3 text-muted-foreground" />
+        )}
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          style={{
+            background: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
+          }}
+        />
+        <span className="min-w-0 flex-1 truncate">{row.key}</span>
+        <span className="tt-num text-muted-foreground">{row.calls} 次调用</span>
+      </button>
+      {expanded && (
+        <p className="bg-surface-2/40 px-5 py-2 text-[10px] text-muted-foreground">
+          在 {row.events} 条本地日志中直接检测到。日志未提供单次调用
+          Token，费用和 Token 归因不展示。
+        </p>
+      )}
+    </div>
+  );
+}
 
 function ToolRanking({
   toolRows,
@@ -573,99 +411,78 @@ function ToolRanking({
   totalTokens: number;
   onSelect: (source: string) => void;
 }) {
-  const allRow = (
-    <button
-      type="button"
-      onClick={() => onSelect("__all__")}
-      className={`flex w-full flex-col border-l-2 px-2 py-1.5 text-left text-xs transition-colors ${
-        selectedSource === "__all__"
-          ? "border-primary bg-accent/50"
-          : "border-transparent hover:bg-accent/30"
-      }`}
-    >
-      <span className="flex items-center gap-2">
-        <Layers className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate">全部工具</span>
-        <span className="tt-num text-[10px] text-muted-foreground">100%</span>
-      </span>
-      <span className="mt-1 block h-[2px] w-full bg-surface-2">
-        <span className="block h-full bg-primary" style={{ width: "100%" }} />
-      </span>
-    </button>
-  );
-  if (toolRows.length === 0) {
+  const renderRow = (source: string, tokens: number, all = false) => {
+    const selected = selectedSource === source;
+    const share = all
+      ? totalTokens > 0
+        ? 100
+        : 0
+      : shareOf(tokens, totalTokens);
+    const label = all ? "全部工具" : sourceLabel(source);
     return (
-      <div className="flex flex-col">
-        {allRow}
-        <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-          无匹配
-        </p>
-      </div>
+      <button
+        key={source}
+        type="button"
+        onClick={() => onSelect(source)}
+        className={`flex w-full flex-col border-l-2 px-2 py-1.5 text-left text-xs transition-colors ${selected ? "border-primary bg-accent/50" : "border-transparent hover:bg-accent/30"}`}
+      >
+        <span className="flex items-center gap-2">
+          {all ? (
+            <Layers className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <BrandIcon name={label} className="size-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <span className="tt-num text-[10px] text-muted-foreground">
+            {share.toFixed(0)}%
+          </span>
+        </span>
+        <span className="mt-1 block h-[2px] w-full bg-surface-2">
+          <span
+            className="block h-full"
+            style={{
+              width: `${share}%`,
+              background: all ? "var(--color-primary)" : brandColorOf(label),
+            }}
+          />
+        </span>
+      </button>
     );
-  }
+  };
   return (
-    <div className="flex flex-col">
-      {allRow}
-      {toolRows.map((row) => {
-        const share = shareOf(row.totalTokens, totalTokens);
-        const isSelected = selectedSource === row.source;
-        const label = sourceLabel(row.source);
-        const color = brandColorOf(label);
-        return (
-          <button
-            key={row.source}
-            type="button"
-            onClick={() => onSelect(row.source)}
-            className={`flex w-full flex-col border-l-2 px-2 py-1.5 text-left text-xs transition-colors ${
-              isSelected
-                ? "border-primary bg-accent/50"
-                : "border-transparent hover:bg-accent/30"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <BrandIcon name={label} className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              <span className="tt-num text-[10px] text-muted-foreground">
-                {share.toFixed(0)}%
-              </span>
-            </span>
-            <span className="mt-1 block h-[2px] w-full bg-surface-2">
-              <span
-                className="block h-full"
-                style={{ width: `${Math.min(100, share)}%`, background: color }}
-              />
-            </span>
-          </button>
-        );
-      })}
+    <div>
+      {renderRow("__all__", totalTokens, true)}
+      {toolRows.map((row) => renderRow(row.source, row.totalTokens))}
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export interface ContextBreakdownProps {
   events: LocalUsageEvent[];
 }
 
 export function ContextBreakdown({ events }: ContextBreakdownProps) {
-  const [selectedSource, setSelectedSource] = useState<string>("__all__");
+  const [selectedSource, setSelectedSource] = useState("__all__");
   const [query, setQuery] = useState("");
   const [dimension, setDimension] = useState<DimensionKey>("model");
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
-
-  // --- Tool ranking (left panel) ---
-
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const toolRows = useMemo(() => buildToolRanking(events), [events]);
   const filteredTools = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (normalized.length === 0) return toolRows;
-    return toolRows.filter((row) =>
-      sourceLabel(row.source).toLowerCase().includes(normalized),
-    );
-  }, [toolRows, query]);
+    return normalized
+      ? toolRows.filter((row) =>
+          sourceLabel(row.source).toLowerCase().includes(normalized),
+        )
+      : toolRows;
+  }, [query, toolRows]);
+
+  useEffect(() => {
+    if (
+      selectedSource !== "__all__" &&
+      !toolRows.some((row) => row.source === selectedSource)
+    )
+      setSelectedSource("__all__");
+  }, [selectedSource, toolRows]);
 
   const scopedEvents = useMemo(
     () =>
@@ -674,103 +491,64 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
         : events.filter((event) => event.source === selectedSource),
     [events, selectedSource],
   );
-
-  const selectedToolTokens = scopedEvents.reduce(
+  const selectedTokens = scopedEvents.reduce(
     (sum, event) => sum + event.totalTokens,
     0,
   );
-  const selectedToolCost = useMemo(
+  const selectedCost = useMemo(
     () => estimateUsageCost(scopedEvents),
     [scopedEvents],
   );
-
   const breakdown = useMemo(
     () => buildContextBreakdown(scopedEvents),
     [scopedEvents],
   );
-  const sourceHasRichContext = useMemo(() => {
-    if (selectedSource === "__all__") {
-      return events.some((event) => RICH_CONTEXT_SOURCES.has(event.source));
-    }
-    return RICH_CONTEXT_SOURCES.has(selectedSource);
-  }, [events, selectedSource]);
-
-  // --- Available dimension tabs ---
-
-  const availableTabs = useMemo<DimensionKey[]>(() => {
-    if (selectedSource === "__all__")
-      return ["model", "messages", "reasoning", "tokenType"];
-    if (sourceHasRichContext)
-      return [
-        "model",
-        "messages",
-        "reasoning",
-        "tool",
-        "mcp",
-        "skill",
-        "tokenType",
-      ];
-    return ["model", "messages", "reasoning", "tokenType"];
-  }, [selectedSource, sourceHasRichContext]);
-
-  // Keep dimension in sync when tabs change
-  useEffect(() => {
-    if (!availableTabs.includes(dimension)) {
-      setDimension(availableTabs[0]);
-      setExpandedKeys(new Set());
-    }
-  }, [availableTabs, dimension]);
-
-  const handleDimensionChange = (key: DimensionKey) => {
-    if (key !== dimension) {
-      setDimension(key);
-      setExpandedKeys(new Set());
-    }
-  };
-
-  // --- Dimension rows ---
-
-  const modelRows = useMemo(
-    () => buildModelBreakdown(scopedEvents),
-    [scopedEvents],
+  const models = useMemo(() => buildModelRows(scopedEvents), [scopedEvents]);
+  const messageRows = useMemo(
+    () => directMessageRows({ key: "messages", calls: 0, ...breakdown.totals }),
+    [breakdown],
   );
+  const reasoningRows = useMemo(
+    () =>
+      breakdown.totals.reasoningOutputTokens > 0
+        ? [
+            {
+              key: "推理",
+              calls: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              cacheCreationInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: breakdown.totals.reasoningOutputTokens,
+              totalTokens: breakdown.totals.reasoningOutputTokens,
+            },
+          ]
+        : [],
+    [breakdown],
+  );
+  const observedRows = useMemo(
+    () =>
+      dimension === "tool" || dimension === "mcp" || dimension === "skill"
+        ? observedRowsFor(dimension, scopedEvents)
+        : [],
+    [dimension, scopedEvents],
+  );
+  const hasParsedContext = scopedEvents.some((event) => event.context != null);
 
-  const dimensionRows = useMemo(():
-    LocalUsageContextBreakdownRow[] | ModelBreakdownRow[] => {
-    switch (dimension) {
-      case "model":
-        return modelRows;
-      case "messages":
-        return breakdown.messageRoles
-          .filter((r) => r.key !== "reasoning" && r.totalTokens > 0)
-          .map((r) => ({ ...r, key: messageRoleLabels[r.key] ?? r.key }));
-      case "reasoning":
-        return breakdown.messageRoles
-          .filter((r) => r.key === "reasoning" && r.totalTokens > 0)
-          .map((r) => ({ ...r, key: "推理" }));
-      case "tool":
-        return breakdown.tools.filter((r) => r.totalTokens > 0);
-      case "mcp":
-        return breakdown.categories.filter(
-          (r) => r.key === "mcp" && r.totalTokens > 0,
-        );
-      case "skill":
-        return breakdown.skills.filter((r) => r.totalTokens > 0);
-      case "tokenType":
-        return buildTokenTypeRows(scopedEvents);
-    }
-  }, [dimension, breakdown, scopedEvents, modelRows]);
-
-  const toggleExpand = (key: string) => {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
+  const toggleModel = (key: string) =>
+    setExpandedModels((previous) => {
+      const next = new Set(previous);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
 
-  // --- Render ---
+  const noDataMessage =
+    dimension === "tool" || dimension === "mcp" || dimension === "skill"
+      ? hasParsedContext
+        ? "当前工具的本地日志没有该类可解析调用记录。"
+        : "当前工具仅提供请求级 Token，未提供可解析的上下文来源记录。"
+      : "当前维度暂无数据。";
 
   return (
     <Panel
@@ -778,13 +556,11 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
       bodyClassName="p-0"
       action={
         <span className="tt-num text-[10px] text-muted-foreground">
-          {formatTokens(selectedToolTokens)} ·{" "}
-          {formatCost(selectedToolCost, "CNY")}
+          {formatTokens(selectedTokens)} · {formatCost(selectedCost, "CNY")}
         </span>
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,168px)_minmax(0,1fr)]">
-        {/* Axis A — tool ranking */}
         <div className="flex min-h-0 flex-col border-border sm:border-r">
           <div className="border-b border-border p-2">
             <input
@@ -797,94 +573,83 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
             />
           </div>
           <div className="tt-xscroll max-h-[340px] min-h-0 flex-1 overflow-auto">
-            <ToolRanking
-              toolRows={filteredTools}
-              selectedSource={selectedSource}
-              totalTokens={toolRows.reduce(
-                (sum, row) => sum + row.totalTokens,
-                0,
-              )}
-              onSelect={setSelectedSource}
-            />
+            {filteredTools.length > 0 || query.trim().length === 0 ? (
+              <ToolRanking
+                toolRows={filteredTools}
+                selectedSource={selectedSource}
+                totalTokens={events.reduce(
+                  (sum, event) => sum + event.totalTokens,
+                  0,
+                )}
+                onSelect={setSelectedSource}
+              />
+            ) : (
+              <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                无匹配工具
+              </p>
+            )}
           </div>
         </div>
-
-        {/* Axis B — dimension breakdown */}
-        <div className="flex min-h-0 flex-col">
+        <div className="flex min-h-0 flex-col p-2">
           <div className="mb-2 flex flex-wrap gap-1">
-            {availableTabs.map((key) => (
+            {DIMENSIONS.map((item) => (
               <button
-                key={key}
+                key={item.key}
                 type="button"
-                onClick={() => handleDimensionChange(key)}
-                className={`rounded-sm border px-2 py-1 text-[11px] transition-colors ${
-                  dimension === key
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-border-strong"
-                }`}
+                onClick={() => {
+                  setDimension(item.key);
+                  setExpandedModels(new Set());
+                }}
+                className={`rounded-sm border px-2 py-1 text-[11px] transition-colors ${dimension === item.key ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-border-strong"}`}
               >
-                {dimensionLabels[key]}
+                {item.label}
               </button>
             ))}
           </div>
-          {dimensionRows.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-              当前维度暂无数据
+          {selectedTokens === 0 ? (
+            <div className="flex min-h-24 flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
+              当前区间没有 Token 使用数据
+            </div>
+          ) : dimension === "model" ? (
+            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+              {models.map((row, index) => (
+                <ModelRow
+                  key={row.key}
+                  row={row}
+                  index={index}
+                  expanded={expandedModels.has(row.key)}
+                  onToggle={() => toggleModel(row.key)}
+                  totalTokens={selectedTokens}
+                  events={scopedEvents}
+                />
+              ))}
+            </div>
+          ) : dimension === "messages" || dimension === "reasoning" ? (
+            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+              {(dimension === "messages" ? messageRows : reasoningRows).map(
+                (row, index) => (
+                  <TokenRow
+                    key={row.key}
+                    row={row}
+                    index={index}
+                    totalTokens={selectedTokens}
+                  />
+                ),
+              )}
+            </div>
+          ) : observedRows.length > 0 ? (
+            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+              {observedRows.map((row, index) => (
+                <ObservedCallRow key={row.key} row={row} index={index} />
+              ))}
             </div>
           ) : (
-            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
-              <div className="flex flex-col">
-                {dimension === "model"
-                  ? (dimensionRows as ModelBreakdownRow[]).map((row, index) => (
-                      <ExpandableModelRow
-                        key={`model-${row.key}`}
-                        row={row}
-                        index={index}
-                        isExpanded={expandedKeys.has(row.key)}
-                        onToggle={() => toggleExpand(row.key)}
-                        scopedTokens={selectedToolTokens}
-                        scopedEvents={scopedEvents}
-                      />
-                    ))
-                  : (dimensionRows as LocalUsageContextBreakdownRow[]).map(
-                      (row, index) => (
-                        <ExpandableEntityRow
-                          key={`${dimension}-${row.key}`}
-                          row={row}
-                          index={index}
-                          isExpanded={expandedKeys.has(row.key)}
-                          onToggle={() => toggleExpand(row.key)}
-                          scopedEvents={scopedEvents}
-                          scopedTokens={selectedToolTokens}
-                          dimension={dimension}
-                        />
-                      ),
-                    )}
-              </div>
+            <div className="flex min-h-24 flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
+              {noDataMessage}
             </div>
           )}
         </div>
       </div>
     </Panel>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function dimensionLabel(dimension: DimensionKey, key: string): string {
-  if (dimension === "tokenType") return tokenTypeLabel(key);
-  return key;
-}
-
-function tokenTypeLabel(key: string): string {
-  const map: Record<string, string> = {
-    输入: "输入",
-    输出: "输出",
-    缓存读取: "缓存读取",
-    缓存写入: "缓存写入",
-    推理: "推理",
-  };
-  return map[key] ?? key;
 }
