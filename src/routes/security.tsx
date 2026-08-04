@@ -579,7 +579,26 @@ function SecurityReportPanel({ report }: { report: SecurityReport }) {
         <span className="text-sm font-semibold">
           综合判定：{report.verdict}
         </span>
+        <span className="tt-num text-sm font-semibold">{report.riskScore}</span>
+        <span className="text-[10px] text-muted-foreground">/ 100</span>
         <span className="ml-auto text-xs">{report.risks.length} 项风险</span>
+      </div>
+      {/* 风险评分可视化条 */}
+      <div className="mt-2 flex items-center gap-2">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${Math.min(report.riskScore, 100)}%`,
+              background:
+                report.riskScore >= 70
+                  ? "var(--color-danger)"
+                  : report.riskScore >= 30
+                    ? "var(--color-warn)"
+                    : "var(--color-ok)",
+            }}
+          />
+        </div>
       </div>
 
       {report.risks.length === 0 ? (

@@ -31,14 +31,26 @@ const categoryColors = [
 
 const RICH_CONTEXT_SOURCES = new Set(["claude-code", "codex", "grok"]);
 
-type DimensionKey = "model" | "tool" | "mcp" | "skill" | "tokenType";
+type DimensionKey =
+  "model" | "messages" | "reasoning" | "tool" | "mcp" | "skill" | "tokenType";
 
 const dimensionLabels: Record<DimensionKey, string> = {
   model: "模型",
+  messages: "Messages",
+  reasoning: "推理",
   tool: "工具调用",
   mcp: "MCP",
   skill: "Skill",
   tokenType: "Token类型",
+};
+
+/** messageRoles 键 → 中文展示标签 */
+const messageRoleLabels: Record<string, string> = {
+  conversation_history: "对话历史",
+  system_prefix: "系统提示词",
+  user_input: "用户输入",
+  assistant_reply: "助手回复",
+  reasoning: "推理",
 };
 
 // ---------------------------------------------------------------------------
@@ -594,10 +606,19 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
   // --- Available dimension tabs ---
 
   const availableTabs = useMemo<DimensionKey[]>(() => {
-    if (selectedSource === "__all__") return ["model"];
+    if (selectedSource === "__all__")
+      return ["model", "messages", "reasoning", "tokenType"];
     if (sourceHasRichContext)
-      return ["model", "tool", "mcp", "skill", "tokenType"];
-    return ["model", "tokenType"];
+      return [
+        "model",
+        "messages",
+        "reasoning",
+        "tool",
+        "mcp",
+        "skill",
+        "tokenType",
+      ];
+    return ["model", "messages", "reasoning", "tokenType"];
   }, [selectedSource, sourceHasRichContext]);
 
   // Keep dimension in sync when tabs change
@@ -627,6 +648,14 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
     switch (dimension) {
       case "model":
         return modelRows;
+      case "messages":
+        return breakdown.messageRoles
+          .filter((r) => r.key !== "reasoning" && r.totalTokens > 0)
+          .map((r) => ({ ...r, key: messageRoleLabels[r.key] ?? r.key }));
+      case "reasoning":
+        return breakdown.messageRoles
+          .filter((r) => r.key === "reasoning" && r.totalTokens > 0)
+          .map((r) => ({ ...r, key: "推理" }));
       case "tool":
         return breakdown.tools.filter((r) => r.totalTokens > 0);
       case "mcp":

@@ -20,7 +20,7 @@ import type {
 
 const MAX_ROWS = 30;
 
-type DetailDimension = "date" | "model";
+type DetailDimension = "date" | "model" | "project";
 
 interface DetailRow {
   key: string;
@@ -79,6 +79,7 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
           options={[
             { value: "date", label: "按日" },
             { value: "model", label: "按模型" },
+            { value: "project", label: "按项目" },
           ]}
         />
       </div>
@@ -194,7 +195,11 @@ function buildDetailRows(
   const groups = new Map<string, LocalUsageEvent[]>();
   for (const event of events) {
     const key =
-      dimension === "date" ? event.timestamp.slice(0, 10) : event.model;
+      dimension === "date"
+        ? event.timestamp.slice(0, 10)
+        : dimension === "model"
+          ? event.model
+          : event.project;
     const group = groups.get(key) ?? [];
     group.push(event);
     groups.set(key, group);
