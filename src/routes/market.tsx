@@ -174,14 +174,13 @@ function MarketPage() {
     [localSnapshot],
   );
 
-  // Detected agents (for radio disable in drawer)
+  // Installation probes are authoritative. An installed Agent with an empty
+  // skill directory remains a valid market installation target.
   const detectedAgents = useMemo(
     () =>
       new Set(
-        MARKET_AGENTS.filter((a) =>
-          (localSnapshot?.skills ?? []).some((s) =>
-            s.installations.some((i) => i.agent === a),
-          ),
+        MARKET_AGENTS.filter(
+          (a) => localSnapshot?.agents[a]?.installed === true,
         ),
       ),
     [localSnapshot],

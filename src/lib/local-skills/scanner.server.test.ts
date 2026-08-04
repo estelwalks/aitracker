@@ -38,14 +38,32 @@ test("scans common agent roots without treating mtime as usage evidence", async 
     now: new Date(),
   });
 
-  // Skill agents are now derived from the 27-tool catalog: the 9 tools that
-  // expose a skills directory (Claude Code, Codex CLI, Cursor, Gemini CLI,
-  // OpenCode, Grok Build, Antigravity, Hermes Agent, OpenClaw).
-  assert.equal(Object.keys(snapshot.roots).length, 9);
+  // Only the five verified Skill installation targets are exposed.
+  assert.equal(Object.keys(snapshot.roots).length, 5);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 2);
   assert.equal(snapshot.skills[0].health, "unknown");
   assert.match(snapshot.skills[0].healthReason, /文件修改时间不作为调用证据/);
+});
+
+test("detects an installed Agent even when its skill directory is empty", async () => {
+  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-agent-"));
+  try {
+    // .codex is the installation probe root; .codex/skills intentionally does
+    // not exist, proving the market target is not inferred from Skill rows.
+    await mkdir(join(root, ".codex"), { recursive: true });
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      trusttoolsDirectory: join(root, ".trusttools"),
+    });
+    assert.equal(snapshot.skills.length, 0);
+    assert.equal(snapshot.agents["Codex CLI"].installed, true);
+    assert.deepEqual(snapshot.agents["Codex CLI"].detectedPaths, [
+      join(root, ".codex"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("uses structured Skill calls as the only activity evidence", async () => {
