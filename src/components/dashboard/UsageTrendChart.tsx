@@ -225,7 +225,11 @@ export function UsageTrendChart({
           ]}
         />
       </div>
-      <div style={{ height: 260 }}>
+      <div
+        className="tt-corner relative overflow-hidden rounded-sm border border-border bg-surface-2/25"
+        style={{ height: 260 }}
+      >
+        <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-40" />
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartDataWithSources}
@@ -313,7 +317,7 @@ export function UsageTrendChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
         {topSources.map((item) => {
           const hidden = hiddenSources.includes(item.key);
           return (
@@ -327,20 +331,27 @@ export function UsageTrendChart({
                     : [...current, item.key],
                 )
               }
-              className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11px] ${
+              className={`flex items-center gap-1.5 rounded-sm border px-2 py-0.5 transition-colors ${
                 hidden
                   ? "border-border text-muted-foreground opacity-50"
-                  : "border-border-strong"
+                  : "border-border-strong text-foreground"
               }`}
             >
               <span
                 className="size-1.5 rounded-full"
-                style={{ background: item.color }}
+                style={{
+                  background: hidden
+                    ? "var(--color-muted-foreground)"
+                    : item.color,
+                }}
               />
               {item.name}
             </button>
           );
         })}
+        <span className="ml-auto text-muted-foreground">
+          点击图例可隐藏 / 显示
+        </span>
       </div>
     </div>
   );
@@ -350,10 +361,24 @@ function aggregateHourlyBySource(
   events: LocalUsageEvent[],
   sources: { key: LocalUsageSource }[],
 ): TrendPoint[] {
+  // 今日小时粒度：固定铺满 0–23 共 24 个点（无事件的小时为 0），
+  // 与原型一致——横轴从 00:00 开始。取首个事件所在日期作为当天基准。
+  const todayKey =
+    events.length > 0 ? events[0]!.timestamp.slice(0, 10) : undefined;
   const buckets = new Map<
     string,
     { label: string; total: number; bySource: Map<string, number> }
   >();
+  if (todayKey) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const hh = String(hour).padStart(2, "0");
+      buckets.set(`${todayKey}T${hh}`, {
+        label: hh,
+        total: 0,
+        bySource: new Map(),
+      });
+    }
+  }
   for (const event of events) {
     const timestamp = new Date(event.timestamp);
     if (Number.isNaN(timestamp.getTime())) continue;
@@ -361,9 +386,9 @@ function aggregateHourlyBySource(
     const day = String(timestamp.getDate()).padStart(2, "0");
     const hour = String(timestamp.getHours()).padStart(2, "0");
     const key = `${timestamp.getFullYear()}-${month}-${day}T${hour}`;
-    const label = `${month}-${day} ${hour}`;
+    // 跨天事件：仅保留当天桶；非当天则建临时桶（不会铺满，但极少见）。
     const bucket = buckets.get(key) ?? {
-      label,
+      label: hour,
       total: 0,
       bySource: new Map(),
     };
