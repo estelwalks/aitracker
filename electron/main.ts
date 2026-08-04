@@ -175,6 +175,29 @@ function registerIpcHandlers(): void {
       renameSync(tmp, prefsPath);
     },
   );
+  ipcMain.handle(
+    desktopIpc.resetPreferences,
+    (event): { removedKeys: number } => {
+      assertTrustedSender(event);
+      let current: Record<string, unknown> = {};
+      try {
+        current = JSON.parse(readFileSync(prefsPath, "utf8")) as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        return { removedKeys: 0 };
+      }
+      const keys = Object.keys(current).filter(
+        (key) => key === "closeHintShown" || key.startsWith("trusttools."),
+      );
+      for (const key of keys) delete current[key];
+      const tmp = prefsPath + ".tmp." + Date.now();
+      writeFileSync(tmp, JSON.stringify(current, null, 2), "utf8");
+      renameSync(tmp, prefsPath);
+      return { removedKeys: keys.length };
+    },
+  );
 }
 
 function createTray(): void {
@@ -367,6 +390,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.showWindow);
     ipcMain.removeHandler(desktopIpc.getPreferences);
     ipcMain.removeHandler(desktopIpc.setPreference);
+    ipcMain.removeHandler(desktopIpc.resetPreferences);
     void localWebServer?.close();
   });
 

@@ -13,6 +13,7 @@ import {
   TTButton,
 } from "../components/tt";
 import {
+  DEFAULT_SETTINGS,
   useAITrackerSettings,
   type AITrackerSettings,
 } from "../lib/settings/store";
@@ -173,7 +174,9 @@ function SettingsPage() {
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(
     loaderData.storageUsage,
   );
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
+  const [resetPreferencesDialogOpen, setResetPreferencesDialogOpen] =
+    useState(false);
   const [clearingData, setClearingData] = useState(false);
 
   const update = <K extends keyof AITrackerSettings>(
@@ -242,19 +245,66 @@ function SettingsPage() {
           ? "无法读取系统开机项，请稍后重试"
           : "直接读取并修改当前系统的开机启动状态";
 
-  const handleClearData = async () => {
+  const changeRetentionDays = async (retentionDays: number) => {
+    update("retentionDays", retentionDays);
+    try {
+      const { applyRetentionPolicyFn } =
+        await import("../lib/local-usage/prune.server");
+      const result = await applyRetentionPolicyFn({ data: { retentionDays } });
+      setStorageUsage(result.usage);
+      if (result.cleanup.removedFiles > 0) {
+        toast.success(
+          `已清理 ${result.cleanup.removedFiles} 个过期缓存文件（${formatBytes(result.cleanup.removedBytes)}）`,
+        );
+      } else {
+        toast.success(
+          retentionDays === 0 ? "已设置为永久保留缓存" : "已保存缓存保留策略",
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存保留策略失败");
+    }
+  };
+
+  const handleClearCache = async () => {
     setClearingData(true);
     try {
-      const { pruneLocalDataFn } =
+      const { clearRegenerableCacheFn } =
         await import("../lib/local-usage/prune.server");
-      const result = await pruneLocalDataFn();
+      const result = await clearRegenerableCacheFn();
       setStorageUsage(result.usage);
-      toast.success("本地数据已清除");
+      toast.success(
+        result.cleanup.removedFiles > 0
+          ? `已清理 ${result.cleanup.removedFiles} 个本地索引/缓存文件（${formatBytes(result.cleanup.removedBytes)}）`
+          : "没有可清理的本地索引或缓存",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "清除数据失败");
     } finally {
       setClearingData(false);
-      setClearDialogOpen(false);
+      setClearCacheDialogOpen(false);
+    }
+  };
+
+  const handleResetPreferences = async () => {
+    setClearingData(true);
+    try {
+      const result = await window.desktopBridge?.resetPreferences();
+      for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+        const key = window.localStorage.key(index);
+        if (key?.startsWith("trusttools.")) window.localStorage.removeItem(key);
+      }
+      setSettings(DEFAULT_SETTINGS);
+      toast.success(
+        result
+          ? `已重置 ${result.removedKeys} 项应用偏好与安全历史`
+          : "已重置浏览器中的应用偏好与安全历史",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "重置应用偏好失败");
+    } finally {
+      setClearingData(false);
+      setResetPreferencesDialogOpen(false);
     }
   };
 
@@ -317,19 +367,22 @@ function SettingsPage() {
               </Field>
               <Field
                 label="数据路径"
-                hint="修改后新数据写入新路径，已有数据保留在原位置不迁移"
+                hint="当前 AITracker 受控数据目录；不会包含或删除外部 AI 工具日志"
               >
                 <input
-                  value={settings.dataPath}
+                  value={storageUsage?.directory ?? settings.dataPath}
                   readOnly
                   disabled
                   className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
                 />
               </Field>
-              <Field label="数据保留">
+              <Field
+                label="缓存保留"
+                hint="仅清理 AITracker 可再生成的本地索引/缓存；采集明细来自原始本机日志，AITracker 不会删除这些日志"
+              >
                 <Segmented
                   value={String(settings.retentionDays)}
-                  onChange={(value) => update("retentionDays", Number(value))}
+                  onChange={(value) => void changeRetentionDays(Number(value))}
                   options={[
                     { value: "30", label: "30天" },
                     { value: "60", label: "60天" },
@@ -341,9 +394,14 @@ function SettingsPage() {
               </Field>
               <Field label="存储占用">
                 {storageUsage ? (
-                  <span className="tt-num text-[13px]">
+                  <span
+                    className={`tt-num text-[13px] ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
+                  >
                     {formatBytes(storageUsage.bytes)} /{" "}
                     {formatBytes(storageUsage.softCapBytes)}
+                    {storageUsage.exceedsSoftCap
+                      ? "（已超过 500MB，建议清理缓存）"
+                      : ""}
                   </span>
                 ) : loaderData.storageError ? (
                   <span className="text-[13px] text-warn">
@@ -355,31 +413,33 @@ function SettingsPage() {
                   </span>
                 )}
               </Field>
-              <div className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-0">
+              <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                 <div>
-                  <div className="text-[13px]">清除数据</div>
+                  <div className="text-[13px]">清除可再生成本地索引/缓存</div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    将删除全部采集记录与配置，操作不可撤销
+                    仅删除当前 AITracker 数据目录下的缓存；不会删除 AI
+                    工具日志、适配器配置或安全历史
                   </div>
                 </div>
                 <TTButton
                   variant="danger"
                   size="sm"
-                  onClick={() => setClearDialogOpen(true)}
+                  onClick={() => setClearCacheDialogOpen(true)}
                 >
-                  清除数据
+                  清除缓存
                 </TTButton>
               </div>
 
               <AlertDialog
-                open={clearDialogOpen}
-                onOpenChange={setClearDialogOpen}
+                open={clearCacheDialogOpen}
+                onOpenChange={setClearCacheDialogOpen}
               >
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>确认清除</AlertDialogTitle>
+                    <AlertDialogTitle>确认清除本地索引/缓存</AlertDialogTitle>
                     <AlertDialogDescription>
-                      将删除全部采集记录与配置，操作不可撤销
+                      将删除当前 AITracker 受控目录中的可再生成索引和缓存。外部
+                      AI 工具日志、适配器配置、应用偏好与安全历史不会受影响。
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -389,12 +449,60 @@ function SettingsPage() {
                     <AlertDialogAction
                       onClick={(e) => {
                         e.preventDefault();
-                        void handleClearData();
+                        void handleClearCache();
                       }}
                       disabled={clearingData}
                       className="bg-danger text-danger-foreground hover:bg-danger/90"
                     >
-                      {clearingData ? "清除中..." : "确认清除"}
+                      {clearingData ? "清除中..." : "确认清除缓存"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <div className="flex items-center justify-between gap-3 py-3 last:border-0">
+                <div>
+                  <div className="text-[13px]">重置应用偏好与安全历史</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    重置设置、更新记录、安全检测历史与今日扫描次数；不会删除本地索引/缓存或外部
+                    AI 工具日志
+                  </div>
+                </div>
+                <TTButton
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setResetPreferencesDialogOpen(true)}
+                >
+                  重置偏好
+                </TTButton>
+              </div>
+              <AlertDialog
+                open={resetPreferencesDialogOpen}
+                onOpenChange={setResetPreferencesDialogOpen}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      确认重置应用偏好与安全历史
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      将重置 AITracker
+                      的应用设置、版本更新记录、安全检测历史与今日扫描次数。不会删除本地索引/缓存或任何外部
+                      AI 工具日志。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={clearingData}>
+                      取消
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void handleResetPreferences();
+                      }}
+                      disabled={clearingData}
+                      className="bg-danger text-danger-foreground hover:bg-danger/90"
+                    >
+                      {clearingData ? "重置中..." : "确认重置"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
