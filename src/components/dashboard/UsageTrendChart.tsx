@@ -342,9 +342,6 @@ export function UsageTrendChart({
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] text-muted-foreground">
-        点击图例可隐藏 / 显示对应工具；隐藏的系列不计入区间合计 / 均值 / 峰值。
-      </p>
     </div>
   );
 }
