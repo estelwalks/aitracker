@@ -472,7 +472,7 @@ function TrendTooltip({
         })}
       <div className="mt-1 flex items-center gap-2 border-t border-border pt-1">
         <span className="w-24">合计</span>
-        <span className="tt-num ml-auto">{total.toLocaleString()}</span>
+        <span className="tt-num ml-auto">{formatTokens(total)}</span>
         <span className="tt-num w-12 text-right text-muted-foreground">
           {grandTotal > 0 ? shareOf(total, grandTotal).toFixed(1) : "0.0"}%
         </span>
