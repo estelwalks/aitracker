@@ -265,10 +265,21 @@ function Dashboard() {
     [metricNav.pages],
   );
 
-  // Trend summary stats: total, avg, peak from the selected daily range.
+  // Trend summary stats: total, avg, peak. 今日按小时聚合（峰值显示小时），
+  // 其余周期按日（峰值显示日期）——与趋势图横轴粒度一致。
   const trendStats = useMemo(() => {
-    const dailyTokens = selectedDaily.map((d) => d.totalTokens);
     const sum = selectedTotals.totalTokens;
+    if (period === "today") {
+      const hourly = aggregateEventsByTime(selectedEvents, "hour");
+      const avg = hourly.length > 0 ? Math.round(sum / hourly.length) : 0;
+      const peak = hourly.reduce((m, b) => Math.max(m, b.totalTokens), 0);
+      const peakBucket = hourly.find((b) => b.totalTokens === peak);
+      // peakLabel 取峰值所在小时，显示为 HH:00（与趋势图小时桶粒度一致）
+      const peakHour = peakBucket ? peakBucket.key.slice(11, 13) : "";
+      const peakLabel = peakHour ? `${peakHour}:00` : "";
+      return { sum, avg, peak, peakLabel };
+    }
+    const dailyTokens = selectedDaily.map((d) => d.totalTokens);
     const avg =
       selectedDaily.length > 0 ? Math.round(sum / selectedDaily.length) : 0;
     const peak = dailyTokens.length > 0 ? Math.max(...dailyTokens) : 0;
@@ -276,7 +287,7 @@ function Dashboard() {
     const peakLabel =
       peakIdx >= 0 && selectedDaily[peakIdx] ? selectedDaily[peakIdx].date : "";
     return { sum, avg, peak, peakLabel };
-  }, [selectedDaily, selectedTotals.totalTokens]);
+  }, [selectedDaily, selectedEvents, selectedTotals.totalTokens, period]);
 
   const posterData = useMemo(
     () =>
