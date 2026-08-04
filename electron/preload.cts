@@ -13,6 +13,7 @@ const desktopIpc = {
   showWindow: "desktop:show-window",
   getPreferences: "desktop:get-preferences",
   setPreference: "desktop:set-preference",
+  resetPreferences: "desktop:reset-preferences",
 } as const;
 
 const desktopApi: TrustToolsDesktopApi = Object.freeze({
@@ -32,6 +33,10 @@ const desktopApi: TrustToolsDesktopApi = Object.freeze({
     >,
   setPreference: (key: string, value: unknown) =>
     ipcRenderer.invoke(desktopIpc.setPreference, key, value) as Promise<void>,
+  resetPreferences: () =>
+    ipcRenderer.invoke(desktopIpc.resetPreferences) as Promise<{
+      removedKeys: number;
+    }>,
 });
 
 contextBridge.exposeInMainWorld("trustToolsDesktop", desktopApi);

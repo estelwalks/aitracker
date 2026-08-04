@@ -5,6 +5,7 @@ export const desktopIpc = {
   showWindow: "desktop:show-window",
   getPreferences: "desktop:get-preferences",
   setPreference: "desktop:set-preference",
+  resetPreferences: "desktop:reset-preferences",
 } as const;
 
 export interface RuntimeInfo {
@@ -25,4 +26,5 @@ export interface TrustToolsDesktopApi {
   showWindow(): Promise<void>;
   getPreferences(): Promise<Record<string, unknown>>;
   setPreference(key: string, value: unknown): Promise<void>;
+  resetPreferences(): Promise<{ removedKeys: number }>;
 }
