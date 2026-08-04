@@ -19,6 +19,21 @@ export interface LocalUsageContextBreakdown {
   tools: LocalUsageContextBreakdownRow[];
   skills: LocalUsageContextBreakdownRow[];
   commands: LocalUsageContextBreakdownRow[];
+  /**
+   * Per-message-role token view for the context source tree.
+   *
+   * Clean-room safe (docs/compliance/CLEAN_ROOM.md §隐私口径): this is a cache-proxy
+   * heuristic that only RELABELS the event's existing token fields — it reads no
+   * message role/content. Mapping:
+   *   cachedInputTokens        → conversation_history (cache hits = re-sent history)
+   *   cacheCreationInputTokens → system_prefix      (new cache write = new context prefix)
+   *   inputTokens              → user_input          (non-cached input)
+   *   outputTokens − reasoning → assistant_reply
+   *   reasoningOutputTokens    → reasoning
+   * These rows are an ALTERNATIVE grouping of the same event totals (like
+   * `messages`/`categories`), not an additional attribution — they do not double-count.
+   */
+  messageRoles: LocalUsageContextBreakdownRow[];
 }
 
 type BreakdownMap = Map<string, LocalUsageContextBreakdownRow>;
@@ -123,6 +138,62 @@ function sortedRows(map: BreakdownMap): LocalUsageContextBreakdownRow[] {
   );
 }
 
+/**
+ * Cache-proxy message-role attribution: relabels the event's existing token
+ * fields into conversation_history / system_prefix / user_input /
+ * assistant_reply / reasoning rows. Each role carries only the slice it owns
+ * (e.g. `assistant_reply` holds output-minus-reasoning via the count objects
+ * below, with reasoning cleared so the per-field totals stay consistent).
+ */
+function roleCounts(
+  value: number,
+  field: keyof LocalTokenCounts,
+): LocalTokenCounts {
+  const counts = emptyCounts();
+  if (value > 0) counts[field] = value;
+  counts.totalTokens = value;
+  return counts;
+}
+
+function addMessageRoleRows(map: BreakdownMap, event: LocalUsageEvent): void {
+  const distributable = distributableCounts(event);
+  if (event.cachedInputTokens > 0) {
+    addRow(
+      map,
+      "conversation_history",
+      roleCounts(event.cachedInputTokens, "cachedInputTokens"),
+      0,
+    );
+  }
+  if (event.cacheCreationInputTokens > 0) {
+    addRow(
+      map,
+      "system_prefix",
+      roleCounts(event.cacheCreationInputTokens, "cacheCreationInputTokens"),
+      0,
+    );
+  }
+  if (event.inputTokens > 0) {
+    addRow(map, "user_input", roleCounts(event.inputTokens, "inputTokens"), 0);
+  }
+  if (distributable.outputTokens > 0) {
+    addRow(
+      map,
+      "assistant_reply",
+      roleCounts(distributable.outputTokens, "outputTokens"),
+      0,
+    );
+  }
+  if (event.reasoningOutputTokens > 0) {
+    addRow(
+      map,
+      "reasoning",
+      roleCounts(event.reasoningOutputTokens, "reasoningOutputTokens"),
+      0,
+    );
+  }
+}
+
 function uniqueTools(event: LocalUsageEvent): LocalUsageToolCall[] {
   const byName = new Map<string, LocalUsageToolCall>();
   for (const tool of event.context?.tools ?? []) {
@@ -164,9 +235,11 @@ export function buildContextBreakdown(
   const tools: BreakdownMap = new Map();
   const skills: BreakdownMap = new Map();
   const commands: BreakdownMap = new Map();
+  const messageRoles: BreakdownMap = new Map();
 
   for (const event of events) {
     addCounts(totals, distributableCounts(event));
+    addMessageRoleRows(messageRoles, event);
     const eventTools = uniqueTools(event);
     if (eventTools.length === 0) {
       addRow(messages, "text_response", distributableCounts(event), 1);
@@ -229,6 +302,7 @@ export function buildContextBreakdown(
     tools: sortedRows(tools),
     skills: sortedRows(skills),
     commands: sortedRows(commands),
+    messageRoles: sortedRows(messageRoles),
   };
 }
 

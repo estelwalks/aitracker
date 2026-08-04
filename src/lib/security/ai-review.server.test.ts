@@ -75,3 +75,67 @@ test("degrades to static result status on rate limiting and request failure", as
   assert.equal(limited.status, "限流");
   assert.equal(failed.status, "失败");
 });
+
+test("parses structured per-finding verdicts when model returns JSON array", async () => {
+  const result = await reviewSecurityRisks([risk, risk], {
+    config: {
+      endpoint: "https://example.test/v1/chat/completions",
+      apiKey: "test-key",
+      model: "test-model",
+    },
+    fetcher: async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify([
+                  {
+                    index: 0,
+                    verdict: "confirmed",
+                    confidence: 0.9,
+                    rationale: "确为硬编码密钥",
+                  },
+                  {
+                    index: 1,
+                    verdict: "false-positive",
+                    confidence: 0.7,
+                    rationale: "示例值",
+                  },
+                ]),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  assert.equal(result.status, "已完成");
+  assert.equal(result.findings?.length, 2);
+  assert.equal(result.findings?.[0]?.verdict, "confirmed");
+  assert.equal(result.findings?.[1]?.verdict, "false-positive");
+  // confidence 被夹到 [0,1]
+  assert.ok((result.findings?.[0]?.confidence ?? -1) <= 1);
+});
+
+test("falls back to summary-only when model ignores JSON contract", async () => {
+  const result = await reviewSecurityRisks([risk], {
+    config: {
+      endpoint: "https://example.test/v1/chat/completions",
+      apiKey: "test-key",
+      model: "test-model",
+    },
+    fetcher: async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "风险可信，建议移除。" } }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+  });
+
+  assert.equal(result.status, "已完成");
+  assert.match(result.summary, /风险可信/);
+  assert.equal(result.findings, undefined);
+});
