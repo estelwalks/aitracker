@@ -211,10 +211,11 @@ function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
   const reasoningTokens = roleBy("reasoning");
   const mcpTokens =
     breakdown.categories.find((c) => c.key === "mcp")?.totalTokens ?? 0;
-  // 工具调用 = 全部 tools 减去 skills/mcp 分类（避免与 Skill/MCP 节点重复）
-  const toolTokens = breakdown.tools
-    .filter((t) => !t.key.startsWith("mcp_"))
-    .reduce((s, t) => s + t.totalTokens, 0);
+  // 工具调用 = 真实工具（排除 text_response 无 context fallback、排除 mcp_）
+  const realTools = breakdown.tools.filter(
+    (t) => t.key !== "text_response" && !t.key.startsWith("mcp_"),
+  );
+  const toolTokens = realTools.reduce((s, t) => s + t.totalTokens, 0);
   const skillTokens = breakdown.skills.reduce((s, t) => s + t.totalTokens, 0);
 
   const nodes = [
@@ -233,8 +234,8 @@ function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
       label: "工具调用 Tool calls",
       tokens: toolTokens,
       color: "var(--color-chart-2)",
-      children: breakdown.tools
-        .filter((t) => !t.key.startsWith("mcp_") && t.totalTokens > 0)
+      children: realTools
+        .filter((t) => t.totalTokens > 0)
         .slice(0, 6)
         .map((t) => ({ label: t.key, value: t.totalTokens })),
     },
