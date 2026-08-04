@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import type { SessionFilter, SessionSource, SessionSummary } from "./types.ts";
+import type {
+  SessionFilter,
+  SessionSource,
+  SessionStatus,
+  SessionSummary,
+} from "./types.ts";
 
 const ALLOWED_SOURCES: readonly SessionSource[] = [
   "claude-code",
@@ -12,6 +17,12 @@ const ALLOWED_RANGES: readonly SessionFilter["range"][] = [
   "7d",
   "30d",
   "90d",
+];
+const ALLOWED_STATUSES: readonly SessionStatus[] = [
+  "available",
+  "interrupted",
+  "lost",
+  "unavailable",
 ];
 const DAY_IN_MS = 24 * 60 * 60 * 1_000;
 const RANGE_DAYS: Record<NonNullable<SessionFilter["range"]>, number> = {
@@ -45,11 +56,17 @@ const sessionFilterValidator = (input: unknown): SessionFilter => {
     typeof value.keyword === "string" && value.keyword.length > 0
       ? value.keyword
       : undefined;
+  const status =
+    typeof value.status === "string" &&
+    (ALLOWED_STATUSES as readonly string[]).includes(value.status)
+      ? (value.status as SessionStatus)
+      : undefined;
   const filter: SessionFilter = {};
   if (source != null) filter.source = source;
   if (projectId != null) filter.projectId = projectId;
   if (range != null) filter.range = range;
   if (keyword != null) filter.keyword = keyword;
+  if (status != null) filter.status = status;
   return filter;
 };
 
@@ -66,6 +83,9 @@ function filterSessions(
     filter.keyword != null ? filter.keyword.toLowerCase() : undefined;
   const sessions = summary.sessions.filter((session) => {
     if (filter.source != null && session.source !== filter.source) {
+      return false;
+    }
+    if (filter.status != null && session.status !== filter.status) {
       return false;
     }
     if (

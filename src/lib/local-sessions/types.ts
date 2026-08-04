@@ -10,6 +10,15 @@
 
 export type SessionSource = "claude-code" | "codex" | "grok";
 
+/**
+ * State derived exclusively from explicit local session metadata.  `available`
+ * is not a claim that a remote provider still retains the conversation: it
+ * only means this local record has a shell-safe resume id.  `unavailable`
+ * keeps malformed ids visible without ever constructing a command for them.
+ */
+export type SessionStatus =
+  "available" | "interrupted" | "lost" | "unavailable";
+
 export interface SessionTokenCounts {
   inputTokens: number;
   outputTokens: number;
@@ -17,6 +26,16 @@ export interface SessionTokenCounts {
   cacheCreationInputTokens: number;
   reasoningOutputTokens: number;
   totalTokens: number;
+}
+
+/** A pricing result; unknown models or unsupported cache-write pricing stay explicit. */
+export interface SessionCostEstimate {
+  knownUsd: number;
+  cacheSavingsUsd: number;
+  pricedEvents: number;
+  unknownEvents: number;
+  unknownModels: string[];
+  complete: boolean;
 }
 
 export interface SessionRecord {
@@ -41,7 +60,13 @@ export interface SessionRecord {
   /** retried user turns (best-effort; 0 if unknown in v1). */
   retryTurns: number;
   totals: SessionTokenCounts;
+  /** Estimate using the same local model-price catalog as the Token dashboard. */
+  cost: SessionCostEstimate;
   subagentCalls: number;
+  /** Local metadata state; never inferred from missing logs or conversation text. */
+  status: SessionStatus;
+  /** Short explanation of the exact metadata evidence behind a non-default state. */
+  statusReason: string | null;
   /** true iff sessionId matches the shell-safe alphabet. */
   resumeSafe: boolean;
   /** Bare resume command (e.g. "claude --resume <id>"); null if !resumeSafe. */
@@ -60,4 +85,5 @@ export interface SessionFilter {
   projectId?: string;
   range?: "all" | "7d" | "30d" | "90d";
   keyword?: string;
+  status?: SessionStatus;
 }
