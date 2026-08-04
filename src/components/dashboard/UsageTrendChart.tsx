@@ -361,16 +361,17 @@ function aggregateHourlyBySource(
   events: LocalUsageEvent[],
   sources: { key: LocalUsageSource }[],
 ): TrendPoint[] {
-  // 今日小时粒度：固定铺满 0–23 共 24 个点（无事件的小时为 0），
-  // 与原型一致——横轴从 00:00 开始。取首个事件所在日期作为当天基准。
+  // 今日小时粒度：从 00:00 铺到「当前小时」（含），无事件的小时为 0，
+  // 不画未来小时——横轴止于现在。取首个事件所在日期作为当天基准。
   const todayKey =
     events.length > 0 ? events[0]!.timestamp.slice(0, 10) : undefined;
+  const currentHour = new Date().getHours();
   const buckets = new Map<
     string,
     { label: string; total: number; bySource: Map<string, number> }
   >();
   if (todayKey) {
-    for (let hour = 0; hour < 24; hour += 1) {
+    for (let hour = 0; hour <= currentHour; hour += 1) {
       const hh = String(hour).padStart(2, "0");
       buckets.set(`${todayKey}T${hh}`, {
         label: hh,
@@ -386,6 +387,14 @@ function aggregateHourlyBySource(
     const day = String(timestamp.getDate()).padStart(2, "0");
     const hour = String(timestamp.getHours()).padStart(2, "0");
     const key = `${timestamp.getFullYear()}-${month}-${day}T${hour}`;
+    // 今日场景：事件所在小时晚于当前小时则不计入（避免横轴冒出未来点）；
+    // 非今日（todayKey 缺失）则照常累加。
+    if (
+      todayKey &&
+      key.startsWith(`${todayKey}T`) &&
+      timestamp.getHours() > currentHour
+    )
+      continue;
     // 跨天事件：仅保留当天桶；非当天则建临时桶（不会铺满，但极少见）。
     const bucket = buckets.get(key) ?? {
       label: hour,
