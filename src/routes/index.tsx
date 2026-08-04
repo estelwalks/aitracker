@@ -747,14 +747,8 @@ function Dashboard() {
           </Panel>
         </div>
 
-        <div key="provider" className="dashboard-widget">
-          <Panel
-            className="dashboard-context"
-            title="上下文构成"
-            action={<span className="tt-label">按工具 · 按维度</span>}
-          >
-            <ContextBreakdown events={selectedEvents} />
-          </Panel>
+        <div key="provider" className="dashboard-widget dashboard-context">
+          <ContextBreakdown events={selectedEvents} />
         </div>
 
         <div key="models" className="dashboard-widget">
