@@ -329,12 +329,21 @@ function Dashboard() {
   }
 
   // -- Token type label map for KPI cards --
+  // 键名与 aggregatePricedUsage(tokenType) 产出一致（见 pricing/index.ts addTokenTypeRows）。
+  // 固定展示顺序：输入/输出/缓存读/缓存写/推理，与原型 KPI 8 块一致。
+  const TOKEN_TYPE_ORDER = [
+    "input",
+    "output",
+    "cacheRead",
+    "cacheWrite",
+    "reasoning",
+  ] as const;
   const tokenTypeLabelMap: Record<string, string> = {
     input: "输入 Token",
     output: "输出 Token",
     cacheRead: "缓存读 Token",
     cacheWrite: "缓存写 Token",
-    reasoningOutput: "推理输出 Token",
+    reasoning: "推理输出 Token",
   };
 
   // -- Helpers for MoM display in KPI cards --
@@ -556,9 +565,17 @@ function Dashboard() {
                 </div>
               </Link>
 
-              {/* Token breakdown cards — input/output/cacheRead/cacheWrite/reasoning
-                  (与原型 8 块对齐：>0 才出现；tokenTypeRows 已在 useMemo 内过滤 >0) */}
-              {tokenTypeRows.map((row) => (
+              {/* Token breakdown cards — 固定顺序：输入/输出/缓存读/缓存写/推理
+                  （与原型 KPI 8 块一致；>0 才出现，故今日无缓存数据时仅显示存在的几块） */}
+              {(() => {
+                const byKey = new Map(
+                  tokenTypeRows.map((row) => [row.key, row] as const),
+                );
+                return TOKEN_TYPE_ORDER.map((key) => byKey.get(key)).filter(
+                  (row): row is (typeof tokenTypeRows)[number] =>
+                    row != null && row.totalTokens > 0,
+                );
+              })().map((row) => (
                 <div
                   key={row.key}
                   className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
