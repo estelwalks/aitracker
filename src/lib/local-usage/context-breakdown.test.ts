@@ -127,3 +127,78 @@ test("messageRoles 在有多事件时合计等于所有事件总量", () => {
   );
   assert.equal(systemPrefix?.totalTokens, 9);
 });
+
+test("已观察调用只保留日志中的调用次数，不伪造逐调用 Token", () => {
+  const result = buildContextBreakdown([
+    event({
+      context: {
+        tools: [
+          { name: "exec_command", category: "execution", calls: 2 },
+          { name: "github_get_issue", category: "mcp", calls: 3 },
+        ],
+        skills: [{ name: "release-check", calls: 1 }],
+      },
+    }),
+    event({
+      context: {
+        tools: [{ name: "exec_command", category: "execution", calls: 4 }],
+        skills: [{ name: "release-check", calls: 2 }],
+      },
+    }),
+  ]);
+
+  assert.deepEqual(result.observedTools, [
+    { key: "exec_command", calls: 6, events: 2 },
+  ]);
+  assert.deepEqual(result.observedMcp, [
+    { key: "github_get_issue", calls: 3, events: 1 },
+  ]);
+  assert.deepEqual(result.observedSkills, [
+    { key: "release-check", calls: 3, events: 2 },
+  ]);
+});
+
+test("Token 字段闭环：输出扣除推理后与输入和缓存项合计等于 total", () => {
+  const result = buildContextBreakdown([
+    event({
+      inputTokens: 10,
+      cachedInputTokens: 7,
+      cacheCreationInputTokens: 3,
+      outputTokens: 11,
+      reasoningOutputTokens: 5,
+      totalTokens: 31,
+    }),
+  ]);
+
+  assert.equal(result.totals.outputTokens, 6);
+  assert.equal(
+    result.totals.inputTokens +
+      result.totals.cachedInputTokens +
+      result.totals.cacheCreationInputTokens +
+      result.totals.outputTokens +
+      result.totals.reasoningOutputTokens,
+    result.totals.totalTokens,
+  );
+});
+
+test("空日志与零 Token 不产生伪造的上下文来源", () => {
+  const empty = buildContextBreakdown([]);
+  assert.equal(empty.totals.totalTokens, 0);
+  assert.deepEqual(empty.observedTools, []);
+  assert.deepEqual(empty.observedMcp, []);
+  assert.deepEqual(empty.observedSkills, []);
+
+  const zero = buildContextBreakdown([
+    event({
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+      context: undefined,
+    }),
+  ]);
+  assert.equal(zero.totals.totalTokens, 0);
+  assert.deepEqual(zero.observedTools, []);
+});
