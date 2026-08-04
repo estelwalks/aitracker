@@ -88,6 +88,45 @@ function splitInteger(value: number, parts: number, index: number): number {
   return base + (index < value % parts ? 1 : 0);
 }
 
+/**
+ * 按 calls 权重把一个数值分配给多个份额，返回每个份额的分得量（含取整余数兜底，
+ * 保证 sum === value）。weights 长度 = 份额数。
+ */
+function allocateByWeights(value: number, weights: number[]): number[] {
+  const sum = weights.reduce((s, w) => s + w, 0);
+  if (sum <= 0) return weights.map(() => 0);
+  const raw = weights.map((w) => (value * w) / sum);
+  const floor = raw.map((r) => Math.floor(r));
+  const remainder = value - floor.reduce((s, f) => s + f, 0);
+  const order = raw
+    .map((r, i) => ({ i, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder; k++) floor[order[k]!.i]! += 1;
+  return floor;
+}
+
+/** 按 calls 权重把完整 LocalTokenCounts 分配给各工具，返回每工具的 counts。 */
+function allocateCountsByWeights(
+  counts: LocalTokenCounts,
+  weights: number[],
+): LocalTokenCounts[] {
+  const fields: (keyof LocalTokenCounts)[] = [
+    "inputTokens",
+    "cachedInputTokens",
+    "cacheCreationInputTokens",
+    "outputTokens",
+    "reasoningOutputTokens",
+    "totalTokens",
+  ];
+  const byField: Record<string, number[]> = {};
+  for (const f of fields) byField[f] = allocateByWeights(counts[f], weights);
+  return weights.map((_, i) => {
+    const c = emptyCounts();
+    for (const f of fields) c[f] = byField[f]![i]!;
+    return c;
+  });
+}
+
 function splitTokenCounts(
   counts: LocalTokenCounts,
   parts: number,
@@ -234,44 +273,27 @@ export function buildContextBreakdown(
     addMessageRoleRows(messageRoles, event);
     const eventTools = uniqueTools(event);
 
-    // 归因模型（参考 TokenTracker）：input 系列（input/cached/cacheCreation）
-    // 只归 messageRoles，不进 tools；output（减 reasoning）按工具 calls 权重
-    // 分摊给 tools/categories；reasoning 单独归因。这样 messages + tools +
-    // reasoning 互不重复，合计 = total。
-    const reasoningTokens = Math.min(
-      event.reasoningOutputTokens,
-      event.outputTokens,
-    );
-    const distributableOutput = event.outputTokens - reasoningTokens;
+    // 归因模型 A（参考 TokenTracker tool_calls_breakdown）：
+    // - input 系列（input/cached/cacheCreation）归 messageRoles（对话历史/
+    //   用户输入/系统提示词），按角色互斥。
+    // - 工具调用分摊**完整事件 token**（input+cache+output），作为独立归因
+    //   视角——即「为调用这些工具而消耗的全部上下文」。与 Messages 不互斥
+    //   （TokenTracker 也是这样：Messages 151M + Tool calls 12.7M 并存）。
+    //   故 SourceDetail 对工具/MCP 维度不显示「合计=100%」式的百分比。
+    const fullCounts = distributableCounts(event);
 
     if (eventTools.length === 0) {
-      // 无工具：output 归 assistant_reply（messageRoles 已含）；input 已归
-      // messageRoles。这里只补 messages/categories 聚合视图。
-      const outputCounts: LocalTokenCounts = {
-        ...emptyCounts(),
-        outputTokens: distributableOutput,
-        totalTokens: distributableOutput,
-      };
-      addRow(messages, "text_response", outputCounts, 1);
-      addRow(categories, "messages", outputCounts, 1);
+      addRow(messages, "text_response", fullCounts, 1);
+      addRow(categories, "messages", fullCounts, 1);
       continue;
     }
 
-    // 按工具 calls 权重分摊 output（无字符长度，用 calls 近似）
-    const totalCalls = eventTools.reduce((s, t) => s + t.calls, 0) || 1;
+    // 按 calls 权重分摊完整 token 给各工具（模型 A：工具分摊完整事件 token）
+    const weights = eventTools.map((t) => t.calls);
+    const toolCounts = allocateCountsByWeights(fullCounts, weights);
     const allocations = new Map<string, LocalTokenCounts>();
-    let allocated = 0;
     for (const [index, tool] of eventTools.entries()) {
-      const share =
-        index === eventTools.length - 1
-          ? distributableOutput - allocated // 末位兜底，避免取整误差
-          : Math.floor((distributableOutput * tool.calls) / totalCalls);
-      allocated += share;
-      const counts: LocalTokenCounts = {
-        ...emptyCounts(),
-        outputTokens: share,
-        totalTokens: share,
-      };
+      const counts = toolCounts[index]!;
       allocations.set(`${tool.category}:${tool.name}`, counts);
       addRow(categories, tool.category, counts, tool.calls);
       addRow(tools, tool.name, counts, tool.calls);
