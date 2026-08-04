@@ -28,6 +28,7 @@ import {
   type BatchUninstallResult,
   type LocalSkill,
   type SkillAgent,
+  type SkillDailyPoint,
   type SkillHealth,
   type SkillInstallation,
   type SkillSource,
@@ -406,6 +407,48 @@ function skillUsageEvidence(
   return evidence;
 }
 
+/**
+ * 按日聚合每个 Skill 的调用序列，用于「日均 / 使用趋势(↑↓−)」展示。
+ *
+ * 仅依赖已脱敏的 context.skills[].calls + 事件时间戳，不读取 Skill 内容。
+ * 注意：当前仅 Codex 产 context.skills，其余来源序列为空（与 usageCount 同源限制）。
+ */
+function skillDailySeries(
+  events: LocalUsageEvent[],
+): Map<string, SkillDailyPoint[]> {
+  const series = new Map<string, Map<string, number>>();
+  for (const event of events) {
+    const usedAt = Date.parse(event.timestamp);
+    if (!Number.isFinite(usedAt)) continue;
+    const date = localDateKeyFromMillis(usedAt);
+    for (const skill of event.context?.skills ?? []) {
+      const key = skill.name.toLowerCase();
+      const byDate = series.get(key) ?? new Map<string, number>();
+      byDate.set(date, (byDate.get(date) ?? 0) + skill.calls);
+      series.set(key, byDate);
+    }
+  }
+  const result = new Map<string, SkillDailyPoint[]>();
+  for (const [key, byDate] of series) {
+    result.set(
+      key,
+      [...byDate.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([date, calls]) => ({ date, calls })),
+    );
+  }
+  return result;
+}
+
+/** 本地时区日期键（YYYY-MM-DD），与 local-usage 的 localDateKey 口径一致。 */
+function localDateKeyFromMillis(millis: number): string {
+  const date = new Date(millis);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function safeSkillName(name: string): string {
   const trimmed = name.trim();
   if (
@@ -614,6 +657,7 @@ export async function scanLocalSkills(
     options.usageEvents ?? [],
     now.getTime(),
   );
+  const dailySeries = skillDailySeries(options.usageEvents ?? []);
   const healthThresholds = resolvedHealthThresholds(options.healthThresholds);
 
   const skills: LocalSkill[] = [...installations.entries()]
@@ -644,6 +688,7 @@ export async function scanLocalSkills(
         lastUsedAt:
           usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
         usageCount: usage?.calls ?? 0,
+        daily: dailySeries.get(name.toLowerCase()) ?? [],
         installations: entries.sort((a, b) => a.agent.localeCompare(b.agent)),
       };
     })
@@ -658,6 +703,8 @@ export async function scanLocalSkills(
           health: skill.health,
           lastUsedAt: skill.lastUsedAt,
           usageCount: skill.usageCount,
+          dailyTail: skill.daily?.slice(-1)[0]?.date ?? null,
+          dailyPoints: skill.daily?.length ?? 0,
           installations: skill.installations,
         })),
         blacklist,

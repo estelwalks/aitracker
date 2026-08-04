@@ -32,6 +32,11 @@ export interface SkillInstallation {
   updateReason: string;
 }
 
+export interface SkillDailyPoint {
+  date: string;
+  calls: number;
+}
+
 export interface LocalSkill {
   id: string;
   name: string;
@@ -40,6 +45,8 @@ export interface LocalSkill {
   healthReason: string;
   lastUsedAt: string | null;
   usageCount: number;
+  /** 按日聚合的调用序列（仅 Codex 等产出 context.skills 的来源可见）。 */
+  daily?: SkillDailyPoint[];
   installations: SkillInstallation[];
 }
 
