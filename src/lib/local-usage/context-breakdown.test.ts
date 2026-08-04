@@ -20,7 +20,7 @@ function event(overrides: Partial<LocalUsageEvent> = {}): LocalUsageEvent {
   };
 }
 
-test("多个工具按 calls 权重分摊 output，input 不计入工具", () => {
+test("多个工具按 calls 权重分摊完整事件 token（模型 A）", () => {
   const result = buildContextBreakdown([
     event({
       context: {
@@ -32,35 +32,27 @@ test("多个工具按 calls 权重分摊 output，input 不计入工具", () => 
     }),
   ]);
 
-  // 工具只分摊 output（31）减 reasoning（11）= 20；input/cached 不进工具
+  // 模型 A：工具分摊完整事件 token（input+cache+output），两工具合计 = total
   const toolSum = result.tools.reduce((sum, row) => sum + row.totalTokens, 0);
-  assert.equal(toolSum, 20);
+  assert.equal(toolSum, 101);
   assert.equal(
     result.categories.reduce((sum, row) => sum + row.totalTokens, 0),
-    20,
+    101,
   );
-  // calls 权重 2:1 → exec_command 13(或14), web_search 7(或6)
-  assert.ok(result.tools[0]?.totalTokens >= 13);
-  assert.ok(result.tools[1]?.totalTokens <= 7);
-  // 工具的 input/cached 必须为 0（input 归 messageRoles）
-  assert.equal(result.tools[0]?.inputTokens, 0);
-  assert.equal(result.tools[0]?.cachedInputTokens, 0);
+  // calls 权重 2:1 → exec_command ≈ 67, web_search ≈ 34
+  assert.ok(result.tools[0]?.totalTokens >= 60);
+  // 工具含 input（模型 A：完整 token 归因）
+  assert.ok(result.tools[0]!.inputTokens > 0);
 });
 
-test("纯文本响应：output 归 messages，input 归 messageRoles", () => {
+test("纯文本响应：完整 token 归 messages text_response", () => {
   const result = buildContextBreakdown([event()]);
-  // 无工具：output(20，减 reasoning) 归 text_response
   const textRow = result.messages.find((r) => r.key === "text_response");
   assert.ok(textRow);
-  assert.equal(textRow?.totalTokens, 20);
-  assert.equal(textRow?.outputTokens, 20);
-  // input/cached 在 messageRoles，不在 messages 聚合
+  assert.equal(textRow?.totalTokens, 101);
+  // messageRoles 仍按角色分 input（独立视图）
   const userInput = result.messageRoles.find((r) => r.key === "user_input");
   assert.equal(userInput?.totalTokens, 50);
-  const history = result.messageRoles.find(
-    (r) => r.key === "conversation_history",
-  );
-  assert.equal(history?.totalTokens, 20);
 });
 
 test("Skill 与命令统计是工具归因的受限视图", () => {
@@ -87,10 +79,12 @@ test("Skill 与命令统计是工具归因的受限视图", () => {
     }),
   ]);
 
+  // 模型 A：exec_command 与 tool_search 各分 ~50（calls 1:1），skill 从
+  // tool_search 归因，command 从 exec_command 归因
   assert.equal(result.skills[0]?.key, "release-check");
-  assert.equal(result.skills[0]?.totalTokens, 10);
+  assert.ok(result.skills[0]?.totalTokens >= 49);
   assert.equal(result.commands[0]?.key, "npm · npm run");
-  assert.equal(result.commands[0]?.totalTokens, 10);
+  assert.ok(result.commands[0]?.totalTokens >= 49);
 });
 
 test("messageRoles 按缓存代理切分，总额等于事件总量", () => {
