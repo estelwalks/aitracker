@@ -1,5 +1,6 @@
 import {
   parseUserSecurityRules,
+  SECURITY_RULE_KINDS,
   SECURITY_RULES_VERSION,
   type SecurityRuleKind,
   type UserSecurityRule,
@@ -25,33 +26,17 @@ export interface SecurityRisk {
   excerpt: string;
 }
 
-export type AiReviewStatus = "未请求" | "未配置" | "已完成" | "失败" | "限流";
-
-export type AiFindingVerdict = "confirmed" | "false-positive" | "needs-context";
-
-/** 单条命中的 AI 研判结论（按 risks 下标匹配）。 */
-export interface AiFindingReview {
-  index: number;
-  verdict: AiFindingVerdict;
-  confidence: number;
-  rationale: string;
-}
-
-export interface AiReviewResult {
-  status: AiReviewStatus;
-  summary: string;
-  /** 每条命中的结构化研判；仅当 AI 以结构化数组返回时填充。 */
-  findings?: AiFindingReview[];
-}
-
 export interface SecurityReport {
   scannedAt: string;
+  /** 用户选择的 SKILL.md 或其所属目录名；不持久化源码。 */
+  targetName: string;
   filesScanned: number;
   risks: SecurityRisk[];
   verdict: "安全" | "可疑" | "危险";
   /** 0–100 数值风险评分：高危 25/中危 8/低危 2 分累加后封顶。 */
   riskScore: number;
-  aiReview: AiReviewResult;
+  /** 仅包含本地 File API 读取和静态规则执行的耗时。 */
+  durationMs: number;
   /** 命中规则库的版本号，便于审计与回溯 */
   rulesVersion: string;
 }
@@ -379,16 +364,16 @@ export function computeRiskScore(risks: SecurityRisk[]): number {
   return Math.min(100, score);
 }
 
-export function scanSecurityFiles(
+function scanDimension(
   files: SecurityInputFile[],
-  userRules: UserSecurityRule[] = [],
-): SecurityReport {
-  const risks: SecurityRisk[] = [];
-  const compiledUserRules = compileUserRules(userRules);
+  rules: BuiltInRule[],
+  userRules: CompiledUserRule[],
+  risks: SecurityRisk[],
+): void {
   for (const file of files) {
     const lines = file.content.split(/\r?\n/);
     lines.forEach((line, index) => {
-      for (const rule of RULES) {
+      for (const rule of rules) {
         rule.pattern.lastIndex = 0;
         if (!rule.pattern.test(line)) continue;
         risks.push({
@@ -402,7 +387,7 @@ export function scanSecurityFiles(
           excerpt: maskedExcerpt(line),
         });
       }
-      for (const rule of compiledUserRules) {
+      for (const rule of userRules) {
         rule.regex.lastIndex = 0;
         if (!rule.regex.test(line)) continue;
         risks.push({
@@ -418,9 +403,16 @@ export function scanSecurityFiles(
       }
     });
   }
+}
 
+function buildReport(
+  files: SecurityInputFile[],
+  risks: SecurityRisk[],
+  startedAt: number,
+): SecurityReport {
   return {
     scannedAt: new Date().toISOString(),
+    targetName: files[0]?.name ?? "SKILL.md",
     filesScanned: files.length,
     risks,
     verdict: risks.some((risk) => risk.severity === "高危")
@@ -429,10 +421,68 @@ export function scanSecurityFiles(
         ? "可疑"
         : "安全",
     riskScore: computeRiskScore(risks),
-    aiReview: {
-      status: "未请求",
-      summary: "未启用 AI 二次审查，结论仅来自本地静态规则。",
-    },
+    durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
     rulesVersion: SECURITY_RULES_VERSION,
   };
+}
+
+/**
+ * 同步本地扫描接口，适合测试和不需要展示过程的调用方。
+ * 不读取网络、不发送文件，且只运行内置/本地用户规则。
+ */
+export function scanSecurityFiles(
+  files: SecurityInputFile[],
+  userRules: UserSecurityRule[] = [],
+): SecurityReport {
+  const startedAt = performance.now();
+  const risks: SecurityRisk[] = [];
+  const compiledUserRules = compileUserRules(userRules);
+  for (const kind of SECURITY_RULE_KINDS) {
+    scanDimension(
+      files,
+      RULES.filter((rule) => rule.kind === kind),
+      compiledUserRules.filter((rule) => rule.kind === kind),
+      risks,
+    );
+  }
+  return buildReport(files, risks, startedAt);
+}
+
+export interface LocalScanProgress {
+  completedDimensions: number;
+  totalDimensions: number;
+  kind: SecurityRiskKind;
+}
+
+/**
+ * 与同步扫描使用完全相同的静态规则，但在每个真实完成的检测维度后让出 UI。
+ * 这样页面进度只反映已在本机执行的规则，不使用定时器伪造扫描过程。
+ */
+export async function scanSecurityFilesWithProgress(
+  files: SecurityInputFile[],
+  userRules: UserSecurityRule[] = [],
+  onProgress?: (progress: LocalScanProgress) => void,
+): Promise<SecurityReport> {
+  const startedAt = performance.now();
+  const risks: SecurityRisk[] = [];
+  const compiledUserRules = compileUserRules(userRules);
+  const totalDimensions = SECURITY_RULE_KINDS.length;
+
+  for (const [index, kind] of SECURITY_RULE_KINDS.entries()) {
+    scanDimension(
+      files,
+      RULES.filter((rule) => rule.kind === kind),
+      compiledUserRules.filter((rule) => rule.kind === kind),
+      risks,
+    );
+    onProgress?.({
+      completedDimensions: index + 1,
+      totalDimensions,
+      kind,
+    });
+    // 让 React 有机会绘制刚刚完成的真实规则维度。
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+
+  return buildReport(files, risks, startedAt);
 }

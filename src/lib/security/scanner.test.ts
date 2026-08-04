@@ -108,7 +108,6 @@ test("detects dangerous commands and masks hardcoded keys", () => {
   ]);
 
   assert.equal(report.verdict, "危险");
-  assert.equal(report.aiReview.status, "未请求");
   assert.ok(report.risks.some((risk) => risk.kind === "远程命令执行"));
   assert.ok(report.risks.some((risk) => risk.kind === "密钥泄露"));
   assert.ok(report.risks.every((risk) => risk.source === "内置规则"));
@@ -120,6 +119,8 @@ test("detects dangerous commands and masks hardcoded keys", () => {
 test("report carries the rule library version", () => {
   const report = scanSecurityFiles([{ name: "a.md", content: "safe" }]);
   assert.equal(report.rulesVersion, SECURITY_RULES_VERSION);
+  assert.equal(report.targetName, "a.md");
+  assert.ok(report.durationMs >= 0);
 });
 
 test("returns safe for ordinary markdown", () => {
