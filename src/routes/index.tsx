@@ -556,32 +556,28 @@ function Dashboard() {
                 </div>
               </Link>
 
-              {/* Token breakdown cards — input & output only */}
-              {tokenTypeRows
-                .filter(
-                  (r) =>
-                    ["input", "output"].includes(r.key) && r.totalTokens > 0,
-                )
-                .map((row) => (
-                  <div
-                    key={row.key}
-                    className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
-                  >
-                    <div className="tt-label whitespace-nowrap font-mono uppercase">
-                      {tokenTypeLabelMap[row.key] ?? row.key}
-                    </div>
-                    <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                      {formatTokens(row.totalTokens)}
-                    </div>
-                    <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                      {shareOf(
-                        row.totalTokens,
-                        selectedTotals.totalTokens,
-                      ).toFixed(0)}
-                      % 占比
-                    </div>
+              {/* Token breakdown cards — input/output/cacheRead/cacheWrite/reasoning
+                  (与原型 8 块对齐：>0 才出现；tokenTypeRows 已在 useMemo 内过滤 >0) */}
+              {tokenTypeRows.map((row) => (
+                <div
+                  key={row.key}
+                  className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
+                >
+                  <div className="tt-label whitespace-nowrap font-mono uppercase">
+                    {tokenTypeLabelMap[row.key] ?? row.key}
                   </div>
-                ))}
+                  <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                    {formatTokens(row.totalTokens)}
+                  </div>
+                  <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                    {shareOf(
+                      row.totalTokens,
+                      selectedTotals.totalTokens,
+                    ).toFixed(0)}
+                    % 占比
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Pagination: fade edge + dots + chevrons */}
