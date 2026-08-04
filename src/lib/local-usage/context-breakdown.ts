@@ -12,6 +12,13 @@ export interface LocalUsageContextBreakdownRow extends LocalTokenCounts {
   calls: number;
 }
 
+/** A call count observed directly in a privacy-preserving local context log. */
+export interface LocalUsageObservedContextRow {
+  key: string;
+  calls: number;
+  events: number;
+}
+
 export interface LocalUsageContextBreakdown {
   totals: LocalTokenCounts;
   messages: LocalUsageContextBreakdownRow[];
@@ -34,9 +41,18 @@ export interface LocalUsageContextBreakdown {
    * `messages`/`categories`), not an additional attribution — they do not double-count.
    */
   messageRoles: LocalUsageContextBreakdownRow[];
+  /**
+   * Directly observed context metadata. These rows intentionally carry no
+   * token attribution: local client logs record the request-level usage and
+   * the tool/skill calls independently, but do not expose per-call usage.
+   */
+  observedTools: LocalUsageObservedContextRow[];
+  observedMcp: LocalUsageObservedContextRow[];
+  observedSkills: LocalUsageObservedContextRow[];
 }
 
 type BreakdownMap = Map<string, LocalUsageContextBreakdownRow>;
+type ObservedContextMap = Map<string, LocalUsageObservedContextRow>;
 
 function emptyCounts(): LocalTokenCounts {
   return {
@@ -169,6 +185,27 @@ function sortedRows(map: BreakdownMap): LocalUsageContextBreakdownRow[] {
   );
 }
 
+function addObservedRow(
+  map: ObservedContextMap,
+  key: string,
+  calls: number,
+): void {
+  if (key.length === 0 || calls <= 0) return;
+  const row = map.get(key) ?? { key, calls: 0, events: 0 };
+  row.calls += calls;
+  row.events += 1;
+  map.set(key, row);
+}
+
+function sortedObservedRows(
+  map: ObservedContextMap,
+): LocalUsageObservedContextRow[] {
+  return [...map.values()].sort(
+    (left, right) =>
+      right.calls - left.calls || left.key.localeCompare(right.key),
+  );
+}
+
 /**
  * Cache-proxy message-role attribution: relabels the event's existing token
  * fields into conversation_history / system_prefix / user_input /
@@ -267,11 +304,28 @@ export function buildContextBreakdown(
   const skills: BreakdownMap = new Map();
   const commands: BreakdownMap = new Map();
   const messageRoles: BreakdownMap = new Map();
+  const observedTools: ObservedContextMap = new Map();
+  const observedMcp: ObservedContextMap = new Map();
+  const observedSkills: ObservedContextMap = new Map();
 
   for (const event of events) {
     addCounts(totals, distributableCounts(event));
     addMessageRoleRows(messageRoles, event);
     const eventTools = uniqueTools(event);
+
+    // Preserve call-level provenance exactly as parsed. The surrounding usage
+    // event does not contain a per-call token value, so no token split is
+    // applied to these rows.
+    for (const tool of eventTools) {
+      if (tool.category === "mcp") {
+        addObservedRow(observedMcp, tool.name, tool.calls);
+      } else {
+        addObservedRow(observedTools, tool.name, tool.calls);
+      }
+    }
+    for (const skill of skillCalls(event)) {
+      addObservedRow(observedSkills, skill.name, skill.calls);
+    }
 
     // 归因模型 A（参考 TokenTracker tool_calls_breakdown）：
     // - input 系列（input/cached/cacheCreation）归 messageRoles（对话历史/
@@ -346,6 +400,9 @@ export function buildContextBreakdown(
     skills: sortedRows(skills),
     commands: sortedRows(commands),
     messageRoles: sortedRows(messageRoles),
+    observedTools: sortedObservedRows(observedTools),
+    observedMcp: sortedObservedRows(observedMcp),
+    observedSkills: sortedObservedRows(observedSkills),
   };
 }
 
