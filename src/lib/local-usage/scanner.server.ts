@@ -21,6 +21,7 @@ import {
   consumeCodexPendingContext,
   createCodexPendingContext,
 } from "./codex-context.ts";
+import { collectClaudeContext } from "./claude-context.ts";
 import {
   BUILTIN_USAGE_ADAPTERS,
   GENERIC_BUILTIN_USAGE_ADAPTERS,
@@ -57,7 +58,7 @@ const MAX_FILES_PER_SOURCE = 1_200;
 const MAX_DISCOVERED_ENTRIES_PER_SOURCE = 30_000;
 const MAX_JSONL_LINE_LENGTH = 16 * 1024 * 1024;
 const FUTURE_TIMESTAMP_TOLERANCE_MS = DAY_IN_MS;
-const PERSISTENT_CACHE_VERSION = 10;
+const PERSISTENT_CACHE_VERSION = 11;
 const PERSISTENT_CACHE_FILE_NAME = "local-usage-index-v10.json";
 const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
   "local-usage-index-v1.json",
@@ -729,12 +730,16 @@ function claudeEventFromRecord(
     usage.cache_creation_input_tokens,
   );
   const outputTokens = tokenValue(usage.output_tokens);
+  const reasoningOutputTokens = tokenValue(usage.reasoning_output_tokens);
   const totalTokens =
     inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
 
   if (totalTokens === 0) {
     return undefined;
   }
+
+  // 采集上下文（tools/skills/commands），仅结构元数据，clean-room 合规。
+  const context = collectClaudeContext(message);
 
   return {
     id,
@@ -763,8 +768,9 @@ function claudeEventFromRecord(
       cachedInputTokens,
       cacheCreationInputTokens,
       outputTokens,
-      reasoningOutputTokens: 0,
+      reasoningOutputTokens,
       totalTokens,
+      ...(context ? { context } : {}),
     },
   };
 }
