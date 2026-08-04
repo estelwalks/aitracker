@@ -195,44 +195,124 @@ function SegBar({
 // SourceDetail – expanded view for "模型" tab rows
 // ---------------------------------------------------------------------------
 
-function SourceDetail({
-  row,
-  scopedTokens,
-}: {
-  row: ModelBreakdownRow;
-  scopedTokens: number;
-}) {
-  const composition = breakdownComposition(
-    row as unknown as LocalUsageBreakdown,
-  );
+function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
+  const breakdown = useMemo(() => buildContextBreakdown(events), [events]);
+  const total = breakdown.totals.totalTokens || 1;
+
+  // 构建上下文来源树（对齐原型 5 节点）：
+  // 会话消息 / 工具调用 / 推理 / MCP / Skill
+  const roleBy = (key: string) =>
+    breakdown.messageRoles.find((r) => r.key === key)?.totalTokens ?? 0;
+  const messagesTokens =
+    roleBy("conversation_history") +
+    roleBy("system_prefix") +
+    roleBy("user_input") +
+    roleBy("assistant_reply");
+  const reasoningTokens = roleBy("reasoning");
+  const mcpTokens =
+    breakdown.categories.find((c) => c.key === "mcp")?.totalTokens ?? 0;
+  // 工具调用 = 全部 tools 减去 skills/mcp 分类（避免与 Skill/MCP 节点重复）
+  const toolTokens = breakdown.tools
+    .filter((t) => !t.key.startsWith("mcp_"))
+    .reduce((s, t) => s + t.totalTokens, 0);
+  const skillTokens = breakdown.skills.reduce((s, t) => s + t.totalTokens, 0);
+
+  const nodes = [
+    {
+      label: "会话消息 Messages",
+      tokens: messagesTokens,
+      color: "var(--color-chart-1)",
+      children: [
+        { label: "对话历史", value: roleBy("conversation_history") },
+        { label: "用户输入", value: roleBy("user_input") },
+        { label: "助手回复", value: roleBy("assistant_reply") },
+        { label: "系统提示词", value: roleBy("system_prefix") },
+      ].filter((c) => c.value > 0),
+    },
+    {
+      label: "工具调用 Tool calls",
+      tokens: toolTokens,
+      color: "var(--color-chart-2)",
+      children: breakdown.tools
+        .filter((t) => !t.key.startsWith("mcp_") && t.totalTokens > 0)
+        .slice(0, 6)
+        .map((t) => ({ label: t.key, value: t.totalTokens })),
+    },
+    {
+      label: "推理 Reasoning",
+      tokens: reasoningTokens,
+      color: "var(--color-chart-3)",
+      children:
+        reasoningTokens > 0
+          ? [{ label: "思考链", value: reasoningTokens }]
+          : [],
+    },
+    {
+      label: "MCP 服务 MCP servers",
+      tokens: mcpTokens,
+      color: "var(--color-chart-5)",
+      children: breakdown.tools
+        .filter((t) => t.key.startsWith("mcp_") && t.totalTokens > 0)
+        .slice(0, 5)
+        .map((t) => ({ label: t.key, value: t.totalTokens })),
+    },
+    {
+      label: "Skill 注入 Skills",
+      tokens: skillTokens,
+      color: "var(--color-chart-4)",
+      children: breakdown.skills
+        .filter((s) => s.totalTokens > 0)
+        .slice(0, 5)
+        .map((s) => ({ label: s.key, value: s.totalTokens })),
+    },
+  ].filter((n) => n.tokens > 0);
+
+  // 底部汇总
+  const cacheHit = cacheRate(breakdown.totals);
+  const skillCount = breakdown.skills.filter((s) => s.totalTokens > 0).length;
+  const mcpCount = breakdown.tools.filter(
+    (t) => t.key.startsWith("mcp_") && t.totalTokens > 0,
+  ).length;
+  const sessionCount = new Set(events.map((e) => e.sessionId).filter(Boolean))
+    .size;
 
   return (
-    <div className="border-t border-border/60 bg-surface-2/40 px-3 py-2">
-      <div className="grid grid-cols-4 gap-x-3 gap-y-1">
-        {composition.map((seg, i) => {
-          const share = scopedTokens > 0 ? shareOf(seg.value, scopedTokens) : 0;
-          return (
-            <div
-              key={i}
-              className="flex items-center gap-1.5 text-[10px] text-muted-foreground"
-            >
+    <div className="mt-2 border-l-2 border-primary/40 pl-3">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3">
+        {nodes.map((n) => (
+          <div key={n.label} className="min-w-0">
+            <div className="flex items-center gap-1.5">
               <span
                 className="size-1.5 shrink-0 rounded-full"
-                style={{ background: seg.color }}
+                style={{ background: n.color }}
               />
-              <span className="truncate">{seg.label}</span>
-              <span className="tt-num ml-auto">{formatTokens(seg.value)}</span>
-              <span className="tt-num w-8 text-right">{share.toFixed(1)}%</span>
+              <span className="truncate text-[10px] text-muted-foreground">
+                {n.label}
+              </span>
             </div>
-          );
-        })}
+            <div className="tt-num pl-3 text-[11px]">
+              {formatTokens(n.tokens)}
+              <span className="ml-1 text-muted-foreground">
+                {((n.tokens / total) * 100).toFixed(1)}%
+              </span>
+            </div>
+            {n.children.length > 0 && (
+              <ul className="tt-num mt-0.5 space-y-0.5 pl-3 text-[10px] text-muted-foreground">
+                {n.children.map((c) => (
+                  <li key={c.label} className="flex justify-between gap-2">
+                    <span className="truncate">{c.label.split(" ")[0]}</span>
+                    <span>{formatTokens(c.value)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
       </div>
-      <div className="mt-1.5 flex items-center justify-between border-t border-border/40 pt-1 text-[10px] text-muted-foreground">
-        <span className="tt-num">
-          总计 {formatTokens(row.totalTokens)} · {formatCost(row.cost, "CNY")}
-        </span>
-        <span className="tt-num">调用 {row.calls} 次</span>
-      </div>
+      <p className="tt-num mt-2 text-[10px] text-muted-foreground">
+        缓存命中 <span className="text-ok">{cacheHit.toFixed(0)}%</span> ·{" "}
+        {skillCount} skills · {mcpCount} MCP · {sessionCount} 会话
+      </p>
     </div>
   );
 }
@@ -346,13 +426,19 @@ function ExpandableModelRow({
   isExpanded,
   onToggle,
   scopedTokens,
+  scopedEvents,
 }: {
   row: ModelBreakdownRow;
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
   scopedTokens: number;
+  scopedEvents: LocalUsageEvent[];
 }) {
+  const modelEvents = useMemo(
+    () => scopedEvents.filter((e) => e.model === row.key),
+    [scopedEvents, row.key],
+  );
   const composition = breakdownComposition(
     row as unknown as LocalUsageBreakdown,
   );
@@ -388,7 +474,7 @@ function ExpandableModelRow({
       <div className="px-2 pb-1.5">
         <SegBar composition={composition} total={row.totalTokens} />
       </div>
-      {isExpanded && <SourceDetail row={row} scopedTokens={scopedTokens} />}
+      {isExpanded && <SourceDetail events={modelEvents} />}
     </div>
   );
 }
@@ -756,6 +842,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
                         isExpanded={expandedKeys.has(row.key)}
                         onToggle={() => toggleExpand(row.key)}
                         scopedTokens={selectedToolTokens}
+                        scopedEvents={scopedEvents}
                       />
                     ))
                   : (dimensionRows as LocalUsageContextBreakdownRow[]).map(
