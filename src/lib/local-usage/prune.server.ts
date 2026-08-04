@@ -1,39 +1,68 @@
 import { createServerFn } from "@tanstack/react-start";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { lstat, readdir, rm } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, relative, resolve } from "node:path";
 
 /**
- * FR-029 / NFR-023 — local data lifecycle helpers.
+ * FR-029 / NFR-023 — TrustTools-owned local data lifecycle helpers.
  *
- * TrustTools stores everything under `~/.trusttools/`. This module reports the
- * on-disk footprint (so the settings page can show "当前占用 XMB / 500MB") and
- * prunes obsolete cache artifacts. It never touches AI-tool logs or user
- * configs outside `~/.trusttools/`.
+ * The scanner reads third-party AI-tool logs in place. Those logs are never
+ * considered application storage and are never traversed or removed here.
+ * The only destructive operations in this module are limited to the selected
+ * TrustTools data root's `cache/` directory (indexes and market cache can be
+ * regenerated from their original local sources).
  */
 
-const LEGACY_INDEX_FILES = [
-  "local-usage-index-v1.json",
-  "local-usage-index-v2.json",
-  "local-usage-index-v3.json",
-  "local-usage-index-v4.json",
-  "local-usage-index-v5.json",
-  "local-usage-index-v6.json",
-  "local-usage-index-v7.json",
-  "local-usage-index-v8.json",
-  "local-usage-index-v9.json",
-];
+const CACHE_DIRECTORY = "cache";
+const DATA_ROOT_MARKER = ".trusttools-data-root";
+const DAY_MS = 24 * 60 * 60 * 1_000;
 
 /** NFR-023 soft cap shown in the UI. */
 export const STORAGE_SOFT_CAP_BYTES = 500 * 1024 * 1024;
 
-export function trusttoolsDirectory(): string {
-  const override = process.env.TRUSTTOOLS_HOME;
-  if (override && override.length > 0) return override;
-  return join(homedir(), ".trusttools");
+export interface StorageUsage {
+  directory: string;
+  bytes: number;
+  fileCount: number;
+  softCapBytes: number;
+  /** 0..1 fraction of the soft cap currently used. */
+  utilization: number;
+  exceedsSoftCap: boolean;
+  /** A custom location needs the marker written by Electron before pruning. */
+  controlled: boolean;
 }
 
-/** Recursively sum the byte size of a directory tree. Symlink-safe. */
+export interface CleanupStats {
+  removedFiles: number;
+  removedBytes: number;
+  retainedFiles: number;
+  retentionDays: number;
+  skipped: boolean;
+  reason?: string;
+}
+
+export function defaultTrustToolsDirectory(homeDirectory = homedir()): string {
+  return join(homeDirectory, ".trusttools");
+}
+
+/**
+ * Electron sets TRUSTTOOLS_HOME from the saved data-path preference. The
+ * environment override is also useful for isolated test/install environments.
+ */
+export function trusttoolsDirectory(): string {
+  const override = process.env.TRUSTTOOLS_HOME?.trim();
+  return override ? resolve(override) : defaultTrustToolsDirectory();
+}
+
+function isInside(parent: string, candidate: string): boolean {
+  const pathFromParent = relative(parent, candidate);
+  return (
+    pathFromParent === "" ||
+    (!pathFromParent.startsWith("..") && !pathFromParent.startsWith("/"))
+  );
+}
+
+/** Recursively sum a directory tree. Symlinks are neither followed nor counted. */
 export async function directorySize(
   directory: string,
 ): Promise<{ bytes: number; fileCount: number }> {
@@ -65,13 +94,16 @@ export async function directorySize(
   return { bytes, fileCount };
 }
 
-export interface StorageUsage {
-  directory: string;
-  bytes: number;
-  fileCount: number;
-  softCapBytes: number;
-  /** 0..1 fraction of the soft cap currently used. */
-  utilization: number;
+export async function isControlledTrustToolsDirectory(
+  directory = trusttoolsDirectory(),
+): Promise<boolean> {
+  const root = resolve(directory);
+  if (root === resolve(defaultTrustToolsDirectory())) return true;
+  try {
+    return (await lstat(join(root, DATA_ROOT_MARKER))).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export async function readStorageUsage(): Promise<StorageUsage> {
@@ -83,69 +115,147 @@ export async function readStorageUsage(): Promise<StorageUsage> {
     fileCount,
     softCapBytes: STORAGE_SOFT_CAP_BYTES,
     utilization: Math.min(1, bytes / STORAGE_SOFT_CAP_BYTES),
+    exceedsSoftCap: bytes >= STORAGE_SOFT_CAP_BYTES,
+    controlled: await isControlledTrustToolsDirectory(directory),
   };
 }
 
-/**
- * Delete obsolete local-usage index versions (v1..v9) left over from older
- * releases. The current index (v10) is always preserved. Returns the file
- * names actually removed.
- */
-export async function pruneLegacyIndices(): Promise<string[]> {
-  const cacheDir = join(trusttoolsDirectory(), "cache");
-  const removed: string[] = [];
-  for (const name of LEGACY_INDEX_FILES) {
-    const target = join(cacheDir, name);
-    try {
-      const stats = await lstat(target);
-      if (stats.isFile() || stats.isSymbolicLink()) {
-        await rm(target, { force: true });
-        removed.push(name);
-      }
-    } catch {
-      // not present — skip
-    }
-  }
-  return removed;
+function emptyCleanup(retentionDays: number, reason?: string): CleanupStats {
+  const cleanup: CleanupStats = {
+    removedFiles: 0,
+    removedBytes: 0,
+    retainedFiles: 0,
+    retentionDays,
+    skipped: Boolean(reason),
+  };
+  if (reason) cleanup.reason = reason;
+  return cleanup;
 }
 
-/** Read the configured retention window (days) from prefs, default 90. */
-export async function readRetentionDays(): Promise<number> {
-  let prefsDir: string;
-  try {
-    const { app } = await import("electron");
-    prefsDir = app.getPath("userData");
-  } catch {
-    prefsDir = join(homedir(), ".trusttools");
+/**
+ * Walk only the controlled `cache/` directory. `rm` is called for individual
+ * regular files/symlinks only, so an unexpected directory or external link
+ * cannot broaden deletion scope.
+ */
+async function pruneCacheFiles(
+  shouldRemove: (modifiedAt: number) => boolean,
+  retentionDays: number,
+  directory = trusttoolsDirectory(),
+): Promise<CleanupStats> {
+  const root = resolve(directory);
+  const cacheDirectory = resolve(root, CACHE_DIRECTORY);
+  if (!isInside(root, cacheDirectory)) {
+    return emptyCleanup(retentionDays, "缓存目录不在 TrustTools 数据目录内");
   }
-  const prefsPath = join(prefsDir, "trusttools-prefs.json");
-  try {
-    const { readFile } = await import("node:fs/promises");
-    const raw = await readFile(prefsPath, "utf8");
-    const prefs = JSON.parse(raw) as Record<string, unknown>;
-    const value = prefs["trusttools.settings.retentionDays"];
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      // 0 means "forever" in the UI; treat anything <= 0 as infinite.
-      return Number.POSITIVE_INFINITY;
-    }
-    if (typeof value === "string") {
-      const parsed = Number.parseInt(value, 10);
-      if (Number.isFinite(parsed) && parsed > 0) return parsed;
-    }
-  } catch {
-    // prefs missing/invalid — default
+  if (!(await isControlledTrustToolsDirectory(root))) {
+    return emptyCleanup(
+      retentionDays,
+      "数据目录未经 TrustTools 验证，未执行清理",
+    );
   }
-  return 90;
+
+  const result = emptyCleanup(retentionDays);
+  const visit = async (current: string): Promise<void> => {
+    let entries: string[];
+    try {
+      entries = await readdir(current);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const target = resolve(current, entry);
+      if (!isInside(cacheDirectory, target)) continue;
+      let stats;
+      try {
+        stats = await lstat(target);
+      } catch {
+        continue;
+      }
+      if (stats.isDirectory()) {
+        await visit(target);
+        continue;
+      }
+      if (!stats.isFile() && !stats.isSymbolicLink()) continue;
+      if (!shouldRemove(stats.mtimeMs)) {
+        result.retainedFiles += 1;
+        continue;
+      }
+      try {
+        await rm(target, { force: true });
+        result.removedFiles += 1;
+        // A symlink's target is never followed, so its contribution is zero.
+        if (stats.isFile()) result.removedBytes += stats.size;
+      } catch {
+        result.retainedFiles += 1;
+      }
+    }
+  };
+  await visit(cacheDirectory);
+  return result;
+}
+
+/**
+ * Remove expired, regenerable cache files. A permanent retention policy (0)
+ * deliberately does no deletion. Token source logs and non-cache TrustTools
+ * configuration are outside this operation's scope.
+ */
+export async function pruneExpiredCacheFiles(
+  retentionDays: number,
+  now = new Date(),
+  directory = trusttoolsDirectory(),
+): Promise<CleanupStats> {
+  if (!Number.isFinite(retentionDays) || retentionDays < 0) {
+    throw new Error("保留天数必须为非负整数");
+  }
+  if (retentionDays === 0) return emptyCleanup(0);
+  const cutoff = now.getTime() - retentionDays * DAY_MS;
+  return pruneCacheFiles(
+    (modifiedAt) => modifiedAt < cutoff,
+    retentionDays,
+    directory,
+  );
+}
+
+/** Clear every regenerable file inside TrustTools' controlled cache directory. */
+export async function clearRegenerableCache(
+  directory = trusttoolsDirectory(),
+): Promise<CleanupStats> {
+  return pruneCacheFiles(() => true, 0, directory);
 }
 
 export const getStorageUsageFn = createServerFn({ method: "GET" }).handler(
   async (): Promise<StorageUsage> => readStorageUsage(),
 );
 
-export const pruneLocalDataFn = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ removedLegacyIndices: string[]; usage: StorageUsage }> => {
-    const removedLegacyIndices = await pruneLegacyIndices();
-    const usage = await readStorageUsage();
-    return { removedLegacyIndices, usage };
+export const applyRetentionPolicyFn = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown): { retentionDays: number } => {
+    if (
+      typeof data !== "object" ||
+      data === null ||
+      !Number.isInteger((data as { retentionDays?: unknown }).retentionDays)
+    ) {
+      throw new Error("保留天数必须为非负整数");
+    }
+    const retentionDays = (data as { retentionDays: number }).retentionDays;
+    if (retentionDays < 0 || retentionDays > 3650) {
+      throw new Error("保留天数超出允许范围");
+    }
+    return { retentionDays };
+  })
+  .handler(
+    async ({
+      data,
+    }): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
+      const cleanup = await pruneExpiredCacheFiles(data.retentionDays);
+      return { cleanup, usage: await readStorageUsage() };
+    },
+  );
+
+export const clearRegenerableCacheFn = createServerFn({
+  method: "POST",
+}).handler(
+  async (): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
+    const cleanup = await clearRegenerableCache();
+    return { cleanup, usage: await readStorageUsage() };
   },
 );
