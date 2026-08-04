@@ -88,3 +88,44 @@ test("Skill 与命令统计是工具归因的受限视图", () => {
   assert.equal(result.commands[0]?.key, "npm · npm run");
   assert.equal(result.commands[0]?.totalTokens, 51);
 });
+
+test("messageRoles 按缓存代理切分，总额等于事件总量", () => {
+  const result = buildContextBreakdown([event()]);
+
+  const byKey = new Map(result.messageRoles.map((row) => [row.key, row]));
+  assert.equal(byKey.get("user_input")?.totalTokens, 50);
+  assert.equal(byKey.get("conversation_history")?.totalTokens, 20);
+  // output 31 − reasoning 11 = 20
+  assert.equal(byKey.get("assistant_reply")?.totalTokens, 20);
+  assert.equal(byKey.get("reasoning")?.totalTokens, 11);
+  assert.equal(byKey.get("system_prefix"), undefined); // cacheCreationInputTokens=0
+
+  assert.equal(
+    result.messageRoles.reduce((sum, row) => sum + row.totalTokens, 0),
+    101,
+  );
+});
+
+test("messageRoles 在有多事件时合计等于所有事件总量", () => {
+  const result = buildContextBreakdown([
+    event(),
+    event({
+      cacheCreationInputTokens: 9,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 9,
+    }),
+  ]);
+
+  // event1 contributes 101, event2 contributes system_prefix=9
+  assert.equal(
+    result.messageRoles.reduce((sum, row) => sum + row.totalTokens, 0),
+    110,
+  );
+  const systemPrefix = result.messageRoles.find(
+    (row) => row.key === "system_prefix",
+  );
+  assert.equal(systemPrefix?.totalTokens, 9);
+});

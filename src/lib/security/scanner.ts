@@ -27,9 +27,21 @@ export interface SecurityRisk {
 
 export type AiReviewStatus = "未请求" | "未配置" | "已完成" | "失败" | "限流";
 
+export type AiFindingVerdict = "confirmed" | "false-positive" | "needs-context";
+
+/** 单条命中的 AI 研判结论（按 risks 下标匹配）。 */
+export interface AiFindingReview {
+  index: number;
+  verdict: AiFindingVerdict;
+  confidence: number;
+  rationale: string;
+}
+
 export interface AiReviewResult {
   status: AiReviewStatus;
   summary: string;
+  /** 每条命中的结构化研判；仅当 AI 以结构化数组返回时填充。 */
+  findings?: AiFindingReview[];
 }
 
 export interface SecurityReport {
@@ -37,6 +49,8 @@ export interface SecurityReport {
   filesScanned: number;
   risks: SecurityRisk[];
   verdict: "安全" | "可疑" | "危险";
+  /** 0–100 数值风险评分：高危 25/中危 8/低危 2 分累加后封顶。 */
+  riskScore: number;
   aiReview: AiReviewResult;
   /** 命中规则库的版本号，便于审计与回溯 */
   rulesVersion: string;
@@ -350,6 +364,21 @@ function compileUserRules(rules: UserSecurityRule[]): CompiledUserRule[] {
     });
 }
 
+/**
+ * 数值风险评分（0–100）。按严重度加权累加后封顶：
+ * 高危 25 / 中危 8 / 低危 2 分每条。无命中时为 0。
+ * 评分独立于 verdict 文本判定，用于安全报告的可视化风险条。
+ */
+export function computeRiskScore(risks: SecurityRisk[]): number {
+  let score = 0;
+  for (const risk of risks) {
+    if (risk.severity === "高危") score += 25;
+    else if (risk.severity === "中危") score += 8;
+    else if (risk.severity === "低危") score += 2;
+  }
+  return Math.min(100, score);
+}
+
 export function scanSecurityFiles(
   files: SecurityInputFile[],
   userRules: UserSecurityRule[] = [],
@@ -399,6 +428,7 @@ export function scanSecurityFiles(
       : risks.length > 0
         ? "可疑"
         : "安全",
+    riskScore: computeRiskScore(risks),
     aiReview: {
       status: "未请求",
       summary: "未启用 AI 二次审查，结论仅来自本地静态规则。",
