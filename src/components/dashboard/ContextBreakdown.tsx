@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, Layers } from "lucide-react";
 import {
   buildContextBreakdown,
   type LocalUsageContextBreakdownRow,
@@ -17,6 +17,7 @@ import type {
   LocalUsageBreakdown,
 } from "../../lib/local-usage";
 import { Panel } from "../tt";
+import { BrandIcon, brandColorOf } from "../BrandIcon";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -489,61 +490,64 @@ function ToolRanking({
     <button
       type="button"
       onClick={() => onSelect("__all__")}
-      className={`flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left text-[11px] transition-colors ${
+      className={`flex w-full flex-col border-l-2 px-2 py-1.5 text-left text-xs transition-colors ${
         selectedSource === "__all__"
-          ? "bg-primary/10 text-primary"
-          : "hover:bg-accent/40"
+          ? "border-primary bg-accent/50"
+          : "border-transparent hover:bg-accent/30"
       }`}
     >
-      <span className="size-1.5 rounded-full bg-primary" />
-      <span className="truncate">全部工具</span>
-      <span className="tt-num ml-auto">
-        {shareOf(totalTokens, totalTokens).toFixed(0)}%
+      <span className="flex items-center gap-2">
+        <Layers className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate">全部工具</span>
+        <span className="tt-num text-[10px] text-muted-foreground">100%</span>
+      </span>
+      <span className="mt-1 block h-[2px] w-full bg-surface-2">
+        <span className="block h-full bg-primary" style={{ width: "100%" }} />
       </span>
     </button>
   );
   if (toolRows.length === 0) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col">
         {allRow}
-        <div className="px-2 py-4 text-center text-[11px] text-muted-foreground">
-          未匹配到工具
-        </div>
+        <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+          无匹配
+        </p>
       </div>
     );
   }
   return (
     <div className="flex flex-col">
       {allRow}
-      {toolRows.map((row, index) => {
+      {toolRows.map((row) => {
         const share = shareOf(row.totalTokens, totalTokens);
         const isSelected = selectedSource === row.source;
+        const label = sourceLabel(row.source);
+        const color = brandColorOf(label);
         return (
           <button
             key={row.source}
             type="button"
             onClick={() => onSelect(row.source)}
-            className={`flex w-full items-center gap-2 border-b border-border px-2 py-1.5 text-left text-[11px] transition-colors ${
-              isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent/40"
+            className={`flex w-full flex-col border-l-2 px-2 py-1.5 text-left text-xs transition-colors ${
+              isSelected
+                ? "border-primary bg-accent/50"
+                : "border-transparent hover:bg-accent/30"
             }`}
           >
-            <span
-              className="size-1.5 rounded-full"
-              style={{
-                background: categoryColors[index % categoryColors.length],
-              }}
-            />
-            <span className="truncate">{sourceLabel(row.source)}</span>
-            <span className="h-1 flex-1 overflow-hidden bg-surface-2">
+            <span className="flex items-center gap-2">
+              <BrandIcon name={label} className="size-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              <span className="tt-num text-[10px] text-muted-foreground">
+                {share.toFixed(0)}%
+              </span>
+            </span>
+            <span className="mt-1 block h-[2px] w-full bg-surface-2">
               <span
                 className="block h-full"
-                style={{
-                  width: `${Math.min(100, share)}%`,
-                  background: categoryColors[index % categoryColors.length],
-                }}
+                style={{ width: `${Math.min(100, share)}%`, background: color }}
               />
             </span>
-            <span className="tt-num w-10 text-right">{share.toFixed(0)}%</span>
           </button>
         );
       })}
