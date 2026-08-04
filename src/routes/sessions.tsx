@@ -8,10 +8,12 @@ import {
   getLocalSessions,
   refreshLocalSessions,
 } from "../lib/local-sessions/server-fns";
+import { formatCost } from "../lib/pricing";
 import type {
   SessionFilter,
   SessionRecord,
   SessionSource,
+  SessionStatus,
   SessionSummary,
 } from "../lib/local-sessions/types";
 
@@ -45,6 +47,37 @@ const RANGE_OPTIONS: Array<{ key: SessionFilter["range"]; label: string }> = [
   { key: "90d", label: "近 90 天" },
 ];
 
+const STATUS_OPTIONS: Array<{
+  key: SessionStatus | "all";
+  label: string;
+}> = [
+  { key: "all", label: "全部状态" },
+  { key: "available", label: "可恢复" },
+  { key: "interrupted", label: "异常中断" },
+  { key: "lost", label: "已标记丢失" },
+  { key: "unavailable", label: "命令不可用" },
+];
+
+const STATUS_META: Record<SessionStatus, { label: string; className: string }> =
+  {
+    available: {
+      label: "可恢复",
+      className: "border-ok/30 bg-ok/10 text-ok",
+    },
+    interrupted: {
+      label: "异常中断",
+      className: "border-amber-500/30 bg-amber-500/10 text-amber-600",
+    },
+    lost: {
+      label: "已标记丢失",
+      className: "border-rose-500/30 bg-rose-500/10 text-rose-600",
+    },
+    unavailable: {
+      label: "命令不可用",
+      className: "border-border bg-muted text-muted-foreground",
+    },
+  };
+
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -77,12 +110,14 @@ function SessionsPage() {
   // Filter state (applied server-side via the filter param).
   const [keyword, setKeyword] = useState("");
   const [source, setSource] = useState<SessionSource | "all">("all");
+  const [status, setStatus] = useState<SessionStatus | "all">("all");
   const [projectId, setProjectId] = useState<string>("all");
   const [range, setRange] = useState<SessionFilter["range"]>("all");
 
   const filter: SessionFilter = {
     keyword: keyword.trim() || undefined,
     source: source === "all" ? undefined : source,
+    status: status === "all" ? undefined : status,
     projectId: projectId === "all" ? undefined : projectId,
     range,
   };
@@ -99,6 +134,7 @@ function SessionsPage() {
         if (
           prev.keyword === filter.keyword &&
           prev.source === filter.source &&
+          prev.status === filter.status &&
           prev.projectId === filter.projectId &&
           prev.range === filter.range
         ) {
@@ -111,7 +147,7 @@ function SessionsPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, source, projectId, range]);
+  }, [keyword, source, status, projectId, range]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,11 +175,33 @@ function SessionsPage() {
   const totals = useMemo(() => {
     let tokens = 0;
     let turns = 0;
+    let knownUsd = 0;
+    let cacheSavingsUsd = 0;
+    let pricedEvents = 0;
+    let unknownEvents = 0;
+    const unknownModels = new Set<string>();
     for (const session of summary.sessions) {
       tokens += session.totals.totalTokens;
       turns += session.turns;
+      knownUsd += session.cost.knownUsd;
+      cacheSavingsUsd += session.cost.cacheSavingsUsd;
+      pricedEvents += session.cost.pricedEvents;
+      unknownEvents += session.cost.unknownEvents;
+      for (const model of session.cost.unknownModels) unknownModels.add(model);
     }
-    return { count: summary.sessions.length, tokens, turns };
+    return {
+      count: summary.sessions.length,
+      tokens,
+      turns,
+      cost: {
+        knownUsd,
+        cacheSavingsUsd,
+        pricedEvents,
+        unknownEvents,
+        unknownModels: [...unknownModels].sort(),
+        complete: unknownEvents === 0,
+      },
+    };
   }, [summary.sessions]);
 
   async function handleRefresh() {
@@ -175,13 +233,18 @@ function SessionsPage() {
         </TTButton>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <SummaryCard label="会话条数" value={totals.count} />
         <SummaryCard label="Token 合计" value={formatTokens(totals.tokens)} />
+        <SummaryCard label="费用合计" value={formatCost(totals.cost, "CNY")} />
         <SummaryCard label="轮次合计" value={totals.turns} />
       </div>
 
-      <Panel className="mt-3" title="可恢复会话">
+      <Panel className="mt-3" title="本地会话">
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          当前仅支持恢复 Claude Code、Codex 与
+          Grok；费用按本地模型定价表估算，未知价格会明确标注。
+        </p>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -229,6 +292,19 @@ function SessionsPage() {
             <option value="codex">Codex</option>
             <option value="grok">Grok</option>
           </select>
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as SessionStatus | "all")
+            }
+            className="tt-input h-8 text-[13px]"
+          >
+            {STATUS_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         {summary.sessions.length === 0 ? (
@@ -271,6 +347,7 @@ function SummaryCard({
 function SessionRow({ session }: { session: SessionRecord }) {
   const [copied, setCopied] = useState(false);
   const meta = SOURCE_META[session.source];
+  const statusMeta = STATUS_META[session.status];
   const fullCommand =
     session.resumeSafe && session.resumeCommand
       ? `cd ${session.projectRef} && ${session.resumeCommand}`
@@ -297,6 +374,12 @@ function SessionRow({ session }: { session: SessionRecord }) {
         </span>
         <span className="truncate font-medium text-foreground">
           {session.title || "(未命名会话)"}
+        </span>
+        <span
+          title={session.statusReason ?? undefined}
+          className={`rounded-full border px-1.5 py-0.5 text-[10px] ${statusMeta.className}`}
+        >
+          {statusMeta.label}
         </span>
         <span className="ml-auto">
           <TTButton
@@ -343,6 +426,12 @@ function SessionRow({ session }: { session: SessionRecord }) {
           </span>
         </span>
         <span>
+          费用{" "}
+          <span className="tt-num text-foreground/80">
+            {formatCost(session.cost, "CNY")}
+          </span>
+        </span>
+        <span>
           轮次{" "}
           <span className="tt-num text-foreground/80">{session.turns}</span>
         </span>
@@ -356,6 +445,11 @@ function SessionRow({ session }: { session: SessionRecord }) {
         <div className="w-full text-[10px] text-muted-foreground/70">
           需在该目录下执行恢复命令：
           <span className="tt-num">{session.projectRef}</span>
+        </div>
+      )}
+      {session.statusReason != null && (
+        <div className="w-full text-[10px] text-muted-foreground/70">
+          状态说明：{session.statusReason}
         </div>
       )}
     </li>
