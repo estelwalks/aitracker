@@ -62,8 +62,11 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
+  --font-sans:
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
 }
 
 :root {
@@ -280,8 +283,16 @@
 /* 科技感：网格底纹 / 边角标记 / 扫描线 */
 @utility tt-grid-bg {
   background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--color-border) 60%, transparent) 1px, transparent 1px);
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--color-border) 60%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-border) 60%, transparent) 1px,
+      transparent 1px
+    );
   background-size: 20px 20px;
   background-position: -1px -1px;
 }
@@ -304,8 +315,16 @@
     inset: 0;
     z-index: -1;
     background-image:
-      linear-gradient(to right, color-mix(in oklab, var(--color-border) 45%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklab, var(--color-border) 45%, transparent) 1px, transparent 1px);
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--color-border) 45%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--color-border) 45%, transparent) 1px,
+        transparent 1px
+      );
     background-size: 18px 18px;
     opacity: 0.35;
     mask-image: radial-gradient(120% 90% at 100% 0%, #000 0%, transparent 70%);
@@ -326,8 +345,13 @@
     transition: opacity 0.18s ease;
   }
   &:hover {
-    border-color: color-mix(in oklab, var(--color-primary) 45%, var(--color-border));
-    box-shadow: 0 10px 30px -18px color-mix(in oklab, var(--color-primary) 80%, transparent);
+    border-color: color-mix(
+      in oklab,
+      var(--color-primary) 45%,
+      var(--color-border)
+    );
+    box-shadow: 0 10px 30px -18px
+      color-mix(in oklab, var(--color-primary) 80%, transparent);
   }
   &:hover::after {
     opacity: 1;
