@@ -66,6 +66,8 @@ export interface SkillSnapshot {
   fingerprint: string;
   healthBasis: string;
   roots: Record<SkillAgent, string>;
+  /** Actual Agent installation probe results, independent of Skill contents. */
+  agents: Record<SkillAgent, { installed: boolean; detectedPaths: string[] }>;
   skills: LocalSkill[];
   blacklist: string[];
 }

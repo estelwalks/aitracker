@@ -1,7 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { homedir } from "node:os";
 
-import { AI_TOOLS, type AiTool } from "../tools/catalog.ts";
+import {
+  AI_TOOLS,
+  type AiTool,
+  type UsageLogParsing,
+  usageLogParsingFor,
+} from "../tools/catalog.ts";
+import {
+  detectToolInstallations,
+  type ToolInstallationFact,
+} from "../tools/detection.server.ts";
 import type { LocalUsageSourceSummary } from "./types.ts";
 
 export type UsageSourceStatus = "has-data" | "no-logs" | "not-installed";
@@ -16,6 +25,8 @@ export interface UsageSourceEntry {
   lastScannedAt: string | null;
   /** HOME-relative probe paths (normalized to ~/) used to detect the tool. */
   paths: string[];
+  /** Capability, not a claim that a usable log was found. */
+  usageLogParsing: UsageLogParsing;
 }
 
 export interface UsageSourcesTotals {
@@ -57,6 +68,7 @@ function normalizeForDisplay(path: string, homeDir: string): string {
 export function deriveUsageSources(
   tools: readonly AiTool[],
   sourceSummaries: readonly LocalUsageSourceSummary[],
+  installationFacts: readonly ToolInstallationFact[],
   generatedAt: string,
   homeDir: string,
 ): UsageSourcesSummary {
@@ -64,6 +76,9 @@ export function deriveUsageSources(
   for (const summary of sourceSummaries) {
     bySource.set(summary.source, summary);
   }
+  const installationsById = new Map(
+    installationFacts.map((fact) => [fact.id, fact]),
+  );
 
   let connectedCount = 0;
   let noLogsCount = 0;
@@ -73,31 +88,27 @@ export function deriveUsageSources(
 
   const entries: UsageSourceEntry[] = tools.map((tool) => {
     const summary = bySource.get(tool.id);
-    const scanned = summary != null;
+    const installation = installationsById.get(tool.id);
+    const installed = installation?.installed ?? false;
     const events = summary?.events ?? 0;
     const malformedLines = summary?.malformedLines ?? 0;
 
     // Path display: prefer the concrete paths the scanner actually walked;
     // fall back to the catalog's known probe roots.
     const rawPaths =
-      summary?.paths && summary.paths.length > 0
-        ? summary.paths
+      installation?.detectedPaths && installation.detectedPaths.length > 0
+        ? installation.detectedPaths
         : tool.detectRoots;
     const paths = rawPaths.map((path) => normalizeForDisplay(path, homeDir));
 
     let status: UsageSourceStatus;
-    if (scanned && summary.available && events > 0) {
+    if (installed && events > 0) {
       status = "has-data";
       connectedCount += 1;
       eventCount += events;
-    } else if (
-      scanned &&
-      (summary.detected ||
-        (summary.filesConsidered ?? 0) > 0 ||
-        (summary.paths != null && summary.paths.length > 0))
-    ) {
-      // The tool's install dir was found but no parseable token events came
-      // out of its logs (or it has no logs yet).
+    } else if (installed) {
+      // The tool is installed even when no log parser exists or the parser
+      // has no events. Log capability must never redefine installation.
       status = "no-logs";
       noLogsCount += 1;
     } else {
@@ -112,8 +123,9 @@ export function deriveUsageSources(
       status,
       events,
       malformedLines,
-      lastScannedAt: scanned ? generatedAt : null,
+      lastScannedAt: generatedAt,
       paths,
+      usageLogParsing: usageLogParsingFor(tool.id),
     };
   });
 
@@ -136,9 +148,11 @@ export const getUsageSources = createServerFn({ method: "GET" }).handler(
     const { getCachedLocalUsageSnapshot } =
       await import("./snapshot.server.ts");
     const snapshot = await getCachedLocalUsageSnapshot();
+    const installations = await detectToolInstallations(AI_TOOLS, homedir());
     return deriveUsageSources(
       AI_TOOLS,
       snapshot.sources,
+      installations,
       snapshot.generatedAt,
       homedir(),
     );
@@ -151,9 +165,11 @@ export const refreshUsageSources = createServerFn({ method: "POST" }).handler(
       await import("./snapshot.server.ts");
     clearLocalUsageSnapshotCache();
     const snapshot = await getCachedLocalUsageSnapshot();
+    const installations = await detectToolInstallations(AI_TOOLS, homedir());
     return deriveUsageSources(
       AI_TOOLS,
       snapshot.sources,
+      installations,
       snapshot.generatedAt,
       homedir(),
     );

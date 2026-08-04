@@ -2,10 +2,19 @@ import assert from "node:assert";
 import { test } from "node:test";
 
 import { AI_TOOLS } from "../tools/catalog.ts";
+import { deriveToolInstallationFacts } from "../tools/detection.server.ts";
 import type { LocalUsageSourceSummary } from "./types.ts";
 import { deriveUsageSources } from "./get-usage-sources.ts";
 
 const HOME = "/Users/x";
+
+function installations(...roots: string[]) {
+  return deriveToolInstallationFacts(
+    AI_TOOLS,
+    new Set(roots.map((root) => `${HOME}/${root}`)),
+    HOME,
+  );
+}
 
 function summary(
   partial: Partial<LocalUsageSourceSummary>,
@@ -28,6 +37,7 @@ test("has-data: a tool with available=true and events>0", () => {
   const out = deriveUsageSources(
     AI_TOOLS,
     [summary({ source: "claude-code", available: true, events: 5 })],
+    installations(".claude"),
     "2026-08-03T00:00:00.000Z",
     HOME,
   );
@@ -52,6 +62,7 @@ test("no-logs: detected but events=0", () => {
         paths: [`${HOME}/.codex`],
       }),
     ],
+    installations(".codex"),
     "t",
     HOME,
   );
@@ -62,17 +73,17 @@ test("no-logs: detected but events=0", () => {
 });
 
 test("not-installed: tool absent from summaries", () => {
-  const out = deriveUsageSources(AI_TOOLS, [], "t", HOME);
+  const out = deriveUsageSources(AI_TOOLS, [], installations(), "t", HOME);
   const cursor = out.entries.find((e) => e.id === "cursor")!;
   assert.equal(cursor.status, "not-installed");
   assert.equal(cursor.events, 0);
-  assert.equal(cursor.lastScannedAt, null);
+  assert.equal(cursor.lastScannedAt, "t");
   assert.equal(out.totals.toolCount, 27);
   assert.equal(out.totals.notInstalledCount, 27);
 });
 
 test("HOME-normalization: catalog relative path gets ~/, absolute scanner path rewritten", () => {
-  const out = deriveUsageSources(AI_TOOLS, [], "t", HOME);
+  const out = deriveUsageSources(AI_TOOLS, [], installations(), "t", HOME);
   const claude = out.entries.find((e) => e.id === "claude-code")!;
   // catalog detectRoots are HOME-relative -> "~/.claude" and the macOS path.
   assert.ok(claude.paths.includes("~/.claude"));
@@ -81,6 +92,7 @@ test("HOME-normalization: catalog relative path gets ~/, absolute scanner path r
   const outAbs = deriveUsageSources(
     AI_TOOLS,
     [summary({ source: "grok", detected: true, paths: [`${HOME}/.grok`] })],
+    installations(".grok"),
     "t",
     HOME,
   );
@@ -105,6 +117,7 @@ test("totals aggregate across multiple connected tools", () => {
         malformedLines: 2,
       }),
     ],
+    installations(".claude", ".codex"),
     "t",
     HOME,
   );
