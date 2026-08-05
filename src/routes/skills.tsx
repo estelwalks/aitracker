@@ -63,6 +63,7 @@ import { Badge } from "../components/ui/badge";
 import { toUiError } from "../lib/errors";
 import { useI18n } from "../lib/i18n/context";
 import { catalogs, getMessage } from "../lib/i18n/messages";
+import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { cn } from "../lib/utils";
 import {
@@ -92,6 +93,7 @@ export const Route = createFileRoute("/skills")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.skills",
+          brandParams,
         ),
       },
       {
@@ -353,7 +355,7 @@ function SkillsPage() {
                   .map((f) =>
                     t("skills.toast.uninstallFailedItem", {
                       path: f.path,
-                      error: f.error,
+                      error: t(f.errorCode ?? "errors.generic", f.errorParams),
                     }),
                   )
                   .join(t("skills.toast.uninstallFailedSeparator")),
@@ -503,7 +505,9 @@ function SkillsPage() {
             skipped += result.skipped.length;
             failed += result.failed.length;
             result.failed.forEach((f) =>
-              failedDetails.push(`${skill.name} → ${f.agent}: ${f.error}`),
+              failedDetails.push(
+                `${skill.name} → ${f.agent}: ${t(f.errorCode ?? "errors.generic", f.errorParams)}`,
+              ),
             );
           } catch (error) {
             failed += overwriteAgents.length;
@@ -527,7 +531,9 @@ function SkillsPage() {
             skipped += result.skipped.length;
             failed += result.failed.length;
             result.failed.forEach((f) =>
-              failedDetails.push(`${skill.name} → ${f.agent}: ${f.error}`),
+              failedDetails.push(
+                `${skill.name} → ${f.agent}: ${t(f.errorCode ?? "errors.generic", f.errorParams)}`,
+              ),
             );
           } catch (error) {
             failed += skipAgents.length;

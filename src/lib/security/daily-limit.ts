@@ -1,4 +1,7 @@
-const STORAGE_KEY = "trusttools.security.daily-count.v1";
+import { STORAGE_KEY_PREFIX } from "../app-config";
+import { AppError } from "../errors";
+
+const STORAGE_KEY = `${STORAGE_KEY_PREFIX}security.daily-count.v1`;
 export const DAILY_SCAN_LIMIT = 10;
 
 interface DailyCount {
@@ -22,11 +25,11 @@ export async function seedDailyCountFromPlatform(): Promise<void> {
   if (typeof window === "undefined") return;
   const api = (
     window as {
-      trustToolsDesktop?: {
+      desktopApi?: {
         getPreferences(): Promise<Record<string, unknown>>;
       };
     }
-  ).trustToolsDesktop;
+  ).desktopApi;
   if (!api) return;
   try {
     const prefs = await api.getPreferences();
@@ -60,7 +63,9 @@ export function consumeDailyScan(
 ): number {
   const count = readDailyScanCount(storage, now);
   if (count >= DAILY_SCAN_LIMIT)
-    throw new Error("今日 10 次本地扫描额度已用完");
+    throw new AppError("errors.security.dailyLimitReached", {
+      limit: DAILY_SCAN_LIMIT,
+    });
   const next = count + 1;
   const value = JSON.stringify({ date: localDateKey(now), count: next });
   storage.setItem(STORAGE_KEY, value);
@@ -69,11 +74,11 @@ export function consumeDailyScan(
   if (typeof window !== "undefined") {
     const api = (
       window as {
-        trustToolsDesktop?: {
+        desktopApi?: {
           setPreference(key: string, value: unknown): Promise<void>;
         };
       }
-    ).trustToolsDesktop;
+    ).desktopApi;
     if (api) {
       void api.setPreference(STORAGE_KEY, value).catch(() => {});
     }

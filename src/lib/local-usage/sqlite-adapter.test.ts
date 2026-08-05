@@ -6,15 +6,13 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { scanLocalUsage } from "./scanner.server.ts";
+import { APP_DATA_DIR } from "../app-config";
 
 test("scans a configured read-only SQLite usage source", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-sqlite-adapter-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-sqlite-adapter-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const sourceDirectory = join(homeDirectory, ".aipy-test");
-  const configDirectory = join(homeDirectory, ".trusttools");
+  const configDirectory = join(homeDirectory, APP_DATA_DIR);
   const databasePath = join(sourceDirectory, "usage.db");
   await mkdir(sourceDirectory, { recursive: true });
   await mkdir(configDirectory, { recursive: true });
@@ -86,7 +84,7 @@ test("scans a configured read-only SQLite usage source", async () => {
 test("falls back to WorkBuddy SQLite usage when detailed JSONL is unavailable", async () => {
   const root = join(
     tmpdir(),
-    `trusttools-workbuddy-sqlite-${process.pid}-${Date.now()}`,
+    `tt-workbuddy-sqlite-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "home");
   const workbuddyDirectory = join(homeDirectory, ".workbuddy");
@@ -135,10 +133,7 @@ test("falls back to WorkBuddy SQLite usage when detailed JSONL is unavailable", 
 });
 
 test("auto-detects built-in Aipy without Claude Code or Codex", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-aipy-builtin-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-aipy-builtin-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const sourceDirectory = join(
     homeDirectory,

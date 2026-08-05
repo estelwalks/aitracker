@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { APP_VERSION } from "./app-version";
+import { APP_ID, APP_VERSION, ENV } from "./app-config";
 
 /**
  * FR-033 — silent new-version check on startup.
@@ -25,8 +25,8 @@ export interface VersionCheckResult {
 }
 
 /** Default GitHub repo to poll for releases. Override via env if forked. */
-const RELEASE_OWNER = process.env.TRUSTTOOLS_RELEASE_OWNER ?? "trusttools";
-const RELEASE_REPO = process.env.TRUSTTOOLS_RELEASE_REPO ?? "trusttools";
+const RELEASE_OWNER = process.env[ENV.RELEASE_OWNER] ?? APP_ID;
+const RELEASE_REPO = process.env[ENV.RELEASE_REPO] ?? APP_ID;
 const CHECK_TIMEOUT_MS = 5_000;
 
 /**

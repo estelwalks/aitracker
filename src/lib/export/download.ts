@@ -6,6 +6,8 @@
  * is intentionally not exercised by the node:test suite — see `export.test.ts`.
  */
 
+import { EXPORT_FILENAME_PREFIX } from "../app-config";
+
 /** MIME types per export format (UTF-8, so Chinese headers decode correctly). */
 const MIME_TYPES: Record<"csv" | "json", string> = {
   csv: "text/csv;charset=utf-8",
@@ -19,8 +21,9 @@ const EXTENSIONS: Record<"csv" | "json", string> = {
 };
 
 /**
- * Build the `trusttools_export_${YYYYMMDDHHMM}.${ext}` filename from a Unix
- * epoch millisecond timestamp in **local** time. Extracted for testability.
+ * Build the export filename (e.g. `<export-prefix>${YYYYMMDDHHMM}.${ext}`,
+ * prefix from app-config) from a Unix epoch millisecond timestamp in **local**
+ * time. Extracted for testability.
  */
 export function buildExportFilename(
   format: "csv" | "json",
@@ -34,7 +37,7 @@ export function buildExportFilename(
     `${pad(d.getDate())}` +
     `${pad(d.getHours())}` +
     `${pad(d.getMinutes())}`;
-  return `trusttools_export_${stamp}.${EXTENSIONS[format]}`;
+  return `${EXPORT_FILENAME_PREFIX}${stamp}.${EXTENSIONS[format]}`;
 }
 
 /**

@@ -56,19 +56,19 @@ for (const locale of LOCALES) {
     const missing = zhKeys.filter((k) => !keys.includes(k));
     const extra = keys.filter((k) => !zhKeys.includes(k));
     failures.push(
-      `${locale}: key 集合不一致 (缺少 ${missing.length}: ${missing.slice(0, 5).join(", ")}; 多余 ${extra.length}: ${extra.slice(0, 5).join(", ")})`,
+      `${locale}: key-set mismatch (missing ${missing.length}: ${missing.slice(0, 5).join(", ")}; extra ${extra.length}: ${extra.slice(0, 5).join(", ")})`,
     );
   }
   for (const [key, value] of Object.entries(flat)) {
     const text = textOf(value);
     if (text.trim().length === 0) {
-      failures.push(`${locale}: key "${key}" 为空字符串`);
+      failures.push(`${locale}: key "${key}" is empty`);
     }
     const got = placeholders(text);
     const expected = placeholders(textOf(zh[key]));
     if (JSON.stringify(got) !== JSON.stringify(expected)) {
       failures.push(
-        `${locale}: key "${key}" 占位符不一致 (期望 {${expected.join(", ")}}, 实际 {${got.join(", ")}})`,
+        `${locale}: key "${key}" placeholder mismatch (expected {${expected.join(", ")}}, got {${got.join(", ")}})`,
       );
     }
   }
@@ -89,13 +89,13 @@ for (const locale of ["ja-JP", "ko-KR"]) {
 }
 
 if (failures.length) {
-  console.error("check-translations: 字典完整性问题\n");
+  console.error("check-translations: dictionary completeness issues\n");
   for (const f of failures) console.error(`  ✖ ${f}`);
   process.exit(1);
 }
 
 console.log(
-  `check-translations: 四语言 ${zhKeys.length} 个 key 一致,占位符/空值校验通过`,
+  `check-translations: ${zhKeys.length} keys consistent across all locales; placeholder/empty checks passed`,
 );
 if (unreviewed > 0) {
   console.warn(

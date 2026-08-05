@@ -4,7 +4,7 @@ export const market = {
   pageHeaderDesc: "セキュリティスキャンを通過した Skill のみ収録",
   meta: {
     description:
-      "TrustTools Skill マーケットの実インデックスを閲覧できます。セキュリティスキャンを通過した Skill のみ収録しています。",
+      "{appName} Skill マーケットの実インデックスを閲覧できます。セキュリティスキャンを通過した Skill のみ収録しています。",
   },
   notProvided: "未提供",
   network: {

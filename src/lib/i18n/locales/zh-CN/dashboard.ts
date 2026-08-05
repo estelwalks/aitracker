@@ -185,7 +185,7 @@ export const dashboard = {
     rescan: "重新扫描",
   },
   poster: {
-    headline: "TrustTools Token 战报",
+    headline: "{appName} Token 战报",
     rankLabel: "本期称号",
     totalTokens: "总 Token",
     metricCost: "估算费用",

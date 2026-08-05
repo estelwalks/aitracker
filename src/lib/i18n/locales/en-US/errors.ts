@@ -1,5 +1,13 @@
 export const errors = {
   generic: "Operation failed, please try again",
+  security: {
+    dailyLimitReached: "Today's {limit} local scan quota is used up",
+    fileRequired: "Select a SKILL.md file or a Skill folder containing it",
+    fileTypeInvalid:
+      "Only a single SKILL.md file or a Skill folder containing SKILL.md is supported",
+    fileTooLarge: "File too large — please choose a file under 100 MB",
+    notTextFile: "SKILL.md is not a parseable text file",
+  },
   skills: {
     emptyInput: "Input must not be empty",
     batchPathsCount: "Invalid batch uninstall path count",
@@ -7,12 +15,34 @@ export const errors = {
     installInvalid: "Invalid install arguments",
     syncInvalid: "Invalid sync arguments",
     blacklistInvalid: "Invalid blacklist arguments",
+    invalidName: "Invalid Skill name",
+    pathOutsideManaged: "Path is not inside a managed Skill root",
+    symlinkEscape: "Escalation path or symlink detected",
+    notManagedDir: "Target is not a managed Skill directory",
+    recycleWriteFailed: "Failed to write to the recycle directory",
+    marketSymlinkForbidden: "Market Skill source must not be a symlink",
+    marketSourceNotDir: "Market Skill source must be a directory",
+    marketSourceSymlink: "Market Skill source must not contain symlinks",
+    invalidSourcePath: "Invalid market Skill source path",
+    sourceOutsideTemp:
+      "Market Skill source is outside the controlled temp directory",
+    marketRootNeedsSkillMd:
+      "Market Skill root must contain a regular SKILL.md file",
+    unsupportedAgent: "Unsupported target agent",
+    blacklisted: "This Skill is on the blacklist",
+    copySymlinkForbidden: "Copying symlinks is not allowed",
+    invalidTargetPath: "Invalid target path",
+    overlappingPaths: "Source and target paths overlap — operation blocked",
+    duplicateName: "A Skill with the same name already exists at the target",
+    noSkillSelected: "Select at least one Skill",
   },
   sessions: {
     filterInvalid: "Invalid session filter",
   },
   pricing: {
     modelListInvalid: "Invalid model list",
+    rateResponseIncomplete: "Incomplete exchange-rate response",
+    rateMissingCurrency: "Exchange-rate response is missing a currency",
   },
   market: {
     fieldInvalid: "Invalid market field: {field}",
@@ -27,5 +57,64 @@ export const errors = {
     searchTooLong: "Search keyword must not exceed 100 characters",
     sortInvalid: "Invalid sort parameter",
     installInvalid: "Invalid install parameters",
+    schema: {
+      invalidSkillParam: "Invalid Skill parameters",
+      invalidInstallField: "Invalid Skill install field: {field}",
+      agentRequired: "Select at least one agent",
+      unsupportedAgent: "Contains an unsupported agent",
+    },
+    api: {
+      http: "Market request failed (HTTP {status})",
+      networkTimeout:
+        "Network unavailable: Skill market request timed out and no local cache exists",
+    },
+    archive: {
+      tarNumericField: "Download contains an invalid tar numeric field",
+      tarChecksum: "Download tar checksum is invalid",
+      invalidPath: "Download contains an invalid path",
+      absolutePath: "Download contains an absolute path: {path}",
+      pathTraversal: "Download contains a path traversal: {path}",
+      tooManyEntries: "Download exceeds the 1000-entry limit",
+      fileTooLarge: "Download contains an oversized file: {path}",
+      tarTruncated: "Download tar content is incomplete",
+      paxBadLink: "Download PAX metadata contains a disallowed link target",
+      badLinkEntry:
+        "Download contains a disallowed link or special entry: {path}",
+      unpackedTooLarge: "Download exceeds the 40 MB unpacked-size limit",
+      emptyTar: "Download is empty or not a valid tar archive",
+      tarTooLarge: "Download exceeds the 20 MB limit",
+      emptyDownload: "The download endpoint returned no content",
+      downloadHttp: "Skill download failed (HTTP {status})",
+      notGzip: "Download content is not a valid gzip archive",
+      inflateFailed: "Download could not be inflated or exceeds the size limit",
+      downloadTimeout:
+        "Skill download timed out — check your network and retry",
+    },
+    install: {
+      diskFull: "Not enough disk space — free some space and retry",
+      invalidName: "Invalid Skill name",
+      pathTraversal: "Download contains a path traversal: {path}",
+      parentDirEscape:
+        "Download file parent directory escapes the destination: {path}",
+      duplicateEntry: "Download contains a duplicate entry: {path}",
+      noSkillMd: "No SKILL.md found in the download",
+      multipleSkillRoots:
+        "Download contains multiple Skill roots — cannot safely determine the install target",
+      rootOutsideTemp: "Skill root escapes the temp directory boundary",
+    },
+    outcome: {
+      installedAll: "Successfully installed to {count} agent(s).",
+      partialCount:
+        "{succeeded} agent(s) installed successfully, {failed} failed.",
+      failedAll: "All targets failed to install.",
+      scanBlocked: "Static scan found high-risk rules; install was blocked.",
+      targetBlocked: "Static scan did not pass; install skipped",
+    },
+  },
+  usage: {
+    configNotJson: "Configuration is not valid JSON",
+    adapterConfigInvalid: "Adapter configuration is invalid",
+    retentionNonNegative: "Retention days must be a non-negative integer",
+    retentionRange: "Retention days are outside the allowed range",
   },
 } as const;

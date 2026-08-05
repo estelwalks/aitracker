@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { CSV_HEADER } from "./csv.ts";
+import { EXPORT_FILENAME_PREFIX } from "../app-config";
 import { toExportCsv } from "./csv.ts";
 import { toExportJson } from "./json.ts";
 import { buildExportFilename } from "./download.ts";
@@ -188,11 +189,11 @@ test("buildExportFilename: 本地时间生成 YYYYMMDDHHMM 文件名", () => {
   const d = new Date(2026, 7, 3, 14, 5, 0); // local time constructor
   assert.equal(
     buildExportFilename("csv", d.getTime()),
-    "trusttools_export_202608031405.csv",
+    `${EXPORT_FILENAME_PREFIX}202608031405.csv`,
   );
   assert.equal(
     buildExportFilename("json", d.getTime()),
-    "trusttools_export_202608031405.json",
+    `${EXPORT_FILENAME_PREFIX}202608031405.json`,
   );
 });
 

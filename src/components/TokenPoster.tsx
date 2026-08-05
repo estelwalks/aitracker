@@ -9,6 +9,7 @@ import {
 
 import { Segmented, TTButton } from "./tt";
 import { useI18n } from "../lib/i18n/context";
+import { brandParams, POSTER_FILENAME_PREFIX } from "../lib/app-config";
 import type { BoundFormatters } from "../lib/i18n/format";
 
 export type PosterPeriod =
@@ -112,7 +113,7 @@ function drawPoster(
   context.fillStyle = skin.accent;
   context.fillRect(margin, 104, 10, 36);
   context.fillStyle = skin.foreground;
-  const headline = t("dashboard.poster.headline");
+  const headline = t("dashboard.poster.headline", brandParams);
   context.font = `600 ${fitFontSize(
     context,
     headline,
@@ -369,7 +370,7 @@ export function TokenPoster({
     }
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    anchor.download = `trusttools-token-${filePeriod}-${Date.now()}.png`;
+    anchor.download = `${POSTER_FILENAME_PREFIX}${filePeriod}-${Date.now()}.png`;
     anchor.href = url;
     anchor.click();
     URL.revokeObjectURL(url);

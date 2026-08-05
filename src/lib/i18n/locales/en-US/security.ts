@@ -33,7 +33,7 @@ export const security = {
     read: "Read local SKILL.md",
   },
   rulesNotice:
-    "Built-in rules v{version} ship with TrustTools updates; there is currently no remote rules update channel, so no network requests are made and no fake update status is shown.",
+    "Built-in rules v{version} ship with {appName} updates; there is currently no remote rules update channel, so no network requests are made and no fake update status is shown.",
   dropzone: {
     title: "Drop a SKILL.md or Skill folder to start scanning",
     hint: "SKILL.md / folders containing SKILL.md · max 100 MB per file · parsed locally, source never uploaded",

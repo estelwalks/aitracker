@@ -1,4 +1,6 @@
 import { parseMarketApiResponse } from "./schema.ts";
+import { MARKET_API_BASE } from "../app-config";
+import { AppError } from "../errors";
 import {
   marketCacheKey,
   readMarketCache,
@@ -6,7 +8,7 @@ import {
 } from "./cache.server.ts";
 import type { MarketListResult, MarketSkill, MarketSort } from "./types.ts";
 
-const MARKET_API = "https://ai.trusttools.cn/api";
+const MARKET_API = MARKET_API_BASE;
 const REQUEST_TIMEOUT_MS = 8_000;
 
 export interface MarketApiOptions {
@@ -78,7 +80,7 @@ export async function fetchMarketSkills(
       signal: controller.signal,
     });
     if (!response.ok)
-      throw new Error(`市场接口请求失败（HTTP ${response.status}）`);
+      throw new AppError("errors.market.api.http", { status: response.status });
 
     const parsed = parseMarketApiResponse(await response.json());
     const sortedSkills = sortSkills(parsed.skills, sort);
@@ -106,12 +108,7 @@ export async function fetchMarketSkills(
       };
     }
 
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("网络不可用：Skill 市场请求超时，本地也没有可用缓存");
-    }
-    throw new Error(
-      `网络不可用：${error instanceof Error ? error.message : "Skill 市场请求失败"}，本地也没有可用缓存`,
-    );
+    throw new AppError("errors.market.api.networkTimeout");
   } finally {
     clearTimeout(timeout);
   }

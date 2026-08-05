@@ -1,3 +1,6 @@
+# Packaging identity (appId/productName) mirrors src/lib/app-config.ts —
+# change APP_NAME/APP_ID there first, then update this file and
+# scripts/package-mac.mjs artifact names together.
 appId: com.trusttools.desktop
 productName: TrustTools
 asar: true

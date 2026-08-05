@@ -19,13 +19,8 @@ import type {
   SkillDownloadInspection,
 } from "./types.ts";
 import type { SkillAgent } from "../local-skills/types.ts";
-
-export class DiskSpaceError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DiskSpaceError";
-  }
-}
+import { APP_DATA_DIR } from "../app-config";
+import { AppError } from "../errors";
 
 async function checkDiskSpace(
   requiredBytes: number,
@@ -35,10 +30,10 @@ async function checkDiskSpace(
     const stats = await statfs(path);
     const freeBytes = stats.bavail * stats.bsize;
     if (freeBytes < requiredBytes) {
-      throw new DiskSpaceError("磁盘空间不足，请清理后重试");
+      throw new AppError("errors.market.install.diskFull");
     }
   } catch (error) {
-    if (error instanceof DiskSpaceError) throw error;
+    if (error instanceof AppError) throw error;
     // statfs not available or path missing — skip check (best-effort)
   }
 }
@@ -73,7 +68,7 @@ function safeInstallName(value: string): string {
     name.includes("\\") ||
     basename(name) !== name
   ) {
-    throw new Error("Skill 名称不合法");
+    throw new AppError("errors.market.install.invalidName");
   }
   return name;
 }
@@ -86,7 +81,9 @@ async function extractEntries(
   for (const entry of entries) {
     const targetPath = resolve(destinationRealPath, entry.path);
     if (!isPathInside(destinationRealPath, targetPath)) {
-      throw new Error(`下载包包含路径穿越：${entry.path}`);
+      throw new AppError("errors.market.install.pathTraversal", {
+        path: entry.path,
+      });
     }
     if (entry.type === "directory") {
       await mkdir(targetPath, { recursive: true, mode: 0o700 });
@@ -96,17 +93,17 @@ async function extractEntries(
     await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
     const parentRealPath = await realpath(dirname(targetPath));
     if (!isPathInside(destinationRealPath, parentRealPath)) {
-      throw new Error(`下载包文件父目录越界：${entry.path}`);
+      throw new AppError("errors.market.install.parentDirEscape", {
+        path: entry.path,
+      });
     }
-    try {
-      await lstat(targetPath);
-      throw new Error(`下载包包含重复条目：${entry.path}`);
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.startsWith("下载包包含重复条目")
-      )
-        throw error;
+    const alreadyExists = await lstat(targetPath)
+      .then(() => true)
+      .catch(() => false);
+    if (alreadyExists) {
+      throw new AppError("errors.market.install.duplicateEntry", {
+        path: entry.path,
+      });
     }
     await writeFile(targetPath, entry.content, { flag: "wx", mode: 0o600 });
   }
@@ -125,7 +122,8 @@ async function findSkillRoot(
     )
     .map((entry) => dirname(entry.path));
   const uniqueCandidates = [...new Set(candidates)];
-  if (uniqueCandidates.length === 0) throw new Error("下载包中未找到 SKILL.md");
+  if (uniqueCandidates.length === 0)
+    throw new AppError("errors.market.install.noSkillMd");
 
   const preferredNames = new Set([
     safeInstallName(skill.slug),
@@ -140,13 +138,12 @@ async function findSkillRoot(
       : preferred.length === 1
         ? preferred[0]
         : undefined;
-  if (!selected)
-    throw new Error("下载包包含多个 Skill 根目录，无法安全确定安装目标");
+  if (!selected) throw new AppError("errors.market.install.multipleSkillRoots");
 
   const destinationRealPath = await realpath(destination);
   const rootRealPath = await realpath(resolve(destinationRealPath, selected));
   if (!isPathInside(destinationRealPath, rootRealPath)) {
-    throw new Error("Skill 根目录越过临时目录边界");
+    throw new AppError("errors.market.install.rootOutsideTemp");
   }
   return rootRealPath;
 }
@@ -166,7 +163,7 @@ export async function prepareSkillInstall(
   dependencies: InstallDependencies = {},
 ): Promise<InstallSkillResult> {
   const temporaryParent =
-    dependencies.tempRoot ?? join(homedir(), ".trusttools", "tmp");
+    dependencies.tempRoot ?? join(homedir(), APP_DATA_DIR, "tmp");
 
   // Disk-space precheck: ensure at least MAX_UNPACKED_BYTES free before downloading
   await checkDiskSpace(MAX_UNPACKED_BYTES, homedir());
@@ -180,12 +177,12 @@ export async function prepareSkillInstall(
     return {
       installed: false,
       reason: "scan-blocked",
-      message: "静态扫描发现高风险规则，已阻止安装。",
+      messageCode: "errors.market.outcome.scanBlocked",
       agents: request.agents,
       targets: request.agents.map((agent) => ({
         agent,
         installed: false,
-        message: "静态扫描未通过，未执行安装",
+        messageCode: "errors.market.outcome.targetBlocked",
       })),
       inspection: downloaded.inspection,
     };
@@ -209,12 +206,21 @@ export async function prepareSkillInstall(
           targetAgent: agent,
           origin: request.skill,
         });
-        targets.push({ agent, installed: true, message: "安装成功" });
+        targets.push({
+          agent,
+          installed: true,
+          messageCode: "market.outcome.success",
+        });
       } catch (error) {
+        const ui =
+          error instanceof AppError
+            ? { code: error.code, params: error.params }
+            : null;
         targets.push({
           agent,
           installed: false,
-          message: error instanceof Error ? error.message : "安装失败",
+          messageCode: ui?.code ?? "market.outcome.failed",
+          messageParams: ui?.params,
         });
       }
     }
@@ -229,12 +235,18 @@ export async function prepareSkillInstall(
     return {
       installed: reason === "installed",
       reason,
-      message:
+      messageCode:
         reason === "installed"
-          ? `已成功安装到 ${succeeded} 个 Agent。`
+          ? "errors.market.outcome.installedAll"
           : reason === "partial"
-            ? `${succeeded} 个 Agent 安装成功，${targets.length - succeeded} 个失败。`
-            : "所有目标均安装失败。",
+            ? "errors.market.outcome.partialCount"
+            : "errors.market.outcome.failedAll",
+      messageParams:
+        reason === "installed"
+          ? { count: succeeded }
+          : reason === "partial"
+            ? { succeeded, failed: targets.length - succeeded }
+            : undefined,
       agents: request.agents,
       targets,
       inspection: downloaded.inspection,

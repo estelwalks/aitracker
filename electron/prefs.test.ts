@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { readPrefs, writePrefs } from "./prefs.js";
 
 function withTempDir(): string {
-  return mkdtempSync(join(tmpdir(), "trusttools-prefs-test-"));
+  return mkdtempSync(join(tmpdir(), "tt-prefs-test-"));
 }
 
 test("readPrefs: 缺失文件返回空对象", () => {

@@ -38,10 +38,10 @@ export const settings = {
   },
   dataPath: "データパス",
   dataPathHint:
-    "現在の TrustTools 管理データディレクトリ。外部 AI ツールのログは含まれず、削除もされません",
+    "現在の {appName} 管理データディレクトリ。外部 AI ツールのログは含まれず、削除もされません",
   retention: "キャッシュ保持",
   retentionHint:
-    "TrustTools が再生成できるローカルインデックス/キャッシュのみ削除します。収集明細は元のローカルログ由来であり、TrustTools が削除することはありません",
+    "{appName} が再生成できるローカルインデックス/キャッシュのみ削除します。収集明細は元のローカルログ由来であり、{appName} が削除することはありません",
   retentionDays: "{count}日",
   retentionForever: "無期限",
   storage: "ストレージ使用量",
@@ -49,11 +49,11 @@ export const settings = {
     "（500MB を超えています。キャッシュの削除をおすすめします）",
   clearCache: "再生成可能なローカルインデックス/キャッシュを削除",
   clearCacheHint:
-    "現在の TrustTools データディレクトリ内のキャッシュのみ削除します。AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",
+    "現在の {appName} データディレクトリ内のキャッシュのみ削除します。AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",
   clearCacheButton: "キャッシュを削除",
   clearCacheDialogTitle: "ローカルインデックス/キャッシュを削除しますか？",
   clearCacheDialogDesc:
-    "TrustTools 管理ディレクトリ内の再生成可能なインデックスとキャッシュが削除されます。外部 AI ツールのログ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
+    "{appName} 管理ディレクトリ内の再生成可能なインデックスとキャッシュが削除されます。外部 AI ツールのログ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
   clearing: "削除中...",
   confirmClearCache: "キャッシュを削除",
   resetPrefs: "アプリ設定とセキュリティ履歴をリセット",
@@ -62,7 +62,7 @@ export const settings = {
   resetButton: "設定をリセット",
   resetDialogTitle: "アプリ設定とセキュリティ履歴をリセットしますか？",
   resetDialogDesc:
-    "TrustTools のアプリ設定、バージョン更新履歴、セキュリティ検査履歴、今日の検査回数がリセットされます。ローカルインデックス/キャッシュや外部 AI ツールのログは削除されません。",
+    "{appName} のアプリ設定、バージョン更新履歴、セキュリティ検査履歴、今日の検査回数がリセットされます。ローカルインデックス/キャッシュや外部 AI ツールのログは削除されません。",
   resetting: "リセット中...",
   confirmReset: "リセット",
   currentLanguage: "現在の言語",

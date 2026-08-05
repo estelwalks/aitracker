@@ -1,7 +1,7 @@
 /**
  * Locale identity, system-language mapping and resolution priority.
  *
- * Priority (per docs/plan/TrustTools-敏捷任务清单.md): explicit user choice
+ * Priority (per the docs/plan task list): explicit user choice
  * > system language > zh-CN fallback. Unknown locales always fall back to
  * zh-CN. Pure functions, no runtime dependencies — shared by the renderer
  * (browser/dev) and testable in isolation.

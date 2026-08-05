@@ -36,21 +36,21 @@ export const settings = {
   },
   dataPath: "Data path",
   dataPathHint:
-    "TrustTools-controlled data directory; it never includes or deletes external AI tool logs",
+    "{appName}-controlled data directory; it never includes or deletes external AI tool logs",
   retention: "Cache retention",
   retentionHint:
-    "Only clears TrustTools-regenerable local indexes/caches; usage details come from the original local logs, which TrustTools never deletes",
+    "Only clears {appName}-regenerable local indexes/caches; usage details come from the original local logs, which {appName} never deletes",
   retentionDays: "{count} days",
   retentionForever: "Forever",
   storage: "Storage used",
   storageExceedsSoftCap: " (over 500 MB — consider clearing the cache)",
   clearCache: "Clear regenerable local indexes/caches",
   clearCacheHint:
-    "Deletes only caches inside the current TrustTools data directory; never AI tool logs, adapter configs or security history",
+    "Deletes only caches inside the current {appName} data directory; never AI tool logs, adapter configs or security history",
   clearCacheButton: "Clear cache",
   clearCacheDialogTitle: "Clear local indexes/caches?",
   clearCacheDialogDesc:
-    "Regenerable indexes and caches inside the TrustTools-controlled directory will be deleted. External AI tool logs, adapter configs, app preferences and security history are unaffected.",
+    "Regenerable indexes and caches inside the {appName}-controlled directory will be deleted. External AI tool logs, adapter configs, app preferences and security history are unaffected.",
   clearing: "Clearing…",
   confirmClearCache: "Clear cache",
   resetPrefs: "Reset app preferences & security history",
@@ -59,7 +59,7 @@ export const settings = {
   resetButton: "Reset preferences",
   resetDialogTitle: "Reset app preferences & security history?",
   resetDialogDesc:
-    "TrustTools app settings, version update records, security scan history and today's scan count will be reset. Local indexes/caches and external AI tool logs are not deleted.",
+    "{appName} app settings, version update records, security scan history and today's scan count will be reset. Local indexes/caches and external AI tool logs are not deleted.",
   resetting: "Resetting…",
   confirmReset: "Reset",
   currentLanguage: "Current language",

@@ -82,6 +82,7 @@ import { useI18n } from "../lib/i18n/context";
 import type { BoundFormatters } from "../lib/i18n/format";
 import { resolveLocaleFromSearch, type Locale } from "../lib/i18n/locale";
 import { catalogs, getMessage } from "../lib/i18n/messages";
+import { brandParams } from "../lib/app-config";
 
 type TFunction = ReturnType<typeof useI18n>["t"];
 
@@ -125,6 +126,7 @@ export const Route = createFileRoute("/")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.dashboard",
+          brandParams,
         ),
       },
       {
@@ -132,6 +134,7 @@ export const Route = createFileRoute("/")({
         content: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "dashboard.meta.description",
+          brandParams,
         ),
       },
     ],

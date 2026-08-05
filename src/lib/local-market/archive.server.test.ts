@@ -5,10 +5,22 @@ import { scanTarEntries, validateArchivePath } from "./archive.server.ts";
 
 test("validateArchivePath blocks traversal and absolute paths", () => {
   assert.equal(validateArchivePath("skill/SKILL.md"), "skill/SKILL.md");
-  assert.throws(() => validateArchivePath("../escape"), /路径穿越/);
-  assert.throws(() => validateArchivePath("skill/../../escape"), /路径穿越/);
-  assert.throws(() => validateArchivePath("/absolute/path"), /绝对路径/);
-  assert.throws(() => validateArchivePath("C:\\escape"), /无效路径/);
+  assert.throws(
+    () => validateArchivePath("../escape"),
+    /errors.market.archive.pathTraversal/,
+  );
+  assert.throws(
+    () => validateArchivePath("skill/../../escape"),
+    /errors.market.archive.pathTraversal/,
+  );
+  assert.throws(
+    () => validateArchivePath("/absolute/path"),
+    /errors\.market\.archive\.absolutePath/,
+  );
+  assert.throws(
+    () => validateArchivePath("C:\\escape"),
+    /errors\.market\.archive\.invalidPath/,
+  );
 });
 
 test("scanTarEntries reports dangerous shell patterns", () => {

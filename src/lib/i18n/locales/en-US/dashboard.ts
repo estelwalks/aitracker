@@ -192,7 +192,7 @@ export const dashboard = {
     rescan: "Rescan",
   },
   poster: {
-    headline: "TrustTools Token Report",
+    headline: "{appName} Token Report",
     rankLabel: "This period's title",
     totalTokens: "Total Tokens",
     metricCost: "Estimated cost",

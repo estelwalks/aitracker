@@ -47,9 +47,7 @@ async function timedScan(
 }
 
 export async function benchmarkLocalUsagePersistentCache(): Promise<LocalUsageCacheBenchmark> {
-  const cacheDirectory = await mkdtemp(
-    join(tmpdir(), "trusttools-local-usage-"),
-  );
+  const cacheDirectory = await mkdtemp(join(tmpdir(), "tt-local-usage-"));
   const now = new Date();
 
   try {

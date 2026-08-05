@@ -28,10 +28,7 @@ function sourceSummary(
 }
 
 test("persistent cache reuses, reparses, prunes, and rebuilds files safely", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-scanner-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const claudeFile = join(
@@ -202,7 +199,7 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
 });
 
 test("cache embeds registryFingerprint and invalidates on mismatch", async () => {
-  const root = join(tmpdir(), `trusttools-fp-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `tt-fp-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const cacheFile = join(cacheDirectory, "local-usage-index-v10.json");
@@ -296,10 +293,7 @@ test("cache embeds registryFingerprint and invalidates on mismatch", async () =>
 });
 
 test("WorkBuddy reads historical rawUsage with correct cache and reasoning token math", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-workbuddy-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-workbuddy-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const sessionDirectory = join(
     homeDirectory,
@@ -362,10 +356,7 @@ test("WorkBuddy reads historical rawUsage with correct cache and reasoning token
 });
 
 test("discovers Codex sessions from an explicitly configured home", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-codex-home-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-codex-home-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const codexHomeDirectory = join(root, "custom-codex-home");
   const sessionDirectory = join(
@@ -429,7 +420,7 @@ test("discovers Codex sessions from an explicitly configured home", async () => 
 test("discovers Windows-style alternate homes and nested cumulative Codex events", async () => {
   const root = join(
     tmpdir(),
-    `trusttools-codex-alternate-${process.pid}-${Date.now()}`,
+    `tt-codex-alternate-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "electron-home");
   const windowsUserHome = join(root, "windows-user");
@@ -512,7 +503,7 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
 test("generic adapters prefer structured sessions and distinguish file fallbacks", async () => {
   const root = join(
     tmpdir(),
-    `trusttools-generic-session-${process.pid}-${Date.now()}`,
+    `tt-generic-session-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "home");
   const sessionDirectory = join(homeDirectory, ".kimi", "sessions");
@@ -586,10 +577,7 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
 });
 
 test("Codex rollout context is attributed, bucketed, and never caches raw commands or outputs", async () => {
-  const root = join(
-    tmpdir(),
-    `trusttools-codex-context-${process.pid}-${Date.now()}`,
-  );
+  const root = join(tmpdir(), `tt-codex-context-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(homeDirectory, ".codex", "sessions");

@@ -1,4 +1,5 @@
 import { SKILL_AGENTS } from "./agent-rules.ts";
+import type { MessageKey } from "../i18n/messages";
 
 export { SKILL_AGENTS };
 
@@ -34,15 +35,29 @@ export interface LocalSkill {
   installations: SkillInstallation[];
 }
 
+export interface BatchUninstallFailure {
+  path: string;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  errorCode: MessageKey | null;
+  errorParams?: Record<string, string | number>;
+}
+
+export interface SyncFailure {
+  agent: string;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  errorCode: MessageKey | null;
+  errorParams?: Record<string, string | number>;
+}
+
 export interface BatchUninstallResult {
   succeeded: string[];
-  failed: { path: string; error: string }[];
+  failed: BatchUninstallFailure[];
 }
 
 export interface SkillSyncResult {
   succeeded: { agent: string; path: string }[];
   skipped: { agent: string; reason: "conflict" }[];
-  failed: { agent: string; error: string }[];
+  failed: SyncFailure[];
 }
 
 export interface SkillSnapshot {

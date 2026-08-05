@@ -1,4 +1,5 @@
 import { SKILL_AGENTS } from "../local-skills/types.ts";
+import type { MessageKey } from "../i18n/messages";
 
 /**
  * Market install targets — same agent set as Skill agents (the market
@@ -95,15 +96,21 @@ export interface SkillDownloadInspection {
   scan: StaticScanReport;
 }
 
+export interface InstallSkillTarget {
+  agent: MarketAgent;
+  installed: boolean;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  messageCode: MessageKey | null;
+  messageParams?: Record<string, string | number>;
+}
+
 export interface InstallSkillResult {
   installed: boolean;
   reason: "installed" | "partial" | "failed" | "scan-blocked";
-  message: string;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  messageCode: MessageKey | null;
+  messageParams?: Record<string, string | number>;
   agents: MarketAgent[];
-  targets: Array<{
-    agent: MarketAgent;
-    installed: boolean;
-    message: string;
-  }>;
+  targets: InstallSkillTarget[];
   inspection: SkillDownloadInspection;
 }

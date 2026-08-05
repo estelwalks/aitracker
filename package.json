@@ -27,7 +27,7 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:perf": "node --import tsx --test src/lib/local-usage/performance.test.ts && tsc --noEmit && eslint src/lib/local-usage",
-    "check:i18n": "tsc --noEmit && node --import tsx --test src/lib/i18n/locale.test.ts src/lib/i18n/messages.test.ts src/lib/i18n/format.test.ts electron/i18n.test.ts electron/prefs.test.ts && node --import tsx scripts/check-translations.mjs && node scripts/check-hardcoded-text.mjs && node scripts/check-locale-sync.mjs",
+    "check:i18n": "tsc --noEmit && node --import tsx --test src/lib/i18n/locale.test.ts src/lib/i18n/messages.test.ts src/lib/i18n/format.test.ts electron/i18n.test.ts electron/prefs.test.ts && node --import tsx scripts/check-translations.mjs && node scripts/check-hardcoded-text.mjs && node scripts/check-locale-sync.mjs && node --import tsx scripts/check-app-config-sync.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "generate:manifest": "node --import tsx scripts/generate-tool-manifest.mjs",
