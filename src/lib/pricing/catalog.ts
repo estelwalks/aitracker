@@ -1,4 +1,7 @@
-import { matchModel, type ModelMatcher } from "../tool-registry/contracts.ts";
+import {
+  normalizeModel,
+  type ModelMatcher,
+} from "../tool-registry/contracts.ts";
 
 export interface ModelPrice {
   id: string;
@@ -22,12 +25,44 @@ export interface ModelPrice {
   match: ModelMatcher;
 }
 
+/**
+ * Compile a declarative matcher into a fast closure, normalizing names ONCE
+ * (the hot path is per-event pricing over 100k+ events - re-normalizing inside
+ * `matchModel` per call is ~3x slower). The declarative `match` data remains the
+ * source of truth; the compiled closure is a memoized projection.
+ */
+const compiledMatchers = new Map<
+  ModelMatcher,
+  (normalizedModel: string) => boolean
+>();
+
+function compileMatcher(
+  matcher: ModelMatcher,
+): (normalizedModel: string) => boolean {
+  if (matcher.kind === "exactOrSnapshot") {
+    const names = matcher.names.map(normalizeModel);
+    return (model) =>
+      names.some((name) => model === name || model.startsWith(`${name}-20`));
+  }
+  const parts = matcher.parts;
+  return (model) => parts.every((part) => model.includes(part));
+}
+
+function compiledMatch(price: ModelPrice, normalizedModel: string): boolean {
+  let fn = compiledMatchers.get(price.match);
+  if (!fn) {
+    fn = compileMatcher(price.match);
+    compiledMatchers.set(price.match, fn);
+  }
+  return fn(normalizedModel);
+}
+
 /** Whether a declarative price rule matches an already-normalized model. */
 export function priceMatches(
   price: ModelPrice,
   normalizedModel: string,
 ): boolean {
-  return matchModel(price.match, normalizedModel);
+  return compiledMatch(price, normalizedModel);
 }
 
 export const MODEL_PRICES: ModelPrice[] = [

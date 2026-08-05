@@ -9,7 +9,7 @@ import type {
 import type { UsagePeriod } from "../local-usage/presentation";
 import { MODEL_PRICES, priceMatches, type ModelPrice } from "./catalog";
 import { normalizeModel } from "../tool-registry/contracts.ts";
-import type { PricingSnapshot } from "./types";
+import type { PricingSnapshot, RuntimeModelPrice } from "./types";
 
 export type { PricingSnapshot, RuntimeModelPrice } from "./types";
 
@@ -33,9 +33,19 @@ export const BUILTIN_RATES: Record<Currency, number> = {
 
 export const DEFAULT_USD_TO_CNY = BUILTIN_RATES.CNY;
 let activePricingSnapshot: PricingSnapshot | null = null;
+/**
+ * True when the active snapshot contains `toolId:model` keys. The snapshot is
+ * currently model-keyed; the flag lets `findModelRate` skip the toolId-key
+ * lookup (and its string concat) on the per-event hot path - the dual-read only
+ * pays off once per-tool live prices exist.
+ */
+let activeSnapshotHasToolKeys = false;
 
 export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
   activePricingSnapshot = snapshot;
+  activeSnapshotHasToolKeys =
+    snapshot !== null &&
+    Object.keys(snapshot.prices).some((key) => key.includes(":"));
 }
 
 export function currentUsdToCny(): number {
@@ -121,9 +131,12 @@ export interface FindModelRateInput {
 export function findModelRate(input: FindModelRateInput): ModelPrice | null {
   const normalized = normalizeModel(input.model);
   const prices = activePricingSnapshot?.prices;
-  const keyed = prices?.[`${input.toolId}:${normalized}`];
-  const modelKeyed = prices?.[normalized];
-  const runtime = keyed ?? modelKeyed;
+  let runtime: RuntimeModelPrice | undefined;
+  if (prices) {
+    runtime = activeSnapshotHasToolKeys
+      ? (prices[`${input.toolId}:${normalized}`] ?? prices[normalized])
+      : prices[normalized];
+  }
   if (runtime) return runtimeToModelPrice(input.model, normalized, runtime);
   return MODEL_PRICES.find((price) => priceMatches(price, normalized)) ?? null;
 }
