@@ -28,6 +28,13 @@ import {
   type ToolInstallationFact,
 } from "../tools/detection.server.ts";
 import {
+  DEFAULT_MARKERS,
+  DEFAULT_MAX_DEPTH,
+  resolveAgentRoots,
+  SKILL_AGENT_RULES,
+  type SkillAgentRule,
+} from "./agent-rules.ts";
+import {
   SKILL_AGENTS,
   type BatchUninstallResult,
   type LocalSkill,
@@ -38,6 +45,9 @@ import {
   type SkillSyncResult,
   type SkillUpdateStatus,
 } from "./types.ts";
+
+/** Compatibility re-export (label → write root); kept for existing importers. */
+export { SKILL_ROOT_SUFFIXES } from "./agent-rules.ts";
 
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
 const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
@@ -73,30 +83,22 @@ export interface MarketSkillOriginInput {
 }
 
 /**
- * Skill root suffix per agent label, derived from the catalog. Keyed by
- * `SkillAgent` (the tool `nameZh`); value is the HOME-relative skill dir.
+ * Skill discovery rule per agent label, keyed by `SkillAgent` (the tool
+ * `nameZh`). Used to walk each agent's root(s) with the right markers/depth.
  */
-export const SKILL_ROOT_SUFFIXES = Object.fromEntries(
-  AI_TOOLS.filter((tool) => tool.skillRootSuffix !== null).map((tool) => [
-    tool.nameZh,
-    tool.skillRootSuffix,
-  ]),
-) as Record<SkillAgent, string>;
+const RULE_BY_AGENT: ReadonlyMap<string, SkillAgentRule> = new Map(
+  SKILL_AGENT_RULES.map((rule) => {
+    const tool = AI_TOOLS.find((candidate) => candidate.id === rule.toolId);
+    return [tool?.nameZh ?? rule.toolId, rule] as const;
+  }),
+);
 
 interface ScanOptions {
   homeDirectory?: string;
   now?: Date;
   trusttoolsDirectory?: string;
   usageEvents?: LocalUsageEvent[];
-}
-
-function rootsFor(homeDirectory: string): Record<SkillAgent, string> {
-  return Object.fromEntries(
-    SKILL_AGENTS.map((agent) => [
-      agent,
-      join(homeDirectory, SKILL_ROOT_SUFFIXES[agent]),
-    ]),
-  ) as Record<SkillAgent, string>;
+  env?: Record<string, string | undefined>;
 }
 
 function agentInstallationFacts(
@@ -190,10 +192,16 @@ function parseFrontmatter(content: string): Record<string, string> {
 
 async function readSkillManifest(
   path: string,
+  markers: readonly string[] = DEFAULT_MARKERS,
 ): Promise<Record<string, string>> {
   try {
     const details = await lstat(path);
-    const manifestPath = details.isFile() ? path : join(path, "SKILL.md");
+    let manifestPath = path;
+    if (!details.isFile()) {
+      const marker = await findMarker(path, markers);
+      if (marker === null) return {};
+      manifestPath = join(path, marker);
+    }
     return parseFrontmatter(await readFile(manifestPath, "utf8"));
   } catch {
     return {};
@@ -360,21 +368,39 @@ function isPathInside(root: string, candidate: string): boolean {
 
 async function assertManagedSkillPath(
   path: string,
-  roots: Record<SkillAgent, string>,
+  roots: Record<SkillAgent, string[]>,
 ): Promise<SkillAgent> {
+  // `..` segments are rejected on the raw path (resolve() would collapse
+  // them, hiding a traversal attempt).
+  if (containsParentTraversal(path))
+    throw new Error("路径不属于受管 Skill 根目录");
+
   const resolvedPath = resolve(path);
-  const matchingAgent = SKILL_AGENTS.find((agent) => {
-    const pathFromRoot = relative(resolve(roots[agent]), resolvedPath);
-    return (
-      pathFromRoot !== "" &&
-      !pathFromRoot.startsWith("..") &&
-      !pathFromRoot.includes(sep)
-    );
-  });
-  if (!matchingAgent) throw new Error("路径不属于受管 Skill 根目录");
+  let matchingRoot: string | null = null;
+  let matchingAgent: SkillAgent | null = null;
+  for (const agent of SKILL_AGENTS) {
+    for (const root of roots[agent] ?? []) {
+      const pathFromRoot = relative(resolve(root), resolvedPath);
+      if (
+        pathFromRoot === "" ||
+        pathFromRoot === ".." ||
+        pathFromRoot.startsWith(`..${sep}`) ||
+        pathFromRoot.split(sep).includes("..")
+      ) {
+        continue;
+      }
+      matchingRoot = root;
+      matchingAgent = agent;
+      break;
+    }
+    if (matchingRoot !== null) break;
+  }
+  if (matchingAgent === null || matchingRoot === null) {
+    throw new Error("路径不属于受管 Skill 根目录");
+  }
 
   const [rootRealPath, candidateRealPath] = await Promise.all([
-    realpath(roots[matchingAgent]),
+    realpath(matchingRoot),
     realpath(resolvedPath),
   ]);
   if (!isPathInside(rootRealPath, candidateRealPath)) {
@@ -429,20 +455,111 @@ async function assertMarketSkillPath(path: string): Promise<void> {
   }
 }
 
-async function isSkillEntry(path: string): Promise<boolean> {
-  const entryStat = await lstat(path);
-  if (entryStat.isSymbolicLink()) return false;
-  if (entryStat.isFile()) return path.toLowerCase().endsWith(".md");
-  if (!entryStat.isDirectory()) return false;
+/**
+ * Find the first existing marker file inside `directoryPath`, in `markers`
+ * order (exact-case match). Returns the marker file name or `null`.
+ */
+async function findMarker(
+  directoryPath: string,
+  markers: readonly string[],
+): Promise<string | null> {
+  for (const marker of markers) {
+    try {
+      const markerStat = await stat(join(directoryPath, marker));
+      if (markerStat.isFile()) return marker;
+    } catch {
+      // Missing (ENOENT) or unreadable — try the next marker.
+    }
+  }
+  return null;
+}
+
+interface SkillWalkContext {
+  agent: string;
+  rule: SkillAgentRule;
+  origins: MarketOriginsFile;
+  installations: Map<string, SkillInstallation[]>;
+  descriptions: Map<string, string | null>;
+}
+
+async function recordSkill(
+  skillPath: string,
+  marker: string,
+  context: SkillWalkContext,
+): Promise<void> {
+  const details = await stat(skillPath);
+  const frontmatter = await readSkillManifest(skillPath, [marker]);
+  const name = frontmatter.name?.trim() || basename(skillPath) || "Skill";
+  if (!context.descriptions.has(name)) {
+    context.descriptions.set(name, frontmatter.description ?? null);
+  }
+  const origin = context.origins.installations[resolve(skillPath)];
+  const version = frontmatter.version ?? origin?.localVersion ?? null;
+  const evidence = updateEvidence({ version, origin });
+  const current = context.installations.get(name) ?? [];
+  current.push({
+    agent: context.agent,
+    path: skillPath,
+    installedAt: new Date(details.birthtimeMs || details.ctimeMs).toISOString(),
+    modifiedAt: details.mtime.toISOString(),
+    version,
+    source: origin?.source ?? frontmatterSource(frontmatter),
+    updateStatus: evidence.status,
+    updateReason: evidence.reason,
+  });
+  context.installations.set(name, current);
+}
+
+/**
+ * Recursively discover skills under `directoryPath` (root depth = 0). A
+ * directory containing a marker file is recorded as one skill and not
+ * descended into; marker-less directories are descended into while
+ * `depth + 1 < maxDepth`. Dot-prefixed entries and symbolic links are
+ * skipped; bare markdown files are never skills. Entries are processed in
+ * localeCompare order for deterministic output.
+ */
+async function walkSkillDirectory(
+  directoryPath: string,
+  depth: number,
+  context: SkillWalkContext,
+): Promise<void> {
+  let directory;
   try {
-    return (await stat(join(path, "SKILL.md"))).isFile();
+    directory = await opendir(directoryPath);
   } catch {
-    return true;
+    return; // Missing/unreadable root: silently skipped.
+  }
+
+  const entries: { name: string; path: string }[] = [];
+  for await (const entry of directory) {
+    entries.push({ name: entry.name, path: join(directoryPath, entry.name) });
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    let entryStat;
+    try {
+      entryStat = await lstat(entry.path);
+    } catch {
+      continue; // Vanished between listing and stat.
+    }
+    if (entryStat.isSymbolicLink() || !entryStat.isDirectory()) continue;
+
+    const marker = await findMarker(
+      entry.path,
+      context.rule.markers ?? DEFAULT_MARKERS,
+    );
+    if (marker !== null) {
+      await recordSkill(entry.path, marker, context);
+    } else if (depth + 1 < (context.rule.maxDepth ?? DEFAULT_MAX_DEPTH)) {
+      await walkSkillDirectory(entry.path, depth + 1, context);
+    }
   }
 }
 
 async function scanInstallations(
-  roots: Record<SkillAgent, string>,
+  roots: Record<SkillAgent, string[]>,
   origins: MarketOriginsFile,
 ): Promise<{
   installations: Map<string, SkillInstallation[]>;
@@ -452,41 +569,17 @@ async function scanInstallations(
   const descriptions = new Map<string, string | null>();
   await Promise.all(
     SKILL_AGENTS.map(async (agent) => {
-      const root = roots[agent];
-      try {
-        const directory = await opendir(root);
-        for await (const entry of directory) {
-          if (entry.name.startsWith(".")) continue;
-          const path = join(root, entry.name);
-          if (!(await isSkillEntry(path))) continue;
-          const details = await stat(path);
-          const frontmatter = await readSkillManifest(path);
-          const name = entry.isFile()
-            ? entry.name.replace(/\.md$/i, "")
-            : entry.name;
-          if (!descriptions.has(name)) {
-            descriptions.set(name, frontmatter.description ?? null);
-          }
-          const origin = origins.installations[resolve(path)];
-          const version = frontmatter.version ?? origin?.localVersion ?? null;
-          const evidence = updateEvidence({ version, origin });
-          const current = installations.get(name) ?? [];
-          current.push({
-            agent,
-            path,
-            installedAt: new Date(
-              details.birthtimeMs || details.ctimeMs,
-            ).toISOString(),
-            modifiedAt: details.mtime.toISOString(),
-            version,
-            source: origin?.source ?? frontmatterSource(frontmatter),
-            updateStatus: evidence.status,
-            updateReason: evidence.reason,
-          });
-          installations.set(name, current);
-        }
-      } catch {
-        return;
+      const rule = RULE_BY_AGENT.get(agent);
+      if (rule === undefined) return;
+      const context: SkillWalkContext = {
+        agent,
+        rule,
+        origins,
+        installations,
+        descriptions,
+      };
+      for (const root of roots[agent] ?? []) {
+        await walkSkillDirectory(root, 0, context);
       }
     }),
   );
@@ -528,7 +621,7 @@ export async function scanLocalSkills(
 ): Promise<SkillSnapshot> {
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
-  const roots = rootsFor(homeDirectory);
+  const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
   const trusttoolsDirectory = options.trusttoolsDirectory ?? TRUSTTOOLS_DIR;
   const [origins, blacklist, installationFacts] = await Promise.all([
     readOrigins(join(trusttoolsDirectory, "skill-origins.json")),
@@ -588,7 +681,7 @@ async function copySkillToAgent(input: {
   if (!SKILL_AGENTS.includes(input.targetAgent))
     throw new Error("目标 Agent 不受支持");
 
-  const roots = rootsFor(homedir());
+  const roots = resolveAgentRoots(homedir(), process.env);
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
   if ((await readBlacklist()).includes(name))
     throw new Error("该 Skill 已被加入黑名单");
@@ -596,7 +689,7 @@ async function copySkillToAgent(input: {
   const sourceStat = await lstat(input.sourcePath);
   if (sourceStat.isSymbolicLink()) throw new Error("不允许复制符号链接");
   const extension = sourceStat.isFile() ? ".md" : "";
-  const targetRoot = roots[input.targetAgent];
+  const targetRoot = roots[input.targetAgent][0];
   const targetPath = join(targetRoot, `${name}${extension}`);
   if (!isPathInside(targetRoot, targetPath)) throw new Error("目标路径不合法");
 
@@ -619,7 +712,7 @@ export async function installLocalSkill(input: {
   sourcePath: string;
   targetAgent: SkillAgent;
 }): Promise<void> {
-  const roots = rootsFor(homedir());
+  const roots = resolveAgentRoots(homedir(), process.env);
   await assertManagedSkillPath(input.sourcePath, roots);
   const targetPath = await copySkillToAgent(input);
   const origins = await readOrigins();
@@ -776,7 +869,7 @@ export async function refreshMarketSkillEvidence(
 export async function uninstallLocalSkill(
   path: string,
 ): Promise<{ path: string }> {
-  const roots = rootsFor(homedir());
+  const roots = resolveAgentRoots(homedir(), process.env);
   await assertManagedSkillPath(path, roots);
   const target = resolve(path);
   await rm(target, { recursive: true, force: true });
@@ -810,7 +903,7 @@ export async function syncLocalSkill(input: {
   targetAgents: string[];
   onConflict: "overwrite" | "skip";
 }): Promise<SkillSyncResult> {
-  const roots = rootsFor(homedir());
+  const roots = resolveAgentRoots(homedir(), process.env);
   await assertManagedSkillPath(input.sourcePath, roots);
 
   const succeeded: { agent: string; path: string }[] = [];
