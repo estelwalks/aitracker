@@ -6,9 +6,11 @@
  * Clean Room: only the observable discovery behavior is aligned — this is
  * TrustTools's own config shape, types and naming. No TokenTracker code,
  * structure, naming or comments are copied.
+ *
+ * This module must stay importable in the browser bundle (client code reads
+ * `SKILL_AGENTS`), so it is pure data — no `node:path`/`node:fs` imports.
+ * Path resolution lives in `scanner.server.ts` (`resolveAgentRoots`).
  */
-
-import { basename, join } from "node:path";
 
 import { AI_TOOLS } from "../tools/catalog.ts";
 
@@ -99,25 +101,3 @@ export const SKILL_AGENTS: readonly string[] =
 export const SKILL_ROOT_SUFFIXES: Record<string, string> = Object.fromEntries(
   SKILL_AGENT_RULES.map((rule) => [agentLabelOf(rule), rule.roots[0]]),
 );
-
-/**
- * Resolve each agent's skill roots against a home directory. When a rule has
- * `envHome` and the corresponding env var is a non-empty string, the env value
- * replaces the directory part of each root (the tool's home directory) while
- * keeping the last path segment: `join(envValue, basename(suffix))`. Empty
- * strings are treated as unset and fall back to `join(home, suffix)`.
- */
-export function resolveAgentRoots(
-  home: string,
-  env: Record<string, string | undefined>,
-): Record<string, string[]> {
-  const roots: Record<string, string[]> = {};
-  for (const rule of SKILL_AGENT_RULES) {
-    const envValue = rule.envHome == null ? undefined : env[rule.envHome];
-    const overridden = envValue !== undefined && envValue !== "";
-    roots[agentLabelOf(rule)] = rule.roots.map((suffix) =>
-      overridden ? join(envValue, basename(suffix)) : join(home, suffix),
-    );
-  }
-  return roots;
-}
