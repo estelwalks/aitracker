@@ -81,21 +81,25 @@ for (const [name, got, expected] of [
   ],
 ]) {
   if (!got) {
-    failures.push(`${name}: 无法提取声明`);
+    failures.push(`${name}: unable to extract declaration`);
   } else if (JSON.stringify(got) !== JSON.stringify(expected)) {
-    failures.push(`${name}: ${got.join(", ")} ≠ 期望 ${expected.join(", ")}`);
+    failures.push(
+      `${name}: ${got.join(", ")} ≠ expected ${expected.join(", ")}`,
+    );
   }
 }
 
 if (failures.length) {
-  console.error("check-locale-sync: 双端 Locale/Currency 声明不同步\n");
+  console.error(
+    "check-locale-sync: locale/currency declarations out of sync\n",
+  );
   for (const f of failures) console.error(`  ✖ ${f}`);
   console.error(
-    "\n新增语言/币种时需同时更新对应声明(renderer/contracts/main-process catalog)。",
+    "\nAdding a locale/currency requires updating all declarations (renderer/contracts/main-process catalog) together.",
   );
   process.exit(1);
 }
 
 console.log(
-  "check-locale-sync: 双端 Locale/Currency 声明一致 (zh-CN/en-US/ja-JP/ko-KR × CNY/USD/JPY/KRW)",
+  "check-locale-sync: locale/currency declarations in sync (zh-CN/en-US/ja-JP/ko-KR × CNY/USD/JPY/KRW)",
 );

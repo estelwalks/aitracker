@@ -1,23 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 
-export interface AITrackerSettings {
+export interface AppSettings {
   launchAtLoginRequested: boolean;
   retentionDays: number;
   dataPath: string;
 }
 
-export const DEFAULT_SETTINGS: AITrackerSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLoginRequested: false,
   retentionDays: 90,
   dataPath: "~/",
 };
 
-const STORAGE_KEY = "trusttools.settings.v1";
+import { STORAGE_KEY_PREFIX } from "../app-config";
 
-export function parseSettings(raw: string | null): AITrackerSettings {
+const STORAGE_KEY = `${STORAGE_KEY_PREFIX}settings.v1`;
+
+export function parseSettings(raw: string | null): AppSettings {
   if (!raw) return DEFAULT_SETTINGS;
   try {
-    const value = JSON.parse(raw) as Partial<AITrackerSettings>;
+    const value = JSON.parse(raw) as Partial<AppSettings>;
     const numberValue = (candidate: unknown, fallback: number) =>
       typeof candidate === "number" &&
       Number.isFinite(candidate) &&
@@ -47,11 +49,11 @@ export function parseSettings(raw: string | null): AITrackerSettings {
 async function loadSettingsFromPlatform(): Promise<Record<string, unknown>> {
   const api = (
     window as {
-      desktopBridge?: {
+      desktopApi?: {
         getPreferences(): Promise<Record<string, unknown>>;
       };
     }
-  ).desktopBridge;
+  ).desktopApi;
   if (api) {
     try {
       return await api.getPreferences();
@@ -68,11 +70,11 @@ async function saveSettingToPlatform(
 ): Promise<void> {
   const api = (
     window as {
-      desktopBridge?: {
+      desktopApi?: {
         setPreference(key: string, value: unknown): Promise<void>;
       };
     }
-  ).desktopBridge;
+  ).desktopApi;
   if (api) {
     try {
       await api.setPreference(key, value);
@@ -82,9 +84,8 @@ async function saveSettingToPlatform(
   }
 }
 
-export function useAITrackerSettings() {
-  const [settings, setSettings] =
-    useState<AITrackerSettings>(DEFAULT_SETTINGS);
+export function useAppSettings() {
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const lastSavedRef = useRef<string>("");
 

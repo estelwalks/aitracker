@@ -45,9 +45,15 @@ import {
   readPrefs,
   writePrefs,
 } from "./prefs.js";
+import {
+  APP_DATA_DIR,
+  APP_NAME,
+  ENV,
+  STORAGE_KEY_PREFIX,
+} from "./app-config.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
-const developmentUrl = process.env.TRUSTTOOLS_DEV_URL;
+const developmentUrl = process.env[ENV.DEV_URL];
 const isDevelopment = Boolean(developmentUrl);
 
 let mainWindow: BrowserWindow | null = null;
@@ -180,7 +186,7 @@ function registerIpcHandlers(): void {
       assertTrustedSender(event);
       const current = readPrefs(prefsPath());
       const keys = Object.keys(current).filter(
-        (key) => key === "closeHintShown" || key.startsWith("trusttools."),
+        (key) => key === "closeHintShown" || key.startsWith(STORAGE_KEY_PREFIX),
       );
       for (const key of keys) delete current[key];
       writePrefs(prefsPath(), current);
@@ -317,7 +323,7 @@ async function createMainWindow(): Promise<void> {
     minWidth: 1100,
     minHeight: 720,
     show: false,
-    title: "AITracker",
+    title: APP_NAME,
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
       contextIsolation: true,
@@ -396,18 +402,13 @@ async function prewarmLocalData(origin: string): Promise<void> {
       signal: controller.signal,
     });
     if (!response.ok) {
-      console.warn(
-        `AITracker initial data scan returned HTTP ${response.status}`,
-      );
+      console.warn(`Initial data scan returned HTTP ${response.status}`);
     }
     await response.body?.cancel();
   } catch (error) {
     // Startup remains recoverable: the BrowserWindow request will retry the
     // same loaders, and visible-page polling continues refreshing afterwards.
-    console.warn(
-      "AITracker initial data scan did not finish before launch",
-      error,
-    );
+    console.warn("Initial data scan did not finish before launch", error);
   } finally {
     clearTimeout(timeout);
   }
@@ -417,8 +418,8 @@ async function checkDataCompatibility(): Promise<{
   compatible: boolean;
   oldVersion?: string;
 }> {
-  const homeDir = process.env.TRUSTTOOLS_USAGE_HOME || app.getPath("home");
-  const schemaVersionPath = join(homeDir, ".trusttools", "schema_version");
+  const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
+  const schemaVersionPath = join(homeDir, APP_DATA_DIR, "schema_version");
 
   try {
     const content = await readFile(schemaVersionPath, "utf8");
@@ -479,7 +480,7 @@ if (!hasSingleInstanceLock) {
     // value also keeps scanner behavior stable when Electron is launched by
     // Finder/login items with a reduced environment. A test-lab override, when
     // supplied, intentionally wins.
-    process.env.TRUSTTOOLS_USAGE_HOME ??= app.getPath("home");
+    process.env[ENV.USAGE_HOME] ??= app.getPath("home");
 
     const prefs = readPrefs(prefsPath());
     currentPreferences = resolveDesktopPreferences(prefs, app.getLocale());
@@ -501,16 +502,15 @@ if (!hasSingleInstanceLock) {
 
       if (response === 1) {
         // User chose to clear data and continue
-        const homeDir =
-          process.env.TRUSTTOOLS_USAGE_HOME || app.getPath("home");
+        const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
         try {
-          await unlink(join(homeDir, ".trusttools", "schema_version"));
+          await unlink(join(homeDir, APP_DATA_DIR, "schema_version"));
         } catch {
           // File may not exist
         }
         try {
           await writeFile(
-            join(homeDir, ".trusttools", "schema_version"),
+            join(homeDir, APP_DATA_DIR, "schema_version"),
             CURRENT_SCHEMA_VERSION,
             "utf8",
           );

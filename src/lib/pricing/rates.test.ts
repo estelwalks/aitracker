@@ -9,7 +9,7 @@ import { buildPricingSnapshot } from "./dynamic.server.ts";
 import { BUILTIN_RATES } from "./index.ts";
 
 function withTempHome(): string {
-  return mkdtempSync(join(tmpdir(), "trusttools-rates-test-"));
+  return mkdtempSync(join(tmpdir(), "tt-rates-test-"));
 }
 
 function jsonFetcher(payload: unknown): typeof fetch {

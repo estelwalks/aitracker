@@ -53,7 +53,7 @@ export interface AutoLaunchState {
   supported: boolean;
 }
 
-export interface AITrackerDesktopApi {
+export interface DesktopApi {
   getRuntimeInfo(): Promise<RuntimeInfo>;
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
@@ -64,9 +64,9 @@ export interface AITrackerDesktopApi {
   /** Resolve the current display locale (user preference > system > zh-CN). */
   getLocale(): Promise<DesktopLocale>;
   /**
-   * Persist a locale choice to `trusttools-prefs.json` and rebuild the native
-   * tray/menus. Rejects non-locale values; the renderer must only send one of
-   * the four `DesktopLocale` strings.
+   * Persist a locale choice to the prefs file and rebuild the native tray/
+   * menus. Rejects non-locale values; the renderer must only send one of the
+   * four `DesktopLocale` strings.
    */
   setLocale(locale: DesktopLocale): Promise<void>;
   /** Subscribe to locale changes initiated in the main process; returns an unsubscribe function. */

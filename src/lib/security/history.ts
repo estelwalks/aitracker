@@ -2,8 +2,8 @@
  * 安全检测历史持久化层（PRD v3.0 §11 FR-020）。
  *
  * 复用与 `daily-limit.ts` / `settings/store.ts` 相同的 IPC 偏好通道：
- * - Electron：`window.desktopBridge.getPreferences` / `setPreference`
- *   持久化到 `userData/trusttools-prefs.json`，跨重启可见；
+ * - Electron：`window.desktopApi.getPreferences` / `setPreference`
+ *   持久化到 userData 下的偏好文件，跨重启可见；
  * - 浏览器开发态 / IPC 不可用时：回退到 localStorage；
  * - SSR：直接 no-op / 返回空。
  *
@@ -12,24 +12,17 @@
  */
 
 import type { SecurityReport } from "./scanner.ts";
+import { STORAGE_KEY_PREFIX } from "../app-config";
+import type { DesktopApi } from "../../../electron/contracts.ts";
 
-const STORAGE_KEY = "trusttools.security.history.v1";
+const STORAGE_KEY = `${STORAGE_KEY_PREFIX}security.history.v1`;
 const HISTORY_DAYS = 30;
 const HISTORY_CAP = 100;
 const RISKS_CAP_PER_REPORT = 50;
 
-interface AITrackerDesktopApiLike {
-  getPreferences(): Promise<Record<string, unknown>>;
-  setPreference(key: string, value: unknown): Promise<void>;
-}
-
-function getDesktopApi(): AITrackerDesktopApiLike | undefined {
+function getDesktopApi(): DesktopApi | undefined {
   if (typeof window === "undefined") return undefined;
-  return (
-    window as {
-      desktopBridge?: AITrackerDesktopApiLike;
-    }
-  ).desktopBridge;
+  return window.desktopApi;
 }
 
 function isWithinHistoryWindow(scannedAt: string, now: Date): boolean {

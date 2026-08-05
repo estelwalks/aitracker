@@ -63,6 +63,7 @@ import {
   type MessageKey,
   type MessageParams,
 } from "../lib/i18n/messages";
+import { APP_ID, brandParams } from "../lib/app-config";
 import type { BoundFormatters } from "../lib/i18n/format";
 
 const PAGE_SIZE = 14;
@@ -119,6 +120,7 @@ export const Route = createFileRoute("/market")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.market",
+          brandParams,
         ),
       },
       {
@@ -126,6 +128,7 @@ export const Route = createFileRoute("/market")({
         content: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "market.meta.description",
+          brandParams,
         ),
       },
     ],
@@ -643,7 +646,12 @@ function SkillDetailDrawer({
       } else if (nextOutcome.reason === "scan-blocked") {
         setFailure(t("market.install.failure.scanBlocked"));
       } else {
-        setFailure(nextOutcome.message);
+        setFailure(
+          t(
+            nextOutcome.messageCode ?? "errors.market.outcome.failedAll",
+            nextOutcome.messageParams,
+          ),
+        );
       }
     } catch (error) {
       if (cancelledRef.current) return;
@@ -654,19 +662,7 @@ function SkillDetailDrawer({
         return;
       }
       const message = error instanceof Error ? error.message : "";
-      if (error instanceof Error && error.name === "DiskSpaceError") {
-        setFailure(t("market.install.failure.diskFull"));
-      } else if (message.includes("磁盘空间不足")) {
-        setFailure(t("market.install.failure.diskFull"));
-      } else if (
-        message.includes("超时") ||
-        message.includes("网络") ||
-        message.includes("下载失败")
-      ) {
-        setFailure(t("market.install.failure.download"));
-      } else {
-        setFailure(message || t("market.install.failure.generic"));
-      }
+      setFailure(message || t("market.install.failure.generic"));
     } finally {
       stopProgress();
       setSubmitting(false);
@@ -773,7 +769,7 @@ function SkillDetailDrawer({
               {t("market.drawer.commandExample")}
             </dt>
             <dd className="break-all font-mono text-[11px]">
-              trusttools install {skill.slug}
+              {APP_ID} install {skill.slug}
             </dd>
             <dt className="text-muted-foreground">
               {t("market.drawer.contextTokens")}
@@ -943,7 +939,12 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
             className={`mt-0.5 size-4 shrink-0 ${completed ? "text-ok" : "text-warn"}`}
           />
         )}
-        <strong>{outcome.message}</strong>
+        <strong>
+          {t(
+            outcome.messageCode ?? "errors.market.outcome.failedAll",
+            outcome.messageParams,
+          )}
+        </strong>
       </div>
       <div className="tt-num grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
         <span>
@@ -976,7 +977,11 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
             {target.installed
               ? t("market.outcome.success")
               : t("market.outcome.failed")}{" "}
-            · {target.agent} · {target.message}
+            · {target.agent} ·{" "}
+            {t(
+              target.messageCode ?? "market.outcome.failed",
+              target.messageParams,
+            )}
           </li>
         ))}
       </ul>

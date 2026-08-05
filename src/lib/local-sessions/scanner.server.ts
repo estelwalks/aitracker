@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
 
+import { ENV } from "../app-config";
 import { estimateSessionCost } from "./cost.ts";
 import { buildResumeCommand, isResumeSafeId } from "./resume-id.ts";
 import type {
@@ -1034,7 +1035,7 @@ export async function scanLocalSessions(
   options: ScanLocalSessionsOptions = {},
 ): Promise<SessionSummary> {
   const now = options.now ?? new Date();
-  const isolatedUsageHome = process.env.TRUSTTOOLS_USAGE_HOME?.trim();
+  const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
     options.homeDirectory ??
     (isolatedUsageHome && isAbsolute(isolatedUsageHome)

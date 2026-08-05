@@ -1,6 +1,14 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const errors = {
   generic: "작업에 실패했습니다. 다시 시도해 주세요",
+  security: {
+    dailyLimitReached: "오늘의 로컬 검사 할당량({limit}회)을 모두 사용했습니다",
+    fileRequired: "SKILL.md 또는 이를 포함한 Skill 폴더를 선택하세요",
+    fileTypeInvalid:
+      "SKILL.md 단일 파일 또는 SKILL.md가 포함된 Skill 폴더만 지원합니다",
+    fileTooLarge: "파일이 너무 큽니다. 100MB 이하의 파일을 선택하세요",
+    notTextFile: "SKILL.md는 파싱 가능한 텍스트 파일이 아닙니다",
+  },
   skills: {
     emptyInput: "인자가 비어 있을 수 없습니다",
     batchPathsCount: "일괄 제거 경로 수가 올바르지 않습니다",
@@ -8,12 +16,34 @@ export const errors = {
     installInvalid: "설치 인자가 올바르지 않습니다",
     syncInvalid: "동기화 인자가 올바르지 않습니다",
     blacklistInvalid: "블랙리스트 인자가 올바르지 않습니다",
+    invalidName: "Skill 이름이 올바르지 않습니다",
+    pathOutsideManaged: "경로가 관리되는 Skill 루트 안에 있지 않습니다",
+    symlinkEscape: "권한 밖 경로 또는 심볼릭 링크를 감지했습니다",
+    notManagedDir: "대상이 관리되는 Skill 디렉터리가 아닙니다",
+    recycleWriteFailed: "휴지통 디렉터리에 쓰지 못했습니다",
+    marketSymlinkForbidden:
+      "마켓 Skill 소스에는 심볼릭 링크가 허용되지 않습니다",
+    marketSourceNotDir: "마켓 Skill 소스는 디렉터리여야 합니다",
+    marketSourceSymlink: "마켓 Skill 소스에 심볼릭 링크가 포함될 수 없습니다",
+    invalidSourcePath: "마켓 Skill 소스 경로가 올바르지 않습니다",
+    sourceOutsideTemp: "마켓 Skill 소스가 관리되는 임시 디렉터리 밖에 있습니다",
+    marketRootNeedsSkillMd:
+      "마켓 Skill 루트에는 일반 파일 SKILL.md가 필요합니다",
+    unsupportedAgent: "대상 Agent가 지원되지 않습니다",
+    blacklisted: "이 Skill은 블랙리스트에 등록되어 있습니다",
+    copySymlinkForbidden: "심볼릭 링크 복사는 허용되지 않습니다",
+    invalidTargetPath: "대상 경로가 올바르지 않습니다",
+    overlappingPaths: "소스와 대상 경로가 겹쳐 작업이 차단되었습니다",
+    duplicateName: "대상 위치에 같은 이름의 Skill이 이미 있습니다",
+    noSkillSelected: "Skill을 하나 이상 선택하세요",
   },
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",
+    rateResponseIncomplete: "환율 응답이 불완전합니다",
+    rateMissingCurrency: "환율 응답에 통화가 없습니다",
   },
   market: {
     fieldInvalid: "마켓 필드 {field}이(가) 유효하지 않습니다",
@@ -28,5 +58,65 @@ export const errors = {
     searchTooLong: "검색어는 100자를 초과할 수 없습니다",
     sortInvalid: "정렬 매개변수가 유효하지 않습니다",
     installInvalid: "설치 매개변수가 유효하지 않습니다",
+    schema: {
+      invalidSkillParam: "Skill 매개변수가 올바르지 않습니다",
+      invalidInstallField: "Skill 설치 필드 {field}이(가) 유효하지 않습니다",
+      agentRequired: "Agent를 하나 이상 선택하세요",
+      unsupportedAgent: "지원되지 않는 Agent가 포함되어 있습니다",
+    },
+    api: {
+      http: "마켓 API 요청에 실패했습니다(HTTP {status})",
+      networkTimeout:
+        "네트워크를 사용할 수 없습니다: Skill 마켓 요청이 시간 초과되었고 로컬 캐시도 없습니다",
+    },
+    archive: {
+      tarNumericField: "다운로드에 잘못된 tar 숫자 필드가 포함되어 있습니다",
+      tarChecksum: "다운로드 tar 체크섬이 올바르지 않습니다",
+      invalidPath: "다운로드에 잘못된 경로가 포함되어 있습니다",
+      absolutePath: "다운로드에 절대 경로가 포함되어 있습니다: {path}",
+      pathTraversal: "다운로드에 경로 순회가 포함되어 있습니다: {path}",
+      tooManyEntries: "다운로드가 1000개 항목 제한을 초과했습니다",
+      fileTooLarge: "다운로드에 너무 큰 파일이 포함되어 있습니다: {path}",
+      tarTruncated: "다운로드 tar 내용이 불완전합니다",
+      paxBadLink:
+        "다운로드 PAX 메타데이터에 허용되지 않는 링크 대상이 있습니다",
+      badLinkEntry:
+        "다운로드에 허용되지 않는 링크 또는 특수 항목이 포함되어 있습니다: {path}",
+      unpackedTooLarge: "다운로드가 압축 해제 후 40MB 제한을 초과했습니다",
+      emptyTar: "다운로드가 비어 있거나 유효한 tar 아카이브가 아닙니다",
+      tarTooLarge: "다운로드가 20MB 제한을 초과했습니다",
+      emptyDownload: "다운로드 엔드포인트가 콘텐츠를 반환하지 않았습니다",
+      downloadHttp: "Skill 다운로드에 실패했습니다(HTTP {status})",
+      notGzip: "다운로드 콘텐츠가 유효한 gzip 아카이브가 아닙니다",
+      inflateFailed: "다운로드 압축 해제에 실패했거나 크기 제한을 초과했습니다",
+      downloadTimeout:
+        "Skill 다운로드가 시간 초과되었습니다. 네트워크를 확인하고 다시 시도하세요",
+    },
+    install: {
+      diskFull: "디스크 공간이 부족합니다. 공간을 확보하고 다시 시도하세요",
+      invalidName: "Skill 이름이 올바르지 않습니다",
+      pathTraversal: "다운로드에 경로 순회가 포함되어 있습니다: {path}",
+      parentDirEscape:
+        "다운로드 파일의 부모 디렉터리가 대상 경계를 벗어납니다: {path}",
+      duplicateEntry: "다운로드에 중복 항목이 포함되어 있습니다: {path}",
+      noSkillMd: "다운로드에서 SKILL.md를 찾을 수 없습니다",
+      multipleSkillRoots:
+        "다운로드에 여러 Skill 루트가 포함되어 있어 설치 대상을 안전하게 결정할 수 없습니다",
+      rootOutsideTemp: "Skill 루트가 임시 디렉터리 경계를 벗어납니다",
+    },
+    outcome: {
+      installedAll: "{count}개 Agent에 설치되었습니다.",
+      partialCount: "{succeeded}개 Agent가 성공하고 {failed}개가 실패했습니다.",
+      failedAll: "모든 대상 설치에 실패했습니다.",
+      scanBlocked:
+        "정적 검사에서 고위험 규칙이 발견되어 설치가 차단되었습니다.",
+      targetBlocked: "정적 검사를 통과하지 못해 설치를 건너뜁니다",
+    },
+  },
+  usage: {
+    configNotJson: "구성이 유효한 JSON이 아닙니다",
+    adapterConfigInvalid: "어댑터 구성이 올바르지 않습니다",
+    retentionNonNegative: "보존 일수는 음수가 아닌 정수여야 합니다",
+    retentionRange: "보존 일수가 허용 범위를 벗어났습니다",
   },
 } as const;

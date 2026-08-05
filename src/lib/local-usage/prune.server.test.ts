@@ -4,21 +4,22 @@ import { mkdir, mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { DATA_ROOT_MARKER } from "../app-config";
 import {
   clearRegenerableCache,
   directorySize,
-  isControlledAITrackerDirectory,
+  isControlledDataDirectory,
   pruneExpiredCacheFiles,
 } from "./prune.server.ts";
 
 async function controlledRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix));
-  await writeFile(join(root, ".trusttools-data-root"), "trusttools-v1\n");
+  await writeFile(join(root, DATA_ROOT_MARKER), "tt-v1\n");
   return root;
 }
 
 test("directorySize sums files recursively and ignores symlinks", async () => {
-  const root = await controlledRoot("trusttools-prune-size-");
+  const root = await controlledRoot("tt-prune-size-");
   await mkdir(join(root, "cache"), { recursive: true });
   await mkdir(join(root, "trash"), { recursive: true });
   await writeFile(join(root, "a.json"), "x".repeat(10));
@@ -26,13 +27,13 @@ test("directorySize sums files recursively and ignores symlinks", async () => {
   await writeFile(join(root, "trash", "t.json"), "z".repeat(5));
 
   assert.deepEqual(await directorySize(root), {
-    bytes: 10 + 20 + 5 + 14,
+    bytes: 10 + 20 + 5 + 6,
     fileCount: 4,
   });
 });
 
-test("retention only removes expired files from a marked AITracker cache", async () => {
-  const root = await controlledRoot("trusttools-prune-retention-");
+test("retention only removes expired files from a marked cache", async () => {
+  const root = await controlledRoot("tt-prune-retention-");
   const cache = join(root, "cache");
   await mkdir(cache, { recursive: true });
   const oldCache = join(cache, "old-index.json");
@@ -62,7 +63,7 @@ test("retention only removes expired files from a marked AITracker cache", async
 });
 
 test("permanent retention does not delete regenerable cache", async () => {
-  const root = await controlledRoot("trusttools-prune-forever-");
+  const root = await controlledRoot("tt-prune-forever-");
   const cacheFile = join(root, "cache", "index.json");
   await mkdir(join(root, "cache"), { recursive: true });
   await writeFile(cacheFile, "cache");
@@ -74,7 +75,7 @@ test("permanent retention does not delete regenerable cache", async () => {
 });
 
 test("cache clear returns actual file and byte statistics without touching config", async () => {
-  const root = await controlledRoot("trusttools-prune-clear-");
+  const root = await controlledRoot("tt-prune-clear-");
   await mkdir(join(root, "cache", "nested"), { recursive: true });
   await writeFile(join(root, "cache", "index.json"), "1234");
   await writeFile(join(root, "cache", "nested", "market.json"), "123456");
@@ -93,9 +94,9 @@ test("refuses an unmarked external directory even when it contains a cache folde
   await mkdir(join(externalRoot, "cache"), { recursive: true });
   await writeFile(externalLog, "external tool log");
 
-  assert.equal(await isControlledAITrackerDirectory(externalRoot), false);
+  assert.equal(await isControlledDataDirectory(externalRoot), false);
   const cleanup = await clearRegenerableCache(externalRoot);
   assert.equal(cleanup.skipped, true);
-  assert.match(cleanup.reason ?? "", /未经 AITracker 验证/);
+  assert.match(cleanup.reason ?? "", /not been validated/);
   assert.equal(await readFile(externalLog, "utf8"), "external tool log");
 });

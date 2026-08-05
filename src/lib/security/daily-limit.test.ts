@@ -19,6 +19,9 @@ test("persists ten scans per local calendar day and resets next day", () => {
   for (let count = 1; count <= 10; count += 1) {
     assert.equal(consumeDailyScan(memory, today), count);
   }
-  assert.throws(() => consumeDailyScan(memory, today), /10 次/);
+  assert.throws(
+    () => consumeDailyScan(memory, today),
+    /errors.security.dailyLimitReached/,
+  );
   assert.equal(readDailyScanCount(memory, new Date(2026, 6, 28, 0, 1)), 0);
 });

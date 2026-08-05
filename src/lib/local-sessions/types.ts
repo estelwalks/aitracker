@@ -1,5 +1,5 @@
 /**
- * Local AI-tool session records (Task D1, AITracker V3.0 PRD v1.2).
+ * Local AI-tool session records (Task D1, V3.0 PRD v1.2).
  *
  * A `SessionRecord` is a privacy-preserving summary of one resumable session
  * from one of the three tools that expose a real session/resume concept:

@@ -1,4 +1,5 @@
 import { gunzipSync } from "node:zlib";
+import { AppError } from "../errors";
 
 import type {
   SkillDownloadInspection,
@@ -109,7 +110,8 @@ function readTarString(block: Buffer, start: number, length: number): string {
 
 function readTarOctal(block: Buffer, start: number, length: number): number {
   const raw = readTarString(block, start, length).replace(/\0/g, "").trim();
-  if (!/^[0-7]*$/.test(raw)) throw new Error("下载包包含无效的 tar 数字字段");
+  if (!/^[0-7]*$/.test(raw))
+    throw new AppError("errors.market.archive.tarNumericField");
   return raw === "" ? 0 : Number.parseInt(raw, 8);
 }
 
@@ -119,20 +121,21 @@ function validateTarChecksum(block: Buffer): void {
   for (let index = 0; index < 512; index += 1) {
     actual += index >= 148 && index < 156 ? 32 : (block[index] ?? 0);
   }
-  if (expected !== actual) throw new Error("下载包 tar 校验和无效");
+  if (expected !== actual)
+    throw new AppError("errors.market.archive.tarChecksum");
 }
 
 export function validateArchivePath(input: string): string {
   if (!input || input.includes("\0") || input.includes("\\")) {
-    throw new Error("下载包包含无效路径");
+    throw new AppError("errors.market.archive.invalidPath");
   }
   if (input.startsWith("/") || /^[a-zA-Z]:/.test(input)) {
-    throw new Error(`下载包包含绝对路径：${input}`);
+    throw new AppError("errors.market.archive.absolutePath", { path: input });
   }
 
   const parts = input.split("/").filter((part) => part !== "" && part !== ".");
   if (parts.length === 0 || parts.some((part) => part === "..")) {
-    throw new Error(`下载包包含路径穿越：${input}`);
+    throw new AppError("errors.market.archive.pathTraversal", { path: input });
   }
   return parts.join("/");
 }
@@ -146,7 +149,7 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
   while (offset + 512 <= buffer.length) {
     headersChecked += 1;
     if (headersChecked > MAX_ENTRIES)
-      throw new Error("下载包条目数量超过 1000 个限制");
+      throw new AppError("errors.market.archive.tooManyEntries");
     const header = buffer.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) break;
     validateTarChecksum(header);
@@ -156,9 +159,10 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
     const path = validateArchivePath(prefix ? `${prefix}/${name}` : name);
     const size = readTarOctal(header, 124, 12);
     const typeFlag = readTarString(header, 156, 1) || "0";
-    if (size > MAX_FILE_BYTES) throw new Error(`下载包单文件过大：${path}`);
+    if (size > MAX_FILE_BYTES)
+      throw new AppError("errors.market.archive.fileTooLarge", { path });
     if (offset + 512 + size > buffer.length)
-      throw new Error("下载包 tar 内容不完整");
+      throw new AppError("errors.market.archive.tarTruncated");
     if (["x", "g"].includes(typeFlag)) {
       const metadata = buffer
         .subarray(offset + 512, offset + 512 + size)
@@ -173,19 +177,19 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
         const value = assignment.slice(equals + 1);
         if (key === "path") validateArchivePath(value);
         if (key === "linkpath") {
-          throw new Error("下载包 PAX 元数据包含不允许的链接目标");
+          throw new AppError("errors.market.archive.paxBadLink");
         }
       }
       offset += 512 + Math.ceil(size / 512) * 512;
       continue;
     }
     if (!["0", "5"].includes(typeFlag)) {
-      throw new Error(`下载包包含不允许的链接或特殊条目：${path}`);
+      throw new AppError("errors.market.archive.badLinkEntry", { path });
     }
 
     unpackedBytes += size;
     if (unpackedBytes > MAX_UNPACKED_BYTES)
-      throw new Error("下载包解压后体积超过 40 MB 限制");
+      throw new AppError("errors.market.archive.unpackedTooLarge");
 
     entries.push({
       path,
@@ -198,7 +202,8 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
     offset += 512 + Math.ceil(size / 512) * 512;
   }
 
-  if (entries.length === 0) throw new Error("下载包为空或不是有效的 tar 包");
+  if (entries.length === 0)
+    throw new AppError("errors.market.archive.emptyTar");
   return entries;
 }
 
@@ -256,9 +261,9 @@ export function scanTarEntries(entries: TarEntry[]): StaticScanReport {
 async function readLimitedBody(response: Response): Promise<Buffer> {
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_COMPRESSED_BYTES) {
-    throw new Error("下载包超过 20 MB 限制");
+    throw new AppError("errors.market.archive.tarTooLarge");
   }
-  if (!response.body) throw new Error("下载接口没有返回文件内容");
+  if (!response.body) throw new AppError("errors.market.archive.emptyDownload");
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -269,7 +274,7 @@ async function readLimitedBody(response: Response): Promise<Buffer> {
     size += value.byteLength;
     if (size > MAX_COMPRESSED_BYTES) {
       await reader.cancel();
-      throw new Error("下载包超过 20 MB 限制");
+      throw new AppError("errors.market.archive.tarTooLarge");
     }
     chunks.push(value);
   }
@@ -302,7 +307,9 @@ export async function downloadAndInspectSkill(
       signal: controller.signal,
     });
     if (!response.ok)
-      throw new Error(`Skill 下载失败（HTTP ${response.status}）`);
+      throw new AppError("errors.market.archive.downloadHttp", {
+        status: response.status,
+      });
 
     const compressed = await readLimitedBody(response);
     if (
@@ -310,7 +317,7 @@ export async function downloadAndInspectSkill(
       compressed[0] !== 0x1f ||
       compressed[1] !== 0x8b
     ) {
-      throw new Error("下载内容不是有效的 gzip 压缩包");
+      throw new AppError("errors.market.archive.notGzip");
     }
 
     let unpacked: Buffer;
@@ -319,7 +326,7 @@ export async function downloadAndInspectSkill(
         maxOutputLength: MAX_UNPACKED_BYTES,
       });
     } catch {
-      throw new Error("下载包解压失败或解压后体积超限");
+      throw new AppError("errors.market.archive.inflateFailed");
     }
 
     const entries = parseTarArchive(unpacked);
@@ -334,7 +341,7 @@ export async function downloadAndInspectSkill(
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Skill 下载超时，请检查网络后重试");
+      throw new AppError("errors.market.archive.downloadTimeout");
     }
     throw error;
   } finally {

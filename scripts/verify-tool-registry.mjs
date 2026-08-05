@@ -29,7 +29,7 @@ const { TOOL_DEFINITIONS } = await imp("tools/index.ts");
 
 const registry = compileToolRegistry(TOOL_DEFINITIONS);
 
-console.log("AITracker tool-registry verify");
+console.log("tool-registry verify");
 console.log("─────────────────────────────────────────");
 
 // Baseline counts (frozen reference).

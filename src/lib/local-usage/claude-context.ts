@@ -12,7 +12,7 @@
  * - Skill 名、工具名、MCP server/tool 名属统计字段，允许采集。
  *
  * 实现思路参考 AITracker 的可观察行为（按 content block type/name 分类），
- * 但使用 AITracker 自有类型与分类口径，不复制其代码结构。
+ * 但使用应用自有类型与分类口径，不复制其代码结构。
  */
 
 import type {
@@ -27,7 +27,7 @@ interface JsonObject {
   [key: string]: unknown;
 }
 
-/** Claude Code 工具名 -> AITracker 工具分类。 */
+/** Claude Code 工具名 -> 应用工具分类。 */
 function claudeToolCategory(name: string): LocalUsageToolCategory {
   if (name === "Bash" || name === "exec_command") return "execution";
   if (name === "Edit" || name === "Write" || name === "apply_patch")

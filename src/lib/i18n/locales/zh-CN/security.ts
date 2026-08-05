@@ -31,7 +31,7 @@ export const security = {
     read: "读取本地 SKILL.md",
   },
   rulesNotice:
-    "内置规则库 v{version}，随 AITracker 应用更新；当前没有远端规则库更新通道，因此不会发起网络请求或显示伪造的更新成功状态。",
+    "内置规则库 v{version}，随 {appName} 应用更新；当前没有远端规则库更新通道，因此不会发起网络请求或显示伪造的更新成功状态。",
   dropzone: {
     title: "拖入 SKILL.md 或 Skill 文件夹以开始扫描",
     hint: "仅支持 SKILL.md / 含 SKILL.md 的目录 · 单文件最大 100MB · 本地解析，不上传源码",

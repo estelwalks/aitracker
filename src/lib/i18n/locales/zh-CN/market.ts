@@ -3,7 +3,7 @@ export const market = {
   pageHeaderDesc: "仅收录通过安全扫描的 Skill",
   meta: {
     description:
-      "浏览 AITracker Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
+      "浏览 {appName} Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
   },
   notProvided: "未提供",
   network: {

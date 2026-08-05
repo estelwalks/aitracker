@@ -3,7 +3,7 @@ export const market = {
   pageHeaderDesc: "Only Skills that passed security scanning are listed",
   meta: {
     description:
-      "Browse the real AITracker Skill Market index — only Skills that passed security scanning are included.",
+      "Browse the real {appName} Skill Market index — only Skills that passed security scanning are included.",
   },
   notProvided: "Not provided",
   network: {

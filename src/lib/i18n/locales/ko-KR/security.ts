@@ -34,7 +34,7 @@ export const security = {
     read: "로컬 SKILL.md 읽기",
   },
   rulesNotice:
-    "내장 규칙 라이브러리 v{version}은 AITracker 앱과 함께 업데이트됩니다. 현재 원격 규칙 업데이트 채널이 없으므로 네트워크 요청을 보내지 않으며 가짜 업데이트 성공 상태도 표시하지 않습니다.",
+    "내장 규칙 라이브러리 v{version}은 {appName} 앱과 함께 업데이트됩니다. 현재 원격 규칙 업데이트 채널이 없으므로 네트워크 요청을 보내지 않으며 가짜 업데이트 성공 상태도 표시하지 않습니다.",
   dropzone: {
     title: "SKILL.md 또는 Skill 폴더를 끌어다 놓아 스캔을 시작하세요",
     hint: "SKILL.md / SKILL.md가 포함된 디렉터리만 지원 · 파일당 최대 100MB · 로컬에서 분석하며 소스 코드를 업로드하지 않음",

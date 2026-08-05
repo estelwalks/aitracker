@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
 
+import { ENV } from "../app-config";
 import { isResumeSafeId } from "./resume-id.ts";
 import { scanLocalSessions } from "./scanner.server.ts";
 import type { SessionRecord } from "./types.ts";
@@ -11,7 +12,7 @@ import type { SessionRecord } from "./types.ts";
 const NOW = new Date("2026-08-03T12:00:00.000Z");
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await mkdtemp(join(tmpdir(), "trusttools-sessions-"));
+  const home = await mkdtemp(join(tmpdir(), "tt-sessions-"));
   try {
     return await fn(home);
   } finally {
@@ -607,7 +608,7 @@ test("dedupes by source:sessionId across sources and sorts by startedAt desc", a
   });
 });
 
-test("Claude Code: respects TRUSTTOOLS_USAGE_HOME override", async () => {
+test("Claude Code: respects the usage-home env override", async () => {
   await withTempHome(async (home) => {
     const projectDir = join(home, ".claude", "projects", "demo");
     await mkdir(projectDir, { recursive: true });
@@ -622,17 +623,17 @@ test("Claude Code: respects TRUSTTOOLS_USAGE_HOME override", async () => {
       })}\n`,
     );
 
-    const previous = process.env.TRUSTTOOLS_USAGE_HOME;
-    process.env.TRUSTTOOLS_USAGE_HOME = home;
+    const previous = process.env[ENV.USAGE_HOME];
+    process.env[ENV.USAGE_HOME] = home;
     try {
       const summary = await scanLocalSessions({ now: NOW });
       assert.equal(summary.total, 1);
       assert.equal(summary.sessions[0]!.sessionId, sessionId);
     } finally {
       if (previous === undefined) {
-        delete process.env.TRUSTTOOLS_USAGE_HOME;
+        delete process.env[ENV.USAGE_HOME];
       } else {
-        process.env.TRUSTTOOLS_USAGE_HOME = previous;
+        process.env[ENV.USAGE_HOME] = previous;
       }
     }
   });

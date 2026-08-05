@@ -193,7 +193,7 @@ export const dashboard = {
     rescan: "再スキャン",
   },
   poster: {
-    headline: "AITracker Token 戦報",
+    headline: "{appName} Token 戦報",
     rankLabel: "今期の称号",
     totalTokens: "総 Token",
     metricCost: "推定費用",

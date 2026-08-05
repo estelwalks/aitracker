@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { I18nProvider, useI18n } from "../lib/i18n/context";
 import { catalogs, getMessage } from "../lib/i18n/messages";
+import { APP_NAME, brandParams } from "../lib/app-config";
 import {
   mapSystemCurrency,
   resolveCurrencyFromSearch,
@@ -132,12 +133,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         meta: [
           { charSet: "utf-8" },
           { name: "viewport", content: "width=device-width, initial-scale=1" },
-          { title: getMessage(catalogs[locale], "meta.title") },
+          { title: getMessage(catalogs[locale], "meta.title", brandParams) },
           {
             name: "description",
-            content: getMessage(catalogs[locale], "meta.description"),
+            content: getMessage(
+              catalogs[locale],
+              "meta.description",
+              brandParams,
+            ),
           },
-          { name: "author", content: "AITracker" },
+          { name: "author", content: APP_NAME },
           { property: "og:type", content: "website" },
           { name: "twitter:card", content: "summary_large_image" },
         ],

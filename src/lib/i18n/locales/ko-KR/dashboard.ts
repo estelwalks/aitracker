@@ -190,7 +190,7 @@ export const dashboard = {
     rescan: "다시 스캔",
   },
   poster: {
-    headline: "AITracker Token 전보",
+    headline: "{appName} Token 전보",
     rankLabel: "이번 기간 칭호",
     totalTokens: "총 Token",
     metricCost: "추정 비용",

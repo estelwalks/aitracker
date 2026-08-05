@@ -32,9 +32,9 @@ const WHITELISTED_FILES = new Set([
   "src/routes/security.tsx", // 保留:rules 数据直显;其余文案应迁移
 ]);
 
-// Pass-through phrases (tool/product names, tech terms, punctuation).
+// Pass-through phrases (tool names, tech terms, punctuation). The app's own
+// product name is intentionally absent — it must come from app-config.
 const WHITELIST_PATTERNS = [
-  "AITracker",
   "Claude Code",
   "Codex",
   "Aipy",
@@ -128,9 +128,6 @@ for (const file of listFiles()) {
     if (/\bt\(\s*["']/.test(line)) return;
     if (LABEL_MAP_LINE_RE.test(line)) return;
     if (isDataValueLine(line)) return;
-    // 服务端错误消息匹配(message.includes("磁盘空间不足") 等):匹配的是
-    // 不翻译的服务端中文消息,属业务分类逻辑而非 UI 文案。
-    if (/message\.includes\(/.test(line)) return;
     const visible = line.replace(/^[\s]*/, "").slice(0, 120);
     violations.push(`${file}:${index + 1}: ${visible}`);
   });
@@ -138,19 +135,19 @@ for (const file of listFiles()) {
 
 if (violations.length) {
   console.error(
-    `check-hardcoded-text: 发现 ${violations.length} 处疑似未迁移的中日韩 UI 文案\n`,
+    `check-hardcoded-text: ${violations.length} possibly unmigrated CJK UI string(s) found\n`,
   );
   for (const v of violations.slice(0, 40)) console.error(`  ✖ ${v}`);
   if (violations.length > 40) {
-    console.error(`  … 其余 ${violations.length - 40} 处省略`);
+    console.error(`  … ${violations.length - 40} more (truncated)`);
   }
   if (reportOnly) {
     console.error(
-      "\n(仅报告模式 — 未失败;白名单见 scripts/check-hardcoded-text.mjs)",
+      "\n(report-only mode — no failure; whitelist in scripts/check-hardcoded-text.mjs)",
     );
     process.exit(0);
   }
   process.exit(1);
 }
 
-console.log("check-hardcoded-text: 路由/组件未发现硬编码中日韩 UI 文案");
+console.log("check-hardcoded-text: no hardcoded CJK UI text in routes/components");

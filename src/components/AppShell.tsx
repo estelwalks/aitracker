@@ -13,6 +13,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useI18n } from "../lib/i18n/context";
+import { APP_NAME, APP_VERSION } from "../lib/app-config";
 import type { MessageKey } from "../lib/i18n/messages";
 
 const nav: Array<{
@@ -66,9 +67,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           {!collapsed && (
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-semibold">AITracker</div>
+              <div className="truncate text-sm font-semibold">{APP_NAME}</div>
               <div className="tt-num text-[10px] text-muted-foreground">
-                v1.0.0.1
+                v{APP_VERSION}
               </div>
             </div>
           )}

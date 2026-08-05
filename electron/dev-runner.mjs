@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+// Env-var names below mirror src/lib/app-config.ts ENV (plain JS cannot import
+// the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
 const host = process.env.TRUSTTOOLS_DEV_HOST ?? "127.0.0.1";
 const port = process.env.TRUSTTOOLS_DEV_PORT ?? "5173";

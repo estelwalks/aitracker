@@ -15,6 +15,7 @@ import {
   resolveDesktopPreferences,
   type DesktopLocale,
 } from "./i18n.js";
+import { APP_NAME } from "./app-config.js";
 import {
   CURRENCY_MODE_PREF_KEY,
   CURRENCY_PREF_KEY,
@@ -40,7 +41,7 @@ test("electronMessages: 四个语言齐全且无空文案", () => {
 
 test("electronMessages: 非中文文案允许在任意 UI 语言展示(品牌名不翻译)", () => {
   for (const locale of DESKTOP_LOCALES) {
-    assert.equal(electronMessages[locale].tray.tooltip, "AITracker");
+    assert.equal(electronMessages[locale].tray.tooltip, APP_NAME);
   }
 });
 

@@ -11,6 +11,7 @@ import {
   LOCALE_MODE_PREF_KEY,
   LOCALE_PREF_KEY,
 } from "./prefs.js";
+import { APP_DATA_DIR, APP_NAME } from "./app-config.js";
 
 /**
  * Main-process message catalog and preference resolution — deliberately free
@@ -66,91 +67,119 @@ export interface ElectronMessages {
   };
 }
 
-export const electronMessages: Record<DesktopLocale, ElectronMessages> = {
+const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
   "zh-CN": {
-    tray: { tooltip: "AITracker" },
-    menu: { open: "打开 AITracker", autoLaunch: "开机自动启动", quit: "退出" },
+    tray: { tooltip: "{appName}" },
+    menu: { open: "打开 {appName}", autoLaunch: "开机自动启动", quit: "退出" },
     dialog: {
       closeHint: {
-        message: "AITracker 将继续在菜单栏运行，可通过托盘图标重新打开",
+        message: "{appName} 将继续在菜单栏运行，可通过托盘图标重新打开",
         ok: "知道了",
       },
       dataIncompat: {
         title: "数据版本不兼容",
         message:
-          "检测到旧版本数据格式 (v{oldVer})，与当前版本 ({curVer}) 不兼容。建议备份 ~/.trusttools/ 目录后清除数据重新启动。",
+          "检测到旧版本数据格式 (v{oldVer})，与当前版本 ({curVer}) 不兼容。建议备份 ~/{dataDir}/ 目录后清除数据重新启动。",
         quit: "退出",
         clearAndContinue: "清除数据并继续",
       },
     },
   },
   "en-US": {
-    tray: { tooltip: "AITracker" },
+    tray: { tooltip: "{appName}" },
     menu: {
-      open: "Open AITracker",
+      open: "Open {appName}",
       autoLaunch: "Launch at Login",
       quit: "Quit",
     },
     dialog: {
       closeHint: {
         message:
-          "AITracker will keep running in the menu bar — reopen it from the tray icon",
+          "{appName} will keep running in the menu bar — reopen it from the tray icon",
         ok: "Got it",
       },
       dataIncompat: {
         title: "Incompatible data version",
         message:
-          "Detected an older data format (v{oldVer}) that is incompatible with the current version ({curVer}). Back up the ~/.trusttools/ directory, then clear the data and restart.",
+          "Detected an older data format (v{oldVer}) that is incompatible with the current version ({curVer}). Back up the ~/{dataDir}/ directory, then clear the data and restart.",
         quit: "Quit",
         clearAndContinue: "Clear data and continue",
       },
     },
   },
   "ja-JP": {
-    tray: { tooltip: "AITracker" },
+    tray: { tooltip: "{appName}" },
     menu: {
-      open: "AITracker を開く",
+      open: "{appName} を開く",
       autoLaunch: "ログイン時に起動",
       quit: "終了",
     },
     dialog: {
       closeHint: {
         message:
-          "AITracker はメニューバーで実行を続けます。トレイアイコンから再度開けます",
+          "{appName} はメニューバーで実行を続けます。トレイアイコンから再度開けます",
         ok: "了解しました",
       },
       dataIncompat: {
         title: "データバージョン非互換",
         message:
-          "旧バージョンのデータ形式 (v{oldVer}) を検出しました。現在のバージョン ({curVer}) とは互換性がありません。~/.trusttools/ ディレクトリをバックアップしてから、データを消去して再起動してください。",
+          "旧バージョンのデータ形式 (v{oldVer}) を検出しました。現在のバージョン ({curVer}) とは互換性がありません。~/{dataDir}/ ディレクトリをバックアップしてから、データを消去して再起動してください。",
         quit: "終了",
         clearAndContinue: "データを消去して続行",
       },
     },
   },
   "ko-KR": {
-    tray: { tooltip: "AITracker" },
+    tray: { tooltip: "{appName}" },
     menu: {
-      open: "AITracker 열기",
+      open: "{appName} 열기",
       autoLaunch: "로그인 시 실행",
       quit: "종료",
     },
     dialog: {
       closeHint: {
         message:
-          "AITracker는 메뉴 막대에서 계속 실행됩니다. 트레이 아이콘으로 다시 열 수 있습니다",
+          "{appName}는 메뉴 막대에서 계속 실행됩니다. 트레이 아이콘으로 다시 열 수 있습니다",
         ok: "확인",
       },
       dataIncompat: {
         title: "데이터 버전 비호환",
         message:
-          "이전 버전의 데이터 형식(v{oldVer})을 감지했습니다. 현재 버전({curVer})과 호환되지 않습니다. ~/.trusttools/ 디렉터리를 백업한 후 데이터를 삭제하고 다시 시작하세요.",
+          "이전 버전의 데이터 형식(v{oldVer})을 감지했습니다. 현재 버전({curVer})과 호환되지 않습니다. ~/{dataDir}/ 디렉터리를 백업한 후 데이터를 삭제하고 다시 시작하세요.",
         quit: "종료",
         clearAndContinue: "데이터 삭제 후 계속",
       },
     },
   },
 };
+
+/**
+ * Resolve the `{appName}` / `{dataDir}` placeholders from the central config.
+ * The raw catalog stays a pure data module (no `electron` import), so the
+ * interpolation happens once at module init and the result is exported.
+ */
+function applyBrand<T>(value: T): T {
+  if (typeof value === "string") {
+    return value
+      .replaceAll("{appName}", APP_NAME)
+      .replaceAll("{dataDir}", `~/${APP_DATA_DIR}`) as T;
+  }
+  if (Array.isArray(value)) return value.map(applyBrand) as T;
+  if (value != null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [key, applyBrand(child)]),
+    ) as T;
+  }
+  return value;
+}
+
+export const electronMessages: Record<DesktopLocale, ElectronMessages> =
+  Object.fromEntries(
+    DESKTOP_LOCALES.map((locale) => [
+      locale,
+      applyBrand(rawElectronMessages[locale]),
+    ]),
+  ) as Record<DesktopLocale, ElectronMessages>;
 
 /** Exact-match a raw prefs/system value against the supported locales. */
 export function normalizeDesktopLocale(raw: unknown): DesktopLocale | null {
@@ -184,7 +213,7 @@ export function mapAppLocale(raw: string | null | undefined): DesktopLocale {
 
 /**
  * Resolve the display locale for the desktop shell:
- * user preference (`trusttools.locale` in prefs) > system language > zh-CN.
+ * user preference (locale pref key in prefs) > system language > zh-CN.
  */
 export function resolveDesktopLocale(
   prefs: Record<string, unknown>,

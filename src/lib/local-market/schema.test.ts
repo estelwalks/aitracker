@@ -41,11 +41,11 @@ test("parseMarketApiResponse maps real API fields without inventing rating or ve
 test("parseMarketApiResponse rejects malformed contracts", () => {
   assert.throws(
     () => parseMarketApiResponse({ success: true, data: [{}], pagination: {} }),
-    /字段/,
+    /errors\.market\.(pagingField|field)Invalid/,
   );
   assert.throws(
     () => parseMarketApiResponse({ success: false, data: [], pagination: {} }),
-    /格式无效/,
+    /errors\.market\.invalidFormat/,
   );
 });
 
@@ -106,14 +106,14 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
   );
   assert.throws(
     () => parseMarketQuery({ page: 0, limit: 20, search: "" }),
-    /页码/,
+    /errors\.market\.pageNotPositive/,
   );
   assert.throws(
     () => parseMarketQuery({ page: 1, limit: 100, search: "" }),
-    /每页/,
+    /errors\.market\.limitRange/,
   );
   assert.throws(
     () => parseMarketQuery({ page: 1, limit: 20, search: "", sort: "invalid" }),
-    /排序/,
+    /errors\.market\.sortInvalid/,
   );
 });
