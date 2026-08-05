@@ -30,7 +30,9 @@
     "check:i18n": "tsc --noEmit && node --import tsx --test src/lib/i18n/locale.test.ts src/lib/i18n/messages.test.ts src/lib/i18n/format.test.ts electron/i18n.test.ts electron/prefs.test.ts && node --import tsx scripts/check-translations.mjs && node scripts/check-hardcoded-text.mjs && node scripts/check-locale-sync.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "verify:tool-registry": "node --import tsx scripts/verify-tool-registry.mjs"
+    "generate:manifest": "node --import tsx scripts/generate-tool-manifest.mjs",
+    "prebuild": "npm run generate:manifest",
+    "verify:tool-registry": "npm run generate:manifest && node --import tsx scripts/verify-tool-registry.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
