@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Cursor skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination).
+ * Cursor. Usage: adapter reader "generic". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "cursor",
@@ -17,7 +16,23 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "adapter",
+      reader: "generic",
+      paths: [
+        {
+          root: "Library/Application Support/Cursor/User/globalStorage",
+          glob: "**/*usage*.json",
+          format: "json",
+        },
+        {
+          root: "AppData/Roaming/Cursor/User/globalStorage",
+          glob: "**/*usage*.json",
+          format: "json",
+        },
+        { root: ".cursor", glob: "**/*usage*.jsonl", format: "jsonl" },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

@@ -22,11 +22,13 @@ export interface ValidationDiagnostic {
 }
 
 export const BUILTIN_USAGE_READERS: ReadonlySet<string> = new Set([
+  "generic",
   "generic-json",
   "generic-jsonl",
   "generic-sqlite",
   "claude-rollout-v1",
   "codex-rollout-v1",
+  "workbuddy-native",
 ]);
 
 export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([

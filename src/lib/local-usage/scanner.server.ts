@@ -15,6 +15,8 @@ import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
+import { getDefaultRegistry } from "../tool-registry/registry.ts";
+import { computeRegistryFingerprint } from "../tool-registry/fingerprint.server.ts";
 import { buildLocalUsageSnapshot } from "./aggregate.ts";
 import {
   collectCodexContextRecord,
@@ -58,8 +60,15 @@ const MAX_FILES_PER_SOURCE = 1_200;
 const MAX_DISCOVERED_ENTRIES_PER_SOURCE = 30_000;
 const MAX_JSONL_LINE_LENGTH = 16 * 1024 * 1024;
 const FUTURE_TIMESTAMP_TOLERANCE_MS = DAY_IN_MS;
-const PERSISTENT_CACHE_VERSION = 11;
+const PERSISTENT_CACHE_VERSION = 12;
 const PERSISTENT_CACHE_FILE_NAME = "local-usage-index-v10.json";
+/**
+ * Fingerprint of the tool-registry config that produced this cache. A config
+ * change (paths, reader, command, or pricing-rule set) invalidates the cache so
+ * stale parse results are never served. Bumped with PERSISTENT_CACHE_VERSION
+ * (11 -> 12) to force a one-time rebuild on first run after the migration.
+ */
+const REGISTRY_FINGERPRINT = computeRegistryFingerprint(getDefaultRegistry());
 const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
   "local-usage-index-v1.json",
   "local-usage-index-v2.json",
@@ -186,6 +195,7 @@ type PersistentFileEntry =
 
 interface PersistentUsageIndex {
   version: typeof PERSISTENT_CACHE_VERSION;
+  registryFingerprint: string;
   files: PersistentFileEntry[];
 }
 
@@ -433,7 +443,8 @@ async function loadPersistentIndex(
     const index = asObject(raw);
     if (
       index?.version !== PERSISTENT_CACHE_VERSION ||
-      !Array.isArray(index.files)
+      !Array.isArray(index.files) ||
+      index.registryFingerprint !== REGISTRY_FINGERPRINT
     ) {
       return undefined;
     }
@@ -446,7 +457,11 @@ async function loadPersistentIndex(
       }
       files.push(entry);
     }
-    return { version: PERSISTENT_CACHE_VERSION, files };
+    return {
+      version: PERSISTENT_CACHE_VERSION,
+      registryFingerprint: REGISTRY_FINGERPRINT,
+      files,
+    };
   } catch {
     return undefined;
   }
@@ -464,6 +479,7 @@ async function writePersistentIndex(
   );
   const payload = JSON.stringify({
     version: PERSISTENT_CACHE_VERSION,
+    registryFingerprint: REGISTRY_FINGERPRINT,
     files,
   } satisfies PersistentUsageIndex);
 

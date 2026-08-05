@@ -39,7 +39,7 @@ test("each config id equals its filename stem", () => {
   assert.deepEqual([...ids].sort(), BASELINE_TOOLS.map((t) => t.id).sort());
 });
 
-test("only the 9 skill agents carry skills + market; all other capabilities unsupported", () => {
+test("skill/market/usage capabilities match the frozen baseline sets", () => {
   const registry = compileToolRegistry(TOOL_DEFINITIONS);
   const BASELINE_SKILL_IDS = [
     "claude-code",
@@ -52,6 +52,17 @@ test("only the 9 skill agents carry skills + market; all other capabilities unsu
     "openclaw",
     "antigravity",
   ];
+  // 10 tools carry a usage capability (claude/codex/workbuddy native; 7 adapter).
+  const BASELINE_USAGE_NATIVE = new Set(["claude-code", "codex", "workbuddy"]);
+  const BASELINE_USAGE_ADAPTER = new Set([
+    "cursor",
+    "gemini-cli",
+    "kimi-code",
+    "opencode",
+    "grok",
+    "github-copilot",
+    "roo-code",
+  ]);
   for (const def of registry.definitions) {
     const isSkill = BASELINE_SKILL_IDS.includes(def.id);
     assert.equal(
@@ -62,8 +73,13 @@ test("only the 9 skill agents carry skills + market; all other capabilities unsu
       def.capabilities.market.mode,
       isSkill ? "install-target" : "unsupported",
     );
-    // usage/agents/sessions/security are still unsupported for every tool in M3.
-    assert.equal(def.capabilities.usage.mode, "unsupported");
+    const expectedUsage = BASELINE_USAGE_NATIVE.has(def.id)
+      ? "native"
+      : BASELINE_USAGE_ADAPTER.has(def.id)
+        ? "adapter"
+        : "unsupported";
+    assert.equal(def.capabilities.usage.mode, expectedUsage);
+    // agents/sessions/security are still unsupported for every tool in M4.
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(def.capabilities.sessions.mode, "unsupported");
     assert.equal(def.capabilities.security.mode, "unsupported");
