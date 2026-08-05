@@ -1,11 +1,6 @@
-import { SKILL_TOOL_NAMES } from "../tools/catalog.ts";
+import { SKILL_AGENTS } from "./agent-rules.ts";
 
-/**
- * Skill agent labels - derived from the catalog as the `nameZh` of every tool
- * that exposes a skills directory (`skillRootSuffix !== null`). Kept as a
- * `readonly` tuple so `SkillAgent` is a narrow literal union.
- */
-export const SKILL_AGENTS = SKILL_TOOL_NAMES as readonly [string, ...string[]];
+export { SKILL_AGENTS };
 
 export type SkillAgent = (typeof SKILL_AGENTS)[number];
 export type SkillUpdateStatus = "current" | "available" | "unknown";
@@ -53,7 +48,8 @@ export interface SkillSyncResult {
 export interface SkillSnapshot {
   generatedAt: string;
   fingerprint: string;
-  roots: Record<SkillAgent, string>;
+  /** Resolved skill roots per agent (multiple roots allowed). */
+  roots: Record<SkillAgent, string[]>;
   /** Actual Agent installation probe results, independent of Skill contents. */
   agents: Record<SkillAgent, { installed: boolean; detectedPaths: string[] }>;
   skills: LocalSkill[];

@@ -1,12 +1,11 @@
-import { SKILL_TOOL_NAMES } from "../tools/catalog.ts";
+import { SKILL_AGENTS } from "../local-skills/types.ts";
 
 /**
- * Market install targets — derived from the catalog as the `nameZh` of every
- * tool that exposes a skills directory (same set as Skill agents). Kept as a
- * `readonly` tuple so `MarketAgent` is a narrow literal union that matches
- * `SkillAgent` (the market installer forwards these to the skills scanner).
+ * Market install targets — same agent set as Skill agents (the market
+ * installer forwards these to the skills scanner), so `MarketAgent` is a
+ * narrow literal union that matches `SkillAgent`.
  */
-export const MARKET_AGENTS = SKILL_TOOL_NAMES as readonly [string, ...string[]];
+export const MARKET_AGENTS = SKILL_AGENTS;
 
 export type MarketAgent = (typeof MARKET_AGENTS)[number];
 
