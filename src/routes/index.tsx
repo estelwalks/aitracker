@@ -71,7 +71,7 @@ import {
 } from "../lib/pricing";
 import { getPricingSnapshot } from "../lib/pricing/server-fns";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
-import { AI_TOOLS } from "../lib/tools/catalog";
+import { PUBLIC_TOOL_MANIFEST } from "../lib/tool-registry/public-manifest.generated";
 import {
   toExportCsv,
   toExportJson,
@@ -998,11 +998,11 @@ function OnboardingDashboard({
           </div>
           <Panel
             title={t("dashboard.onboarding.toolsTitle", {
-              count: AI_TOOLS.length,
+              count: PUBLIC_TOOL_MANIFEST.tools.length,
             })}
           >
             <div className="flex flex-wrap gap-2">
-              {AI_TOOLS.map((tool) => (
+              {PUBLIC_TOOL_MANIFEST.tools.map((tool) => (
                 <span
                   key={tool.id}
                   className="inline-flex items-center rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs text-muted-foreground"

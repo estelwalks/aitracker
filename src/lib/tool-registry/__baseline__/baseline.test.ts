@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AI_TOOLS, usageLogParsingFor } from "../../tools/catalog.ts";
-import { SKILL_AGENT_RULES } from "../../local-skills/agent-rules.ts";
+import { SKILL_AGENT_RULES } from "../../local-skills/skill-rules.server.ts";
 import { BUILTIN_USAGE_ADAPTERS } from "../../local-usage/adapters/catalog.ts";
-import { MODEL_PRICES } from "../../pricing/catalog.ts";
+import { MODEL_PRICES, priceMatches } from "../../pricing/catalog.ts";
 import {
   buildResumeCommand,
   isResumeSafeId,
@@ -166,7 +166,7 @@ test("baseline model prices match the live MODEL_PRICES (rates + matcher behavio
 
     for (const model of MODEL_BATTERY) {
       assert.equal(
-        live.matches(model),
+        priceMatches(live, model),
         baselineMatcherMatches(expected.matcher, model),
         `matcher drift for price "${expected.id}" on model "${model}"`,
       );

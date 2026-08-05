@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AI_TOOLS, AI_TOOL_IDS, usageLogParsingFor } from "./catalog.ts";
-import {
-  SKILL_AGENT_RULES,
-  SKILL_AGENTS,
-} from "../local-skills/agent-rules.ts";
+import { SKILL_AGENT_RULES } from "../local-skills/skill-rules.server.ts";
+import { SKILL_AGENTS } from "../local-skills/agent-rules.ts";
 
 const EXPECTED_SKILL_LABELS = [
   "Claude Code",

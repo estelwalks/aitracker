@@ -95,4 +95,16 @@ if (ids.size !== tools.length) {
   process.exit(1);
 }
 
-console.log("\nOK: registry valid; manifest safe; baseline intact.");
+// Drift check: the committed generated manifest must match a fresh generation.
+const committed = await imp("public-manifest.generated.ts");
+if (
+  JSON.stringify(committed.PUBLIC_TOOL_MANIFEST) !==
+  JSON.stringify(registry.publicManifest)
+) {
+  console.error(
+    "\nFAIL: public-manifest.generated.ts is stale. Run: npm run generate:manifest",
+  );
+  process.exit(1);
+}
+
+console.log("\nOK: registry valid; manifest safe + in sync; baseline intact.");

@@ -35,7 +35,11 @@ export default defineTool({
     },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
-    sessions: { mode: "unsupported" },
+    sessions: {
+      mode: "resume",
+      reader: "codex-session-v1",
+      command: ["codex", "resume", "{sessionId}"],
+    },
     market: { mode: "install-target" },
     security: { mode: "unsupported" },
   },

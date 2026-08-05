@@ -7,7 +7,8 @@ import type {
   LocalUsageTotals,
 } from "../local-usage";
 import type { UsagePeriod } from "../local-usage/presentation";
-import { MODEL_PRICES, type ModelPrice } from "./catalog";
+import { MODEL_PRICES, priceMatches, type ModelPrice } from "./catalog";
+import { normalizeModel } from "../tool-registry/contracts.ts";
 import type { PricingSnapshot } from "./types";
 
 export type { PricingSnapshot, RuntimeModelPrice } from "./types";
@@ -77,31 +78,58 @@ const EMPTY_COUNTS: LocalTokenCounts = {
   totalTokens: 0,
 };
 
+function runtimeToModelPrice(
+  model: string,
+  normalized: string,
+  runtime: NonNullable<PricingSnapshot["prices"][string]>,
+): ModelPrice {
+  return {
+    id: normalized,
+    label: model,
+    effectiveDate: activePricingSnapshot?.generatedAt.slice(0, 10) ?? "",
+    inputUsdPerMillion: runtime.inputUsdPerMillion,
+    outputUsdPerMillion: runtime.outputUsdPerMillion,
+    cacheReadUsdPerMillion: runtime.cacheReadUsdPerMillion,
+    cacheWriteUsdPerMillion: runtime.cacheWriteUsdPerMillion,
+    tiers: runtime.tiers,
+    match: { kind: "exactOrSnapshot", names: [normalized] },
+  };
+}
+
 export function findModelPrice(model: string): ModelPrice | undefined {
-  const normalized = model
-    .trim()
-    .toLowerCase()
-    .replaceAll("_", "-")
-    .replaceAll(".", "-");
+  const normalized = normalizeModel(model);
   const runtime = activePricingSnapshot?.prices[normalized];
-  if (runtime) {
-    return {
-      id: normalized,
-      label: model,
-      effectiveDate: activePricingSnapshot?.generatedAt.slice(0, 10) ?? "",
-      inputUsdPerMillion: runtime.inputUsdPerMillion,
-      outputUsdPerMillion: runtime.outputUsdPerMillion,
-      cacheReadUsdPerMillion: runtime.cacheReadUsdPerMillion,
-      cacheWriteUsdPerMillion: runtime.cacheWriteUsdPerMillion,
-      tiers: runtime.tiers,
-      matches: (candidate) => candidate === normalized,
-    };
-  }
-  return MODEL_PRICES.find((price) => price.matches(normalized));
+  if (runtime) return runtimeToModelPrice(model, normalized, runtime);
+  return MODEL_PRICES.find((price) => priceMatches(price, normalized));
+}
+
+export interface FindModelRateInput {
+  /** Usage source id (the tool the event came from). */
+  toolId: string;
+  model: string;
+  occurredAt?: string;
+}
+
+/**
+ * Source-aware price lookup (audit P1). Checks the dynamic snapshot with the
+ * new `toolId:model` key first, then falls back to the legacy `model` key
+ * (dual-read), then the static declarative rules. The snapshot is currently
+ * model-keyed, so the `toolId:model` key is absent and behavior is unchanged;
+ * when per-tool live prices appear, the tool-specific key wins. Unknown models
+ * return `null` (never a guessed price).
+ */
+export function findModelRate(input: FindModelRateInput): ModelPrice | null {
+  const normalized = normalizeModel(input.model);
+  const prices = activePricingSnapshot?.prices;
+  const keyed = prices?.[`${input.toolId}:${normalized}`];
+  const modelKeyed = prices?.[normalized];
+  const runtime = keyed ?? modelKeyed;
+  if (runtime) return runtimeToModelPrice(input.model, normalized, runtime);
+  return MODEL_PRICES.find((price) => priceMatches(price, normalized)) ?? null;
 }
 
 export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
-  const price = findModelPrice(event.model);
+  const price = findModelRate({ toolId: event.source, model: event.model });
   if (price == null) {
     return unknownCost(event.model);
   }

@@ -30,9 +30,12 @@ import {
 import {
   DEFAULT_MARKERS,
   DEFAULT_MAX_DEPTH,
-  SKILL_AGENT_RULES,
   type SkillAgentRule,
 } from "./agent-rules.ts";
+import {
+  SKILL_AGENT_RULES,
+  SKILL_ROOT_SUFFIXES,
+} from "./skill-rules.server.ts";
 import {
   SKILL_AGENTS,
   type BatchUninstallResult,
@@ -46,7 +49,7 @@ import {
 } from "./types.ts";
 
 /** Compatibility re-export (label → write root); kept for existing importers. */
-export { SKILL_ROOT_SUFFIXES } from "./agent-rules.ts";
+export { SKILL_ROOT_SUFFIXES };
 
 /**
  * Resolve each agent's skill roots against a home directory. When a rule has
