@@ -61,6 +61,10 @@ import {
   TableRow,
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
+import { toUiError } from "../lib/errors";
+import { useI18n } from "../lib/i18n/context";
+import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { cn } from "../lib/utils";
 import {
   batchUninstallSkills,
@@ -80,14 +84,24 @@ import {
 } from "../lib/local-skills/types";
 
 export const Route = createFileRoute("/skills")({
-  loader: () => getLocalSkills(),
-  head: () => ({
+  loader: async ({ location }) => {
+    const data = await getLocalSkills();
+    return { ...data, locale: resolveLocaleFromSearch(location.search) };
+  },
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "Skill 管理 · AITracker V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.skills",
+        ),
+      },
       {
         name: "description",
-        content:
-          "扫描并管理本机 AI Agent 的 Skill，支持安全复制、跨 Agent 同步与黑名单。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "skills.metaDesc",
+        ),
       },
     ],
   }),
@@ -98,28 +112,30 @@ const PAGE_SIZE = 25;
 
 const healthMeta: Record<
   SkillHealth,
-  { label: string; dot: string; color: string }
+  { labelKey: MessageKey; dot: string; color: string }
 > = {
-  active: { label: "活跃", dot: "bg-ok", color: "text-ok" },
-  low: { label: "低频", dot: "bg-warn", color: "text-warn" },
-  doze: { label: "休眠", dot: "bg-orange-500", color: "text-orange-500" },
-  dead: { label: "长期未活动", dot: "bg-danger", color: "text-danger" },
+  active: {
+    labelKey: "skills.health.active",
+    dot: "bg-ok",
+    color: "text-ok",
+  },
+  low: { labelKey: "skills.health.low", dot: "bg-warn", color: "text-warn" },
+  doze: {
+    labelKey: "skills.health.doze",
+    dot: "bg-orange-500",
+    color: "text-orange-500",
+  },
+  dead: {
+    labelKey: "skills.health.dead",
+    dot: "bg-danger",
+    color: "text-danger",
+  },
   unknown: {
-    label: "调用未知",
+    labelKey: "skills.health.unknown",
     dot: "bg-muted-foreground",
     color: "text-muted-foreground",
   },
 };
-
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
 
 /**
  * 近 7 天日均调用（仅 Codex 等产 context.skills 的来源可见，否则为 0）。
@@ -177,6 +193,7 @@ type UninstallTarget =
   | { type: "batch"; skills: LocalSkill[] };
 
 function SkillsPage() {
+  const { t, format } = useI18n();
   const initial = Route.useLoaderData();
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial);
   const [query, setQuery] = useState("");
@@ -251,7 +268,8 @@ function SkillsPage() {
       await action();
       await refresh(success);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "操作失败");
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -368,7 +386,7 @@ function SkillsPage() {
         for (const installation of target.skill.installations) {
           await uninstallSkill({ data: installation.path });
         }
-        await refresh(`${target.skill.name} 已永久删除`);
+        await refresh(t("skills.toast.deleted", { name: target.skill.name }));
       } else {
         const paths = [
           ...new Set(
@@ -376,25 +394,38 @@ function SkillsPage() {
           ),
         ];
         if (paths.length === 0) {
-          toast.success("没有需要卸载的副本");
+          toast.success(t("skills.toast.nothingToUninstall"));
         } else {
           const result = await batchUninstallSkills({ data: paths });
           setCheckedIds(new Set());
           await refresh();
           if (result.succeeded.length > 0) {
-            toast.success(`${result.succeeded.length} 个安装副本已永久删除`);
+            toast.success(
+              t("skills.toast.uninstalledCopies", {
+                count: format.formatNumber(result.succeeded.length),
+              }),
+            );
           }
           if (result.failed.length > 0) {
             toast.error(
-              `${result.failed.length} 项清理失败：${result.failed
-                .map((f) => `${f.path}（${f.error}）`)
-                .join("；")}`,
+              t("skills.toast.uninstallFailed", {
+                count: format.formatNumber(result.failed.length),
+                details: result.failed
+                  .map((f) =>
+                    t("skills.toast.uninstallFailedItem", {
+                      path: f.path,
+                      error: f.error,
+                    }),
+                  )
+                  .join(t("skills.toast.uninstallFailedSeparator")),
+              }),
             );
           }
         }
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "卸载失败");
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -406,7 +437,7 @@ function SkillsPage() {
   const openSyncScope = (skills: LocalSkill[]) => {
     const valid = skills.filter((s) => s.installations.length > 0);
     if (valid.length === 0) {
-      toast.error("所选 Skill 没有可同步的安装副本");
+      toast.error(t("skills.toast.noSyncCopies"));
       return;
     }
     setSyncScope({ skills: valid, mode: "global", selectedAgents: new Set() });
@@ -420,7 +451,7 @@ function SkillsPage() {
         : [...syncScope.selectedAgents];
 
     if (targetAgents.length === 0) {
-      toast.error("请至少选择一个目标工具");
+      toast.error(t("skills.toast.selectTarget"));
       return;
     }
 
@@ -537,8 +568,9 @@ function SkillsPage() {
             );
           } catch (error) {
             failed += overwriteAgents.length;
+            const ui = toUiError(error);
             failedDetails.push(
-              `${skill.name}: ${error instanceof Error ? error.message : "同步失败"}`,
+              `${skill.name}: ${ui ? t(ui.code, ui.params) : t("skills.toast.syncFailed")}`,
             );
           }
         }
@@ -560,15 +592,26 @@ function SkillsPage() {
             );
           } catch (error) {
             failed += skipAgents.length;
+            const ui = toUiError(error);
             failedDetails.push(
-              `${skill.name}: ${error instanceof Error ? error.message : "同步失败"}`,
+              `${skill.name}: ${ui ? t(ui.code, ui.params) : t("skills.toast.syncFailed")}`,
             );
           }
         }
       }
 
       await refresh();
-      const message = `同步完成：成功 ${succeeded} 条 / 跳过 ${skipped} 条${failed > 0 ? ` / 失败 ${failed} 条` : ""}`;
+      const message =
+        failed > 0
+          ? t("skills.toast.syncDoneFailed", {
+              succeeded: format.formatNumber(succeeded),
+              skipped: format.formatNumber(skipped),
+              failed: format.formatNumber(failed),
+            })
+          : t("skills.toast.syncDone", {
+              succeeded: format.formatNumber(succeeded),
+              skipped: format.formatNumber(skipped),
+            });
       if (failed > 0 && succeeded === 0) {
         toast.error(message, { description: failedDetails.join("\n") });
       } else if (failed > 0) {
@@ -610,21 +653,24 @@ function SkillsPage() {
   return (
     <>
       <PageHeader
-        title="Skill 管理"
-        desc={`${snapshot.healthBasis} 扫描于 ${formatTime(snapshot.generatedAt)}`}
+        title={t("skills.pageHeader")}
+        desc={t("skills.pageHeaderDesc", {
+          basis: snapshot.healthBasis,
+          time: format.formatDateTime(snapshot.generatedAt, false),
+        })}
       />
 
       {/* Filter bar */}
       <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 p-3">
         <span className="text-[11px] text-muted-foreground">
-          页面可见时每 5 秒按变更指纹轮询（非原生 watcher）
+          {t("skills.pollingHint")}
         </span>
         <div className="relative min-w-[180px] flex-1 sm:max-w-64">
           <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索名称或描述…"
+            placeholder={t("skills.searchPlaceholder")}
             className="h-8 w-full rounded-sm border border-border bg-surface-2 pl-8 text-[13px] outline-none focus:border-primary"
           />
         </div>
@@ -635,12 +681,12 @@ function SkillsPage() {
           }
           className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
         >
-          <option value="all">健康度：全部</option>
-          <option value="active">活跃</option>
-          <option value="low">低频</option>
-          <option value="doze">休眠</option>
-          <option value="dead">长期未活动</option>
-          <option value="unknown">调用未知</option>
+          <option value="all">{t("skills.filter.healthAll")}</option>
+          <option value="active">{t("skills.health.active")}</option>
+          <option value="low">{t("skills.health.low")}</option>
+          <option value="doze">{t("skills.health.doze")}</option>
+          <option value="dead">{t("skills.health.dead")}</option>
+          <option value="unknown">{t("skills.health.unknown")}</option>
         </select>
         <select
           value={agent}
@@ -649,7 +695,7 @@ function SkillsPage() {
           }
           className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
         >
-          <option value="all">安装位置：全部</option>
+          <option value="all">{t("skills.filter.agentAll")}</option>
           {SKILL_AGENTS.map((name) => (
             <option key={name}>{name}</option>
           ))}
@@ -657,27 +703,34 @@ function SkillsPage() {
         <TTButton
           className="ml-auto"
           disabled={busy}
-          onClick={() => run(() => Promise.resolve(), "已重新扫描本地 Skill")}
+          onClick={() =>
+            run(() => Promise.resolve(), t("skills.toast.rescanned"))
+          }
         >
           <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
-          刷新扫描
+          {t("skills.actions.rescan")}
         </TTButton>
       </div>
 
       {/* Skill table */}
-      <Panel title={`Skill 列表（${sorted.length}）`} bodyClassName="p-0">
+      <Panel
+        title={t("skills.table.title", {
+          count: format.formatNumber(sorted.length),
+        })}
+        bodyClassName="p-0"
+      >
         {sorted.length === 0 ? (
           <div className="p-4">
             <EmptyState
-              title="没有匹配的 Skill"
-              desc="调整筛选条件，或添加监控目录后重新扫描。"
+              title={t("skills.empty.title")}
+              desc={t("skills.empty.desc")}
               actions={
                 <>
                   <Link to="/settings">
-                    <TTButton>添加监控目录</TTButton>
+                    <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
                   </Link>
                   <Link to="/market">
-                    <TTButton>去市场看看</TTButton>
+                    <TTButton>{t("skills.actions.goMarket")}</TTButton>
                   </Link>
                 </>
               }
@@ -698,12 +751,14 @@ function SkillsPage() {
                   }
                   onCheckedChange={() => toggleAllPaged()}
                   disabled={busy}
-                  aria-label="全选当前页"
+                  aria-label={t("skills.batch.selectPage")}
                 />
-                全选当前页
+                {t("skills.batch.selectPage")}
               </label>
               <span className="text-xs text-muted-foreground">
-                已选 {checkedSkills.length} 项
+                {t("skills.batch.selectedCount", {
+                  count: format.formatNumber(checkedSkills.length),
+                })}
               </span>
               <div className="ml-auto flex items-center gap-2">
                 <TTButton
@@ -711,7 +766,7 @@ function SkillsPage() {
                   disabled={busy || checkedSkills.length === 0}
                   onClick={() => openSyncScope(checkedSkills)}
                 >
-                  <Copy className="size-3" /> 批量同步
+                  <Copy className="size-3" /> {t("skills.batch.sync")}
                 </TTButton>
                 <TTButton
                   size="sm"
@@ -719,7 +774,7 @@ function SkillsPage() {
                   disabled={busy || checkedSkills.length === 0}
                   onClick={openBatchUninstall}
                 >
-                  <Trash2 className="size-3" /> 批量卸载
+                  <Trash2 className="size-3" /> {t("skills.batch.uninstall")}
                 </TTButton>
                 <TTButton
                   size="sm"
@@ -727,7 +782,7 @@ function SkillsPage() {
                   disabled={busy || checkedSkills.length === 0}
                   onClick={clearSelection}
                 >
-                  取消选择
+                  {t("skills.batch.clearSelection")}
                 </TTButton>
               </div>
             </div>
@@ -745,7 +800,7 @@ function SkillsPage() {
                     )}
                   >
                     <span className="inline-flex items-center gap-1">
-                      名称
+                      {t("skills.table.name")}
                       {sortDir === "asc" ? (
                         <ArrowUp className="size-3" />
                       ) : sortDir === "desc" ? (
@@ -755,21 +810,27 @@ function SkillsPage() {
                       )}
                     </span>
                   </TableHead>
-                  <TableHead className="min-w-[100px]">描述</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-right">
-                    调用
+                  <TableHead className="min-w-[100px]">
+                    {t("skills.table.desc")}
                   </TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap text-right">
-                    日均
+                    {t("skills.table.calls")}
+                  </TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-right">
+                    {t("skills.table.dailyAvg")}
                   </TableHead>
                   <TableHead className="w-[60px] whitespace-nowrap text-center">
-                    趋势
+                    {t("skills.table.trend")}
                   </TableHead>
-                  <TableHead className="w-[200px]">安装位置</TableHead>
+                  <TableHead className="w-[200px]">
+                    {t("skills.table.agent")}
+                  </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap">
-                    最近使用时间
+                    {t("skills.table.lastUsed")}
                   </TableHead>
-                  <TableHead className="w-[130px] pr-4">操作</TableHead>
+                  <TableHead className="w-[130px] pr-4">
+                    {t("skills.table.actions")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -794,7 +855,9 @@ function SkillsPage() {
                             toggleChecked(skill.id, checked === true)
                           }
                           disabled={busy}
-                          aria-label={`选择 ${skill.name}`}
+                          aria-label={t("skills.aria.selectSkill", {
+                            name: skill.name,
+                          })}
                         />
                       </TableCell>
                       <TableCell>
@@ -809,7 +872,7 @@ function SkillsPage() {
                           </button>
                           {snapshot.blacklist.includes(skill.name) && (
                             <span className="rounded-sm bg-danger/15 px-1.5 py-0.5 text-[10px] text-danger">
-                              黑名单
+                              {t("skills.badge.blacklisted")}
                             </span>
                           )}
                         </div>
@@ -825,25 +888,25 @@ function SkillsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
-                        {skill.usageCount.toLocaleString()}
+                        {format.formatNumber(skill.usageCount)}
                       </TableCell>
                       <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
                         {dailyAvg(skill.daily)}
                       </TableCell>
                       <TableCell className="tt-num text-center text-[12px]">
                         {(() => {
-                          const t = trendOf(skill.daily);
+                          const trend = trendOf(skill.daily);
                           return (
                             <span
                               className={
-                                t === "↑"
+                                trend === "↑"
                                   ? "text-ok"
-                                  : t === "↓"
+                                  : trend === "↓"
                                     ? "text-danger"
                                     : "text-muted-foreground"
                               }
                             >
-                              {t}
+                              {trend}
                             </span>
                           );
                         })()}
@@ -876,13 +939,15 @@ function SkillsPage() {
                                 onClick={() => toggleAgentsExpanded(skill.id)}
                                 className="text-[10px] text-muted-foreground hover:text-foreground"
                               >
-                                收起
+                                {t("common.collapse")}
                               </button>
                             )}
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
-                        {skill.lastUsedAt ? formatTime(skill.lastUsedAt) : "—"}
+                        {skill.lastUsedAt
+                          ? format.formatDateTime(skill.lastUsedAt, false)
+                          : "—"}
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex items-center gap-1">
@@ -890,18 +955,20 @@ function SkillsPage() {
                             size="sm"
                             disabled={busy || skill.installations.length === 0}
                             onClick={() => openSyncScope([skill])}
-                            title="跨 Agent 同步"
+                            title={t("skills.actions.syncTitle")}
                           >
-                            <Copy className="size-3" /> 同步
+                            <Copy className="size-3" />{" "}
+                            {t("skills.actions.sync")}
                           </TTButton>
                           <TTButton
                             size="sm"
                             variant="danger"
                             disabled={busy}
                             onClick={() => openUninstall(skill)}
-                            title="卸载"
+                            title={t("skills.actions.uninstall")}
                           >
-                            <Trash2 className="size-3" /> 卸载
+                            <Trash2 className="size-3" />{" "}
+                            {t("skills.actions.uninstall")}
                           </TTButton>
                         </div>
                       </TableCell>
@@ -914,7 +981,11 @@ function SkillsPage() {
             {/* Pagination footer */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2">
               <span className="text-xs text-muted-foreground">
-                第 {rangeStart}-{rangeEnd} 条 / 共 {sorted.length} 条
+                {t("skills.pagination.range", {
+                  start: format.formatNumber(rangeStart),
+                  end: format.formatNumber(rangeEnd),
+                  total: format.formatNumber(sorted.length),
+                })}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -977,14 +1048,16 @@ function SkillsPage() {
                   {detailSkill.name}
                 </SheetTitle>
                 <SheetDescription>
-                  {detailSkill.description ?? "暂无描述"}
+                  {detailSkill.description ?? t("skills.detail.noDescription")}
                 </SheetDescription>
               </SheetHeader>
 
               <div className="mt-4 space-y-4 text-[13px]">
                 {/* Source path */}
                 <div>
-                  <div className="tt-label mb-1">来源路径</div>
+                  <div className="tt-label mb-1">
+                    {t("skills.detail.sourcePath")}
+                  </div>
                   {detailSkill.installations.map((inst) => (
                     <div
                       key={inst.path}
@@ -999,18 +1072,26 @@ function SkillsPage() {
                 <div className="text-[12px] text-muted-foreground">
                   <p>{detailSkill.healthReason}</p>
                   <p className="mt-1">
-                    最近调用：
                     {detailSkill.lastUsedAt == null
-                      ? "暂无可验证记录"
-                      : formatTime(detailSkill.lastUsedAt)}
-                    {" · "}累计识别：{detailSkill.usageCount.toLocaleString()}{" "}
-                    次
+                      ? t("skills.detail.noLastUsed")
+                      : t("skills.detail.lastUsedAt", {
+                          time: format.formatDateTime(
+                            detailSkill.lastUsedAt,
+                            false,
+                          ),
+                        })}
+                    {" · "}
+                    {t("skills.detail.totalCalls", {
+                      count: format.formatNumber(detailSkill.usageCount),
+                    })}
                   </p>
                 </div>
 
                 {/* Per-agent install status (all 9 agents) */}
                 <div>
-                  <div className="tt-label mb-2">安装状态</div>
+                  <div className="tt-label mb-2">
+                    {t("skills.detail.installStatus")}
+                  </div>
                   <ul className="space-y-2">
                     {SKILL_AGENTS.map((agentName) => {
                       const installation = detailSkill.installations.find(
@@ -1029,14 +1110,14 @@ function SkillsPage() {
                                   variant="secondary"
                                   className="bg-ok/15 text-ok"
                                 >
-                                  已安装
+                                  {t("common.installed")}
                                 </Badge>
                               ) : (
                                 <Badge
                                   variant="outline"
                                   className="text-muted-foreground"
                                 >
-                                  未安装
+                                  {t("common.notInstalled")}
                                 </Badge>
                               )}
                             </div>
@@ -1046,14 +1127,32 @@ function SkillsPage() {
                                   {installation.path}
                                 </div>
                                 <div className="mt-1 text-[10px] text-muted-foreground">
-                                  安装：{formatTime(installation.installedAt)}
-                                  {" · "}修改：
-                                  {formatTime(installation.modifiedAt)}
+                                  {t("skills.detail.installedAt", {
+                                    time: format.formatDateTime(
+                                      installation.installedAt,
+                                      false,
+                                    ),
+                                  })}
+                                  {" · "}
+                                  {t("skills.detail.modifiedAt", {
+                                    time: format.formatDateTime(
+                                      installation.modifiedAt,
+                                      false,
+                                    ),
+                                  })}
                                 </div>
                                 <div className="mt-1 text-[10px] text-muted-foreground">
-                                  版本：{installation.version ?? "未提供"}
-                                  {" · "}来源：
-                                  {installation.source?.label ?? "未提供"}
+                                  {t("skills.detail.version", {
+                                    version:
+                                      installation.version ??
+                                      t("skills.detail.notProvided"),
+                                  })}
+                                  {" · "}
+                                  {t("skills.detail.source", {
+                                    source:
+                                      installation.source?.label ??
+                                      t("skills.detail.notProvided"),
+                                  })}
                                 </div>
                                 <div
                                   className={cn(
@@ -1063,13 +1162,16 @@ function SkillsPage() {
                                       : "text-muted-foreground",
                                   )}
                                 >
-                                  更新状态：
-                                  {installation.updateStatus === "available"
-                                    ? "可更新"
-                                    : installation.updateStatus === "current"
-                                      ? "已是当前证据版本"
-                                      : "无法判断"}
-                                  （{installation.updateReason}）
+                                  {t("skills.detail.updateStatus", {
+                                    status:
+                                      installation.updateStatus === "available"
+                                        ? t("skills.detail.updateAvailable")
+                                        : installation.updateStatus ===
+                                            "current"
+                                          ? t("skills.detail.updateCurrent")
+                                          : t("skills.detail.updateUnknown"),
+                                    reason: installation.updateReason,
+                                  })}
                                 </div>
                               </>
                             )}
@@ -1085,11 +1187,14 @@ function SkillsPage() {
                                     uninstallSkill({
                                       data: installation.path,
                                     }),
-                                  `${detailSkill.name} 已从 ${agentName} 卸载`,
+                                  t("skills.toast.uninstalledFrom", {
+                                    name: detailSkill.name,
+                                    agent: agentName,
+                                  }),
                                 )
                               }
                             >
-                              卸载
+                              {t("skills.actions.uninstall")}
                             </TTButton>
                           ) : (
                             <TTButton
@@ -1109,11 +1214,15 @@ function SkillsPage() {
                                         targetAgent: agentName,
                                       },
                                     }),
-                                  `${detailSkill.name} 已安装到 ${agentName}`,
+                                  t("skills.toast.installedTo", {
+                                    name: detailSkill.name,
+                                    agent: agentName,
+                                  }),
                                 )
                               }
                             >
-                              <Download className="size-3" /> 安装
+                              <Download className="size-3" />{" "}
+                              {t("skills.actions.install")}
                             </TTButton>
                           )}
                         </li>
@@ -1136,12 +1245,16 @@ function SkillsPage() {
                               blocked: !isBlocked,
                             },
                           }),
-                        isBlocked ? "已移出黑名单" : "已加入黑名单",
+                        isBlocked
+                          ? t("skills.toast.unblocked")
+                          : t("skills.toast.blocked"),
                       )
                     }
                   >
                     <ShieldBan className="size-3.5" />
-                    {isBlocked ? "移出黑名单" : "加入黑名单"}
+                    {isBlocked
+                      ? t("skills.actions.unblock")
+                      : t("skills.actions.block")}
                   </TTButton>
                   <TTButton
                     variant="danger"
@@ -1151,7 +1264,8 @@ function SkillsPage() {
                       openUninstall(detailSkill);
                     }}
                   >
-                    <Trash2 className="size-3.5" /> 卸载全部副本
+                    <Trash2 className="size-3.5" />{" "}
+                    {t("skills.actions.uninstallAll")}
                   </TTButton>
                 </div>
               </div>
@@ -1171,23 +1285,31 @@ function SkillsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="size-5 text-danger" />
-              确认卸载
+              {t("skills.uninstall.title")}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-1">
                 <p>
-                  将从全部已安装工具中移除
                   {uninstallTarget?.type === "batch"
-                    ? ` ${uninstallTarget.skills.length} 个 Skill`
-                    : ` ${uninstallTarget?.skill.name ?? ""}`}
-                  。
+                    ? t("skills.uninstall.batchDesc", {
+                        count: format.formatNumber(
+                          uninstallTarget.skills.length,
+                        ),
+                      })
+                    : t("skills.uninstall.singleDesc", {
+                        name: uninstallTarget?.skill.name ?? "",
+                      })}
                 </p>
-                <p className="text-danger">此操作不可撤销</p>
+                <p className="text-danger">
+                  {t("skills.uninstall.irreversible")}
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={busy}
               onClick={(e) => {
@@ -1196,7 +1318,7 @@ function SkillsPage() {
               }}
               className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
             >
-              确认卸载
+              {t("skills.uninstall.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1211,10 +1333,8 @@ function SkillsPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>同步 Skill</DialogTitle>
-            <DialogDescription>
-              将所选 Skill 同步安装到其他 Agent 的 skills 目录
-            </DialogDescription>
+            <DialogTitle>{t("skills.sync.title")}</DialogTitle>
+            <DialogDescription>{t("skills.sync.desc")}</DialogDescription>
           </DialogHeader>
 
           {syncScope && (
@@ -1239,10 +1359,10 @@ function SkillsPage() {
                   />
                   <div>
                     <div className="text-sm font-medium">
-                      同步到全部工具（全局）
+                      {t("skills.sync.globalMode")}
                     </div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      覆盖本地已安装的 agent，未安装的自动跳过
+                      {t("skills.sync.globalModeHint")}
                     </div>
                   </div>
                 </label>
@@ -1263,9 +1383,11 @@ function SkillsPage() {
                     className="mt-0.5"
                   />
                   <div>
-                    <div className="text-sm font-medium">仅同步到指定工具</div>
+                    <div className="text-sm font-medium">
+                      {t("skills.sync.specificMode")}
+                    </div>
                     <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      勾选需要同步到的目标 Agent
+                      {t("skills.sync.specificModeHint")}
                     </div>
                   </div>
                 </label>
@@ -1306,7 +1428,7 @@ function SkillsPage() {
                             variant="outline"
                             className="ml-auto text-[10px] text-muted-foreground"
                           >
-                            未安装
+                            {t("common.notInstalled")}
                           </Badge>
                         )}
                       </label>
@@ -1323,14 +1445,14 @@ function SkillsPage() {
               disabled={busy}
               onClick={() => setSyncScope(null)}
             >
-              取消
+              {t("common.cancel")}
             </TTButton>
             <TTButton
               variant="primary"
               disabled={busy}
               onClick={confirmSyncScope}
             >
-              开始同步
+              {t("skills.sync.start")}
             </TTButton>
           </DialogFooter>
         </DialogContent>
@@ -1347,11 +1469,9 @@ function SkillsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="size-5 text-warn" />
-              同步冲突
+              {t("skills.conflict.title")}
             </DialogTitle>
-            <DialogDescription>
-              以下目标 Agent 已存在同名 Skill，请选择处理方式
-            </DialogDescription>
+            <DialogDescription>{t("skills.conflict.desc")}</DialogDescription>
           </DialogHeader>
 
           {syncConflict && (
@@ -1362,14 +1482,14 @@ function SkillsPage() {
                   size="sm"
                   onClick={() => setAllConflictResolutions("overwrite")}
                 >
-                  全部覆盖
+                  {t("skills.conflict.overwriteAll")}
                 </TTButton>
                 <TTButton
                   size="sm"
                   variant="default"
                   onClick={() => setAllConflictResolutions("skip")}
                 >
-                  全部跳过
+                  {t("skills.conflict.skipAll")}
                 </TTButton>
               </div>
 
@@ -1385,7 +1505,9 @@ function SkillsPage() {
                         {conflict.skillName}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        目标 Agent：{conflict.agent}
+                        {t("skills.conflict.targetAgent", {
+                          agent: conflict.agent,
+                        })}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1401,7 +1523,7 @@ function SkillsPage() {
                             : "border-border text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        覆盖
+                        {t("skills.conflict.overwrite")}
                       </button>
                       <button
                         type="button"
@@ -1413,7 +1535,7 @@ function SkillsPage() {
                             : "border-border text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        跳过
+                        {t("skills.conflict.skip")}
                       </button>
                     </div>
                   </li>
@@ -1428,14 +1550,14 @@ function SkillsPage() {
               disabled={busy}
               onClick={() => setSyncConflict(null)}
             >
-              取消
+              {t("common.cancel")}
             </TTButton>
             <TTButton
               variant="primary"
               disabled={busy}
               onClick={confirmSyncConflict}
             >
-              开始同步
+              {t("skills.sync.start")}
             </TTButton>
           </DialogFooter>
         </DialogContent>

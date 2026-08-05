@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AI_TOOLS, AI_TOOL_IDS, SKILL_TOOL_NAMES } from "./catalog.ts";
+import {
+  AI_TOOLS,
+  AI_TOOL_IDS,
+  SKILL_TOOL_NAMES,
+  usageLogParsingFor,
+} from "./catalog.ts";
 
 test("AI_TOOLS catalogs all 27 tools with stable ids", () => {
   assert.equal(AI_TOOLS.length, 27);
@@ -13,20 +18,14 @@ test("AI_TOOLS catalogs all 27 tools with stable ids", () => {
   }
 });
 
-test("SKILL_TOOL_NAMES covers the 9 tools that expose a skills directory", () => {
-  // claude-code, codex, cursor, gemini-cli, opencode (existing) + grok,
-  // antigravity, hermes, openclaw (added in Story E0 / FR-027).
-  assert.equal(SKILL_TOOL_NAMES.length, 9);
+test("SKILL_TOOL_NAMES covers the five verified skill installation targets", () => {
+  assert.equal(SKILL_TOOL_NAMES.length, 5);
   for (const name of [
     "Claude Code",
     "Codex CLI",
     "Cursor",
     "Gemini CLI",
     "OpenCode",
-    "Grok Build",
-    "Antigravity",
-    "Hermes Agent",
-    "OpenClaw",
   ]) {
     assert.ok(
       SKILL_TOOL_NAMES.includes(name),
@@ -35,15 +34,18 @@ test("SKILL_TOOL_NAMES covers the 9 tools that expose a skills directory", () =>
   }
 });
 
-test("the 4 newly-enabled tools carry their verified skill root suffix", () => {
+test("unverified skill roots remain unavailable as installation targets", () => {
   const byId = new Map(AI_TOOLS.map((tool) => [tool.id, tool]));
-  assert.equal(byId.get("grok")?.skillRootSuffix, ".grok/skills");
-  assert.equal(
-    byId.get("antigravity")?.skillRootSuffix,
-    ".gemini/antigravity/skills",
-  );
-  assert.equal(byId.get("hermes")?.skillRootSuffix, ".hermes/skills");
-  assert.equal(byId.get("openclaw")?.skillRootSuffix, ".openclaw/skills");
+  assert.equal(byId.get("grok")?.skillRootSuffix, null);
+  assert.equal(byId.get("antigravity")?.skillRootSuffix, null);
+  assert.equal(byId.get("hermes")?.skillRootSuffix, null);
+  assert.equal(byId.get("openclaw")?.skillRootSuffix, null);
+});
+
+test("usage parser capability is distinct from catalog installation roots", () => {
+  assert.equal(usageLogParsingFor("codex"), "native");
+  assert.equal(usageLogParsingFor("grok"), "adapter");
+  assert.equal(usageLogParsingFor("openclaw"), "unsupported");
 });
 
 test("tools without a verified skills directory stay null", () => {

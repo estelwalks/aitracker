@@ -4,6 +4,10 @@ import { RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dot, EmptyState, PageHeader, Panel, TTButton } from "../components/tt";
+import { useI18n } from "../lib/i18n/context";
+import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import { resolveLocaleFromSearch } from "../lib/i18n/locale";
+import { toUiError } from "../lib/errors";
 import {
   getUsageSources,
   refreshUsageSources,
@@ -13,13 +17,25 @@ import {
 } from "../lib/local-usage/get-usage-sources";
 
 export const Route = createFileRoute("/sources")({
-  loader: () => getUsageSources(),
-  head: () => ({
+  loader: ({ location }) =>
+    getUsageSources().then((data) => ({
+      ...data,
+      locale: resolveLocaleFromSearch(location.search),
+    })),
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "数据来源 · AITracker V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.sources",
+        ),
+      },
       {
         name: "description",
-        content: "查看本机各 AI 工具的安装探测状态与日志采集情况。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "sources.metaDescription",
+        ),
       },
     ],
   }),
@@ -28,40 +44,43 @@ export const Route = createFileRoute("/sources")({
 
 const STATUS_META: Record<
   UsageSourceStatus,
-  { label: string; dot: string; color: string }
+  { labelKey: MessageKey; dot: string; color: string }
 > = {
-  "has-data": { label: "有数据", dot: "bg-ok", color: "text-ok" },
-  "no-logs": { label: "无日志", dot: "bg-warn", color: "text-warn" },
+  "has-data": {
+    labelKey: "sources.status.hasData",
+    dot: "bg-ok",
+    color: "text-ok",
+  },
+  "no-logs": {
+    labelKey: "sources.status.noLogs",
+    dot: "bg-warn",
+    color: "text-warn",
+  },
   "not-installed": {
-    label: "未安装",
+    labelKey: "sources.status.notInstalled",
     dot: "bg-muted-foreground/40",
     color: "text-muted-foreground",
   },
 };
 
-const STATUS_FILTERS: Array<{ key: UsageSourceStatus | "all"; label: string }> =
-  [
-    { key: "all", label: "全部" },
-    { key: "has-data", label: "有数据" },
-    { key: "no-logs", label: "无日志" },
-    { key: "not-installed", label: "未安装" },
-  ];
+const STATUS_FILTERS: Array<{
+  key: UsageSourceStatus | "all";
+  labelKey: MessageKey;
+}> = [
+  { key: "all", labelKey: "common.all" },
+  { key: "has-data", labelKey: "sources.status.hasData" },
+  { key: "no-logs", labelKey: "sources.status.noLogs" },
+  { key: "not-installed", labelKey: "sources.status.notInstalled" },
+];
 
-const LOG_PARSING_LABEL: Record<UsageSourceEntry["usageLogParsing"], string> = {
-  native: "原生支持",
-  adapter: "适配器支持",
-  unsupported: "待支持",
+const LOG_PARSING_LABEL: Record<
+  UsageSourceEntry["usageLogParsing"],
+  MessageKey
+> = {
+  native: "sources.parsing.native",
+  adapter: "sources.parsing.adapter",
+  unsupported: "sources.parsing.unsupported",
 };
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    const date = new Date(iso);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  } catch {
-    return "—";
-  }
-}
 
 function SummaryCard({
   label,
@@ -86,8 +105,10 @@ function SummaryCard({
 }
 
 function SourcesPage() {
-  const initial = Route.useLoaderData() as UsageSourcesSummary;
-  const [summary, setSummary] = useState<UsageSourcesSummary>(initial);
+  const { t, format } = useI18n();
+  const [summary, setSummary] = useState<UsageSourcesSummary>(
+    Route.useLoaderData(),
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<UsageSourceStatus | "all">(
@@ -119,9 +140,10 @@ function SourcesPage() {
     try {
       const next = await refreshUsageSources();
       setSummary(next);
-      toast.success("重新扫描完成");
-    } catch {
-      toast.error("重新扫描失败，请重试");
+      toast.success(t("sources.toast.rescanDone"));
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
     } finally {
       setRefreshing(false);
     }
@@ -131,34 +153,46 @@ function SourcesPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
-          title="数据来源"
-          desc={`27 个 AI 工具的探测状态 · 更新于 ${formatDateTime(summary.generatedAt)}`}
+          title={t("sources.pageHeader")}
+          desc={t("sources.pageHeaderDesc", {
+            count: format.formatNumber(summary.totals.toolCount),
+            time: format.formatDateTime(summary.generatedAt, false),
+          })}
         />
         <TTButton onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw
             className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
           />
-          {refreshing ? "扫描中" : "重新扫描"}
+          {refreshing ? t("sources.scanning") : t("sources.rescan")}
         </TTButton>
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
         <SummaryCard
-          label="已接入 / 总探测"
-          value={`${summary.totals.connectedCount} / ${summary.totals.toolCount}`}
+          label={t("sources.summary.connected")}
+          value={`${format.formatNumber(summary.totals.connectedCount)} / ${format.formatNumber(summary.totals.toolCount)}`}
         />
-        <SummaryCard label="采集事件总数" value={summary.totals.eventCount} />
         <SummaryCard
-          label="未采集工具"
-          value={summary.totals.notInstalledCount}
+          label={t("sources.summary.events")}
+          value={format.formatNumber(summary.totals.eventCount)}
         />
-        <SummaryCard label="无日志工具" value={summary.totals.noLogsCount} />
-        <SummaryCard label="异常行数" value={summary.totals.malformedCount} />
+        <SummaryCard
+          label={t("sources.summary.notInstalled")}
+          value={format.formatNumber(summary.totals.notInstalledCount)}
+        />
+        <SummaryCard
+          label={t("sources.summary.noLogs")}
+          value={format.formatNumber(summary.totals.noLogsCount)}
+        />
+        <SummaryCard
+          label={t("sources.summary.malformed")}
+          value={format.formatNumber(summary.totals.malformedCount)}
+        />
       </div>
 
       <Panel
         className="mt-3"
-        title="工具探测状态"
+        title={t("sources.panelTitle")}
         action={
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -166,7 +200,7 @@ function SourcesPage() {
               <input
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
-                placeholder="搜索工具名称"
+                placeholder={t("sources.searchPlaceholder")}
                 className="tt-input h-8 w-44 pl-8 text-[13px]"
               />
             </div>
@@ -191,7 +225,7 @@ function SourcesPage() {
                     : "border-border bg-surface text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {filter.label}
+                {t(filter.labelKey)}
                 <span className="text-[10px] opacity-70">{count}</span>
               </button>
             );
@@ -200,8 +234,8 @@ function SourcesPage() {
 
         {filtered.length === 0 ? (
           <EmptyState
-            title="没有匹配的工具"
-            desc="调整筛选条件或搜索关键词后重试。"
+            title={t("sources.empty.title")}
+            desc={t("sources.empty.desc")}
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -216,6 +250,7 @@ function SourcesPage() {
 }
 
 function SourceRow({ entry }: { entry: UsageSourceEntry }) {
+  const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-2.5 text-[13px]">
@@ -224,26 +259,36 @@ function SourceRow({ entry }: { entry: UsageSourceEntry }) {
         <span className="font-medium text-foreground">{entry.nameZh}</span>
       </div>
 
-      <span className={`tt-num text-[12px] ${meta.color}`}>{meta.label}</span>
+      <span className={`tt-num text-[12px] ${meta.color}`}>
+        {t(meta.labelKey)}
+      </span>
 
       {entry.events > 0 && (
         <span className="tt-num text-[11px] text-muted-foreground">
-          采集事件 {entry.events.toLocaleString()}
+          {t("sources.row.events", {
+            count: format.formatNumber(entry.events),
+          })}
         </span>
       )}
 
       <span className="tt-num text-[11px] text-muted-foreground">
-        日志解析：{LOG_PARSING_LABEL[entry.usageLogParsing]}
+        {t("sources.row.parsing", {
+          label: t(LOG_PARSING_LABEL[entry.usageLogParsing]),
+        })}
       </span>
 
       {entry.malformedLines > 0 && (
         <span className="tt-num text-[11px] text-warn">
-          异常 {entry.malformedLines}
+          {t("sources.row.malformed", {
+            count: format.formatNumber(entry.malformedLines),
+          })}
         </span>
       )}
 
       <span className="tt-num text-[11px] text-muted-foreground">
-        {formatDateTime(entry.lastScannedAt)}
+        {entry.lastScannedAt
+          ? format.formatDateTime(entry.lastScannedAt, false)
+          : "—"}
       </span>
 
       {entry.status === "not-installed" && (
@@ -253,12 +298,14 @@ function SourceRow({ entry }: { entry: UsageSourceEntry }) {
           rel="noopener noreferrer"
           className="text-[11px] text-primary hover:underline"
         >
-          下载安装 ↗
+          {t("sources.row.download")}
         </a>
       )}
 
       <span className="tt-num hidden w-full text-[10px] text-muted-foreground/70 lg:block">
-        探测路径：{entry.paths.join(" · ") || "—"}
+        {t("sources.row.paths", {
+          paths: entry.paths.join(" · ") || "—",
+        })}
       </span>
     </li>
   );

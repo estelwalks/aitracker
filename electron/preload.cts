@@ -1,20 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-import type {
-  AutoLaunchState,
-  RuntimeInfo,
-  AITrackerDesktopApi,
+import {
+  desktopIpc,
+  type AutoLaunchState,
+  type DesktopCurrency,
+  type DesktopLocale,
+  type DesktopPreferenceMode,
+  type LocalePreferences,
+  type RuntimeInfo,
+  type AITrackerDesktopApi,
 } from "./contracts.js";
-
-const desktopIpc = {
-  getRuntimeInfo: "desktop:get-runtime-info",
-  getAutoLaunch: "desktop:get-auto-launch",
-  setAutoLaunch: "desktop:set-auto-launch",
-  showWindow: "desktop:show-window",
-  getPreferences: "desktop:get-preferences",
-  setPreference: "desktop:set-preference",
-  resetPreferences: "desktop:reset-preferences",
-} as const;
 
 const desktopApi: AITrackerDesktopApi = Object.freeze({
   getRuntimeInfo: () =>
@@ -37,6 +32,47 @@ const desktopApi: AITrackerDesktopApi = Object.freeze({
     ipcRenderer.invoke(desktopIpc.resetPreferences) as Promise<{
       removedKeys: number;
     }>,
+  getLocale: () =>
+    ipcRenderer.invoke(desktopIpc.getLocale) as Promise<DesktopLocale>,
+  setLocale: (locale: DesktopLocale) =>
+    ipcRenderer.invoke(desktopIpc.setLocale, locale) as Promise<void>,
+  onLocaleChanged: (callback: (locale: DesktopLocale) => void) => {
+    const listener = (_event: unknown, locale: unknown) => {
+      callback(locale as DesktopLocale);
+    };
+    ipcRenderer.on(desktopIpc.localeChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(desktopIpc.localeChanged, listener);
+    };
+  },
+  getLocalePreferences: () =>
+    ipcRenderer.invoke(desktopIpc.getLocalePreferences) as Promise<
+      LocalePreferences
+    >,
+  setLocaleMode: (mode: DesktopPreferenceMode, locale?: DesktopLocale) =>
+    ipcRenderer.invoke(
+      desktopIpc.setLocaleMode,
+      mode,
+      locale,
+    ) as Promise<void>,
+  setCurrencyMode: (
+    mode: DesktopPreferenceMode,
+    currency?: DesktopCurrency,
+  ) =>
+    ipcRenderer.invoke(
+      desktopIpc.setCurrencyMode,
+      mode,
+      currency,
+    ) as Promise<void>,
+  onPreferencesChanged: (callback: (prefs: LocalePreferences) => void) => {
+    const listener = (_event: unknown, prefs: unknown) => {
+      callback(prefs as LocalePreferences);
+    };
+    ipcRenderer.on(desktopIpc.preferencesChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(desktopIpc.preferencesChanged, listener);
+    };
+  },
 });
 
 contextBridge.exposeInMainWorld("desktopBridge", desktopApi);

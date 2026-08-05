@@ -1,3 +1,5 @@
+import { formatMoney as i18nFormatMoney } from "../i18n/format";
+import type { Locale } from "../i18n/locale";
 import type {
   LocalTokenCounts,
   LocalUsageEvent,
@@ -10,12 +12,25 @@ import type { PricingSnapshot } from "./types";
 
 export type { PricingSnapshot, RuntimeModelPrice } from "./types";
 
-export type Currency = "USD" | "CNY";
+import type { Currency } from "../i18n/locale";
+export type { Currency } from "../i18n/locale";
 export type UsageDimension = "source" | "model" | "project" | "tokenType";
 export type TokenTypeKey =
   "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
 
-export const DEFAULT_USD_TO_CNY = 7.2;
+/**
+ * Built-in baseline exchange rates (offline fallback). These are static
+ * approximations — the UI labels their source as "fallback" and never presents
+ * them as live prices (docs/plan v1.2 汇率与离线).
+ */
+export const BUILTIN_RATES: Record<Currency, number> = {
+  CNY: 7.2,
+  JPY: 145,
+  KRW: 1350,
+  USD: 1,
+};
+
+export const DEFAULT_USD_TO_CNY = BUILTIN_RATES.CNY;
 let activePricingSnapshot: PricingSnapshot | null = null;
 
 export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
@@ -24,6 +39,19 @@ export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
 
 export function currentUsdToCny(): number {
   return activePricingSnapshot?.usdToCny ?? DEFAULT_USD_TO_CNY;
+}
+
+/**
+ * The exchange rate for a display currency. Prefers the latest pricing
+ * snapshot's rates (single shared snapshot per session), then the built-in
+ * baseline. USD is always 1.
+ */
+export function currentRate(currency: Currency): number {
+  if (currency === "USD") return 1;
+  const fromSnapshot = activePricingSnapshot?.exchangeRates?.[currency];
+  return typeof fromSnapshot === "number" && Number.isFinite(fromSnapshot)
+    ? fromSnapshot
+    : BUILTIN_RATES[currency];
 }
 
 export interface CostEstimate {
@@ -210,36 +238,44 @@ export function totalsFromEvents(events: LocalUsageEvent[]): LocalUsageTotals {
   );
 }
 
-export function convertUsd(
-  value: number,
-  currency: Currency,
-  usdToCny?: number,
-) {
-  return currency === "USD" ? value : value * (usdToCny ?? currentUsdToCny());
+/** Convert a USD amount to a display currency. USD passes through unchanged. */
+export function convertUsd(value: number, currency: Currency, rate?: number) {
+  return currency === "USD" ? value : value * (rate ?? currentRate(currency));
 }
 
+/**
+ * Format a cost in its display currency (converting USD first). The currency
+ * never changes with the UI language; `locale` only affects number grouping
+ * and the currency symbol presentation. `rate` overrides the snapshot/built-in
+ * rate (callers pass an explicit rate to pin a single snapshot).
+ */
 export function formatMoney(
+  locale: Locale,
   valueUsd: number,
   currency: Currency,
-  usdToCny?: number,
+  rate?: number,
 ): string {
-  const value = convertUsd(valueUsd, currency, usdToCny);
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
+  return i18nFormatMoney(
+    locale,
+    convertUsd(valueUsd, currency, rate),
     currency,
-    minimumFractionDigits: value >= 100 ? 0 : 2,
-    maximumFractionDigits: value >= 100 ? 0 : 4,
-  }).format(value);
+  );
 }
 
-export function formatCost(
+/**
+ * Format a cost estimate as a bare amount, or null when nothing is priced.
+ * The "price unknown" / "(partially unknown)" wording lives in the message
+ * catalogs (pricing.unknown / pricing.partialUnknown) and is composed with
+ * `t()` at the display boundary — never concatenated in lib code.
+ */
+export function formatCostAmount(
+  locale: Locale,
   cost: CostEstimate,
   currency: Currency,
-  usdToCny?: number,
-): string {
-  if (cost.pricedEvents === 0 && cost.unknownEvents > 0) return "价格未知";
-  const amount = formatMoney(cost.knownUsd, currency, usdToCny);
-  return cost.unknownEvents > 0 ? `${amount}（部分未知）` : amount;
+  rate?: number,
+): string | null {
+  if (cost.pricedEvents === 0 && cost.unknownEvents > 0) return null;
+  return formatMoney(locale, cost.knownUsd, currency, rate);
 }
 
 export function sourceName(source: LocalUsageSource | string) {

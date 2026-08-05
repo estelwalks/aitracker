@@ -62,9 +62,12 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* 四语言字体回退栈:中文/日文/韩文依次回退,数字与代码继续 JetBrains Mono */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
-    sans-serif;
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans",
+    "Yu Gothic UI", "Yu Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP",
+    "Noto Sans KR", "Malgun Gothic", "Microsoft YaHei", "Apple SD Gothic Neo",
+    system-ui, sans-serif;
   --font-mono:
     "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
 }

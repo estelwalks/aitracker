@@ -1,3 +1,4 @@
+import { AppError } from "../errors";
 import { MARKET_AGENTS } from "./types.ts";
 import type {
   MarketAgent,
@@ -20,7 +21,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 function requiredString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`市场接口字段 ${field} 无效`);
+    throw new AppError("errors.market.fieldInvalid", { field });
   }
   return value;
 }
@@ -39,13 +40,13 @@ function optionalBoolean(value: unknown): boolean | null {
 
 function nonNegativeInteger(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error(`市场接口分页字段 ${field} 无效`);
+    throw new AppError("errors.market.pagingFieldInvalid", { field });
   }
   return value;
 }
 
 function parseSkill(value: unknown): MarketSkill {
-  if (!isRecord(value)) throw new Error("市场接口返回了无效的 Skill 数据");
+  if (!isRecord(value)) throw new AppError("errors.market.invalidSkill");
 
   return {
     id: nonNegativeInteger(value.id, "skill.id"),
@@ -89,13 +90,14 @@ function tokenEstimate(value: unknown): number | null {
 }
 
 function parsePagination(value: unknown): MarketPagination {
-  if (!isRecord(value)) throw new Error("市场接口缺少分页信息");
+  if (!isRecord(value)) throw new AppError("errors.market.missingPaging");
 
   const page = nonNegativeInteger(value.page, "page");
   const limit = nonNegativeInteger(value.limit, "limit");
   const total = nonNegativeInteger(value.total, "total");
   const pages = nonNegativeInteger(value.pages, "pages");
-  if (page < 1 || limit < 1) throw new Error("市场接口分页范围无效");
+  if (page < 1 || limit < 1)
+    throw new AppError("errors.market.pagingRangeInvalid");
 
   return { page, limit, total, pages };
 }
@@ -108,7 +110,7 @@ export function parseMarketApiResponse(
     value.success !== true ||
     !Array.isArray(value.data)
   ) {
-    throw new Error("市场接口返回格式无效");
+    throw new AppError("errors.market.invalidFormat");
   }
 
   return {
@@ -123,22 +125,23 @@ export function parseMarketQuery(value: unknown): {
   search: string;
   sort: MarketSort;
 } {
-  if (!isRecord(value)) throw new Error("市场查询参数无效");
+  if (!isRecord(value)) throw new AppError("errors.market.queryInvalid");
 
   const page = typeof value.page === "number" ? value.page : Number(value.page);
   const limit =
     typeof value.limit === "number" ? value.limit : Number(value.limit);
   const search = typeof value.search === "string" ? value.search.trim() : "";
 
-  if (!Number.isInteger(page) || page < 1) throw new Error("页码必须是正整数");
+  if (!Number.isInteger(page) || page < 1)
+    throw new AppError("errors.market.pageNotPositive");
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
-    throw new Error("每页数量必须在 1 到 50 之间");
+    throw new AppError("errors.market.limitRange");
   }
-  if (search.length > 100) throw new Error("搜索关键词不能超过 100 个字符");
+  if (search.length > 100) throw new AppError("errors.market.searchTooLong");
 
   const sortRaw = typeof value.sort === "string" ? value.sort : "downloads";
   if (!VALID_SORTS.includes(sortRaw as MarketSort)) {
-    throw new Error("排序参数无效");
+    throw new AppError("errors.market.sortInvalid");
   }
 
   return { page, limit, search, sort: sortRaw as MarketSort };
@@ -148,7 +151,7 @@ export function parseInstallRequest(value: unknown): {
   skill: SkillDownloadInspection["skill"];
   agents: MarketAgent[];
 } {
-  if (!isRecord(value)) throw new Error("安装参数无效");
+  if (!isRecord(value)) throw new AppError("errors.market.installInvalid");
   if (!isRecord(value.skill)) throw new Error("Skill 参数无效");
   const required = [
     "name",

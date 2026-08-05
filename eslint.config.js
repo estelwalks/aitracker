@@ -15,6 +15,7 @@ export default tseslint.config(
       "release",
       "test-results",
       "vendor",
+      "docs", // 文档目录(含外部 zip 解包样例),非本仓库代码
     ],
   },
   {

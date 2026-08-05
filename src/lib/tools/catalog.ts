@@ -26,6 +26,31 @@ export interface AiTool {
   skillRootSuffix: string | null;
 }
 
+/**
+ * Parser coverage is intentionally modelled separately from installation.
+ * A supported parser may find no records, and an installed tool may have no
+ * parser yet; neither condition changes the filesystem installation fact.
+ */
+export type UsageLogParsing = "native" | "adapter" | "unsupported";
+
+const NATIVE_USAGE_PARSERS = new Set(["claude-code", "codex"]);
+const ADAPTER_USAGE_PARSERS = new Set([
+  "cursor",
+  "gemini-cli",
+  "opencode",
+  "github-copilot",
+  "kimi-code",
+  "workbuddy",
+  "grok",
+  "roo-code",
+]);
+
+export function usageLogParsingFor(toolId: string): UsageLogParsing {
+  if (NATIVE_USAGE_PARSERS.has(toolId)) return "native";
+  if (ADAPTER_USAGE_PARSERS.has(toolId)) return "adapter";
+  return "unsupported";
+}
+
 export const AI_TOOLS: readonly AiTool[] = [
   {
     id: "claude-code",
@@ -67,7 +92,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "openclaw",
     nameZh: "OpenClaw",
     detectRoots: [".openclaw"],
-    skillRootSuffix: ".openclaw/skills",
+    skillRootSuffix: null,
   },
   {
     id: "every-code",
@@ -79,7 +104,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "hermes",
     nameZh: "Hermes Agent",
     detectRoots: [".hermes"],
-    skillRootSuffix: ".hermes/skills",
+    skillRootSuffix: null,
   },
   {
     id: "github-copilot",
@@ -115,7 +140,7 @@ export const AI_TOOLS: readonly AiTool[] = [
     id: "grok",
     nameZh: "Grok Build",
     detectRoots: [".grok"],
-    skillRootSuffix: ".grok/skills",
+    skillRootSuffix: null,
   },
   {
     id: "kilo-cli",
@@ -138,7 +163,7 @@ export const AI_TOOLS: readonly AiTool[] = [
       ".gemini/antigravity",
       "Library/Application Support/Antigravity",
     ],
-    skillRootSuffix: ".gemini/antigravity/skills",
+    skillRootSuffix: null,
   },
   {
     id: "pi",

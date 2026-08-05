@@ -14,11 +14,12 @@ import { Segmented } from "../tt";
 import {
   aggregatePricedUsage,
   estimateUsageCost,
-  formatCost,
   formatMoney,
   type PricedUsageRow,
 } from "../../lib/pricing";
-import { formatTokens, shareOf } from "../../lib/local-usage/presentation";
+import { formatCostLabel } from "../../lib/pricing/cost-label";
+import { shareOf } from "../../lib/local-usage/presentation";
+import { useI18n } from "../../lib/i18n/context";
 import type { LocalUsageEvent } from "../../lib/local-usage";
 
 const chartColors = [
@@ -42,7 +43,14 @@ export interface ModelDistributionProps {
 }
 
 export function ModelDistribution({ events }: ModelDistributionProps) {
+  const { locale, t, format } = useI18n();
   const [view, setView] = useState<ModelView>("donut");
+
+  const segmentOptions = [
+    { value: "donut", label: t("dashboard.model.viewDonut") },
+    { value: "bars", label: t("dashboard.model.viewBars") },
+    { value: "list", label: t("dashboard.model.viewList") },
+  ];
 
   const models: (PricedUsageRow & {
     share: number;
@@ -69,15 +77,11 @@ export function ModelDistribution({ events }: ModelDistributionProps) {
           <Segmented
             value={view}
             onChange={(value) => setView(value as ModelView)}
-            options={[
-              { value: "donut", label: "环形" },
-              { value: "bars", label: "条形" },
-              { value: "list", label: "列表" },
-            ]}
+            options={segmentOptions}
           />
         </div>
         <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-          当前区间暂无模型用量数据。
+          {t("dashboard.model.empty")}
         </div>
       </div>
     );
@@ -87,17 +91,16 @@ export function ModelDistribution({ events }: ModelDistributionProps) {
     <div className="flex flex-col" style={{ minHeight: 160, maxHeight: 360 }}>
       <div className="mb-2 flex items-center justify-between">
         <span className="tt-num text-[11px] text-muted-foreground">
-          {models.length} 个模型 · {formatTokens(totalTokens)} ·{" "}
-          {formatCost(totalCost, "CNY")}
+          {t("dashboard.model.summary", {
+            count: models.length,
+            tokens: format.formatTokens(totalTokens),
+            cost: formatCostLabel(t, format, totalCost),
+          })}
         </span>
         <Segmented
           value={view}
           onChange={(value) => setView(value as ModelView)}
-          options={[
-            { value: "donut", label: "环形" },
-            { value: "bars", label: "条形" },
-            { value: "list", label: "列表" },
-          ]}
+          options={segmentOptions}
         />
       </div>
       {view === "donut" && (
@@ -122,10 +125,12 @@ function ModelDonut({
   models: (PricedUsageRow & { share: number; color: string })[];
   totalTokens: number;
 }) {
+  const { locale, t, format } = useI18n();
   const top = models.slice(0, TOP_N);
   const rest = models.slice(TOP_N);
   const restTokens = rest.reduce((sum, m) => sum + m.totalTokens, 0);
   const restCost = rest.reduce((sum, m) => sum + m.cost.knownUsd, 0);
+  const otherLabel = t("dashboard.model.other");
   const chartData = [
     ...top.map((m) => ({
       name: m.key,
@@ -135,7 +140,7 @@ function ModelDonut({
     ...(restTokens > 0
       ? [
           {
-            name: "其他",
+            name: otherLabel,
             tokens: restTokens,
             color: "var(--color-muted-foreground)",
           },
@@ -170,11 +175,11 @@ function ModelDonut({
                 const model = top.find((m) => m.key === name);
                 const costUsd = model
                   ? model.cost.knownUsd
-                  : name === "其他"
+                  : name === otherLabel
                     ? restCost
                     : 0;
                 return [
-                  `${formatTokens(tokens)} · ${share.toFixed(1)}% · ${formatMoney(costUsd, "CNY")}`,
+                  `${format.formatTokens(tokens)} · ${format.formatPercent(share)} · ${format.formatUsd(costUsd)}`,
                   name,
                 ];
               }}
@@ -189,7 +194,7 @@ function ModelDonut({
         </ResponsiveContainer>
         <div className="dashboard-donut-label">
           <strong>{models.length}</strong>
-          <span>MODELS</span>
+          <span>{t("dashboard.model.modelsLabel")}</span>
         </div>
       </div>
       <ModelLegend models={top} rest={rest} totalTokens={totalTokens} />
@@ -204,9 +209,11 @@ function ModelBars({
   models: (PricedUsageRow & { share: number; color: string })[];
   totalTokens: number;
 }) {
+  const { t, format } = useI18n();
   const top = models.slice(0, TOP_N);
   const rest = models.slice(TOP_N);
   const restTokens = rest.reduce((sum, m) => sum + m.totalTokens, 0);
+  const otherLabel = t("dashboard.model.other");
   const data = [
     ...top.map((m) => ({
       name: shortModel(m.key),
@@ -216,7 +223,7 @@ function ModelBars({
     ...(restTokens > 0
       ? [
           {
-            name: "其他",
+            name: otherLabel,
             tokens: restTokens,
             color: "var(--color-muted-foreground)",
           },
@@ -250,7 +257,7 @@ function ModelBars({
                 const share =
                   totalTokens > 0 ? shareOf(tokens, totalTokens) : 0;
                 return [
-                  `${formatTokens(tokens)} · ${share.toFixed(1)}%`,
+                  `${format.formatTokens(tokens)} · ${format.formatPercent(share)}`,
                   String(entry?.payload?.name ?? ""),
                 ];
               }}
@@ -281,15 +288,24 @@ function ModelList({
   models: (PricedUsageRow & { share: number; color: string })[];
   totalTokens: number;
 }) {
+  const { t, format } = useI18n();
   return (
     <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
       <table className="w-full min-w-[360px] text-[11px]">
         <thead className="sticky top-0 bg-surface-1">
           <tr className="border-b border-border text-left text-[10px] text-muted-foreground">
-            <th className="px-2 py-1.5 font-normal">模型</th>
-            <th className="px-2 py-1.5 text-right font-normal">Token</th>
-            <th className="px-2 py-1.5 text-right font-normal">费用</th>
-            <th className="px-2 py-1.5 text-right font-normal">占比</th>
+            <th className="px-2 py-1.5 font-normal">
+              {t("dashboard.model.colModel")}
+            </th>
+            <th className="px-2 py-1.5 text-right font-normal">
+              {t("dashboard.model.colTokens")}
+            </th>
+            <th className="px-2 py-1.5 text-right font-normal">
+              {t("dashboard.detail.cost")}
+            </th>
+            <th className="px-2 py-1.5 text-right font-normal">
+              {t("dashboard.detail.share")}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -306,20 +322,22 @@ function ModelList({
                 {model.key}
               </td>
               <td className="tt-num px-2 py-1.5 text-right">
-                {formatTokens(model.totalTokens)}
+                {format.formatTokens(model.totalTokens)}
               </td>
               <td className="tt-num px-2 py-1.5 text-right">
-                {formatCost(model.cost, "CNY")}
+                {formatCostLabel(t, format, model.cost)}
               </td>
               <td className="tt-num px-2 py-1.5 text-right text-muted-foreground">
-                {model.share.toFixed(1)}%
+                {format.formatPercent(model.share)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="tt-num mt-1 px-2 py-1 text-[10px] text-muted-foreground">
-        合计 {formatTokens(totalTokens)}
+        {t("dashboard.model.total", {
+          tokens: format.formatTokens(totalTokens),
+        })}
       </div>
     </div>
   );
@@ -334,6 +352,7 @@ function ModelLegend({
   rest: (PricedUsageRow & { share: number; color: string })[];
   totalTokens: number;
 }) {
+  const { t, format } = useI18n();
   const restTokens = rest.reduce((sum, m) => sum + m.totalTokens, 0);
   const restShare = totalTokens > 0 ? shareOf(restTokens, totalTokens) : 0;
   return (
@@ -348,10 +367,10 @@ function ModelLegend({
             {model.key}
           </span>
           <span className="tt-num ml-auto">
-            {formatTokens(model.totalTokens)}
+            {format.formatTokens(model.totalTokens)}
           </span>
           <span className="tt-num w-10 text-right text-muted-foreground">
-            {model.share.toFixed(1)}%
+            {format.formatPercent(model.share)}
           </span>
         </div>
       ))}
@@ -361,10 +380,12 @@ function ModelLegend({
             className="size-1.5 shrink-0 rounded-full"
             style={{ background: "var(--color-muted-foreground)" }}
           />
-          <span>其他 {rest.length} 个</span>
-          <span className="tt-num ml-auto">{formatTokens(restTokens)}</span>
+          <span>{t("dashboard.model.otherCount", { count: rest.length })}</span>
+          <span className="tt-num ml-auto">
+            {format.formatTokens(restTokens)}
+          </span>
           <span className="tt-num w-10 text-right">
-            {restShare.toFixed(1)}%
+            {format.formatPercent(restShare)}
           </span>
         </div>
       )}

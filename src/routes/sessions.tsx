@@ -4,11 +4,15 @@ import { RefreshCw, Search, Terminal } from "lucide-react";
 import { toast } from "sonner";
 
 import { Dot, EmptyState, PageHeader, Panel, TTButton } from "../components/tt";
+import { useI18n } from "../lib/i18n/context";
+import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import { resolveLocaleFromSearch } from "../lib/i18n/locale";
+import { toUiError } from "../lib/errors";
+import { formatCostLabel } from "../lib/pricing/cost-label";
 import {
   getLocalSessions,
   refreshLocalSessions,
 } from "../lib/local-sessions/server-fns";
-import { formatCost } from "../lib/pricing";
 import type {
   SessionFilter,
   SessionRecord,
@@ -18,13 +22,25 @@ import type {
 } from "../lib/local-sessions/types";
 
 export const Route = createFileRoute("/sessions")({
-  loader: () => getLocalSessions({ data: {} }),
-  head: () => ({
+  loader: ({ location }) =>
+    getLocalSessions({ data: {} }).then((data) => ({
+      ...data,
+      locale: resolveLocaleFromSearch(location.search),
+    })),
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "会话恢复 · AITracker V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.sessions",
+        ),
+      },
       {
         name: "description",
-        content: "浏览本地历史会话并一键复制恢复命令。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "sessions.metaDescription",
+        ),
       },
     ],
   }),
@@ -40,49 +56,48 @@ const SOURCE_META: Record<
   grok: { label: "Grok", dot: "bg-violet-500", color: "text-violet-500" },
 };
 
-const RANGE_OPTIONS: Array<{ key: SessionFilter["range"]; label: string }> = [
-  { key: "all", label: "全部" },
-  { key: "7d", label: "近 7 天" },
-  { key: "30d", label: "近 30 天" },
-  { key: "90d", label: "近 90 天" },
+const RANGE_OPTIONS: Array<{
+  key: SessionFilter["range"];
+  labelKey: MessageKey;
+}> = [
+  { key: "all", labelKey: "common.all" },
+  { key: "7d", labelKey: "sessions.range.d7" },
+  { key: "30d", labelKey: "sessions.range.d30" },
+  { key: "90d", labelKey: "sessions.range.d90" },
 ];
 
 const STATUS_OPTIONS: Array<{
   key: SessionStatus | "all";
-  label: string;
+  labelKey: MessageKey;
 }> = [
-  { key: "all", label: "全部状态" },
-  { key: "available", label: "可恢复" },
-  { key: "interrupted", label: "异常中断" },
-  { key: "lost", label: "已标记丢失" },
-  { key: "unavailable", label: "命令不可用" },
+  { key: "all", labelKey: "sessions.status.all" },
+  { key: "available", labelKey: "sessions.status.available" },
+  { key: "interrupted", labelKey: "sessions.status.interrupted" },
+  { key: "lost", labelKey: "sessions.status.lost" },
+  { key: "unavailable", labelKey: "sessions.status.unavailable" },
 ];
 
-const STATUS_META: Record<SessionStatus, { label: string; className: string }> =
-  {
-    available: {
-      label: "可恢复",
-      className: "border-ok/30 bg-ok/10 text-ok",
-    },
-    interrupted: {
-      label: "异常中断",
-      className: "border-amber-500/30 bg-amber-500/10 text-amber-600",
-    },
-    lost: {
-      label: "已标记丢失",
-      className: "border-rose-500/30 bg-rose-500/10 text-rose-600",
-    },
-    unavailable: {
-      label: "命令不可用",
-      className: "border-border bg-muted text-muted-foreground",
-    },
-  };
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const STATUS_META: Record<
+  SessionStatus,
+  { labelKey: MessageKey; className: string }
+> = {
+  available: {
+    labelKey: "sessions.status.available",
+    className: "border-ok/30 bg-ok/10 text-ok",
+  },
+  interrupted: {
+    labelKey: "sessions.status.interrupted",
+    className: "border-amber-500/30 bg-amber-500/10 text-amber-600",
+  },
+  lost: {
+    labelKey: "sessions.status.lost",
+    className: "border-rose-500/30 bg-rose-500/10 text-rose-600",
+  },
+  unavailable: {
+    labelKey: "sessions.status.unavailable",
+    className: "border-border bg-muted text-muted-foreground",
+  },
+};
 
 function formatDuration(ms: number): string {
   if (ms <= 0) return "—";
@@ -93,18 +108,9 @@ function formatDuration(ms: number): string {
   return `${hours}h ${rest}m`;
 }
 
-function formatDateTime(iso: string): string {
-  try {
-    const date = new Date(iso);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  } catch {
-    return iso;
-  }
-}
-
 function SessionsPage() {
-  const initial = Route.useLoaderData() as SessionSummary;
-  const [summary, setSummary] = useState<SessionSummary>(initial);
+  const { t, format } = useI18n();
+  const [summary, setSummary] = useState<SessionSummary>(Route.useLoaderData());
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter state (applied server-side via the filter param).
@@ -210,9 +216,10 @@ function SessionsPage() {
     try {
       const next = await refreshLocalSessions({ data: appliedFilter });
       setSummary(next);
-      toast.success("会话列表已刷新");
-    } catch {
-      toast.error("刷新失败，请重试");
+      toast.success(t("sessions.toast.refreshed"));
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
     } finally {
       setRefreshing(false);
     }
@@ -222,28 +229,39 @@ function SessionsPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
-          title="会话恢复"
-          desc="浏览本地历史会话并一键复制恢复命令"
+          title={t("sessions.pageHeader")}
+          desc={t("sessions.pageHeaderDesc")}
         />
         <TTButton onClick={handleRefresh} disabled={refreshing}>
           <RefreshCw
             className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
           />
-          {refreshing ? "刷新中" : "刷新"}
+          {refreshing ? t("sessions.refreshing") : t("common.refresh")}
         </TTButton>
       </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <SummaryCard label="会话条数" value={totals.count} />
-        <SummaryCard label="Token 合计" value={formatTokens(totals.tokens)} />
-        <SummaryCard label="费用合计" value={formatCost(totals.cost, "CNY")} />
-        <SummaryCard label="轮次合计" value={totals.turns} />
+        <SummaryCard
+          label={t("sessions.summary.count")}
+          value={format.formatNumber(totals.count)}
+        />
+        <SummaryCard
+          label={t("sessions.summary.tokens")}
+          value={format.formatTokens(totals.tokens)}
+        />
+        <SummaryCard
+          label={t("sessions.summary.cost")}
+          value={formatCostLabel(t, format, totals.cost)}
+        />
+        <SummaryCard
+          label={t("sessions.summary.turns")}
+          value={format.formatNumber(totals.turns)}
+        />
       </div>
 
-      <Panel className="mt-3" title="本地会话">
+      <Panel className="mt-3" title={t("sessions.panelTitle")}>
         <p className="mb-3 text-[11px] text-muted-foreground">
-          当前仅支持恢复 Claude Code、Codex 与
-          Grok；费用按本地模型定价表估算，未知价格会明确标注。
+          {t("sessions.hint")}
         </p>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -251,7 +269,7 @@ function SessionsPage() {
             <input
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索标题 / 项目 / 模型 / sessionId"
+              placeholder={t("sessions.searchPlaceholder")}
               className="tt-input h-8 w-56 pl-8 text-[13px]"
             />
           </div>
@@ -260,7 +278,7 @@ function SessionsPage() {
             onChange={(event) => setProjectId(event.target.value)}
             className="tt-input h-8 text-[13px]"
           >
-            <option value="all">全部项目</option>
+            <option value="all">{t("sessions.project.all")}</option>
             {projectOptions.map((project) => (
               <option key={project} value={project}>
                 {project}
@@ -276,7 +294,7 @@ function SessionsPage() {
           >
             {RANGE_OPTIONS.map((option) => (
               <option key={option.key ?? "all"} value={option.key ?? "all"}>
-                {option.label}
+                {t(option.labelKey)}
               </option>
             ))}
           </select>
@@ -287,7 +305,7 @@ function SessionsPage() {
             }
             className="tt-input h-8 text-[13px]"
           >
-            <option value="all">全部工具</option>
+            <option value="all">{t("sessions.source.all")}</option>
             <option value="claude-code">Claude Code</option>
             <option value="codex">Codex</option>
             <option value="grok">Grok</option>
@@ -301,7 +319,7 @@ function SessionsPage() {
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.key} value={option.key}>
-                {option.label}
+                {t(option.labelKey)}
               </option>
             ))}
           </select>
@@ -309,8 +327,8 @@ function SessionsPage() {
 
         {summary.sessions.length === 0 ? (
           <EmptyState
-            title="没有匹配的会话"
-            desc="调整筛选条件或搜索关键词后重试。"
+            title={t("sessions.empty.title")}
+            desc={t("sessions.empty.desc")}
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -345,6 +363,7 @@ function SummaryCard({
 }
 
 function SessionRow({ session }: { session: SessionRecord }) {
+  const { t, format } = useI18n();
   const [copied, setCopied] = useState(false);
   const meta = SOURCE_META[session.source];
   const statusMeta = STATUS_META[session.status];
@@ -359,9 +378,10 @@ function SessionRow({ session }: { session: SessionRecord }) {
       await navigator.clipboard.writeText(fullCommand);
       setCopied(true);
       setTimeout(() => setCopied(false), 1_600);
-      toast.success("已复制恢复命令");
-    } catch {
-      toast.error("复制失败，请手动复制");
+      toast.success(t("sessions.toast.copied"));
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
     }
   }
 
@@ -373,13 +393,13 @@ function SessionRow({ session }: { session: SessionRecord }) {
           {meta.label}
         </span>
         <span className="truncate font-medium text-foreground">
-          {session.title || "(未命名会话)"}
+          {session.title || t("sessions.row.untitled")}
         </span>
         <span
           title={session.statusReason ?? undefined}
           className={`rounded-full border px-1.5 py-0.5 text-[10px] ${statusMeta.className}`}
         >
-          {statusMeta.label}
+          {t(statusMeta.labelKey)}
         </span>
         <span className="ml-auto">
           <TTButton
@@ -388,33 +408,35 @@ function SessionRow({ session }: { session: SessionRecord }) {
             disabled={!session.resumeSafe}
             title={
               session.resumeSafe
-                ? "复制恢复命令"
-                : "该会话 ID 不安全，无法生成恢复命令"
+                ? t("sessions.row.copy")
+                : t("sessions.row.copyUnsafe")
             }
           >
             <Terminal className="size-3.5" />
-            {copied ? "已复制" : "复制恢复命令"}
+            {copied ? t("sessions.row.copied") : t("sessions.row.copy")}
           </TTButton>
         </span>
       </div>
 
       <div className="flex w-full flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground">
         <span>
-          项目 <span className="text-foreground/80">{session.projectKey}</span>
+          {t("sessions.row.project")}{" "}
+          <span className="text-foreground/80">{session.projectKey}</span>
         </span>
         {session.model && (
           <span>
-            模型 <span className="text-foreground/80">{session.model}</span>
+            {t("sessions.row.model")}{" "}
+            <span className="text-foreground/80">{session.model}</span>
           </span>
         )}
         <span>
-          时间{" "}
+          {t("sessions.row.time")}{" "}
           <span className="tt-num text-foreground/80">
-            {formatDateTime(session.startedAt)}
+            {format.formatDateTime(session.startedAt, false)}
           </span>
         </span>
         <span>
-          时长{" "}
+          {t("sessions.row.duration")}{" "}
           <span className="tt-num text-foreground/80">
             {formatDuration(session.durationMs)}
           </span>
@@ -422,34 +444,38 @@ function SessionRow({ session }: { session: SessionRecord }) {
         <span>
           Token{" "}
           <span className="tt-num text-foreground/80">
-            {formatTokens(session.totals.totalTokens)}
+            {format.formatTokens(session.totals.totalTokens)}
           </span>
         </span>
         <span>
-          费用{" "}
+          {t("sessions.row.cost")}{" "}
           <span className="tt-num text-foreground/80">
-            {formatCost(session.cost, "CNY")}
+            {formatCostLabel(t, format, session.cost)}
           </span>
         </span>
         <span>
-          轮次{" "}
-          <span className="tt-num text-foreground/80">{session.turns}</span>
+          {t("sessions.row.turns")}{" "}
+          <span className="tt-num text-foreground/80">
+            {format.formatNumber(session.turns)}
+          </span>
         </span>
         <span>
-          改动{" "}
-          <span className="tt-num text-foreground/80">{session.editTurns}</span>
+          {t("sessions.row.edits")}{" "}
+          <span className="tt-num text-foreground/80">
+            {format.formatNumber(session.editTurns)}
+          </span>
         </span>
       </div>
 
       {session.resumeSafe && (
         <div className="w-full text-[10px] text-muted-foreground/70">
-          需在该目录下执行恢复命令：
+          {t("sessions.row.resumeDirHint")}
           <span className="tt-num">{session.projectRef}</span>
         </div>
       )}
       {session.statusReason != null && (
         <div className="w-full text-[10px] text-muted-foreground/70">
-          状态说明：{session.statusReason}
+          {t("sessions.row.statusReason")} {session.statusReason}
         </div>
       )}
     </li>

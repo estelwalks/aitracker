@@ -24,4 +24,6 @@ export interface PricingSnapshot {
   usdToCny: number;
   exchangeRateDate: string;
   exchangeRateSource: "live" | "cache" | "stale-cache" | "fallback";
+  /** All display-currency rates from one snapshot (USD is always 1). */
+  exchangeRates: Record<string, number>;
 }

@@ -6,17 +6,39 @@ import {
   type ReactNode,
 } from "react";
 
+import type { MessageKey } from "./i18n/messages";
+
 export const themes = [
-  { id: "dark", label: "暗色", desc: "默认，日常使用", cls: "" },
-  { id: "light", label: "亮色", desc: "白天 / 会议展示", cls: "theme-light" },
+  {
+    id: "dark",
+    labelKey: "theme.dark.label",
+    descKey: "theme.dark.desc",
+    cls: "",
+  },
+  {
+    id: "light",
+    labelKey: "theme.light.label",
+    descKey: "theme.light.desc",
+    cls: "theme-light",
+  },
   {
     id: "contrast",
-    label: "高对比度",
-    desc: "投影 / 大屏 / 视力辅助",
+    labelKey: "theme.contrast.label",
+    descKey: "theme.contrast.desc",
     cls: "theme-contrast",
   },
-  { id: "warm", label: "暖色", desc: "夜间低蓝光", cls: "theme-warm" },
-] as const;
+  {
+    id: "warm",
+    labelKey: "theme.warm.label",
+    descKey: "theme.warm.desc",
+    cls: "theme-warm",
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  labelKey: MessageKey;
+  descKey: MessageKey;
+  cls: string;
+}>;
 
 export type ThemeId = (typeof themes)[number]["id"];
 

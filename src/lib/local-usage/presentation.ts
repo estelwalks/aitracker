@@ -93,37 +93,9 @@ export function sourceLabel(source: LocalUsageSource | string): string {
   return source;
 }
 
-export function formatTokens(value: number): string {
-  if (value >= 1_000_000_000) return `${trimFixed(value / 1_000_000_000)}B`;
-  if (value >= 1_000_000) return `${trimFixed(value / 1_000_000)}M`;
-  if (value >= 1_000) return `${trimFixed(value / 1_000)}K`;
-  return Math.round(value).toLocaleString();
-}
-
-export function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
-}
-
-export function formatEventTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-}
+// NOTE: 展示格式化统一走 src/lib/i18n/format.ts (locale 参数化)。
+// 本模块只保留纯数据逻辑;formatTokens/formatDateTime/formatEventTime
+// 的调用方改用 useI18n().format.*。
 
 export function filterDailyUsage(
   daily: LocalUsageDaily[],
@@ -260,22 +232,34 @@ export function previousPeriodTotal(
   return total;
 }
 
+/**
+ * Compose the token breakdown for a row. `label` is a stable i18n message key
+ * (dashboard.tokens.*) — components translate it at the display boundary.
+ */
 export function breakdownComposition(row: LocalUsageBreakdown) {
   return [
-    { label: "输入", value: row.inputTokens, color: "var(--color-chart-1)" },
-    { label: "输出", value: row.outputTokens, color: "var(--color-chart-2)" },
     {
-      label: "缓存读取",
+      label: "dashboard.tokens.input",
+      value: row.inputTokens,
+      color: "var(--color-chart-1)",
+    },
+    {
+      label: "dashboard.tokens.output",
+      value: row.outputTokens,
+      color: "var(--color-chart-2)",
+    },
+    {
+      label: "dashboard.tokens.cacheRead",
       value: row.cachedInputTokens,
       color: "var(--color-chart-3)",
     },
     {
-      label: "缓存写入",
+      label: "dashboard.tokens.cacheWrite",
       value: row.cacheCreationInputTokens,
       color: "var(--color-chart-5)",
     },
     {
-      label: "推理",
+      label: "dashboard.tokens.reasoning",
       value: row.reasoningOutputTokens,
       color: "var(--color-chart-4)",
     },
@@ -426,12 +410,6 @@ export function resolveUsageRange(
   }
 
   return { from, to, fromDate, toDate, valid: true };
-}
-
-function trimFixed(value: number): string {
-  return value
-    .toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)
-    .replace(/\.?0+$/, "");
 }
 
 function addDays(value: Date, days: number): Date {

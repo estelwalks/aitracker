@@ -5,26 +5,25 @@ import {
   type LocalUsageContextBreakdownRow,
   type LocalUsageObservedContextRow,
 } from "../../lib/local-usage/context-breakdown";
-import {
-  formatTokens,
-  shareOf,
-  sourceLabel,
-} from "../../lib/local-usage/presentation";
-import { estimateUsageCost, formatCost } from "../../lib/pricing";
+import { shareOf, sourceLabel } from "../../lib/local-usage/presentation";
+import { estimateUsageCost } from "../../lib/pricing";
+import { formatCostLabel } from "../../lib/pricing/cost-label";
 import type { LocalUsageEvent } from "../../lib/local-usage";
+import { useI18n } from "../../lib/i18n/context";
+import type { MessageKey } from "../../lib/i18n/messages";
 import { Panel } from "../tt";
 import { BrandIcon, brandColorOf } from "../BrandIcon";
 
 type DimensionKey =
   "model" | "messages" | "reasoning" | "tool" | "mcp" | "skill";
 
-const DIMENSIONS: { key: DimensionKey; label: string }[] = [
-  { key: "model", label: "模型" },
-  { key: "messages", label: "Messages" },
-  { key: "reasoning", label: "Reasoning" },
-  { key: "tool", label: "Tool calls" },
-  { key: "mcp", label: "MCP" },
-  { key: "skill", label: "Skills" },
+const DIMENSIONS: { key: DimensionKey; labelKey: MessageKey }[] = [
+  { key: "model", labelKey: "dashboard.context.dimModel" },
+  { key: "messages", labelKey: "dashboard.context.dimMessages" },
+  { key: "reasoning", labelKey: "dashboard.context.dimReasoning" },
+  { key: "tool", labelKey: "dashboard.context.dimTool" },
+  { key: "mcp", labelKey: "dashboard.context.dimMcp" },
+  { key: "skill", labelKey: "dashboard.context.dimSkill" },
 ];
 
 const CATEGORY_COLORS = [
@@ -49,6 +48,8 @@ interface SourceChild {
   value: string;
 }
 
+type TFunction = ReturnType<typeof useI18n>["t"];
+
 function buildToolRanking(events: LocalUsageEvent[]): ToolRankRow[] {
   const groups = new Map<string, number>();
   for (const event of events) {
@@ -66,7 +67,7 @@ function buildToolRanking(events: LocalUsageEvent[]): ToolRankRow[] {
     );
 }
 
-function buildModelRows(events: LocalUsageEvent[]): ModelRow[] {
+function buildModelRows(events: LocalUsageEvent[], t: TFunction): ModelRow[] {
   const groups = new Map<string, LocalUsageEvent[]>();
   for (const event of events) {
     const group = groups.get(event.model) ?? [];
@@ -79,7 +80,7 @@ function buildModelRows(events: LocalUsageEvent[]): ModelRow[] {
       // while preserving the scanner's total and cache conventions.
       const totals = buildContextBreakdown(modelEvents).totals;
       return {
-        key: key || "未知模型",
+        key: key || t("dashboard.context.unknownModel"),
         calls: modelEvents.length,
         ...totals,
         cost: estimateUsageCost(modelEvents),
@@ -93,13 +94,14 @@ function buildModelRows(events: LocalUsageEvent[]): ModelRow[] {
 }
 
 function directMessageRows(
+  t: TFunction,
   totals: LocalUsageContextBreakdownRow,
 ): LocalUsageContextBreakdownRow[] {
   const entries = [
-    ["输入", "inputTokens"],
-    ["缓存读取", "cachedInputTokens"],
-    ["缓存写入", "cacheCreationInputTokens"],
-    ["输出", "outputTokens"],
+    [t("dashboard.tokens.input"), "inputTokens"],
+    [t("dashboard.tokens.cacheRead"), "cachedInputTokens"],
+    [t("dashboard.tokens.cacheWrite"), "cacheCreationInputTokens"],
+    [t("dashboard.tokens.output"), "outputTokens"],
   ] as const;
   return entries
     .map(([key, field]) => ({
@@ -181,9 +183,10 @@ function SourceNode({
 }
 
 function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
+  const { t, format } = useI18n();
   const breakdown = useMemo(() => buildContextBreakdown(events), [events]);
   const total = breakdown.totals.totalTokens;
-  const messages = directMessageRows({
+  const messages = directMessageRows(t, {
     key: "messages",
     calls: 0,
     ...breakdown.totals,
@@ -194,44 +197,51 @@ function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
   const observedSkills = breakdown.observedSkills;
   const hasParsedContext = events.some((event) => event.context != null);
   const tokenValue = (tokens: number) =>
-    `${formatTokens(tokens)} · ${shareOf(tokens, total).toFixed(1)}%`;
+    `${format.formatTokens(tokens)} · ${format.formatPercent(shareOf(tokens, total))}`;
   const callChildren = (rows: LocalUsageObservedContextRow[]): SourceChild[] =>
     rows.map((row) => ({
       label: row.key,
-      value: `${row.calls} 次 · ${row.events} 条记录`,
+      value: t("dashboard.context.callSummary", {
+        calls: row.calls,
+        events: row.events,
+      }),
     }));
 
   return (
     <div className="mt-1 border-l-2 border-primary/40">
       <SourceNode
         color={CATEGORY_COLORS[0]}
-        label="Messages"
+        label={t("dashboard.context.dimMessages")}
         value={tokenValue(messageTokens)}
         children={messages.map((row) => ({
           label: row.key,
-          value: formatTokens(row.totalTokens),
+          value: format.formatTokens(row.totalTokens),
         }))}
       />
       <SourceNode
         color={CATEGORY_COLORS[1]}
-        label="Tool calls"
+        label={t("dashboard.context.dimTool")}
         value={
           observedTools.length > 0
-            ? `${toolCallCount(observedTools)} 次调用`
-            : "无可解析记录"
+            ? t("dashboard.context.calls", {
+                count: toolCallCount(observedTools),
+              })
+            : t("dashboard.context.noRecords")
         }
         children={callChildren(observedTools)}
       />
       <SourceNode
         color={CATEGORY_COLORS[2]}
-        label="Reasoning"
+        label={t("dashboard.context.dimReasoning")}
         value={tokenValue(breakdown.totals.reasoningOutputTokens)}
         children={
           breakdown.totals.reasoningOutputTokens > 0
             ? [
                 {
-                  label: "日志直接记录的推理 Token",
-                  value: formatTokens(breakdown.totals.reasoningOutputTokens),
+                  label: t("dashboard.context.reasoningDirect"),
+                  value: format.formatTokens(
+                    breakdown.totals.reasoningOutputTokens,
+                  ),
                 },
               ]
             : []
@@ -239,32 +249,34 @@ function SourceDetail({ events }: { events: LocalUsageEvent[] }) {
       />
       <SourceNode
         color={CATEGORY_COLORS[4]}
-        label="MCP"
+        label={t("dashboard.context.dimMcp")}
         value={
           observedMcp.length > 0
-            ? `${toolCallCount(observedMcp)} 次调用`
-            : "无可解析记录"
+            ? t("dashboard.context.calls", {
+                count: toolCallCount(observedMcp),
+              })
+            : t("dashboard.context.noRecords")
         }
         children={callChildren(observedMcp)}
       />
       <SourceNode
         color={CATEGORY_COLORS[3]}
-        label="Skills"
+        label={t("dashboard.context.dimSkill")}
         value={
           observedSkills.length > 0
-            ? `${toolCallCount(observedSkills)} 次调用`
-            : "无可解析记录"
+            ? t("dashboard.context.calls", {
+                count: toolCallCount(observedSkills),
+              })
+            : t("dashboard.context.noRecords")
         }
         children={callChildren(observedSkills)}
       />
       <p className="border-t border-border/60 px-3 py-2 text-[10px] text-muted-foreground">
-        Token 仅来自请求级 usage 字段；Tool calls、MCP 与 Skills
-        是独立的日志调用记录，不参与 Token 占比或费用分摊。
+        {t("dashboard.context.usageNote")}
       </p>
       {!hasParsedContext && (
         <p className="px-3 py-2 text-[10px] text-muted-foreground">
-          此工具日志仅提供请求级 Token；未检测到可解析的 Tools、MCP 或 Skills
-          记录，因此不会进行逐调用 Token 估算。
+          {t("dashboard.context.usageNoteNoContext")}
         </p>
       )}
     </div>
@@ -286,9 +298,14 @@ function ModelRow({
   totalTokens: number;
   events: LocalUsageEvent[];
 }) {
+  const { t, format } = useI18n();
   const modelEvents = useMemo(
-    () => events.filter((event) => (event.model || "未知模型") === row.key),
-    [events, row.key],
+    () =>
+      events.filter(
+        (event) =>
+          (event.model || t("dashboard.context.unknownModel")) === row.key,
+      ),
+    [events, row.key, t],
   );
   const share = shareOf(row.totalTokens, totalTokens);
   return (
@@ -311,13 +328,13 @@ function ModelRow({
         />
         <span className="min-w-0 flex-1 truncate">{row.key}</span>
         <span className="tt-num w-14 text-right">
-          {formatTokens(row.totalTokens)}
+          {format.formatTokens(row.totalTokens)}
         </span>
         <span className="tt-num w-14 text-right text-muted-foreground">
-          {formatCost(row.cost, "CNY")}
+          {formatCostLabel(t, format, row.cost)}
         </span>
         <span className="tt-num w-9 text-right text-muted-foreground">
-          {share.toFixed(1)}%
+          {format.formatPercent(share)}
         </span>
       </button>
       {expanded && <SourceDetail events={modelEvents} />}
@@ -334,6 +351,7 @@ function TokenRow({
   index: number;
   totalTokens: number;
 }) {
+  const { format } = useI18n();
   const share = shareOf(row.totalTokens, totalTokens);
   return (
     <div className="flex items-center gap-2 border-b border-border/60 px-2 py-2 text-[11px] last:border-0">
@@ -352,10 +370,10 @@ function TokenRow({
         />
       </span>
       <span className="tt-num w-14 text-right">
-        {formatTokens(row.totalTokens)}
+        {format.formatTokens(row.totalTokens)}
       </span>
       <span className="tt-num w-9 text-right text-muted-foreground">
-        {share.toFixed(1)}%
+        {format.formatPercent(share)}
       </span>
     </div>
   );
@@ -368,6 +386,7 @@ function ObservedCallRow({
   row: LocalUsageObservedContextRow;
   index: number;
 }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="border-b border-border/60 last:border-0">
@@ -388,12 +407,13 @@ function ObservedCallRow({
           }}
         />
         <span className="min-w-0 flex-1 truncate">{row.key}</span>
-        <span className="tt-num text-muted-foreground">{row.calls} 次调用</span>
+        <span className="tt-num text-muted-foreground">
+          {t("dashboard.context.calls", { count: row.calls })}
+        </span>
       </button>
       {expanded && (
         <p className="bg-surface-2/40 px-5 py-2 text-[10px] text-muted-foreground">
-          在 {row.events} 条本地日志中直接检测到。日志未提供单次调用
-          Token，费用和 Token 归因不展示。
+          {t("dashboard.context.observedNote", { events: row.events })}
         </p>
       )}
     </div>
@@ -411,6 +431,7 @@ function ToolRanking({
   totalTokens: number;
   onSelect: (source: string) => void;
 }) {
+  const { t, format } = useI18n();
   const renderRow = (source: string, tokens: number, all = false) => {
     const selected = selectedSource === source;
     const share = all
@@ -418,7 +439,7 @@ function ToolRanking({
         ? 100
         : 0
       : shareOf(tokens, totalTokens);
-    const label = all ? "全部工具" : sourceLabel(source);
+    const label = all ? t("dashboard.context.allTools") : sourceLabel(source);
     return (
       <button
         key={source}
@@ -434,7 +455,7 @@ function ToolRanking({
           )}
           <span className="min-w-0 flex-1 truncate">{label}</span>
           <span className="tt-num text-[10px] text-muted-foreground">
-            {share.toFixed(0)}%
+            {format.formatPercent(share)}
           </span>
         </span>
         <span className="mt-1 block h-[2px] w-full bg-surface-2">
@@ -462,6 +483,7 @@ export interface ContextBreakdownProps {
 }
 
 export function ContextBreakdown({ events }: ContextBreakdownProps) {
+  const { t, format } = useI18n();
   const [selectedSource, setSelectedSource] = useState("__all__");
   const [query, setQuery] = useState("");
   const [dimension, setDimension] = useState<DimensionKey>("model");
@@ -503,17 +525,25 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
     () => buildContextBreakdown(scopedEvents),
     [scopedEvents],
   );
-  const models = useMemo(() => buildModelRows(scopedEvents), [scopedEvents]);
+  const models = useMemo(
+    () => buildModelRows(scopedEvents, t),
+    [scopedEvents, t],
+  );
   const messageRows = useMemo(
-    () => directMessageRows({ key: "messages", calls: 0, ...breakdown.totals }),
-    [breakdown],
+    () =>
+      directMessageRows(t, {
+        key: "messages",
+        calls: 0,
+        ...breakdown.totals,
+      }),
+    [breakdown, t],
   );
   const reasoningRows = useMemo(
     () =>
       breakdown.totals.reasoningOutputTokens > 0
         ? [
             {
-              key: "推理",
+              key: t("dashboard.tokens.reasoning"),
               calls: 0,
               inputTokens: 0,
               cachedInputTokens: 0,
@@ -524,7 +554,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
             },
           ]
         : [],
-    [breakdown],
+    [breakdown, t],
   );
   const observedRows = useMemo(
     () =>
@@ -546,17 +576,18 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
   const noDataMessage =
     dimension === "tool" || dimension === "mcp" || dimension === "skill"
       ? hasParsedContext
-        ? "当前工具的本地日志没有该类可解析调用记录。"
-        : "当前工具仅提供请求级 Token，未提供可解析的上下文来源记录。"
-      : "当前维度暂无数据。";
+        ? t("dashboard.context.noDataNoCalls")
+        : t("dashboard.context.noDataRequestOnly")
+      : t("dashboard.context.noDataDimension");
 
   return (
     <Panel
-      title="AI 工具构成 · 上下文来源"
+      title={t("dashboard.context.title")}
       bodyClassName="p-0"
       action={
         <span className="tt-num text-[10px] text-muted-foreground">
-          {formatTokens(selectedTokens)} · {formatCost(selectedCost, "CNY")}
+          {format.formatTokens(selectedTokens)} ·{" "}
+          {formatCostLabel(t, format, selectedCost)}
         </span>
       }
     >
@@ -567,8 +598,8 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="筛选 AI 工具…"
-              aria-label="筛选 AI 工具"
+              placeholder={t("dashboard.context.filterPlaceholder")}
+              aria-label={t("dashboard.context.filterAria")}
               className="h-6 w-full rounded-sm border border-border bg-surface-2 px-2 text-[11px] outline-none placeholder:text-muted-foreground focus:border-primary"
             />
           </div>
@@ -585,7 +616,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               />
             ) : (
               <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
-                无匹配工具
+                {t("dashboard.context.noMatch")}
               </p>
             )}
           </div>
@@ -602,13 +633,13 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
                 }}
                 className={`rounded-sm border px-2 py-1 text-[11px] transition-colors ${dimension === item.key ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-border-strong"}`}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
           {selectedTokens === 0 ? (
             <div className="flex min-h-24 flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-              当前区间没有 Token 使用数据
+              {t("dashboard.context.noTokenData")}
             </div>
           ) : dimension === "model" ? (
             <div className="tt-xscroll min-h-0 flex-1 overflow-auto">

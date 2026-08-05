@@ -2,17 +2,23 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { BUILTIN_RATES } from "./index.ts";
+import type { Currency } from "../i18n/locale";
 import type { PricingSnapshot, RuntimeModelPrice } from "./types.ts";
 
 const PRICE_URLS = [
   "https://cdn.jsdelivr.net/gh/BerriAI/litellm@main/model_prices_and_context_window.json",
   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
 ];
-const EXCHANGE_URL = "https://api.frankfurter.dev/v2/rate/USD/CNY";
+// One request fetches all three non-USD display currencies (docs/plan v1.2).
+const EXCHANGE_URL =
+  "https://api.frankfurter.dev/v2/latest?base=USD&symbols=CNY,JPY,KRW";
 const PRICE_TTL_MS = 24 * 60 * 60 * 1_000;
 const EXCHANGE_TTL_MS = 60 * 60 * 1_000;
 const FETCH_TIMEOUT_MS = 15_000;
-const FALLBACK_USD_TO_CNY = 7.2;
+const FALLBACK_USD_TO_CNY = BUILTIN_RATES.CNY;
+/** Exchange-rate cache file (per-currency rates, single date/source stamp). */
+const EXCHANGE_CACHE_FILE = "usd-rates.json";
 
 interface LiteLlmPrice {
   input_cost_per_token?: number;
@@ -30,13 +36,15 @@ interface PriceCache {
 interface ExchangeCache {
   fetchedAt: string;
   date: string;
-  rate: number;
+  rates: Partial<Record<Currency, number>>;
 }
 
 interface PricingOptions {
   homeDirectory?: string;
   now?: Date;
   fetcher?: typeof fetch;
+  /** Force a network refresh attempt even when the cache is fresh. */
+  refreshExchange?: boolean;
 }
 
 const OFFICIAL_PRICES: Record<string, Omit<RuntimeModelPrice, "model">> = {
@@ -76,6 +84,11 @@ function normalizedModel(value: string): string {
 
 function positiveOrZero(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** Return the numeric rate or 0 when invalid (callers treat 0 as missing). */
+function parseRate(value: unknown): number {
+  return positiveOrZero(value) ? value : 0;
 }
 
 function usablePrice(value: LiteLlmPrice | undefined): value is LiteLlmPrice & {
@@ -235,47 +248,87 @@ async function loadPriceCatalog(
     : { source: "fallback" };
 }
 
-async function loadExchangeRate(
+/**
+ * Load the USD→CNY/JPY/KRW exchange rates with per-currency cache + fallback
+ * (docs/plan v1.2 汇率与离线):
+ *   live        — network refresh succeeded (or force refresh)
+ *   cache       — cached value within TTL
+ *   stale-cache — cached value older than TTL (still usable)
+ *   fallback    — built-in baseline rates
+ * All currencies share one fetch and one date/source stamp.
+ */
+async function loadExchangeRates(
   cachePath: string,
   now: Date,
   fetcher: typeof fetch,
+  refresh = false,
 ): Promise<{
-  rate: number;
+  rates: Record<Currency, number>;
   date: string;
   source: PricingSnapshot["exchangeRateSource"];
 }> {
   const cached = await readJson<ExchangeCache>(cachePath);
-  if (cached && (await isFresh(cachePath, EXCHANGE_TTL_MS, now))) {
-    return { rate: cached.rate, date: cached.date, source: "cache" };
+  const fresh = cached && (await isFresh(cachePath, EXCHANGE_TTL_MS, now));
+  if (cached && fresh && !refresh) {
+    return {
+      rates: withFallbacks(cached.rates),
+      date: cached.date,
+      source: "cache",
+    };
   }
   try {
     const value = (await fetchJson(EXCHANGE_URL, fetcher)) as {
       date?: unknown;
-      rate?: unknown;
+      rates?: Record<string, unknown>;
     };
-    if (
-      !positiveOrZero(value.rate) ||
-      value.rate === 0 ||
-      typeof value.date !== "string"
-    ) {
+    if (typeof value.date !== "string" || !isRecord(value.rates)) {
       throw new Error("汇率响应不完整");
     }
-    const next = {
+    const rates = {
+      CNY: parseRate(value.rates.CNY),
+      JPY: parseRate(value.rates.JPY),
+      KRW: parseRate(value.rates.KRW),
+    };
+    if (rates.CNY === 0 || rates.JPY === 0 || rates.KRW === 0) {
+      throw new Error("汇率响应缺少币种");
+    }
+    const next: ExchangeCache = {
       fetchedAt: now.toISOString(),
       date: value.date,
-      rate: value.rate,
+      rates,
     };
     await writeJson(cachePath, next);
-    return { rate: next.rate, date: next.date, source: "live" };
+    return { rates: { ...rates, USD: 1 }, date: next.date, source: "live" };
   } catch {
-    if (cached)
-      return { rate: cached.rate, date: cached.date, source: "stale-cache" };
+    if (cached) {
+      return {
+        rates: withFallbacks(cached.rates),
+        date: cached.date,
+        source: "stale-cache",
+      };
+    }
     return {
-      rate: FALLBACK_USD_TO_CNY,
+      rates: { ...BUILTIN_RATES } as Record<Currency, number>,
       date: now.toISOString().slice(0, 10),
       source: "fallback",
     };
   }
+}
+
+/** Fill missing per-currency rates with the built-in baseline. */
+function withFallbacks(
+  rates: Partial<Record<Currency, number>>,
+): Record<Currency, number> {
+  return {
+    CNY: rates.CNY ?? BUILTIN_RATES.CNY,
+    JPY: rates.JPY ?? BUILTIN_RATES.JPY,
+    KRW: rates.KRW ?? BUILTIN_RATES.KRW,
+    USD: 1,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function buildPricingSnapshot(
@@ -289,20 +342,42 @@ export async function buildPricingSnapshot(
     ".trusttools",
     "cache",
   );
-  const [catalog, exchange] = await Promise.all([
-    loadPriceCatalog(join(cacheDirectory, "model-prices.json"), now, fetcher),
-    loadExchangeRate(join(cacheDirectory, "usd-cny.json"), now, fetcher),
-  ]);
+  // 空模型列表(汇率刷新场景)只取汇率,不触碰价格目录。
+  const [catalog, exchange] =
+    models.length === 0
+      ? [
+          null,
+          await loadExchangeRates(
+            join(cacheDirectory, EXCHANGE_CACHE_FILE),
+            now,
+            fetcher,
+            options.refreshExchange,
+          ),
+        ]
+      : await Promise.all([
+          loadPriceCatalog(
+            join(cacheDirectory, "model-prices.json"),
+            now,
+            fetcher,
+          ),
+          loadExchangeRates(
+            join(cacheDirectory, EXCHANGE_CACHE_FILE),
+            now,
+            fetcher,
+            options.refreshExchange,
+          ),
+        ]);
+  const exchangeRateCny = exchange.rates.CNY ?? BUILTIN_RATES.CNY;
   const prices: Record<string, RuntimeModelPrice> = {};
   for (const model of [...new Set(models)].slice(0, 1_000)) {
     const normalized = normalizedModel(model);
     const official = OFFICIAL_PRICES[normalized];
     let resolved =
       official == null
-        ? resolveLiteLlmPrice(model, catalog.cache?.prices ?? {})
+        ? resolveLiteLlmPrice(model, catalog?.cache?.prices ?? {})
         : { model, ...official };
     if (normalized === "doubao-seed-2-0-code") {
-      const usd = (cny: number) => cny / exchange.rate;
+      const usd = (cny: number) => cny / exchangeRateCny;
       resolved = {
         model,
         inputUsdPerMillion: usd(3.2),
@@ -337,11 +412,12 @@ export async function buildPricingSnapshot(
   return {
     generatedAt: now.toISOString(),
     prices,
-    priceSource: catalog.source,
-    priceSourceLabel: catalog.cache?.source ?? "内置价格回退",
-    modelCount: Object.keys(catalog.cache?.prices ?? {}).length,
-    usdToCny: exchange.rate,
+    priceSource: catalog?.source ?? "fallback",
+    priceSourceLabel: catalog?.cache?.source ?? "内置价格回退",
+    modelCount: Object.keys(catalog?.cache?.prices ?? {}).length,
+    usdToCny: exchangeRateCny,
     exchangeRateDate: exchange.date,
     exchangeRateSource: exchange.source,
+    exchangeRates: exchange.rates,
   };
 }

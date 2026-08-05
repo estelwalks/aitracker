@@ -12,29 +12,42 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { I18nProvider } from "../lib/i18n/context";
+import { I18nProvider, useI18n } from "../lib/i18n/context";
+import { catalogs, getMessage } from "../lib/i18n/messages";
+import {
+  mapSystemCurrency,
+  resolveCurrencyFromSearch,
+  resolveLocaleFromSearch,
+  type Currency,
+  type Locale,
+} from "../lib/i18n/locale";
+import {
+  getRatesSnapshot,
+  type RatesSnapshot,
+} from "../lib/pricing/server-fns";
 import { ThemeProvider } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { refreshLocalUsageSnapshot } from "../lib/local-usage";
 import { seedDailyCountFromPlatform } from "../lib/security/daily-limit";
 
 function NotFoundComponent() {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="tt-num text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">
-          页面不存在
+          {t("common.notFound")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          你访问的页面不存在或已被移动。
+          {t("common.notFoundDesc")}
         </p>
         <div className="mt-6">
           <Link
             to="/"
             className="inline-flex items-center justify-center rounded-sm bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
-            返回首页
+            {t("common.backHome")}
           </Link>
         </div>
       </div>
@@ -45,6 +58,7 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const { t } = useI18n();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
@@ -53,10 +67,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          页面加载失败
+          {t("common.pageLoadFailed")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          出了点问题，可以重试或回到首页。
+          {t("common.pageLoadFailedDesc")}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -66,13 +80,13 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             }}
             className="inline-flex items-center justify-center rounded-sm bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
-            重试
+            {t("common.retry")}
           </button>
           <a
             href="/"
             className="inline-flex items-center justify-center rounded-sm border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            返回首页
+            {t("common.backHome")}
           </a>
         </div>
       </div>
@@ -80,35 +94,67 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+interface RootLoaderData {
+  /**
+   * Locale resolved from the request URL (`?locale=`). Electron's main process
+   * appends it from prefs/system language so SSR renders the right language on
+   * first paint; the browser dev client mirrors user choices into the URL.
+   */
+  locale: Locale;
+  /** Display currency resolved from `?currency=` (Electron) or the locale. */
+  displayCurrency: Currency;
+  /** Exchange rates read server-side for the first frame. */
+  rates: RatesSnapshot | null;
+}
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   {
-    head: () => ({
-      meta: [
-        { charSet: "utf-8" },
-        { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: "AITracker V3.0 · AI 工具主权控制台" },
-        {
-          name: "description",
-          content:
-            "AITracker V3.0 原型：统一管理多个 AI 编码工具的 Token 消耗、Skill 资产、安全检测与记忆。",
-        },
-        { name: "author", content: "AITracker" },
-        { property: "og:type", content: "website" },
-        { name: "twitter:card", content: "summary_large_image" },
-      ],
-      links: [
-        {
-          rel: "preconnect",
-          href: "https://fonts.googleapis.com",
-        },
-        {
-          rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
-        },
-        { rel: "stylesheet", href: appCss },
-        { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
-      ],
-    }),
+    loader: async ({ location }) => {
+      const locale = resolveLocaleFromSearch(location.search);
+      let rates: RatesSnapshot | null = null;
+      try {
+        rates = await getRatesSnapshot({ data: false });
+      } catch {
+        // First-frame rates are best-effort; the provider refreshes silently.
+      }
+      return {
+        locale,
+        displayCurrency: resolveCurrencyFromSearch(
+          location.search,
+          mapSystemCurrency(locale),
+        ),
+        rates,
+      };
+    },
+    head: ({ loaderData }) => {
+      const locale = loaderData?.locale ?? "zh-CN";
+      return {
+        meta: [
+          { charSet: "utf-8" },
+          { name: "viewport", content: "width=device-width, initial-scale=1" },
+          { title: getMessage(catalogs[locale], "meta.title") },
+          {
+            name: "description",
+            content: getMessage(catalogs[locale], "meta.description"),
+          },
+          { name: "author", content: "AITracker" },
+          { property: "og:type", content: "website" },
+          { name: "twitter:card", content: "summary_large_image" },
+        ],
+        links: [
+          {
+            rel: "preconnect",
+            href: "https://fonts.googleapis.com",
+          },
+          {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
+          },
+          { rel: "stylesheet", href: appCss },
+          { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+        ],
+      };
+    },
     shellComponent: RootShell,
     component: RootComponent,
     notFoundComponent: NotFoundComponent,
@@ -117,8 +163,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 );
 
 function RootShell({ children }: { children: ReactNode }) {
+  const loaderData = Route.useLoaderData();
   return (
-    <html lang="zh-CN">
+    <html lang={loaderData?.locale ?? "zh-CN"}>
       <head>
         <HeadContent />
       </head>
@@ -132,10 +179,15 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const loaderData = Route.useLoaderData();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <I18nProvider>
+      <I18nProvider
+        initialLocale={loaderData?.locale}
+        initialDisplayCurrency={loaderData?.displayCurrency}
+        initialRates={loaderData?.rates}
+      >
         <ThemeProvider>
           <PlatformPersistenceSeed />
           <LocalUsageAutoRefresh />
