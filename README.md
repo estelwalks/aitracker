@@ -78,7 +78,17 @@ npm run format         # Prettier 格式化
 npx tsc --noEmit
 npm run build
 npm run build:electron
+npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifest 漂移检查
 ```
+
+## 工具注册表（tool-registry）
+
+每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格规则）收敛为 `src/lib/tool-registry/tools/<id>.config.ts` 单文件；业务模块只消费注册表的派生结果，不维护自己的工具名单。
+
+- 注册表内核（contracts/defineTool/validate/registry/manifest）见 `src/lib/tool-registry/`，纯数据、浏览器安全。
+- 浏览器只导入生成的 `public-manifest.generated.ts`（display + 能力状态，无路径/Reader Key/命令/价格）；配置变更后执行 `npm run generate:manifest` 重新生成并提交（`verify:tool-registry` 会做漂移检查）。
+- 新增工具：新建 `<id>.config.ts` 并在 `tools/index.ts` 白名单注册；`npm run verify:tool-registry` + 相关单测通过后提交。
+- 用量缓存（`local-usage-index-v10.json`）携带 `registryFingerprint`，注册表配置变更自动失效重建。
 
 ## 数据接入
 
