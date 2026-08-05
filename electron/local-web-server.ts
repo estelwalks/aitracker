@@ -116,48 +116,90 @@ async function readRequestBody(
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
 }
 
+/**
+ * Capability-token cookie name. The renderer's SPA requests (TanStack Start
+ * server-fn RPC, the 5-second usage poll) use same-origin fetch with relative
+ * paths — they cannot carry `?token=` — so the token is mirrored into an
+ * HttpOnly SameSite=Strict cookie on the first authenticated response and the
+ * browser attaches it to every same-origin request automatically.
+ */
+const TOKEN_COOKIE_NAME = "trusttools_token";
+
+type TokenStatus = "none" | "cookie" | "challenge";
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!header) return cookies;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const name = part.slice(0, eq).trim();
+    if (name.length > 0) cookies[name] = part.slice(eq + 1).trim();
+  }
+  return cookies;
+}
+
+/**
+ * Validate the capability token. Returns:
+ *  - "cookie":    the HttpOnly cookie already matches (no Set-Cookie needed);
+ *  - "challenge": token valid via query/header — response should set the
+ *    cookie so subsequent same-origin requests carry it automatically;
+ *  - "none":      unauthorized.
+ */
 function validateToken(
   request: IncomingMessage,
   capabilityToken: string,
-): boolean {
+): TokenStatus {
+  if (parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME] === capabilityToken) {
+    return "cookie";
+  }
+
   const authHeader = request.headers.authorization;
   if (authHeader && authHeader === `Bearer ${capabilityToken}`) {
-    return true;
+    return "challenge";
   }
 
   const customToken = request.headers["x-capability-token"];
   if (typeof customToken === "string" && customToken === capabilityToken) {
-    return true;
+    return "challenge";
   }
 
   const url = new URL(request.url ?? "/", "http://localhost");
   const queryToken = url.searchParams.get("token");
   if (queryToken === capabilityToken) {
-    return true;
+    return "challenge";
   }
 
-  return false;
+  return "none";
+}
+
+function tokenCookieHeader(capabilityToken: string): string {
+  return `${TOKEN_COOKIE_NAME}=${capabilityToken}; Path=/; HttpOnly; SameSite=Strict`;
 }
 
 async function sendFetchResponse(
   fetchResponse: Response,
   nodeResponse: ServerResponse,
+  extraSetCookies: string[],
 ): Promise<void> {
   nodeResponse.statusCode = fetchResponse.status;
   nodeResponse.statusMessage = fetchResponse.statusText;
 
   fetchResponse.headers.forEach((value, name) => {
-    nodeResponse.setHeader(name, value);
+    if (name.toLowerCase() !== "set-cookie") {
+      nodeResponse.setHeader(name, value);
+    }
   });
 
   const getSetCookie = (
     fetchResponse.headers as Headers & { getSetCookie?: () => string[] }
   ).getSetCookie;
-  if (getSetCookie) {
-    const cookies = getSetCookie.call(fetchResponse.headers);
-    if (cookies.length > 0) {
-      nodeResponse.setHeader("set-cookie", cookies);
-    }
+  const cookies = [
+    ...extraSetCookies,
+    ...(getSetCookie ? getSetCookie.call(fetchResponse.headers) : []),
+  ];
+  if (cookies.length > 0) {
+    nodeResponse.setHeader("set-cookie", cookies);
   }
 
   const responseBody = await fetchResponse.arrayBuffer();
@@ -209,15 +251,24 @@ export async function startLocalWebServer(
         }
       }
 
-      // All non-static routes require the capability token.
-      if (!validateToken(request, capabilityToken)) {
+      // All non-static routes require the capability token. A token supplied
+      // via query/header additionally establishes the HttpOnly cookie so the
+      // SPA's same-origin fetches (server-fn RPC, usage poll) authenticate
+      // automatically.
+      const tokenStatus = validateToken(request, capabilityToken);
+      if (tokenStatus === "none") {
         response.statusCode = 401;
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
         response.end("Unauthorized");
         return;
       }
+      const challengeCookies =
+        tokenStatus === "challenge" ? [tokenCookieHeader(capabilityToken)] : [];
 
       if (middleware) {
+        if (challengeCookies.length > 0) {
+          response.setHeader("set-cookie", challengeCookies);
+        }
         await middleware(request, response);
         return;
       }
@@ -242,7 +293,7 @@ export async function startLocalWebServer(
         },
       );
 
-      await sendFetchResponse(fetchResponse, response);
+      await sendFetchResponse(fetchResponse, response, challengeCookies);
       void Promise.allSettled(pendingTasks);
     } catch (error) {
       console.error("Local web server request failed", error);
