@@ -42,8 +42,8 @@ test("scans common agent roots without treating mtime as usage evidence", async 
   assert.equal(Object.keys(snapshot.roots).length, 5);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 2);
-  assert.equal(snapshot.skills[0].health, "unknown");
-  assert.match(snapshot.skills[0].healthReason, /文件修改时间不作为调用证据/);
+  // No structured call evidence: mtime is not treated as usage evidence.
+  assert.equal(snapshot.skills[0].lastUsedAt, null);
 });
 
 test("detects an installed Agent even when its skill directory is empty", async () => {
@@ -94,8 +94,7 @@ test("uses structured Skill calls as the only activity evidence", async () => {
     ],
   });
 
-  assert.equal(snapshot.skills[0]?.health, "active");
-  assert.match(snapshot.skills[0]?.healthReason ?? "", /真实调用 5 次/);
+  assert.equal(snapshot.skills[0]?.lastUsedAt, "2026-07-28T10:00:00.000Z");
 });
 
 test("reads real version and source from SKILL.md frontmatter and changes fingerprint", async () => {

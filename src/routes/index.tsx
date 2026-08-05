@@ -71,7 +71,6 @@ import {
 } from "../lib/pricing";
 import { getPricingSnapshot } from "../lib/pricing/server-fns";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
-import type { SkillHealth, SkillSnapshot } from "../lib/local-skills/types";
 import { AI_TOOLS } from "../lib/tools/catalog";
 import {
   toExportCsv,
@@ -193,8 +192,6 @@ function Dashboard() {
     () => estimateUsageCost(selectedEvents),
     [selectedEvents],
   );
-  const skillHealth = buildSkillHealth(skills);
-
   // KPI Row 1 — period-driven headline metrics.
   const intervalCostCny = format.formatUsd(selectedCost.knownUsd);
   const intervalCostHint =
@@ -631,26 +628,14 @@ function Dashboard() {
                   {t("dashboard.kpi.skills")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                  {skillHealth.total}
+                  {skills?.skills.length ?? 0}
                   <span className="text-base text-muted-foreground">
                     {" "}
                     {t("dashboard.kpi.skillUnit")}
                   </span>
                 </div>
-                <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs">
-                  {skillHealth.rows
-                    .filter((r) => r.count > 0)
-                    .map((item) => (
-                      <span
-                        key={item.health}
-                        className="inline-flex items-center gap-0.5"
-                      >
-                        <span
-                          className={`inline-block size-1.5 rounded-full ${item.dot}`}
-                        />
-                        {item.count}
-                      </span>
-                    ))}
+                <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                  {t("dashboard.kpi.skillScanNote")}
                 </div>
               </Link>
 
@@ -927,28 +912,6 @@ function periodGrainLabel(period: UsagePeriod, t: TFunction): string {
     case "all":
       return t("dashboard.grain.month");
   }
-}
-
-function buildSkillHealth(snapshot: SkillSnapshot | null) {
-  const counts: Record<SkillHealth, number> = {
-    active: 0,
-    low: 0,
-    doze: 0,
-    dead: 0,
-    unknown: 0,
-  };
-  for (const skill of snapshot?.skills ?? []) counts[skill.health] += 1;
-  return {
-    active: counts.active,
-    total: snapshot?.skills.length ?? 0,
-    rows: [
-      { health: "active", count: counts.active, dot: "bg-ok" },
-      { health: "low", count: counts.low, dot: "bg-warn" },
-      { health: "doze", count: counts.doze, dot: "bg-orange-500" },
-      { health: "dead", count: counts.dead, dot: "bg-danger" },
-      { health: "unknown", count: counts.unknown, dot: "bg-muted-foreground" },
-    ] as const,
-  };
 }
 
 /**

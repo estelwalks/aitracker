@@ -66,6 +66,7 @@ export const dashboard = {
     cacheSavings: "キャッシュ削減額",
     skills: "Skill 数",
     skillUnit: "個",
+    skillScanNote: "ローカルスキャン対象",
     vsPrevious: "vs 前の期間",
     hitRate: "ヒット率 {rate}",
     costHint: "{period} · ローカルモデル価格表で推定",
@@ -173,7 +174,7 @@ export const dashboard = {
       "27 種の AI コーディングツールのローカルログを一括スキャンし、日次/モデル/プロジェクト単位で実際の消費を集計します。",
     capSkillTitle: "Skill 管理",
     capSkillDesc:
-      "Claude Code、Codex、Cursor などのツールの Skills を一元管理し、ヘルス状態を一目で確認できます。",
+      "Claude Code、Codex、Cursor などのツールの Skills を一元管理し、共通メンテナンスとツール間同期に対応します。",
     capSecurityTitle: "セキュリティ検出",
     capSecurityDesc:
       "選択した SKILL.md に対して 11 次元のローカル静的検出を実行し、ソースコードをアップロードしません。",

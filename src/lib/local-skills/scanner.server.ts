@@ -32,8 +32,6 @@ import {
   type BatchUninstallResult,
   type LocalSkill,
   type SkillAgent,
-  type SkillDailyPoint,
-  type SkillHealth,
   type SkillInstallation,
   type SkillSource,
   type SkillSnapshot,
@@ -41,8 +39,6 @@ import {
   type SkillUpdateStatus,
 } from "./types.ts";
 
-const DAY_MS = 24 * 60 * 60 * 1_000;
-const RECENT_WINDOW_DAYS = 7;
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
 const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
 const ORIGINS_FILE = join(TRUSTTOOLS_DIR, "skill-origins.json");
@@ -87,18 +83,11 @@ export const SKILL_ROOT_SUFFIXES = Object.fromEntries(
   ]),
 ) as Record<SkillAgent, string>;
 
-export interface HealthThresholds {
-  lowFrequencyCount?: number;
-  dozeDays?: number;
-  deadDays?: number;
-}
-
 interface ScanOptions {
   homeDirectory?: string;
   now?: Date;
   trusttoolsDirectory?: string;
   usageEvents?: LocalUsageEvent[];
-  healthThresholds?: HealthThresholds;
 }
 
 function rootsFor(homeDirectory: string): Record<SkillAgent, string> {
@@ -323,153 +312,26 @@ function updateEvidence(input: {
   return { status: "unknown", reason: "远端未提供可比较的版本或更新时间" };
 }
 
-interface HealthThresholdsResolved {
-  lowFrequencyCount: number;
-  dozeDays: number;
-  deadDays: number;
-}
-
-const DEFAULT_HEALTH_THRESHOLDS: HealthThresholdsResolved = {
-  lowFrequencyCount: 5,
-  dozeDays: 30,
-  deadDays: 90,
-};
-
-function resolvedHealthThresholds(
-  raw?: HealthThresholds,
-): HealthThresholdsResolved {
-  if (!raw) return DEFAULT_HEALTH_THRESHOLDS;
-  return {
-    lowFrequencyCount:
-      raw.lowFrequencyCount != null &&
-      Number.isFinite(raw.lowFrequencyCount) &&
-      raw.lowFrequencyCount >= 0
-        ? raw.lowFrequencyCount
-        : DEFAULT_HEALTH_THRESHOLDS.lowFrequencyCount,
-    dozeDays:
-      raw.dozeDays != null && Number.isFinite(raw.dozeDays) && raw.dozeDays > 0
-        ? raw.dozeDays
-        : DEFAULT_HEALTH_THRESHOLDS.dozeDays,
-    deadDays:
-      raw.deadDays != null &&
-      Number.isFinite(raw.deadDays) &&
-      raw.deadDays > (raw.dozeDays ?? DEFAULT_HEALTH_THRESHOLDS.dozeDays)
-        ? raw.deadDays
-        : DEFAULT_HEALTH_THRESHOLDS.deadDays,
-  };
-}
-
-function healthFromLastUse(
-  lastUsedAt: number,
-  now: number,
-  recentCalls: number,
-  thresholds: HealthThresholdsResolved,
-): { health: SkillHealth; reason: string } {
-  const ageDays = Math.max(0, Math.floor((now - lastUsedAt) / DAY_MS));
-
-  // Active: last used within RECENT_WINDOW_DAYS AND enough calls in that window
-  if (
-    ageDays <= RECENT_WINDOW_DAYS &&
-    recentCalls >= thresholds.lowFrequencyCount
-  ) {
-    return {
-      health: "active",
-      reason: `最近 7 天调用 ${recentCalls} 次（活跃）`,
-    };
-  }
-
-  // Low: used within dozeDays but doesn't meet active criteria
-  if (ageDays <= thresholds.dozeDays) {
-    if (ageDays <= RECENT_WINDOW_DAYS) {
-      return {
-        health: "low",
-        reason: `7 天内仅 ${recentCalls} 次调用（需 ≥${thresholds.lowFrequencyCount} 次）`,
-      };
-    }
-    return { health: "low", reason: `${ageDays} 天未调用` };
-  }
-
-  // Doze: last used between dozeDays and deadDays ago
-  if (ageDays <= thresholds.deadDays) {
-    return { health: "doze", reason: `${ageDays} 天未调用` };
-  }
-
-  // Dead: last used more than deadDays ago
-  return { health: "dead", reason: `${ageDays} 天未调用` };
-}
-
 interface SkillUsageInfo {
-  calls: number;
-  recentCalls: number;
   lastUsedAt: number;
 }
 
 function skillUsageEvidence(
   events: LocalUsageEvent[],
-  now: number,
 ): Map<string, SkillUsageInfo> {
   const evidence = new Map<string, SkillUsageInfo>();
-  const recentThreshold = now - RECENT_WINDOW_DAYS * DAY_MS;
   for (const event of events) {
     const usedAt = Date.parse(event.timestamp);
     if (!Number.isFinite(usedAt)) continue;
-    const isRecent = usedAt >= recentThreshold;
     for (const skill of event.context?.skills ?? []) {
       const key = skill.name.toLowerCase();
-      const current = evidence.get(key) ?? {
-        calls: 0,
-        recentCalls: 0,
-        lastUsedAt: 0,
-      };
-      current.calls += skill.calls;
-      if (isRecent) current.recentCalls += skill.calls;
-      current.lastUsedAt = Math.max(current.lastUsedAt, usedAt);
-      evidence.set(key, current);
+      const current = evidence.get(key);
+      if (current == null || usedAt > current.lastUsedAt) {
+        evidence.set(key, { lastUsedAt: usedAt });
+      }
     }
   }
   return evidence;
-}
-
-/**
- * 按日聚合每个 Skill 的调用序列，用于「日均 / 使用趋势(↑↓−)」展示。
- *
- * 仅依赖已脱敏的 context.skills[].calls + 事件时间戳，不读取 Skill 内容。
- * 注意：当前仅 Codex 产 context.skills，其余来源序列为空（与 usageCount 同源限制）。
- */
-function skillDailySeries(
-  events: LocalUsageEvent[],
-): Map<string, SkillDailyPoint[]> {
-  const series = new Map<string, Map<string, number>>();
-  for (const event of events) {
-    const usedAt = Date.parse(event.timestamp);
-    if (!Number.isFinite(usedAt)) continue;
-    const date = localDateKeyFromMillis(usedAt);
-    for (const skill of event.context?.skills ?? []) {
-      const key = skill.name.toLowerCase();
-      const byDate = series.get(key) ?? new Map<string, number>();
-      byDate.set(date, (byDate.get(date) ?? 0) + skill.calls);
-      series.set(key, byDate);
-    }
-  }
-  const result = new Map<string, SkillDailyPoint[]>();
-  for (const [key, byDate] of series) {
-    result.set(
-      key,
-      [...byDate.entries()]
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([date, calls]) => ({ date, calls })),
-    );
-  }
-  return result;
-}
-
-/** 本地时区日期键（YYYY-MM-DD），与 local-usage 的 localDateKey 口径一致。 */
-function localDateKeyFromMillis(millis: number): string {
-  const date = new Date(millis);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function safeSkillName(name: string): string {
@@ -678,42 +540,17 @@ export async function scanLocalSkills(
     roots,
     origins,
   );
-  const usageEvidence = skillUsageEvidence(
-    options.usageEvents ?? [],
-    now.getTime(),
-  );
-  const dailySeries = skillDailySeries(options.usageEvents ?? []);
-  const healthThresholds = resolvedHealthThresholds(options.healthThresholds);
+  const usageEvidence = skillUsageEvidence(options.usageEvents ?? []);
 
   const skills: LocalSkill[] = [...installations.entries()]
     .map(([name, entries]) => {
       const usage = usageEvidence.get(name.toLowerCase());
-      const status =
-        usage == null
-          ? {
-              health: "unknown" as const,
-              reason:
-                "未发现结构化调用记录；无法判断活跃度，文件修改时间不作为调用证据",
-            }
-          : healthFromLastUse(
-              usage.lastUsedAt,
-              now.getTime(),
-              usage.recentCalls,
-              healthThresholds,
-            );
       return {
         id: name,
         name,
         description: descriptions.get(name) ?? null,
-        health: status.health,
-        healthReason:
-          usage == null
-            ? status.reason
-            : `${status.reason}；本地日志记录真实调用 ${usage.calls.toLocaleString()} 次`,
         lastUsedAt:
           usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
-        usageCount: usage?.calls ?? 0,
-        daily: dailySeries.get(name.toLowerCase()) ?? [],
         installations: entries.sort((a, b) => a.agent.localeCompare(b.agent)),
       };
     })
@@ -725,11 +562,7 @@ export async function scanLocalSkills(
         skills: skills.map((skill) => ({
           name: skill.name,
           description: skill.description,
-          health: skill.health,
           lastUsedAt: skill.lastUsedAt,
-          usageCount: skill.usageCount,
-          dailyTail: skill.daily?.slice(-1)[0]?.date ?? null,
-          dailyPoints: skill.daily?.length ?? 0,
           installations: skill.installations,
         })),
         blacklist,
@@ -740,8 +573,6 @@ export async function scanLocalSkills(
   return {
     generatedAt: now.toISOString(),
     fingerprint,
-    healthBasis:
-      "活跃度只依据本地日志中的结构化 Skill 调用；文件修改时间仅作安装信息展示。",
     roots,
     agents,
     skills,

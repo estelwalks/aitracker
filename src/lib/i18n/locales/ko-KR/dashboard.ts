@@ -66,6 +66,7 @@ export const dashboard = {
     cacheSavings: "캐시 절감액",
     skills: "Skill 수",
     skillUnit: "개",
+    skillScanNote: "로컬 스캔에 포함됨",
     vsPrevious: "vs 이전 기간",
     hitRate: "적중률 {rate}",
     costHint: "{period} · 로컬 모델 가격표로 추정",
@@ -170,7 +171,7 @@ export const dashboard = {
       "27개 AI 코딩 도구의 로컬 로그를 일괄 스캔하여 일/모델/프로젝트 단위로 실제 사용량을 집계합니다.",
     capSkillTitle: "Skill 관리",
     capSkillDesc:
-      "Claude Code, Codex, Cursor 등 도구의 Skills를 중앙 관리하고 상태를 한눈에 확인합니다.",
+      "Claude Code, Codex, Cursor 등 도구의 Skills를 중앙 관리하고 일괄 유지보수 및 도구 간 동기화를 지원합니다.",
     capSecurityTitle: "보안 검사",
     capSecurityDesc:
       "선택한 SKILL.md에 대해 11개 차원의 로컬 정적 검사를 실행하며 소스 코드를 업로드하지 않습니다.",

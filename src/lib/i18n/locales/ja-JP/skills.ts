@@ -3,19 +3,11 @@ export const skills = {
   metaDesc:
     "ローカル AI Agent の Skill をスキャンして管理します。安全なコピー、Agent 間同期、ブラックリストに対応。",
   pageHeader: "Skill 管理",
-  pageHeaderDesc: "{basis} を {time} にスキャン",
+  pageHeaderDesc: "全 {count} 個のローカル Skill · {time} にスキャン",
   pollingHint:
     "ページ表示中は 5 秒ごとに変更フィンガープリントでポーリングします（ネイティブ watcher ではありません）",
   searchPlaceholder: "名前または説明を検索…",
-  health: {
-    active: "アクティブ",
-    low: "低頻度",
-    doze: "休止中",
-    dead: "長期間未使用",
-    unknown: "呼び出し不明",
-  },
   filter: {
-    healthAll: "ヘルス: すべて",
     agentAll: "インストール先: すべて",
   },
   actions: {
@@ -41,9 +33,6 @@ export const skills = {
     title: "Skill リスト（{count}）",
     name: "名前",
     desc: "説明",
-    calls: "呼び出し",
-    dailyAvg: "日平均",
-    trend: "傾向",
     agent: "インストール先",
     lastUsed: "最終使用",
     actions: "操作",
@@ -66,7 +55,6 @@ export const skills = {
     sourcePath: "ソースパス",
     lastUsedAt: "最終呼び出し: {time}",
     noLastUsed: "検証可能な記録なし",
-    totalCalls: "累計認識: {count} 回",
     installStatus: "インストール状態",
     installedAt: "インストール: {time}",
     modifiedAt: "変更: {time}",
