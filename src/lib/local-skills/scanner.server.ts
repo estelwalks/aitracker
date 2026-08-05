@@ -1,11 +1,12 @@
 import {
+  appendFile,
   cp,
   lstat,
   mkdir,
   opendir,
   readFile,
   realpath,
-  rm,
+  rename,
   stat,
   writeFile,
 } from "node:fs/promises";
@@ -80,7 +81,6 @@ export function resolveAgentRoots(
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
 const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
 const ORIGINS_FILE = join(TRUSTTOOLS_DIR, "skill-origins.json");
-const MARKET_TEMP_DIR = join(TRUSTTOOLS_DIR, "tmp");
 const MARKET_API = "https://ai.trusttools.cn/api/skills";
 const MARKET_EVIDENCE_TTL_MS = 5 * 60 * 1_000;
 
@@ -434,11 +434,98 @@ async function assertManagedSkillPath(
   if (!isPathInside(rootRealPath, candidateRealPath)) {
     throw new Error("检测到越权路径或符号链接");
   }
+
+  // 必须指向单个 Skill:含 marker 的目录,或 `.md` 文件。防止把集合目录/父
+  // 目录(如 `~/.claude/skills/development`)当作卸载、安装或同步目标,导致
+  // 整目录被 `rm -rf`/回收。
+  const rule = RULE_BY_AGENT.get(matchingAgent);
+  const markers = rule?.markers ?? DEFAULT_MARKERS;
+  const entryStat = await lstat(candidateRealPath);
+  const isSingleSkill =
+    (entryStat.isDirectory() &&
+      (await findMarker(candidateRealPath, markers)) !== null) ||
+    (entryStat.isFile() && /\.md$/iu.test(basename(candidateRealPath)));
+  if (!isSingleSkill) {
+    throw new Error("目标不是受管的 Skill 目录");
+  }
   return matchingAgent;
 }
 
 function containsParentTraversal(path: string): boolean {
   return path.split(/[\\/]+/u).includes("..");
+}
+
+/**
+ * 可注入的 home/trusttools 目录(与 ScanOptions 同构),供测试把全部 Skill
+ * 操作隔离到临时根,避免触碰真实 `~/.claude/skills`。
+ */
+interface SkillOpOptions {
+  homeDirectory?: string;
+  trusttoolsDirectory?: string;
+}
+
+/** 解析注入的 `.trusttools` 目录:显式 trusttoolsDirectory 优先,否则跟随 homeDirectory。 */
+function trusttoolsDirectoryFor(options: SkillOpOptions = {}): string {
+  return resolve(
+    options.trusttoolsDirectory ??
+      join(options.homeDirectory ?? homedir(), ".trusttools"),
+  );
+}
+
+/**
+ * 可恢复删除:把目标整体 rename 进 TrustTools 回收目录并追加 JSONL 清单,
+ * 取代不可逆的 `rm -rf`。清单即审计记录;`trusttoolsDirectory` 可注入
+ * (测试用),默认 `~/.trusttools`。
+ */
+async function moveToTrash(
+  targetPath: string,
+  action: "uninstall" | "overwrite",
+  options: SkillOpOptions = {},
+): Promise<void> {
+  const root = trusttoolsDirectoryFor(options);
+  const trashDir = join(root, "trash", "skills");
+  await mkdir(trashDir, { recursive: true, mode: 0o700 });
+
+  const stamp = new Date().toISOString().replace(/[:.]/gu, "-");
+  const base = basename(targetPath);
+  const manifest = join(trashDir, "manifest.jsonl");
+  for (let attempt = 1; attempt <= 100; attempt += 1) {
+    const suffix = attempt === 1 ? stamp : `${stamp}-${attempt}`;
+    const trashPath = join(trashDir, `${base}-${suffix}`);
+    try {
+      await rename(targetPath, trashPath);
+      // 清单与操作日志尽力而为,不因记账失败而回滚/误报删除失败。
+      const record = {
+        trashedAt: new Date().toISOString(),
+        action,
+        originalPath: resolve(targetPath),
+        trashPath: resolve(trashPath),
+      };
+      await appendFile(manifest, `${JSON.stringify(record)}\n`, "utf8").catch(
+        () => undefined,
+      );
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
+    }
+  }
+  throw new Error("回收目录写入失败");
+}
+
+/** 追加一条 Skill 操作日志(尽力而为,不阻断主流程)。 */
+async function appendSkillOpLog(
+  entry: Record<string, unknown>,
+  options: SkillOpOptions = {},
+): Promise<void> {
+  const root = trusttoolsDirectoryFor(options);
+  const logFile = join(root, "logs", "skills-ops.log");
+  await mkdir(dirname(logFile), { recursive: true, mode: 0o700 });
+  await appendFile(
+    logFile,
+    `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`,
+    "utf8",
+  ).catch(() => undefined);
 }
 
 async function assertNoSymbolicLinks(root: string): Promise<void> {
@@ -456,13 +543,18 @@ async function assertNoSymbolicLinks(root: string): Promise<void> {
   }
 }
 
-async function assertMarketSkillPath(path: string): Promise<void> {
+async function assertMarketSkillPath(
+  path: string,
+  options: { homeDirectory?: string; trusttoolsDirectory?: string } = {},
+): Promise<void> {
   if (!isAbsolute(path) || containsParentTraversal(path)) {
     throw new Error("市场 Skill 源路径不合法");
   }
 
+  // 受控临时根跟随注入的 trusttoolsDirectory(测试隔离),默认 ~/.trusttools/tmp。
+  const temporaryRoot = join(trusttoolsDirectoryFor(options), "tmp");
   const [temporaryRootRealPath, sourceRealPath] = await Promise.all([
-    realpath(MARKET_TEMP_DIR),
+    realpath(temporaryRoot),
     realpath(path),
   ]);
   const pathFromTemporaryRoot = relative(temporaryRootRealPath, sourceRealPath);
@@ -701,15 +793,21 @@ export async function scanLocalSkills(
   };
 }
 
-async function copySkillToAgent(input: {
-  sourcePath: string;
-  targetAgent: SkillAgent;
-  overwrite?: boolean;
-}): Promise<string> {
+async function copySkillToAgent(
+  input: {
+    sourcePath: string;
+    targetAgent: SkillAgent;
+    overwrite?: boolean;
+  },
+  options: SkillOpOptions = {},
+): Promise<string> {
   if (!SKILL_AGENTS.includes(input.targetAgent))
     throw new Error("目标 Agent 不受支持");
 
-  const roots = resolveAgentRoots(homedir(), process.env);
+  const roots = resolveAgentRoots(
+    options.homeDirectory ?? homedir(),
+    process.env,
+  );
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
   if ((await readBlacklist()).includes(name))
     throw new Error("该 Skill 已被加入黑名单");
@@ -721,13 +819,25 @@ async function copySkillToAgent(input: {
   const targetPath = join(targetRoot, `${name}${extension}`);
   if (!isPathInside(targetRoot, targetPath)) throw new Error("目标路径不合法");
 
+  // 自删防护:目标与源相同或互为祖先/子孙时,覆盖删除会连源一起毁掉
+  // (例如把 `~/.claude/skills/foo` 同步回 Claude Code 自身)。
+  const sourceResolved = resolve(input.sourcePath);
+  const targetResolved = resolve(targetPath);
+  if (
+    sourceResolved === targetResolved ||
+    isPathInside(sourceResolved, targetResolved) ||
+    isPathInside(targetResolved, sourceResolved)
+  ) {
+    throw new Error("源与目标路径重叠，已阻止操作");
+  }
+
   await mkdir(targetRoot, { recursive: true, mode: 0o700 });
   const targetExists = await lstat(targetPath)
     .then(() => true)
     .catch(() => false);
   if (targetExists) {
     if (!input.overwrite) throw new Error("目标位置已存在同名 Skill");
-    await rm(targetPath, { recursive: true, force: true });
+    await moveToTrash(targetPath, "overwrite", options);
   }
   await cp(input.sourcePath, targetPath, {
     recursive: sourceStat.isDirectory(),
@@ -736,21 +846,40 @@ async function copySkillToAgent(input: {
   return targetPath;
 }
 
-export async function installLocalSkill(input: {
-  sourcePath: string;
-  targetAgent: SkillAgent;
-}): Promise<void> {
-  const roots = resolveAgentRoots(homedir(), process.env);
+export async function installLocalSkill(
+  input: {
+    sourcePath: string;
+    targetAgent: SkillAgent;
+  },
+  options: SkillOpOptions = {},
+): Promise<void> {
+  const roots = resolveAgentRoots(
+    options.homeDirectory ?? homedir(),
+    process.env,
+  );
   await assertManagedSkillPath(input.sourcePath, roots);
-  const targetPath = await copySkillToAgent(input);
-  const origins = await readOrigins();
+  const targetPath = await copySkillToAgent(input, options);
+  await appendSkillOpLog(
+    {
+      action: "install",
+      agent: input.targetAgent,
+      source: resolve(input.sourcePath),
+      target: resolve(targetPath),
+    },
+    options,
+  );
+  const originsFile = join(
+    trusttoolsDirectoryFor(options),
+    "skill-origins.json",
+  );
+  const origins = await readOrigins(originsFile);
   const sourceOrigin = origins.installations[resolve(input.sourcePath)];
   if (sourceOrigin) {
     origins.installations[resolve(targetPath)] = {
       ...sourceOrigin,
       installedAt: new Date().toISOString(),
     };
-    await writeOrigins(origins);
+    await writeOrigins(origins, originsFile);
   }
 }
 
@@ -760,11 +889,20 @@ export async function installMarketSkill(
     targetAgent: SkillAgent;
     origin?: MarketSkillOriginInput;
   },
-  options: { trusttoolsDirectory?: string } = {},
+  options: SkillOpOptions = {},
 ): Promise<void> {
-  await assertMarketSkillPath(input.sourcePath);
+  await assertMarketSkillPath(input.sourcePath, options);
   const frontmatter = await readSkillManifest(input.sourcePath);
-  const targetPath = await copySkillToAgent(input);
+  const targetPath = await copySkillToAgent(input, options);
+  await appendSkillOpLog(
+    {
+      action: "install-market",
+      agent: input.targetAgent,
+      source: resolve(input.sourcePath),
+      target: resolve(targetPath),
+    },
+    options,
+  );
   if (!input.origin) return;
 
   const now = new Date().toISOString();
@@ -779,7 +917,7 @@ export async function installMarketSkill(
     slug: input.origin.slug,
   };
   const originsFile = join(
-    options.trusttoolsDirectory ?? TRUSTTOOLS_DIR,
+    trusttoolsDirectoryFor(options),
     "skill-origins.json",
   );
   const origins = await readOrigins(originsFile);
@@ -896,16 +1034,21 @@ export async function refreshMarketSkillEvidence(
 
 export async function uninstallLocalSkill(
   path: string,
+  options: SkillOpOptions = {},
 ): Promise<{ path: string }> {
-  const roots = resolveAgentRoots(homedir(), process.env);
+  const roots = resolveAgentRoots(
+    options.homeDirectory ?? homedir(),
+    process.env,
+  );
   await assertManagedSkillPath(path, roots);
   const target = resolve(path);
-  await rm(target, { recursive: true, force: true });
+  await moveToTrash(target, "uninstall", options);
   return { path: target };
 }
 
 export async function batchUninstallLocalSkills(
   paths: string[],
+  options: SkillOpOptions = {},
 ): Promise<BatchUninstallResult> {
   const uniquePaths = [...new Set(paths)];
   if (uniquePaths.length === 0) throw new Error("至少选择一个 Skill");
@@ -914,7 +1057,7 @@ export async function batchUninstallLocalSkills(
   const failed: { path: string; error: string }[] = [];
   for (const path of uniquePaths) {
     try {
-      const result = await uninstallLocalSkill(path);
+      const result = await uninstallLocalSkill(path, options);
       succeeded.push(result.path);
     } catch (error) {
       failed.push({
@@ -926,12 +1069,18 @@ export async function batchUninstallLocalSkills(
   return { succeeded, failed };
 }
 
-export async function syncLocalSkill(input: {
-  sourcePath: string;
-  targetAgents: string[];
-  onConflict: "overwrite" | "skip";
-}): Promise<SkillSyncResult> {
-  const roots = resolveAgentRoots(homedir(), process.env);
+export async function syncLocalSkill(
+  input: {
+    sourcePath: string;
+    targetAgents: string[];
+    onConflict: "overwrite" | "skip";
+  },
+  options: SkillOpOptions = {},
+): Promise<SkillSyncResult> {
+  const roots = resolveAgentRoots(
+    options.homeDirectory ?? homedir(),
+    process.env,
+  );
   await assertManagedSkillPath(input.sourcePath, roots);
 
   const succeeded: { agent: string; path: string }[] = [];
@@ -945,19 +1094,36 @@ export async function syncLocalSkill(input: {
     }
     const agent = targetAgent as SkillAgent;
     try {
-      const targetPath = await copySkillToAgent({
-        sourcePath: input.sourcePath,
-        targetAgent: agent,
-        overwrite: input.onConflict === "overwrite",
-      });
-      const origins = await readOrigins();
+      const targetPath = await copySkillToAgent(
+        {
+          sourcePath: input.sourcePath,
+          targetAgent: agent,
+          overwrite: input.onConflict === "overwrite",
+        },
+        options,
+      );
+      await appendSkillOpLog(
+        {
+          action: "sync",
+          agent,
+          source: resolve(input.sourcePath),
+          target: resolve(targetPath),
+          onConflict: input.onConflict,
+        },
+        options,
+      );
+      const originsFile = join(
+        trusttoolsDirectoryFor(options),
+        "skill-origins.json",
+      );
+      const origins = await readOrigins(originsFile);
       const sourceOrigin = origins.installations[resolve(input.sourcePath)];
       if (sourceOrigin) {
         origins.installations[resolve(targetPath)] = {
           ...sourceOrigin,
           installedAt: new Date().toISOString(),
         };
-        await writeOrigins(origins);
+        await writeOrigins(origins, originsFile);
       }
       succeeded.push({ agent, path: targetPath });
     } catch (error) {
