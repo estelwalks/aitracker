@@ -1,51 +1,98 @@
-// Verifies the tool-registry baseline (and, after M1, the compiled registry).
+// Verifies the tool-registry: compiles the registry (validation diagnostics
+// fail the run), prints baseline + per-capability counts, and confirms the
+// generated public manifest is safe.
 // Run: npm run verify:tool-registry
-//
-// Prints the frozen baseline counts and exits non-zero if the baseline module
-// fails to load. After M1 this script is extended to compile the registry and
-// report per-capability counts + validation diagnostics.
 import { tsImport } from "tsx/esm/api";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
-const mod = await tsImport(
-  "../src/lib/tool-registry/__baseline__/baseline.ts",
-  import.meta.url,
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, "..");
+const imp = (rel) =>
+  tsImport(join(root, `src/lib/tool-registry/${rel}`), import.meta.url);
+
+const b = await imp("__baseline__/baseline.ts");
+const reg = await imp("registry.ts");
+const manifestMod = await imp("manifest.ts");
+
+const {
+  BASELINE_TOOLS,
+  BASELINE_USAGE_PARSING,
+  BASELINE_SKILL_AGENTS,
+  BASELINE_USAGE_ADAPTERS,
+  BASELINE_SESSION_SOURCES,
+  BASELINE_MODEL_PRICES,
+} = b;
+const { compileToolRegistry } = reg;
+const { manifestIsSafe } = manifestMod;
+const { TOOL_DEFINITIONS } = await imp("tools/index.ts");
+
+const registry = compileToolRegistry(TOOL_DEFINITIONS);
+
+console.log("TrustTools tool-registry verify");
+console.log("─────────────────────────────────────────");
+
+// Baseline counts (frozen reference).
+const native = BASELINE_TOOLS.filter(
+  (t) => BASELINE_USAGE_PARSING[t.id] === "native",
+).length;
+const adapter = BASELINE_TOOLS.filter(
+  (t) => BASELINE_USAGE_PARSING[t.id] === "adapter",
+).length;
+const unsupported = BASELINE_TOOLS.filter(
+  (t) => BASELINE_USAGE_PARSING[t.id] === "unsupported",
+).length;
+console.log("[baseline] tools:                " + BASELINE_TOOLS.length);
+console.log(`[baseline]   usage native:       ${native}`);
+console.log(`[baseline]   usage adapter:      ${adapter}`);
+console.log(`[baseline]   usage unsupported:  ${unsupported}`);
+console.log("[baseline] skill agents:         " + BASELINE_SKILL_AGENTS.length);
+console.log(
+  "[baseline] usage adapters:       " + BASELINE_USAGE_ADAPTERS.length,
+);
+console.log(
+  "[baseline] session sources:      " + BASELINE_SESSION_SOURCES.length,
+);
+console.log("[baseline] model price rules:    " + BASELINE_MODEL_PRICES.length);
+
+// Registry counts (live, must reach baseline as migrations complete).
+const tools = registry.definitions;
+const count = (cap, mode) =>
+  tools.filter((d) => d.capabilities[cap].mode === mode).length;
+console.log("[registry] compiled tools:       " + tools.length);
+console.log(`[registry]   usage native:       ${count("usage", "native")}`);
+console.log(`[registry]   usage adapter:      ${count("usage", "adapter")}`);
+console.log(
+  `[registry]   skills read-write:  ${count("skills", "read-write")}`,
+);
+console.log(`[registry]   sessions resume:    ${count("sessions", "resume")}`);
+console.log(
+  `[registry]   market install:     ${count("market", "install-target")}`,
+);
+console.log(
+  `[registry]   pricing rules:      ${tools.reduce((n, d) => n + (d.pricing?.rules.length ?? 0), 0)}`,
 );
 
-const b = mod;
-const tools = b.BASELINE_TOOLS;
-const skillAgents = b.BASELINE_SKILL_AGENTS;
-const usageAdapters = b.BASELINE_USAGE_ADAPTERS;
-const sessionSources = b.BASELINE_SESSION_SOURCES;
-const modelPrices = b.BASELINE_MODEL_PRICES;
+const errors = registry.diagnostics.filter((d) => d.severity === "error");
+if (errors.length > 0) {
+  console.error(`\nFAIL: ${errors.length} validation error(s):`);
+  for (const d of errors)
+    console.error(`  ${d.toolId}: ${d.code} - ${d.message}`);
+  process.exit(1);
+}
 
-const native = tools.filter(
-  (t) => b.BASELINE_USAGE_PARSING[t.id] === "native",
-).length;
-const adapter = tools.filter(
-  (t) => b.BASELINE_USAGE_PARSING[t.id] === "adapter",
-).length;
-const unsupported = tools.filter(
-  (t) => b.BASELINE_USAGE_PARSING[t.id] === "unsupported",
-).length;
+if (!manifestIsSafe(registry.publicManifest)) {
+  console.error("\nFAIL: public manifest leaks sensitive fields.");
+  process.exit(1);
+}
 
-console.log("TrustTools tool-registry baseline verify");
-console.log("─────────────────────────────────────────");
-console.log(`tools:                  ${tools.length}`);
-console.log(`  usage native:         ${native}`);
-console.log(`  usage adapter:        ${adapter}`);
-console.log(`  usage unsupported:    ${unsupported}`);
-console.log(`skill agents:           ${skillAgents.length}`);
-console.log(`builtin usage adapters: ${usageAdapters.length}`);
-console.log(`session sources:        ${sessionSources.length}`);
-console.log(`model price rules:      ${modelPrices.length}`);
-
-// Duplicate-id guard on the baseline itself.
+// Duplicate-id guard.
 const ids = new Set(tools.map((t) => t.id));
 if (ids.size !== tools.length) {
   console.error(
-    `FAIL: duplicate tool ids in baseline (${tools.length} tools, ${ids.size} unique)`,
+    `\nFAIL: duplicate tool ids (${tools.length} tools, ${ids.size} unique)`,
   );
   process.exit(1);
 }
 
-console.log("\nOK: baseline intact.");
+console.log("\nOK: registry valid; manifest safe; baseline intact.");
