@@ -43,3 +43,18 @@
 - 设置页健康阈值配置项（若存在残留字段）确认清理；`trusttools-prefs.json` 中 `lowFrequencyCount/dozeDays/deadDays` 旧键不再读取
 - 详情抽屉「版本/更新状态」等超集字段保持现状（PRD 未要求，未做改动）
 - 实施进度文档 B3~B6/E 行等状态行与代码进度存在滞后，建议下次文档同步时全量刷新
+
+## 4. 识别逻辑对齐 TokenTracker（2026-08-05）
+
+对齐参考实现（`~/Documents/Knownsec/Develop/TokenTracker`，MIT，仅对齐行为/格式，Clean Room）的 skill 发现规则，修复三个缺陷：无 marker 容器目录被整体识别（`development/` → 单个 skill）、根级 README.md 被误识别、嵌套 skill 目录无法枚举。
+
+| 维度 | 对齐前 | 对齐后（TokenTracker 行为） |
+|------|--------|------------------------------|
+| skill 判定 | 任意 `.md` 文件算 skill；目录无 SKILL.md 兜底算 skill | **目录内含 marker（`SKILL.md`/`skill.md` 白名单）才算**；裸 .md（README 等）一律不算 |
+| 嵌套目录 | 只扫一层，`development/xxx/SKILL.md` 丢失 | **递归 maxDepth=3**：命中 marker 即记且不再下钻，无 marker 且有余量才下钻 |
+| 命名 | 目录名 / 文件名去 .md | **frontmatter `name` > 父目录名 > "Skill"**（本机 SKILL.md 的 name 与目录名一致，显示不变） |
+| 规则位置 | catalog.ts 硬编码 `skillRootSuffix`（5 个） | **独立配置文件 `src/lib/local-skills/agent-rules.ts`**，每工具一组规则（toolId/roots/envHome/markers/maxDepth） |
+| 工具范围 | 5 个 | **9 个**：+grok（GROK_HOME）、hermes、openclaw、antigravity（双根）；claude 仅扫 `~/.claude/skills` |
+| 路径守卫 | 仅接受根下直接子级 | 任意深度 + 无 `..` 段 + realpath 防符号链接逃逸（嵌套安装/卸载/同步可用） |
+
+行为差异记录：`~/.claude/dev` 不扫描（对齐 TokenTracker，仅 `~/.claude/skills`）；zcode 仅插件缓存不扫目录、agents 不在本产品 27 工具 catalog 内，均不进配置。
