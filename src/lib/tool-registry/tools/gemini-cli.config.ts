@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Gemini CLI skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination).
+ * Gemini CLI. Usage: adapter reader "generic". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "gemini-cli",
@@ -17,7 +16,14 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "adapter",
+      reader: "generic",
+      paths: [
+        { root: ".gemini/tmp", glob: "**/chats/*.json", format: "json" },
+        { root: ".gemini", glob: "**/*usage*.jsonl", format: "jsonl" },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

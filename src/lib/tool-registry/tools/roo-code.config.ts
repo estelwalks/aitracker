@@ -1,9 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Roo Code tool definition. M2: detection/display only - all capabilities
- * are `unsupported` until their real storage/log formats are verified and
- * migrated (M3 skills, M4 usage, M5 sessions/pricing).
+ * Roo Code. Usage: adapter reader "generic".
  */
 export default defineTool({
   id: "roo-code",
@@ -14,8 +12,29 @@ export default defineTool({
       "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline",
     ],
   },
+
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "adapter",
+      reader: "generic",
+      paths: [
+        {
+          root: "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          glob: "**/*.json",
+          format: "json",
+        },
+        {
+          root: ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          glob: "**/*.json",
+          format: "json",
+        },
+        {
+          root: "AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          glob: "**/*.json",
+          format: "json",
+        },
+      ],
+    },
     skills: { mode: "unsupported" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

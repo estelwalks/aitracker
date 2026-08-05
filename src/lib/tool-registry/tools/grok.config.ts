@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Grok Build skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination). When GROK_HOME is a non-empty value, it replaces the tool home directory (keeping the last path segment).
+ * Grok Build. Usage: adapter reader "generic". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "grok",
@@ -18,7 +17,14 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "adapter",
+      reader: "generic",
+      paths: [
+        { root: ".grok/sessions", glob: "**/*.jsonl", format: "jsonl" },
+        { root: ".grok/logs", glob: "**/*.jsonl", format: "jsonl" },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },
