@@ -12,12 +12,14 @@ import type { VersionCheckResult } from "./version-check.server";
  * The check is silent: any failure leaves `hasUpdate=false`.
  */
 
-const PREF_HAS_UPDATE = "trusttools.update.hasUpdate";
-const PREF_LATEST = "trusttools.update.latestVersion";
-const PREF_CHANGELOG = "trusttools.update.changelog";
-const PREF_RELEASE_URL = "trusttools.update.releaseUrl";
-const PREF_DISMISSED_LATEST = "trusttools.update.dismissedLatest";
-const PREF_CHECKED_AT = "trusttools.update.checkedAt";
+import { STORAGE_KEY_PREFIX } from "./app-config";
+
+const PREF_HAS_UPDATE = `${STORAGE_KEY_PREFIX}update.hasUpdate`;
+const PREF_LATEST = `${STORAGE_KEY_PREFIX}update.latestVersion`;
+const PREF_CHANGELOG = `${STORAGE_KEY_PREFIX}update.changelog`;
+const PREF_RELEASE_URL = `${STORAGE_KEY_PREFIX}update.releaseUrl`;
+const PREF_DISMISSED_LATEST = `${STORAGE_KEY_PREFIX}update.dismissedLatest`;
+const PREF_CHECKED_AT = `${STORAGE_KEY_PREFIX}update.checkedAt`;
 
 interface DesktopPrefsApi {
   getPreferences(): Promise<Record<string, unknown>>;
@@ -25,7 +27,7 @@ interface DesktopPrefsApi {
 }
 
 function desktopApi(): DesktopPrefsApi | undefined {
-  return (window as { trustToolsDesktop?: DesktopPrefsApi }).trustToolsDesktop;
+  return (window as { desktopApi?: DesktopPrefsApi }).desktopApi;
 }
 
 export interface UpdateState {

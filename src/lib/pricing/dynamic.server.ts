@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { BUILTIN_RATES } from "./index.ts";
 import type { Currency } from "../i18n/locale";
 import type { PricingSnapshot, RuntimeModelPrice } from "./types.ts";
+import { APP_DATA_DIR } from "../app-config";
+import { AppError } from "../errors";
 
 const PRICE_URLS = [
   "https://cdn.jsdelivr.net/gh/BerriAI/litellm@main/model_prices_and_context_window.json",
@@ -282,7 +284,7 @@ async function loadExchangeRates(
       rates?: Record<string, unknown>;
     };
     if (typeof value.date !== "string" || !isRecord(value.rates)) {
-      throw new Error("汇率响应不完整");
+      throw new AppError("errors.pricing.rateResponseIncomplete");
     }
     const rates = {
       CNY: parseRate(value.rates.CNY),
@@ -290,7 +292,7 @@ async function loadExchangeRates(
       KRW: parseRate(value.rates.KRW),
     };
     if (rates.CNY === 0 || rates.JPY === 0 || rates.KRW === 0) {
-      throw new Error("汇率响应缺少币种");
+      throw new AppError("errors.pricing.rateMissingCurrency");
     }
     const next: ExchangeCache = {
       fetchedAt: now.toISOString(),
@@ -339,7 +341,7 @@ export async function buildPricingSnapshot(
   const fetcher = options.fetcher ?? fetch;
   const cacheDirectory = join(
     options.homeDirectory ?? homedir(),
-    ".trusttools",
+    APP_DATA_DIR,
     "cache",
   );
   // 空模型列表(汇率刷新场景)只取汇率,不触碰价格目录。

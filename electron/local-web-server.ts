@@ -8,6 +8,8 @@ import {
 import { extname, join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { COOKIE_TOKEN_NAME } from "./app-config.js";
+
 interface NitroExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
@@ -123,7 +125,7 @@ async function readRequestBody(
  * HttpOnly SameSite=Strict cookie on the first authenticated response and the
  * browser attaches it to every same-origin request automatically.
  */
-const TOKEN_COOKIE_NAME = "trusttools_token";
+const TOKEN_COOKIE_NAME = COOKIE_TOKEN_NAME;
 
 type TokenStatus = "none" | "cookie" | "challenge";
 
@@ -222,7 +224,7 @@ export async function startLocalWebServer(
   const middleware = module.middleware;
   if (!handler?.fetch && !middleware) {
     throw new Error(
-      "TrustTools server build does not expose a fetch handler or Node middleware",
+      "Server build does not expose a fetch handler or Node middleware",
     );
   }
 
@@ -303,7 +305,7 @@ export async function startLocalWebServer(
         response.statusCode = 500;
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
       }
-      response.end("TrustTools local server error");
+      response.end("Local server error");
     }
   });
 
@@ -317,7 +319,7 @@ export async function startLocalWebServer(
 
   const address = server.address();
   if (!address || typeof address === "string") {
-    throw new Error("Unable to resolve TrustTools local server address");
+    throw new Error("Unable to resolve local server address");
   }
 
   return {

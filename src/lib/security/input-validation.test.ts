@@ -36,12 +36,12 @@ test("accepts a directory only when it contains SKILL.md", async () => {
 test("invalid input and oversized SKILL.md reject before a caller can consume quota", async () => {
   await assert.rejects(
     readLocalSkillFile([fakeFile("README.md", "# no")]),
-    /仅支持 SKILL\.md/,
+    /errors\.security\.fileTypeInvalid/,
   );
   await assert.rejects(
     readLocalSkillFile([
       fakeFile("SKILL.md", "# big", { size: MAX_SKILL_FILE_SIZE + 1 }),
     ]),
-    /100MB/,
+    /errors\.security\.fileTooLarge/,
   );
 });

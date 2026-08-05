@@ -24,7 +24,7 @@ function event(model: string, inputTokens: number): LocalUsageEvent {
 }
 
 test("loads dynamic prices, official overrides, tiered Doubao pricing, and latest exchange rate", async () => {
-  const homeDirectory = await mkdtemp(join(tmpdir(), "trusttools-pricing-"));
+  const homeDirectory = await mkdtemp(join(tmpdir(), "tt-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
     if (url.includes("frankfurter")) {

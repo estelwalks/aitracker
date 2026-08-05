@@ -23,6 +23,8 @@ import {
 import { createHash } from "node:crypto";
 
 import type { LocalUsageEvent } from "../local-usage/types.ts";
+import { APP_DATA_DIR, MARKET_API_BASE } from "../app-config";
+import { AppError } from "../errors";
 import { AI_TOOLS } from "../tools/catalog.ts";
 import {
   detectToolInstallations,
@@ -39,6 +41,7 @@ import {
 } from "./skill-rules.server.ts";
 import {
   SKILL_AGENTS,
+  type BatchUninstallFailure,
   type BatchUninstallResult,
   type LocalSkill,
   type SkillAgent,
@@ -46,6 +49,7 @@ import {
   type SkillSource,
   type SkillSnapshot,
   type SkillSyncResult,
+  type SyncFailure,
   type SkillUpdateStatus,
 } from "./types.ts";
 
@@ -78,10 +82,10 @@ export function resolveAgentRoots(
   return roots;
 }
 
-const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
-const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
-const ORIGINS_FILE = join(TRUSTTOOLS_DIR, "skill-origins.json");
-const MARKET_API = "https://ai.trusttools.cn/api/skills";
+const DATA_DIR = join(homedir(), APP_DATA_DIR);
+const BLACKLIST_FILE = join(DATA_DIR, "skill-blacklist.json");
+const ORIGINS_FILE = join(DATA_DIR, "skill-origins.json");
+const MARKET_API = `${MARKET_API_BASE}/skills`;
 const MARKET_EVIDENCE_TTL_MS = 5 * 60 * 1_000;
 
 interface MarketOrigin {
@@ -124,7 +128,7 @@ const RULE_BY_AGENT: ReadonlyMap<string, SkillAgentRule> = new Map(
 interface ScanOptions {
   homeDirectory?: string;
   now?: Date;
-  trusttoolsDirectory?: string;
+  dataDirectory?: string;
   usageEvents?: LocalUsageEvent[];
   env?: Record<string, string | undefined>;
 }
@@ -380,7 +384,7 @@ function safeSkillName(name: string): string {
     trimmed.includes("\\") ||
     basename(trimmed) !== trimmed
   ) {
-    throw new Error("Skill 名称不合法");
+    throw new AppError("errors.skills.invalidName");
   }
   return trimmed;
 }
@@ -401,7 +405,7 @@ async function assertManagedSkillPath(
   // `..` segments are rejected on the raw path (resolve() would collapse
   // them, hiding a traversal attempt).
   if (containsParentTraversal(path))
-    throw new Error("路径不属于受管 Skill 根目录");
+    throw new AppError("errors.skills.pathOutsideManaged");
 
   const resolvedPath = resolve(path);
   let matchingRoot: string | null = null;
@@ -424,7 +428,7 @@ async function assertManagedSkillPath(
     if (matchingRoot !== null) break;
   }
   if (matchingAgent === null || matchingRoot === null) {
-    throw new Error("路径不属于受管 Skill 根目录");
+    throw new AppError("errors.skills.pathOutsideManaged");
   }
 
   const [rootRealPath, candidateRealPath] = await Promise.all([
@@ -432,7 +436,7 @@ async function assertManagedSkillPath(
     realpath(resolvedPath),
   ]);
   if (!isPathInside(rootRealPath, candidateRealPath)) {
-    throw new Error("检测到越权路径或符号链接");
+    throw new AppError("errors.skills.symlinkEscape");
   }
 
   // 必须指向单个 Skill:含 marker 的目录,或 `.md` 文件。防止把集合目录/父
@@ -446,7 +450,7 @@ async function assertManagedSkillPath(
       (await findMarker(candidateRealPath, markers)) !== null) ||
     (entryStat.isFile() && /\.md$/iu.test(basename(candidateRealPath)));
   if (!isSingleSkill) {
-    throw new Error("目标不是受管的 Skill 目录");
+    throw new AppError("errors.skills.notManagedDir");
   }
   return matchingAgent;
 }
@@ -456,33 +460,33 @@ function containsParentTraversal(path: string): boolean {
 }
 
 /**
- * 可注入的 home/trusttools 目录(与 ScanOptions 同构),供测试把全部 Skill
+ * 可注入的 home/data 目录(与 ScanOptions 同构),供测试把全部 Skill
  * 操作隔离到临时根,避免触碰真实 `~/.claude/skills`。
  */
 interface SkillOpOptions {
   homeDirectory?: string;
-  trusttoolsDirectory?: string;
+  dataDirectory?: string;
 }
 
-/** 解析注入的 `.trusttools` 目录:显式 trusttoolsDirectory 优先,否则跟随 homeDirectory。 */
-function trusttoolsDirectoryFor(options: SkillOpOptions = {}): string {
+/** 解析注入的数据目录:显式 dataDirectory 优先,否则跟随 homeDirectory。 */
+function dataDirectoryFor(options: SkillOpOptions = {}): string {
   return resolve(
-    options.trusttoolsDirectory ??
-      join(options.homeDirectory ?? homedir(), ".trusttools"),
+    options.dataDirectory ??
+      join(options.homeDirectory ?? homedir(), APP_DATA_DIR),
   );
 }
 
 /**
- * 可恢复删除:把目标整体 rename 进 TrustTools 回收目录并追加 JSONL 清单,
- * 取代不可逆的 `rm -rf`。清单即审计记录;`trusttoolsDirectory` 可注入
- * (测试用),默认 `~/.trusttools`。
+ * 可恢复删除:把目标整体 rename 进回收目录并追加 JSONL 清单,
+ * 取代不可逆的 `rm -rf`。清单即审计记录;`dataDirectory` 可注入
+ * (测试用),默认数据目录。
  */
 async function moveToTrash(
   targetPath: string,
   action: "uninstall" | "overwrite",
   options: SkillOpOptions = {},
 ): Promise<void> {
-  const root = trusttoolsDirectoryFor(options);
+  const root = dataDirectoryFor(options);
   const trashDir = join(root, "trash", "skills");
   await mkdir(trashDir, { recursive: true, mode: 0o700 });
 
@@ -510,7 +514,7 @@ async function moveToTrash(
       if (code !== "EEXIST" && code !== "ENOTEMPTY") throw error;
     }
   }
-  throw new Error("回收目录写入失败");
+  throw new AppError("errors.skills.recycleWriteFailed");
 }
 
 /** 追加一条 Skill 操作日志(尽力而为,不阻断主流程)。 */
@@ -518,7 +522,7 @@ async function appendSkillOpLog(
   entry: Record<string, unknown>,
   options: SkillOpOptions = {},
 ): Promise<void> {
-  const root = trusttoolsDirectoryFor(options);
+  const root = dataDirectoryFor(options);
   const logFile = join(root, "logs", "skills-ops.log");
   await mkdir(dirname(logFile), { recursive: true, mode: 0o700 });
   await appendFile(
@@ -530,29 +534,31 @@ async function appendSkillOpLog(
 
 async function assertNoSymbolicLinks(root: string): Promise<void> {
   const rootStat = await lstat(root);
-  if (rootStat.isSymbolicLink()) throw new Error("市场 Skill 源不允许符号链接");
-  if (!rootStat.isDirectory()) throw new Error("市场 Skill 源必须是目录");
+  if (rootStat.isSymbolicLink())
+    throw new AppError("errors.skills.marketSymlinkForbidden");
+  if (!rootStat.isDirectory())
+    throw new AppError("errors.skills.marketSourceNotDir");
 
   const directory = await opendir(root);
   for await (const entry of directory) {
     const entryPath = join(root, entry.name);
     const entryStat = await lstat(entryPath);
     if (entryStat.isSymbolicLink())
-      throw new Error("市场 Skill 源不允许包含符号链接");
+      throw new AppError("errors.skills.marketSourceSymlink");
     if (entryStat.isDirectory()) await assertNoSymbolicLinks(entryPath);
   }
 }
 
 async function assertMarketSkillPath(
   path: string,
-  options: { homeDirectory?: string; trusttoolsDirectory?: string } = {},
+  options: { homeDirectory?: string; dataDirectory?: string } = {},
 ): Promise<void> {
   if (!isAbsolute(path) || containsParentTraversal(path)) {
-    throw new Error("市场 Skill 源路径不合法");
+    throw new AppError("errors.skills.invalidSourcePath");
   }
 
-  // 受控临时根跟随注入的 trusttoolsDirectory(测试隔离),默认 ~/.trusttools/tmp。
-  const temporaryRoot = join(trusttoolsDirectoryFor(options), "tmp");
+  // 受控临时根跟随注入的 dataDirectory(测试隔离),默认数据目录/tmp。
+  const temporaryRoot = join(dataDirectoryFor(options), "tmp");
   const [temporaryRootRealPath, sourceRealPath] = await Promise.all([
     realpath(temporaryRoot),
     realpath(path),
@@ -564,14 +570,14 @@ async function assertMarketSkillPath(
     pathFromTemporaryRoot.startsWith("..") ||
     !marketDirectory.startsWith("market-")
   ) {
-    throw new Error("市场 Skill 源不属于受控临时目录");
+    throw new AppError("errors.skills.sourceOutsideTemp");
   }
 
   await assertNoSymbolicLinks(path);
   const manifestPath = join(path, "SKILL.md");
   const manifestStat = await lstat(manifestPath);
   if (manifestStat.isSymbolicLink() || !manifestStat.isFile()) {
-    throw new Error("市场 Skill 根目录必须包含常规文件 SKILL.md");
+    throw new AppError("errors.skills.marketRootNeedsSkillMd");
   }
 }
 
@@ -742,10 +748,10 @@ export async function scanLocalSkills(
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
   const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
-  const trusttoolsDirectory = options.trusttoolsDirectory ?? TRUSTTOOLS_DIR;
+  const dataDirectory = options.dataDirectory ?? DATA_DIR;
   const [origins, blacklist, installationFacts] = await Promise.all([
-    readOrigins(join(trusttoolsDirectory, "skill-origins.json")),
-    readBlacklist(join(trusttoolsDirectory, "skill-blacklist.json")),
+    readOrigins(join(dataDirectory, "skill-origins.json")),
+    readBlacklist(join(dataDirectory, "skill-blacklist.json")),
     detectToolInstallations(AI_TOOLS, homeDirectory),
   ]);
   const agents = agentInstallationFacts(installationFacts);
@@ -802,7 +808,7 @@ async function copySkillToAgent(
   options: SkillOpOptions = {},
 ): Promise<string> {
   if (!SKILL_AGENTS.includes(input.targetAgent))
-    throw new Error("目标 Agent 不受支持");
+    throw new AppError("errors.skills.unsupportedAgent");
 
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),
@@ -810,14 +816,16 @@ async function copySkillToAgent(
   );
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
   if ((await readBlacklist()).includes(name))
-    throw new Error("该 Skill 已被加入黑名单");
+    throw new AppError("errors.skills.blacklisted");
 
   const sourceStat = await lstat(input.sourcePath);
-  if (sourceStat.isSymbolicLink()) throw new Error("不允许复制符号链接");
+  if (sourceStat.isSymbolicLink())
+    throw new AppError("errors.skills.copySymlinkForbidden");
   const extension = sourceStat.isFile() ? ".md" : "";
   const targetRoot = roots[input.targetAgent][0];
   const targetPath = join(targetRoot, `${name}${extension}`);
-  if (!isPathInside(targetRoot, targetPath)) throw new Error("目标路径不合法");
+  if (!isPathInside(targetRoot, targetPath))
+    throw new AppError("errors.skills.invalidTargetPath");
 
   // 自删防护:目标与源相同或互为祖先/子孙时,覆盖删除会连源一起毁掉
   // (例如把 `~/.claude/skills/foo` 同步回 Claude Code 自身)。
@@ -828,7 +836,7 @@ async function copySkillToAgent(
     isPathInside(sourceResolved, targetResolved) ||
     isPathInside(targetResolved, sourceResolved)
   ) {
-    throw new Error("源与目标路径重叠，已阻止操作");
+    throw new AppError("errors.skills.overlappingPaths");
   }
 
   await mkdir(targetRoot, { recursive: true, mode: 0o700 });
@@ -836,7 +844,7 @@ async function copySkillToAgent(
     .then(() => true)
     .catch(() => false);
   if (targetExists) {
-    if (!input.overwrite) throw new Error("目标位置已存在同名 Skill");
+    if (!input.overwrite) throw new AppError("errors.skills.duplicateName");
     await moveToTrash(targetPath, "overwrite", options);
   }
   await cp(input.sourcePath, targetPath, {
@@ -868,10 +876,7 @@ export async function installLocalSkill(
     },
     options,
   );
-  const originsFile = join(
-    trusttoolsDirectoryFor(options),
-    "skill-origins.json",
-  );
+  const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
   const origins = await readOrigins(originsFile);
   const sourceOrigin = origins.installations[resolve(input.sourcePath)];
   if (sourceOrigin) {
@@ -916,10 +921,7 @@ export async function installMarketSkill(
     repoPath: input.origin.repoPath,
     slug: input.origin.slug,
   };
-  const originsFile = join(
-    trusttoolsDirectoryFor(options),
-    "skill-origins.json",
-  );
+  const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
   const origins = await readOrigins(originsFile);
   origins.installations[resolve(targetPath)] = {
     source,
@@ -946,14 +948,14 @@ function optionalRemoteString(value: unknown): string | null {
 
 export async function refreshMarketSkillEvidence(
   options: {
-    trusttoolsDirectory?: string;
+    dataDirectory?: string;
     fetcher?: typeof fetch;
     now?: Date;
     force?: boolean;
   } = {},
 ): Promise<boolean> {
-  const trusttoolsDirectory = options.trusttoolsDirectory ?? TRUSTTOOLS_DIR;
-  const filePath = join(trusttoolsDirectory, "skill-origins.json");
+  const dataDirectory = options.dataDirectory ?? DATA_DIR;
+  const filePath = join(dataDirectory, "skill-origins.json");
   const origins = await readOrigins(filePath);
   const now = options.now ?? new Date();
   const dueOrigins = Object.entries(origins.installations).filter(
@@ -1051,18 +1053,24 @@ export async function batchUninstallLocalSkills(
   options: SkillOpOptions = {},
 ): Promise<BatchUninstallResult> {
   const uniquePaths = [...new Set(paths)];
-  if (uniquePaths.length === 0) throw new Error("至少选择一个 Skill");
+  if (uniquePaths.length === 0)
+    throw new AppError("errors.skills.noSkillSelected");
 
   const succeeded: string[] = [];
-  const failed: { path: string; error: string }[] = [];
+  const failed: BatchUninstallFailure[] = [];
   for (const path of uniquePaths) {
     try {
       const result = await uninstallLocalSkill(path, options);
       succeeded.push(result.path);
     } catch (error) {
+      const ui =
+        error instanceof AppError
+          ? { code: error.code, params: error.params }
+          : null;
       failed.push({
         path,
-        error: error instanceof Error ? error.message : "未知错误",
+        errorCode: ui?.code ?? "errors.generic",
+        errorParams: ui?.params,
       });
     }
   }
@@ -1085,11 +1093,14 @@ export async function syncLocalSkill(
 
   const succeeded: { agent: string; path: string }[] = [];
   const skipped: { agent: string; reason: "conflict" }[] = [];
-  const failed: { agent: string; error: string }[] = [];
+  const failed: SyncFailure[] = [];
 
   for (const targetAgent of input.targetAgents) {
     if (!SKILL_AGENTS.includes(targetAgent as SkillAgent)) {
-      failed.push({ agent: targetAgent, error: "目标 Agent 不受支持" });
+      failed.push({
+        agent: targetAgent,
+        errorCode: "errors.skills.unsupportedAgent",
+      });
       continue;
     }
     const agent = targetAgent as SkillAgent;
@@ -1112,10 +1123,7 @@ export async function syncLocalSkill(
         },
         options,
       );
-      const originsFile = join(
-        trusttoolsDirectoryFor(options),
-        "skill-origins.json",
-      );
+      const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
       const origins = await readOrigins(originsFile);
       const sourceOrigin = origins.installations[resolve(input.sourcePath)];
       if (sourceOrigin) {
@@ -1127,14 +1135,21 @@ export async function syncLocalSkill(
       }
       succeeded.push({ agent, path: targetPath });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "未知错误";
+      const ui =
+        error instanceof AppError
+          ? { code: error.code, params: error.params }
+          : null;
       if (
         input.onConflict === "skip" &&
-        message === "目标位置已存在同名 Skill"
+        ui?.code === "errors.skills.duplicateName"
       ) {
         skipped.push({ agent, reason: "conflict" });
       } else {
-        failed.push({ agent, error: message });
+        failed.push({
+          agent,
+          errorCode: ui?.code ?? "errors.generic",
+          errorParams: ui?.params,
+        });
       }
     }
   }

@@ -14,8 +14,8 @@ import {
 } from "../components/tt";
 import {
   DEFAULT_SETTINGS,
-  useTrustToolsSettings,
-  type TrustToolsSettings,
+  useAppSettings,
+  type AppSettings,
 } from "../lib/settings/store";
 import { useI18n } from "../lib/i18n/context";
 import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
@@ -30,7 +30,9 @@ import {
   APP_VERSION,
   APP_RELEASE_DATE,
   APP_REPO_URL,
-} from "../lib/app-version";
+  brandParams,
+  STORAGE_KEY_PREFIX,
+} from "../lib/app-config";
 import type { StorageUsage } from "../lib/local-usage/prune.server";
 import {
   AlertDialog,
@@ -71,6 +73,7 @@ export const Route = createFileRoute("/settings")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.settings",
+          brandParams,
         ),
       },
       {
@@ -208,7 +211,7 @@ function SettingsPage() {
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
   const [autoLaunchStatus, setAutoLaunchStatus] =
     useState<AutoLaunchStatus>("正在读取");
-  const { settings, setSettings, loaded } = useTrustToolsSettings();
+  const { settings, setSettings, loaded } = useAppSettings();
   const {
     locale,
     localeMode,
@@ -237,14 +240,12 @@ function SettingsPage() {
     useState(false);
   const [clearingData, setClearingData] = useState(false);
 
-  const update = <K extends keyof TrustToolsSettings>(
-    key: K,
-    value: TrustToolsSettings[K],
-  ) => setSettings((current) => ({ ...current, [key]: value }));
+  const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
+    setSettings((current) => ({ ...current, [key]: value }));
 
   // Auto-launch logic (keep existing logic intact)
   useEffect(() => {
-    const desktopApi = window.trustToolsDesktop;
+    const desktopApi = window.desktopApi;
     if (!desktopApi) {
       setAutoLaunchStatus("浏览器不可用");
       return;
@@ -271,7 +272,7 @@ function SettingsPage() {
   }, [setSettings]);
 
   const changeAutoLaunch = async (enabled: boolean) => {
-    const desktopApi = window.trustToolsDesktop;
+    const desktopApi = window.desktopApi;
     if (!desktopApi) {
       toast.error(t("settings.toast.autoLaunchDesktopOnly"));
       return;
@@ -359,10 +360,11 @@ function SettingsPage() {
   const handleResetPreferences = async () => {
     setClearingData(true);
     try {
-      const result = await window.trustToolsDesktop?.resetPreferences();
+      const result = await window.desktopApi?.resetPreferences();
       for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
         const key = window.localStorage.key(index);
-        if (key?.startsWith("trusttools.")) window.localStorage.removeItem(key);
+        if (key?.startsWith(STORAGE_KEY_PREFIX))
+          window.localStorage.removeItem(key);
       }
       setSettings(DEFAULT_SETTINGS);
       toast.success(
@@ -536,7 +538,7 @@ function SettingsPage() {
               </Field>
               <Field
                 label={t("settings.dataPath")}
-                hint={t("settings.dataPathHint")}
+                hint={t("settings.dataPathHint", brandParams)}
               >
                 <input
                   value={storageUsage?.directory ?? settings.dataPath}
@@ -547,7 +549,7 @@ function SettingsPage() {
               </Field>
               <Field
                 label={t("settings.retention")}
-                hint={t("settings.retentionHint")}
+                hint={t("settings.retentionHint", brandParams)}
               >
                 <Segmented
                   value={String(settings.retentionDays)}
@@ -586,7 +588,7 @@ function SettingsPage() {
                 <div>
                   <div className="text-[13px]">{t("settings.clearCache")}</div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {t("settings.clearCacheHint")}
+                    {t("settings.clearCacheHint", brandParams)}
                   </div>
                 </div>
                 <TTButton
@@ -608,7 +610,7 @@ function SettingsPage() {
                       {t("settings.clearCacheDialogTitle")}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {t("settings.clearCacheDialogDesc")}
+                      {t("settings.clearCacheDialogDesc", brandParams)}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -655,7 +657,7 @@ function SettingsPage() {
                       {t("settings.resetDialogTitle")}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {t("settings.resetDialogDesc")}
+                      {t("settings.resetDialogDesc", brandParams)}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

@@ -37,21 +37,21 @@ export const settings = {
   },
   dataPath: "데이터 경로",
   dataPathHint:
-    "현재 TrustTools 관리 데이터 디렉터리입니다. 외부 AI 도구 로그는 포함하지 않으며 삭제하지도 않습니다",
+    "현재 {appName} 관리 데이터 디렉터리입니다. 외부 AI 도구 로그는 포함하지 않으며 삭제하지도 않습니다",
   retention: "캐시 보존",
   retentionHint:
-    "TrustTools가 다시 생성할 수 있는 로컬 인덱스/캐시만 정리합니다. 수집 상세는 원본 로컬 로그에서 비롯되며 TrustTools가 이 로그를 삭제하지 않습니다",
+    "{appName}가 다시 생성할 수 있는 로컬 인덱스/캐시만 정리합니다. 수집 상세는 원본 로컬 로그에서 비롯되며 {appName}가 이 로그를 삭제하지 않습니다",
   retentionDays: "{count}일",
   retentionForever: "무기한",
   storage: "저장 공간 사용량",
   storageExceedsSoftCap: "（500MB 초과, 캐시 정리를 권장합니다）",
   clearCache: "재생성 가능한 로컬 인덱스/캐시 정리",
   clearCacheHint:
-    "현재 TrustTools 데이터 디렉터리 안의 캐시만 삭제합니다. AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
+    "현재 {appName} 데이터 디렉터리 안의 캐시만 삭제합니다. AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
   clearCacheButton: "캐시 정리",
   clearCacheDialogTitle: "로컬 인덱스/캐시를 정리하시겠습니까?",
   clearCacheDialogDesc:
-    "TrustTools 관리 디렉터리 안의 재생성 가능한 인덱스와 캐시가 삭제됩니다. 외부 AI 도구 로그, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
+    "{appName} 관리 디렉터리 안의 재생성 가능한 인덱스와 캐시가 삭제됩니다. 외부 AI 도구 로그, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
   clearing: "정리 중...",
   confirmClearCache: "캐시 정리",
   resetPrefs: "앱 설정 및 보안 기록 초기화",
@@ -60,7 +60,7 @@ export const settings = {
   resetButton: "설정 초기화",
   resetDialogTitle: "앱 설정 및 보안 기록을 초기화하시겠습니까?",
   resetDialogDesc:
-    "TrustTools 앱 설정, 버전 업데이트 기록, 보안 검사 기록과 오늘의 검사 횟수가 초기화됩니다. 로컬 인덱스/캐시와 외부 AI 도구 로그는 삭제되지 않습니다.",
+    "{appName} 앱 설정, 버전 업데이트 기록, 보안 검사 기록과 오늘의 검사 횟수가 초기화됩니다. 로컬 인덱스/캐시와 외부 AI 도구 로그는 삭제되지 않습니다.",
   resetting: "초기화 중...",
   confirmReset: "초기화",
   currentLanguage: "현재 언어",

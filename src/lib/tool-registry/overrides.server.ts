@@ -1,7 +1,7 @@
 /**
  * Restricted user overrides for tool definitions (server-only).
  *
- * Reads `~/.trusttools/tool-overrides.json`, validates it against a strict
+ * Reads the tool-overrides file under the app data root, validates it against a strict
  * schema, and merges ONLY whitelisted fields (enable/disable, additional safe
  * discovery roots, display preferences) into the built-in definitions. A user
  * can NEVER override a Reader key, resume command, pricing rule, or market
@@ -19,10 +19,11 @@ import { z } from "zod";
 
 import type { ToolDefinition } from "./contracts.ts";
 import { isUnsafePath } from "./validate.ts";
+import { APP_DATA_DIR } from "../app-config";
 
 const DEFAULT_OVERRIDE_PATH = join(
   homedir(),
-  ".trusttools",
+  APP_DATA_DIR,
   "tool-overrides.json",
 );
 

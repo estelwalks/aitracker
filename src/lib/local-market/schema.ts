@@ -152,7 +152,8 @@ export function parseInstallRequest(value: unknown): {
   agents: MarketAgent[];
 } {
   if (!isRecord(value)) throw new AppError("errors.market.installInvalid");
-  if (!isRecord(value.skill)) throw new Error("Skill 参数无效");
+  if (!isRecord(value.skill))
+    throw new AppError("errors.market.schema.invalidSkillParam");
   const required = [
     "name",
     "repoOwner",
@@ -165,11 +166,11 @@ export function parseInstallRequest(value: unknown): {
       typeof value.skill[field] !== "string" ||
       value.skill[field].trim() === ""
     ) {
-      throw new Error(`Skill 安装字段 ${field} 无效`);
+      throw new AppError("errors.market.schema.invalidInstallField", { field });
     }
   }
   if (!Array.isArray(value.agents) || value.agents.length === 0) {
-    throw new Error("请至少选择一个 Agent");
+    throw new AppError("errors.market.schema.agentRequired");
   }
   const agents = [...new Set(value.agents)];
   if (
@@ -179,7 +180,7 @@ export function parseInstallRequest(value: unknown): {
         !MARKET_AGENTS.includes(agent as MarketAgent),
     )
   ) {
-    throw new Error("包含不支持的 Agent");
+    throw new AppError("errors.market.schema.unsupportedAgent");
   }
 
   return {

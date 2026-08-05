@@ -1,4 +1,5 @@
 import type { SecurityInputFile } from "./scanner.ts";
+import { AppError } from "../errors";
 
 export const MAX_SKILL_FILE_SIZE = 100 * 1024 * 1024;
 
@@ -22,31 +23,28 @@ export async function readLocalSkillFile(
   supplied: FileList | BrowserFile[],
 ): Promise<LocalSkillFile> {
   const files = Array.from(supplied as ArrayLike<BrowserFile>);
-  if (files.length === 0)
-    throw new Error("请选择 SKILL.md 或包含它的 Skill 文件夹");
+  if (files.length === 0) throw new AppError("errors.security.fileRequired");
 
   const hasDirectoryPath = files.some((file) =>
     Boolean(file.webkitRelativePath),
   );
   if (!hasDirectoryPath && files.length !== 1) {
-    throw new Error(
-      "仅支持单个 SKILL.md 文件或一个包含 SKILL.md 的 Skill 文件夹",
-    );
+    throw new AppError("errors.security.fileTypeInvalid");
   }
 
   const skillFile = files.find((file) => isSkillFileName(file.name));
   if (!skillFile) {
-    throw new Error("仅支持 SKILL.md 文件或包含 SKILL.md 的 Skill 文件夹");
+    throw new AppError("errors.security.fileTypeInvalid");
   }
   if (!hasDirectoryPath && !isSkillFileName(skillFile.name)) {
-    throw new Error("仅支持 SKILL.md 文件或包含 SKILL.md 的 Skill 文件夹");
+    throw new AppError("errors.security.fileTypeInvalid");
   }
   if (skillFile.size > MAX_SKILL_FILE_SIZE) {
-    throw new Error("文件过大，请选择 100MB 以内的文件");
+    throw new AppError("errors.security.fileTooLarge");
   }
 
   const content = await skillFile.text();
-  if (content.includes("\0")) throw new Error("SKILL.md 不是可解析的文本文件");
+  if (content.includes("\0")) throw new AppError("errors.security.notTextFile");
   const root = skillFile.webkitRelativePath?.split("/")[0];
   return {
     name: skillFile.webkitRelativePath || skillFile.name,

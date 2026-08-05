@@ -9,6 +9,7 @@ import type {
   LocalUsageSourceSummary,
 } from "./types.ts";
 import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
+import { APP_DATA_DIR, ENV } from "../app-config";
 
 const SYNC_INTERVAL_MS = 60_000;
 const SYNC_TIMEOUT_MS = 120_000;
@@ -33,7 +34,7 @@ interface QueueRow {
 
 function usageHome(override?: string): string {
   if (override) return override;
-  const configured = process.env.TRUSTTOOLS_USAGE_HOME?.trim();
+  const configured = process.env[ENV.USAGE_HOME]?.trim();
   return configured || homedir();
 }
 
@@ -46,7 +47,7 @@ function runtimeEntry(): string {
 }
 
 function stateRoot(home: string): string {
-  return join(home, ".trusttools", "tokentracker-runtime");
+  return join(home, APP_DATA_DIR, "tokentracker-runtime");
 }
 
 function queuePath(home: string): string {
@@ -58,7 +59,7 @@ function configPath(home: string): string {
 }
 
 function bootstrapLogPath(home: string): string {
-  return join(home, ".trusttools", "logs", "local-usage-bootstrap.log");
+  return join(home, APP_DATA_DIR, "logs", "local-usage-bootstrap.log");
 }
 
 function nodeCommand(): { executable: string; env: NodeJS.ProcessEnv } {
@@ -140,7 +141,7 @@ async function runTrackerCommand(
         ...command.env,
         HOME: home,
         USERPROFILE: home,
-        TRUSTTOOLS_TOKENTRACKER_STATE_HOME: stateRoot(home),
+        [ENV.TOKENTRACKER_STATE_HOME]: stateRoot(home),
         TOKENTRACKER_NO_TELEMETRY: "1",
         ...extraEnvironment,
       },
@@ -194,12 +195,12 @@ async function runSync(home: string, force: boolean): Promise<void> {
     );
     lastSyncAt = Date.now();
 
-    // initializeTokenTrackerUsage is gated behind TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE.
+    // initializeTokenTrackerUsage is gated behind the bridge opt-in env var.
     // The auto-init is intentionally disabled; this guard remains as a
     // safety net in case the caller has explicitly opted in.
     if (
       process.versions.electron &&
-      process.env.TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE
+      process.env[ENV.ENABLE_TOKENTRACKER_BRIDGE]
     ) {
       void initializeTokenTrackerUsage({ homeDirectory: home });
     }
@@ -217,7 +218,7 @@ async function runSync(home: string, force: boolean): Promise<void> {
  *
  * This no-op preserves the exported symbol for backwards compatibility
  * with any existing callers (e.g. runSync), which are themselves gated
- * behind TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE.
+ * behind the bridge opt-in env var.
  */
 export async function initializeTokenTrackerUsage(
   _options: {
@@ -258,7 +259,7 @@ export async function collectTokenTrackerUsage(
 }> {
   // TokenTracker bridge is opt-in only. Without the explicit env var the
   // bridge returns empty results — the native adapters are the canonical path.
-  if (!process.env.TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE) {
+  if (!process.env[ENV.ENABLE_TOKENTRACKER_BRIDGE]) {
     return { events: [], summaries: [] };
   }
 

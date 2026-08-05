@@ -84,7 +84,7 @@ const request = {
 };
 
 test("prepareSkillInstall extracts, installs per target, reports failures, and cleans temp files", async () => {
-  const tempRoot = await mkdtemp(join(tmpdir(), "trusttools-market-test-"));
+  const tempRoot = await mkdtemp(join(tmpdir(), "tt-market-test-"));
   const calls: string[] = [];
   try {
     const result = await prepareSkillInstall(
@@ -125,7 +125,7 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
 });
 
 test("prepareSkillInstall blocks dangerous content before extraction or installation", async () => {
-  const tempRoot = await mkdtemp(join(tmpdir(), "trusttools-market-test-"));
+  const tempRoot = await mkdtemp(join(tmpdir(), "tt-market-test-"));
   let installCalls = 0;
   try {
     const result = await prepareSkillInstall(

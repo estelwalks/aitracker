@@ -15,6 +15,7 @@ import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
+import { APP_DATA_DIR, ENV } from "../app-config";
 import { getDefaultRegistry } from "../tool-registry/registry.ts";
 import { computeRegistryFingerprint } from "../tool-registry/fingerprint.server.ts";
 import { buildLocalUsageSnapshot } from "./aggregate.ts";
@@ -1680,7 +1681,7 @@ export async function scanLocalUsage(
       Math.trunc(options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE),
     ),
   );
-  const isolatedUsageHome = process.env.TRUSTTOOLS_USAGE_HOME?.trim();
+  const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
     options.homeDirectory ??
     (isolatedUsageHome && isAbsolute(isolatedUsageHome)
@@ -1753,10 +1754,10 @@ export async function scanLocalUsage(
   ]);
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
   const cacheDirectory =
-    options.cacheDirectory ?? join(homeDirectory, ".trusttools", "cache");
+    options.cacheDirectory ?? join(homeDirectory, APP_DATA_DIR, "cache");
   const adapterConfigPath =
     options.adapterConfigPath ??
-    join(homeDirectory, ".trusttools", "usage-adapters.json");
+    join(homeDirectory, APP_DATA_DIR, "usage-adapters.json");
   const cacheFilePath = join(cacheDirectory, PERSISTENT_CACHE_FILE_NAME);
   const legacyCacheFilePaths = LEGACY_PERSISTENT_CACHE_FILE_NAMES.map(
     (fileName) => join(cacheDirectory, fileName),

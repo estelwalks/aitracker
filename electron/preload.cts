@@ -6,12 +6,13 @@ import {
   type DesktopCurrency,
   type DesktopLocale,
   type DesktopPreferenceMode,
+  type DesktopApi,
   type LocalePreferences,
   type RuntimeInfo,
-  type TrustToolsDesktopApi,
 } from "./contracts.js";
+import { DESKTOP_GLOBAL } from "./app-config.js";
 
-const desktopApi: TrustToolsDesktopApi = Object.freeze({
+const desktopApi: DesktopApi = Object.freeze({
   getRuntimeInfo: () =>
     ipcRenderer.invoke(desktopIpc.getRuntimeInfo) as Promise<RuntimeInfo>,
   getAutoLaunch: () =>
@@ -75,4 +76,4 @@ const desktopApi: TrustToolsDesktopApi = Object.freeze({
   },
 });
 
-contextBridge.exposeInMainWorld("trustToolsDesktop", desktopApi);
+contextBridge.exposeInMainWorld(DESKTOP_GLOBAL, desktopApi);

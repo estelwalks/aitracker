@@ -3,9 +3,10 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import type { MarketListResult } from "./types.ts";
+import { APP_DATA_DIR } from "../app-config";
 
 const CACHE_VERSION = 1;
-const CACHE_FILE = join(homedir(), ".trusttools", "cache", "market-v1.json");
+const CACHE_FILE = join(homedir(), APP_DATA_DIR, "cache", "market-v1.json");
 
 interface MarketCache {
   version: number;

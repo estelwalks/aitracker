@@ -19,6 +19,7 @@ import { PageHeader, Panel, StatusBadge, TTButton } from "../components/tt";
 import { toUiError } from "../lib/errors";
 import { useI18n } from "../lib/i18n/context";
 import { catalogs, getMessage } from "../lib/i18n/messages";
+import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import {
   filterAllLabel,
@@ -60,6 +61,7 @@ export const Route = createFileRoute("/security")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.security",
+          brandParams,
         ),
       },
       {
@@ -263,7 +265,10 @@ function SecurityPage() {
       </div>
 
       <div className="mb-3 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[12px] text-muted-foreground">
-        {t("security.rulesNotice", { version: SECURITY_RULES_VERSION })}
+        {t("security.rulesNotice", {
+          ...brandParams,
+          version: SECURITY_RULES_VERSION,
+        })}
       </div>
 
       <div

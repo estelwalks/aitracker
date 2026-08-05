@@ -2,10 +2,12 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { AppError } from "../errors";
 import { parseExternalUsageAdapterFile } from "./adapters/config.server.ts";
 import type { ExternalUsageAdapterFile } from "./adapters/types.ts";
+import { APP_DATA_DIR } from "../app-config";
 
-const CONFIG_PATH = join(homedir(), ".trusttools", "usage-adapters.json");
+const CONFIG_PATH = join(homedir(), APP_DATA_DIR, "usage-adapters.json");
 const EMPTY_CONFIG: ExternalUsageAdapterFile = { version: 1, adapters: [] };
 
 export interface UsageAdapterConfigState {
@@ -31,11 +33,15 @@ export async function writeUsageAdapterConfig(
   try {
     raw = JSON.parse(text) as unknown;
   } catch {
-    throw new Error("配置不是有效 JSON");
+    throw new AppError("errors.usage.configNotJson");
   }
   const parsed = parseExternalUsageAdapterFile(raw);
   if (parsed.file == null) {
-    throw new Error(parsed.diagnostics[0]?.message ?? "适配器配置不合法");
+    const detail = parsed.diagnostics[0]?.message;
+    throw new AppError(
+      "errors.usage.adapterConfigInvalid",
+      detail ? { detail } : undefined,
+    );
   }
 
   const normalized = `${JSON.stringify(parsed.file, null, 2)}\n`;

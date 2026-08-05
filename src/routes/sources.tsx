@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dot, EmptyState, PageHeader, Panel, TTButton } from "../components/tt";
 import { useI18n } from "../lib/i18n/context";
 import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { toUiError } from "../lib/errors";
 import {
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/sources")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.sources",
+          brandParams,
         ),
       },
       {

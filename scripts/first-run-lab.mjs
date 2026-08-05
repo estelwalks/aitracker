@@ -4,14 +4,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const labHome = join(projectRoot, ".trusttools-lab", "first-run-home");
+const labHome = join(projectRoot, ".tt-lab", "first-run-home");
 const prepareOnly = process.argv.includes("--prepare-only");
 const seedOnly = process.argv.includes("--seed-only");
 
 async function prepareEmptyHome() {
   await rm(labHome, { recursive: true, force: true });
   await mkdir(labHome, { recursive: true });
-  process.stdout.write(`首次安装测试目录已重置：${labHome}\n`);
+  process.stdout.write(`First-run lab home reset: ${labHome}\n`);
 }
 
 async function seedWorkbuddyUsage() {
@@ -46,7 +46,7 @@ async function seedWorkbuddyUsage() {
     "utf8",
   );
   process.stdout.write(
-    `已写入无对话正文的 WorkBuddy 测试用量：${sessionDirectory}\n`,
+    `Wrote WorkBuddy test usage (no conversation body): ${sessionDirectory}\n`,
   );
 }
 

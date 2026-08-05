@@ -70,7 +70,7 @@ function assertLabelsUnique(): void {
   const labels = new Set<string>();
   for (const label of SKILL_AGENTS) {
     if (labels.has(label)) {
-      throw new Error(`Skill agent label 重复: "${label}"`);
+      throw new Error(`Duplicate Skill agent label: "${label}"`);
     }
     labels.add(label);
   }

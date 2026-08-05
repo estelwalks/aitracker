@@ -30,6 +30,7 @@ import {
 } from "./messages";
 import { BUILTIN_RATES, formatMoney as pricingFormatMoney } from "../pricing";
 import { getRatesSnapshot, type RatesSnapshot } from "../pricing/server-fns";
+import { brandParams } from "../app-config";
 
 const LOCALE_STORAGE_KEY = "tt-locale";
 const LOCALE_MODE_STORAGE_KEY = "tt-locale-mode";
@@ -154,7 +155,11 @@ function titleForPath(locale: Locale, pathname: string): string {
   const match = ROUTE_TITLE_KEYS.find(([prefix]) =>
     pathname.startsWith(prefix),
   );
-  return getMessage(catalogs[locale], match?.[1] ?? "meta.titles.notFound");
+  return getMessage(
+    catalogs[locale],
+    match?.[1] ?? "meta.titles.notFound",
+    brandParams,
+  );
 }
 
 function rateFor(rates: RatesSnapshot | null, currency: Currency): number {
@@ -238,7 +243,7 @@ export function I18nProvider({
   useEffect(() => {
     if (converged.current) return;
     if (typeof window === "undefined") return;
-    if (window.trustToolsDesktop) {
+    if (window.desktopApi) {
       converged.current = true;
       return;
     }
@@ -273,8 +278,7 @@ export function I18nProvider({
 
   /** Main-process initiated changes (tray/menu or future flows). */
   useEffect(() => {
-    const api =
-      typeof window !== "undefined" ? window.trustToolsDesktop : undefined;
+    const api = typeof window !== "undefined" ? window.desktopApi : undefined;
     if (!api?.onPreferencesChanged) return;
     return api.onPreferencesChanged((next) => {
       if (next.locale !== localeRef.current) {
@@ -325,10 +329,8 @@ export function I18nProvider({
         mode === "manual" ? (locale ?? systemLocale) : systemLocale,
         currencyRef.current,
       );
-      if (typeof window !== "undefined" && window.trustToolsDesktop) {
-        void window.trustToolsDesktop
-          .setLocaleMode(mode, locale)
-          .catch(() => {});
+      if (typeof window !== "undefined" && window.desktopApi) {
+        void window.desktopApi.setLocaleMode(mode, locale).catch(() => {});
       }
     },
     [systemLocale],
@@ -350,10 +352,8 @@ export function I18nProvider({
           ? (currency ?? mapSystemCurrency(systemLocale))
           : mapSystemCurrency(systemLocale),
       );
-      if (typeof window !== "undefined" && window.trustToolsDesktop) {
-        void window.trustToolsDesktop
-          .setCurrencyMode(mode, currency)
-          .catch(() => {});
+      if (typeof window !== "undefined" && window.desktopApi) {
+        void window.desktopApi.setCurrencyMode(mode, currency).catch(() => {});
       }
     },
     [systemLocale],
