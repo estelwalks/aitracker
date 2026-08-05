@@ -11,21 +11,22 @@ import {
   type SkillSyncResult,
 } from "./types.ts";
 import type { HealthThresholds } from "./scanner.server.ts";
+import { AppError } from "../errors";
 
 const stringInput = (value: unknown): string => {
   if (typeof value !== "string" || value.length === 0)
-    throw new Error("参数不能为空");
+    throw new AppError("errors.skills.emptyInput");
   return value;
 };
 
 const batchPathsInput = (value: unknown): string[] => {
   if (!Array.isArray(value) || value.length === 0 || value.length > 200) {
-    throw new Error("批量卸载路径数量不合法");
+    throw new AppError("errors.skills.batchPathsCount");
   }
   if (
     value.some((path) => typeof path !== "string" || path.trim().length === 0)
   ) {
-    throw new Error("批量卸载路径不合法");
+    throw new AppError("errors.skills.batchPathsInvalid");
   }
   return [...new Set(value)];
 };
@@ -91,7 +92,7 @@ export const installSkill = createServerFn({ method: "POST" })
       typeof input?.sourcePath !== "string" ||
       !SKILL_AGENTS.includes(input?.targetAgent)
     ) {
-      throw new Error("安装参数不合法");
+      throw new AppError("errors.skills.installInvalid");
     }
     return input;
   })
@@ -131,7 +132,7 @@ export const syncLocalSkill = createServerFn({ method: "POST" })
         ) ||
         (input.onConflict !== "overwrite" && input.onConflict !== "skip")
       ) {
-        throw new Error("同步参数不合法");
+        throw new AppError("errors.skills.syncInvalid");
       }
       return input;
     },
@@ -148,7 +149,7 @@ export const updateSkillBlacklist = createServerFn({ method: "POST" })
       typeof input?.name !== "string" ||
       typeof input?.blocked !== "boolean"
     ) {
-      throw new Error("黑名单参数不合法");
+      throw new AppError("errors.skills.blacklistInvalid");
     }
     return input;
   })

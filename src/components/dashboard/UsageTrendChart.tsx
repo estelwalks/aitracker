@@ -10,8 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useI18n } from "../../lib/i18n/context";
 import {
-  formatTokens,
   shareOf,
   sourceLabel,
   type UsagePeriod,
@@ -150,6 +150,7 @@ export function UsageTrendChart({
   mode,
   onModeChange,
 }: UsageTrendChartProps) {
+  const { t, format } = useI18n();
   const [hiddenSources, setHiddenSources] = useState<LocalUsageSource[]>([]);
 
   const grain = grainForPeriod(period);
@@ -243,7 +244,7 @@ export function UsageTrendChart({
               tickLine={false}
             />
             <YAxis
-              tickFormatter={formatTokens}
+              tickFormatter={(value) => format.formatTokens(Number(value))}
               width={48}
               tick={{
                 fontSize: 11,
@@ -300,7 +301,9 @@ export function UsageTrendChart({
                 strokeDasharray="4 4"
                 strokeOpacity={0.6}
                 label={{
-                  value: `均值 ${formatTokens(mean)}`,
+                  value: t("dashboard.trend.meanLabel", {
+                    tokens: format.formatTokens(mean),
+                  }),
                   position: "insideTopRight",
                   fontSize: 10,
                   fill: "var(--color-muted-foreground)",
@@ -343,7 +346,7 @@ export function UsageTrendChart({
           );
         })}
         <span className="ml-auto text-muted-foreground">
-          点击图例可隐藏 / 显示
+          {t("dashboard.trend.legendHint")}
         </span>
       </div>
     </div>
@@ -412,12 +415,6 @@ function aggregateHourlyBySource(
     });
 }
 
-function grainLabelUnit(grain: UsageTimeGrain | "month"): string {
-  if (grain === "hour") return "时段";
-  if (grain === "day") return "天";
-  return "月";
-}
-
 interface TrendTooltipProps {
   active?: boolean;
   label?: string | number;
@@ -435,6 +432,7 @@ function TrendTooltip({
   hiddenSources,
   grandTotal,
 }: TrendTooltipProps) {
+  const { t, format } = useI18n();
   if (!active || !payload || payload.length === 0) return null;
   const total = payload.reduce(
     (sum, item) => sum + (typeof item.value === "number" ? item.value : 0),
@@ -456,18 +454,22 @@ function TrendTooltip({
                 style={{ background: source.color }}
               />
               <span className="w-24 truncate">{source.name}</span>
-              <span className="tt-num ml-auto">{formatTokens(value)}</span>
+              <span className="tt-num ml-auto">
+                {format.formatTokens(value)}
+              </span>
               <span className="tt-num w-12 text-right text-muted-foreground">
-                {share.toFixed(1)}%
+                {format.formatPercent(share)}
               </span>
             </div>
           );
         })}
       <div className="mt-1 flex items-center gap-2 border-t border-border pt-1">
-        <span className="w-24">合计</span>
-        <span className="tt-num ml-auto">{formatTokens(total)}</span>
+        <span className="w-24">{t("dashboard.trend.tooltipTotal")}</span>
+        <span className="tt-num ml-auto">{format.formatTokens(total)}</span>
         <span className="tt-num w-12 text-right text-muted-foreground">
-          {grandTotal > 0 ? shareOf(total, grandTotal).toFixed(1) : "0.0"}%
+          {grandTotal > 0
+            ? format.formatPercent(shareOf(total, grandTotal))
+            : "0.0%"}
         </span>
       </div>
     </div>

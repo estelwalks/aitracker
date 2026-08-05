@@ -34,11 +34,36 @@ test("toExportCsv: 空行仅输出表头一行", () => {
   assert.equal(lines.length, 1);
   assert.equal(
     lines[0],
-    "日期,工具名,模型名,项目,输入Token,输出Token,缓存读,缓存写,推理Token,费用",
+    "日期,工具名,模型名,项目,输入Token,输出Token,缓存读,缓存写,推理Token,费用,costDisplay,currency,rate,rateDate",
   );
-  assert.equal(CSV_HEADER.length, 10);
+  assert.equal(CSV_HEADER.length, 14);
   // No stray CRLF anywhere when splitting should yield exactly header-only.
   assert.ok(!out.includes("\n\r") && !out.endsWith("\r\n"));
+});
+
+test("toExportCsv: 可传入本地化表头, 缺省时保持中文 CSV_HEADER", () => {
+  const out = toExportCsv([], undefined, [
+    "Date",
+    "Tool",
+    "Model",
+    "Project",
+    "Input Tokens",
+    "Output Tokens",
+    "Cache Read",
+    "Cache Write",
+    "Reasoning Tokens",
+    "Cost",
+    "costDisplay",
+    "currency",
+    "rate",
+    "rateDate",
+  ]);
+  assert.equal(
+    out.split("\r\n")[0],
+    "Date,Tool,Model,Project,Input Tokens,Output Tokens,Cache Read,Cache Write,Reasoning Tokens,Cost,costDisplay,currency,rate,rateDate",
+  );
+  // 缺省表头与 zh-CN 输出逐字一致(数据键兼容)
+  assert.equal(toExportCsv([]), toExportCsv([], undefined, [...CSV_HEADER]));
 });
 
 test("toExportCsv: 使用 CRLF 行结束符", () => {
@@ -77,7 +102,7 @@ test("toExportCsv: 含逗号的模型名被引号包裹", () => {
   // so a naive comma-split would over-split — assert on the full record instead.
   assert.equal(
     lines[1],
-    '2026-07-27T10:00:00.000Z,claude-code,"GPT-4, Turbo",~/demo,1000,500,200,100,50,1.23',
+    '2026-07-27T10:00:00.000Z,claude-code,"GPT-4, Turbo",~/demo,1000,500,200,100,50,1.23,,,,',
   );
 });
 
@@ -169,4 +194,49 @@ test("buildExportFilename: 本地时间生成 YYYYMMDDHHMM 文件名", () => {
     buildExportFilename("json", d.getTime()),
     "trusttools_export_202608031405.json",
   );
+});
+
+test("toExportCsv: 展示货币与汇率字段按机器可读稳定值输出", () => {
+  const out = toExportCsv(
+    [
+      {
+        ...makeRow({ cost: 1.5 }),
+        costDisplay: 10.8,
+        currency: "CNY",
+        rate: 7.2,
+        rateDate: "2026-08-05",
+      },
+    ],
+    undefined,
+    [
+      "日期",
+      "工具名",
+      "模型名",
+      "项目",
+      "输入Token",
+      "输出Token",
+      "缓存读",
+      "缓存写",
+      "推理Token",
+      "费用",
+      "costDisplay",
+      "currency",
+      "rate",
+      "rateDate",
+    ],
+  );
+  const cells = out.split("\r\n")[1].split(",");
+  assert.equal(cells[10], "10.80");
+  assert.equal(cells[11], "CNY");
+  assert.equal(cells[12], "7.2");
+  assert.equal(cells[13], "2026-08-05");
+});
+
+test("toExportJson: 汇率字段缺省时输出 null 而非 0(未知价格不填 0)", () => {
+  const out = toExportJson([makeRow({ cost: undefined })]);
+  const parsed = JSON.parse(out) as Array<Record<string, unknown>>;
+  assert.equal(parsed[0]["费用"], null);
+  assert.equal(parsed[0]["costDisplay"], null);
+  assert.equal(parsed[0]["rate"], null);
+  assert.equal(parsed[0]["rateDate"], null);
 });

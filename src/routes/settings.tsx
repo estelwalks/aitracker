@@ -18,6 +18,12 @@ import {
   type TrustToolsSettings,
 } from "../lib/settings/store";
 import { useI18n } from "../lib/i18n/context";
+import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import {
+  resolveLocaleFromSearch,
+  type Currency,
+  type Locale,
+} from "../lib/i18n/locale";
 import { themes, useTheme } from "../lib/theme";
 import { useVersionCheck } from "../lib/version-check";
 import {
@@ -38,34 +44,56 @@ import {
 } from "../components/ui/alert-dialog";
 
 export const Route = createFileRoute("/settings")({
-  loader: async () => {
+  loader: async ({ location }) => {
     try {
       const { getStorageUsageFn } =
         await import("../lib/local-usage/prune.server");
       const usage = await getStorageUsageFn();
-      return { storageUsage: usage, storageError: null };
+      return {
+        locale: resolveLocaleFromSearch(location.search),
+        storageUsage: usage,
+        storageError: null,
+      };
     } catch (error) {
       return {
+        locale: resolveLocaleFromSearch(location.search),
         storageUsage: null,
         storageError:
-          error instanceof Error ? error.message : "无法读取存储信息",
+          error instanceof Error
+            ? error.message
+            : getMessage(catalogs["zh-CN"], "errors.generic"),
       };
     }
   },
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "设置 · TrustTools V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.settings",
+        ),
+      },
       {
         name: "description",
-        content: "管理仅保存在当前设备的本机设置。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "settings.pageHeaderDesc",
+        ),
       },
     ],
   }),
   component: SettingsPage,
 });
 
+// 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
 const categories = ["通用", "外观", "关于"] as const;
 type Category = (typeof categories)[number];
+const categoryKeys: Record<Category, MessageKey> = {
+  通用: "settings.sections.general",
+  外观: "settings.sections.appearance",
+  关于: "settings.sections.about",
+};
+
 type AutoLaunchStatus =
   | "正在读取"
   | "桌面端可用"
@@ -73,6 +101,30 @@ type AutoLaunchStatus =
   | "浏览器不可用"
   | "系统不支持"
   | "读取失败";
+const autoLaunchStatusKeys: Record<AutoLaunchStatus, MessageKey> = {
+  正在读取: "settings.status.reading",
+  桌面端可用: "settings.status.desktopAvailable",
+  正在保存: "settings.status.saving",
+  浏览器不可用: "settings.status.browserUnavailable",
+  系统不支持: "settings.status.unsupported",
+  读取失败: "settings.status.readFailed",
+};
+
+const rateSourceKeys: Record<string, MessageKey> = {
+  live: "settings.rate.live",
+  cache: "settings.rate.cache",
+  "stale-cache": "settings.rate.staleCache",
+  fallback: "settings.rate.fallback",
+};
+
+const localeLabelKeys: Record<Locale, MessageKey> = {
+  "zh-CN": "settings.languages.zhCN",
+  "en-US": "settings.languages.enUS",
+  "ja-JP": "settings.languages.jaJP",
+  "ko-KR": "settings.languages.koKR",
+};
+
+const retentionOptions = [30, 60, 90, 180, 0] as const;
 
 function Field({
   label,
@@ -150,13 +202,6 @@ function NumberField({
   );
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 MB";
-  const mb = bytes / (1024 * 1024);
-  if (mb < 1) return `${(mb * 1024).toFixed(1)} KB`;
-  return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
-}
-
 function SettingsPage() {
   const loaderData = Route.useLoaderData();
   const [category, setCategory] = useState<Category>("通用");
@@ -164,7 +209,20 @@ function SettingsPage() {
   const [autoLaunchStatus, setAutoLaunchStatus] =
     useState<AutoLaunchStatus>("正在读取");
   const { settings, setSettings, loaded } = useTrustToolsSettings();
-  const { locale } = useI18n();
+  const {
+    locale,
+    localeMode,
+    setLocaleMode,
+    displayCurrency,
+    currencyMode,
+    currencySource,
+    setCurrencyMode,
+    rates,
+    ratesLoading,
+    refreshRates,
+    t,
+    format,
+  } = useI18n();
   const { theme, setTheme } = useTheme();
   const {
     result: versionResult,
@@ -215,7 +273,7 @@ function SettingsPage() {
   const changeAutoLaunch = async (enabled: boolean) => {
     const desktopApi = window.trustToolsDesktop;
     if (!desktopApi) {
-      toast.error("仅桌面客户端可设置开机自启");
+      toast.error(t("settings.toast.autoLaunchDesktopOnly"));
       return;
     }
 
@@ -226,24 +284,28 @@ function SettingsPage() {
       setAutoLaunchStatus(state.supported ? "桌面端可用" : "系统不支持");
       update("launchAtLoginRequested", state.enabled);
       if (state.supported) {
-        toast.success(state.enabled ? "已开启开机自启" : "已关闭开机自启");
+        toast.success(
+          state.enabled
+            ? t("settings.toast.autoLaunchEnabled")
+            : t("settings.toast.autoLaunchDisabled"),
+        );
       } else {
-        toast.error("当前系统不支持开机自启");
+        toast.error(t("settings.toast.autoLaunchUnsupported"));
       }
     } catch {
       setAutoLaunchStatus("读取失败");
-      toast.error("开机自启设置失败");
+      toast.error(t("settings.toast.autoLaunchSaveFailed"));
     }
   };
 
   const autoLaunchHint =
     autoLaunchStatus === "浏览器不可用"
-      ? "仅桌面客户端可设置"
+      ? t("settings.autoLaunchHint.browserOnly")
       : autoLaunchStatus === "系统不支持"
-        ? "当前系统不支持此功能"
+        ? t("settings.autoLaunchHint.unsupported")
         : autoLaunchStatus === "读取失败"
-          ? "无法读取系统开机项，请稍后重试"
-          : "直接读取并修改当前系统的开机启动状态";
+          ? t("settings.autoLaunchHint.readFailed")
+          : t("settings.autoLaunchHint.default");
 
   const changeRetentionDays = async (retentionDays: number) => {
     update("retentionDays", retentionDays);
@@ -254,15 +316,20 @@ function SettingsPage() {
       setStorageUsage(result.usage);
       if (result.cleanup.removedFiles > 0) {
         toast.success(
-          `已清理 ${result.cleanup.removedFiles} 个过期缓存文件（${formatBytes(result.cleanup.removedBytes)}）`,
+          t("settings.toast.cleanupDone", {
+            count: result.cleanup.removedFiles,
+            size: format.formatBytes(result.cleanup.removedBytes),
+          }),
         );
       } else {
         toast.success(
-          retentionDays === 0 ? "已设置为永久保留缓存" : "已保存缓存保留策略",
+          retentionDays === 0
+            ? t("settings.toast.keepForever")
+            : t("settings.toast.retentionSaved"),
         );
       }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "保存保留策略失败");
+    } catch {
+      toast.error(t("settings.toast.retentionFailed"));
     }
   };
 
@@ -275,11 +342,14 @@ function SettingsPage() {
       setStorageUsage(result.usage);
       toast.success(
         result.cleanup.removedFiles > 0
-          ? `已清理 ${result.cleanup.removedFiles} 个本地索引/缓存文件（${formatBytes(result.cleanup.removedBytes)}）`
-          : "没有可清理的本地索引或缓存",
+          ? t("settings.toast.cleared", {
+              count: result.cleanup.removedFiles,
+              size: format.formatBytes(result.cleanup.removedBytes),
+            })
+          : t("settings.toast.nothingToClear"),
       );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "清除数据失败");
+    } catch {
+      toast.error(t("settings.toast.clearFailed"));
     } finally {
       setClearingData(false);
       setClearCacheDialogOpen(false);
@@ -297,14 +367,23 @@ function SettingsPage() {
       setSettings(DEFAULT_SETTINGS);
       toast.success(
         result
-          ? `已重置 ${result.removedKeys} 项应用偏好与安全历史`
-          : "已重置浏览器中的应用偏好与安全历史",
+          ? t("settings.toast.resetDone", { count: result.removedKeys })
+          : t("settings.toast.resetDoneBrowser"),
       );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "重置应用偏好失败");
+    } catch {
+      toast.error(t("settings.toast.resetFailed"));
     } finally {
       setClearingData(false);
       setResetPreferencesDialogOpen(false);
+    }
+  };
+
+  const handleRefreshRates = async () => {
+    try {
+      await refreshRates();
+      toast.success(t("settings.rate.refreshed"));
+    } catch {
+      toast.error(t("settings.rate.failed"));
     }
   };
 
@@ -316,8 +395,8 @@ function SettingsPage() {
   return (
     <>
       <PageHeader
-        title="设置"
-        desc="一般配置保存在当前设备；系统级选项仅在桌面客户端生效"
+        title={t("settings.pageHeader")}
+        desc={t("settings.pageHeaderDesc")}
       />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
@@ -332,22 +411,112 @@ function SettingsPage() {
                   : "text-muted-foreground hover:bg-accent/50"
               }`}
             >
-              {item}
+              {t(categoryKeys[item])}
             </button>
           ))}
         </Panel>
 
-        <Panel title={category}>
+        <Panel title={t(categoryKeys[category])}>
           {category === "通用" && (
             <div>
-              <Field label="语言">
+              <Field
+                label={t("settings.language")}
+                hint={
+                  localeMode === "system"
+                    ? t("settings.languageFollowHint")
+                    : t("settings.languageManualHint")
+                }
+              >
                 <Segmented
-                  value={locale}
-                  onChange={() => {}}
-                  options={[{ value: "zh-CN" as typeof locale, label: "中文" }]}
+                  value={localeMode === "manual" ? locale : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setLocaleMode("system")
+                      : setLocaleMode("manual", value as Locale)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "zh-CN", label: t("settings.languages.zhCN") },
+                    { value: "en-US", label: t("settings.languages.enUS") },
+                    { value: "ja-JP", label: t("settings.languages.jaJP") },
+                    { value: "ko-KR", label: t("settings.languages.koKR") },
+                  ]}
                 />
               </Field>
-              <Field label="开机自启" hint={autoLaunchHint}>
+              <Field
+                label={t("settings.currency")}
+                hint={
+                  currencyMode === "manual"
+                    ? t("settings.currencyManualHint")
+                    : currencySource === "fallback"
+                      ? t("settings.currencyFallbackHint")
+                      : t("settings.currencyFollowHint")
+                }
+              >
+                <Segmented
+                  value={currencyMode === "manual" ? displayCurrency : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setCurrencyMode("system")
+                      : setCurrencyMode("manual", value as Currency)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "CNY", label: "CNY" },
+                    { value: "USD", label: "USD" },
+                    { value: "JPY", label: "JPY" },
+                    { value: "KRW", label: "KRW" },
+                  ]}
+                />
+              </Field>
+              <Field
+                label={t("settings.rate.title")}
+                hint={t("settings.rate.desc")}
+              >
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="tt-num text-[13px]">
+                      {rates
+                        ? t("settings.rate.line", {
+                            rate: format.formatNumber(
+                              rates.rates[displayCurrency] ?? 1,
+                              { maximumFractionDigits: 4 },
+                            ),
+                            currency: displayCurrency,
+                          })
+                        : "—"}
+                    </span>
+                    <TTButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRefreshRates()}
+                      disabled={ratesLoading}
+                    >
+                      {ratesLoading
+                        ? t("settings.rate.refreshing")
+                        : t("settings.rate.refresh")}
+                    </TTButton>
+                  </div>
+                  {rates && (
+                    <div className="text-[11px] text-muted-foreground">
+                      {t("settings.rate.updatedAt", { date: rates.date })}
+                      {" · "}
+                      {t(
+                        rateSourceKeys[rates.source] ??
+                          "settings.rate.fallback",
+                      )}
+                      {rates.source !== "live" &&
+                        ` · ${t("settings.rate.offlineHint", {
+                          source: t(
+                            rateSourceKeys[rates.source] ??
+                              "settings.rate.fallback",
+                          ),
+                        })}`}
+                    </div>
+                  )}
+                </div>
+              </Field>
+              <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
                 <Toggle
                   value={autoLaunchEnabled}
                   onChange={changeAutoLaunch}
@@ -360,14 +529,14 @@ function SettingsPage() {
                 >
                   {autoLaunchStatus === "桌面端可用"
                     ? autoLaunchEnabled
-                      ? "已在系统中开启"
-                      : "已在系统中关闭"
-                    : autoLaunchStatus}
+                      ? t("settings.status.enabledInSystem")
+                      : t("settings.status.disabledInSystem")
+                    : t(autoLaunchStatusKeys[autoLaunchStatus])}
                 </span>
               </Field>
               <Field
-                label="数据路径"
-                hint="当前 TrustTools 受控数据目录；不会包含或删除外部 AI 工具日志"
+                label={t("settings.dataPath")}
+                hint={t("settings.dataPathHint")}
               >
                 <input
                   value={storageUsage?.directory ?? settings.dataPath}
@@ -377,30 +546,30 @@ function SettingsPage() {
                 />
               </Field>
               <Field
-                label="缓存保留"
-                hint="仅清理 TrustTools 可再生成的本地索引/缓存；采集明细来自原始本机日志，TrustTools 不会删除这些日志"
+                label={t("settings.retention")}
+                hint={t("settings.retentionHint")}
               >
                 <Segmented
                   value={String(settings.retentionDays)}
                   onChange={(value) => void changeRetentionDays(Number(value))}
-                  options={[
-                    { value: "30", label: "30天" },
-                    { value: "60", label: "60天" },
-                    { value: "90", label: "90天" },
-                    { value: "180", label: "180天" },
-                    { value: "0", label: "永久" },
-                  ]}
+                  options={retentionOptions.map((days) => ({
+                    value: String(days),
+                    label:
+                      days === 0
+                        ? t("settings.retentionForever")
+                        : t("settings.retentionDays", { count: days }),
+                  }))}
                 />
               </Field>
-              <Field label="存储占用">
+              <Field label={t("settings.storage")}>
                 {storageUsage ? (
                   <span
                     className={`tt-num text-[13px] ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
                   >
-                    {formatBytes(storageUsage.bytes)} /{" "}
-                    {formatBytes(storageUsage.softCapBytes)}
+                    {format.formatBytes(storageUsage.bytes)} /{" "}
+                    {format.formatBytes(storageUsage.softCapBytes)}
                     {storageUsage.exceedsSoftCap
-                      ? "（已超过 500MB，建议清理缓存）"
+                      ? t("settings.storageExceedsSoftCap")
                       : ""}
                   </span>
                 ) : loaderData.storageError ? (
@@ -409,16 +578,15 @@ function SettingsPage() {
                   </span>
                 ) : (
                   <span className="text-[13px] text-muted-foreground">
-                    加载中...
+                    {t("common.loading")}
                   </span>
                 )}
               </Field>
               <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                 <div>
-                  <div className="text-[13px]">清除可再生成本地索引/缓存</div>
+                  <div className="text-[13px]">{t("settings.clearCache")}</div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    仅删除当前 TrustTools 数据目录下的缓存；不会删除 AI
-                    工具日志、适配器配置或安全历史
+                    {t("settings.clearCacheHint")}
                   </div>
                 </div>
                 <TTButton
@@ -426,7 +594,7 @@ function SettingsPage() {
                   size="sm"
                   onClick={() => setClearCacheDialogOpen(true)}
                 >
-                  清除缓存
+                  {t("settings.clearCacheButton")}
                 </TTButton>
               </div>
 
@@ -436,15 +604,16 @@ function SettingsPage() {
               >
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>确认清除本地索引/缓存</AlertDialogTitle>
+                    <AlertDialogTitle>
+                      {t("settings.clearCacheDialogTitle")}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                      将删除当前 TrustTools 受控目录中的可再生成索引和缓存。外部
-                      AI 工具日志、适配器配置、应用偏好与安全历史不会受影响。
+                      {t("settings.clearCacheDialogDesc")}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={clearingData}>
-                      取消
+                      {t("common.cancel")}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={(e) => {
@@ -454,17 +623,18 @@ function SettingsPage() {
                       disabled={clearingData}
                       className="bg-danger text-danger-foreground hover:bg-danger/90"
                     >
-                      {clearingData ? "清除中..." : "确认清除缓存"}
+                      {clearingData
+                        ? t("settings.clearing")
+                        : t("settings.confirmClearCache")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
               <div className="flex items-center justify-between gap-3 py-3 last:border-0">
                 <div>
-                  <div className="text-[13px]">重置应用偏好与安全历史</div>
+                  <div className="text-[13px]">{t("settings.resetPrefs")}</div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    重置设置、更新记录、安全检测历史与今日扫描次数；不会删除本地索引/缓存或外部
-                    AI 工具日志
+                    {t("settings.resetPrefsHint")}
                   </div>
                 </div>
                 <TTButton
@@ -472,7 +642,7 @@ function SettingsPage() {
                   size="sm"
                   onClick={() => setResetPreferencesDialogOpen(true)}
                 >
-                  重置偏好
+                  {t("settings.resetButton")}
                 </TTButton>
               </div>
               <AlertDialog
@@ -482,17 +652,15 @@ function SettingsPage() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      确认重置应用偏好与安全历史
+                      {t("settings.resetDialogTitle")}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      将重置 TrustTools
-                      的应用设置、版本更新记录、安全检测历史与今日扫描次数。不会删除本地索引/缓存或任何外部
-                      AI 工具日志。
+                      {t("settings.resetDialogDesc")}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={clearingData}>
-                      取消
+                      {t("common.cancel")}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       onClick={(e) => {
@@ -502,7 +670,9 @@ function SettingsPage() {
                       disabled={clearingData}
                       className="bg-danger text-danger-foreground hover:bg-danger/90"
                     >
-                      {clearingData ? "重置中..." : "确认重置"}
+                      {clearingData
+                        ? t("settings.resetting")
+                        : t("settings.confirmReset")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -534,19 +704,19 @@ function SettingsPage() {
                     </div>
                     <div className="px-2 py-1.5">
                       <div className="text-[13px] font-medium">
-                        {item.label}
+                        {t(item.labelKey)}
                       </div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {item.desc}
+                        {t(item.descKey)}
                       </div>
                     </div>
                   </button>
                 ))}
               </div>
               <div className="mt-4 border-t border-border pt-4">
-                <Field label="语言">
+                <Field label={t("settings.currentLanguage")}>
                   <span className="text-[13px] text-muted-foreground">
-                    中文（当前仅支持）
+                    {t(localeLabelKeys[locale])}
                   </span>
                 </Field>
               </div>
@@ -555,15 +725,15 @@ function SettingsPage() {
 
           {category === "关于" && (
             <div>
-              <Field label="版本">
+              <Field label={t("settings.version")}>
                 <span className="tt-num text-[13px]">V{APP_VERSION}</span>
               </Field>
-              <Field label="发布日期">
+              <Field label={t("settings.releaseDate")}>
                 <span className="text-[13px] text-muted-foreground">
                   {APP_RELEASE_DATE}
                 </span>
               </Field>
-              <Field label="检查更新">
+              <Field label={t("settings.checkUpdate")}>
                 <div className="flex items-center gap-2">
                   <TTButton
                     variant="ghost"
@@ -571,15 +741,19 @@ function SettingsPage() {
                     onClick={() => void versionRefresh()}
                     disabled={versionLoading}
                   >
-                    {versionLoading ? "检查中..." : "检查更新"}
+                    {versionLoading
+                      ? t("settings.checking")
+                      : t("settings.checkUpdate")}
                   </TTButton>
                   {versionResult && (
                     <span className="text-[12px] text-muted-foreground">
                       {versionResult.status === "newer"
-                        ? `发现新版本 ${versionResult.latestVersion}`
+                        ? t("settings.updateFound", {
+                            version: versionResult.latestVersion ?? "",
+                          })
                         : versionResult.status === "current"
-                          ? "已是最新版本"
-                          : "无法获取版本信息"}
+                          ? t("settings.upToDate")
+                          : t("settings.updateFailed")}
                     </span>
                   )}
                 </div>
@@ -598,13 +772,13 @@ function SettingsPage() {
                         className="mt-2 inline-flex items-center gap-1 text-[12px] text-primary hover:underline"
                       >
                         <ExternalLink className="size-3" />
-                        查看发布页面
+                        {t("settings.viewRelease")}
                       </a>
                     )}
                   </div>
                 )}
               </Field>
-              <Field label="源码仓库">
+              <Field label={t("settings.sourceRepo")}>
                 <a
                   href={APP_REPO_URL}
                   target="_blank"

@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { UsageHeatmap, type UsageHeatmapCell } from "../UsageHeatmap";
 import { estimateEventCost, formatMoney } from "../../lib/pricing";
+import { useI18n } from "../../lib/i18n/context";
 import type { LocalUsageEvent } from "../../lib/local-usage";
 
 const aggregateUsageHeatmap = UsageHeatmap.aggregateUsageHeatmap;
-
-const weekdayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 /**
  * FR-006 — 7 × 24 consumption heatmap with week-offset navigation. Cells show
@@ -26,7 +25,18 @@ interface CellExtra {
 }
 
 export function UsageHeatmapPanel({ events }: UsageHeatmapPanelProps) {
+  const { locale, t, format } = useI18n();
   const [weekOffset, setWeekOffset] = useState(0);
+
+  const weekdayLabels = [
+    t("dashboard.heatmap.monday"),
+    t("dashboard.heatmap.tuesday"),
+    t("dashboard.heatmap.wednesday"),
+    t("dashboard.heatmap.thursday"),
+    t("dashboard.heatmap.friday"),
+    t("dashboard.heatmap.saturday"),
+    t("dashboard.heatmap.sunday"),
+  ];
 
   const { weekStart, weekEnd, weekLabel, canGoForward } = useMemo(() => {
     const now = new Date();
@@ -40,14 +50,19 @@ export function UsageHeatmapPanel({ events }: UsageHeatmapPanelProps) {
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     end.setHours(23, 59, 59, 999);
-    const fmt = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`;
+    const fmt = (date: Date) =>
+      format.formatDate(date, {
+        year: undefined,
+        month: "numeric",
+        day: "numeric",
+      });
     return {
       weekStart: start,
       weekEnd: end,
       weekLabel: `${fmt(start)} – ${fmt(end)}`,
       canGoForward: weekOffset < 0,
     };
-  }, [weekOffset]);
+  }, [weekOffset, format]);
 
   const weekEvents = useMemo(
     () =>
@@ -75,7 +90,7 @@ export function UsageHeatmapPanel({ events }: UsageHeatmapPanelProps) {
           onNext={() => setWeekOffset((value) => value + 1)}
         />
         <div className="flex min-h-44 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-          当前周无可用事件，热力图保持为空。
+          {t("dashboard.heatmap.emptyWeek")}
         </div>
         <GradientLegend />
       </div>
@@ -133,6 +148,7 @@ function HeatmapHeader({
   onPrev: () => void;
   onNext: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
       <span className="tt-num">{weekLabel}</span>
@@ -141,19 +157,21 @@ function HeatmapHeader({
           type="button"
           onClick={onPrev}
           className="inline-flex size-6 items-center justify-center rounded-sm border border-border bg-surface-2 transition-colors hover:border-border-strong"
-          aria-label="上一周"
+          aria-label={t("dashboard.heatmap.prevWeek")}
         >
           ‹
         </button>
         <span className="tt-num w-12 text-center">
-          {weekOffset === 0 ? "本周" : `-${weekOffset}周`}
+          {weekOffset === 0
+            ? t("dashboard.heatmap.thisWeek")
+            : t("dashboard.heatmap.weeksAgo", { count: Math.abs(weekOffset) })}
         </span>
         <button
           type="button"
           onClick={onNext}
           disabled={!canGoForward}
           className="inline-flex size-6 items-center justify-center rounded-sm border border-border bg-surface-2 transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="下一周"
+          aria-label={t("dashboard.heatmap.nextWeek")}
         >
           ›
         </button>
@@ -173,6 +191,7 @@ function HeatmapPanelRow({
   extras: CellExtra[];
   maxTokens: number;
 }) {
+  const { locale, t, format } = useI18n();
   return (
     <>
       <span className="flex items-center text-[10px] text-muted-foreground">
@@ -193,11 +212,21 @@ function HeatmapPanelRow({
                   }
                 : undefined
             }
-            title={`${label} ${String(cell.hour).padStart(2, "0")}:00 · ${cell.events} 个事件 · ${cell.totalTokens.toLocaleString()} Token · ${formatMoney(
-              extra.costUsd,
-              "CNY",
-            )} · ${extra.sessions} 个会话 · 主力 ${extra.topModel || "—"}`}
-            aria-label={`${label} ${cell.hour} 时，${cell.events} 个事件，${cell.totalTokens} Token`}
+            title={t("dashboard.heatmap.cellTitle", {
+              weekday: label,
+              hour: String(cell.hour).padStart(2, "0"),
+              events: cell.events,
+              tokens: format.formatNumber(cell.totalTokens),
+              cost: format.formatUsd(extra.costUsd),
+              sessions: extra.sessions,
+              top: extra.topModel || "—",
+            })}
+            aria-label={t("dashboard.heatmap.cellAria", {
+              weekday: label,
+              hour: cell.hour,
+              events: cell.events,
+              tokens: cell.totalTokens,
+            })}
           />
         );
       })}
@@ -206,9 +235,10 @@ function HeatmapPanelRow({
 }
 
 function GradientLegend() {
+  const { t } = useI18n();
   return (
     <div className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-      <span>少</span>
+      <span>{t("dashboard.heatmap.low")}</span>
       {[0.12, 0.28, 0.48, 0.7, 1].map((opacity) => (
         <span
           key={opacity}
@@ -216,7 +246,7 @@ function GradientLegend() {
           style={{ opacity }}
         />
       ))}
-      <span>多 · 按 Token 强度</span>
+      <span>{t("dashboard.heatmap.high")}</span>
     </div>
   );
 }

@@ -46,6 +46,10 @@ export function toExportJson(
     cacheWriteKey,
     reasoningKey,
     costKey,
+    costDisplayKey,
+    currencyKey,
+    rateKey,
+    rateDateKey,
   ] = CSV_HEADER;
 
   const records = rows.map((row) => ({
@@ -59,6 +63,10 @@ export function toExportJson(
     [cacheWriteKey]: row.cacheCreationInputTokens,
     [reasoningKey]: row.reasoningOutputTokens,
     [costKey]: row.cost ?? null,
+    [costDisplayKey]: row.costDisplay ?? null,
+    [currencyKey]: row.currency ?? null,
+    [rateKey]: row.rate ?? null,
+    [rateDateKey]: row.rateDate ?? null,
   }));
 
   return JSON.stringify(records, null, 2);

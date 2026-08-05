@@ -12,17 +12,32 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-const nav = [
-  { to: "/", label: "首页", icon: Home },
-  { to: "/skills", label: "Skill 管理", icon: Blocks },
-  { to: "/market", label: "Skill 市场", icon: Store },
-  { to: "/security", label: "安全检测", icon: ShieldCheck },
-  { to: "/sessions", label: "会话恢复", icon: MessagesSquare },
-  { to: "/sources", label: "数据来源", icon: Database },
-  { to: "/settings", label: "设置", icon: Settings },
-] as const;
+import { useI18n } from "../lib/i18n/context";
+import type { MessageKey } from "../lib/i18n/messages";
+
+const nav: Array<{
+  to:
+    | "/"
+    | "/skills"
+    | "/market"
+    | "/security"
+    | "/sessions"
+    | "/sources"
+    | "/settings";
+  label: MessageKey;
+  icon: typeof Home;
+}> = [
+  { to: "/", label: "nav.dashboard", icon: Home },
+  { to: "/skills", label: "nav.skills", icon: Blocks },
+  { to: "/market", label: "nav.market", icon: Store },
+  { to: "/security", label: "nav.security", icon: ShieldCheck },
+  { to: "/sessions", label: "nav.sessions", icon: MessagesSquare },
+  { to: "/sources", label: "nav.sources", icon: Database },
+  { to: "/settings", label: "nav.settings", icon: Settings },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -64,11 +79,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             const Icon = item.icon;
+            const label = t(item.label);
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                title={item.label}
+                title={label}
                 className={`relative flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-sm transition-colors ${
                   active
                     ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
@@ -79,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="absolute top-1.5 bottom-1.5 -left-1.5 w-[3px] rounded-r bg-primary" />
                 )}
                 <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                {!collapsed && <span className="truncate">{label}</span>}
               </Link>
             );
           })}
@@ -95,13 +111,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : (
               <PanelLeftClose className="size-4" strokeWidth={1.75} />
             )}
-            {!collapsed && <span>收起</span>}
+            {!collapsed && <span>{t("common.collapse")}</span>}
           </button>
           <div className="flex h-7 items-center gap-2 px-2.5">
             <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-ok" />
             {!collapsed && (
               <span className="text-[11px] text-muted-foreground">
-                本地服务已连接
+                {t("common.localServiceConnected")}
               </span>
             )}
           </div>
@@ -121,13 +137,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           style={{ left: collapsed ? 56 : sidebarWidth }}
         >
           <span className="flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-ok" /> 本地 API 已连接
+            <span className="size-1.5 rounded-full bg-ok" />{" "}
+            {t("common.localApiConnected")}
           </span>
           <span className="hidden items-center gap-1.5 md:flex">
-            <span className="size-1.5 rounded-full bg-primary" /> 数据采集：实时
+            <span className="size-1.5 rounded-full bg-primary" />{" "}
+            {t("common.dataCollectionLive")}
           </span>
           <span className="tt-num ml-auto shrink-0">
-            上次更新 2026-07-27 10:24:07
+            {t("common.lastUpdatedAt", { time: "2026-07-27 10:24:07" })}
           </span>
         </div>
       </div>

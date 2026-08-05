@@ -1,9 +1,24 @@
-export function renderErrorPage(): string {
+import { catalogs, getMessage } from "./i18n/messages";
+import { resolveLocaleFromSearchParam, type Locale } from "./i18n/locale";
+
+/**
+ * SSR error page (rendered outside the React tree). Accepts an optional raw
+ * request URL so the fallback page can honor `?locale=`; otherwise zh-CN.
+ */
+export function renderErrorPage(rawUrl?: string | null): string {
+  const locale: Locale =
+    rawUrl == null
+      ? "zh-CN"
+      : (resolveLocaleFromSearchParam(
+          new URL(rawUrl).searchParams.get("locale"),
+        ) ?? "zh-CN");
+  const t = (key: string, params?: Record<string, string | number>) =>
+    getMessage(catalogs[locale], key, params);
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
-    <title>页面加载失败</title>
+    <title>${t("common.pageLoadFailed")}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       body { font: 15px/1.5 system-ui, -apple-system, sans-serif; background: #fafafa; color: #111; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 1.5rem; }
@@ -18,11 +33,11 @@ export function renderErrorPage(): string {
   </head>
   <body>
     <div class="card">
-      <h1>页面加载失败</h1>
-      <p>本地服务暂时无法完成请求，请刷新页面或返回首页。</p>
+      <h1>${t("common.pageLoadFailed")}</h1>
+      <p>${t("common.localServiceUnavailable")}</p>
       <div class="actions">
-        <button class="primary" onclick="location.reload()">重新加载</button>
-        <a class="secondary" href="/">返回首页</a>
+        <button class="primary" onclick="location.reload()">${t("common.reload")}</button>
+        <a class="secondary" href="/">${t("common.backHome")}</a>
       </div>
     </div>
   </body>
