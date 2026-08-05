@@ -36,7 +36,6 @@ import {
 } from "../components/dashboard/UsageTrendChart";
 import { ContextBreakdown } from "../components/dashboard/ContextBreakdown";
 import { UsageHeatmapPanel } from "../components/dashboard/UsageHeatmapPanel";
-import { ModelDistribution } from "../components/dashboard/ModelDistribution";
 import { UsageDetailTable } from "../components/dashboard/UsageDetailTable";
 import {
   TokenPoster,
@@ -841,12 +840,6 @@ function Dashboard() {
 
         <div key="provider" className="dashboard-widget dashboard-context">
           <ContextBreakdown events={selectedEvents} />
-        </div>
-
-        <div key="models" className="dashboard-widget">
-          <Panel title={t("dashboard.model.title")}>
-            <ModelDistribution events={selectedEvents} />
-          </Panel>
         </div>
 
         <div key="heatmap" className="dashboard-widget">
