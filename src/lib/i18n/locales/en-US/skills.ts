@@ -2,19 +2,11 @@ export const skills = {
   metaDesc:
     "Scan and manage Skills of local AI Agents — safe copying, cross-Agent sync and blacklisting.",
   pageHeader: "Skill Management",
-  pageHeaderDesc: "{basis} scanned at {time}",
+  pageHeaderDesc: "{count} local skills · scanned at {time}",
   pollingHint:
     "Polls every 5 s by change fingerprint while the page is visible (no native watcher)",
   searchPlaceholder: "Search name or description…",
-  health: {
-    active: "Active",
-    low: "Low frequency",
-    doze: "Dormant",
-    dead: "Inactive for a long time",
-    unknown: "Unknown usage",
-  },
   filter: {
-    healthAll: "Health: All",
     agentAll: "Install location: All",
   },
   actions: {
@@ -40,9 +32,6 @@ export const skills = {
     title: "Skill list ({count})",
     name: "Name",
     desc: "Description",
-    calls: "Calls",
-    dailyAvg: "Daily avg",
-    trend: "Trend",
     agent: "Install location",
     lastUsed: "Last used",
     actions: "Actions",
@@ -65,7 +54,6 @@ export const skills = {
     sourcePath: "Source path",
     lastUsedAt: "Last used: {time}",
     noLastUsed: "No verifiable record",
-    totalCalls: "Total recognized: {count} times",
     installStatus: "Install status",
     installedAt: "Installed: {time}",
     modifiedAt: "Modified: {time}",

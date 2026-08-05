@@ -8,7 +8,6 @@ import { SKILL_TOOL_NAMES } from "../tools/catalog.ts";
 export const SKILL_AGENTS = SKILL_TOOL_NAMES as readonly [string, ...string[]];
 
 export type SkillAgent = (typeof SKILL_AGENTS)[number];
-export type SkillHealth = "active" | "low" | "doze" | "dead" | "unknown";
 export type SkillUpdateStatus = "current" | "available" | "unknown";
 
 export interface SkillSource {
@@ -32,21 +31,11 @@ export interface SkillInstallation {
   updateReason: string;
 }
 
-export interface SkillDailyPoint {
-  date: string;
-  calls: number;
-}
-
 export interface LocalSkill {
   id: string;
   name: string;
   description: string | null;
-  health: SkillHealth;
-  healthReason: string;
   lastUsedAt: string | null;
-  usageCount: number;
-  /** 按日聚合的调用序列（仅 Codex 等产出 context.skills 的来源可见）。 */
-  daily?: SkillDailyPoint[];
   installations: SkillInstallation[];
 }
 
@@ -64,7 +53,6 @@ export interface SkillSyncResult {
 export interface SkillSnapshot {
   generatedAt: string;
   fingerprint: string;
-  healthBasis: string;
   roots: Record<SkillAgent, string>;
   /** Actual Agent installation probe results, independent of Skill contents. */
   agents: Record<SkillAgent, { installed: boolean; detectedPaths: string[] }>;

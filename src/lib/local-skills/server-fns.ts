@@ -1,7 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 import {
   SKILL_AGENTS,
@@ -10,7 +7,6 @@ import {
   type SkillSnapshot,
   type SkillSyncResult,
 } from "./types.ts";
-import type { HealthThresholds } from "./scanner.server.ts";
 import { AppError } from "../errors";
 
 const stringInput = (value: unknown): string => {
@@ -31,51 +27,15 @@ const batchPathsInput = (value: unknown): string[] => {
   return [...new Set(value)];
 };
 
-async function readHealthThresholds(): Promise<HealthThresholds> {
-  let prefsDir: string;
-  try {
-    const { app } = await import("electron");
-    prefsDir = app.getPath("userData");
-  } catch {
-    prefsDir = join(homedir(), ".trusttools");
-  }
-  const prefsPath = join(prefsDir, "trusttools-prefs.json");
-  try {
-    const raw = await readFile(prefsPath, "utf8");
-    const prefs = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      lowFrequencyCount:
-        typeof prefs.lowFrequencyCount === "number" &&
-        Number.isFinite(prefs.lowFrequencyCount)
-          ? (prefs.lowFrequencyCount as number)
-          : 5,
-      dozeDays:
-        typeof prefs.dozeDays === "number" && Number.isFinite(prefs.dozeDays)
-          ? (prefs.dozeDays as number)
-          : 30,
-      deadDays:
-        typeof prefs.deadDays === "number" && Number.isFinite(prefs.deadDays)
-          ? (prefs.deadDays as number)
-          : 90,
-    };
-  } catch {
-    return { lowFrequencyCount: 5, dozeDays: 30, deadDays: 90 };
-  }
-}
-
 export const getLocalSkills = createServerFn({ method: "GET" }).handler(
   async (): Promise<SkillSnapshot> => {
-    const [{ scanLocalSkills }, { getCachedLocalUsageSnapshot }, thresholds] =
+    const [{ scanLocalSkills }, { getCachedLocalUsageSnapshot }] =
       await Promise.all([
         import("./scanner.server.ts"),
         import("../local-usage/snapshot.server.ts"),
-        readHealthThresholds(),
       ]);
     const usage = await getCachedLocalUsageSnapshot();
-    return scanLocalSkills({
-      usageEvents: usage.details,
-      healthThresholds: thresholds,
-    });
+    return scanLocalSkills({ usageEvents: usage.details });
   },
 );
 
