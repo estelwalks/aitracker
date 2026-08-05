@@ -30,7 +30,6 @@ import {
 import {
   DEFAULT_MARKERS,
   DEFAULT_MAX_DEPTH,
-  resolveAgentRoots,
   SKILL_AGENT_RULES,
   type SkillAgentRule,
 } from "./agent-rules.ts";
@@ -48,6 +47,32 @@ import {
 
 /** Compatibility re-export (label → write root); kept for existing importers. */
 export { SKILL_ROOT_SUFFIXES } from "./agent-rules.ts";
+
+/**
+ * Resolve each agent's skill roots against a home directory. When a rule has
+ * `envHome` and the corresponding env var is a non-empty string, the env value
+ * replaces the directory part of each root (the tool's home directory) while
+ * keeping the last path segment: `join(envValue, basename(suffix))`. Empty
+ * strings are treated as unset and fall back to `join(home, suffix)`.
+ *
+ * Server-only (node:path); lives here so the shared `agent-rules.ts` stays
+ * importable in the browser bundle.
+ */
+export function resolveAgentRoots(
+  home: string,
+  env: Record<string, string | undefined>,
+): Record<string, string[]> {
+  const roots: Record<string, string[]> = {};
+  // SKILL_AGENTS mirrors SKILL_AGENT_RULES order, so index alignment holds.
+  for (const [i, rule] of SKILL_AGENT_RULES.entries()) {
+    const envValue = rule.envHome == null ? undefined : env[rule.envHome];
+    const overridden = envValue !== undefined && envValue !== "";
+    roots[SKILL_AGENTS[i]] = rule.roots.map((suffix) =>
+      overridden ? join(envValue, basename(suffix)) : join(home, suffix),
+    );
+  }
+  return roots;
+}
 
 const TRUSTTOOLS_DIR = join(homedir(), ".trusttools");
 const BLACKLIST_FILE = join(TRUSTTOOLS_DIR, "skill-blacklist.json");
