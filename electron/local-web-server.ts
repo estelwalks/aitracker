@@ -150,7 +150,9 @@ function validateToken(
   request: IncomingMessage,
   capabilityToken: string,
 ): TokenStatus {
-  if (parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME] === capabilityToken) {
+  if (
+    parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME] === capabilityToken
+  ) {
     return "cookie";
   }
 
