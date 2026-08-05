@@ -1,18 +1,13 @@
 /**
- * Per-agent skill discovery rules, now derived from the tool-registry.
+ * Browser-safe skill-agent labels and shared constants.
  *
- * The single source of truth for skill storage is each tool's `storage.skills`
- * config. This module projects the registry into the legacy `SKILL_AGENT_RULES`
- * / `SKILL_AGENTS` / `SKILL_ROOT_SUFFIXES` shape so existing scanners, market
- * targets and tests keep working unchanged.
- *
- * Browser note: this module is imported by browser code (SKILL_AGENTS labels).
- * It is safe through M3 because configs carry no reader keys, commands, or
- * pricing. M4-T1 migrates browser consumers to `public-manifest.generated.ts`
- * and this module becomes server-only.
+ * This module is imported by browser code (SKILL_AGENTS labels via
+ * `local-skills/types.ts`). It derives labels from the public manifest ONLY -
+ * never the full registry - so the browser bundle never receives skill paths,
+ * reader keys, commands, or pricing. The path-bearing `SKILL_AGENT_RULES` lives
+ * in the server-only `skill-rules.server.ts`.
  */
-import type { ToolDefinition } from "../tool-registry/contracts.ts";
-import { listTools } from "../tool-registry/registry.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
 export interface SkillAgentRule {
   /** Catalog tool id (`AI_TOOLS[].id`). */
@@ -34,13 +29,11 @@ export const DEFAULT_MARKERS: readonly string[] = ["SKILL.md", "skill.md"];
 export const DEFAULT_MAX_DEPTH = 3;
 
 /**
- * Canonical UI order of skill agents. The registry stores skill DATA per tool;
- * this list only fixes the DISPLAY order (frozen from the pre-migration
- * `SKILL_AGENT_RULES` array) so the Skills/Market pages do not visually
- * reorder. It must stay in sync with the set of skill-capable tools - the
- * `assertSkillOrderInSync` check enforces that below.
+ * Canonical UI order of skill agents. Shared with `skill-rules.server.ts` so
+ * server (rules) and browser (labels) agree on order. Must stay in sync with the
+ * set of skill-capable tools - enforced by the registry/verify diagnostics.
  */
-const SKILL_AGENT_ORDER: readonly string[] = [
+export const SKILL_AGENT_ORDER: readonly string[] = [
   "claude-code",
   "codex",
   "cursor",
@@ -52,60 +45,28 @@ const SKILL_AGENT_ORDER: readonly string[] = [
   "antigravity",
 ];
 
-/** Tools that have a non-unsupported skills capability. */
-const SKILL_TOOL_BY_ID: ReadonlyMap<string, ToolDefinition> = new Map(
-  listTools()
-    .filter(
-      (def) =>
-        def.capabilities.skills.mode !== "unsupported" &&
-        def.storage?.skills &&
-        def.storage.skills.roots.length > 0,
-    )
-    .map((def) => [def.id, def]),
-);
+const MANIFEST_BY_ID: ReadonlyMap<
+  string,
+  (typeof PUBLIC_TOOL_MANIFEST)["tools"][number]
+> = new Map(PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool]));
 
-function toRule(def: ToolDefinition): SkillAgentRule {
-  const skills = def.storage!.skills!;
-  return {
-    toolId: def.id,
-    roots: skills.roots,
-    ...(skills.envHome ? { envHome: skills.envHome } : {}),
-    ...(skills.markers ? { markers: skills.markers } : {}),
-    ...(skills.maxDepth !== undefined ? { maxDepth: skills.maxDepth } : {}),
-  };
+function isSkillTool(id: string): boolean {
+  const entry = MANIFEST_BY_ID.get(id);
+  return entry?.capabilities.skills !== "unsupported";
 }
 
 /**
- * The skill agents, in the canonical UI order. Each entry maps a tool to its
- * skill roots; `[0]` is the write path (sync/install target).
+ * Skill agent labels (the manifest `nameZh` of every skill tool), in canonical
+ * order.
  */
-export const SKILL_AGENT_RULES: readonly SkillAgentRule[] =
-  SKILL_AGENT_ORDER.map((id) => SKILL_TOOL_BY_ID.get(id))
-    .filter((def): def is ToolDefinition => def !== undefined)
-    .map(toRule);
+export const SKILL_AGENTS: readonly string[] = SKILL_AGENT_ORDER.filter(
+  isSkillTool,
+).map((id) => MANIFEST_BY_ID.get(id)!.nameZh);
 
 /**
- * Skill agent labels (the registry `nameZh` of every skill tool), in order.
+ * Fail-fast module-load validation: derived labels must be unique.
  */
-export const SKILL_AGENTS: readonly string[] = SKILL_AGENT_RULES.map(
-  (rule) => SKILL_TOOL_BY_ID.get(rule.toolId)!.display.nameZh,
-);
-
-/**
- * Fail-fast module-load validation: the order list must exactly cover the
- * skill-capable registry tools (no missing/extra), and labels must be unique.
- */
-function assertSkillConfigValid(): void {
-  const registrySkillIds = new Set([...SKILL_TOOL_BY_ID.keys()].sort());
-  const orderIds = new Set(SKILL_AGENT_ORDER);
-  if (
-    registrySkillIds.size !== orderIds.size ||
-    ![...registrySkillIds].every((id) => orderIds.has(id))
-  ) {
-    throw new Error(
-      `SKILL_AGENT_ORDER 与 registry 的 skill 工具集不一致 (order=${[...orderIds].sort().join(",")}, registry=${[...registrySkillIds].join(",")})`,
-    );
-  }
+function assertLabelsUnique(): void {
   const labels = new Set<string>();
   for (const label of SKILL_AGENTS) {
     if (labels.has(label)) {
@@ -114,15 +75,4 @@ function assertSkillConfigValid(): void {
     labels.add(label);
   }
 }
-assertSkillConfigValid();
-
-/**
- * Label -> `roots[0]` (the write path). Compatibility export: existing callers
- * (and tests) look up `SKILL_ROOT_SUFFIXES["Claude Code"]`.
- */
-export const SKILL_ROOT_SUFFIXES: Record<string, string> = Object.fromEntries(
-  SKILL_AGENT_RULES.map((rule) => [
-    SKILL_TOOL_BY_ID.get(rule.toolId)!.display.nameZh,
-    rule.roots[0],
-  ]),
-);
+assertLabelsUnique();

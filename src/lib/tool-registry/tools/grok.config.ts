@@ -27,7 +27,11 @@ export default defineTool({
     },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
-    sessions: { mode: "unsupported" },
+    sessions: {
+      mode: "resume",
+      reader: "grok-session-v1",
+      command: ["grok", "--resume", "{sessionId}"],
+    },
     market: { mode: "install-target" },
     security: { mode: "unsupported" },
   },

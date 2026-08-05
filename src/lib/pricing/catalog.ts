@@ -1,3 +1,5 @@
+import { matchModel, type ModelMatcher } from "../tool-registry/contracts.ts";
+
 export interface ModelPrice {
   id: string;
   label: string;
@@ -12,21 +14,20 @@ export interface ModelPrice {
     outputUsdPerMillion: number;
     cacheReadUsdPerMillion: number;
   }>;
-  matches: (normalizedModel: string) => boolean;
+  /**
+   * Declarative matcher (data, not a function). Replaces the former `matches()`
+   * closure so pricing rules are auditable and can live in tool configs. Use
+   * `matchModel(price.match, normalizedModel)` to evaluate.
+   */
+  match: ModelMatcher;
 }
 
-function exactOrSnapshot(...names: string[]) {
-  const normalizedNames = names.map((name) =>
-    name.toLowerCase().replaceAll("_", "-").replaceAll(".", "-"),
-  );
-  return (model: string) =>
-    normalizedNames.some(
-      (name) => model === name || model.startsWith(`${name}-20`),
-    );
-}
-
-function includesAll(...parts: string[]) {
-  return (model: string) => parts.every((part) => model.includes(part));
+/** Whether a declarative price rule matches an already-normalized model. */
+export function priceMatches(
+  price: ModelPrice,
+  normalizedModel: string,
+): boolean {
+  return matchModel(price.match, normalizedModel);
 }
 
 export const MODEL_PRICES: ModelPrice[] = [
@@ -38,7 +39,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 30,
     cacheReadUsdPerMillion: 0.5,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.6-sol"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.6-sol"] },
   },
   {
     id: "gpt-5.6-terra",
@@ -48,7 +49,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 15,
     cacheReadUsdPerMillion: 0.25,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.6-terra"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.6-terra"] },
   },
   {
     id: "gpt-5.6-luna",
@@ -58,7 +59,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 6,
     cacheReadUsdPerMillion: 0.1,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.6-luna"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.6-luna"] },
   },
   {
     id: "gpt-5.5",
@@ -68,7 +69,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 37.5,
     cacheReadUsdPerMillion: 0.625,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.5"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.5"] },
   },
   {
     id: "gpt-5.4",
@@ -78,7 +79,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 15,
     cacheReadUsdPerMillion: 0.25,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.4"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.4"] },
   },
   {
     id: "gpt-5.2",
@@ -88,7 +89,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 14,
     cacheReadUsdPerMillion: 0.175,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.2"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.2"] },
   },
   {
     id: "gpt-5.1-codex",
@@ -98,7 +99,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 10,
     cacheReadUsdPerMillion: 0.125,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5.1-codex"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5.1-codex"] },
   },
   {
     id: "gpt-5-codex",
@@ -108,7 +109,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 10,
     cacheReadUsdPerMillion: 0.125,
     cacheWriteUsdPerMillion: null,
-    matches: exactOrSnapshot("gpt-5-codex"),
+    match: { kind: "exactOrSnapshot", names: ["gpt-5-codex"] },
   },
   {
     id: "claude-opus-4",
@@ -118,7 +119,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 75,
     cacheReadUsdPerMillion: 1.5,
     cacheWriteUsdPerMillion: 18.75,
-    matches: includesAll("claude", "opus", "4"),
+    match: { kind: "includesAll", parts: ["claude", "opus", "4"] },
   },
   {
     id: "claude-sonnet-4",
@@ -128,7 +129,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 15,
     cacheReadUsdPerMillion: 0.3,
     cacheWriteUsdPerMillion: 3.75,
-    matches: includesAll("claude", "sonnet", "4"),
+    match: { kind: "includesAll", parts: ["claude", "sonnet", "4"] },
   },
   {
     id: "claude-sonnet-3.7",
@@ -138,7 +139,7 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 15,
     cacheReadUsdPerMillion: 0.3,
     cacheWriteUsdPerMillion: 3.75,
-    matches: includesAll("claude", "3-7", "sonnet"),
+    match: { kind: "includesAll", parts: ["claude", "3-7", "sonnet"] },
   },
   {
     id: "claude-haiku-3.5",
@@ -148,6 +149,6 @@ export const MODEL_PRICES: ModelPrice[] = [
     outputUsdPerMillion: 4,
     cacheReadUsdPerMillion: 0.08,
     cacheWriteUsdPerMillion: 1,
-    matches: includesAll("claude", "3-5", "haiku"),
+    match: { kind: "includesAll", parts: ["claude", "3-5", "haiku"] },
   },
 ];

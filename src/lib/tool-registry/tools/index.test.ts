@@ -63,6 +63,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "github-copilot",
     "roo-code",
   ]);
+  const BASELINE_SESSIONS_RESUME = new Set(["claude-code", "codex", "grok"]);
   for (const def of registry.definitions) {
     const isSkill = BASELINE_SKILL_IDS.includes(def.id);
     assert.equal(
@@ -79,9 +80,13 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         ? "adapter"
         : "unsupported";
     assert.equal(def.capabilities.usage.mode, expectedUsage);
-    // agents/sessions/security are still unsupported for every tool in M4.
+    // agents/security unsupported for every tool; sessions resume for the 3
+    // resume-capable tools (claude-code/codex/grok).
     assert.equal(def.capabilities.agents.mode, "unsupported");
-    assert.equal(def.capabilities.sessions.mode, "unsupported");
+    assert.equal(
+      def.capabilities.sessions.mode,
+      BASELINE_SESSIONS_RESUME.has(def.id) ? "resume" : "unsupported",
+    );
     assert.equal(def.capabilities.security.mode, "unsupported");
   }
 });
