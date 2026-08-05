@@ -19,7 +19,6 @@ import {
 import { toast } from "sonner";
 
 import {
-  Dot,
   EmptyState,
   PageHeader,
   Panel,
@@ -63,7 +62,7 @@ import {
 import { Badge } from "../components/ui/badge";
 import { toUiError } from "../lib/errors";
 import { useI18n } from "../lib/i18n/context";
-import { catalogs, getMessage, type MessageKey } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { cn } from "../lib/utils";
 import {
@@ -79,7 +78,6 @@ import {
   SKILL_AGENTS,
   type LocalSkill,
   type SkillAgent,
-  type SkillHealth,
   type SkillSnapshot,
 } from "../lib/local-skills/types";
 
@@ -109,63 +107,6 @@ export const Route = createFileRoute("/skills")({
 });
 
 const PAGE_SIZE = 25;
-
-const healthMeta: Record<
-  SkillHealth,
-  { labelKey: MessageKey; dot: string; color: string }
-> = {
-  active: {
-    labelKey: "skills.health.active",
-    dot: "bg-ok",
-    color: "text-ok",
-  },
-  low: { labelKey: "skills.health.low", dot: "bg-warn", color: "text-warn" },
-  doze: {
-    labelKey: "skills.health.doze",
-    dot: "bg-orange-500",
-    color: "text-orange-500",
-  },
-  dead: {
-    labelKey: "skills.health.dead",
-    dot: "bg-danger",
-    color: "text-danger",
-  },
-  unknown: {
-    labelKey: "skills.health.unknown",
-    dot: "bg-muted-foreground",
-    color: "text-muted-foreground",
-  },
-};
-
-/**
- * 近 7 天日均调用（仅 Codex 等产 context.skills 的来源可见，否则为 0）。
- */
-function dailyAvg(daily?: { date: string; calls: number }[]): number {
-  if (!daily || daily.length === 0) return 0;
-  // 取序列中最近 7 个日期点求均值
-  const tail = daily.slice(-7);
-  const sum = tail.reduce((acc, point) => acc + point.calls, 0);
-  return Math.round(sum / tail.length);
-}
-
-/**
- * 使用趋势：近 7 天 vs 前 7 天的日均差值方向（↑/↓/−）。
- * 数据不足或无序列时返回 "−"。
- */
-function trendOf(daily?: { date: string; calls: number }[]): "↑" | "↓" | "−" {
-  if (!daily || daily.length < 2) return "−";
-  const recent = daily.slice(-7).reduce((acc, p) => acc + p.calls, 0);
-  const priorSlice = daily.slice(-14, -7);
-  if (priorSlice.length === 0) return recent > 0 ? "↑" : "−";
-  const prior =
-    priorSlice.reduce((acc, p) => acc + p.calls, 0) / priorSlice.length;
-  const recentAvg = recent / Math.min(7, daily.slice(-7).length);
-  if (prior === 0) return recentAvg > 0 ? "↑" : "−";
-  const delta = (recentAvg - prior) / prior;
-  if (delta > 0.1) return "↑";
-  if (delta < -0.1) return "↓";
-  return "−";
-}
 
 // --- Sync state types ---
 
@@ -197,7 +138,6 @@ function SkillsPage() {
   const initial = Route.useLoaderData();
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial);
   const [query, setQuery] = useState("");
-  const [health, setHealth] = useState<"all" | SkillHealth>("all");
   const [agent, setAgent] = useState<"all" | SkillAgent>("all");
   const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
   const [page, setPage] = useState(1);
@@ -259,7 +199,7 @@ function SkillsPage() {
   // Reset to first page when filters or sort change
   useEffect(() => {
     setPage(1);
-  }, [query, health, agent, sortDir]);
+  }, [query, agent, sortDir]);
 
   const run = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true);
@@ -291,7 +231,7 @@ function SkillsPage() {
     [snapshot.skills],
   );
 
-  // Filtered list (search by name OR description + health + agent filters)
+  // Filtered list (search by name OR description + agent filter)
   const filtered = useMemo(
     () =>
       snapshot.skills.filter((skill) => {
@@ -300,12 +240,11 @@ function SkillsPage() {
         const descMatch = skill.description?.toLowerCase().includes(q) ?? false;
         return (
           (nameMatch || descMatch) &&
-          (health === "all" || skill.health === health) &&
           (agent === "all" ||
             skill.installations.some((i) => i.agent === agent))
         );
       }),
-    [agent, health, query, snapshot.skills],
+    [agent, query, snapshot.skills],
   );
 
   // Sorted list
@@ -655,7 +594,7 @@ function SkillsPage() {
       <PageHeader
         title={t("skills.pageHeader")}
         desc={t("skills.pageHeaderDesc", {
-          basis: snapshot.healthBasis,
+          count: format.formatNumber(snapshot.skills.length),
           time: format.formatDateTime(snapshot.generatedAt, false),
         })}
       />
@@ -674,20 +613,6 @@ function SkillsPage() {
             className="h-8 w-full rounded-sm border border-border bg-surface-2 pl-8 text-[13px] outline-none focus:border-primary"
           />
         </div>
-        <select
-          value={health}
-          onChange={(event) =>
-            setHealth(event.target.value as "all" | SkillHealth)
-          }
-          className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
-        >
-          <option value="all">{t("skills.filter.healthAll")}</option>
-          <option value="active">{t("skills.health.active")}</option>
-          <option value="low">{t("skills.health.low")}</option>
-          <option value="doze">{t("skills.health.doze")}</option>
-          <option value="dead">{t("skills.health.dead")}</option>
-          <option value="unknown">{t("skills.health.unknown")}</option>
-        </select>
         <select
           value={agent}
           onChange={(event) =>
@@ -813,15 +738,6 @@ function SkillsPage() {
                   <TableHead className="min-w-[100px]">
                     {t("skills.table.desc")}
                   </TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-right">
-                    {t("skills.table.calls")}
-                  </TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-right">
-                    {t("skills.table.dailyAvg")}
-                  </TableHead>
-                  <TableHead className="w-[60px] whitespace-nowrap text-center">
-                    {t("skills.table.trend")}
-                  </TableHead>
                   <TableHead className="w-[200px]">
                     {t("skills.table.agent")}
                   </TableHead>
@@ -862,7 +778,6 @@ function SkillsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Dot className={healthMeta[skill.health].dot} />
                           <button
                             type="button"
                             onClick={() => setDetailSkillId(skill.id)}
@@ -886,30 +801,6 @@ function SkillsPage() {
                         <span className="line-clamp-2 text-[12px] text-muted-foreground">
                           {skill.description ?? "—"}
                         </span>
-                      </TableCell>
-                      <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
-                        {format.formatNumber(skill.usageCount)}
-                      </TableCell>
-                      <TableCell className="tt-num tabular-nums text-right text-[12px] text-muted-foreground">
-                        {dailyAvg(skill.daily)}
-                      </TableCell>
-                      <TableCell className="tt-num text-center text-[12px]">
-                        {(() => {
-                          const trend = trendOf(skill.daily);
-                          return (
-                            <span
-                              className={
-                                trend === "↑"
-                                  ? "text-ok"
-                                  : trend === "↓"
-                                    ? "text-danger"
-                                    : "text-muted-foreground"
-                              }
-                            >
-                              {trend}
-                            </span>
-                          );
-                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
@@ -1044,7 +935,6 @@ function SkillsPage() {
             <>
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
-                  <Dot className={healthMeta[detailSkill.health].dot} />
                   {detailSkill.name}
                 </SheetTitle>
                 <SheetDescription>
@@ -1068,23 +958,16 @@ function SkillsPage() {
                   ))}
                 </div>
 
-                {/* Health info */}
+                {/* Last used */}
                 <div className="text-[12px] text-muted-foreground">
-                  <p>{detailSkill.healthReason}</p>
-                  <p className="mt-1">
-                    {detailSkill.lastUsedAt == null
-                      ? t("skills.detail.noLastUsed")
-                      : t("skills.detail.lastUsedAt", {
-                          time: format.formatDateTime(
-                            detailSkill.lastUsedAt,
-                            false,
-                          ),
-                        })}
-                    {" · "}
-                    {t("skills.detail.totalCalls", {
-                      count: format.formatNumber(detailSkill.usageCount),
-                    })}
-                  </p>
+                  {detailSkill.lastUsedAt == null
+                    ? t("skills.detail.noLastUsed")
+                    : t("skills.detail.lastUsedAt", {
+                        time: format.formatDateTime(
+                          detailSkill.lastUsedAt,
+                          false,
+                        ),
+                      })}
                 </div>
 
                 {/* Per-agent install status (all 9 agents) */}

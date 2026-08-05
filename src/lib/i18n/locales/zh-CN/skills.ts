@@ -2,18 +2,10 @@ export const skills = {
   metaDesc:
     "扫描并管理本机 AI Agent 的 Skill，支持安全复制、跨 Agent 同步与黑名单。",
   pageHeader: "Skill 管理",
-  pageHeaderDesc: "{basis} 扫描于 {time}",
+  pageHeaderDesc: "共 {count} 个本地 Skill · 扫描于 {time}",
   pollingHint: "页面可见时每 5 秒按变更指纹轮询（非原生 watcher）",
   searchPlaceholder: "搜索名称或描述…",
-  health: {
-    active: "活跃",
-    low: "低频",
-    doze: "休眠",
-    dead: "长期未活动",
-    unknown: "调用未知",
-  },
   filter: {
-    healthAll: "健康度：全部",
     agentAll: "安装位置：全部",
   },
   actions: {
@@ -39,9 +31,6 @@ export const skills = {
     title: "Skill 列表（{count}）",
     name: "名称",
     desc: "描述",
-    calls: "调用",
-    dailyAvg: "日均",
-    trend: "趋势",
     agent: "安装位置",
     lastUsed: "最近使用时间",
     actions: "操作",
@@ -64,7 +53,6 @@ export const skills = {
     sourcePath: "来源路径",
     lastUsedAt: "最近调用：{time}",
     noLastUsed: "暂无可验证记录",
-    totalCalls: "累计识别：{count} 次",
     installStatus: "安装状态",
     installedAt: "安装：{time}",
     modifiedAt: "修改：{time}",

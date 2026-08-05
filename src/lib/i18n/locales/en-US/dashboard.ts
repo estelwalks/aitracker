@@ -65,6 +65,7 @@ export const dashboard = {
     cacheSavings: "Cache savings",
     skills: "Skill Count",
     skillUnit: "skills",
+    skillScanNote: "Included in local scan",
     vsPrevious: "vs previous period",
     hitRate: "Hit rate {rate}",
     costHint: "{period} · estimated from local model catalog",
@@ -172,7 +173,7 @@ export const dashboard = {
       "Scans local logs of 27 AI coding tools and aggregates real usage by day, model and project.",
     capSkillTitle: "Skill Management",
     capSkillDesc:
-      "Manage Skills across Claude Code, Codex, Cursor and more, with health at a glance.",
+      "Manage Skills across Claude Code, Codex, Cursor and more — unified upkeep and cross-tool sync.",
     capSecurityTitle: "Security Scan",
     capSecurityDesc:
       "Runs 11-dimension local static checks on selected SKILL.md files; source code never leaves the machine.",

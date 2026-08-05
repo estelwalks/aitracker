@@ -64,6 +64,7 @@ export const dashboard = {
     cacheSavings: "缓存节省",
     skills: "Skill 数",
     skillUnit: "个",
+    skillScanNote: "已纳入本地扫描",
     vsPrevious: "vs 上一区间",
     hitRate: "命中率 {rate}",
     costHint: "{period} · 按本地模型目录估算",
@@ -166,7 +167,7 @@ export const dashboard = {
       "统一扫描 27 款 AI 编码工具的本机日志，按日/模型/项目维度汇总真实消耗。",
     capSkillTitle: "Skill 管理",
     capSkillDesc:
-      "集中管理 Claude Code、Codex、Cursor 等工具的 Skills，健康度一目了然。",
+      "集中管理 Claude Code、Codex、Cursor 等工具的 Skills，统一维护、跨工具同步。",
     capSecurityTitle: "安全检测",
     capSecurityDesc: "对选择的 SKILL.md 执行 11 维本地静态检测，不上传源码。",
     toolsTitle: "受支持的 AI 工具（{count} 款）",
