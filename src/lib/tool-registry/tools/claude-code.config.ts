@@ -1,21 +1,27 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Claude Code tool definition. M2: detection/display only - all capabilities
- * are `unsupported` until their real storage/log formats are verified and
- * migrated (M3 skills, M4 usage, M5 sessions/pricing).
+ * Claude Code skill agent. Skill roots below; `roots[0]` is the write/sync
+ * target (market install destination).
  */
 export default defineTool({
   id: "claude-code",
   configVersion: 1,
   display: { name: "Claude Code", nameZh: "Claude Code" },
   detection: { roots: [".claude", "Library/Application Support/Claude"] },
+  storage: {
+    skills: {
+      roots: [".claude/skills"],
+      markers: ["SKILL.md", "skill.md"],
+      maxDepth: 3,
+    },
+  },
   capabilities: {
     usage: { mode: "unsupported" },
-    skills: { mode: "unsupported" },
+    skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },
-    market: { mode: "unsupported" },
+    market: { mode: "install-target" },
     security: { mode: "unsupported" },
   },
 });

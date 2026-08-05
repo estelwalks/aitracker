@@ -39,14 +39,33 @@ test("each config id equals its filename stem", () => {
   assert.deepEqual([...ids].sort(), BASELINE_TOOLS.map((t) => t.id).sort());
 });
 
-test("M2 configs are detection-only (all capabilities unsupported)", () => {
+test("only the 9 skill agents carry skills + market; all other capabilities unsupported", () => {
   const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const BASELINE_SKILL_IDS = [
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli",
+    "opencode",
+    "grok",
+    "hermes",
+    "openclaw",
+    "antigravity",
+  ];
   for (const def of registry.definitions) {
+    const isSkill = BASELINE_SKILL_IDS.includes(def.id);
+    assert.equal(
+      def.capabilities.skills.mode,
+      isSkill ? "read-write" : "unsupported",
+    );
+    assert.equal(
+      def.capabilities.market.mode,
+      isSkill ? "install-target" : "unsupported",
+    );
+    // usage/agents/sessions/security are still unsupported for every tool in M3.
     assert.equal(def.capabilities.usage.mode, "unsupported");
-    assert.equal(def.capabilities.skills.mode, "unsupported");
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(def.capabilities.sessions.mode, "unsupported");
-    assert.equal(def.capabilities.market.mode, "unsupported");
     assert.equal(def.capabilities.security.mode, "unsupported");
   }
 });
