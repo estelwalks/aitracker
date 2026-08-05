@@ -201,6 +201,100 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
   }
 });
 
+test("cache embeds registryFingerprint and invalidates on mismatch", async () => {
+  const root = join(tmpdir(), `trusttools-fp-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const cacheFile = join(cacheDirectory, "local-usage-index-v10.json");
+  const sessionDir = join(homeDirectory, ".codex", "sessions");
+  await mkdir(sessionDir, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDir, "rollout-fp.jsonl"),
+    [
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        type: "session_meta",
+        payload: { type: "session_meta", id: "fp-session" },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        type: "turn_context",
+        payload: { type: "turn_context", model: "gpt-5-codex", cwd: "/demo" },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:02.000Z",
+        type: "token_count",
+        payload: {
+          type: "token_count",
+          timestamp: "2026-07-27T10:00:02.000Z",
+          info: {
+            total_token_usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_tokens: 150,
+            },
+            last_token_usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_tokens: 150,
+            },
+          },
+        },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(first, "codex").filesParsed, 1);
+
+    const index = JSON.parse(await readFile(cacheFile, "utf8")) as {
+      version: number;
+      registryFingerprint: string;
+      files: unknown[];
+    };
+    assert.equal(index.version, 12);
+    assert.ok(
+      typeof index.registryFingerprint === "string" &&
+        index.registryFingerprint.length > 0,
+    );
+
+    // Re-scan: cache hits (file reused, not reparsed).
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "codex").filesReused, 1);
+
+    // Corrupt the fingerprint -> cache must be invalidated and rebuilt.
+    await writeFile(
+      cacheFile,
+      JSON.stringify({ ...index, registryFingerprint: "stale-fingerprint" }),
+    );
+    const third = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(third, "codex").filesParsed, 1);
+    assert.equal(sourceSummary(third, "codex").filesReused, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("WorkBuddy reads historical rawUsage with correct cache and reasoning token math", async () => {
   const root = join(
     tmpdir(),

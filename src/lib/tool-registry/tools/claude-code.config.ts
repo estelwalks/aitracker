@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Claude Code skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination).
+ * Claude Code. Usage: native reader "claude-rollout-v1". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "claude-code",
@@ -17,7 +16,13 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "native",
+      reader: "claude-rollout-v1",
+      paths: [
+        { root: ".claude/projects", glob: "**/*.jsonl", format: "jsonl" },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

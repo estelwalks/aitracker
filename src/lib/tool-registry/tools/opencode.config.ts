@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * OpenCode skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination).
+ * OpenCode. Usage: adapter reader "generic". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "opencode",
@@ -17,7 +16,18 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "adapter",
+      reader: "generic",
+      paths: [
+        {
+          root: ".local/share/opencode/storage/message",
+          glob: "**/*.json",
+          format: "json",
+        },
+        { root: ".opencode", glob: "**/*.jsonl", format: "jsonl" },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

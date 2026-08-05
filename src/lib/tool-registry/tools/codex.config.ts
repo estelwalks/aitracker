@@ -1,8 +1,7 @@
 import { defineTool } from "../define-tool.ts";
 
 /**
- * Codex CLI skill agent. Skill roots below; `roots[0]` is the write/sync
- * target (market install destination). When CODEX_HOME is a non-empty value, it replaces the tool home directory (keeping the last path segment).
+ * Codex CLI. Usage: native reader "codex-rollout-v1". Skill agent (read-write, market install target).
  */
 export default defineTool({
   id: "codex",
@@ -18,7 +17,22 @@ export default defineTool({
     },
   },
   capabilities: {
-    usage: { mode: "unsupported" },
+    usage: {
+      mode: "native",
+      reader: "codex-rollout-v1",
+      paths: [
+        {
+          root: ".codex/sessions",
+          glob: "**/rollout-*.jsonl",
+          format: "jsonl",
+        },
+        {
+          root: ".codex/archived_sessions",
+          glob: "**/rollout-*.jsonl",
+          format: "jsonl",
+        },
+      ],
+    },
     skills: { mode: "read-write" },
     agents: { mode: "unsupported" },
     sessions: { mode: "unsupported" },

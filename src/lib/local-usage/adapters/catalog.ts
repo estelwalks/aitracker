@@ -1,5 +1,6 @@
 import type { UsageAdapterContract, UsageFieldMapping } from "./types.ts";
 import { USAGE_ADAPTER_PRESETS } from "./presets.ts";
+import { listTools } from "../../tool-registry/registry.ts";
 
 export const GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
 
@@ -103,68 +104,38 @@ function builtin(
   };
 }
 
-export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
-  builtin("claude-code", [
-    { root: ".claude/projects", glob: "**/*.jsonl", format: "jsonl" },
-  ]),
-  builtin("codex", [
-    { root: ".codex/sessions", glob: "**/rollout-*.jsonl", format: "jsonl" },
-    {
-      root: ".codex/archived_sessions",
-      glob: "**/rollout-*.jsonl",
-      format: "jsonl",
-    },
-  ]),
-  builtin("cursor", [
-    {
-      root: "Library/Application Support/Cursor/User/globalStorage",
-      glob: "**/*usage*.json",
-      format: "json",
-    },
-    {
-      root: "AppData/Roaming/Cursor/User/globalStorage",
-      glob: "**/*usage*.json",
-      format: "json",
-    },
-    { root: ".cursor", glob: "**/*usage*.jsonl", format: "jsonl" },
-  ]),
-  builtin("gemini-cli", [
-    { root: ".gemini/tmp", glob: "**/chats/*.json", format: "json" },
-    { root: ".gemini", glob: "**/*usage*.jsonl", format: "jsonl" },
-  ]),
-  builtin("kimi-code", [
-    { root: ".kimi/sessions", glob: "**/*.jsonl", format: "jsonl" },
-    { root: ".kimi/logs", glob: "**/*.jsonl", format: "jsonl" },
-  ]),
-  builtin("opencode", [
-    {
-      root: ".local/share/opencode/storage/message",
-      glob: "**/*.json",
-      format: "json",
-    },
-    { root: ".opencode", glob: "**/*.jsonl", format: "jsonl" },
-  ]),
-  builtin("grok", [
-    { root: ".grok/sessions", glob: "**/*.jsonl", format: "jsonl" },
-    { root: ".grok/logs", glob: "**/*.jsonl", format: "jsonl" },
-  ]),
-  builtin("github-copilot", [
-    {
-      root: ".config/github-copilot",
-      glob: "**/*usage*.jsonl",
-      format: "jsonl",
-    },
-    {
-      root: "Library/Application Support/github-copilot",
-      glob: "**/*usage*.json",
-      format: "json",
-    },
-    {
-      root: "AppData/Roaming/github-copilot",
-      glob: "**/*usage*.json",
-      format: "json",
-    },
-  ]),
+/**
+ * Built-in usage adapters, derived from the tool-registry: one entry per tool
+ * with a non-unsupported `usage` capability, plus two LEGACY adapter sources
+ * (`cline`, `aipy`) that are real tools but not in the 27-tool PRD catalog and
+ * therefore have no `*.config.ts`. The scanner still dispatches native readers
+ * (claude-code/codex/workbuddy) via hardcoded calls; this catalog feeds the
+ * generic adapter pipeline and the source-id universe.
+ */
+const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
+  .filter(
+    (def) =>
+      def.capabilities.usage.mode !== "unsupported" &&
+      def.capabilities.usage.paths &&
+      def.capabilities.usage.paths.length > 0,
+  )
+  .map((def) => {
+    const usage = def.capabilities.usage;
+    const entry: UsageAdapterContract = {
+      source: def.id,
+      paths: [...usage.paths!],
+      mapping:
+        (usage.mapping as UsageFieldMapping | undefined) ?? COMMON_MAPPING,
+      maxFileSizeBytes:
+        usage.maxFileSizeBytes ?? GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES,
+      kind: "builtin",
+    };
+    if (usage.query) entry.query = usage.query;
+    return entry;
+  });
+
+// cline / aipy are usage sources but not PRD catalog tools -> legacy entries.
+const LEGACY_USAGE_ADAPTERS: UsageAdapterContract[] = [
   builtin("cline", [
     {
       root: "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
@@ -182,23 +153,6 @@ export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
       format: "json",
     },
   ]),
-  builtin("roo-code", [
-    {
-      root: "Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-    {
-      root: ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-    {
-      root: "AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-  ]),
   {
     source: "aipy",
     paths: [...USAGE_ADAPTER_PRESETS.aipy.paths],
@@ -207,11 +161,11 @@ export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
     maxFileSizeBytes: 512 * 1024 * 1024,
     kind: "builtin",
   },
-  builtin(
-    "workbuddy",
-    [...USAGE_ADAPTER_PRESETS.workbuddy.paths],
-    USAGE_ADAPTER_PRESETS.workbuddy.mapping,
-  ),
+];
+
+export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
+  ...REGISTRY_USAGE_ADAPTERS,
+  ...LEGACY_USAGE_ADAPTERS,
 ];
 
 export const GENERIC_BUILTIN_USAGE_ADAPTERS = BUILTIN_USAGE_ADAPTERS.filter(
