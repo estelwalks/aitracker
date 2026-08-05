@@ -54,8 +54,6 @@ import {
   createEmptyUsageSnapshot,
   filterDailyUsage,
   filterUsageEvents,
-  formatDateTime,
-  formatTokens,
   previousPeriodTotal,
   resolveUsageRange,
   shareOf,
@@ -67,6 +65,7 @@ import type { LocalUsageSnapshot } from "../lib/local-usage";
 import {
   aggregatePricedUsage,
   applyPricingSnapshot,
+  convertUsd,
   estimateEventCost,
   estimateUsageCost,
   formatMoney,
@@ -81,9 +80,16 @@ import {
   downloadExport,
   type ExportRow,
 } from "../lib/export";
+import { useI18n } from "../lib/i18n/context";
+import type { BoundFormatters } from "../lib/i18n/format";
+import { resolveLocaleFromSearch, type Locale } from "../lib/i18n/locale";
+import { catalogs, getMessage } from "../lib/i18n/messages";
+
+type TFunction = ReturnType<typeof useI18n>["t"];
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
+  loader: async ({ location }) => {
+    const locale = resolveLocaleFromSearch(location.search);
     const usageResult = await Promise.resolve(getLocalUsageSnapshot()).then(
       (value) => ({ status: "fulfilled" as const, value }),
       (reason) => ({ status: "rejected" as const, reason }),
@@ -104,43 +110,36 @@ export const Route = createFileRoute("/")({
         usageResult.status === "rejected"
           ? usageResult.reason instanceof Error
             ? usageResult.reason.message
-            : "本地数据读取失败"
+            : getMessage(
+                catalogs[locale],
+                "dashboard.onboarding.localReadFailed",
+              )
           : null,
       skills: skillsResult.status === "fulfilled" ? skillsResult.value : null,
       pricing:
         pricingResult.status === "fulfilled" ? pricingResult.value : null,
+      locale,
     };
   },
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "首页总览 · TrustTools V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.dashboard",
+        ),
+      },
       {
         name: "description",
-        content: "从本机受支持 AI 客户端日志生成的真实 Token 使用概览。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "dashboard.meta.description",
+        ),
       },
     ],
   }),
   component: Dashboard,
 });
-
-const periodOptions: { value: UsagePeriod; label: string }[] = [
-  { value: "today", label: "今日" },
-  { value: "7d", label: "近 7 天" },
-  { value: "30d", label: "近 30 天" },
-  { value: "all", label: "全部" },
-  { value: "custom", label: "自定义" },
-];
-
-const periodLabels: Record<UsagePeriod, string> = {
-  today: "今日",
-  week: "本周",
-  "7d": "近 7 天",
-  "30d": "近 30 天",
-  month: "本月",
-  year: "本年",
-  all: "全部",
-  custom: "自定义区间",
-};
 
 function daysAgo(days: number): string {
   const date = new Date();
@@ -151,11 +150,33 @@ function daysAgo(days: number): string {
 function Dashboard() {
   const { snapshot, error, skills, pricing } = Route.useLoaderData();
   const router = useRouter();
+  const { locale, t, format, displayCurrency, rates } = useI18n();
   applyPricingSnapshot(pricing);
   const [period, setPeriod] = useState<UsagePeriod>("today");
   const [from, setFrom] = useState(daysAgo(14));
   const [to, setTo] = useState(daysAgo(0));
   const [trendMode, setTrendMode] = useState<TrendChartMode>("area");
+
+  const periodOptions: { value: UsagePeriod; label: string }[] = [
+    { value: "today", label: t("dashboard.period.today") },
+    { value: "7d", label: t("dashboard.period.lastNDays", { count: 7 }) },
+    { value: "30d", label: t("dashboard.period.lastNDays", { count: 30 }) },
+    { value: "all", label: t("dashboard.period.all") },
+    { value: "custom", label: t("dashboard.period.custom") },
+  ];
+  const periodLabels = useMemo<Record<UsagePeriod, string>>(
+    () => ({
+      today: t("dashboard.period.today"),
+      week: t("dashboard.period.week"),
+      "7d": t("dashboard.period.lastNDays", { count: 7 }),
+      "30d": t("dashboard.period.lastNDays", { count: 30 }),
+      month: t("dashboard.period.month"),
+      year: t("dashboard.period.year"),
+      all: t("dashboard.period.all"),
+      custom: t("dashboard.period.customRange"),
+    }),
+    [t],
+  );
 
   const selectedDaily = useMemo(
     () => filterDailyUsage(snapshot.daily, period, from, to),
@@ -176,11 +197,11 @@ function Dashboard() {
   const skillHealth = buildSkillHealth(skills);
 
   // KPI Row 1 — period-driven headline metrics.
-  const intervalCostCny = formatMoney(selectedCost.knownUsd, "CNY");
+  const intervalCostCny = format.formatUsd(selectedCost.knownUsd);
   const intervalCostHint =
     selectedCost.unknownEvents > 0
-      ? "部分模型价格未知，金额为已知下限"
-      : `${periodLabels[period]} · 按本地模型目录估算`;
+      ? t("dashboard.kpi.costUnknownHint")
+      : t("dashboard.kpi.costHint", { period: periodLabels[period] });
   const tokenMoM = useMemo(
     () =>
       computeMoM(
@@ -195,7 +216,11 @@ function Dashboard() {
       ),
     [selectedTotals.totalTokens, snapshot.details, period, from, to],
   );
-  const cacheSavingsCny = formatMoney(selectedCost.cacheSavingsUsd, "CNY");
+  const cacheSavingsCny = formatMoney(
+    locale,
+    selectedCost.cacheSavingsUsd,
+    "CNY",
+  );
   const cacheHitRate = cacheRate(selectedTotals);
 
   // KPI Row 2 — token composition breakdown for the selected range.
@@ -296,13 +321,28 @@ function Dashboard() {
         selectedTotals,
         selectedCost,
         period,
+        periodLabels[period],
         from,
         to,
+        format,
+        locale,
       ),
-    [selectedEvents, selectedTotals, selectedCost, period, from, to],
+    [
+      selectedEvents,
+      selectedTotals,
+      selectedCost,
+      period,
+      periodLabels,
+      from,
+      to,
+      format,
+      locale,
+    ],
   );
 
   const handleExport = (format: "csv" | "json") => {
+    const rate = rates?.rates[displayCurrency] ?? 1;
+    const rateDate = rates?.date ?? "";
     const rows: ExportRow[] = selectedEvents.map((event) => {
       const cost = estimateEventCost(event);
       return {
@@ -315,7 +355,15 @@ function Dashboard() {
         cachedInputTokens: event.cachedInputTokens,
         cacheCreationInputTokens: event.cacheCreationInputTokens,
         reasoningOutputTokens: event.reasoningOutputTokens,
-        ...(cost.unknownEvents === 0 ? { cost: cost.knownUsd } : {}),
+        ...(cost.unknownEvents === 0
+          ? {
+              cost: cost.knownUsd,
+              costDisplay: convertUsd(cost.knownUsd, displayCurrency, rate),
+              currency: displayCurrency,
+              rate,
+              rateDate,
+            }
+          : {}),
       };
     });
     const sourceLabels: Record<string, string> = {};
@@ -326,7 +374,22 @@ function Dashboard() {
     }
     const content =
       format === "csv"
-        ? toExportCsv(rows, sourceLabels)
+        ? toExportCsv(rows, sourceLabels, [
+            t("export.column.date"),
+            t("export.column.source"),
+            t("export.column.model"),
+            t("export.column.project"),
+            t("export.column.input"),
+            t("export.column.output"),
+            t("export.column.cacheRead"),
+            t("export.column.cacheWrite"),
+            t("export.column.reasoning"),
+            t("export.column.cost"),
+            "costDisplay",
+            "currency",
+            "rate",
+            "rateDate",
+          ])
         : toExportJson(rows, sourceLabels);
     downloadExport(content, format, Date.now());
     setShowExportMenu(false);
@@ -352,21 +415,24 @@ function Dashboard() {
     "cacheWrite",
   ] as const;
   const tokenTypeLabelMap: Record<string, string> = {
-    input: "输入 Token",
-    output: "输出 Token",
-    cacheRead: "缓存读 Token",
-    cacheWrite: "缓存写 Token",
+    input: t("dashboard.kpi.tokenInput"),
+    output: t("dashboard.kpi.tokenOutput"),
+    cacheRead: t("dashboard.kpi.tokenCacheRead"),
+    cacheWrite: t("dashboard.kpi.tokenCacheWrite"),
   };
 
   // -- Helpers for MoM display in KPI cards --
   const renderMomIndicator = (mom: number | null) => {
     if (mom == null || !Number.isFinite(mom)) {
-      return <span className="text-muted-foreground">环比 −−</span>;
+      return (
+        <span className="text-muted-foreground">{t("dashboard.mom.dash")}</span>
+      );
     }
     const up = mom > 0;
-    const absPct = `${Math.abs(mom).toFixed(1)}%`;
     if (mom === 0) {
-      return <span className="text-muted-foreground">环比 0%</span>;
+      return (
+        <span className="text-muted-foreground">{t("dashboard.mom.zero")}</span>
+      );
     }
     return (
       <span
@@ -377,7 +443,7 @@ function Dashboard() {
         ) : (
           <ArrowDownRight className="size-3.5" />
         )}
-        <span>{absPct}</span>
+        <span>{format.formatPercent(Math.abs(mom))}</span>
       </span>
     );
   };
@@ -388,10 +454,14 @@ function Dashboard() {
       <div className="sticky top-0 z-30 -mx-3 mb-3 border-b border-border bg-background/85 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 2xl:-mx-8 2xl:px-8">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 items-baseline gap-2">
-            <h1 className="text-base font-semibold tracking-tight">首页总览</h1>
+            <h1 className="text-base font-semibold tracking-tight">
+              {t("dashboard.title")}
+            </h1>
             <span className="truncate text-[12px] text-muted-foreground">
-              统计区间：{periodLabels[period]} · 最近同步{" "}
-              {formatDateTime(lastSync)}
+              {t("dashboard.header.range", {
+                period: periodLabels[period],
+                time: format.formatDateTime(lastSync),
+              })}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -408,21 +478,23 @@ function Dashboard() {
                   max={to}
                   onChange={(event) => setFrom(event.target.value)}
                   className="rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs outline-none"
-                  aria-label="开始日期"
+                  aria-label={t("dashboard.header.customFrom")}
                 />
-                <span className="text-xs text-muted-foreground">至</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("dashboard.header.separator")}
+                </span>
                 <input
                   type="date"
                   value={to}
                   min={from}
                   onChange={(event) => setTo(event.target.value)}
                   className="rounded-sm border border-border bg-surface-2 px-2 py-1 text-xs outline-none"
-                  aria-label="结束日期"
+                  aria-label={t("dashboard.header.customTo")}
                 />
               </>
             )}
             <span className="text-[10px] text-muted-foreground">
-              {periodGrainLabel(period)}
+              {periodGrainLabel(period, t)}
             </span>
 
             {/* Export Poster */}
@@ -431,10 +503,10 @@ function Dashboard() {
               onClick={() => setShowPoster(true)}
               disabled={selectedEvents.length === 0}
               className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-              title="生成 Token 海报"
+              title={t("dashboard.poster.generate")}
             >
               <Image className="size-3.5" />
-              导出海报
+              {t("dashboard.export.poster")}
             </button>
 
             {/* Export Data */}
@@ -444,10 +516,10 @@ function Dashboard() {
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 disabled={selectedEvents.length === 0}
                 className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-                title="导出 CSV / JSON"
+                title={t("dashboard.export.dataTitle")}
               >
                 <Download className="size-3.5" />
-                导出数据
+                {t("dashboard.export.data")}
               </button>
               {showExportMenu && (
                 <>
@@ -481,17 +553,19 @@ function Dashboard() {
               onClick={() => void handleRefresh()}
               disabled={refreshing}
               className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2.5 py-1 text-xs transition-colors hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-              title="立即重新扫描本机日志"
+              title={t("dashboard.refresh.title")}
             >
               <RefreshCw
                 className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
-              {refreshing ? "同步中…" : "立即刷新"}
+              {refreshing
+                ? t("dashboard.refresh.syncing")
+                : t("dashboard.refresh.now")}
             </button>
 
             {/* Status badge */}
             <StatusBadge tone="ok">
-              <Dot className="size-1 bg-ok" /> 已同步
+              <Dot className="size-1 bg-ok" /> {t("dashboard.header.synced")}
             </StatusBadge>
           </div>
         </div>
@@ -508,7 +582,7 @@ function Dashboard() {
               {/* Card: 区间费用 */}
               <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
                 <div className="tt-label whitespace-nowrap font-mono uppercase">
-                  区间费用
+                  {t("dashboard.kpi.cost")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
                   {intervalCostCny}
@@ -521,30 +595,31 @@ function Dashboard() {
               {/* Card: Token 总量 */}
               <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
                 <div className="tt-label whitespace-nowrap font-mono uppercase">
-                  Token 总量
+                  {t("dashboard.kpi.tokens")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                  {formatTokens(selectedTotals.totalTokens)}
+                  {format.formatTokens(selectedTotals.totalTokens)}
                 </div>
                 <div className="mt-1.5 flex items-center gap-1 text-xs">
                   {renderMomIndicator(tokenMoM)}
-                  <span className="text-muted-foreground">vs 上一区间</span>
+                  <span className="text-muted-foreground">
+                    {t("dashboard.kpi.vsPrevious")}
+                  </span>
                 </div>
               </div>
 
               {/* Card: 缓存节省 */}
               <div className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3">
                 <div className="tt-label whitespace-nowrap font-mono uppercase">
-                  缓存节省
+                  {t("dashboard.kpi.cacheSavings")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl text-ok">
                   {cacheSavingsCny}
                 </div>
                 <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                  命中率{" "}
-                  <span className="tt-num text-foreground">
-                    {cacheHitRate.toFixed(0)}%
-                  </span>
+                  {t("dashboard.kpi.hitRate", {
+                    rate: format.formatPercent(Math.round(cacheHitRate)),
+                  })}
                 </div>
               </div>
 
@@ -554,11 +629,14 @@ function Dashboard() {
                 className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
               >
                 <div className="tt-label whitespace-nowrap font-mono uppercase">
-                  Skill 数
+                  {t("dashboard.kpi.skills")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
                   {skillHealth.total}
-                  <span className="text-base text-muted-foreground"> 个</span>
+                  <span className="text-base text-muted-foreground">
+                    {" "}
+                    {t("dashboard.kpi.skillUnit")}
+                  </span>
                 </div>
                 <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs">
                   {skillHealth.rows
@@ -596,14 +674,16 @@ function Dashboard() {
                     {tokenTypeLabelMap[row.key] ?? row.key}
                   </div>
                   <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                    {formatTokens(row.totalTokens)}
+                    {format.formatTokens(row.totalTokens)}
                   </div>
                   <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                    {shareOf(
-                      row.totalTokens,
-                      selectedTotals.totalTokens,
-                    ).toFixed(0)}
-                    % 占比
+                    {t("dashboard.kpi.tokenShare", {
+                      share: format.formatPercent(
+                        Math.round(
+                          shareOf(row.totalTokens, selectedTotals.totalTokens),
+                        ),
+                      ),
+                    })}
                   </div>
                 </div>
               ))}
@@ -623,7 +703,9 @@ function Dashboard() {
                       <button
                         key={i}
                         type="button"
-                        aria-label={`第 ${i + 1} 组指标`}
+                        aria-label={t("dashboard.metrics.page", {
+                          index: i + 1,
+                        })}
                         onClick={() => goMetricPage(i)}
                         className={`h-[6px] transition-all ${
                           i === metricNav.page
@@ -642,12 +724,12 @@ function Dashboard() {
                       [
                         {
                           dir: -1,
-                          label: "上一组指标",
+                          label: t("dashboard.metrics.prev"),
                           Icon: ChevronLeft,
                         },
                         {
                           dir: 1,
-                          label: "下一组指标",
+                          label: t("dashboard.metrics.next"),
                           Icon: ChevronRight,
                         },
                       ] as const
@@ -678,14 +760,14 @@ function Dashboard() {
 
         <div key="trend" className="dashboard-widget">
           <Panel
-            title="Token 消耗趋势 · 按模型（单位：K Tokens）"
+            title={t("dashboard.trend.title")}
             action={
               <Segmented
                 value={trendMode}
                 onChange={(v) => setTrendMode(v as TrendChartMode)}
                 options={[
-                  { value: "area", label: "堆叠面积" },
-                  { value: "line", label: "多序列折线" },
+                  { value: "area", label: t("dashboard.trend.area") },
+                  { value: "line", label: t("dashboard.trend.line") },
                 ]}
               />
             }
@@ -693,21 +775,27 @@ function Dashboard() {
             {/* Summary stats grid */}
             <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4">
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                <div className="tt-label font-mono uppercase">区间合计</div>
+                <div className="tt-label font-mono uppercase">
+                  {t("dashboard.trend.total")}
+                </div>
                 <div className="tt-num mt-0.5 text-sm">
-                  {formatTokens(trendStats.sum)}
+                  {format.formatTokens(trendStats.sum)}
                 </div>
               </div>
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                <div className="tt-label font-mono uppercase">均值</div>
+                <div className="tt-label font-mono uppercase">
+                  {t("dashboard.trend.average")}
+                </div>
                 <div className="tt-num mt-0.5 text-sm">
-                  {formatTokens(trendStats.avg)}
+                  {format.formatTokens(trendStats.avg)}
                 </div>
               </div>
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                <div className="tt-label font-mono uppercase">峰值</div>
+                <div className="tt-label font-mono uppercase">
+                  {t("dashboard.trend.peak")}
+                </div>
                 <div className="tt-num mt-0.5 text-sm">
-                  {formatTokens(trendStats.peak)}
+                  {format.formatTokens(trendStats.peak)}
                 </div>
                 {trendStats.peakLabel && (
                   <div className="text-[10px] text-muted-foreground">
@@ -716,7 +804,9 @@ function Dashboard() {
                 )}
               </div>
               <div className="tt-grid-bg bg-surface-2/40 px-3 py-2">
-                <div className="tt-label font-mono uppercase">环比</div>
+                <div className="tt-label font-mono uppercase">
+                  {t("dashboard.trend.mom")}
+                </div>
                 <div
                   className={`tt-num mt-0.5 text-sm ${
                     tokenMoM != null
@@ -729,7 +819,9 @@ function Dashboard() {
                   }`}
                 >
                   {tokenMoM != null && Number.isFinite(tokenMoM)
-                    ? `${tokenMoM > 0 ? "+" : ""}${tokenMoM.toFixed(1)}%`
+                    ? format.formatPercent(tokenMoM, {
+                        signDisplay: "exceptZero",
+                      })
                     : "−−"}
                 </div>
               </div>
@@ -752,7 +844,7 @@ function Dashboard() {
         </div>
 
         <div key="models" className="dashboard-widget">
-          <Panel title="模型分布">
+          <Panel title={t("dashboard.model.title")}>
             <ModelDistribution events={selectedEvents} />
           </Panel>
         </div>
@@ -760,10 +852,10 @@ function Dashboard() {
         <div key="heatmap" className="dashboard-widget">
           <Panel
             className="dashboard-heatmap"
-            title="7 × 24 消耗热力图"
+            title={t("dashboard.heatmap.title")}
             action={
               <span className="text-[10px] text-muted-foreground">
-                按周导航 · 本机时区
+                {t("dashboard.heatmap.navHint")}
               </span>
             }
           >
@@ -774,7 +866,7 @@ function Dashboard() {
         <div key="activity" className="dashboard-widget">
           <Panel
             className="dashboard-activity"
-            title="消耗明细"
+            title={t("dashboard.detail.title")}
             bodyClassName="p-0"
           >
             <UsageDetailTable events={selectedEvents} />
@@ -824,50 +916,23 @@ function KpiCard({
 }
 
 /**
- * Render a 环比 (period-over-period) delta badge. `value` is the percentage
- * returned by `computeMoM` (null when there is no previous window, e.g. "全部"
- * or no history) — null renders "−−". For consumption metrics (tokens/cost)
- * a decrease is good, so `goodWhenDown` colors it green; a rise is red.
- */
-function MoMBadge({
-  value,
-  goodWhenDown = false,
-}: {
-  value: number | null;
-  goodWhenDown?: boolean;
-}) {
-  if (value == null || !Number.isFinite(value)) {
-    return <span className="tt-num text-muted-foreground">环比 −−</span>;
-  }
-  const up = value > 0;
-  const good = goodWhenDown ? !up : up;
-  const arrow = up ? "▲" : value < 0 ? "▼" : "·";
-  return (
-    <span className={`tt-num ${good ? "text-ok" : "text-danger"}`}>
-      环比 {arrow} {Math.abs(value).toFixed(1)}%
-    </span>
-  );
-}
-
-/**
  * Map the selected period to the aggregation grain the dashboard uses and a
  * short label for the selector area. "今日" buckets hourly, the rolling
  * windows daily, "全部" monthly, and "自定义" defers to the picked span.
  */
-function periodGrainLabel(period: UsagePeriod): string {
+function periodGrainLabel(period: UsagePeriod, t: TFunction): string {
   switch (period) {
     case "today":
     case "week":
-      return "粒度 · 小时";
+      return t("dashboard.grain.hour");
     case "7d":
     case "30d":
     case "month":
-      return "粒度 · 日";
+    case "custom":
+      return t("dashboard.grain.day");
     case "year":
     case "all":
-      return "粒度 · 月";
-    case "custom":
-      return "粒度 · 日";
+      return t("dashboard.grain.month");
   }
 }
 
@@ -913,17 +978,20 @@ function OnboardingDashboard({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
+  const { t, format } = useI18n();
   if (error) {
     return (
       <>
         <PageHeader
-          title="首页总览"
-          desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
+          title={t("dashboard.title")}
+          desc={t("dashboard.onboarding.generatedAt", {
+            time: format.formatDateTime(snapshot.generatedAt),
+          })}
         />
         <EmptyState
           icon={<Database className="size-8" />}
-          title="数据读取失败"
-          desc={`真实数据读取失败：${error}`}
+          title={t("dashboard.onboarding.dataLoadFailed")}
+          desc={t("dashboard.onboarding.dataLoadFailedDesc", { error })}
           actions={
             <TTButton
               variant="primary"
@@ -933,7 +1001,7 @@ function OnboardingDashboard({
               <RefreshCw
                 className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
-              重新加载
+              {t("dashboard.onboarding.reload")}
             </TTButton>
           }
         />
@@ -951,28 +1019,32 @@ function OnboardingDashboard({
     return (
       <>
         <PageHeader
-          title="首页总览"
-          desc="把散落在各 AI 工具的 token、skill、会话，统一收回你手里。"
+          title={t("dashboard.title")}
+          desc={t("dashboard.onboarding.welcomeDesc")}
         />
         <div className="grid gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <CapabilityCard
               icon={<Activity className="size-6" />}
-              title="Token 追踪"
-              desc="统一扫描 27 款 AI 编码工具的本机日志，按日/模型/项目维度汇总真实消耗。"
+              title={t("dashboard.onboarding.capTokenTitle")}
+              desc={t("dashboard.onboarding.capTokenDesc")}
             />
             <CapabilityCard
               icon={<Sparkles className="size-6" />}
-              title="Skill 管理"
-              desc="集中管理 Claude Code、Codex、Cursor 等工具的 Skills，健康度一目了然。"
+              title={t("dashboard.onboarding.capSkillTitle")}
+              desc={t("dashboard.onboarding.capSkillDesc")}
             />
             <CapabilityCard
               icon={<ShieldCheck className="size-6" />}
-              title="安全检测"
-              desc="对选择的 SKILL.md 执行 11 维本地静态检测，不上传源码。"
+              title={t("dashboard.onboarding.capSecurityTitle")}
+              desc={t("dashboard.onboarding.capSecurityDesc")}
             />
           </div>
-          <Panel title="受支持的 AI 工具（27 款）">
+          <Panel
+            title={t("dashboard.onboarding.toolsTitle", {
+              count: AI_TOOLS.length,
+            })}
+          >
             <div className="flex flex-wrap gap-2">
               {AI_TOOLS.map((tool) => (
                 <span
@@ -993,7 +1065,9 @@ function OnboardingDashboard({
               <RefreshCw
                 className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
-              {refreshing ? "扫描中…" : "开始扫描"}
+              {refreshing
+                ? t("dashboard.onboarding.scanning")
+                : t("dashboard.onboarding.startScan")}
             </TTButton>
           </div>
         </div>
@@ -1005,10 +1079,12 @@ function OnboardingDashboard({
     return (
       <>
         <PageHeader
-          title="首页总览"
-          desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
+          title={t("dashboard.title")}
+          desc={t("dashboard.onboarding.generatedAt", {
+            time: format.formatDateTime(snapshot.generatedAt),
+          })}
         />
-        <Panel title="检测到的 AI 工具">
+        <Panel title={t("dashboard.onboarding.detectedTools")}>
           <div className="flex flex-col gap-2">
             {detectedSources.map((source) => (
               <div
@@ -1021,8 +1097,10 @@ function OnboardingDashboard({
                 </div>
                 <span className="tt-num text-xs text-muted-foreground">
                   {source.events > 0
-                    ? `${source.events} 条记录`
-                    : "工具刚安装尚未使用"}
+                    ? t("dashboard.onboarding.records", {
+                        count: source.events,
+                      })
+                    : t("dashboard.onboarding.notUsedYet")}
                 </span>
               </div>
             ))}
@@ -1030,8 +1108,8 @@ function OnboardingDashboard({
         </Panel>
         <EmptyState
           icon={<Database className="size-8" />}
-          title="暂无使用记录"
-          desc="检测到已安装的 AI 工具，但尚未发现可解析的使用日志。使用对应工具后点击刷新。"
+          title={t("dashboard.onboarding.noUsage")}
+          desc={t("dashboard.onboarding.noUsageDesc")}
           actions={
             <TTButton
               variant="primary"
@@ -1041,7 +1119,9 @@ function OnboardingDashboard({
               <RefreshCw
                 className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
               />
-              {refreshing ? "扫描中…" : "重新扫描"}
+              {refreshing
+                ? t("dashboard.onboarding.scanning")
+                : t("dashboard.onboarding.rescan")}
             </TTButton>
           }
         />
@@ -1052,13 +1132,15 @@ function OnboardingDashboard({
   return (
     <>
       <PageHeader
-        title="首页总览"
-        desc={`生成于 ${formatDateTime(snapshot.generatedAt)}`}
+        title={t("dashboard.title")}
+        desc={t("dashboard.onboarding.generatedAt", {
+          time: format.formatDateTime(snapshot.generatedAt),
+        })}
       />
       <EmptyState
         icon={<Database className="size-8" />}
-        title="未发现本地日志"
-        desc="未在本机发现任何受支持客户端的可解析使用日志，不会回退到 Mock 数据。"
+        title={t("dashboard.onboarding.noLogs")}
+        desc={t("dashboard.onboarding.noLogsDesc")}
       />
     </>
   );
@@ -1094,12 +1176,17 @@ function buildPosterData(
   totals: ReturnType<typeof totalsFromDaily>,
   cost: ReturnType<typeof estimateUsageCost>,
   period: UsagePeriod,
+  periodLabel: string,
   from: string,
   to: string,
+  format: BoundFormatters & { formatUsd: (amountUsd: number) => string },
+  locale: Locale,
 ): PosterData {
   const range = resolveUsageRange(period, from, to);
   const rangeLabel =
-    range.valid && range.from && range.to ? `${range.from} ~ ${range.to}` : "";
+    range.valid && range.from && range.to
+      ? `${format.formatDate(parseLocalDate(range.from))} ~ ${format.formatDate(parseLocalDate(range.to))}`
+      : "";
 
   const trend = aggregateEventsByTime(events, "day").map((b) => b.totalTokens);
 
@@ -1117,20 +1204,26 @@ function buildPosterData(
   const grandTotal = modelRows.reduce((s, r) => s + r.totalTokens, 0);
   const models = modelRows.slice(0, 3).map((r) => ({
     name: r.key,
-    tokens: formatTokens(r.totalTokens),
+    tokens: format.formatTokens(r.totalTokens),
     pct: shareOf(r.totalTokens, grandTotal),
   }));
 
   return {
-    periodLabel: periodLabels[period],
+    periodLabel,
     rangeLabel,
     tokens: totals.totalTokens,
-    costLabel: formatMoney(cost.knownUsd, "CNY"),
-    savedLabel: formatMoney(cost.cacheSavingsUsd, "CNY"),
+    costLabel: format.formatUsd(cost.knownUsd),
+    savedLabel: format.formatUsd(cost.cacheSavingsUsd),
     hitRate: cacheRate(totals),
     trend,
     providers,
     models,
     unknownPriceModels: cost.unknownModels.length,
   };
+}
+
+/** Parse a "YYYY-MM-DD" key as a local calendar date (avoids UTC timezone shift). */
+function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
 }

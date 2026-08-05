@@ -1,15 +1,13 @@
 import { useMemo, useState } from "react";
 import { Segmented } from "../tt";
-import {
-  estimateUsageCost,
-  formatCost,
-  type CostEstimate,
-} from "../../lib/pricing";
+import { useI18n } from "../../lib/i18n/context";
+import type { MessageKey } from "../../lib/i18n/messages";
+import { estimateUsageCost, type CostEstimate } from "../../lib/pricing";
+import { formatCostLabel } from "../../lib/pricing/cost-label";
 import {
   aggregateUsageBySession,
   breakdownComposition,
   cacheRate,
-  formatTokens,
   shareOf,
 } from "../../lib/local-usage/presentation";
 import type {
@@ -54,6 +52,7 @@ const EMPTY_TOTALS: LocalUsageTotals = {
  * Sticky header, scrollable body, max 30 rows with a footer counter.
  */
 export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
+  const { t, format } = useI18n();
   const [dimension, setDimension] = useState<DetailDimension>("date");
 
   const rows = useMemo(
@@ -70,40 +69,56 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
       <div className="mb-2 flex items-center justify-between">
         <span className="tt-num text-[11px] text-muted-foreground">
           {totalRows > 0
-            ? `${totalRows} 项 · ${formatTokens(grandTotal)}`
-            : "暂无明细数据"}
+            ? `${t("dashboard.detail.items", { count: totalRows })} · ${format.formatTokens(grandTotal)}`
+            : t("dashboard.detail.empty")}
         </span>
         <Segmented
           value={dimension}
           onChange={(v) => setDimension(v as DetailDimension)}
           options={[
-            { value: "date", label: "按日" },
-            { value: "model", label: "按模型" },
-            { value: "project", label: "按项目" },
+            { value: "date", label: t("dashboard.detail.dimensionDate") },
+            { value: "model", label: t("dashboard.detail.dimensionModel") },
+            { value: "project", label: t("dashboard.detail.dimensionProject") },
           ]}
         />
       </div>
 
       {totalRows === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 py-8 text-center text-xs text-muted-foreground">
-          当前区间暂无消耗明细。
+          {t("dashboard.detail.emptyRange")}
         </div>
       ) : (
         <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[920px] text-[13px]">
             <thead className="sticky top-0 z-10 bg-surface-1">
               <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
-                <th className="px-3 py-2.5 font-normal">名称</th>
-                <th className="px-3 py-2.5 text-right font-normal">
-                  消耗 Token
+                <th className="px-3 py-2.5 font-normal">
+                  {t("dashboard.detail.name")}
                 </th>
-                <th className="px-3 py-2.5 text-right font-normal">费用</th>
-                <th className="px-3 py-2.5 text-right font-normal">占比</th>
-                <th className="px-3 py-2.5 text-right font-normal">缓存命中</th>
-                <th className="px-3 py-2.5 text-right font-normal">输入</th>
-                <th className="px-3 py-2.5 text-right font-normal">输出</th>
-                <th className="px-3 py-2.5 text-right font-normal">推理</th>
-                <th className="px-3 py-2.5 text-right font-normal">会话</th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.detail.tokensUsed")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.detail.cost")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.detail.share")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.detail.cacheHit")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.tokens.input")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.tokens.output")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.tokens.reasoning")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-normal">
+                  {t("dashboard.detail.sessions")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -126,7 +141,7 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                             <span
                               key={i}
                               className="block h-full"
-                              title={`${seg.label} ${formatTokens(seg.value)} · ${shareOf(seg.value, row.totalTokens).toFixed(1)}%`}
+                              title={`${t(seg.label as MessageKey)} ${format.formatTokens(seg.value)} · ${shareOf(seg.value, row.totalTokens).toFixed(1)}%`}
                               style={{
                                 width: `${shareOf(seg.value, row.totalTokens)}%`,
                                 background: seg.color,
@@ -138,10 +153,10 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                     </div>
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right">
-                    {formatTokens(row.totalTokens)}
+                    {format.formatTokens(row.totalTokens)}
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right">
-                    {formatCost(row.cost, "CNY")}
+                    {formatCostLabel(t, format, row.cost)}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-2">
@@ -164,13 +179,13 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                     {row.cacheHitRate.toFixed(0)}%
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right">
-                    {formatTokens(row.inputTokens)}
+                    {format.formatTokens(row.inputTokens)}
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right">
-                    {formatTokens(row.outputTokens)}
+                    {format.formatTokens(row.outputTokens)}
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right">
-                    {formatTokens(row.reasoningOutputTokens)}
+                    {format.formatTokens(row.reasoningOutputTokens)}
                   </td>
                   <td className="tt-num tabular-nums px-3 py-2.5 text-right text-muted-foreground">
                     {row.sessions}
@@ -180,7 +195,10 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
             </tbody>
           </table>
           <div className="tt-num border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-            当前展示 {Math.min(totalRows, MAX_ROWS)} 条 / 共 {totalRows} 条
+            {t("dashboard.detail.showing", {
+              shown: Math.min(totalRows, MAX_ROWS),
+              total: totalRows,
+            })}
           </div>
         </div>
       )}

@@ -54,14 +54,29 @@ import type {
 } from "../lib/local-market";
 import { getLocalSkills } from "../lib/local-skills/server-fns";
 import type { SkillSnapshot } from "../lib/local-skills/types";
+import { toUiError } from "../lib/errors";
+import { useI18n } from "../lib/i18n/context";
+import { resolveLocaleFromSearch } from "../lib/i18n/locale";
+import {
+  catalogs,
+  getMessage,
+  type MessageKey,
+  type MessageParams,
+} from "../lib/i18n/messages";
+import type { BoundFormatters } from "../lib/i18n/format";
 
 const PAGE_SIZE = 14;
 
-const SORT_OPTIONS: { value: MarketSort; label: string }[] = [
-  { value: "downloads", label: "下载量" },
-  { value: "latest", label: "最新" },
-  { value: "stars", label: "Star" },
-  { value: "tokens", label: "Token 占用" },
+type TFunction = <K extends MessageKey>(
+  key: K,
+  params?: MessageParams<K>,
+) => string;
+
+const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
+  { value: "downloads", labelKey: "market.sort.downloads" },
+  { value: "latest", labelKey: "market.sort.latest" },
+  { value: "stars", labelKey: "market.sort.stars" },
+  { value: "tokens", labelKey: "market.sort.tokens" },
 ];
 
 function emptyResult(): MarketListResult {
@@ -75,9 +90,10 @@ function emptyResult(): MarketListResult {
 }
 
 export const Route = createFileRoute("/market")({
-  loader: async () => {
+  loader: async ({ location }) => {
     try {
       return {
+        locale: resolveLocaleFromSearch(location.search),
         result: await getMarketSkills({
           data: { page: 1, limit: PAGE_SIZE, search: "", sort: "downloads" },
         }),
@@ -85,21 +101,32 @@ export const Route = createFileRoute("/market")({
       };
     } catch (error) {
       return {
+        locale: resolveLocaleFromSearch(location.search),
         result: emptyResult(),
         error:
           error instanceof Error
             ? error.message
-            : "网络不可用：Skill 市场加载失败",
+            : getMessage(
+                catalogs[resolveLocaleFromSearch(location.search)],
+                "market.network.loadFailed",
+              ),
       };
     }
   },
-  head: () => ({
+  head: ({ loaderData }) => ({
     meta: [
-      { title: "Skill 市场 · TrustTools V3.0" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "meta.titles.market",
+        ),
+      },
       {
         name: "description",
-        content:
-          "浏览 TrustTools Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
+        content: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "market.meta.description",
+        ),
       },
     ],
   }),
@@ -108,6 +135,7 @@ export const Route = createFileRoute("/market")({
 
 function MarketPage() {
   const initial = Route.useLoaderData();
+  const { t, format } = useI18n();
   const [result, setResult] = useState(initial.result);
   const [error, setError] = useState<string | null>(initial.error);
   const [rawQuery, setRawQuery] = useState("");
@@ -156,10 +184,13 @@ function MarketPage() {
       })
       .catch((requestError) => {
         if (sequence === requestSequence.current) {
+          const ui = toUiError(requestError);
           setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "网络不可用：Skill 市场加载失败",
+            ui
+              ? t(ui.code, ui.params)
+              : requestError instanceof Error
+                ? requestError.message
+                : t("market.network.loadFailed"),
           );
         }
       })
@@ -197,29 +228,32 @@ function MarketPage() {
 
   return (
     <>
-      <PageHeader title="Skill 市场" desc="仅收录通过安全扫描的 Skill" />
+      <PageHeader
+        title={t("market.pageHeader")}
+        desc={t("market.pageHeaderDesc")}
+      />
 
       {/* Stats cards (FR-021) */}
       <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <StatCard
-          label="上架 Skill 总数"
-          value={stats ? stats.totalSkills.toLocaleString() : "-"}
+          label={t("market.stats.totalSkills")}
+          value={stats ? format.formatNumber(stats.totalSkills) : "-"}
         />
         <StatCard
-          label="官方发布数"
-          value={stats ? stats.officialCount.toLocaleString() : "-"}
-          hint="当前页统计"
+          label={t("market.stats.officialCount")}
+          value={stats ? format.formatNumber(stats.officialCount) : "-"}
+          hint={t("market.stats.hintCurrentPage")}
         />
-        <StatCard label="安全通过率" value="100%" />
+        <StatCard label={t("market.stats.passRate")} value="100%" />
         <StatCard
-          label="已安装数"
-          value={installedCount.toLocaleString()}
-          hint="本机已安装"
+          label={t("market.stats.installedCount")}
+          value={format.formatNumber(installedCount)}
+          hint={t("market.stats.hintLocalInstalled")}
         />
         <StatCard
-          label="总下载量"
-          value={stats ? stats.totalDownloads.toLocaleString() : "-"}
-          hint="当前页统计"
+          label={t("market.stats.totalDownloads")}
+          value={stats ? format.formatNumber(stats.totalDownloads) : "-"}
+          hint={t("market.stats.hintCurrentPage")}
         />
       </div>
 
@@ -231,7 +265,7 @@ function MarketPage() {
             <input
               value={rawQuery}
               onChange={(event) => setRawQuery(event.target.value)}
-              placeholder="按名称或描述搜索真实 Skill…"
+              placeholder={t("market.search.placeholder")}
               className="h-9 w-full rounded-sm border border-border bg-surface-2 pr-10 pl-9 text-[13px] outline-none placeholder:text-muted-foreground focus:border-primary"
             />
             {loading && (
@@ -244,16 +278,24 @@ function MarketPage() {
               setSort(v);
               setPage(1);
             }}
-            options={SORT_OPTIONS}
+            options={SORT_OPTIONS.map((option) => ({
+              value: option.value,
+              label: t(option.labelKey),
+            }))}
           />
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span>
-            数据更新于 {formatDateTime(result.fetchedAt)}
-            {query ? ` · 关键词"${query}"` : ""}
+            {t("market.search.updatedAt", {
+              time: format.formatDate(result.fetchedAt),
+            })}
+            {query ? t("market.search.keyword", { keyword: query }) : ""}
           </span>
           <span>
-            每页 {PAGE_SIZE} 条 · 第 {result.pagination.page} 页
+            {t("market.search.perPage", {
+              count: format.formatNumber(PAGE_SIZE),
+              page: format.formatNumber(result.pagination.page),
+            })}
           </span>
         </div>
       </div>
@@ -270,34 +312,44 @@ function MarketPage() {
           className={`transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
         >
           <Panel
-            title={`Skill 列表（${result.pagination.total.toLocaleString()}）`}
+            title={t("market.list.title", {
+              count: format.formatNumber(result.pagination.total),
+            })}
             bodyClassName="p-0"
           >
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[50px] pl-4">排名</TableHead>
+                  <TableHead className="w-[50px] pl-4">
+                    {t("market.table.rank")}
+                  </TableHead>
                   <TableHead className="min-w-[180px]">Skill</TableHead>
-                  <TableHead className="w-[120px]">发布者</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap">
-                    下载量
+                  <TableHead className="w-[120px]">
+                    {t("market.table.publisher")}
                   </TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap">
-                    Token 占用
+                    {t("market.table.downloads")}
+                  </TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap">
+                    {t("market.table.tokenUsage")}
                   </TableHead>
                   <TableHead className="w-[70px] whitespace-nowrap">
-                    体积
+                    {t("market.table.size")}
                   </TableHead>
                   <TableHead className="w-[70px] whitespace-nowrap">
-                    Star
+                    {t("market.table.stars")}
                   </TableHead>
-                  <TableHead className="w-[100px]">安全状态</TableHead>
-                  <TableHead className="w-[80px] pr-4">操作</TableHead>
+                  <TableHead className="w-[100px]">
+                    {t("market.table.security")}
+                  </TableHead>
+                  <TableHead className="w-[80px] pr-4">
+                    {t("market.table.actions")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {result.skills.map((skill, index) => {
-                  const security = securityPresentation(skill);
+                  const security = securityPresentation(skill, t, format);
                   const rank =
                     (result.pagination.page - 1) * PAGE_SIZE + index + 1;
                   const isInstalled = installedSkillNames.has(skill.name);
@@ -325,14 +377,14 @@ function MarketPage() {
                               variant="secondary"
                               className="bg-ok/15 text-[10px] font-normal text-ok"
                             >
-                              已安装
+                              {t("market.installed")}
                             </Badge>
                           )}
                         </div>
                         <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           {skill.descriptionZh ??
                             skill.description ??
-                            "该 Skill 暂未提供描述。"}
+                            t("market.noDescription")}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -342,25 +394,27 @@ function MarketPage() {
                           </span>
                           {skill.isOfficial && (
                             <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-                              官方
+                              {t("market.official")}
                             </span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
-                        {formatCount(skill.installCount)}
+                        {formatCount(skill.installCount, t, format)}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
                         {skill.tokens !== null
-                          ? skill.tokens.toLocaleString()
+                          ? format.formatNumber(skill.tokens)
                           : "-"}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
-                        {skill.size !== null ? formatBytes(skill.size) : "-"}
+                        {skill.size !== null
+                          ? format.formatBytes(skill.size)
+                          : "-"}
                       </TableCell>
                       <TableCell className="tt-num text-[12px] text-muted-foreground">
                         {skill.stars !== null
-                          ? skill.stars.toLocaleString()
+                          ? format.formatNumber(skill.stars)
                           : "-"}
                       </TableCell>
                       <TableCell>
@@ -378,7 +432,7 @@ function MarketPage() {
                           variant="primary"
                           onClick={() => setDetail(skill)}
                         >
-                          安装
+                          {t("market.install.button")}
                         </TTButton>
                       </TableCell>
                     </TableRow>
@@ -395,7 +449,7 @@ function MarketPage() {
               disabled={loading || page <= 1}
               onClick={() => setPage((current) => Math.max(1, current - 1))}
             >
-              上一页
+              {t("market.pagination.prev")}
             </TTButton>
             {getPageNumbers(result.pagination.page, Math.max(1, pages)).map(
               (pageNum, idx) =>
@@ -426,7 +480,7 @@ function MarketPage() {
               disabled={loading || pages === 0 || page >= pages}
               onClick={() => setPage((current) => current + 1)}
             >
-              下一页
+              {t("market.pagination.next")}
             </TTButton>
           </div>
         </div>
@@ -440,12 +494,14 @@ function MarketPage() {
             )
           }
           title={
-            error ? "网络不可用，Skill 市场暂不可访问" : "没有匹配的 Skill"
+            error
+              ? t("market.network.unavailableTitle")
+              : t("market.empty.noMatch")
           }
           desc={
             error
-              ? "本地已缓存的列表仍可浏览，恢复网络后自动同步最新数据。"
-              : "换一个关键词重新搜索。"
+              ? t("market.network.unavailableDesc")
+              : t("market.empty.noMatchDesc")
           }
           actions={
             error ? (
@@ -453,7 +509,7 @@ function MarketPage() {
                 variant="primary"
                 onClick={() => setRetrySequence((current) => current + 1)}
               >
-                重试
+                {t("common.retry")}
               </TTButton>
             ) : undefined
           }
@@ -512,6 +568,7 @@ function SkillDetailDrawer({
   onClose: () => void;
   onInstalled: () => void;
 }) {
+  const { t, format } = useI18n();
   const [selectedAgent, setSelectedAgent] = useState<MarketAgent | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [cancelled, setCancelled] = useState(false);
@@ -521,7 +578,7 @@ function SkillDetailDrawer({
   const cancelledRef = useRef(false);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const security = securityPresentation(skill);
+  const security = securityPresentation(skill, t, format);
   const isInstalled = installedSkillNames.has(skill.name);
 
   const startProgress = useCallback(() => {
@@ -550,7 +607,7 @@ function SkillDetailDrawer({
 
   const submit = async () => {
     if (!selectedAgent) {
-      setFailure("请选择安装目标");
+      setFailure(t("market.install.failure.noAgent"));
       return;
     }
     setSubmitting(true);
@@ -580,30 +637,35 @@ function SkillDetailDrawer({
       setOutcome(nextOutcome);
 
       if (nextOutcome.installed) {
-        toast.success(`${skill.name} 已安装到 ${selectedAgent}`);
+        toast.success(t("market.install.success", { agent: selectedAgent }));
         onInstalled();
         onClose();
       } else if (nextOutcome.reason === "scan-blocked") {
-        setFailure("静态扫描发现高风险规则，已阻止安装。");
+        setFailure(t("market.install.failure.scanBlocked"));
       } else {
         setFailure(nextOutcome.message);
       }
     } catch (error) {
       if (cancelledRef.current) return;
       stopProgress();
+      const ui = toUiError(error);
+      if (ui) {
+        setFailure(t(ui.code, ui.params));
+        return;
+      }
       const message = error instanceof Error ? error.message : "";
       if (error instanceof Error && error.name === "DiskSpaceError") {
-        setFailure("磁盘空间不足，请清理后重试");
+        setFailure(t("market.install.failure.diskFull"));
       } else if (message.includes("磁盘空间不足")) {
-        setFailure("磁盘空间不足，请清理后重试");
+        setFailure(t("market.install.failure.diskFull"));
       } else if (
         message.includes("超时") ||
         message.includes("网络") ||
         message.includes("下载失败")
       ) {
-        setFailure("下载失败，请检查网络后重试");
+        setFailure(t("market.install.failure.download"));
       } else {
-        setFailure(message || "下载或静态扫描失败");
+        setFailure(message || t("market.install.failure.generic"));
       }
     } finally {
       stopProgress();
@@ -637,7 +699,7 @@ function SkillDetailDrawer({
             {skill.name}
             {skill.isOfficial && (
               <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-                官方
+                {t("market.official")}
               </span>
             )}
             {isInstalled && (
@@ -645,7 +707,7 @@ function SkillDetailDrawer({
                 variant="secondary"
                 className="bg-ok/15 text-[10px] font-normal text-ok"
               >
-                已安装
+                {t("market.installed")}
               </Badge>
             )}
           </SheetTitle>
@@ -658,7 +720,8 @@ function SkillDetailDrawer({
                 rel="noreferrer"
                 className="ml-2 inline-flex items-center gap-1 text-primary hover:underline"
               >
-                查看源仓库 <ExternalLink className="size-3" />
+                {t("market.drawer.viewRepo")}{" "}
+                <ExternalLink className="size-3" />
               </a>
             )}
           </SheetDescription>
@@ -668,22 +731,24 @@ function SkillDetailDrawer({
           {/* Metric cards: 下载量 / Token占用 / Star / 体积 */}
           <div className="grid grid-cols-4 gap-2">
             <MetricCell
-              label="下载量"
-              value={formatCount(skill.installCount)}
+              label={t("market.metric.downloads")}
+              value={formatCount(skill.installCount, t, format)}
             />
             <MetricCell
-              label="Token 占用"
+              label={t("market.metric.tokenUsage")}
               value={
-                skill.tokens !== null ? skill.tokens.toLocaleString() : "-"
+                skill.tokens !== null ? format.formatNumber(skill.tokens) : "-"
               }
             />
             <MetricCell
-              label="Star"
-              value={skill.stars !== null ? skill.stars.toLocaleString() : "-"}
+              label={t("market.metric.stars")}
+              value={
+                skill.stars !== null ? format.formatNumber(skill.stars) : "-"
+              }
             />
             <MetricCell
-              label="体积"
-              value={skill.size !== null ? formatBytes(skill.size) : "-"}
+              label={t("market.metric.size")}
+              value={skill.size !== null ? format.formatBytes(skill.size) : "-"}
             />
           </div>
 
@@ -692,35 +757,53 @@ function SkillDetailDrawer({
             <p className="leading-relaxed text-muted-foreground">
               {skill.descriptionZh ??
                 skill.description ??
-                "该 Skill 暂未提供描述。"}
+                t("market.noDescription")}
             </p>
           </div>
 
           {/* Security notice bar */}
           <div className="flex items-center gap-2 rounded-sm border border-ok/40 bg-ok/10 px-3 py-2 text-xs text-ok">
             <ShieldCheck className="size-4 shrink-0" />
-            <span>安全扫描通过 · 未检出恶意 URL、危险命令与敏感信息</span>
+            <span>{t("market.drawer.securityNotice")}</span>
           </div>
 
           {/* Install info */}
           <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-xs">
-            <dt className="text-muted-foreground">安装命令示例</dt>
+            <dt className="text-muted-foreground">
+              {t("market.drawer.commandExample")}
+            </dt>
             <dd className="break-all font-mono text-[11px]">
               trusttools install {skill.slug}
             </dd>
-            <dt className="text-muted-foreground">上下文 Token</dt>
-            <dd>未提供</dd>
-            <dt className="text-muted-foreground">最近更新</dt>
-            <dd>{formatDateTime(skill.updatedAt)}</dd>
-            <dt className="text-muted-foreground">权限声明</dt>
-            <dd>{skill.verdict ?? "未提供"}</dd>
-            <dt className="text-muted-foreground">网络声明</dt>
-            <dd>{skill.status ?? "未提供"}</dd>
+            <dt className="text-muted-foreground">
+              {t("market.drawer.contextTokens")}
+            </dt>
+            <dd>{t("market.notProvided")}</dd>
+            <dt className="text-muted-foreground">
+              {t("market.drawer.lastUpdated")}
+            </dt>
+            <dd>
+              {skill.updatedAt
+                ? format.formatDate(skill.updatedAt)
+                : t("market.notProvided")}
+            </dd>
+            <dt className="text-muted-foreground">
+              {t("market.drawer.permissionClaim")}
+            </dt>
+            <dd>{skill.verdict ?? t("market.notProvided")}</dd>
+            <dt className="text-muted-foreground">
+              {t("market.drawer.networkClaim")}
+            </dt>
+            <dd>{skill.status ?? t("market.notProvided")}</dd>
           </dl>
 
           {/* Agent selection (single-select radio) */}
           <div>
-            <div className="tt-label mb-2">{`选择安装目标（单选，支持 ${MARKET_AGENTS.length} 个工具）`}</div>
+            <div className="tt-label mb-2">
+              {t("market.drawer.selectAgent", {
+                count: format.formatNumber(MARKET_AGENTS.length),
+              })}
+            </div>
             <div className="grid grid-cols-2 gap-1.5">
               {MARKET_AGENTS.map((agent) => {
                 const detected = detectedAgents.has(agent);
@@ -750,7 +833,7 @@ function SkillDetailDrawer({
                         variant="outline"
                         className="ml-auto text-[9px] text-muted-foreground"
                       >
-                        未安装
+                        {t("market.drawer.agentNotInstalled")}
                       </Badge>
                     )}
                   </label>
@@ -764,7 +847,7 @@ function SkillDetailDrawer({
             <div className="space-y-1.5">
               <Progress value={progress} />
               <p className="text-center text-[11px] text-muted-foreground">
-                下载并扫描中…
+                {t("market.install.downloading")}
               </p>
             </div>
           )}
@@ -801,7 +884,7 @@ function SkillDetailDrawer({
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {submitting ? (
             <TTButton variant="danger" onClick={cancel}>
-              取消
+              {t("common.cancel")}
             </TTButton>
           ) : (
             <TTButton
@@ -810,19 +893,19 @@ function SkillDetailDrawer({
               onClick={submit}
             >
               <Download className="size-3.5" />
-              安装到所选工具
+              {t("market.install.toSelected")}
             </TTButton>
           )}
           {skill.repoUrl && (
             <a href={skill.repoUrl} target="_blank" rel="noreferrer">
               <TTButton>
                 <ExternalLink className="size-3.5" />
-                查看源码
+                {t("market.drawer.viewSource")}
               </TTButton>
             </a>
           )}
           <TTButton variant="ghost" onClick={onClose}>
-            关闭
+            {t("common.close")}
           </TTButton>
         </div>
       </SheetContent>
@@ -840,6 +923,7 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 }
 
 function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
+  const { t, format } = useI18n();
   const failed =
     outcome.reason === "scan-blocked" || outcome.reason === "failed";
   const completed = outcome.reason === "installed";
@@ -862,10 +946,26 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
         <strong>{outcome.message}</strong>
       </div>
       <div className="tt-num grid grid-cols-2 gap-1 text-[11px] text-muted-foreground">
-        <span>压缩包 {formatBytes(outcome.inspection.compressedBytes)}</span>
-        <span>解压后 {formatBytes(outcome.inspection.scan.unpackedBytes)}</span>
-        <span>检查条目 {outcome.inspection.scan.entriesChecked}</span>
-        <span>扫描文件 {outcome.inspection.scan.filesScanned}</span>
+        <span>
+          {t("market.outcome.compressed", {
+            size: format.formatBytes(outcome.inspection.compressedBytes),
+          })}
+        </span>
+        <span>
+          {t("market.outcome.unpacked", {
+            size: format.formatBytes(outcome.inspection.scan.unpackedBytes),
+          })}
+        </span>
+        <span>
+          {t("market.outcome.entries", {
+            count: format.formatNumber(outcome.inspection.scan.entriesChecked),
+          })}
+        </span>
+        <span>
+          {t("market.outcome.files", {
+            count: format.formatNumber(outcome.inspection.scan.filesScanned),
+          })}
+        </span>
       </div>
       <ul className="space-y-1 border-t border-border pt-2 text-[11px]">
         {outcome.targets.map((target) => (
@@ -873,8 +973,10 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
             key={target.agent}
             className={target.installed ? "text-ok" : "text-danger"}
           >
-            {target.installed ? "成功" : "失败"} · {target.agent} ·{" "}
-            {target.message}
+            {target.installed
+              ? t("market.outcome.success")
+              : t("market.outcome.failed")}{" "}
+            · {target.agent} · {target.message}
           </li>
         ))}
       </ul>
@@ -911,10 +1013,11 @@ function getPageNumbers(current: number, total: number): Array<number | "..."> {
   return [1, "...", current - 1, current, current + 1, "...", total];
 }
 
-function securityPresentation(skill: MarketSkill): {
-  safe: boolean;
-  label: string;
-} {
+function securityPresentation(
+  skill: MarketSkill,
+  t: TFunction,
+  format: BoundFormatters,
+): { safe: boolean; label: string } {
   const verdict = skill.verdict?.toLocaleLowerCase();
   const safe = verdict === "allow" || (skill.securityScore ?? -1) >= 80;
   const level =
@@ -923,26 +1026,22 @@ function securityPresentation(skill: MarketSkill): {
       : null;
   const score =
     skill.securityScore === null
-      ? "安全分未提供"
-      : `安全分 ${skill.securityScore.toFixed(0)}`;
+      ? t("market.security.scoreMissing")
+      : t("market.security.score", {
+          score: format.formatNumber(skill.securityScore, {
+            maximumFractionDigits: 0,
+          }),
+        });
   return {
     safe,
-    label: [level, score, skill.verdict].filter(Boolean).join(" · "),
+    label: [level, score, verdict].filter(Boolean).join(" · "),
   };
 }
 
-function formatCount(value: number | null): string {
-  return value === null ? "未提供" : value.toLocaleString();
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "未提供";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
-}
-
-function formatBytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+function formatCount(
+  value: number | null,
+  t: TFunction,
+  format: BoundFormatters,
+): string {
+  return value === null ? t("market.notProvided") : format.formatNumber(value);
 }

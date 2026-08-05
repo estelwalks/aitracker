@@ -3,7 +3,9 @@ import type { ExportRow } from "./types.ts";
 /**
  * Fixed CSV column header, in on-disk order. The Chinese labels are the
  * user-facing field names and are reused verbatim as JSON object keys (see
- * json.ts).
+ * json.ts). The four trailing columns are machine-readable stable values
+ * (docs/plan v1.2 导出: raw USD cost, display amount, currency, rate, rate
+ * date) and are intentionally language-neutral.
  */
 export const CSV_HEADER = [
   "日期",
@@ -16,6 +18,10 @@ export const CSV_HEADER = [
   "缓存写",
   "推理Token",
   "费用",
+  "costDisplay",
+  "currency",
+  "rate",
+  "rateDate",
 ] as const;
 
 /** CRLF line terminator per RFC 4180 §4 (common-parity, Excel-friendly). */
@@ -75,15 +81,23 @@ function resolveSourceLabel(
  * Pure and deterministic: identical `rows` + `sourceLabels` produce identical
  * output. No I/O, no React, no pricing dependency.
  *
+ * CSV headers are localized by the caller via the optional third argument
+ * (e.g. `CSV_HEADER.map((_, i) => t(`export.column.${...}`))`). When omitted,
+ * the zh-CN `CSV_HEADER` is used — so zh-CN output stays byte-identical and
+ * the JSON export keeps its Chinese machine keys regardless of UI language
+ * (数据导出键保持兼容, see json.ts).
+ *
  * @param rows          Usage rows to export, in the order they should appear.
  * @param sourceLabels  Optional `sourceId → displayLabel` map.
+ * @param headers       Optional localized column headers (default CSV_HEADER).
  * @returns CSV document including the header line.
  */
 export function toExportCsv(
   rows: ExportRow[],
   sourceLabels?: Record<string, string>,
+  headers?: readonly string[],
 ): string {
-  const lines: string[] = [CSV_HEADER.join(",")];
+  const lines: string[] = [(headers ?? CSV_HEADER).join(",")];
 
   for (const row of rows) {
     const cells = [
@@ -97,6 +111,10 @@ export function toExportCsv(
       formatTokenCell(row.cacheCreationInputTokens),
       formatTokenCell(row.reasoningOutputTokens),
       formatCostCell(row.cost),
+      formatCostCell(row.costDisplay),
+      escapeCsvCell(row.currency ?? ""),
+      escapeCsvCell(row.rate != null ? String(row.rate) : ""),
+      escapeCsvCell(row.rateDate ?? ""),
     ];
     lines.push(cells.join(","));
   }

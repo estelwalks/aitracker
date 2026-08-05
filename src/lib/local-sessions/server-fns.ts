@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import { AppError } from "../errors";
+
 import type {
   SessionFilter,
   SessionSource,
@@ -35,7 +37,7 @@ const RANGE_DAYS: Record<NonNullable<SessionFilter["range"]>, number> = {
 const sessionFilterValidator = (input: unknown): SessionFilter => {
   if (input == null) return {};
   if (typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("会话过滤参数不合法");
+    throw new AppError("errors.sessions.filterInvalid");
   }
   const value = input as Record<string, unknown>;
   const source =
