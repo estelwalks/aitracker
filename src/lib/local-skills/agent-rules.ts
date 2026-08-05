@@ -1,18 +1,18 @@
 /**
- * Per-agent skill discovery rules, aligned with the TokenTracker (MIT)
- * reference behavior: a skill is a DIRECTORY containing a marker file
- * (`SKILL.md` or `skill.md`, exact case), discovered with bounded recursion.
+ * Per-agent skill discovery rules, now derived from the tool-registry.
  *
- * Clean Room: only the observable discovery behavior is aligned — this is
- * TrustTools's own config shape, types and naming. No TokenTracker code,
- * structure, naming or comments are copied.
+ * The single source of truth for skill storage is each tool's `storage.skills`
+ * config. This module projects the registry into the legacy `SKILL_AGENT_RULES`
+ * / `SKILL_AGENTS` / `SKILL_ROOT_SUFFIXES` shape so existing scanners, market
+ * targets and tests keep working unchanged.
  *
- * This module must stay importable in the browser bundle (client code reads
- * `SKILL_AGENTS`), so it is pure data — no `node:path`/`node:fs` imports.
- * Path resolution lives in `scanner.server.ts` (`resolveAgentRoots`).
+ * Browser note: this module is imported by browser code (SKILL_AGENTS labels).
+ * It is safe through M3 because configs carry no reader keys, commands, or
+ * pricing. M4-T1 migrates browser consumers to `public-manifest.generated.ts`
+ * and this module becomes server-only.
  */
-
-import { AI_TOOLS } from "../tools/catalog.ts";
+import type { ToolDefinition } from "../tool-registry/contracts.ts";
+import { listTools } from "../tool-registry/registry.ts";
 
 export interface SkillAgentRule {
   /** Catalog tool id (`AI_TOOLS[].id`). */
@@ -21,10 +21,7 @@ export interface SkillAgentRule {
   roots: readonly string[];
   /**
    * Env var whose value replaces the directory part of each root (the tool's
-   * home directory) when set to a non-empty string (codex/grok only). The
-   * last path segment is kept: the root becomes
-   * `join(envValue, basename(suffix))` — e.g. `CODEX_HOME=/x` makes
-   * `.codex/skills` resolve to `/x/skills`.
+   * home directory) when set to a non-empty string (codex/grok only).
    */
   envHome?: string;
   /** Marker files, checked in order; default `["SKILL.md", "skill.md"]`. */
@@ -37,67 +34,95 @@ export const DEFAULT_MARKERS: readonly string[] = ["SKILL.md", "skill.md"];
 export const DEFAULT_MAX_DEPTH = 3;
 
 /**
- * The nine skill agents, in UI order. Each entry maps a catalog tool to its
- * skill roots; `[0]` is the write path (sync/install target).
+ * Canonical UI order of skill agents. The registry stores skill DATA per tool;
+ * this list only fixes the DISPLAY order (frozen from the pre-migration
+ * `SKILL_AGENT_RULES` array) so the Skills/Market pages do not visually
+ * reorder. It must stay in sync with the set of skill-capable tools - the
+ * `assertSkillOrderInSync` check enforces that below.
  */
-export const SKILL_AGENT_RULES: readonly SkillAgentRule[] = [
-  { toolId: "claude-code", roots: [".claude/skills"] },
-  { toolId: "codex", roots: [".codex/skills"], envHome: "CODEX_HOME" },
-  { toolId: "cursor", roots: [".cursor/skills"] },
-  { toolId: "gemini-cli", roots: [".gemini/skills"] },
-  { toolId: "opencode", roots: [".config/opencode/skills"] },
-  { toolId: "grok", roots: [".grok/skills"], envHome: "GROK_HOME" },
-  { toolId: "hermes", roots: [".hermes/skills"] },
-  { toolId: "openclaw", roots: [".openclaw/workspace/skills"] },
-  {
-    toolId: "antigravity",
-    roots: [".gemini/antigravity/skills", ".gemini/antigravity-ide/skills"],
-  },
+const SKILL_AGENT_ORDER: readonly string[] = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "gemini-cli",
+  "opencode",
+  "grok",
+  "hermes",
+  "openclaw",
+  "antigravity",
 ];
 
-const nameZhById = new Map<string, string>(
-  AI_TOOLS.map((tool) => [tool.id, tool.nameZh] as const),
+/** Tools that have a non-unsupported skills capability. */
+const SKILL_TOOL_BY_ID: ReadonlyMap<string, ToolDefinition> = new Map(
+  listTools()
+    .filter(
+      (def) =>
+        def.capabilities.skills.mode !== "unsupported" &&
+        def.storage?.skills &&
+        def.storage.skills.roots.length > 0,
+    )
+    .map((def) => [def.id, def]),
+);
+
+function toRule(def: ToolDefinition): SkillAgentRule {
+  const skills = def.storage!.skills!;
+  return {
+    toolId: def.id,
+    roots: skills.roots,
+    ...(skills.envHome ? { envHome: skills.envHome } : {}),
+    ...(skills.markers ? { markers: skills.markers } : {}),
+    ...(skills.maxDepth !== undefined ? { maxDepth: skills.maxDepth } : {}),
+  };
+}
+
+/**
+ * The skill agents, in the canonical UI order. Each entry maps a tool to its
+ * skill roots; `[0]` is the write path (sync/install target).
+ */
+export const SKILL_AGENT_RULES: readonly SkillAgentRule[] =
+  SKILL_AGENT_ORDER.map((id) => SKILL_TOOL_BY_ID.get(id))
+    .filter((def): def is ToolDefinition => def !== undefined)
+    .map(toRule);
+
+/**
+ * Skill agent labels (the registry `nameZh` of every skill tool), in order.
+ */
+export const SKILL_AGENTS: readonly string[] = SKILL_AGENT_RULES.map(
+  (rule) => SKILL_TOOL_BY_ID.get(rule.toolId)!.display.nameZh,
 );
 
 /**
- * Fail-fast module-load validation: every rule must reference a known catalog
- * tool and derive a unique agent label.
+ * Fail-fast module-load validation: the order list must exactly cover the
+ * skill-capable registry tools (no missing/extra), and labels must be unique.
  */
-function assertRulesValid(): void {
+function assertSkillConfigValid(): void {
+  const registrySkillIds = new Set([...SKILL_TOOL_BY_ID.keys()].sort());
+  const orderIds = new Set(SKILL_AGENT_ORDER);
+  if (
+    registrySkillIds.size !== orderIds.size ||
+    ![...registrySkillIds].every((id) => orderIds.has(id))
+  ) {
+    throw new Error(
+      `SKILL_AGENT_ORDER 与 registry 的 skill 工具集不一致 (order=${[...orderIds].sort().join(",")}, registry=${[...registrySkillIds].join(",")})`,
+    );
+  }
   const labels = new Set<string>();
-  for (const rule of SKILL_AGENT_RULES) {
-    const nameZh = nameZhById.get(rule.toolId);
-    if (nameZh === undefined) {
-      throw new Error(
-        `SkillAgentRule 引用了未知工具 id "${rule.toolId}"（不在 AI_TOOLS 中）`,
-      );
+  for (const label of SKILL_AGENTS) {
+    if (labels.has(label)) {
+      throw new Error(`Skill agent label 重复: "${label}"`);
     }
-    if (labels.has(nameZh)) {
-      throw new Error(`Skill agent label 重复: "${nameZh}"`);
-    }
-    labels.add(nameZh);
+    labels.add(label);
   }
 }
-assertRulesValid();
-
-function agentLabelOf(rule: SkillAgentRule): string {
-  const label = nameZhById.get(rule.toolId);
-  if (label === undefined) {
-    throw new Error(`SkillAgentRule 引用了未知工具 id "${rule.toolId}"`);
-  }
-  return label;
-}
+assertSkillConfigValid();
 
 /**
- * Skill agent labels (the catalog `nameZh` of every rule), in rule order.
- */
-export const SKILL_AGENTS: readonly string[] =
-  SKILL_AGENT_RULES.map(agentLabelOf);
-
-/**
- * Label → `roots[0]` (the write path). Compatibility export: existing callers
+ * Label -> `roots[0]` (the write path). Compatibility export: existing callers
  * (and tests) look up `SKILL_ROOT_SUFFIXES["Claude Code"]`.
  */
 export const SKILL_ROOT_SUFFIXES: Record<string, string> = Object.fromEntries(
-  SKILL_AGENT_RULES.map((rule) => [agentLabelOf(rule), rule.roots[0]]),
+  SKILL_AGENT_RULES.map((rule) => [
+    SKILL_TOOL_BY_ID.get(rule.toolId)!.display.nameZh,
+    rule.roots[0],
+  ]),
 );
