@@ -1,4 +1,4 @@
-import { AI_TOOL_IDS } from "../tools/catalog.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
 /**
  * The known usage source ids.
@@ -13,7 +13,7 @@ import { AI_TOOL_IDS } from "../tools/catalog.ts";
 const LEGACY_ADAPTER_SOURCES = ["aipy", "cline"] as const;
 
 export const KNOWN_LOCAL_USAGE_SOURCES = [
-  ...AI_TOOL_IDS,
+  ...PUBLIC_TOOL_MANIFEST.tools.map((tool) => tool.id),
   ...LEGACY_ADAPTER_SOURCES,
 ] as const;
 

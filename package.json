@@ -32,7 +32,7 @@
     "format": "prettier --write .",
     "generate:manifest": "node --import tsx scripts/generate-tool-manifest.mjs",
     "prebuild": "npm run generate:manifest",
-    "verify:tool-registry": "npm run generate:manifest && node --import tsx scripts/verify-tool-registry.mjs"
+    "verify:tool-registry": "node --import tsx scripts/verify-tool-registry.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
