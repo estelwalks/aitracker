@@ -8,6 +8,7 @@ import { ENV } from "../app-config";
 import {
   collectTokenTrackerUsage,
   initializeTokenTrackerUsage,
+  knownSource,
 } from "./tokentracker-bridge.server.ts";
 
 test("initializeTokenTrackerUsage is a safe no-op that does not mutate the filesystem", async () => {
@@ -60,7 +61,6 @@ test("collectTokenTrackerUsage returns empty results when the opt-in env var is 
 });
 
 import { describe, test as it } from "node:test";
-import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
 
 describe("TC-BRG-001: bridge boundaries", () => {
   it("auto-init stays a no-op (never auto-executes the CLI)", async () => {
@@ -72,13 +72,25 @@ describe("TC-BRG-001: bridge boundaries", () => {
     assert.equal(result, undefined);
   });
 
-  it("source normalization can never produce a source outside the known set", async () => {
-    // The only way source ids enter the pipeline is through the registry's
-    // known set; bridge reports are read-only and filtered against it.
-    for (const id of KNOWN_LOCAL_USAGE_SOURCES) {
-      assert.ok(id.length > 0);
-    }
-    // Opt-in off => the bridge produces no events at all.
+  it("source ids pass through verbatim — aliases are never rewritten", () => {
+    // P1-4: the bridge must not reattribute tool sources. Legacy queue ids
+    // are no longer mapped to canonical ids; they are rejected as unknown.
+    assert.equal(knownSource("claude"), undefined);
+    assert.equal(knownSource("copilot"), undefined);
+    assert.equal(knownSource("gemini"), undefined);
+    assert.equal(knownSource("roocode"), undefined);
+    // Canonical ids pass through unchanged.
+    assert.equal(knownSource("claude-code"), "claude-code");
+    assert.equal(knownSource("github-copilot"), "github-copilot");
+    assert.equal(knownSource("gemini-cli"), "gemini-cli");
+    assert.equal(knownSource("roo-code"), "roo-code");
+    // Non-strings, empty values, and unknown ids are rejected.
+    assert.equal(knownSource(undefined), undefined);
+    assert.equal(knownSource(""), undefined);
+    assert.equal(knownSource("not-a-tool"), undefined);
+  });
+
+  it("opt-in off => the bridge produces no events at all", async () => {
     delete process.env["TRUSTTOOLS_ENABLE_TOKENTRACKER_BRIDGE"];
     const result = await collectTokenTrackerUsage({
       homeDirectory: "/nonexistent",

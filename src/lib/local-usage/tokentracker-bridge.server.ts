@@ -216,9 +216,9 @@ async function runSync(home: string, force: boolean): Promise<void> {
  * The TokenTracker CLI must NOT be auto-executed. Per the architecture ADRs,
  * TokenTracker is a behavior reference only — not bundled or executed.
  *
- * This no-op preserves the exported symbol for backwards compatibility
- * with any existing callers (e.g. runSync), which are themselves gated
- * behind the bridge opt-in env var.
+ * This no-op preserves the exported symbol for backwards compatibility with
+ * the gated call in runSync(); runSync() is only reachable through
+ * collectTokenTrackerUsage(), the explicit manual migration entry point.
  */
 export async function initializeTokenTrackerUsage(
   _options: {
@@ -234,20 +234,29 @@ function count(value: unknown): number {
     : 0;
 }
 
-function source(value: unknown): LocalUsageSource | undefined {
+/**
+ * Validates a raw queue source id against the known local-usage sources and
+ * passes it through VERBATIM. No alias rewriting: the bridge must never
+ * reattribute tool sources (P1-4 boundary), so legacy queue ids like
+ * `claude`/`copilot` are rejected as unknown rather than mapped to canonical
+ * ids. Any further validation happens at the consuming migration command.
+ */
+export function knownSource(value: unknown): LocalUsageSource | undefined {
   if (typeof value !== "string" || !value) return undefined;
-  const aliases: Record<string, string> = {
-    claude: "claude-code",
-    copilot: "github-copilot",
-    gemini: "gemini-cli",
-    roocode: "roo-code",
-  };
-  const normalized = aliases[value] ?? value;
-  return (KNOWN_LOCAL_USAGE_SOURCES as readonly string[]).includes(normalized)
-    ? (normalized as LocalUsageSource)
+  return (KNOWN_LOCAL_USAGE_SOURCES as readonly string[]).includes(value)
+    ? (value as LocalUsageSource)
     : undefined;
 }
 
+/**
+ * Collects TokenTracker queue usage as an explicit, manual migration step.
+ *
+ * MANUAL MIGRATION TOOL ONLY — never wire this into the scan path (P1-4):
+ * it executes the bundled tracker CLI and reads the queue file, so it must
+ * only ever be triggered by an explicit human command. It remains gated
+ * behind ENABLE_TOKENTRACKER_BRIDGE: without that env var it returns empty
+ * results and executes nothing.
+ */
 export async function collectTokenTrackerUsage(
   options: {
     forceSync?: boolean;
@@ -276,7 +285,7 @@ export async function collectTokenTrackerUsage(
     if (!line) continue;
     try {
       const row = JSON.parse(line) as QueueRow;
-      const rowSource = source(row.source);
+      const rowSource = knownSource(row.source);
       if (!rowSource || typeof row.hour_start !== "string") continue;
       const model =
         typeof row.model === "string" && row.model ? row.model : "unknown";
@@ -292,7 +301,7 @@ export async function collectTokenTrackerUsage(
 
   const events: LocalUsageEvent[] = [];
   for (const row of latest.values()) {
-    const rowSource = source(row.source);
+    const rowSource = knownSource(row.source);
     if (!rowSource || typeof row.hour_start !== "string") continue;
     const inputTokens = count(row.input_tokens);
     const cachedInputTokens = count(row.cached_input_tokens);
