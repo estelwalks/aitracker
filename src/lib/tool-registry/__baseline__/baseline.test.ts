@@ -34,6 +34,14 @@ test("baseline tools match the live AI_TOOLS catalog (27 tools)", () => {
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
   for (const tool of BASELINE_TOOLS) {
+    // Expected diff (P4-T1, see tool-registry-expected-diff.md D-E): workbuddy
+    // was labeled "adapter" by the frozen catalog constants but its declared
+    // usage mode is native (`workbuddy-native`); the registry-derived value is
+    // the correction.
+    if (tool.id === "workbuddy") {
+      assert.equal(usageLogParsingFor(tool.id), "native");
+      continue;
+    }
     assert.equal(
       usageLogParsingFor(tool.id),
       BASELINE_USAGE_PARSING[tool.id],

@@ -1,21 +1,11 @@
 /**
- * Compatibility catalog. The single source of truth for tool facts is now the
+ * Compatibility catalog. The single source of truth for tool facts is the
  * tool-registry (`src/lib/tool-registry/`). This module derives the legacy
  * `AI_TOOLS` / `AI_TOOL_IDS` projection from the registry so existing
  * consumers (detection, usage sources, skills scanner, onboarding) keep working
  * without per-file edits.
- *
- * `usageLogParsingFor` is NOT yet registry-derived: in M2 every config has
- * `usage.mode = "unsupported"` (real usage readers arrive in M4). Until then it
- * preserves the frozen baseline mapping so the Sources page does not regress.
- * M4-T4 switches it to `getUsagePlan()` / `capabilities.usage.mode`.
- *
- * Browser note: this module is imported by browser code today. It is safe in M2
- * because configs carry no reader keys, commands, or pricing. Before M4 adds
- * those, browser consumers are migrated to `public-manifest.generated.ts` and
- * this module becomes server-only.
  */
-import { listTools } from "../tool-registry/registry.ts";
+import { getUsagePlan, listTools } from "../tool-registry/registry.ts";
 
 export interface AiTool {
   /** Stable lowercase-kebab identifier (used as the usage `source` id). */
@@ -37,24 +27,15 @@ export interface AiTool {
  */
 export type UsageLogParsing = "native" | "adapter" | "unsupported";
 
-// Frozen baseline parser mapping (see __baseline__/baseline.ts). Replaced by
-// registry-derived capability in M4-T4.
-const NATIVE_USAGE_PARSERS = new Set(["claude-code", "codex"]);
-const ADAPTER_USAGE_PARSERS = new Set([
-  "cursor",
-  "gemini-cli",
-  "opencode",
-  "github-copilot",
-  "kimi-code",
-  "workbuddy",
-  "grok",
-  "roo-code",
-]);
-
+/**
+ * Parser coverage derived from the registry's usage capability (P4-T1).
+ * Note: workbuddy moves adapter -> native (its declared mode is native
+ * `workbuddy-native`); the frozen baseline recorded the old catalog label.
+ */
 export function usageLogParsingFor(toolId: string): UsageLogParsing {
-  if (NATIVE_USAGE_PARSERS.has(toolId)) return "native";
-  if (ADAPTER_USAGE_PARSERS.has(toolId)) return "adapter";
-  return "unsupported";
+  const plan = getUsagePlan(toolId);
+  if (!plan) return "unsupported";
+  return plan.mode;
 }
 
 const REGISTRY_TOOLS = listTools().filter(
