@@ -71,6 +71,7 @@ export const dashboard = {
     hitRate: "적중률 {rate}",
     costHint: "{period} · 로컬 모델 가격표로 추정",
     costUnknownHint: "일부 모델 가격 미상, 금액은 알려진 하한",
+    costEstimatedHint: "그중 {amount}는 추정 금액(참고용)",
     tokenInput: "입력 Token",
     tokenOutput: "출력 Token",
     tokenCacheRead: "캐시 읽기 Token",

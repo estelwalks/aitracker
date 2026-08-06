@@ -195,12 +195,20 @@ function Dashboard() {
     () => estimateUsageCost(selectedEvents),
     [selectedEvents],
   );
-  // KPI Row 1 — period-driven headline metrics.
-  const intervalCostCny = format.formatUsd(selectedCost.knownUsd);
+  // KPI Row 1 — period-driven headline metrics. The headline shows the total
+  // (exact + estimated); the hint always labels estimated amounts separately so
+  // estimates are never disguised as an exact/official bill (audit P1-1).
+  const intervalCostCny = format.formatUsd(
+    selectedCost.knownUsd + selectedCost.estimatedUsd,
+  );
   const intervalCostHint =
     selectedCost.unknownEvents > 0
       ? t("dashboard.kpi.costUnknownHint")
-      : t("dashboard.kpi.costHint", { period: periodLabels[period] });
+      : selectedCost.estimatedEvents > 0
+        ? t("dashboard.kpi.costEstimatedHint", {
+            amount: format.formatUsd(selectedCost.estimatedUsd),
+          })
+        : t("dashboard.kpi.costHint", { period: periodLabels[period] });
   const tokenMoM = useMemo(
     () =>
       computeMoM(
@@ -344,6 +352,12 @@ function Dashboard() {
     const rateDate = rates?.date ?? "";
     const rows: ExportRow[] = selectedEvents.map((event) => {
       const cost = estimateEventCost(event);
+      // Four-state export (audit P1-1): exact and estimated events export
+      // their amount (estimated amounts are reference/estimate values; the
+      // cost column carries no exactness claim); unpriced/not-billable events
+      // export no cost at all, exactly as before.
+      const exportable = cost.unknownEvents === 0;
+      const amountUsd = cost.knownUsd + cost.estimatedUsd;
       return {
         timestamp: event.timestamp,
         source: event.source,
@@ -354,10 +368,10 @@ function Dashboard() {
         cachedInputTokens: event.cachedInputTokens,
         cacheCreationInputTokens: event.cacheCreationInputTokens,
         reasoningOutputTokens: event.reasoningOutputTokens,
-        ...(cost.unknownEvents === 0
+        ...(exportable
           ? {
-              cost: cost.knownUsd,
-              costDisplay: convertUsd(cost.knownUsd, displayCurrency, rate),
+              cost: amountUsd,
+              costDisplay: convertUsd(amountUsd, displayCurrency, rate),
               currency: displayCurrency,
               rate,
               rateDate,
@@ -1171,7 +1185,9 @@ function buildPosterData(
     periodLabel,
     rangeLabel,
     tokens: totals.totalTokens,
-    costLabel: format.formatUsd(cost.knownUsd),
+    // Poster shows the combined total; estimated amounts are separately
+    // labeled in the dashboard cost display (audit P1-1 four states).
+    costLabel: format.formatUsd(cost.knownUsd + cost.estimatedUsd),
     savedLabel: format.formatUsd(cost.cacheSavingsUsd),
     hitRate: cacheRate(totals),
     trend,

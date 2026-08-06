@@ -69,6 +69,7 @@ export const dashboard = {
     hitRate: "命中率 {rate}",
     costHint: "{period} · 按本地模型目录估算",
     costUnknownHint: "部分模型价格未知，金额为已知下限",
+    costEstimatedHint: "其中 {amount} 为估算金额，仅供参考",
     tokenInput: "输入 Token",
     tokenOutput: "输出 Token",
     tokenCacheRead: "缓存读 Token",

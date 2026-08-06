@@ -184,16 +184,20 @@ function SessionsPage() {
     let tokens = 0;
     let turns = 0;
     let knownUsd = 0;
+    let estimatedUsd = 0;
     let cacheSavingsUsd = 0;
     let pricedEvents = 0;
+    let estimatedEvents = 0;
     let unknownEvents = 0;
     const unknownModels = new Set<string>();
     for (const session of summary.sessions) {
       tokens += session.totals.totalTokens;
       turns += session.turns;
       knownUsd += session.cost.knownUsd;
+      estimatedUsd += session.cost.estimatedUsd;
       cacheSavingsUsd += session.cost.cacheSavingsUsd;
       pricedEvents += session.cost.pricedEvents;
+      estimatedEvents += session.cost.estimatedEvents;
       unknownEvents += session.cost.unknownEvents;
       for (const model of session.cost.unknownModels) unknownModels.add(model);
     }
@@ -203,8 +207,10 @@ function SessionsPage() {
       turns,
       cost: {
         knownUsd,
+        estimatedUsd,
         cacheSavingsUsd,
         pricedEvents,
+        estimatedEvents,
         unknownEvents,
         unknownModels: [...unknownModels].sort(),
         complete: unknownEvents === 0,

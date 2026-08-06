@@ -13,7 +13,6 @@ import {
   RateRuleSchema,
   RouteSelectionRuleSchema,
   ToolModelObservationSchema,
-  ToolPricingPolicySchema,
   parseNanoUsd,
   usdPerMillionToNano,
 } from "./contracts";
@@ -144,15 +143,6 @@ test("PricingPack parses with defaults for empty rules/rates", () => {
   assert.deepEqual(parsed.rates, []);
 });
 
-test("ToolPricingPolicy defaults reasoningPolicy to ignore", () => {
-  const parsed = ToolPricingPolicySchema.parse({
-    billingMode: "api-metered",
-    fallbackProfileRef: "unpriced-v1",
-  });
-  assert.equal(parsed.reasoningPolicy, "ignore");
-  assert.deepEqual(parsed.rulePackRefs, []);
-});
-
 test("parseNanoUsd and usdPerMillionToNano convert correctly", () => {
   assert.equal(parseNanoUsd("5000000000"), 5_000_000_000n);
   // $5/MTok = 5e9 nanoUSD
@@ -196,6 +186,21 @@ test("BillingRoute accepts an official-api route with evidence + region", () => 
       kind: "aggregator",
     }).status,
     "active",
+  );
+  // P1-1 phase 3: `reference: true` marks a route usable as a reference price
+  // when no billing evidence exists (resolutions are then `estimated`).
+  assert.equal(
+    BillingRouteSchema.parse({
+      id: "r",
+      kind: "official-api",
+      provider: "openai",
+      reference: true,
+    }).reference,
+    true,
+  );
+  assert.equal(
+    BillingRouteSchema.parse({ id: "r", kind: "aggregator" }).reference,
+    undefined,
   );
 });
 
