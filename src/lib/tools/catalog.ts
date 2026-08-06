@@ -57,7 +57,9 @@ export function usageLogParsingFor(toolId: string): UsageLogParsing {
   return "unsupported";
 }
 
-const REGISTRY_TOOLS = listTools();
+const REGISTRY_TOOLS = listTools().filter(
+  (def) => def.catalogVisible !== false,
+);
 
 export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   id: def.id,
@@ -65,5 +67,5 @@ export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   detectRoots: def.detection.roots,
 }));
 
-/** Stable lowercase-kebab ids for all 27 tools, derived from the registry. */
+/** Stable lowercase-kebab ids for the 27 visible catalog tools (legacy sources excluded). */
 export const AI_TOOL_IDS: readonly string[] = AI_TOOLS.map((tool) => tool.id);
