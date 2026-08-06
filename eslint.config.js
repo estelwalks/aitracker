@@ -18,6 +18,7 @@ export default tseslint.config(
       "docs", // 文档目录(含外部 zip 解包样例),非本仓库代码
       "src/lib/tool-registry/public-manifest.generated.ts", // 生成产物,由 generate:manifest 重建
       "src/lib/pricing/pricing-definitions.generated.ts", // 生成产物,由 generate:pricing-imports 重建
+      "src/lib/security/security-rules.generated.ts", // 生成产物,由 generate:security-rules 重建
     ],
   },
   {
