@@ -327,12 +327,12 @@ export function buildContextBreakdown(
       addObservedRow(observedSkills, skill.name, skill.calls);
     }
 
-    // 归因模型 A（参考 TokenTracker tool_calls_breakdown）：
+    // 归因模型 A：
     // - input 系列（input/cached/cacheCreation）归 messageRoles（对话历史/
     //   用户输入/系统提示词），按角色互斥。
     // - 工具调用分摊**完整事件 token**（input+cache+output），作为独立归因
     //   视角——即「为调用这些工具而消耗的全部上下文」。与 Messages 不互斥
-    //   （TokenTracker 也是这样：Messages 151M + Tool calls 12.7M 并存）。
+    //   （Messages 与 Tool calls 的视图可并存）。
     //   故 SourceDetail 对工具/MCP 维度不显示「合计=100%」式的百分比。
     const fullCounts = distributableCounts(event);
 

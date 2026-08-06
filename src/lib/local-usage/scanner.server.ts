@@ -1814,10 +1814,7 @@ export async function scanLocalUsage(
     ),
   ]);
 
-  // The TokenTracker bridge is excluded from the scan path (P1-4): bridge
-  // data is only reachable through the explicit manual migration entry point
-  // in tokentracker-bridge.server.ts and is never merged into normal scans.
-  // The snapshot below is built exclusively from the native adapters above.
+  // The snapshot is built exclusively from the native adapters above.
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
