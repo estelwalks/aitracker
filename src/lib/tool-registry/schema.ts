@@ -507,6 +507,9 @@ export const PlatformProfilesSchema = z.object({
   }),
 });
 
+/** The authoritative per-platform path-base/availability profile (docs §6.1). */
+export type PlatformProfiles = z.infer<typeof PlatformProfilesSchema>;
+
 export const GenericReaderDefaultsSchema = z.object({
   schemaVersion: z.literal(1),
   description: z.string().optional(),

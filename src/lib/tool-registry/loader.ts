@@ -19,7 +19,11 @@ import type {
   UsageFieldMapping,
   UsagePathSpec,
 } from "./contracts.ts";
-import type { RawToolDefinition, SharedPolicyPacks } from "./schema.ts";
+import type {
+  PlatformProfiles,
+  RawToolDefinition,
+  SharedPolicyPacks,
+} from "./schema.ts";
 import { PRICING_PACKS } from "../pricing/pricing-definitions.generated.ts";
 import {
   RAW_TOOL_DEFINITIONS,
@@ -54,15 +58,65 @@ function toSkillRootSpec(root: RawSkillRootSpec): SkillRootSpec {
   return { base: toBase(root.base), path: root.path };
 }
 
-/** Base -> flattened HOME-relative prefix (docs §6.1 + D4 reverse mapping). */
-const BASE_PREFIX: Readonly<Record<string, string>> = {
+/**
+ * Env vars that redirect the XDG bases at resolution time (F5-T1). The
+ * platform profile declares the *default* directories in `xdgFallback`; the
+ * consumer layer can override them via these vars.
+ */
+export const XDG_ENV_VARS: Readonly<Record<string, string>> = {
+  configHome: "XDG_CONFIG_HOME",
+  dataHome: "XDG_DATA_HOME",
+};
+
+/** Conventional HOME-relative prefixes for the non-XDG bases (docs §6.1 + D4 reverse mapping). */
+const CONVENTIONAL_PREFIX: Readonly<Record<string, string>> = {
   home: "",
   userProfile: "AppData/",
   appData: "Library/Application Support/",
   appDataRoaming: "AppData/Roaming/",
-  configHome: ".config/",
-  dataHome: ".local/share/",
 };
+
+/** "~/.config" -> ".config" (the flattened HOME-relative form). */
+function homeRelative(dir: string): string {
+  if (dir === "~") return "";
+  if (dir.startsWith("~/")) return dir.slice(2);
+  return dir;
+}
+
+/**
+ * Build the base -> flattened HOME-relative prefix table from the platform
+ * profile (F5-T1). Every base declared in `basePlatforms` is projected via its
+ * conventional prefix, except `configHome`/`dataHome`, which take their default
+ * directory from `xdgFallback`. Bases the profile does not declare (e.g.
+ * `env:NAME`) are absent, so `projectBase` returns null for them - the profile
+ * is the authoritative source for what can be flattened.
+ */
+export function buildBasePrefixes(
+  profiles: PlatformProfiles,
+): ReadonlyMap<string, string> {
+  const prefixes = new Map<string, string>();
+  for (const base of Object.keys(profiles.basePlatforms)) {
+    const conventional = CONVENTIONAL_PREFIX[base];
+    if (conventional !== undefined) {
+      prefixes.set(base, conventional);
+      continue;
+    }
+    const fallback = profiles.xdgFallback[base];
+    if (fallback !== undefined) {
+      prefixes.set(base, `${homeRelative(fallback)}/`);
+    }
+  }
+  return prefixes;
+}
+
+/**
+ * Base -> flattened HOME-relative prefix (docs §6.1 + D4 reverse mapping),
+ * derived from the authoritative `platform-profiles.json` (via the generated
+ * shared packs) instead of a hardcoded table.
+ */
+const BASE_PREFIX: ReadonlyMap<string, string> = buildBasePrefixes(
+  SHARED_POLICY_PACKS.platformProfiles,
+);
 
 /**
  * Project a (base, path) pair to the flattened HOME-relative form legacy
@@ -70,9 +124,48 @@ const BASE_PREFIX: Readonly<Record<string, string>> = {
  * runtime) and return null.
  */
 export function projectBase(base: string, path: string): string | null {
-  const prefix = BASE_PREFIX[base];
+  const prefix = BASE_PREFIX.get(base);
   if (prefix === undefined) return null;
   return prefix + path;
+}
+
+export interface ProjectedPath {
+  /**
+   * Final path. When `homeRelative` is true it is a HOME-relative suffix
+   * (`join(home, path)`); otherwise it is self-contained (use as-is).
+   */
+  path: string;
+  homeRelative: boolean;
+}
+
+function joinPath(dir: string, path: string): string {
+  return `${dir.replace(/\/+$/, "")}/${path}`;
+}
+
+/**
+ * Env-aware projection (F5-T1 XDG support): `configHome`/`dataHome` honor
+ * `XDG_CONFIG_HOME`/`XDG_DATA_HOME` (absolute when set; `xdgFallback` when
+ * unset), and `env:NAME` bases resolve to `$NAME/path` when the variable is
+ * set. Every other base projects exactly like `projectBase` (HOME-relative).
+ */
+export function projectBaseWithEnv(
+  base: string,
+  path: string,
+  env: Readonly<Record<string, string | undefined>>,
+): ProjectedPath | null {
+  if (base.startsWith("env:")) {
+    const value = env[base.slice(4)];
+    if (!value) return null;
+    return { path: joinPath(value, path), homeRelative: false };
+  }
+  const xdgVar = XDG_ENV_VARS[base];
+  if (xdgVar !== undefined) {
+    const value = env[xdgVar];
+    if (value) return { path: joinPath(value, path), homeRelative: false };
+  }
+  const projected = projectBase(base, path);
+  if (projected === null) return null;
+  return { path: projected, homeRelative: true };
 }
 
 /** Project a v1.5 location to its flattened root. */
