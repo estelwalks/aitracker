@@ -21,14 +21,10 @@ const manifestMod = await tsImport(
   import.meta.url,
 );
 
-const { compileToolRegistry } = registryMod;
+const { getDefaultRegistry } = registryMod;
 const { generatePublicManifest, manifestIsSafe } = manifestMod;
-const { TOOL_DEFINITIONS } = await tsImport(
-  join(root, "src/lib/tool-registry/tools/index.ts"),
-  import.meta.url,
-);
 
-const registry = compileToolRegistry(TOOL_DEFINITIONS);
+const registry = getDefaultRegistry();
 if (registry.diagnostics.length > 0) {
   console.error("Registry validation failed:");
   for (const d of registry.diagnostics) {
@@ -42,7 +38,10 @@ const { loadBuiltinDefinitions } = await tsImport(
   import.meta.url,
 );
 const builtin = loadBuiltinDefinitions();
-const manifest = generatePublicManifest(TOOL_DEFINITIONS, builtin.sharedPacks);
+const manifest = generatePublicManifest(
+  registry.definitions,
+  builtin.sharedPacks,
+);
 if (!manifestIsSafe(manifest)) {
   console.error(
     "Generated manifest failed safety check (leaks sensitive fields).",
