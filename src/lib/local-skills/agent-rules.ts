@@ -29,21 +29,26 @@ export const DEFAULT_MARKERS: readonly string[] = ["SKILL.md", "skill.md"];
 export const DEFAULT_MAX_DEPTH = 3;
 
 /**
- * Canonical UI order of skill agents. Shared with `skill-rules.server.ts` so
- * server (rules) and browser (labels) agree on order. Must stay in sync with the
- * set of skill-capable tools - enforced by the registry/verify diagnostics.
+ * Canonical UI order of skill agents (P4-T2): derived from
+ * skill-market-policy.json via the browser-safe public manifest. Shared with
+ * `skill-rules.server.ts` so server (rules) and browser (labels) agree on
+ * order. Must stay in sync with the set of skill-capable tools - enforced by
+ * the registry/verify diagnostics.
  */
-export const SKILL_AGENT_ORDER: readonly string[] = [
-  "claude-code",
-  "codex",
-  "cursor",
-  "gemini-cli",
-  "opencode",
-  "grok",
-  "hermes",
-  "openclaw",
-  "antigravity",
-];
+export const SKILL_AGENT_ORDER: readonly string[] =
+  PUBLIC_TOOL_MANIFEST.skillAgentOrder ??
+    // Fallback for stale generated manifests: the frozen 9-tool order.
+    [
+      "claude-code",
+      "codex",
+      "cursor",
+      "gemini-cli",
+      "opencode",
+      "grok",
+      "hermes",
+      "openclaw",
+      "antigravity",
+    ];
 
 const MANIFEST_BY_ID: ReadonlyMap<
   string,

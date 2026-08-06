@@ -112,7 +112,7 @@ export function compileToolRegistry(
     diagnostics,
     byId,
     ids: defs.map((def) => def.id),
-    publicManifest: generatePublicManifest(defs),
+    publicManifest: generatePublicManifest(defs, options?.sharedPacks),
     canonicalSource: canonicalRegistryString(defs, options?.sharedPacks),
     ...(options?.sharedPacks ? { sharedPacks: options.sharedPacks } : {}),
   };
