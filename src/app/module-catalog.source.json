@@ -1,0 +1,59 @@
+{
+  "catalogVersion": 1,
+  "modules": [
+    {
+      "id": "dashboard",
+      "navigation": { "group": "core", "route": "/" },
+      "i18n": { "labelKey": "nav.dashboard" },
+      "capabilities": ["read-dashboard"]
+    },
+    {
+      "id": "usage",
+      "navigation": { "group": "core", "route": "/sources" },
+      "i18n": { "labelKey": "nav.sources" },
+      "capabilities": ["read-usage"]
+    },
+    {
+      "id": "agent-directory",
+      "navigation": { "group": "core", "route": "/skills" },
+      "i18n": { "labelKey": "nav.skills" },
+      "capabilities": ["read-agents"]
+    },
+    {
+      "id": "skill-catalog",
+      "navigation": { "group": "core", "route": "/skills" },
+      "i18n": { "labelKey": "nav.skills" },
+      "capabilities": ["read-skills"]
+    },
+    {
+      "id": "skill-distribution",
+      "navigation": { "group": "core", "route": "/market" },
+      "i18n": { "labelKey": "nav.market" },
+      "capabilities": ["install-skills"]
+    },
+    {
+      "id": "security-assessment",
+      "navigation": { "group": "defense", "route": "/security" },
+      "i18n": { "labelKey": "nav.security" },
+      "capabilities": ["scan-security"]
+    },
+    {
+      "id": "security-monitor",
+      "navigation": { "group": "defense", "route": "/security" },
+      "i18n": { "labelKey": "nav.security" },
+      "capabilities": ["monitor-security"]
+    },
+    {
+      "id": "tasks",
+      "navigation": { "group": "infrastructure", "route": "/settings" },
+      "i18n": { "labelKey": "nav.settings" },
+      "capabilities": ["configure-tasks"]
+    },
+    {
+      "id": "settings",
+      "navigation": { "group": "infrastructure", "route": "/settings" },
+      "i18n": { "labelKey": "nav.settings" },
+      "capabilities": ["manage-settings"]
+    }
+  ]
+}
