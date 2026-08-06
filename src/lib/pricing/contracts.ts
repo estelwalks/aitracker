@@ -207,9 +207,9 @@ export type PricingManifest = z.infer<typeof PricingManifestSchema>;
 // ---------------------------------------------------------------------------
 
 export const ReasoningPolicySchema = z.enum([
-  "separate",
-  "include-in-output",
   "ignore",
+  "bill-as-output",
+  "separate",
 ]);
 
 export const ToolPricingPolicySchema = z.object({
@@ -217,7 +217,7 @@ export const ToolPricingPolicySchema = z.object({
   billingMode: z.enum(["api-metered", "subscription", "unsupported"]),
   rulePackRefs: z.array(z.string().min(1).max(64)).default([]),
   fallbackProfileRef: z.string().min(1).max(128),
-  reasoningPolicy: ReasoningPolicySchema.default("separate"),
+  reasoningPolicy: ReasoningPolicySchema.default("ignore"),
 });
 
 export type ToolPricingPolicy = z.infer<typeof ToolPricingPolicySchema>;
