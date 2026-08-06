@@ -1,21 +1,13 @@
 /**
  * Per-tool pricing policy (v1.5).
  *
- * Each tool declares `billingMode` + `fallbackProfileRef` so an unknown model
- * always has a defined outcome (never a silent $0). Until the tool-registry is
- * rewritten to JSON (Phase 3), the policy is derived from the v1.1 registry's
- * usage capability + the legacy adapter sources (aipy/cline) that produce
- * billable events but are not in the 27-tool catalog.
+ * Each tool declares `billingMode` + `fallbackProfileRef` in its JSON
+ * definition (P4-T5) so an unknown model always has a defined outcome (never a
+ * silent $0). The policy is derived from the registry's pricing metadata;
+ * `rulePackRefs` feed the resolver's pack selection.
  */
 import type { ToolPricingPolicy } from "./contracts.ts";
-import { getUsagePlan } from "../tool-registry/registry.ts";
-
-const API_METERED: ToolPricingPolicy = {
-  billingMode: "api-metered",
-  rulePackRefs: [],
-  fallbackProfileRef: "unpriced-v1",
-  reasoningPolicy: "ignore",
-};
+import { getPricingPolicyRefs } from "../tool-registry/registry.ts";
 
 const UNSUPPORTED: ToolPricingPolicy = {
   billingMode: "unsupported",
@@ -24,12 +16,13 @@ const UNSUPPORTED: ToolPricingPolicy = {
   reasoningPolicy: "ignore",
 };
 
-/** Legacy adapter sources that produce billable events but lack a registry config. */
-const LEGACY_BILLABLE_SOURCES = new Set(["aipy", "cline"]);
-
 export function getToolPricingPolicy(toolId: string): ToolPricingPolicy {
-  if (getUsagePlan(toolId) || LEGACY_BILLABLE_SOURCES.has(toolId)) {
-    return API_METERED;
-  }
-  return UNSUPPORTED;
+  const refs = getPricingPolicyRefs(toolId);
+  if (!refs?.billingMode) return UNSUPPORTED;
+  return {
+    billingMode: refs.billingMode,
+    rulePackRefs: [...refs.rulePackRefs],
+    fallbackProfileRef: refs.fallbackProfileRef ?? "unpriced-v1",
+    reasoningPolicy: "ignore",
+  };
 }
