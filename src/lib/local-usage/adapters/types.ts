@@ -37,8 +37,3 @@ export interface ExternalUsageAdapterConfig {
   mapping: UsageFieldMapping;
   query?: string;
 }
-
-export interface ExternalUsageAdapterFile {
-  version: 1;
-  adapters: ExternalUsageAdapterConfig[];
-}

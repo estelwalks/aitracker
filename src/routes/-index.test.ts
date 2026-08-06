@@ -41,8 +41,5 @@ test("事件优先使用显式服务商，并按模型归属常见服务商", ()
   assert.equal(resolveEventProvider(event("deepseek-chat")), "DeepSeek");
   assert.equal(resolveEventProvider(event("Kimi-K2")), "Moonshot");
   assert.equal(resolveEventProvider(event("grok-4")), "xAI");
-  assert.equal(
-    resolveEventProvider(event("本地未知模型", "custom:原始来源")),
-    "custom:原始来源",
-  );
+  assert.equal(resolveEventProvider(event("本地未知模型", "zed")), "zed");
 });

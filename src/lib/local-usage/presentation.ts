@@ -86,10 +86,8 @@ export function createEmptyUsageSnapshot(): LocalUsageSnapshot {
 export function sourceLabel(source: LocalUsageSource | string): string {
   if (source === "claude-code") return "Claude Code";
   if (source === "codex") return "Codex";
-  if (source === "aipy" || source === "custom:aipy") return "Aipy";
-  if (source === "workbuddy" || source === "custom:workbuddy")
-    return "WorkBuddy";
-  if (source.startsWith("custom:")) return source.slice("custom:".length);
+  if (source === "aipy") return "Aipy";
+  if (source === "workbuddy") return "WorkBuddy";
   return source;
 }
 
