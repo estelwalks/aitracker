@@ -35,6 +35,8 @@ export interface UsagePathSpec {
   /** Glob selecting files under root. */
   glob: string;
   format: UsageFormat;
+  /** v1.5 platform targets this path serves (the loader preserves them). */
+  targets?: readonly PlatformTarget[];
 }
 
 /**
