@@ -16,8 +16,11 @@ import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
 import { APP_DATA_DIR, ENV } from "../app-config";
-import { getDefaultRegistry } from "../tool-registry/registry.ts";
-import { computeRegistryFingerprint } from "../tool-registry/fingerprint.server.ts";
+import {
+  getDefaultRegistry,
+  getScannerPolicy,
+} from "../tool-registry/registry.ts";
+import { computeToolRegistryVersion } from "../tool-registry/fingerprint.server.ts";
 import { buildLocalUsageSnapshot } from "./aggregate.ts";
 import {
   collectCodexContextRecord,
@@ -53,22 +56,28 @@ import type {
 import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1_000;
-// Keep enough history for the year/custom ranges exposed by the UI. A 30-day
-// discovery window made machines with valid older logs look completely empty.
-const DEFAULT_LOOKBACK_DAYS = 10 * 365;
-const MAX_FILES_PER_SOURCE = 1_200;
-const MAX_DISCOVERED_ENTRIES_PER_SOURCE = 30_000;
-const MAX_JSONL_LINE_LENGTH = 16 * 1024 * 1024;
-const FUTURE_TIMESTAMP_TOLERANCE_MS = DAY_IN_MS;
+// Scanner budgets (P4-T3): moved to _shared/scanner-policy.json; the values
+// below are null-safe fallbacks when the policy getter has no packs.
+const SCANNER_POLICY = getScannerPolicy();
+const DEFAULT_LOOKBACK_DAYS = SCANNER_POLICY?.lookbackDays ?? 10 * 365;
+const MAX_FILES_PER_SOURCE = SCANNER_POLICY?.maxFilesPerSource ?? 1_200;
+const MAX_DISCOVERED_ENTRIES_PER_SOURCE =
+  SCANNER_POLICY?.maxDiscoveredEntriesPerSource ?? 30_000;
+const MAX_JSONL_LINE_LENGTH =
+  SCANNER_POLICY?.maxJsonlLineLength ?? 16 * 1024 * 1024;
+const FUTURE_TIMESTAMP_TOLERANCE_MS =
+  SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
 const PERSISTENT_CACHE_VERSION = 12;
-const PERSISTENT_CACHE_FILE_NAME = "local-usage-index-v10.json";
+const PERSISTENT_CACHE_FILE_NAME =
+  SCANNER_POLICY?.cacheFileName ?? "local-usage-index-v10.json";
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
- * change (paths, reader, command, or pricing-rule set) invalidates the cache so
- * stale parse results are never served. Bumped with PERSISTENT_CACHE_VERSION
- * (11 -> 12) to force a one-time rebuild on first run after the migration.
+ * change (paths, reader, command, pricing-rule set, or any JSON definition)
+ * invalidates the cache so stale parse results are never served. Bumped with
+ * PERSISTENT_CACHE_VERSION (11 -> 12) to force a one-time rebuild on first run
+ * after the migration.
  */
-const REGISTRY_FINGERPRINT = computeRegistryFingerprint(getDefaultRegistry());
+const REGISTRY_FINGERPRINT = computeToolRegistryVersion(getDefaultRegistry());
 const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
   "local-usage-index-v1.json",
   "local-usage-index-v2.json",

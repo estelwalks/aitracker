@@ -1,93 +1,15 @@
 import type { UsageAdapterContract, UsageFieldMapping } from "./types.ts";
-import { listTools } from "../../tool-registry/registry.ts";
+import {
+  getGenericReaderDefaults,
+  listTools,
+} from "../../tool-registry/registry.ts";
 
-export const GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
-
-const COMMON_MAPPING: UsageFieldMapping = {
-  records: [
-    "events",
-    "messages",
-    "turns",
-    "history",
-    "items",
-    "data.events",
-    "data.messages",
-  ],
-  timestamp: [
-    "timestamp",
-    "created_at",
-    "createdAt",
-    "time",
-    "metadata.timestamp",
-    "usage.timestamp",
-  ],
-  sessionId: [
-    "session_id",
-    "sessionId",
-    "conversation_id",
-    "conversationId",
-    "thread_id",
-    "threadId",
-    "message.session_id",
-    "message.sessionId",
-    "metadata.session_id",
-    "metadata.sessionId",
-  ],
-  model: ["model", "model_id", "modelId", "metadata.model", "usage.model"],
-  project: [
-    "cwd",
-    "project",
-    "project_path",
-    "projectPath",
-    "workspace",
-    "workspace_path",
-    "metadata.cwd",
-  ],
-  inputTokens: [
-    "usage.input_tokens",
-    "usage.inputTokens",
-    "token_usage.input_tokens",
-    "tokenUsage.inputTokens",
-    "tokens.input",
-    "metrics.input_tokens",
-  ],
-  cachedInputTokens: [
-    "usage.cached_input_tokens",
-    "usage.cache_read_input_tokens",
-    "usage.cachedInputTokens",
-    "token_usage.cached_input_tokens",
-    "tokenUsage.cachedInputTokens",
-    "tokens.cached_input",
-  ],
-  cacheCreationInputTokens: [
-    "usage.cache_creation_input_tokens",
-    "usage.cacheCreationInputTokens",
-    "token_usage.cache_creation_input_tokens",
-    "tokens.cache_creation_input",
-  ],
-  outputTokens: [
-    "usage.output_tokens",
-    "usage.outputTokens",
-    "token_usage.output_tokens",
-    "tokenUsage.outputTokens",
-    "tokens.output",
-    "metrics.output_tokens",
-  ],
-  reasoningOutputTokens: [
-    "usage.reasoning_output_tokens",
-    "usage.reasoningOutputTokens",
-    "token_usage.reasoning_output_tokens",
-    "tokens.reasoning",
-  ],
-  totalTokens: [
-    "usage.total_tokens",
-    "usage.totalTokens",
-    "token_usage.total_tokens",
-    "tokenUsage.totalTokens",
-    "tokens.total",
-    "metrics.total_tokens",
-  ],
-};
+/**
+ * Generic-reader defaults (moved to _shared/generic-reader-defaults.json,
+ * P4-T3): the loader already fills them on every compiled definition; these
+ * are null-safe fallbacks only.
+ */
+const genericDefaults = getGenericReaderDefaults();
 
 /**
  * Built-in usage adapters, derived from the tool-registry: one entry per tool
@@ -108,10 +30,12 @@ const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
     const entry: UsageAdapterContract = {
       source: def.id,
       paths: [...usage.paths!],
-      mapping:
-        (usage.mapping as UsageFieldMapping | undefined) ?? COMMON_MAPPING,
+      // The loader fills these on every compiled definition; the shared-pack
+      // fallback only guards a null policy getter (never in practice).
+      mapping: (usage.mapping ??
+        genericDefaults!.defaultMapping) as UsageFieldMapping,
       maxFileSizeBytes:
-        usage.maxFileSizeBytes ?? GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES,
+        usage.maxFileSizeBytes ?? genericDefaults!.defaultMaxFileSizeBytes,
       kind: "builtin",
     };
     if (usage.query) entry.query = usage.query;
