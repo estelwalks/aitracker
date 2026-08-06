@@ -21,7 +21,8 @@ const schemaMod = await tsImport(
   join(root, "src/lib/security/security-rules.schema.ts"),
   import.meta.url,
 );
-const { SecurityRulesFileSchema, isSafeSecurityPattern } = schemaMod;
+const { SecurityRulesFileSchema, isSafeSecurityPattern, detectReDoS } =
+  schemaMod;
 
 function fail(msg) {
   console.error(`generate-security-rules: ${msg}`);
@@ -41,9 +42,10 @@ for (const rule of parsed.data.rules) {
   if (ids.has(rule.id)) fail(`duplicate rule id "${rule.id}"`);
   ids.add(rule.id);
   if (!isSafeSecurityPattern(rule.pattern)) {
-    fail(
-      `rule "${rule.id}" has an unsafe pattern (empty/over-long/non-compiling/nested-quantifier)`,
-    );
+    const reason =
+      detectReDoS(rule.pattern) ??
+      "empty / over-long / non-compiling (new RegExp)";
+    fail(`rule "${rule.id}" has an unsafe pattern: ${reason}`);
   }
 }
 
