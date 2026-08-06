@@ -7,10 +7,14 @@ import {
   BASELINE_USAGE_PARSING,
 } from "./__baseline__/baseline.ts";
 
-/** Legacy collection sources: real usage sources hidden from the product catalog. */
-const LEGACY_HIDDEN_IDS = new Set(["aipy", "cline"]);
+/**
+ * User-added extension tools (aipy/cline): real usage sources that the user
+ * added beyond the 27-tool product catalog and wants displayed like any other
+ * tool (catalogVisible=true, no longer legacy-hidden).
+ */
+const EXTENSION_IDS = ["aipy", "cline"];
 
-test("the registry compiles all 29 tool configs (27 visible + 2 legacy) with no diagnostics", () => {
+test("the registry compiles all 29 tool definitions with no diagnostics", () => {
   const registry = getDefaultRegistry();
   const errors = registry.diagnostics.filter((d) => d.severity === "error");
   assert.deepEqual(errors, []);
@@ -19,12 +23,15 @@ test("the registry compiles all 29 tool configs (27 visible + 2 legacy) with no 
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
   const registry = getDefaultRegistry();
-  // The 27 visible catalog tools match the frozen baseline exactly.
-  const visible = registry.definitions.filter(
-    (def) => def.catalogVisible !== false,
+  // All 29 tools are visible now (aipy/cline are user extensions, not hidden).
+  assert.equal(
+    registry.definitions.filter((def) => def.catalogVisible !== false).length,
+    29,
   );
+  // The frozen 27-tool baseline matches the first 27 definitions in order.
+  const ids = registry.definitions.map((def) => def.id);
   assert.deepEqual(
-    visible.map((def) => def.id),
+    ids.slice(0, 27),
     BASELINE_TOOLS.map((t) => t.id),
   );
   for (const expected of BASELINE_TOOLS) {
@@ -33,11 +40,11 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
     assert.equal(def.display.nameZh, expected.nameZh);
     assert.deepEqual([...def.detection.roots], [...expected.detectRoots]);
   }
-  // The 2 legacy sources are present and hidden.
-  for (const id of LEGACY_HIDDEN_IDS) {
+  // The user extension tools are present and visible.
+  for (const id of EXTENSION_IDS) {
     const def = registry.byId.get(id);
-    assert.ok(def, `legacy source "${id}" missing from registry`);
-    assert.equal(def?.catalogVisible, false);
+    assert.ok(def, `extension tool "${id}" missing from registry`);
+    assert.notEqual(def?.catalogVisible, false);
   }
 });
 
@@ -45,12 +52,12 @@ test("each config id equals its filename stem", () => {
   const registry = getDefaultRegistry();
   const ids = registry.ids;
   assert.equal(new Set(ids).size, ids.length, "config ids must be unique");
-  // 27 visible ids match the baseline; aipy/cline are the extra legacy ids.
+  // 27 baseline ids + aipy/cline extensions.
   assert.deepEqual(
-    [...ids].filter((id) => !LEGACY_HIDDEN_IDS.has(id)).sort(),
-    BASELINE_TOOLS.map((t) => t.id).sort(),
+    [...ids].slice(0, 27),
+    BASELINE_TOOLS.map((t) => t.id),
   );
-  for (const id of LEGACY_HIDDEN_IDS) assert.ok(ids.includes(id));
+  assert.deepEqual(ids.slice(27), EXTENSION_IDS);
 });
 
 test("skill/market/usage capabilities match the frozen baseline sets", () => {
@@ -66,7 +73,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
   ];
-  // 12 tools carry a usage capability: 3 native + 7 catalog adapter + 2 legacy adapter.
+  // 12 tools carry a usage capability: 3 native + 7 catalog adapter + 2 extension adapter.
   const BASELINE_USAGE_NATIVE = new Set(["claude-code", "codex", "workbuddy"]);
   const BASELINE_USAGE_ADAPTER = new Set([
     "cursor",
@@ -107,18 +114,18 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
   }
 });
 
-test("public manifest mirrors the 27 visible tools (legacy hidden)", () => {
+test("public manifest mirrors all 29 visible tools", () => {
   const registry = getDefaultRegistry();
-  assert.equal(registry.publicManifest.tools.length, 27);
+  assert.equal(registry.publicManifest.tools.length, 29);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
-    BASELINE_TOOLS.map((t) => t.id),
+    registry.definitions.map((d) => d.id),
   );
-  // Legacy sources must not leak into the browser-safe manifest.
-  for (const id of LEGACY_HIDDEN_IDS) {
+  // User extension tools appear in the browser-safe manifest too.
+  for (const id of EXTENSION_IDS) {
     assert.ok(
-      !registry.publicManifest.tools.some((t) => t.id === id),
-      `legacy source "${id}" leaked into public manifest`,
+      registry.publicManifest.tools.some((t) => t.id === id),
+      `extension tool "${id}" missing from public manifest`,
     );
   }
 });

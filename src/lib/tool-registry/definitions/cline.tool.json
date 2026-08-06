@@ -2,7 +2,6 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "cline",
-  "catalogVisible": false,
   "display": {
     "name": "Cline",
     "nameZh": "Cline"
