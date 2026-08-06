@@ -150,4 +150,6 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log("check-hardcoded-text: no hardcoded CJK UI text in routes/components");
+console.log(
+  "check-hardcoded-text: no hardcoded CJK UI text in routes/components",
+);
