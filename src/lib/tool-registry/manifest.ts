@@ -79,6 +79,17 @@ export const FORBIDDEN_MANIFEST_TOKENS: readonly string[] = [
   ".claude",
   ".codex",
   ".config/",
+  // v1.5 fields that must never reach the browser bundle (docs §5/§7).
+  "locations",
+  "rulePackRefs",
+  "billingMode",
+  "fallbackProfileRef",
+  "platform-profiles",
+  "appData",
+  "userProfile",
+  "configHome",
+  "dataHome",
+  "tool.json",
 ];
 
 /** True when a serialized manifest contains no forbidden token. */
