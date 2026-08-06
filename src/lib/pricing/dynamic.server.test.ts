@@ -63,8 +63,10 @@ test("Doubao tiered pricing is resolved offline from rule packs (parity at USD@7
       reasoningOutputTokens: 0,
       totalTokens: 1_200_000,
     });
-    // tier3 (open): 0.2MTok*(9.6/7.2) + 1MTok*(48/7.2) = 6.9333... USD
-    assert.ok(Math.abs(cost.knownUsd - 6.933333333) < 1e-6);
+    // tier3 (open): 0.2MTok*(9.6/7.2) + 1MTok*(48/7.2) = 6.9333... USD.
+    // No billing evidence on local events -> reference-route estimated subtotal.
+    assert.ok(Math.abs(cost.estimatedUsd - 6.933333333) < 1e-6);
+    assert.equal(cost.knownUsd, 0);
     assert.equal(cost.complete, true);
   } finally {
     applyPricingSnapshot(null);

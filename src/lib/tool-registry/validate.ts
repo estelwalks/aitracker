@@ -4,12 +4,10 @@
  * (dev/CI aborts on errors), by the verify script, and by tests.
  */
 import type {
-  ModelMatcher,
   ToolDefinition,
   UsageReaderKey,
   SessionReaderKey,
 } from "./contracts.ts";
-import { matchModel, normalizeModel } from "./contracts.ts";
 
 export type DiagnosticSeverity = "error" | "warning";
 
@@ -47,7 +45,6 @@ const PLATFORM_STATUSES = new Set(["supported", "planned", "unsupported"]);
 
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/u;
 const ENV_VAR_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 function isAbsoluteLike(path: string): boolean {
   return (
@@ -63,51 +60,6 @@ export function isUnsafePath(path: string): boolean {
   if (path.includes("\0")) return true;
   if (isAbsoluteLike(path)) return true;
   return path.split(/[\\/]+/u).includes("..");
-}
-
-function exampleModels(matcher: ModelMatcher): string[] {
-  if (matcher.kind === "exactOrSnapshot") {
-    return matcher.names.flatMap((name) => {
-      const n = normalizeModel(name);
-      return [n, `${n}-20`];
-    });
-  }
-  return [matcher.parts.join("-")];
-}
-
-/**
- * Two matchers "share a model" when an example of one is matched by the other.
- * Used for same-priority overlap detection. Conservative: catches the common
- * overlap shapes (identical names, general-vs-specific includesAll) without
- * false positives on provably-distinct rules.
- */
-function matchersShareModel(a: ModelMatcher, b: ModelMatcher): boolean {
-  const aExamples = exampleModels(a).map(normalizeModel);
-  const bExamples = exampleModels(b).map(normalizeModel);
-  return (
-    aExamples.some((m) => matchModel(b, m)) ||
-    bExamples.some((m) => matchModel(a, m))
-  );
-}
-
-function dateRangesOverlap(
-  aFrom: string,
-  aTo: string | undefined,
-  bFrom: string,
-  bTo: string | undefined,
-): boolean {
-  const aStart = aFrom;
-  const aEnd = aTo ?? "9999-12-31";
-  const bStart = bFrom;
-  const bEnd = bTo ?? "9999-12-31";
-  return aStart <= bEnd && bStart <= aEnd;
-}
-
-function isValidMatcher(matcher: ModelMatcher): boolean {
-  if (matcher.kind === "exactOrSnapshot") {
-    return matcher.names.length > 0 && matcher.names.every((n) => n.length > 0);
-  }
-  return matcher.parts.length > 0 && matcher.parts.every((p) => p.length > 0);
 }
 
 export function validateToolDefinitions(
@@ -410,102 +362,12 @@ export function validateToolDefinitions(
       }
     }
 
-    // Pricing (v1.5): billingMode/fallbackProfileRef policy metadata.
-    const pricing = def.pricing;
-    if (pricing) {
-      if (
-        pricing.billingMode !== undefined &&
-        !["api-metered", "subscription", "unsupported"].includes(
-          pricing.billingMode,
-        )
-      ) {
-        diag(
-          id,
-          "invalid-billing-mode",
-          `billingMode "${pricing.billingMode}" is not a known mode`,
-        );
-      }
-      if (
-        pricing.billingMode === "unsupported" &&
-        pricing.rulePackRefs?.length
-      ) {
-        diag(
-          id,
-          "unsupported-billing-has-refs",
-          "billingMode=unsupported must not reference rule packs",
-        );
-      }
-      if (pricing.billingMode !== undefined && !pricing.fallbackProfileRef) {
-        diag(
-          id,
-          "pricing-missing-fallback",
-          "pricing requires a fallbackProfileRef",
-        );
-      }
-    }
-    // Pricing rules (legacy inline rules; v1.5 references rule packs instead).
-    if (pricing) {
-      const ruleIds = new Set<string>();
-      for (const rule of pricing.rules ?? []) {
-        if (ruleIds.has(rule.id)) {
-          diag(
-            id,
-            "duplicate-price-rule",
-            `duplicate pricing rule id "${rule.id}"`,
-          );
-        }
-        ruleIds.add(rule.id);
-        if (!isValidMatcher(rule.match)) {
-          diag(
-            id,
-            "invalid-price-matcher",
-            `pricing rule "${rule.id}" has an invalid matcher`,
-          );
-        }
-        if (!DATE_PATTERN.test(rule.effectiveFrom)) {
-          diag(
-            id,
-            "invalid-effective-from",
-            `pricing rule "${rule.id}" effectiveFrom must be YYYY-MM-DD`,
-          );
-        }
-        if (
-          rule.effectiveTo !== undefined &&
-          !DATE_PATTERN.test(rule.effectiveTo)
-        ) {
-          diag(
-            id,
-            "invalid-effective-to",
-            `pricing rule "${rule.id}" effectiveTo must be YYYY-MM-DD`,
-          );
-        }
-      }
-      // Same-priority overlap detection.
-      const rules = pricing.rules ?? [];
-      for (let i = 0; i < rules.length; i += 1) {
-        for (let j = i + 1; j < rules.length; j += 1) {
-          const a = rules[i];
-          const b = rules[j];
-          const samePriority = (a.priority ?? 0) === (b.priority ?? 0);
-          if (
-            samePriority &&
-            dateRangesOverlap(
-              a.effectiveFrom,
-              a.effectiveTo,
-              b.effectiveFrom,
-              b.effectiveTo,
-            ) &&
-            matchersShareModel(a.match, b.match)
-          ) {
-            diag(
-              id,
-              "price-rule-overlap",
-              `pricing rules "${a.id}" and "${b.id}" overlap (same priority, overlapping dates, shared models)`,
-            );
-          }
-        }
-      }
-    }
+    // P1-1: tools no longer hold pricing policy (billingMode/fallbackProfileRef/
+    // rulePackRefs) or legacy inline rate rules - pricing ownership moved to
+    // billing routes (pricing/contracts.ts + resolve.ts). The only per-tool
+    // pricing declaration is `modelObservation` (evidence extraction), which is
+    // schema-validated (schema.ts) and whose normalize profile is verified by
+    // the loader (`validateModelObservationProfiles`).
   }
 
   return diags;

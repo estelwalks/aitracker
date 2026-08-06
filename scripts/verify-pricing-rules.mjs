@@ -62,16 +62,14 @@ if (!versionMatch) {
 }
 
 // Parity spot-checks against the frozen baseline (docs TC-PRC-001/002).
+// Approved diff (audit P1-1, F1-T9): local lookups carry no billing evidence,
+// so the frozen baseline prices reproduce with `estimated` confidence
+// (reference-route price, reason `no-route-evidence`) - the amounts are
+// unchanged, the confidence is downgraded from exact per the audit.
 const baseline = await impRoot(
   "src/lib/tool-registry/__baseline__/baseline.ts",
 );
 const { BASELINE_MODEL_PRICES } = baseline;
-const policy = {
-  billingMode: "api-metered",
-  rulePackRefs: [],
-  fallbackProfileRef: "unpriced-v1",
-  reasoningPolicy: "ignore",
-};
 let parityFailures = 0;
 for (const bp of BASELINE_MODEL_PRICES) {
   const model =
@@ -92,13 +90,13 @@ for (const bp of BASELINE_MODEL_PRICES) {
         reasoningOutput: 0n,
       },
     },
-    policy,
+    {},
   );
   const expected = BigInt(Math.round(bp.inputUsdPerMillion * 1_000_000_000));
-  if (res.confidence !== "exact" || res.knownUsdNano !== expected) {
+  if (res.confidence !== "estimated" || res.knownUsdNano !== expected) {
     parityFailures += 1;
     console.error(
-      `  parity: ${model} expected ${expected} nanoUSD (exact), got ${res.confidence} ${res.knownUsdNano ?? "?"}`,
+      `  parity: ${model} expected ${expected} nanoUSD (estimated), got ${res.confidence} ${res.knownUsdNano ?? "?"}`,
     );
   }
 }
@@ -108,5 +106,5 @@ if (parityFailures > 0) {
 }
 
 console.log(
-  `\nOK: ${BASELINE_MODEL_PRICES.length} baseline prices reproduce; no compile errors; generated file in sync.`,
+  `\nOK: ${BASELINE_MODEL_PRICES.length} baseline prices reproduce (estimated, reference-route); no compile errors; generated file in sync.`,
 );

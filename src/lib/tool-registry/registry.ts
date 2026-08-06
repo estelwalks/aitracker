@@ -7,9 +7,6 @@
  * safe projection produced by `generatePublicManifest`.
  */
 import {
-  matchModel,
-  normalizeModel,
-  type ModelRateRule,
   type PlatformStatus,
   type PlatformTarget,
   type ToolDefinition,
@@ -149,37 +146,6 @@ export function getSessionPlanFor(def: ToolDefinition): SessionPlan | null {
   return { toolId: def.id, reader: sessions.reader, command: sessions.command };
 }
 
-export interface FindModelRateInput {
-  toolId: string;
-  model: string;
-  /** ISO date or datetime; defaults to today. */
-  occurredAt?: string;
-}
-
-/** Find the best price rule for a (toolId, model, date) triple; null if none. */
-export function findModelRateIn(
-  registry: CompiledRegistry,
-  input: FindModelRateInput,
-): ModelRateRule | null {
-  const def = registry.byId.get(input.toolId);
-  if (!def?.pricing) return null;
-  const normalized = normalizeModel(input.model);
-  const date = (input.occurredAt ?? new Date().toISOString()).slice(0, 10);
-  const matching = (def.pricing.rules ?? []).filter((rule) => {
-    if (!matchModel(rule.match, normalized)) return false;
-    if (rule.effectiveFrom > date) return false;
-    if (rule.effectiveTo !== undefined && date > rule.effectiveTo) return false;
-    return true;
-  });
-  if (matching.length === 0) return null;
-  matching.sort(
-    (a, b) =>
-      (b.priority ?? 0) - (a.priority ?? 0) ||
-      b.effectiveFrom.localeCompare(a.effectiveFrom),
-  );
-  return matching[0];
-}
-
 // ---------------------------------------------------------------------------
 // Default-registry convenience wrappers. Compiled lazily from the v1.5 JSON
 // definitions (definitions.generated.ts) via the loader - runtime never reads
@@ -233,10 +199,6 @@ export function getUsagePlan(id: string): UsagePlan | null {
 export function getSessionPlan(id: string): SessionPlan | null {
   const def = getTool(id);
   return def ? getSessionPlanFor(def) : null;
-}
-
-export function findModelRate(input: FindModelRateInput): ModelRateRule | null {
-  return findModelRateIn(getDefaultRegistry(), input);
 }
 
 export function getPublicTools(): readonly PublicTool[] {
@@ -646,26 +608,4 @@ export function getUsageTaxonomy(
   registry: CompiledRegistry = getDefaultRegistry(),
 ) {
   return registry.sharedPacks?.usageTaxonomy ?? null;
-}
-
-export interface PricingPolicyRefs {
-  billingMode?: "api-metered" | "subscription" | "unsupported";
-  fallbackProfileRef?: string;
-  rulePackRefs: readonly string[];
-}
-
-/** Pricing policy metadata declared by the tool JSON (docs §8.2). */
-export function getPricingPolicyRefs(
-  toolId: string,
-  registry: CompiledRegistry = getDefaultRegistry(),
-): PricingPolicyRefs | null {
-  const pricing = registry.byId.get(toolId)?.pricing;
-  if (!pricing) return null;
-  return {
-    ...(pricing.billingMode ? { billingMode: pricing.billingMode } : {}),
-    ...(pricing.fallbackProfileRef
-      ? { fallbackProfileRef: pricing.fallbackProfileRef }
-      : {}),
-    rulePackRefs: pricing.rulePackRefs ?? [],
-  };
 }

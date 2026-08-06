@@ -37,11 +37,17 @@ export interface SessionTokenCounts {
   totalTokens: number;
 }
 
-/** A pricing result; unknown models or unsupported cache-write pricing stay explicit. */
+/**
+ * A pricing result preserving the four pricing states (audit P1-1); mirrors
+ * `pricing/index.ts` CostEstimate. Unknown models or unsupported cache-write
+ * pricing stay explicit; estimated amounts are a separate subtotal.
+ */
 export interface SessionCostEstimate {
   knownUsd: number;
+  estimatedUsd: number;
   cacheSavingsUsd: number;
   pricedEvents: number;
+  estimatedEvents: number;
   unknownEvents: number;
   unknownModels: string[];
   complete: boolean;

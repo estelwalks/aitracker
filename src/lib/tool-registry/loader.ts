@@ -301,10 +301,10 @@ export function compileRawTool(
     },
     ...(raw.modelObservation
       ? {
-          // P1-1: the runtime `pricing` field is now the modelObservation
-          // projection (billing evidence extraction, never rates/modes). Phase 2
-          // renames the field to `modelObservation`.
-          pricing: {
+          // P1-1: the runtime `modelObservation` projection (billing evidence
+          // extraction, never rates/modes; audit P1-1 renamed the legacy
+          // `pricing` field). Tools never hold rates or a billing mode.
+          modelObservation: {
             modelField: raw.modelObservation.modelField ?? "model",
             normalizeProfile:
               raw.modelObservation.normalizeProfile ?? "generic-normalize-v1",

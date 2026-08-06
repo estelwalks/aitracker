@@ -75,8 +75,10 @@ console.log(
   `[registry]   market install:     ${count("market", "install-target")}`,
 );
 console.log(`[registry]   context native:     ${count("context", "native")}`);
+// P1-1: tools no longer declare billingMode (pricing ownership moved to
+// billing routes); count tools that declare a modelObservation instead.
 console.log(
-  `[registry]   billing api-metered:${tools.filter((d) => d.pricing?.billingMode === "api-metered").length}`,
+  `[registry]   model observation:  ${tools.filter((d) => d.modelObservation).length}`,
 );
 
 const errors = registry.diagnostics.filter((d) => d.severity === "error");

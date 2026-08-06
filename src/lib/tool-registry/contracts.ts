@@ -194,13 +194,13 @@ export interface ModelRateRule {
   match: ModelMatcher;
 }
 
-export interface ToolPricing {
-  /**
-   * P1-1 model-observation projection: the runtime `pricing` field now carries
-   * how to extract the model name + billing evidence from the tool's logs.
-   * Tools never hold rates, price packs or a fixed billing mode (billing
-   * ownership moved to billing routes; phase 2 renames this field).
-   */
+/**
+ * Per-tool model observation (P1-1, renamed from the legacy `pricing` field):
+ * how to extract the model name + billing evidence from the tool's logs.
+ * Tools never hold rates, price packs or a fixed billing mode - billing
+ * ownership moved to billing routes (docs §4, audit P1-1).
+ */
+export interface ToolModelObservation {
   /** Log field carrying the model name (default "model"). */
   modelField?: string;
   /** Normalization profile id (default "generic-normalize-v1"). */
@@ -217,23 +217,7 @@ export interface ToolPricing {
     reasoningIncludedInOutput?: boolean;
     cacheWriteBillable?: boolean;
   };
-  /**
-   * @deprecated P1-1: pricing ownership moved to billing routes; these legacy
-   * fields are no longer projected by the loader (phase 2 removes them).
-   */
-  provider?: string;
-  /** @deprecated P1-1: see `provider`. */
-  billingMode?: BillingMode;
-  /** @deprecated P1-1: see `provider`. */
-  fallbackProfileRef?: string;
-  /** @deprecated P1-1: see `provider`. */
-  rulePackRefs?: readonly string[];
-  /** v1.1 legacy inline rate rules (kept for legacy consumers until phase 2). */
-  rules?: readonly ModelRateRule[];
 }
-
-/** Per-tool billing mode, aligned with `pricing/contracts.ts` ToolPricingPolicy. */
-export type BillingMode = "api-metered" | "subscription" | "unsupported";
 
 export interface ToolDefinition {
   id: ToolId;
@@ -251,7 +235,8 @@ export interface ToolDefinition {
   detection: ToolDetection;
   storage?: ToolStorage;
   capabilities: Capabilities;
-  pricing?: ToolPricing;
+  /** P1-1: model-observation projection (evidence extraction, never rates). */
+  modelObservation?: ToolModelObservation;
 }
 
 /** Normalized model id used for matching: trim + lowercase + `_`/`.` -> `-`. */

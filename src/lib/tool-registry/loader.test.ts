@@ -277,7 +277,7 @@ describe("compileRawTool - projection", () => {
     assert.deepEqual(def.detection.executableSpec?.windows, ["codex.exe"]);
   });
 
-  test("modelObservation projects into pricing with defaults; legacy fields absent", () => {
+  test("modelObservation projects with defaults (P1-1 rename of the legacy pricing field)", () => {
     const def = compileRawTool(
       rawTool({
         modelObservation: {
@@ -287,18 +287,23 @@ describe("compileRawTool - projection", () => {
       }),
       packs,
     );
-    assert.equal(def.pricing?.modelField, "model");
-    assert.equal(def.pricing?.normalizeProfile, "generic-normalize-v1");
-    assert.deepEqual(def.pricing?.evidence, { endpointField: "endpoint" });
-    // P1-1: tools no longer hold rates or billing modes.
-    assert.equal(def.pricing?.billingMode, undefined);
-    assert.deepEqual(def.pricing?.rulePackRefs, undefined);
-    assert.equal(def.pricing?.rules, undefined);
+    assert.equal(def.modelObservation?.modelField, "model");
+    assert.equal(
+      def.modelObservation?.normalizeProfile,
+      "generic-normalize-v1",
+    );
+    assert.deepEqual(def.modelObservation?.evidence, {
+      endpointField: "endpoint",
+    });
+    // P1-1: tools no longer hold rates, billing modes or pack refs - the
+    // runtime field only carries evidence extraction + token semantics.
+    assert.equal("pricing" in def, false);
+    assert.equal(def.modelObservation?.tokenSemantics, undefined);
   });
 
-  test("modelObservation absent means no pricing projection", () => {
+  test("modelObservation absent means no projection", () => {
     const def = compileRawTool(rawTool(), packs);
-    assert.equal(def.pricing, undefined);
+    assert.equal(def.modelObservation, undefined);
   });
 });
 

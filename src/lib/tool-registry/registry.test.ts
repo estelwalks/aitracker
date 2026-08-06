@@ -5,7 +5,6 @@ import type { ToolDefinition } from "./contracts.ts";
 import { matchModel, normalizeModel } from "./contracts.ts";
 import {
   compileToolRegistry,
-  findModelRateIn,
   getSessionPlanFor,
   getUsagePlanFor,
 } from "./registry.ts";
@@ -53,20 +52,11 @@ function codexLike(): ToolDefinition {
       market: { mode: "install-target" },
       security: { mode: "scan" },
     },
-    pricing: {
-      provider: "openai",
-      rules: [
-        {
-          id: "gpt-5-codex",
-          label: "GPT-5 Codex",
-          effectiveFrom: "2026-07-27",
-          inputUsdPerMillion: 1.25,
-          outputUsdPerMillion: 10,
-          cacheReadUsdPerMillion: 0.125,
-          cacheWriteUsdPerMillion: null,
-          match: { kind: "exactOrSnapshot", names: ["gpt-5-codex"] },
-        },
-      ],
+    // P1-1: tools hold modelObservation (evidence extraction) only - never
+    // rates or a billing mode (pricing ownership moved to billing routes).
+    modelObservation: {
+      modelField: "model",
+      evidence: { endpointField: "endpoint" },
     },
   };
 }
@@ -108,79 +98,9 @@ test("getSessionPlanFor returns reader/command; null when unsupported", () => {
   assert.equal(getSessionPlanFor(unsupported), null);
 });
 
-test("findModelRateIn matches exact, dated snapshot, and returns null for unknown", () => {
-  const reg = compileToolRegistry([codexLike()]);
-  const exact = findModelRateIn(reg, {
-    toolId: "codex",
-    model: "gpt-5-codex",
-    occurredAt: "2026-08-01",
-  });
-  assert.equal(exact?.id, "gpt-5-codex");
-  const snapshot = findModelRateIn(reg, {
-    toolId: "codex",
-    model: "gpt-5-codex-2026-07-27",
-    occurredAt: "2026-08-01",
-  });
-  assert.equal(snapshot?.id, "gpt-5-codex");
-  const unknown = findModelRateIn(reg, {
-    toolId: "codex",
-    model: "gpt-4",
-    occurredAt: "2026-08-01",
-  });
-  assert.equal(unknown, null);
-  // Before effective date -> null.
-  const early = findModelRateIn(reg, {
-    toolId: "codex",
-    model: "gpt-5-codex",
-    occurredAt: "2025-01-01",
-  });
-  assert.equal(early, null);
-  // Unknown tool -> null.
-  assert.equal(
-    findModelRateIn(reg, { toolId: "nope", model: "gpt-5-codex" }),
-    null,
-  );
-});
-
-test("findModelRateIn prefers higher priority then later effectiveFrom", () => {
-  const def: ToolDefinition = {
-    ...codexLike(),
-    pricing: {
-      provider: "openai",
-      rules: [
-        {
-          id: "low",
-          label: "L",
-          priority: 0,
-          effectiveFrom: "2026-01-01",
-          inputUsdPerMillion: 1,
-          outputUsdPerMillion: 1,
-          cacheReadUsdPerMillion: 0.1,
-          cacheWriteUsdPerMillion: null,
-          match: { kind: "exactOrSnapshot", names: ["gpt-5"] },
-        },
-        {
-          id: "high",
-          label: "H",
-          priority: 5,
-          effectiveFrom: "2026-01-01",
-          inputUsdPerMillion: 9,
-          outputUsdPerMillion: 9,
-          cacheReadUsdPerMillion: 0.9,
-          cacheWriteUsdPerMillion: null,
-          match: { kind: "exactOrSnapshot", names: ["gpt-5"] },
-        },
-      ],
-    },
-  };
-  const reg = compileToolRegistry([def]);
-  const rate = findModelRateIn(reg, {
-    toolId: "codex",
-    model: "gpt-5",
-    occurredAt: "2026-06-01",
-  });
-  assert.equal(rate?.id, "high");
-});
+// P1-1: the legacy inline pricing-rules API (findModelRateIn/findModelRate,
+// def.pricing.rules) was removed together with ToolPricing - prices are owned
+// by billing routes and resolved by src/lib/pricing/resolve.ts instead.
 
 test("public manifest contains no sensitive fields (TC-REG-003)", () => {
   const manifest = generatePublicManifest([codexLike()]);
