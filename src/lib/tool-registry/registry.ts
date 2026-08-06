@@ -27,8 +27,13 @@ import {
   validateToolDefinitions,
   type ValidationDiagnostic,
 } from "./validate.ts";
-import type { SharedPolicyPacks } from "./schema.ts";
-import { loadBuiltinDefinitions, projectBase } from "./loader.ts";
+import type { PlatformProfiles, SharedPolicyPacks } from "./schema.ts";
+import {
+  loadBuiltinDefinitions,
+  projectBase,
+  projectBaseWithEnv,
+  type ProjectedPath,
+} from "./loader.ts";
 
 export interface UsagePlan {
   toolId: string;
@@ -246,6 +251,16 @@ export function getPublicTools(): readonly PublicTool[] {
 export type PlatformOs = "macos" | "windows" | "linux";
 export type PlanCapability = "detection" | "usage" | "skills" | "sessions";
 
+/** Environment available to path resolution (XDG vars, `env:NAME` bases). */
+export type PlatformEnv = Readonly<Record<string, string | undefined>>;
+
+/** A location that produced no path for the resolved plan, with a reason. */
+export interface SkippedLocation {
+  base: string;
+  path: string;
+  reason: string;
+}
+
 export interface PlatformPathPlan {
   toolId: string;
   capability: PlanCapability;
@@ -254,6 +269,30 @@ export interface PlatformPathPlan {
   status: PlatformStatus;
   /** Flattened HOME-relative paths to scan for this (os, capability). */
   paths: readonly string[];
+  /**
+   * Locations skipped because their base is not usable on the current targets
+   * per platform-profiles.basePlatforms (or cannot be flattened without an
+   * environment). Absent when nothing was skipped (F5-T2 diagnostics).
+   */
+  skippedLocations?: readonly SkippedLocation[];
+}
+
+/** A plan path with its resolution provenance (F5-T1 env/XDG resolution). */
+export interface ResolvedPlatformPath {
+  /** HOME-relative when `homeRelative` is true, else self-contained. */
+  path: string;
+  /** The base the path was projected from (absent for usage roots). */
+  base?: string;
+  homeRelative: boolean;
+}
+
+export interface PlatformPathsResolution {
+  toolId: string;
+  capability: PlanCapability;
+  os: PlatformOs;
+  status: PlatformStatus;
+  paths: readonly ResolvedPlatformPath[];
+  skippedLocations: readonly SkippedLocation[];
 }
 
 /** Expand an os to its platform targets (windows -> the windows group). */
@@ -264,29 +303,177 @@ export function osTargets(os: PlatformOs): readonly PlatformTarget[] {
 
 /**
  * Effective platform status for a tool on an os: exact target status, then the
- * windows group, then the shared default (`supported`; legacy TS configs
- * without `platforms` behave as all-supported).
+ * windows group, then the shared default from platform-profiles
+ * (`defaultStatus`; legacy configs without a profile and without `platforms`
+ * behave as all-supported).
  */
 function platformStatusFor(
   def: ToolDefinition,
   os: PlatformOs,
+  profiles?: PlatformProfiles,
 ): PlatformStatus {
   const platforms = def.platforms;
-  if (!platforms) return "supported";
-  for (const target of osTargets(os)) {
-    const exact = platforms[target];
-    if (exact !== undefined) return exact;
+  if (platforms) {
+    for (const target of osTargets(os)) {
+      const exact = platforms[target];
+      if (exact !== undefined) return exact;
+    }
+    if (os === "windows" && platforms.windows !== undefined) {
+      return platforms.windows;
+    }
   }
-  if (os === "windows" && platforms.windows !== undefined) {
-    return platforms.windows;
-  }
+  if (profiles) return profiles.defaultStatus[os];
   return "supported";
+}
+
+/**
+ * F5-T2: is `base` declared for any of `targets` in platform-profiles?
+ * `env:NAME` bases are runtime-resolved and never declared in basePlatforms,
+ * so they are always "applicable" and only fail when the variable is unset.
+ * Without a profile (legacy registries) every base is applicable.
+ */
+function baseApplicableToTargets(
+  profiles: PlatformProfiles | undefined,
+  base: string,
+  targets: readonly PlatformTarget[],
+): boolean {
+  if (!profiles) return true;
+  if (base.startsWith("env:")) return true;
+  const declared = profiles.basePlatforms[base];
+  return declared !== undefined && declared.some((t) => targets.includes(t));
+}
+
+interface BasePathEntry {
+  base: string;
+  path: string;
+}
+
+/**
+ * The (base, path) entries for base-bearing capabilities: detection locations
+ * (already filtered by their declared targets), skills rootSpecs, sessions
+ * dataRoots. Usage paths carry no base after compilation and are handled
+ * separately (their roots are final HOME-relative suffixes).
+ */
+function platformEntriesFor(
+  def: ToolDefinition,
+  capability: PlanCapability,
+  targets: readonly PlatformTarget[],
+): readonly BasePathEntry[] {
+  if (capability === "detection") {
+    return (def.detection.locations ?? [])
+      .filter((loc) => loc.targets.some((t) => targets.includes(t)))
+      .map((loc) => ({ base: loc.base, path: loc.path }));
+  }
+  if (capability === "skills") {
+    const rootSpecs = def.storage?.skills?.rootSpecs;
+    return rootSpecs?.length
+      ? rootSpecs.map((r) => ({ base: r.base, path: r.path }))
+      : [];
+  }
+  // sessions: roots are the tool's data roots.
+  return (def.storage?.dataRoots ?? []).map((r) => ({
+    base: r.base,
+    path: r.path,
+  }));
+}
+
+/**
+ * Shared per-capability collection: base-target validation (F5-T2) plus
+ * projection. `env` switches the projection to the env-aware variant
+ * (`projectBaseWithEnv`); when undefined, the legacy pure projection applies
+ * and `env:NAME`/unprojectable bases are skipped with a diagnostic.
+ */
+function collectPlatformPaths(
+  def: ToolDefinition,
+  capability: PlanCapability,
+  targets: readonly PlatformTarget[],
+  profiles: PlatformProfiles | undefined,
+  env: PlatformEnv | undefined,
+): { paths: ResolvedPlatformPath[]; skipped: SkippedLocation[] } {
+  const paths: ResolvedPlatformPath[] = [];
+  const skipped: SkippedLocation[] = [];
+
+  if (capability === "usage") {
+    for (const p of def.capabilities.usage.paths ?? []) {
+      if (
+        p.targets === undefined ||
+        p.targets.some((t) => targets.includes(t))
+      ) {
+        paths.push({ path: p.root, homeRelative: true });
+      }
+    }
+    return { paths, skipped };
+  }
+
+  if (capability === "skills") {
+    const skills = def.storage?.skills;
+    if (!skills?.rootSpecs?.length) {
+      // Pre-v1.5 flattened roots (no base) are final HOME-relative suffixes.
+      for (const root of skills?.roots ?? []) {
+        paths.push({ path: root, homeRelative: true });
+      }
+      return { paths, skipped };
+    }
+  }
+
+  const project = env
+    ? (base: string, path: string): ProjectedPath | null =>
+        projectBaseWithEnv(base, path, env)
+    : (base: string, path: string): ProjectedPath | null => {
+        const projected = projectBase(base, path);
+        return projected === null
+          ? null
+          : { path: projected, homeRelative: true };
+      };
+  const targetLabel = targets.join("/");
+  for (const entry of platformEntriesFor(def, capability, targets)) {
+    if (!baseApplicableToTargets(profiles, entry.base, targets)) {
+      skipped.push({
+        base: entry.base,
+        path: entry.path,
+        reason: `base "${entry.base}" is not declared for target(s) ${targetLabel} in platform-profiles.basePlatforms`,
+      });
+      continue;
+    }
+    const projected = project(entry.base, entry.path);
+    if (projected === null) {
+      skipped.push({
+        base: entry.base,
+        path: entry.path,
+        reason: env
+          ? `no environment value for base "${entry.base}" (variable unset)`
+          : `base "${entry.base}" has no flattened HOME-relative default`,
+      });
+      continue;
+    }
+    paths.push({
+      path: projected.path,
+      base: entry.base,
+      homeRelative: projected.homeRelative,
+    });
+  }
+  return { paths, skipped };
+}
+
+/** Dedupe resolved paths by their final string, preserving order. */
+function dedupePaths(
+  paths: readonly ResolvedPlatformPath[],
+): ResolvedPlatformPath[] {
+  const seen = new Set<string>();
+  const out: ResolvedPlatformPath[] = [];
+  for (const p of paths) {
+    if (seen.has(p.path)) continue;
+    seen.add(p.path);
+    out.push(p);
+  }
+  return out;
 }
 
 /**
  * Resolve the unique per-platform plan for a tool capability (docs §6.1).
  * `linux: planned` never produces scan paths; status "planned"/"unsupported"
- * yields an empty path list.
+ * yields an empty path list. Paths are the flattened HOME-relative form (the
+ * env-aware variant lives in `resolvePlatformPaths`).
  */
 export function resolvePlatformPlan(
   toolId: string,
@@ -297,52 +484,65 @@ export function resolvePlatformPlan(
   const def = registry.byId.get(toolId);
   if (!def) return null;
   const targets = osTargets(os);
-  const status = platformStatusFor(def, os);
+  const profiles = registry.sharedPacks?.platformProfiles;
+  const status = platformStatusFor(def, os, profiles);
   if (status !== "supported") {
     return { toolId, capability, os, status, paths: [] };
   }
-
-  let paths: string[] = [];
-  if (capability === "detection") {
-    paths = (def.detection.locations ?? [])
-      .filter((loc) => loc.targets.some((t) => targets.includes(t)))
-      .map((loc) => projectLocationFor(loc))
-      .filter((p): p is string => p !== null);
-  } else if (capability === "usage") {
-    paths = (def.capabilities.usage.paths ?? [])
-      .filter(
-        (p) =>
-          p.targets === undefined || p.targets.some((t) => targets.includes(t)),
-      )
-      .map((p) => p.root);
-  } else if (capability === "skills") {
-    const skills = def.storage?.skills;
-    if (skills?.rootSpecs?.length) {
-      // rootSpecs have no explicit targets; their platform reach comes from
-      // the base (basePlatforms in platform-profiles) - keep all roots when
-      // any target matches the base, else fall back to all roots.
-      paths = skills.rootSpecs
-        .map((r) => projectLocationFor({ targets, base: r.base, path: r.path }))
-        .filter((p): p is string => p !== null);
-    } else {
-      paths = [...(skills?.roots ?? [])];
-    }
-  } else {
-    // sessions: roots are the tool's data roots / usage roots.
-    paths = (def.storage?.dataRoots ?? [])
-      .map((r) => projectLocationFor({ targets, base: r.base, path: r.path }))
-      .filter((p): p is string => p !== null);
-  }
-
-  return { toolId, capability, os, status, paths: [...new Set(paths)] };
+  const { paths, skipped } = collectPlatformPaths(
+    def,
+    capability,
+    targets,
+    profiles,
+    undefined,
+  );
+  const plan: PlatformPathPlan = {
+    toolId,
+    capability,
+    os,
+    status,
+    paths: dedupePaths(paths).map((p) => p.path),
+  };
+  if (skipped.length > 0) plan.skippedLocations = skipped;
+  return plan;
 }
 
-function projectLocationFor(loc: {
-  targets: readonly PlatformTarget[];
-  base: string;
-  path: string;
-}): string | null {
-  return projectBase(loc.base, loc.path);
+/**
+ * Env-aware platform path resolution (F5-T1 XDG support): `configHome`/
+ * `dataHome` honor `XDG_CONFIG_HOME`/`XDG_DATA_HOME` (absolute when set,
+ * `xdgFallback` when unset) and `env:NAME` bases resolve to `$NAME/path`.
+ * The same base-target validation as `resolvePlatformPlan` applies.
+ */
+export function resolvePlatformPaths(
+  toolId: string,
+  capability: PlanCapability,
+  os: PlatformOs,
+  env: PlatformEnv,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): PlatformPathsResolution | null {
+  const def = registry.byId.get(toolId);
+  if (!def) return null;
+  const targets = osTargets(os);
+  const profiles = registry.sharedPacks?.platformProfiles;
+  const status = platformStatusFor(def, os, profiles);
+  if (status !== "supported") {
+    return { toolId, capability, os, status, paths: [], skippedLocations: [] };
+  }
+  const { paths, skipped } = collectPlatformPaths(
+    def,
+    capability,
+    targets,
+    profiles,
+    env,
+  );
+  return {
+    toolId,
+    capability,
+    os,
+    status,
+    paths: dedupePaths(paths),
+    skippedLocations: skipped,
+  };
 }
 
 export interface SkillPlan {
