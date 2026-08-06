@@ -1,0 +1,92 @@
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import {
+  ROUTE_LINE_LIMIT,
+  analyzeProject,
+  extractImportSources,
+  validateAllowlist,
+} from "./verify-module-boundaries.mjs";
+
+async function withFixture(files, run) {
+  const root = await mkdtemp(join(tmpdir(), "trusttools-architecture-"));
+  try {
+    await Promise.all(
+      Object.entries(files).map(async ([path, content]) => {
+        const target = join(root, path);
+        await mkdir(join(target, ".."), { recursive: true });
+        await writeFile(target, content);
+      }),
+    );
+    return await run(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("extractImportSources finds static imports and exports", () => {
+  assert.deepEqual(
+    extractImportSources(
+      'import { value } from "./value"; export { value } from "./value"; import "./side-effect";',
+    ),
+    ["./side-effect", "./value"],
+  );
+});
+
+test("analyzeProject reports all P0 architecture-boundary categories", async () => {
+  await withFixture(
+    {
+      "src/routes/oversized.ts": `${"export const value = 1;\n".repeat(ROUTE_LINE_LIMIT + 1)}`,
+      "src/routes/security.ts":
+        'import { scan } from "../lib/security/scanner";\n',
+      "src/lib/security/scanner.ts": "export const scan = true;\n",
+      "src/modules/usage/application/use-case.ts":
+        'import { secret } from "../../skills/infrastructure/private";\nexport const usage = secret;\n',
+      "src/modules/skills/infrastructure/private.ts":
+        "export const secret = true;\n",
+      "src/cycle-a.ts": 'import "./cycle-b";\n',
+      "src/cycle-b.ts": 'import "./cycle-a";\n',
+    },
+    async (root) => {
+      const report = await analyzeProject(root);
+      assert.deepEqual(
+        report.violations.map((violation) => violation.type),
+        [
+          "module-deep-import",
+          "relative-import-cycle",
+          "route-direct-server-import",
+          "route-line-limit",
+        ],
+      );
+    },
+  );
+});
+
+test("analyzeProject permits only a fully documented temporary allowlist entry", async () => {
+  await withFixture(
+    {
+      "src/routes/security.ts":
+        'import { scan } from "../lib/security/scanner";\n',
+      "src/lib/security/scanner.ts": "export const scan = true;\n",
+    },
+    async (root) => {
+      const allowlist = [
+        {
+          type: "route-direct-server-import",
+          file: "src/routes/security.ts",
+          reason: "Migrate with security feature in P6.",
+          owner: "security-team",
+          expiresAtPhase: "P6",
+        },
+      ];
+      const report = await analyzeProject(root, allowlist);
+      assert.equal(report.violations.length, 0);
+      assert.equal(report.suppressed.length, 1);
+      assert.deepEqual(validateAllowlist([{ type: "route-line-limit" }]), [
+        "allowlist[0] is missing required field(s): file, reason, owner, expiresAtPhase",
+      ]);
+    },
+  );
+});

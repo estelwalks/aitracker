@@ -36,7 +36,8 @@
     "generate:security-rules": "node --import tsx scripts/generate-security-rules.mjs",
     "prebuild": "npm run generate:tool-imports && npm run generate:manifest && npm run generate:pricing-imports && npm run generate:security-rules",
     "verify:tool-registry": "node --import tsx scripts/verify-tool-registry.mjs",
-    "verify:pricing-rules": "node --import tsx scripts/verify-pricing-rules.mjs"
+    "verify:pricing-rules": "node --import tsx scripts/verify-pricing-rules.mjs",
+    "verify:architecture": "node scripts/verify-module-boundaries.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
