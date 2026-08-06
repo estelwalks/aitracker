@@ -3,13 +3,15 @@
  *
  * Pure function: takes the already-Zod-validated `PricingPack[]` (from
  * pricing-definitions.generated.ts) + a version hash, expands rate/profile
- * references, detects conflicts, and builds a deterministic sorted rule index
- * for the resolver. No filesystem, no network, no JSON parsing here.
+ * references, normalizes matcher values once, detects conflicts, and builds a
+ * deterministic sorted rule index for the resolver. No filesystem, no network,
+ * no JSON parsing here.
  *
  * Conflict policy (docs §5.4, §6):
  * - Duplicate rate id / fallback profile id -> error.
  * - Unresolved rateRef / fallbackProfileRef -> error.
- * - Two rules with the SAME matcher (kind+value), SAME scope, SAME priority and
+ * - Matcher value that normalizes to unsafe/empty -> error.
+ * - Two rules with the SAME normalized matcher, SAME scope, SAME priority and
  *   overlapping effective interval -> error (ambiguous; the compiler must fail
  *   rather than rely on array order).
  * - Two rates for the SAME canonicalModelId with overlapping effective dates ->
@@ -22,9 +24,11 @@ import {
   MATCHER_PRECISION,
   type ConversionRule,
   type FallbackProfile,
+  type ModelMatcher,
   type PricingPack,
   type RateRule,
 } from "./contracts.ts";
+import { normalizeModel } from "./normalize.ts";
 
 export type CompileSeverity = "error" | "warning";
 
@@ -36,9 +40,20 @@ export interface CompileDiagnostic {
 
 export type ScopePrecision = 0 | 1 | 2 | 3; // 0 none, 1 global, 2 provider, 3 tool
 
+/** Matcher with values already normalized by generic-normalize-v1. */
+export type NormalizedMatcher =
+  | { kind: "exact"; value: string }
+  | { kind: "alias"; value: string }
+  | { kind: "prefix"; value: string }
+  | { kind: "suffix"; value: string }
+  | { kind: "token-sequence"; tokens: readonly string[] }
+  | { kind: "any" };
+
 export interface CompiledRule extends ConversionRule {
   scopePrecision: ScopePrecision;
   matcherPrecision: number;
+  /** Matcher with normalized value(s); the resolver compares against this. */
+  normalizedWhen: NormalizedMatcher;
   /** Resolved rate (when rateRef present). */
   rate?: RateRule;
   /** Resolved fallback profile (when fallbackProfileRef present). */
@@ -53,8 +68,25 @@ export interface CompiledPricingRegistry {
   diagnostics: readonly CompileDiagnostic[];
 }
 
+/** Normalize a matcher's value(s); returns null if any value is unsafe/empty. */
+function normalizeMatcher(matcher: ModelMatcher): NormalizedMatcher | null {
+  if (matcher.kind === "any") return { kind: "any" };
+  if (matcher.kind === "token-sequence") {
+    const tokens: string[] = [];
+    for (const t of matcher.tokens) {
+      const n = normalizeModel(t);
+      if (!n.ok) return null;
+      tokens.push(n.normalizedModel);
+    }
+    return { kind: "token-sequence", tokens };
+  }
+  const n = normalizeModel(matcher.value);
+  if (!n.ok) return null;
+  return { kind: matcher.kind, value: n.normalizedModel };
+}
+
 /** Key identifying the "match space" of a rule for overlap detection. */
-function matchKey(when: ConversionRule["when"]): string {
+function matchKey(when: NormalizedMatcher): string {
   if (when.kind === "token-sequence") {
     return `token-sequence:${when.tokens.join("|")}`;
   }
@@ -149,10 +181,17 @@ export function compilePricingRegistry(
     }
   }
 
-  // 3. Resolve rule references + build compiled rules.
+  // 3. Resolve rule references, normalize matchers, build compiled rules.
   const compiled: CompiledRule[] = [];
   for (const pack of packs) {
     for (const rule of pack.rules) {
+      const normalizedWhen = normalizeMatcher(rule.when);
+      if (!normalizedWhen) {
+        err(
+          "unsafe-matcher-value",
+          `rule "${rule.id}" has a matcher value that normalizes to unsafe/empty`,
+        );
+      }
       let rate: RateRule | undefined;
       let fallbackProfile: FallbackProfile | undefined;
       if (rule.rateRef) {
@@ -181,32 +220,36 @@ export function compilePricingRegistry(
         ...rule,
         scopePrecision: scopePrecisionOf(rule.scope),
         matcherPrecision: MATCHER_PRECISION[rule.when.kind],
+        normalizedWhen: normalizedWhen ?? {
+          kind: "any",
+        },
         rate,
         fallbackProfile,
       });
     }
   }
 
-  // 4. Same matcher + scope + priority + overlapping effective -> overlap error.
+  // 4. Same normalized matcher + scope + priority + overlapping effective -> overlap error.
   for (let i = 0; i < compiled.length; i += 1) {
     for (let j = i + 1; j < compiled.length; j += 1) {
       const a = compiled[i]!;
       const b = compiled[j]!;
       if (
-        matchKey(a.when) === matchKey(b.when) &&
+        matchKey(a.normalizedWhen) === matchKey(b.normalizedWhen) &&
         scopeKey(a.scope) === scopeKey(b.scope) &&
         (a.priority ?? 0) === (b.priority ?? 0)
       ) {
-        const aFrom = a.rate?.effective.from ?? "0000-01-01";
-        const aTo = a.rate?.effective.to ?? null;
-        const bFrom = b.rate?.effective.from ?? "0000-01-01";
-        const bTo = b.rate?.effective.to ?? null;
-        // Rules without a rate (any/fallback) have no effective interval; treat
-        // them as always-overlapping only when both lack a rate.
         const aHas = !!a.rate;
         const bHas = !!b.rate;
         const overlap =
-          aHas && bHas ? rangesOverlap(aFrom, aTo, bFrom, bTo) : !aHas && !bHas;
+          aHas && bHas
+            ? rangesOverlap(
+                a.rate!.effective.from,
+                a.rate!.effective.to,
+                b.rate!.effective.from,
+                b.rate!.effective.to,
+              )
+            : !aHas && !bHas;
         if (overlap) {
           err(
             "rule-overlap",

@@ -136,12 +136,12 @@ test("PricingPack parses with defaults for empty rules/rates", () => {
   assert.deepEqual(parsed.rates, []);
 });
 
-test("ToolPricingPolicy defaults reasoningPolicy to separate", () => {
+test("ToolPricingPolicy defaults reasoningPolicy to ignore", () => {
   const parsed = ToolPricingPolicySchema.parse({
     billingMode: "api-metered",
     fallbackProfileRef: "unpriced-v1",
   });
-  assert.equal(parsed.reasoningPolicy, "separate");
+  assert.equal(parsed.reasoningPolicy, "ignore");
   assert.deepEqual(parsed.rulePackRefs, []);
 });
 
