@@ -1772,9 +1772,9 @@ export async function scanLocalUsage(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );
 
-  // External usage adapters (usage-adapters.json / custom:* sources) were
-  // removed (v1.5 M4-T1): tool facts are offline-only. Only built-in generic
-  // adapters run here; native readers (claude/codex/workbuddy) run below.
+  // External usage adapters were removed (v1.5 M4-T1, TC-REG-005): tool facts
+  // are offline-only. Only built-in generic adapters run here; native readers
+  // (claude/codex/workbuddy) run below.
   const genericAdapters = GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
     (adapter) => adapter.source !== "workbuddy",
   );

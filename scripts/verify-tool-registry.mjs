@@ -156,6 +156,33 @@ if (grep) {
   process.exit(1);
 }
 
+// TC-REG-005: no runtime extension entry points anywhere (docs §6.2: the
+// tool-overrides.json / usage-adapters.json / custom:* layers are deleted,
+// not migrated). A negative match exits 1 - treated as success. Test files
+// may carry the strings as fixtures; runtime loading code must not.
+for (const pattern of [
+  "usage-adapters\\.json",
+  "tool-overrides\\.json",
+  "custom:\\*",
+]) {
+  let hit = "";
+  try {
+    hit = execFileSync(
+      "rg",
+      ["-l", "--no-messages", "--glob", "!*.test.ts", pattern, "src"],
+      { encoding: "utf8" },
+    ).trim();
+  } catch (e) {
+    if (e.status !== 1) throw e;
+  }
+  if (hit) {
+    console.error(
+      `\nFAIL: runtime extension reference "${pattern}" remains in: ${hit}`,
+    );
+    process.exit(1);
+  }
+}
+
 // Drift check: committed generated modules must match a fresh generation.
 const { execFileSync: run } = await import("node:child_process");
 for (const script of [
