@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "packId": "defaults",
+  "revision": "2026-08-06",
+  "rules": [],
+  "rates": [],
+  "fallbackProfiles": [
+    {
+      "id": "api-generic-v1",
+      "appliesTo": "api-metered",
+      "usdNanoPerMillion": {
+        "input": "1000000000",
+        "output": "3000000000",
+        "cacheRead": "100000000",
+        "cacheWrite": "1250000000"
+      },
+      "confidence": "estimated",
+      "label": "通用 API 估算费率；非官方账单",
+      "reviewRequired": true
+    },
+    {
+      "id": "subscription-zero-marginal-v1",
+      "appliesTo": "subscription",
+      "confidence": "not-billable",
+      "label": "订阅制用量，不按 API 单价估算"
+    },
+    {
+      "id": "unpriced-v1",
+      "appliesTo": "unknown",
+      "confidence": "unpriced",
+      "label": "未配置费率，等待运营补充"
+    }
+  ]
+}
