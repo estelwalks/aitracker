@@ -5,6 +5,21 @@ import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
 
 import { ENV } from "../app-config";
+import {
+  getDefaultRegistry,
+  getSessionPlanFor,
+  listSessionTools,
+  resolvePlatformPaths,
+} from "../tool-registry/registry.ts";
+import type {
+  CompiledRegistry,
+  PlatformEnv,
+  PlatformOs,
+} from "../tool-registry/registry.ts";
+import {
+  getSessionReader,
+  registerSessionReader,
+} from "../tool-registry/readers/session-readers.ts";
 import { estimateSessionCost } from "./cost.ts";
 import { buildResumeCommand, isResumeSafeId } from "./resume-id.ts";
 import type {
@@ -37,6 +52,11 @@ const SYNTHETIC_MODEL_TOKENS = new Set(["<synthetic>", "<unknown>"]);
 export interface ScanLocalSessionsOptions {
   homeDirectory?: string;
   now?: Date;
+  /**
+   * Test seam: registry to derive session tools, plans and scan roots from
+   * (P1-3). Defaults to the built-in default registry.
+   */
+  registry?: CompiledRegistry;
 }
 
 interface JsonObject {
@@ -1007,6 +1027,21 @@ function fragmentToRecord(fragment: SessionFragment): SessionRecord {
   return { ...record, cost: estimateSessionCost(record) };
 }
 
+/**
+ * Map Node's `process.platform` to the registry's `PlatformOs`. Scanning runs
+ * on the local machine, so the current platform is the resolution target.
+ */
+function currentPlatformOs(): PlatformOs {
+  switch (process.platform) {
+    case "darwin":
+      return "macos";
+    case "win32":
+      return "windows";
+    default:
+      return "linux";
+  }
+}
+
 function dedupeAndSort(sessions: SessionRecord[]): SessionRecord[] {
   const seen = new Map<string, SessionRecord>();
   for (const session of sessions) {
@@ -1026,10 +1061,38 @@ function dedupeAndSort(sessions: SessionRecord[]): SessionRecord[] {
   );
 }
 
+// ---------------------------------------------------------------------------
+// P1-3: controlled SessionReader registration. The scan implementations stay
+// in this module; the factory (tool-registry/readers/session-readers.ts) binds
+// the registry's `SessionReaderKey` to them so config and code cannot drift.
+// `defaultRoots` are the pre-registry hardcoded tool home suffixes, used when
+// a tool JSON declares no `storage.dataRoots` for the sessions capability.
+// ---------------------------------------------------------------------------
+
+registerSessionReader({
+  key: "claude-session-v1",
+  scan: scanClaudeCodeSessions,
+  defaultRoots: [".claude"],
+});
+registerSessionReader({
+  key: "codex-session-v1",
+  scan: scanCodexSessions,
+  defaultRoots: [".codex"],
+});
+registerSessionReader({
+  key: "grok-session-v1",
+  scan: scanGrokSessions,
+  defaultRoots: [".grok"],
+});
+
 /**
- * Scan the three supported session sources under `homeDirectory` and return a
- * merged, deduplicated, startedAt-descending summary. Missing directories are
- * treated as empty — never throw.
+ * Scan every registry-declared session tool and return a merged, deduplicated,
+ * startedAt-descending summary. For each tool: take the scan implementation
+ * from the controlled SessionReader factory (`getSessionPlan().reader`), and
+ * derive the scan root(s) from the platform path plan
+ * (`resolvePlatformPaths(toolId, "sessions", os, env)`, F5-T1 XDG-aware); when
+ * the plan declares no `dataRoots`, the reader's `defaultRoots` keep the
+ * legacy behavior. Missing directories are treated as empty — never throw.
  */
 export async function scanLocalSessions(
   options: ScanLocalSessionsOptions = {},
@@ -1041,19 +1104,42 @@ export async function scanLocalSessions(
     (isolatedUsageHome && isAbsolute(isolatedUsageHome)
       ? isolatedUsageHome
       : homedir());
+  const registry = options.registry ?? getDefaultRegistry();
+  const os = currentPlatformOs();
+  const env: PlatformEnv = process.env;
 
-  const claudeDirectory = join(homeDirectory, ".claude");
-  const codexDirectory = join(homeDirectory, ".codex");
-  const grokDirectory = join(homeDirectory, ".grok");
+  const perTool = await Promise.all(
+    listSessionTools(registry).map(async (toolId) => {
+      const def = registry.byId.get(toolId);
+      const plan = def ? getSessionPlanFor(def) : null;
+      if (!plan) return [] as SessionRecord[];
+      const reader = getSessionReader(plan.reader);
+      if (!reader) return [] as SessionRecord[];
+      const resolution = resolvePlatformPaths(
+        toolId,
+        "sessions",
+        os,
+        env,
+        registry,
+      );
+      if (!resolution) return [] as SessionRecord[];
+      const roots =
+        resolution.paths.length > 0
+          ? resolution.paths.map((path) =>
+              path.homeRelative ? join(homeDirectory, path.path) : path.path,
+            )
+          : reader.defaultRoots.map((root) => join(homeDirectory, root));
+      const scanned = await Promise.all(
+        roots.map((root) =>
+          reader.scan(root).catch(() => [] as SessionRecord[]),
+        ),
+      );
+      return scanned.flat();
+    }),
+  );
 
-  const [claude, codex, grok] = await Promise.all([
-    scanClaudeCodeSessions(claudeDirectory).catch(() => [] as SessionRecord[]),
-    scanCodexSessions(codexDirectory).catch(() => [] as SessionRecord[]),
-    scanGrokSessions(grokDirectory).catch(() => [] as SessionRecord[]),
-  ]);
-
-  const sessions = dedupeAndSort([...claude, ...codex, ...grok]).sort(
-    (left, right) => right.startedAt.localeCompare(left.startedAt),
+  const sessions = dedupeAndSort(perTool.flat()).sort((left, right) =>
+    right.startedAt.localeCompare(left.startedAt),
   );
 
   return {

@@ -1,13 +1,24 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
 
 import { ENV } from "../app-config";
+import { compileToolRegistry } from "../tool-registry/registry.ts";
+import {
+  __resetSessionReaders,
+  registerSessionReader,
+} from "../tool-registry/readers/session-readers.ts";
+import type { ToolDefinition } from "../tool-registry/contracts.ts";
+import { estimateSessionCost } from "./cost.ts";
 import { isResumeSafeId } from "./resume-id.ts";
 import { scanLocalSessions } from "./scanner.server.ts";
-import type { SessionRecord } from "./types.ts";
+import type {
+  SessionRecord,
+  SessionSource,
+  SessionTokenCounts,
+} from "./types.ts";
 
 const NOW = new Date("2026-08-03T12:00:00.000Z");
 
@@ -635,6 +646,127 @@ test("Claude Code: respects the usage-home env override", async () => {
       } else {
         process.env[ENV.USAGE_HOME] = previous;
       }
+    }
+  });
+});
+
+test("P1-3: a newly registered session reader is scanned via the registry plan", async () => {
+  await withTempHome(async (home) => {
+    const toolId = "fake-session-tool";
+    const readerKey = "fake-session-v1";
+    const sessionId = "fake-session-0001";
+
+    // Fixture consumed by the fake reader (its own mini metadata format).
+    await mkdir(join(home, ".fake", "sessions"), { recursive: true });
+    await writeFile(
+      join(home, ".fake", "sessions", `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:00.000Z",
+          id: sessionId,
+          cwd: "/work/fake",
+          model: "fake-model-1",
+          inputTokens: 10,
+          outputTokens: 5,
+        }),
+      ].join("\n") + "\n",
+    );
+
+    // A session tool that exists only in a custom registry: adding one must
+    // require nothing but a tool definition + a controlled reader registration.
+    const fakeTool: ToolDefinition = {
+      id: toolId,
+      configVersion: 1,
+      display: { name: "Fake Session Tool", nameZh: "Fake Session Tool" },
+      detection: { roots: [".fake"] },
+      storage: { dataRoots: [{ base: "home", path: ".fake" }] },
+      capabilities: {
+        usage: { mode: "unsupported" },
+        skills: { mode: "unsupported" },
+        agents: { mode: "unsupported" },
+        sessions: {
+          mode: "resume",
+          reader: readerKey,
+          command: ["fake", "resume", "{sessionId}"],
+        },
+        market: { mode: "unsupported" },
+        security: { mode: "unsupported" },
+      },
+    };
+    const registry = compileToolRegistry([fakeTool]);
+
+    const scannedRoots: string[] = [];
+    registerSessionReader({
+      key: readerKey,
+      scan: async (root) => {
+        scannedRoots.push(root);
+        // Mini parser: one JSON metadata record per line (privacy-safe).
+        const raw = await readFile(
+          join(root, "sessions", `${sessionId}.jsonl`),
+          "utf8",
+        );
+        const records: SessionRecord[] = [];
+        for (const line of raw.split("\n")) {
+          if (line.length === 0) continue;
+          const value = JSON.parse(line) as Record<string, unknown>;
+          const id = typeof value.id === "string" ? value.id : "";
+          if (id === "") continue;
+          const inputTokens = Number(value.inputTokens) || 0;
+          const outputTokens = Number(value.outputTokens) || 0;
+          const startedAt = String(value.timestamp ?? "");
+          const totals: SessionTokenCounts = {
+            inputTokens,
+            outputTokens,
+            cachedInputTokens: 0,
+            cacheCreationInputTokens: 0,
+            reasoningOutputTokens: 0,
+            totalTokens: inputTokens + outputTokens,
+          };
+          const base: Omit<SessionRecord, "cost"> = {
+            sessionId: id,
+            source: toolId as SessionSource,
+            title: "",
+            projectKey: "fake",
+            projectRef: String(value.cwd ?? ""),
+            model: typeof value.model === "string" ? value.model : null,
+            startedAt,
+            endedAt: startedAt,
+            durationMs: 0,
+            turns: 1,
+            editTurns: 0,
+            retryTurns: 0,
+            totals,
+            subagentCalls: 0,
+            status: "available",
+            statusReason: null,
+            resumeSafe: isResumeSafeId(id),
+            resumeCommand: null,
+          };
+          records.push({ ...base, cost: estimateSessionCost(base) });
+        }
+        return records;
+      },
+      defaultRoots: [],
+    });
+
+    try {
+      const summary = await scanLocalSessions({
+        homeDirectory: home,
+        now: NOW,
+        registry,
+      });
+      // The scan root came from the platform path plan (storage.dataRoots +
+      // home base), not from a hardcoded suffix.
+      assert.deepEqual(scannedRoots, [join(home, ".fake")]);
+      const session = soleSession(summary.sessions);
+      assert.equal(session.source, toolId);
+      assert.equal(session.sessionId, sessionId);
+      assert.equal(session.model, "fake-model-1");
+      assert.equal(session.totals.inputTokens, 10);
+      assert.equal(session.totals.outputTokens, 5);
+      assertPrivacyClean(session);
+    } finally {
+      __resetSessionReaders();
     }
   });
 });
