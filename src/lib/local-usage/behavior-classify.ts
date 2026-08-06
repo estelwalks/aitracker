@@ -1,3 +1,4 @@
+import { getUsageTaxonomy } from "../tool-registry/registry.ts";
 import type {
   LocalUsageCommandDurationBucket,
   LocalUsageEvent,
@@ -24,7 +25,16 @@ export interface ModelBehavior {
   eventShare: number;
 }
 
-const DEBUG_COMMAND_HINTS = ["diff", "grep", "log", "status", "test", "lint"];
+// Debug-command hints (P4-T3): moved to _shared/usage-taxonomy.json; the
+// inline list is a null-safe fallback only.
+const DEBUG_COMMAND_HINTS = getUsageTaxonomy()?.debugCommandHints ?? [
+  "diff",
+  "grep",
+  "log",
+  "status",
+  "test",
+  "lint",
+];
 
 function isDebugCommand(row: LocalUsageContextBreakdownRow): boolean {
   return DEBUG_COMMAND_HINTS.some((hint) => row.key.includes(hint));
