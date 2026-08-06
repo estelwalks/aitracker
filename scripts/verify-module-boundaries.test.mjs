@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  MODULE_REQUIRED_ENTRIES,
   ROUTE_LINE_LIMIT,
   analyzeProject,
   extractImportSources,
@@ -44,8 +45,18 @@ test("analyzeProject reports all P0 architecture-boundary categories", async () 
       "src/lib/security/scanner.ts": "export const scan = true;\n",
       "src/modules/usage/application/use-case.ts":
         'import { secret } from "../../skills/infrastructure/private";\nexport const usage = secret;\n',
+      "src/modules/usage/contracts.ts": "export {};\n",
+      "src/modules/usage/application/index.ts": "export {};\n",
+      "src/modules/usage/presentation/index.ts": "export {};\n",
+      "src/modules/usage/api.server.ts": "export {};\n",
+      "src/modules/usage/index.ts": "export {};\n",
       "src/modules/skills/infrastructure/private.ts":
         "export const secret = true;\n",
+      "src/modules/skills/contracts.ts": "export {};\n",
+      "src/modules/skills/application/index.ts": "export {};\n",
+      "src/modules/skills/presentation/index.ts": "export {};\n",
+      "src/modules/skills/api.server.ts": "export {};\n",
+      "src/modules/skills/index.ts": "export {};\n",
       "src/cycle-a.ts": 'import "./cycle-b";\n',
       "src/cycle-b.ts": 'import "./cycle-a";\n',
     },
@@ -59,6 +70,35 @@ test("analyzeProject reports all P0 architecture-boundary categories", async () 
           "route-direct-server-import",
           "route-line-limit",
         ],
+      );
+    },
+  );
+});
+
+test("analyzeProject verifies module scaffolds and prevents public server leaks", async () => {
+  await withFixture(
+    {
+      "src/modules/complete/contracts.ts": "export {};\n",
+      "src/modules/complete/application/index.ts": "export {};\n",
+      "src/modules/complete/presentation/index.ts": "export {};\n",
+      "src/modules/complete/api.server.ts": "export {};\n",
+      "src/modules/complete/index.ts": 'export * from "./presentation";\n',
+      "src/modules/incomplete/index.ts": 'export * from "./api.server";\n',
+      "src/modules/incomplete/api.server.ts": "export {};\n",
+    },
+    async (root) => {
+      const report = await analyzeProject(root);
+      assert.deepEqual(
+        report.violations.map((violation) => violation.type),
+        ["module-public-server-leak", "module-scaffold-missing-entry"],
+      );
+      assert.equal(
+        report.violations[0]?.file,
+        "src/modules/incomplete/index.ts",
+      );
+      assert.equal(
+        report.violations[1]?.detail,
+        MODULE_REQUIRED_ENTRIES.slice(0, 3).join(", "),
       );
     },
   );

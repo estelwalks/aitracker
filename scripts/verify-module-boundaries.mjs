@@ -10,6 +10,13 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROUTE_LINE_LIMIT = 80;
+export const MODULE_REQUIRED_ENTRIES = Object.freeze([
+  "contracts.ts",
+  "application/index.ts",
+  "presentation/index.ts",
+  "api.server.ts",
+  "index.ts",
+]);
 
 /**
  * Temporary migration exceptions only. Each entry must contain:
@@ -74,6 +81,16 @@ function getModuleName(repoPath) {
   return match?.[1];
 }
 
+async function listModuleNames(sourceRoot) {
+  const moduleRoot = resolve(sourceRoot, "modules");
+  if (!existsSync(moduleRoot)) return [];
+  const entries = await readdir(moduleRoot, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
 function isPublicModuleEntry(repoPath, moduleName) {
   return new RegExp(
     `^src/modules/${moduleName}/(?:index|contracts)\\.(?:[cm]?[jt]sx?)$`,
@@ -84,6 +101,29 @@ function routeHasForbiddenDirectImport(importSource) {
   return /(?:^|\/)(?:scanner|[^/]+\.server)(?:\.[cm]?[jt]sx?)?$/.test(
     importSource,
   );
+}
+
+function findReachableServerImplementation(entryFile, graph, root) {
+  const visited = new Set([entryFile]);
+  const pending = [...(graph.get(entryFile) ?? [])];
+
+  while (pending.length > 0) {
+    const candidate = pending.pop();
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+
+    const candidatePath = toRepoPath(root, candidate);
+    if (
+      /(?:^|\/)(?:api\.server\.[cm]?[jt]sx?|infrastructure\/)/.test(
+        candidatePath,
+      )
+    ) {
+      return candidatePath;
+    }
+    pending.push(...(graph.get(candidate) ?? []));
+  }
+
+  return undefined;
 }
 
 function findRelativeImportCycles(graph) {
@@ -152,6 +192,7 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
 
   const files = (await listSourceFiles(sourceRoot)).sort();
   const sourceFiles = new Set(files);
+  const moduleNames = await listModuleNames(sourceRoot);
   const contents = new Map(
     await Promise.all(
       files.map(async (file) => [file, await readFile(file, "utf8")]),
@@ -208,6 +249,35 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
       }
     }
     graph.set(file, dependencies.sort());
+  }
+
+  for (const moduleName of moduleNames) {
+    const moduleRoot = resolve(sourceRoot, "modules", moduleName);
+    const missingEntries = MODULE_REQUIRED_ENTRIES.filter(
+      (entry) => !existsSync(resolve(moduleRoot, entry)),
+    );
+    if (missingEntries.length > 0) {
+      violations.push({
+        type: "module-scaffold-missing-entry",
+        file: `src/modules/${moduleName}`,
+        detail: missingEntries.join(", "),
+      });
+    }
+
+    const publicEntry = resolve(moduleRoot, "index.ts");
+    if (!sourceFiles.has(publicEntry)) continue;
+    const leakedImplementation = findReachableServerImplementation(
+      publicEntry,
+      graph,
+      root,
+    );
+    if (leakedImplementation) {
+      violations.push({
+        type: "module-public-server-leak",
+        file: `src/modules/${moduleName}/index.ts`,
+        detail: leakedImplementation,
+      });
+    }
   }
 
   for (const cycle of findRelativeImportCycles(graph)) {
