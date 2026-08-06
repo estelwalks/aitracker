@@ -7,6 +7,7 @@
  * reader keys, commands, or pricing. The path-bearing `SKILL_AGENT_RULES` lives
  * in the server-only `skill-rules.server.ts`.
  */
+import type { PublicToolManifest } from "../tool-registry/manifest.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
 export interface SkillAgentRule {
@@ -36,19 +37,25 @@ export const DEFAULT_MAX_DEPTH = 3;
  * the registry/verify diagnostics.
  */
 export const SKILL_AGENT_ORDER: readonly string[] =
-  PUBLIC_TOOL_MANIFEST.skillAgentOrder ??
-    // Fallback for stale generated manifests: the frozen 9-tool order.
-    [
-      "claude-code",
-      "codex",
-      "cursor",
-      "gemini-cli",
-      "opencode",
-      "grok",
-      "hermes",
-      "openclaw",
-      "antigravity",
-    ];
+  requireSkillAgentOrder(PUBLIC_TOOL_MANIFEST);
+
+/**
+ * F6-T1: resolve the canonical order from the public manifest with NO fallback
+ * — a stale generated manifest that lost `skillAgentOrder` must fail at module
+ * load (surfaces in build/CI), never silently degrade to a hardcoded list.
+ * Exported for direct testing with a malformed manifest.
+ */
+export function requireSkillAgentOrder(
+  manifest: PublicToolManifest,
+): readonly string[] {
+  const order = manifest.skillAgentOrder;
+  if (order == null || order.length === 0) {
+    throw new Error(
+      "Public tool manifest is missing a non-empty skillAgentOrder — regenerate src/lib/tool-registry/public-manifest.generated.ts (npm run generate:manifest); the order derives from definitions/_shared/skill-market-policy.json",
+    );
+  }
+  return order;
+}
 
 const MANIFEST_BY_ID: ReadonlyMap<
   string,

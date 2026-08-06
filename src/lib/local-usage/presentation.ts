@@ -1,3 +1,4 @@
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 import type {
   LocalTokenCounts,
   LocalUsageBreakdown,
@@ -83,12 +84,18 @@ export function createEmptyUsageSnapshot(): LocalUsageSnapshot {
   };
 }
 
+/**
+ * Browser-facing source label (F6-T2): projected from the public manifest's
+ * `nameZh` — the UI display-name convention used by the sources page and the
+ * skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
+ * left the registry) fall back to the raw id.
+ */
+const MANIFEST_SOURCE_LABELS: ReadonlyMap<string, string> = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.nameZh]),
+);
+
 export function sourceLabel(source: LocalUsageSource | string): string {
-  if (source === "claude-code") return "Claude Code";
-  if (source === "codex") return "Codex";
-  if (source === "aipy") return "Aipy";
-  if (source === "workbuddy") return "WorkBuddy";
-  return source;
+  return MANIFEST_SOURCE_LABELS.get(source) ?? source;
 }
 
 // NOTE: 展示格式化统一走 src/lib/i18n/format.ts (locale 参数化)。

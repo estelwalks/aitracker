@@ -25,8 +25,24 @@ export interface PublicTool {
   name: string;
   nameZh: string;
   icon?: string;
+  /**
+   * True for legacy collection sources (docs §6) that stay in the usage
+   * source universe even if they leave the product catalog. Consumers
+   * (local-usage source ids, labels) project legacy state from this flag
+   * instead of hardcoding ids.
+   */
+  legacy?: boolean;
   capabilities: PublicCapabilityStatus;
 }
+
+/**
+ * Legacy collection sources (docs §6: aipy/cline). Single projection point for
+ * the `legacy` marker stamped on `PublicTool` — consumers must never hardcode
+ * this list themselves. Drift against the real registry is caught by the
+ * manifest safety tests (the checked-in generated manifest must carry exactly
+ * this set).
+ */
+export const LEGACY_TOOL_IDS: readonly string[] = ["aipy", "cline"];
 
 export interface PublicToolManifest {
   configVersion: 1;
@@ -48,6 +64,7 @@ export function generatePublicManifest(
         name: def.display.name,
         nameZh: def.display.nameZh,
         ...(def.display.icon ? { icon: def.display.icon } : {}),
+        ...(LEGACY_TOOL_IDS.includes(def.id) ? { legacy: true } : {}),
         capabilities: {
           usage: def.capabilities.usage.mode,
           skills: def.capabilities.skills.mode,
@@ -58,9 +75,28 @@ export function generatePublicManifest(
         },
       })),
     ...(sharedPacks
-      ? { skillAgentOrder: sharedPacks.skillMarketPolicy.skillAgentOrder }
+      ? { skillAgentOrder: requireSkillAgentOrder(sharedPacks) }
       : {}),
   };
+}
+
+/**
+ * Build-time guard (F6-T1): the canonical skill-agent order MUST come from the
+ * shared skill-market-policy pack and never be empty. A missing/empty order is
+ * a stale or partial pack — fail the build instead of falling back to a
+ * hardcoded list. The checked-in generated manifest is produced with the full
+ * builtin packs, so this only trips on genuinely broken input.
+ */
+function requireSkillAgentOrder(
+  sharedPacks: SharedPolicyPacks,
+): readonly string[] {
+  const order = sharedPacks.skillMarketPolicy?.skillAgentOrder;
+  if (order == null || order.length === 0) {
+    throw new Error(
+      "skillAgentOrder is missing or empty in the shared skill-market-policy pack — regenerate or fix definitions/_shared/skill-market-policy.json",
+    );
+  }
+  return order;
 }
 
 /**
