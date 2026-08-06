@@ -1,25 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { TOOL_DEFINITIONS } from "./index.ts";
-import { compileToolRegistry } from "../registry.ts";
+import { getDefaultRegistry } from "./registry.ts";
 import {
   BASELINE_TOOLS,
   BASELINE_USAGE_PARSING,
-} from "../__baseline__/baseline.ts";
+} from "./__baseline__/baseline.ts";
 
 /** Legacy collection sources: real usage sources hidden from the product catalog. */
 const LEGACY_HIDDEN_IDS = new Set(["aipy", "cline"]);
 
 test("the registry compiles all 29 tool configs (27 visible + 2 legacy) with no diagnostics", () => {
-  const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const registry = getDefaultRegistry();
   const errors = registry.diagnostics.filter((d) => d.severity === "error");
   assert.deepEqual(errors, []);
   assert.equal(registry.definitions.length, 29);
 });
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
-  const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const registry = getDefaultRegistry();
   // The 27 visible catalog tools match the frozen baseline exactly.
   const visible = registry.definitions.filter(
     (def) => def.catalogVisible !== false,
@@ -43,7 +42,7 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
 });
 
 test("each config id equals its filename stem", () => {
-  const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const registry = getDefaultRegistry();
   const ids = registry.ids;
   assert.equal(new Set(ids).size, ids.length, "config ids must be unique");
   // 27 visible ids match the baseline; aipy/cline are the extra legacy ids.
@@ -55,7 +54,7 @@ test("each config id equals its filename stem", () => {
 });
 
 test("skill/market/usage capabilities match the frozen baseline sets", () => {
-  const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const registry = getDefaultRegistry();
   const BASELINE_SKILL_IDS = [
     "claude-code",
     "codex",
@@ -109,7 +108,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
 });
 
 test("public manifest mirrors the 27 visible tools (legacy hidden)", () => {
-  const registry = compileToolRegistry(TOOL_DEFINITIONS);
+  const registry = getDefaultRegistry();
   assert.equal(registry.publicManifest.tools.length, 27);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
