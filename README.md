@@ -83,12 +83,14 @@ npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifes
 
 ## 工具注册表（tool-registry）
 
-每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格规则）收敛为 `src/lib/tool-registry/tools/<id>.config.ts` 单文件；业务模块只消费注册表的派生结果，不维护自己的工具名单。
+每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格策略）收敛为 `src/lib/tool-registry/definitions/<id>.tool.json`（v1.5 JSON，29 个：27 个产品目录工具 + aipy/cline 遗留采集源）；业务模块只消费注册表的派生结果，不维护自己的工具名单。
 
-- 注册表内核（contracts/defineTool/validate/registry/manifest）见 `src/lib/tool-registry/`，纯数据、浏览器安全。
-- 浏览器只导入生成的 `public-manifest.generated.ts`（display + 能力状态，无路径/Reader Key/命令/价格）；配置变更后执行 `npm run generate:manifest` 重新生成并提交（`verify:tool-registry` 会做漂移检查）。
-- 新增工具：新建 `<id>.config.ts` 并在 `tools/index.ts` 白名单注册；`npm run verify:tool-registry` + 相关单测通过后提交。
-- 用量缓存（`local-usage-index-v10.json`）携带 `registryFingerprint`，注册表配置变更自动失效重建。
+- 注册表内核（contracts/schema/loader/validate/registry/manifest）见 `src/lib/tool-registry/`：JSON 仅在构建期由 `scripts/generate-tool-imports.mjs` 读取并嵌入 `definitions.generated.ts`，**运行时不扫描目录、不加载外部 JSON**。
+- 平台模型：`macos/windows10/windows11/linux` targets + `windows` group（`_shared/platform-profiles.json`）；`resolvePlatformPlan()` 按 OS 解析探测/扫描路径；Linux 首期仅 `planned` 状态，不触发扫描。
+- 共享策略包（`definitions/_shared/`）：generic-reader 默认、scanner 预算、skill-market 顺序、usage taxonomy、platform profiles；定价 rule packs 在 `src/lib/pricing/rules/`。
+- 浏览器只导入生成的 `public-manifest.generated.ts`（display + 能力状态 + skillAgentOrder，无路径/Reader Key/命令/价格）；配置变更后执行 `npm run generate:*` 重新生成并提交（`verify:tool-registry` 会做漂移检查）。
+- 新增工具：新建 `definitions/<id>.tool.json` → 在 `definitions/manifest.json` 登记 → `npm run generate:tool-imports` → `npm run verify:tool-registry` + 相关单测通过后提交。
+- 用量缓存（`local-usage-index-v10.json`）携带 `toolRegistryVersion`（sha256 全量 canonical JSON），任何定义/策略变更自动失效重建。
 
 ## 数据接入
 
