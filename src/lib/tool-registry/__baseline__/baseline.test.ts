@@ -20,16 +20,23 @@ import {
 // rule-pack resolver) lives in src/lib/pricing/parity.test.ts - model prices
 // are no longer a static `MODEL_PRICES` catalog.
 
-test("baseline tools match the live AI_TOOLS catalog (27 tools)", () => {
-  assert.equal(AI_TOOLS.length, BASELINE_TOOLS.length);
+test("baseline tools match the live AI_TOOLS catalog (27 baseline + aipy/cline)", () => {
+  // The frozen baseline is the 27-tool product catalog captured pre-migration.
+  // aipy/cline are user-added extension tools (catalogVisible=true) and now
+  // appear in AI_TOOLS after the 27 baseline tools.
+  assert.ok(AI_TOOLS.length >= BASELINE_TOOLS.length);
   for (const expected of BASELINE_TOOLS) {
     const live = AI_TOOLS.find((tool) => tool.id === expected.id);
     assert.ok(live, `baseline tool "${expected.id}" missing from AI_TOOLS`);
     assert.equal(live.nameZh, expected.nameZh);
     assert.deepEqual([...live.detectRoots], [...expected.detectRoots]);
   }
-  // No extra live tools beyond the baseline.
-  assert.equal(AI_TOOLS.length, 27);
+  // The 27 baseline tools come first in canonical order; the extensions follow.
+  assert.deepEqual(
+    AI_TOOLS.slice(0, 27).map((t) => t.id),
+    BASELINE_TOOLS.map((t) => t.id),
+  );
+  assert.equal(AI_TOOLS.length, 29);
 });
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {

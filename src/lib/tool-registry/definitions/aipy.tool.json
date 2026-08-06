@@ -2,7 +2,6 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "aipy",
-  "catalogVisible": false,
   "display": {
     "name": "AiPy",
     "nameZh": "AiPy"

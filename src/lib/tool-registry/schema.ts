@@ -348,7 +348,8 @@ export const RawPricingSchema = z
 
 /**
  * Strict v1.5 tool definition (the JSON world). `catalogVisible=false` is only
- * allowed for the legacy collection sources aipy/cline (docs §6).
+ * allowed for legacy collection sources (docs §6); the current catalog has no
+ * such sources - aipy/cline are user-added extensions and visible (true).
  */
 export const RawToolDefinitionSchema = z
   .object({
@@ -456,7 +457,8 @@ export const RawToolDefinitionSchema = z
     pricing: RawPricingSchema.optional(),
   })
   .superRefine((raw, ctx) => {
-    // catalogVisible=false is only for the legacy collection sources (docs §6).
+    // Defensive (docs §6): catalogVisible=false is reserved for legacy
+    // collection sources; nothing uses it today (aipy/cline are visible).
     if (
       raw.catalogVisible === false &&
       raw.id !== "aipy" &&
