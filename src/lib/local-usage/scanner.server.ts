@@ -29,7 +29,6 @@ import {
   BUILTIN_USAGE_ADAPTERS,
   GENERIC_BUILTIN_USAGE_ADAPTERS,
 } from "./adapters/catalog.ts";
-import { loadExternalUsageAdapters } from "./adapters/config.server.ts";
 import {
   eventFromMappedRecord,
   fieldMismatchDiagnostic,
@@ -109,7 +108,6 @@ export interface LocalUsageScanOptions {
   maxFilesPerSource?: number;
   cacheDirectory?: string;
   disablePersistentCache?: boolean;
-  adapterConfigPath?: string;
 }
 
 async function discoverWindowsWslHomes(
@@ -416,8 +414,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
 function isLocalUsageSource(value: unknown): value is LocalUsageSource {
   return (
     typeof value === "string" &&
-    (BUILTIN_USAGE_ADAPTERS.some((adapter) => adapter.source === value) ||
-      /^custom:[a-z0-9][a-z0-9-]{0,47}$/.test(value))
+    BUILTIN_USAGE_ADAPTERS.some((adapter) => adapter.source === value)
   );
 }
 
@@ -1755,9 +1752,6 @@ export async function scanLocalUsage(
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
   const cacheDirectory =
     options.cacheDirectory ?? join(homeDirectory, APP_DATA_DIR, "cache");
-  const adapterConfigPath =
-    options.adapterConfigPath ??
-    join(homeDirectory, APP_DATA_DIR, "usage-adapters.json");
   const cacheFilePath = join(cacheDirectory, PERSISTENT_CACHE_FILE_NAME);
   const legacyCacheFilePaths = LEGACY_PERSISTENT_CACHE_FILE_NAMES.map(
     (fileName) => join(cacheDirectory, fileName),
@@ -1769,20 +1763,12 @@ export async function scanLocalUsage(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );
 
-  const externalAdapters = await loadExternalUsageAdapters(adapterConfigPath);
-  const externalSourceIds = new Set(
-    externalAdapters.adapters
-      .filter((adapter) => adapter.source.startsWith("custom:"))
-      .map((adapter) => adapter.source.slice("custom:".length)),
+  // External usage adapters (usage-adapters.json / custom:* sources) were
+  // removed (v1.5 M4-T1): tool facts are offline-only. Only built-in generic
+  // adapters run here; native readers (claude/codex/workbuddy) run below.
+  const genericAdapters = GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
+    (adapter) => adapter.source !== "workbuddy",
   );
-  const genericAdapters = [
-    ...GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
-      (adapter) =>
-        adapter.source !== "workbuddy" &&
-        !externalSourceIds.has(adapter.source),
-    ),
-    ...externalAdapters.adapters,
-  ];
   const [claude, codex, workbuddy, ...genericResults] = await Promise.all([
     scanClaude(
       claudeRoots,
@@ -1873,14 +1859,6 @@ export async function scanLocalUsage(
     codex.summary,
     workbuddy.summary,
     ...genericResults.map((result) => result.summary),
-    ...(externalAdapters.diagnostics.length > 0
-      ? [
-          {
-            ...sourceFailure("custom:config").summary,
-            diagnostics: externalAdapters.diagnostics,
-          },
-        ]
-      : []),
   ];
   const summaryBySource = new Map<LocalUsageSource, LocalUsageSourceSummary>();
   for (const summary of bridge.summaries)

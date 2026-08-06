@@ -18,7 +18,7 @@ export const KNOWN_LOCAL_USAGE_SOURCES = [
 ] as const;
 
 export type KnownLocalUsageSource = (typeof KNOWN_LOCAL_USAGE_SOURCES)[number];
-export type LocalUsageSource = KnownLocalUsageSource | `custom:${string}`;
+export type LocalUsageSource = KnownLocalUsageSource;
 
 export type LocalUsageDiagnosticCode =
   | "config-invalid"
