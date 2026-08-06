@@ -1,4 +1,4 @@
-import type { AgentDirectoryModuleContract } from "../contracts";
+import type { AgentDirectorySnapshot } from "../contracts";
 
 /** Safe data boundary for future browser views. */
-export type AgentDirectoryViewModel = AgentDirectoryModuleContract;
+export type AgentDirectoryViewModel = AgentDirectorySnapshot;

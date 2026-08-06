@@ -8,6 +8,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "claude-code",
       "name": "Claude Code",
       "nameZh": "Claude Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "native",
         "skills": "read-write",
@@ -21,6 +27,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "codex",
       "name": "Codex CLI",
       "nameZh": "Codex CLI",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "native",
         "skills": "read-write",
@@ -34,6 +46,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cursor",
       "name": "Cursor",
       "nameZh": "Cursor",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "read-write",
@@ -47,6 +65,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kiro",
       "name": "Kiro",
       "nameZh": "Kiro",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -60,6 +84,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "gemini-cli",
       "name": "Gemini CLI",
       "nameZh": "Gemini CLI",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "read-write",
@@ -73,6 +103,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "opencode",
       "name": "OpenCode",
       "nameZh": "OpenCode",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "read-write",
@@ -86,6 +122,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "openclaw",
       "name": "OpenClaw",
       "nameZh": "OpenClaw",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "read-write",
@@ -99,6 +141,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "every-code",
       "name": "Every Code",
       "nameZh": "Every Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -112,6 +160,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "hermes",
       "name": "Hermes Agent",
       "nameZh": "Hermes Agent",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "read-write",
@@ -125,6 +179,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "github-copilot",
       "name": "GitHub Copilot",
       "nameZh": "GitHub Copilot",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
@@ -138,6 +198,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kimi-code",
       "name": "Kimi Code",
       "nameZh": "Kimi Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
@@ -151,6 +217,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "omp",
       "name": "oh-my-pi",
       "nameZh": "oh-my-pi",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -164,6 +236,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "codebuddy",
       "name": "CodeBuddy",
       "nameZh": "CodeBuddy",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -177,6 +255,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "workbuddy",
       "name": "WorkBuddy",
       "nameZh": "WorkBuddy",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "native",
         "skills": "unsupported",
@@ -190,6 +274,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "grok",
       "name": "Grok Build",
       "nameZh": "Grok Build",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "read-write",
@@ -203,6 +293,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kilo-cli",
       "name": "Kilo CLI",
       "nameZh": "Kilo CLI",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -216,6 +312,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kilocode",
       "name": "Kilo Code",
       "nameZh": "Kilo Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -229,6 +331,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "antigravity",
       "name": "Antigravity",
       "nameZh": "Antigravity",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "read-write",
@@ -242,6 +350,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "pi",
       "name": "pi",
       "nameZh": "pi",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -255,6 +369,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "craft",
       "name": "Craft Agents",
       "nameZh": "Craft Agents",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -268,6 +388,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "roo-code",
       "name": "Roo Code",
       "nameZh": "Roo Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
@@ -281,6 +407,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "zed",
       "name": "Zed Agent",
       "nameZh": "Zed Agent",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -294,6 +426,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "goose",
       "name": "Goose",
       "nameZh": "Goose",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -307,6 +445,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "droid",
       "name": "Droid",
       "nameZh": "Droid",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -320,6 +464,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "mimo",
       "name": "Mimo Code",
       "nameZh": "Mimo Code",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -333,6 +483,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "zcode",
       "name": "ZCode",
       "nameZh": "ZCode",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -346,6 +502,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "anythingllm",
       "name": "AnythingLLM Desktop",
       "nameZh": "AnythingLLM Desktop",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "unsupported",
         "skills": "unsupported",
@@ -360,6 +522,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "name": "AiPy",
       "nameZh": "AiPy",
       "legacy": true,
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
@@ -374,6 +542,12 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "name": "Cline",
       "nameZh": "Cline",
       "legacy": true,
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
