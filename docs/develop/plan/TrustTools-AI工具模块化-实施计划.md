@@ -30,7 +30,7 @@
 
 ## 2. Epic M0 — 冻结基线与验收（3 Task）
 
-- **M0-T1 机器可读基线**：固化 27 个产品目录工具 + AiPy/Cline legacy（id/nameZh/catalogVisible/platform paths）、9 Skill Agent、usage/context adapter 源+paths、3 session 源、`MODEL_PRICES` 与 `OFFICIAL_PRICES`，以及 `COMMON_MAPPING`、扫描器预算/缓存、Skill Market 排序、用量分类、内建安全规则版本和 TokenTracker bridge alias。配 parity 测试断言当前各 catalog 与基线逐项相等，并记录用户安全状态与内建规则包的边界。
+- **M0-T1 机器可读基线**：固化 27 个产品目录工具 + AiPy/Cline legacy（id/nameZh/catalogVisible/platform paths）、9 Skill Agent、usage/context adapter 源+paths、3 session 源、`MODEL_PRICES` 与 `OFFICIAL_PRICES`，以及 `COMMON_MAPPING`、扫描器预算/缓存、Skill Market 排序、用量分类和内建安全规则版本。配 parity 测试断言当前各 catalog 与基线逐项相等，并记录用户安全状态与内建规则包的边界。
 - **M0-T2 对照 fixture**：在 `__baseline__/fixtures/` 放匿名化的 detection/skill-roots/pricing/session-resume fixture（复用现有测试数据），供后续 parity 用例。
 - **M0-T3 验证脚本 + feature flag + 回退说明**：
   - `scripts/verify-tool-registry.mjs`：编译 registry、打印工具数/能力数/价格规则数/诊断，非 0 诊断则 exit 1。
@@ -74,7 +74,7 @@
 - **M4-T2 Reader 契约**：`readers/contracts.ts` 定义 `UsageReader`、`ContextReader`，注册内建 Reader Key；generic JSON/JSONL/SQLite reader 参数化于 JSON definition mapping；未知 key 启动期失败测试。
 - **M4-T3 adapter 数据迁入 JSON**：`BUILTIN_USAGE_ADAPTERS` 的 paths/format/mapping/maxFileSize 迁入 29 个定义对应的 `capabilities.usage`；通用 mapping/default 从 `_shared/generic-reader-defaults.json` 引用，AiPy/WorkBuddy 的 query/mapping 作为数据迁入。`adapters/catalog.ts` 改为派生兼容导出。
 - **M4-T4 原生 Usage/Context Reader 注册**：Claude/Codex 原生扫描注册为 UsageReader；`claude-context.ts`/`codex-context.ts` 以 `capabilities.context.reader` 显式注册，配置声明可用维度；用量分类从 `_shared/usage-taxonomy.json` 派生。未支持工具必须是 `context: unsupported`。
-- **M4-T5 scanner/bridge 切流**：scanner、adapter config 改用 `resolvePlatformPlan()`、`getUsagePlan()`、`getContextPlan()` 和 `scanner-policy.json`；`tokentracker-bridge` 不再自动执行或保留来源 alias，必要时仅作为隔离的手工迁移工具。保留旧目录影子对照（feature flag）。
+- **M4-T5 scanner 切流**：scanner、adapter config 改用 `resolvePlatformPlan()`、`getUsagePlan()`、`getContextPlan()` 和 `scanner-policy.json`；扫描结果仅来自受控 Reader。保留旧目录影子对照（feature flag）。
 - **M4-T6 fixture 回归**：匿名 JSON/JSONL/SQLite + Codex/Claude context fixture 新旧事件及 context breakdown 逐字段相等；坏文件只产生该工具诊断；验证不读取外部 adapter 文件、缓存版本失效和性能回归。
 
 ## 7. Epic M5 — 会话恢复与价格迁移（4 Task；定价子计划 17 人日）
@@ -87,7 +87,7 @@
 ## 8. Epic M6 — 切流、清理、质量门禁（5 Task）
 
 - **M6-T1 逐领域打开新路径**：对照 M0 基线，每项差异显式接受或修复并记录；所有共享策略必须经 Registry 编译生效。
-- **M6-T2 删除旧事实源与运行时入口**：删除 `AI_TOOLS`/`SKILL_AGENT_RULES`/内建 adapter catalog/`COMMON_MAPPING`/`USAGE_ADAPTER_PRESETS`/`SKILL_AGENT_ORDER`/旧静态 `MODEL_PRICES`/session 白名单与展示名映射/TokenTracker bridge alias/`catalog.legacy.ts`，以及 `tool-overrides.json`、`usage-adapters.json`、`custom:*` 的读写路径和无引用兼容导出；保留迁移映射文档，不得保留可被业务读取的平行常量。
+- **M6-T2 删除旧事实源与运行时入口**：删除 `AI_TOOLS`/`SKILL_AGENT_RULES`/内建 adapter catalog/`COMMON_MAPPING`/`USAGE_ADAPTER_PRESETS`/`SKILL_AGENT_ORDER`/旧静态 `MODEL_PRICES`/session 白名单与展示名映射/`catalog.legacy.ts`，以及 `tool-overrides.json`、`usage-adapters.json`、`custom:*` 的读写路径和无引用兼容导出；保留迁移映射文档，不得保留可被业务读取的平行常量。
 - **M6-T3 内建安全规则包切流**：将内建扫描 pattern/分类迁入 `_rules/security-rules.json`，仅接受受限 schema 与构建期安全正则校验；保留 TypeScript 的 ReDoS、长度和超时防护，用户安全状态不得改变内建规则执行。
 - **M6-T4 跨平台质量门**：`npm run lint`、`npx tsc --noEmit`、全量 Node tests、E2E、macOS build 与 Windows build；macOS/Windows 10/Windows 11 分别在真实或 CI runner 上执行探测/Skill/usage/session smoke。Linux 执行 schema/XDG/planned-state tests，不执行 reader/安装承诺，直至单独启用 Linux milestone。
 - **M6-T5 文档更新**：README、架构图、贡献指南、“新增工具/共享策略/专项规则”操作手册；`verify:tool-registry` 纳入 CI 序列说明。

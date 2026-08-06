@@ -34,13 +34,13 @@
 
 ## 1. 当前事实、迁移边界与基线
 
-| 当前事实                                                                                | 迁移目标                                                                  |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `src/lib/pricing/catalog.ts`：`ModelPrice.matches`、`exactOrSnapshot`、`includesAll`。  | 移入 provider/tool rule pack；不再以函数作为模型规则。                    |
-| `src/lib/pricing/dynamic.server.ts`：`OFFICIAL_PRICES`、LiteLLM 匹配、Doubao 阶梯特例。 | 全部转为 JSON rates/rules；模型价格网络查询退出权威路径。                 |
-| `src/lib/pricing/index.ts`：仅按 `model` 查找，使用 number 计算。                       | 改用 source-aware `resolveAndEstimate()` 和 BigInt nanoUSD。              |
-| `PricingSnapshot` 混合模型价格与汇率来源。                                              | 模型 rule version 与汇率 snapshot 分离；离线规则独立可用。                |
-| TokenTracker：curated JSON + LiteLLM seed + JS normalizer/matcher。                     | 借鉴其 source alias/精确优先思想；不移植 JS matcher、模糊匹配、未知零价。 |
+| 当前事实                                                                                | 迁移目标                                                           |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `src/lib/pricing/catalog.ts`：`ModelPrice.matches`、`exactOrSnapshot`、`includesAll`。  | 移入 provider/tool rule pack；不再以函数作为模型规则。             |
+| `src/lib/pricing/dynamic.server.ts`：`OFFICIAL_PRICES`、LiteLLM 匹配、Doubao 阶梯特例。 | 全部转为 JSON rates/rules；模型价格网络查询退出权威路径。          |
+| `src/lib/pricing/index.ts`：仅按 `model` 查找，使用 number 计算。                       | 改用 source-aware `resolveAndEstimate()` 和 BigInt nanoUSD。       |
+| `PricingSnapshot` 混合模型价格与汇率来源。                                              | 模型 rule version 与汇率 snapshot 分离；离线规则独立可用。         |
+| 既有外部定价研究结论。                                                                  | 仅保留经内部复核的模型别名与费率证据；不引入外部运行时或匹配实现。 |
 
 ### M0 验收基线
 
@@ -48,7 +48,7 @@
 
 - `src/lib/pricing/__baseline__/pricing-events.jsonl`：匿名的 source/rawModel/timestamp/token 事件，覆盖 `MODEL_PRICES`、`OFFICIAL_PRICES`、Doubao 阶梯、未知模型、cache write、Codex reasoning。
 - `src/lib/pricing/__baseline__/expected-resolution.json`：现有金额、原始匹配来源及可接受差异清单。现有未知零价必须标为“预期修正”，而不是 parity 失败。
-- `src/lib/pricing/__baseline__/tokentracker-conversion-cases.json`：仅选取已有真实工具映射的 source normalization 例子（Claude、Cursor、WorkBuddy、Antigravity、Zed）；每条附 expected canonical ID，禁止直接引入未经核验的所有 LiteLLM 条目。
+- `src/lib/pricing/__baseline__/conversion-cases.json`：仅选取已有真实工具映射的 source normalization 例子（Claude、Cursor、WorkBuddy、Antigravity、Zed）；每条附 expected canonical ID，禁止直接引入未经核验的所有 LiteLLM 条目。
 - `docs/develop/plan/pricing-rule-migration-map.md`：旧常量/函数到 pack rule ID 的一对一映射、官方来源、核验人和迁移状态。
 
 ## 2. 目标目录与交付物
@@ -136,7 +136,7 @@ scripts/
 - `resolve.ts` 按 scope、matcher 精确度、priority、effective date 执行 rule；支持 alias 到 canonical ID，不能递归无限展开。
 - `prefix`/`suffix` 必须按 `-` token 边界匹配；`token-sequence` 是完整 token 列表的顺序匹配，不是任意 substring。
 - 对每次命中返回 `conversionRuleId`、`rateRuleId`、`canonicalModelId` 和 reason；匹配多条时返回 compiler 阻断诊断，不能在运行时随机选取。
-- 验收：把 TokenTracker 可验证 aliases 改写为 JSON fixture，展示 raw 名字不变、canonical 转换正确。
+- 验收：把已复核 aliases 写为 JSON fixture，展示 raw 名字不变、canonical 转换正确。
 
 ### M2-T3：实现通用配置 fallback（1 人日）
 
@@ -154,7 +154,7 @@ scripts/
 
 ### M3-T1：创建 rules packs（1 人日）
 
-- 从 `MODEL_PRICES`、`OFFICIAL_PRICES`、Doubao special case 和已确认 TokenTracker mapping 创建 defaults/OpenAI/Anthropic/Google/中国供应商/tool-routing packs；该名称只表示内建模型路由，不支持用户 `tool-overrides.json`。
+- 从 `MODEL_PRICES`、`OFFICIAL_PRICES`、Doubao special case 和已确认模型映射创建 defaults/OpenAI/Anthropic/Google/中国供应商/tool-routing packs；该名称只表示内建模型路由，不支持用户 `tool-overrides.json`。
 - 每条 rate 写 source URL、核验日、effective range、rate ID；每条 alias 写 rule ID、scope、证据 fixture。
 - 验收：迁移表中的每个旧项目都存在一个新 rule ID 或被显式标记删除原因。
 

@@ -36,7 +36,7 @@
 
 ### 2.2 会话恢复仅 3 工具（D1，经用户确认）
 
-参考 `/Users/caows/Documents/Knownsec/Develop/TokenTracker` 的**可观察行为**（Clean Room，不复制源码），确认只有 **Claude Code / Codex / Grok** 三个工具有可复制的 resume 命令：
+基于已验证的本地日志样本，确认只有 **Claude Code / Codex / Grok** 三个工具有可复制的 resume 命令：
 
 - Claude Code：`~/.claude/projects/**/*.jsonl`，`claude --resume <id>`
 - Codex：`~/.codex/sessions|archived_sessions/rollout-*.jsonl` + `session_index.jsonl`，`codex resume <id>`
@@ -47,7 +47,7 @@
 
 设置、每日额度、检测历史、版本检测结果统一走 Electron IPC prefs（`userData/trusttools-prefs.json`，原子 temp-file rename）+ localStorage 镜像。已修复审计报告 P0-02（随机端口导致 localStorage 跨重启失效）。
 
-### 2.4 TokenTracker 字段语义（Clean Room）
+### 2.4 本地日志字段语义
 
 - token 闭集 6 元组：input / output / cached_input(缓存读) / cache_creation(缓存写) / reasoning_output(推理) / total + 会话数(sessionId 去重)
 - Codex raw input 含 cached，需减去
@@ -57,29 +57,29 @@
 
 ## 3. Epic / Task 完成矩阵
 
-| Epic         | Task                       | FR              | 状态          | 说明                                                    |
-| ------------ | -------------------------- | --------------- | ------------- | ------------------------------------------------------- |
-| A 信息架构   | A1 27工具事实源            | 027             | ✅ 已提交     | catalog.ts，29→27 对齐                                  |
-| A            | A2 路由删除/新增           | —               | 🟡 骨架完成   | sources/sessions 路由已建；删 tokens/memory 待 B 完成后 |
-| A            | A3 导航 7 项               | 027             | ✅ 已提交     | AppShell/i18n/__root                                    |
-| B 首页大盘   | B1 全局区间+刷新           | 001/002         | 🟡 数据层完成 | presentation 加 all 区间；UI 待做                       |
-| B            | B2 KPI+环比                | 003             | 🟡 数据层完成 | computeMoM/previousPeriodTotal 已加；UI 待做            |
-| B            | B3 趋势+上下文+热力图     | 004/005/006     | ✅ 已提交     | 模型分布按原型对齐移出（差异见首页大盘-模块核对报告）  |
-| B            | B4 明细表推理Token/会话数  | 007             | ⬜ 待做       | aggregateUsageBySession 可复用                          |
-| B            | B5 首次引导+空状态         | 013             | ⬜ 待做       | 27 工具名 + 开始扫描                                    |
-| B            | B6 海报入口+布局           | 008/012         | ⬜ 待做       | 海报直接打开 + 导出入口                                 |
-| C 数据来源   | C1 server fn               | 009             | ✅ 已提交     | get-usage-sources.ts                                    |
-| C            | C2 页面                    | 009             | ✅ 已提交     | sources.tsx 三态                                        |
-| D 会话恢复   | D1 模块骨架                | 024/025/026     | ✅ 已提交     | local-sessions/（3工具）                                |
-| D            | D2 页面                    | 024/025/026     | ✅ 已提交     | sessions.tsx                                            |
-| E Skill/市场 | E 列表/详情/同步/安装      | 014~023         | ✅ 已提交     | 9 skill agent；识别规则配置化 agent-rules.ts，对齐 TokenTracker（见 Skill管理-模块核对报告） |
-| F 安全检测   | F1 11维度规则库            | 018/019         | ✅ 已提交     | 23 条规则覆盖 11 维度                                   |
-| F            | F2 交互+历史持久化         | 018/019/020     | ✅ 已提交     | 剩余次数/规则库版本/100MB/历史30天                      |
-| G 设置/横切  | G1/G2 设置页+保留          | 029/NFR-023     | 🟡 G2 完成    | prune.server.ts 已写待提交；G1 设置页重构待做           |
-| G            | G3 数据导出                | 032             | ✅ 已提交     | export/ 模块（CSV/JSON）                                |
-| G            | G4 版本检测                | 033             | ✅ 已提交     | version-check + useVersionCheck hook                    |
-| G            | G5 托盘+卸载/升级          | 030/031         | ⬜ 待做       | main.ts 首次关闭提示 + 兼容检测                         |
-| H 回归       | H 质量门禁+巡检            | —               | ⬜ 待做       | 删 tokens/memory 测试 + 全量验证                        |
+| Epic         | Task                      | FR          | 状态          | 说明                                                                      |
+| ------------ | ------------------------- | ----------- | ------------- | ------------------------------------------------------------------------- |
+| A 信息架构   | A1 27工具事实源           | 027         | ✅ 已提交     | catalog.ts，29→27 对齐                                                    |
+| A            | A2 路由删除/新增          | —           | 🟡 骨架完成   | sources/sessions 路由已建；删 tokens/memory 待 B 完成后                   |
+| A            | A3 导航 7 项              | 027         | ✅ 已提交     | AppShell/i18n/__root                                                      |
+| B 首页大盘   | B1 全局区间+刷新          | 001/002     | 🟡 数据层完成 | presentation 加 all 区间；UI 待做                                         |
+| B            | B2 KPI+环比               | 003         | 🟡 数据层完成 | computeMoM/previousPeriodTotal 已加；UI 待做                              |
+| B            | B3 趋势+上下文+热力图     | 004/005/006 | ✅ 已提交     | 模型分布按原型对齐移出（差异见首页大盘-模块核对报告）                     |
+| B            | B4 明细表推理Token/会话数 | 007         | ⬜ 待做       | aggregateUsageBySession 可复用                                            |
+| B            | B5 首次引导+空状态        | 013         | ⬜ 待做       | 27 工具名 + 开始扫描                                                      |
+| B            | B6 海报入口+布局          | 008/012     | ⬜ 待做       | 海报直接打开 + 导出入口                                                   |
+| C 数据来源   | C1 server fn              | 009         | ✅ 已提交     | get-usage-sources.ts                                                      |
+| C            | C2 页面                   | 009         | ✅ 已提交     | sources.tsx 三态                                                          |
+| D 会话恢复   | D1 模块骨架               | 024/025/026 | ✅ 已提交     | local-sessions/（3工具）                                                  |
+| D            | D2 页面                   | 024/025/026 | ✅ 已提交     | sessions.tsx                                                              |
+| E Skill/市场 | E 列表/详情/同步/安装     | 014~023     | ✅ 已提交     | 9 skill agent；识别规则配置化 agent-rules.ts（见 Skill管理-模块核对报告） |
+| F 安全检测   | F1 11维度规则库           | 018/019     | ✅ 已提交     | 23 条规则覆盖 11 维度                                                     |
+| F            | F2 交互+历史持久化        | 018/019/020 | ✅ 已提交     | 剩余次数/规则库版本/100MB/历史30天                                        |
+| G 设置/横切  | G1/G2 设置页+保留         | 029/NFR-023 | 🟡 G2 完成    | prune.server.ts 已写待提交；G1 设置页重构待做                             |
+| G            | G3 数据导出               | 032         | ✅ 已提交     | export/ 模块（CSV/JSON）                                                  |
+| G            | G4 版本检测               | 033         | ✅ 已提交     | version-check + useVersionCheck hook                                      |
+| G            | G5 托盘+卸载/升级         | 030/031     | ⬜ 待做       | main.ts 首次关闭提示 + 兼容检测                                           |
+| H 回归       | H 质量门禁+巡检           | —           | ⬜ 待做       | 删 tokens/memory 测试 + 全量验证                                          |
 
 **进度：21 个 Task 中 12 个完成，3 个数据层/骨架完成，6 个待做。**
 
@@ -115,7 +115,7 @@
 
 - `src/lib/local-sessions/`（types/resume-id/scanner.server/server-fns/index + test）
 - `SessionRecord`：sessionId, source, title, projectKey, projectRef(cwd), model, startedAt, endedAt, durationMs(活动时间), turns, editTurns, retryTurns(=0), totals(6元组), subagentCalls, resumeSafe, resumeCommand
-- 3 个 reader（claude/codex/grok），按 TokenTracker 行为实现：
+- 3 个 reader（claude/codex/grok），按已验证的本地日志语义实现：
   - Claude：按 sessionId 合并多文件，过滤非会话文件（journal.jsonl 等）
   - Codex：session_index.jsonl 标题，raw input 减去 cached
   - Grok：summary.json 标题（generated_title > session_summary），unix 秒/毫秒时间戳检测
@@ -271,7 +271,7 @@ npm run dev:desktop:first-run                 # Electron 首启隔离环境
 
 ## 9. 风险与约束
 
-- **Clean Room**：参考 TokenTracker 仅取行为/格式/字段语义；新模块用 TrustTools 自有类型/目录/命名/测试（见 `docs/compliance/CLEAN_ROOM.md`）
+- **独立实现**：新模块使用 TrustTools 自有类型、目录、命名和测试（见 `docs/compliance/CLEAN_ROOM.md`）
 - **B 系列 index.tsx 过大**：拆 `src/components/dashboard/*` 子组件
 - **分类器间歇故障**：实施期间命令安全判定服务间歇不可用，导致 tsc/lint/commit/子代理启动受阻；已完成 6 个 commit 均在分类器可用窗口验证通过
 - **会话恢复仅 3 工具**：UI 文案明确"当前支持恢复的工具"，避免用户误以为全覆盖

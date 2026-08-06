@@ -47,12 +47,12 @@
 ### K1: FR-005 过度依赖外部项目引用
 
 ```markdown
-具体层级结构、维度划分、展开逻辑按照 TokenTracker 的实现。
+具体层级结构、维度划分和展开逻辑须由本项目明确规定。
 ```
 
 这是不完整的需求定义。外部项目可能变化，评审者和开发者无法直接从 PRD 理解需求。PRD 层面应给出自包含的规范。
 
-**修复建议：** 至少定义到第二层结构（如 Messages / Tool Calls / Reasoning / MCP / Skill 各维度的含义和展开路径），TokenTracker 仅作为参考标注。
+**修复建议：** 至少定义到第二层结构（如 Messages / Tool Calls / Reasoning / MCP / Skill 各维度的含义和展开路径）。
 
 ---
 

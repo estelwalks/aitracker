@@ -33,7 +33,7 @@
 
 **验收标准**：基线报告记录 27 个产品目录工具、AiPy/Cline legacy、9 个 Skill Agent、用量/上下文/会话/市场能力集、价格与三平台 fixture；全量质量命令在迁移前有可复现输出。
 
-- [ ] M0-T1：记录 27 产品目录工具、AiPy/Cline legacy、`SKILL_AGENT_RULES`、usage/context adapter、session reader、`MODEL_PRICES`/`OFFICIAL_PRICES`、`COMMON_MAPPING`、扫描预算/缓存、Market 排序、用量分类、内建安全规则和 TokenTracker alias，以及三平台路径的机器可读快照（0.5 天）。
+- [ ] M0-T1：记录 27 产品目录工具、AiPy/Cline legacy、`SKILL_AGENT_RULES`、usage/context adapter、session reader、`MODEL_PRICES`/`OFFICIAL_PRICES`、`COMMON_MAPPING`、扫描预算/缓存、Market 排序、用量分类和内建安全规则，以及三平台路径的机器可读快照（0.5 天）。
 - [ ] M0-T2：为工具探测、Skill roots、价格和 session resume 建立对照 fixture（1 天）。
 - [ ] M0-T3：定义 `verify:tool-registry` 脚本、迁移 feature flag 及回退说明（0.5 天）。
 

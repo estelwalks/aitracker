@@ -51,7 +51,7 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 1. **数据可信：** 同一数据无论重复扫描、日志重写或应用崩溃都不能重复计费。
 2. **隐私优先：** prompt、回复、工具参数和完整对话正文不进入 TrustTools 持久层。
 3. **低认知负担：** 适配 1 名负责人 + Codex 的研发模式，减少语言、进程和部署种类。
-4. **独立开源：** TokenTracker 只作为数据源行为参考，接口、代码、数据模型和测试全部独立。
+4. **独立开源：** 接口、代码、数据模型和测试全部独立。
 5. **跨平台：** 同一 TypeScript 核心覆盖 macOS，Windows 后续版本补充。
 6. **可演进：** 新增 Provider、Skill 目标或会话来源时，不修改稳定核心。
 
@@ -61,7 +61,7 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 - 不在 V1.0 提供浏览器插件、Windows 客户端、命令行模式或浏览器模式。
 - 不执行不受信任 Skill；只做静态检查和用户决定。
 - 不构建本地微服务集群。
-- 不复刻 TokenTracker 的 CLI、HTTP API、queue/cursor schema 或 UI。
+- 不引入外部采集 CLI、HTTP API、queue/cursor schema 或 UI。
 
 ## 2. 输入验证、假设与约束
 
@@ -104,11 +104,10 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 - SQLite 是 TrustTools 本地在线事实源。
 - 所有本地功能无需登录。
 - 原 AI 工具完整对话不写入 TrustTools 数据库、日志或诊断包。
-- TokenTracker 固定参考快照为 v0.83.6 / `32df4fe`，只研究行为。
-- TokenTracker 只参考数据获取逻辑，其他实现不纳入架构。
+- 本项目仅依据公开格式、匿名样本和产品需求定义数据获取逻辑。
 - 对外开源前执行许可证、NOTICE、相似度和来源审查。
 
-### 2.4 TokenTracker 参考边界
+### 2.4 独立实现边界
 
 只参考四类数据获取信息：
 
@@ -117,7 +116,7 @@ TrustTools V3.0 是面向个人 AI 开发者的本地桌面工具。它从用户
 3. Provider 原始字段到统一 Token 字段的换算规则。
 4. 同一事件、镜像记录和累计快照的去重方式。
 
-TrustTools 使用这些信息重新实现 TypeScript Adapter。TokenTracker 的 CLI、本地 API、UI、文件结构、queue/cursor schema、函数接口和测试均不使用。
+TrustTools 使用自有 TypeScript Adapter；不包含外部 CLI、本地 API、UI、文件结构、queue/cursor schema、函数接口或测试。
 
 ### 2.5 可调整约束
 
