@@ -62,8 +62,6 @@ export const ENV = {
   DEV_PORT: `${APP_ID.toUpperCase()}_DEV_PORT`,
   USAGE_HOME: `${APP_ID.toUpperCase()}_USAGE_HOME`,
   HOME: `${APP_ID.toUpperCase()}_HOME`,
-  ENABLE_LEGACY_BRIDGE: `${APP_ID.toUpperCase()}_ENABLE_LEGACY_BRIDGE`,
-  LEGACY_STATE_HOME: `${APP_ID.toUpperCase()}_LEGACY_STATE_HOME`,
   RELEASE_OWNER: `${APP_ID.toUpperCase()}_RELEASE_OWNER`,
   RELEASE_REPO: `${APP_ID.toUpperCase()}_RELEASE_REPO`,
 } as const;
