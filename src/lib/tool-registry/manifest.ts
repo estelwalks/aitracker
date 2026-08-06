@@ -37,20 +37,22 @@ export function generatePublicManifest(
 ): PublicToolManifest {
   return {
     configVersion: 1,
-    tools: defs.map((def) => ({
-      id: def.id,
-      name: def.display.name,
-      nameZh: def.display.nameZh,
-      ...(def.display.icon ? { icon: def.display.icon } : {}),
-      capabilities: {
-        usage: def.capabilities.usage.mode,
-        skills: def.capabilities.skills.mode,
-        agents: def.capabilities.agents.mode,
-        sessions: def.capabilities.sessions.mode,
-        market: def.capabilities.market.mode,
-        security: def.capabilities.security.mode,
-      },
-    })),
+    tools: defs
+      .filter((def) => def.catalogVisible !== false)
+      .map((def) => ({
+        id: def.id,
+        name: def.display.name,
+        nameZh: def.display.nameZh,
+        ...(def.display.icon ? { icon: def.display.icon } : {}),
+        capabilities: {
+          usage: def.capabilities.usage.mode,
+          skills: def.capabilities.skills.mode,
+          agents: def.capabilities.agents.mode,
+          sessions: def.capabilities.sessions.mode,
+          market: def.capabilities.market.mode,
+          security: def.capabilities.security.mode,
+        },
+      })),
   };
 }
 
