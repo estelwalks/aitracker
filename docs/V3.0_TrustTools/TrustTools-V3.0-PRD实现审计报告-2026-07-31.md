@@ -20,7 +20,7 @@
 
 1. **核心统计维度语义错误。** PRD 中的 Provider 指 Anthropic、OpenAI 等模型供应商；首页和 Token 页却把 Claude Code、Codex、Cursor 等客户端来源标为 Provider。核心图表、预算和海报由此可能向用户表达错误结论。
 2. **Electron 持久化设计失效。** 桌面端每次启动使用随机 localhost 端口，而设置、主题、布局和每日检测额度依赖按 origin 隔离的 `localStorage`，导致应用重启后可能全部恢复默认，检测次数也可通过重启重置。
-3. **TokenTracker 集成违反项目当前 Clean Room 与架构基线。** 打包产物直接携带并运行 TokenTracker CLI，还会在 Electron 首次同步后无单独授权地执行初始化 Hook。这既与“只研究行为、独立实现 Adapter”的内部约束冲突，也可能修改用户其他 AI 工具的配置。
+3. **外部采集 CLI 集成违反项目当前独立实现与架构基线。** 打包产物直接携带并运行外部 CLI，还会在 Electron 首次同步后无单独授权地执行初始化 Hook。这既与独立实现约束冲突，也可能修改用户其他 AI 工具的配置。
 4. **安全检测并非 PRD 描述的双层审查。** AI 默认关闭，且只接收静态规则已经命中的片段；没有静态命中时 AI 看不到内容，不能独立发现混淆或新型风险。市场安装也只执行静态扫描。
 5. **实现与当前架构决策相反。** 最新架构要求 Renderer → Preload → Main → Utility Process → SQLite，明确放弃 localhost 服务化后端；实际业务扫描、解包、市场安装和外部 CLI 均运行在 Electron Main 加载的 localhost Nitro 服务中。
 6. **多项设置是“保存成功但业务不生效”。** 预算、自动发现、监控目录、Skill 健康阈值、Memory 排除目录等都有可操作界面，但未进入实际扫描或计算链路。
@@ -49,14 +49,14 @@
 
 ## 2. 发布阻断问题（P0）
 
-### P0-01：TokenTracker 运行时与自动 Hook 违反当前项目约束
+### P0-01：外部采集 CLI 运行时与自动 Hook 违反当前项目约束
 
 **事实**
 
 - PRD NFR-013、`docs/compliance/CLEAN_ROOM.md` 和新版架构均要求独立实现，只研究外部项目的可观察行为与公开数据格式。
-- 新版架构明确写明：不使用 TokenTracker CLI、本地 API、UI、文件结构、 queue/cursor schema、函数接口和测试。
-- `electron-builder.yml` 将 `vendor/tokentracker-cli` 及其 `node_modules` 直接打入应用。
-- `src/lib/local-usage/tokentracker-bridge.server.ts` 直接启动该 CLI，并读取其 `.tokentracker/tracker/queue.jsonl`。
+- 新版架构明确写明：不使用外部采集 CLI、本地 API、UI、文件结构、queue/cursor schema、函数接口或测试。
+- 打包产物不得直接携带第三方采集运行时。
+- 本地用量扫描不得启动外部 CLI 或读取外部队列文件。
 - Electron 首次同步后会后台执行 `init --yes --no-auth --no-open`。
 - 被打包 CLI 的 `init` 会探测并修改 Codex、Claude、Gemini、OpenCode 等工具配置或 Hook。
 - 现有相似度报告仅扫描 TrustTools 的 `src`，未覆盖仓库中的 `vendor`，因此其“0%”结论不能证明当前交付物符合项目自定的 Clean Room 规则。
@@ -70,7 +70,7 @@
 
 **建议**
 
-1. 发布前移除打包的 TokenTracker 运行时、queue 依赖和自动 `init`。
+1. 发布前移除打包的外部采集运行时、queue 依赖和自动 `init`。
 2. 对每个数据源实现独立、最小化、只读优先的 Source Adapter。
 3. 被动采集确实不能满足时，才为单个来源提供默认关闭的 trigger-only Hook。
 4. Hook 启用前展示目标配置、变更内容和隐私说明；写入前备份，提供检测、恢复和卸载清理。
@@ -79,7 +79,7 @@
 **验收口径**
 
 - 安装与首次启动不修改任一第三方 AI 工具配置。
-- 未授权时不存在 TrustTools/TokenTracker Hook。
+- 未授权时不存在外部 Hook。
 - 卸载或禁用 Hook 后配置可完整恢复。
 - 构建产物中不再包含被禁止复用的 CLI、queue schema 或运行时。
 
@@ -118,7 +118,7 @@
 
 - `docs/V3.0_TrustTools/示意图/TrustTools-V3.0-架构设计文档.md` 要求 Main 不承载领域业务、SQLite 为事实源，并采用 Utility Process。
 - 同一文档明确将“全部业务放 Electron Main”和“localhost 服务化后端”列为放弃方案。
-- 实际 Electron Main 动态加载 Nitro server；Token 扫描、Memory 扫描、压缩包解包、市场安装和 TokenTracker 子进程均由该运行时执行。
+- 实际 Electron Main 动态加载 Nitro server；Token 扫描、Memory 扫描、压缩包解包和市场安装均由该运行时执行。
 - 当前没有 Utility Process、MessagePort 任务协议、统一 SQLite 领域仓库、任务监管、崩溃重启或事务回滚。
 - Token 事实源实际为保存大量事件的 JSON 文件。
 
@@ -289,13 +289,13 @@
 
 ### 4.1 Token 数据分析
 
-| FR                           | 状态     | 当前实现                                                                    | 主要缺口 / 不合理点                                                                                                                                         |
-| ---------------------------- | -------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FR-001 多来源 Token 自动采集 | 部分实现 | 定义约 29 个已知来源、约 12 个本地 Adapter，并通过 TokenTracker bridge 扩展 | Windsurf 等清单与 PRD 不一致；非白名单 bridge 结果会被丢弃；缺少 20+ 来源的 golden fixture；设置中的自动发现/目录未接入；直接依赖 TokenTracker 违反架构基线 |
-| FR-002 费用自动计算          | 部分实现 | 支持 CNY/USD、缓存价格、LiteLLM 动态价格和汇率                              | 币种只是 Token 页临时 state，刷新回到 CNY；首页固定 CNY；设置中无币种；“官方价格”主要依赖第三方数据，缺少来源版本与准确率认证                               |
-| FR-003 多维度数据分析        | 部分实现 | 有筛选、排序、分页、时序聚合及部分模型/会话展开                             | 五条完整下钻链未实现；时间缺年/月/周层级；项目 → Provider → 模型、Provider → 模型 → 会话不完整；Provider 被错误实现为 source                                |
-| FR-004 费用预算预警          | 部分实现 | 设置页可配置预算，且存在预算计算 helper 与单测                              | Dashboard 未读取设置、未调用 helper、无预警 UI，属于死功能                                                                                                  |
-| FR-005 Token 数据海报        | 部分实现 | 1080×1920 Canvas、暗/亮模板、下载/复制、品牌元素均存在                      | 仅 Token 页有入口；首页无入口；PRD 要 Top 3 Provider，实际传入 source 并绘制前 4；品牌位置与需求不一致；弹窗无 dialog/焦点管理                              |
+| FR                           | 状态     | 当前实现                                               | 主要缺口 / 不合理点                                                                                                            |
+| ---------------------------- | -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| FR-001 多来源 Token 自动采集 | 部分实现 | 定义约 29 个已知来源、约 12 个本地 Adapter             | Windsurf 等清单与 PRD 不一致；缺少 20+ 来源的 golden fixture；设置中的自动发现/目录未接入。                                    |
+| FR-002 费用自动计算          | 部分实现 | 支持 CNY/USD、缓存价格、LiteLLM 动态价格和汇率         | 币种只是 Token 页临时 state，刷新回到 CNY；首页固定 CNY；设置中无币种；“官方价格”主要依赖第三方数据，缺少来源版本与准确率认证  |
+| FR-003 多维度数据分析        | 部分实现 | 有筛选、排序、分页、时序聚合及部分模型/会话展开        | 五条完整下钻链未实现；时间缺年/月/周层级；项目 → Provider → 模型、Provider → 模型 → 会话不完整；Provider 被错误实现为 source   |
+| FR-004 费用预算预警          | 部分实现 | 设置页可配置预算，且存在预算计算 helper 与单测         | Dashboard 未读取设置、未调用 helper、无预警 UI，属于死功能                                                                     |
+| FR-005 Token 数据海报        | 部分实现 | 1080×1920 Canvas、暗/亮模板、下载/复制、品牌元素均存在 | 仅 Token 页有入口；首页无入口；PRD 要 Top 3 Provider，实际传入 source 并绘制前 4；品牌位置与需求不一致；弹窗无 dialog/焦点管理 |
 
 ### 4.2 Skill 管理
 
@@ -611,7 +611,7 @@ offline/privacy smoke
 
 1. 冻结 Provider/Client/Model/Project/Session 数据字典。
 2. 决定 AI 审查是纯本地、可选云端还是本地模型，并修正隐私承诺。
-3. 决定 TokenTracker 清退方案和 Hook 授权策略。
+3. 完成外部采集运行时清退并明确 Hook 授权策略。
 4. 冻结首发数据源、Skill 目标 Agent 和版本范围。
 5. 明确 10 次/天、市场扫描和安装阻断规则。
 6. 明确 Memory 扫描授权和数据生命周期。
@@ -621,7 +621,7 @@ offline/privacy smoke
 
 ### Gate 1：修复数据可信、持久化和安全边界
 
-1. 移除 TokenTracker 运行时与静默 Hook，改为独立 Adapter。
+1. 移除外部采集运行时与静默 Hook，改为独立 Adapter。
 2. 将配置、额度和任务状态迁移出 localStorage。
 3. 修正 Provider/Client 数据模型及所有图表、预算和海报。
 4. 建立 Utility Process/SQLite/任务协议，或以 ADR 确认替代架构。
@@ -694,7 +694,7 @@ offline/privacy smoke
 
 建议当前版本保持 **内部开发状态**，不要以 PRD v3.2 的 MVP 名义验收。下一步不宜继续横向增加功能，而应先完成 Gate 0 的产品与架构决策，再依次修复：
 
-1. TokenTracker/Hook 与 Clean Room 风险；
+1. 外部运行时/Hook 与独立实现风险；
 2. Electron 设置持久化；
 3. Provider/Client 数据语义；
 4. 安全扫描与市场安装真实闭环；

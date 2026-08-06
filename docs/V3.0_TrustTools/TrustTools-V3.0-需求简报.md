@@ -14,7 +14,7 @@
 
 | 版本 | 修改时间   | 修改内容                                                                                                                              |
 | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| v2.4 | 2026-08-01 | Token 工具数更新为 27（对齐 TokenTracker 实际解析器）；FR-005 上下文构成分析标注按 TokenTracker 实现                                  |
+| v2.4 | 2026-08-01 | Token 工具数更新为 27；FR-005 补充上下文构成分析定义                                                                                  |
 | v2.3 | 2026-07-31 | MVP 最小化：工具数 20+→5，去美元/多下钻线/AI审查/垃圾桶/批量恢复/浏览器/命令行/Windows/自动更新；修复残留"健康度评估"文本；关闭 Q5/Q6 |
 | v2.2 | 2026-07-31 | 删除 Skill 健康度评估体系，改为 Skill 数量统计；安全检测限定目录/SKILL.md 文件；删除安全规则配置                                      |
 | v2.1 | 2026-07-31 | 删除记忆模块；新增会话恢复功能；首页与Token分析整合为首页大盘；Skill管理/市场/安全检测 UI优化                                         |
@@ -27,7 +27,7 @@
 
 ## 1. 请求摘要
 
-打造**个人 AI 主权**桌面工具。把散落在各 AI 工具的 skills、token 消耗、会话记录，统一收回用户手里。参考 TokenTracker 的开源思路，叠加 TrustTools 自有能力（安全检测、Skill 市场对接、海报分享、会话恢复）。
+打造**个人 AI 主权**桌面工具。把散落在各 AI 工具的 skills、token 消耗、会话记录，统一收回用户手里，并提供安全检测、Skill 市场对接、海报分享和会话恢复等自有能力。
 
 ## 2. 业务目标
 
@@ -57,16 +57,16 @@
 
 ### 范围内（MVP 5 模块）
 
-| 模块                      | 内容                                                                                                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **首页大盘 (Token 管理)** | 打开即见 Token 消耗概览与费用换算（人民币/按各模型官网定价）、时间线（日/周/月）+ Provider→模型下钻、上下文来源构成分析（按 TokenTracker 实现）、消耗海报生成（1套模板） |
-| **Skill 管理**            | 本地扫描发现（Claude Code/Codex/Cursor 3 个 agent）、Skill 数量统计、手动删除                                                                                            |
-| **Skill 安全检测**        | 拖入/上传目录或 SKILL.md 文件 → 静态规则扫描 → 安全报告；每天最多 10 次检测                                                                                              |
-| **TrustTools Skill 同步** | 搜索 TrustTools Web Skill 库、下载安装到指定 agent（3 选 1）                                                                                                             |
-| **会话恢复**              | 扫描本地 AI 工具（Claude Code/Codex/Cursor 3 个）会话记录，检测丢失会话，支持单个恢复                                                                                    |
-| **桌面客户端**            | macOS .dmg 安装包，托盘常驻、开机自启（可关闭）、首页大盘为主界面、暗色/亮色 2 套主题                                                                                    |
+| 模块                      | 内容                                                                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **首页大盘 (Token 管理)** | 打开即见 Token 消耗概览与费用换算（人民币/按各模型官网定价）、时间线（日/周/月）+ Provider→模型下钻、上下文来源构成分析、消耗海报生成（1套模板） |
+| **Skill 管理**            | 本地扫描发现（Claude Code/Codex/Cursor 3 个 agent）、Skill 数量统计、手动删除                                                                    |
+| **Skill 安全检测**        | 拖入/上传目录或 SKILL.md 文件 → 静态规则扫描 → 安全报告；每天最多 10 次检测                                                                      |
+| **TrustTools Skill 同步** | 搜索 TrustTools Web Skill 库、下载安装到指定 agent（3 选 1）                                                                                     |
+| **会话恢复**              | 扫描本地 AI 工具（Claude Code/Codex/Cursor 3 个）会话记录，检测丢失会话，支持单个恢复                                                            |
+| **桌面客户端**            | macOS .dmg 安装包，托盘常驻、开机自启（可关闭）、首页大盘为主界面、暗色/亮色 2 套主题                                                            |
 
-### 范围内 Token 工具清单（27 个，来自 TokenTracker）
+### 范围内 Token 工具清单（27 个）
 
 Claude Code、Codex CLI、Cursor、Kiro、Gemini CLI、OpenCode、OpenClaw、Every Code、Hermes Agent、GitHub Copilot、Kimi Code、oh-my-pi、CodeBuddy、WorkBuddy、Grok Build、Kilo CLI、Kilo Code、Antigravity、pi、Craft Agents、Roo Code、Zed Agent、Goose、Droid、Mimo Code、ZCode、AnythingLLM Desktop
 
@@ -166,7 +166,7 @@ Claude Code、Codex CLI、Cursor、Kiro、Gemini CLI、OpenCode、OpenClaw、Eve
 | **兼容性**     | macOS 13+ (Apple Silicon + Intel)；Windows 后续版本补充             | 先聚焦 macOS   |
 | **安全与隐私** | 所有数据本地处理，不上传远端；会话恢复仅扫描本地文件，需用户授权    | 隐私红线       |
 | **无账号**     | 不需要登录注册，安装即用                                            | 极简上手       |
-| **Clean Room** | 架构可借鉴 TokenTracker，代码自研                                   | 合规           |
+| **独立实现**   | 架构、代码、接口和测试由本项目维护                                  | 合规           |
 | **中文界面**   | 中文界面（后续版本补充英文）；数据标签（模型名/Provider名）保留原文 | 中文用户为主   |
 | **换肤**       | 暗色/亮色 2 套主题，支持一键切换                                    | 个性化         |
 | **海报设计感** | 消耗海报 1 套视觉模板，1080×1920 竖版 PNG，带品牌标识               | 社交传播       |
@@ -187,7 +187,6 @@ Claude Code、Codex CLI、Cursor、Kiro、Gemini CLI、OpenCode、OpenClaw、Eve
 
 | 依赖                            | 说明                | 影响                 |
 | ------------------------------- | ------------------- | -------------------- |
-| TokenTracker 开源代码 (MIT)     | 架构参考            | Clean Room 合规      |
 | LiteLLM 模型定价数据            | 费用换算            | 定价数据有缓存机制   |
 | TrustTools Web SkillPackage API | Skill 市场搜索/下载 | API 不可用时降级提示 |
 | Apple Developer ID              | 安装包签名分发      | 阻塞正式分发         |
@@ -219,4 +218,4 @@ Claude Code、Codex CLI、Cursor、Kiro、Gemini CLI、OpenCode、OpenClaw、Eve
 
 ## 9. 推荐下一步
 
-需求简报已按 TokenTracker 实际解析器范围更新为 27 个工具。PRD 已同步更新（v1.0，30 FR，6 模块）。建议进入研发排期。
+需求简报已更新为 27 个工具。PRD 已同步更新（v1.0，30 FR，6 模块）。建议进入研发排期。

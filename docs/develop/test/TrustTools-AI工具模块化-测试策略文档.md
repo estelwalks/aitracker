@@ -79,7 +79,6 @@
 15. `TC-REG-006`：生成的固定 import 清单只含 29 个 `*.tool.json`、显式 shared/specialized pack；应用运行时没有 `*.config.ts`、`tool-overrides.json` 或任意外部目录配置读取。
 16. `TC-POL-001`：generic mapping、扫描预算/缓存、Skill Market 排序、用量 taxonomy 均由共享策略包派生，和 M0 基线结果一致；缺失引用或同级冲突阻塞编译。
 17. `TC-SEC-001`：`security-rules.json` 的规则输出与 M0 基线一致；非法/高风险 pattern 被构建期拒绝，用户个人安全状态不能改变内建规则执行，运行期 ReDoS 防护仍生效。
-18. `TC-BRG-001`：TokenTracker bridge 不再自动执行、不再以 alias 改写来源；孤立手工迁移路径不参与正常扫描或计费。
 
 ## 5. 环境、数据与运维演练
 

@@ -43,7 +43,7 @@
 
 **结论：NEEDS REVISION（暂不批准进入全面实施）。**
 
-当前架构方向合理：全栈 TypeScript、Electron 多进程模块化单体、Utility Process 单写 SQLite、类型化 IPC、Adapter 采集内核以及 TokenTracker Clean Room 边界均符合项目约束。审计未发现 P0 级方向性错误。
+当前架构方向合理：全栈 TypeScript、Electron 多进程模块化单体、Utility Process 单写 SQLite、类型化 IPC、Adapter 采集内核以及独立实现边界均符合项目约束。审计未发现 P0 级方向性错误。
 
 PRD v2.3 已移除 Python/Electron/Stack 等技术选型描述，并将 FR-021 改为产品视角的“本地数据服务”，不再规定 localhost HTTP。PRD 与全栈 TypeScript、类型化 IPC 的技术决策冲突已经关闭。
 
@@ -84,7 +84,7 @@ PRD v2.3 已移除 Python/Electron/Stack 等技术选型描述，并将 FR-021 �
 ### F-04 [P1] 最高优先级的 Token 采集正确性尚无详细设计证据
 
 - **类型：** 缺失决策证据。
-- **受影响章节：** 架构 `3.1`、`QA-01`、`QA-02`、`2.4 TokenTracker 参考边界`。
+- **受影响章节：** 架构 `3.1`、`QA-01`、`QA-02`、`2.4 独立实现边界`。
 - **问题：** 文档提出事务化采集、稳定事件身份、测量语义和 checkpoint 同事务，但未定义 Source Adapter contract、规范化 fact schema、幂等键组成、快照转增量规则、截断/替换算法、checkpoint 状态机和失败重放边界。
 - **为什么重要：** Token 准确率是 P0 驱动；这些规则若在各 Provider 内自行发挥，会产生重复计费、漏计和不可解释差异。
 - **证据：** ADR-009 至 ADR-012 已记录原则，但当前架构尚未把原则落成组件、数据约束和事务时序。
@@ -172,7 +172,7 @@ PRD v2.3 已移除 Python/Electron/Stack 等技术选型描述，并将 FR-021 �
 3. **统一 SQLite 单写者：** 牺牲任意并行写入，换取一致性、迁移和备份的简单性。
 4. **类型化 IPC 而非 localhost HTTP：** 当前没有跨设备或独立部署需求，避免端口和本地 HTTP 攻击面。
 5. **被动采集加周期对账：** 牺牲部分实时性，换取对第三方工具更低侵入。
-6. **TokenTracker 仅作行为研究：** 固定参考版本并重构 contract、schema、接口和测试，符合独立开源目标。
+6. **独立实现：** contract、schema、接口和测试均由本项目维护，符合独立开源目标。
 
 ---
 
