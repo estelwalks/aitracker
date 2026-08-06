@@ -195,15 +195,40 @@ export interface ModelRateRule {
 }
 
 export interface ToolPricing {
-  /** v1.1 legacy provider label (superseded by `rulePackRefs`). */
+  /**
+   * P1-1 model-observation projection: the runtime `pricing` field now carries
+   * how to extract the model name + billing evidence from the tool's logs.
+   * Tools never hold rates, price packs or a fixed billing mode (billing
+   * ownership moved to billing routes; phase 2 renames this field).
+   */
+  /** Log field carrying the model name (default "model"). */
+  modelField?: string;
+  /** Normalization profile id (default "generic-normalize-v1"). */
+  normalizeProfile?: string;
+  /** Billing-evidence extraction: log field names per evidence kind. */
+  evidence?: {
+    providerField?: string;
+    endpointField?: string;
+    accountPlanField?: string;
+    regionField?: string;
+  };
+  /** Usage-parsing semantics (not monetary pricing). */
+  tokenSemantics?: {
+    reasoningIncludedInOutput?: boolean;
+    cacheWriteBillable?: boolean;
+  };
+  /**
+   * @deprecated P1-1: pricing ownership moved to billing routes; these legacy
+   * fields are no longer projected by the loader (phase 2 removes them).
+   */
   provider?: string;
-  /** Billing mode; required in the v1.5 JSON world (docs §6/§8.2). */
+  /** @deprecated P1-1: see `provider`. */
   billingMode?: BillingMode;
-  /** Fallback profile id (e.g. `unpriced-v1`); required in the v1.5 JSON world. */
+  /** @deprecated P1-1: see `provider`. */
   fallbackProfileRef?: string;
-  /** Rule-pack refs resolved against the pricing registry (v1.5). */
+  /** @deprecated P1-1: see `provider`. */
   rulePackRefs?: readonly string[];
-  /** v1.1 legacy inline rate rules (superseded by rule packs). */
+  /** v1.1 legacy inline rate rules (kept for legacy consumers until phase 2). */
   rules?: readonly ModelRateRule[];
 }
 

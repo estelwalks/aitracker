@@ -100,10 +100,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -210,10 +208,11 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model",
+      "evidence": {
+        "endpointField": "endpoint"
+      }
     }
   },
   {
@@ -311,10 +310,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -356,10 +353,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -443,10 +438,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -534,10 +527,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -594,10 +585,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -639,10 +628,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -699,10 +686,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -774,10 +759,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -846,10 +829,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -901,10 +882,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -946,10 +925,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1006,10 +983,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1105,10 +1080,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1158,10 +1131,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1200,10 +1171,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1271,10 +1240,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "install-target",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1316,10 +1283,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1361,10 +1326,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1435,10 +1398,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1485,10 +1446,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1538,10 +1497,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1583,10 +1540,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1626,10 +1581,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1671,10 +1624,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1713,10 +1664,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "unsupported",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1813,10 +1762,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   },
   {
@@ -1903,10 +1850,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "market": "unsupported",
       "security": "unsupported"
     },
-    "pricing": {
-      "billingMode": "api-metered",
-      "fallbackProfileRef": "unpriced-v1",
-      "rulePackRefs": []
+    "modelObservation": {
+      "modelField": "model"
     }
   }
 ];
@@ -2259,4 +2204,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "060f766c68fd667c";
+export const TOOL_REGISTRY_VERSION: string = "d35f6170e0174ab0";

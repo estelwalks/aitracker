@@ -6,7 +6,10 @@
     {
       "id": "openai/gpt-5.6-sol/2026-07-27",
       "canonicalModelId": "gpt-5.6-sol",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "5000000000",
         "output": "30000000000",
@@ -17,12 +20,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.6-terra/2026-07-27",
       "canonicalModelId": "gpt-5.6-terra",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "2500000000",
         "output": "15000000000",
@@ -33,12 +41,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.6-luna/2026-07-27",
       "canonicalModelId": "gpt-5.6-luna",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "1000000000",
         "output": "6000000000",
@@ -49,12 +62,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.5/2026-07-27",
       "canonicalModelId": "gpt-5.5",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "6250000000",
         "output": "37500000000",
@@ -65,12 +83,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.4/2026-07-27",
       "canonicalModelId": "gpt-5.4",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "2500000000",
         "output": "15000000000",
@@ -81,12 +104,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.2/2026-07-27",
       "canonicalModelId": "gpt-5.2",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "1750000000",
         "output": "14000000000",
@@ -97,12 +125,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5.1-codex/2026-07-27",
       "canonicalModelId": "gpt-5.1-codex",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "1250000000",
         "output": "10000000000",
@@ -113,12 +146,17 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     },
     {
       "id": "openai/gpt-5-codex/2026-07-27",
       "canonicalModelId": "gpt-5-codex",
-      "effective": { "from": "2026-07-27", "to": null },
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
       "usdNanoPerMillion": {
         "input": "1250000000",
         "output": "10000000000",
@@ -129,7 +167,9 @@
         "kind": "official",
         "label": "OpenAI API pricing",
         "verifiedAt": "2026-07-27"
-      }
+      },
+      "billingRouteId": "official-openai",
+      "region": "global"
     }
   ],
   "rules": [
@@ -137,7 +177,10 @@
       "id": "openai-gpt-5.6-sol-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.6-sol" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-sol"
+      },
       "convertTo": "gpt-5.6-sol",
       "rateRef": "openai/gpt-5.6-sol/2026-07-27"
     },
@@ -145,7 +188,10 @@
       "id": "openai-gpt-5.6-sol-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.6-sol" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-sol"
+      },
       "convertTo": "gpt-5.6-sol",
       "rateRef": "openai/gpt-5.6-sol/2026-07-27"
     },
@@ -153,7 +199,10 @@
       "id": "openai-gpt-5.6-terra-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.6-terra" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-terra"
+      },
       "convertTo": "gpt-5.6-terra",
       "rateRef": "openai/gpt-5.6-terra/2026-07-27"
     },
@@ -161,7 +210,10 @@
       "id": "openai-gpt-5.6-terra-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.6-terra" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-terra"
+      },
       "convertTo": "gpt-5.6-terra",
       "rateRef": "openai/gpt-5.6-terra/2026-07-27"
     },
@@ -169,7 +221,10 @@
       "id": "openai-gpt-5.6-luna-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.6-luna" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-luna"
+      },
       "convertTo": "gpt-5.6-luna",
       "rateRef": "openai/gpt-5.6-luna/2026-07-27"
     },
@@ -177,7 +232,10 @@
       "id": "openai-gpt-5.6-luna-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.6-luna" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-luna"
+      },
       "convertTo": "gpt-5.6-luna",
       "rateRef": "openai/gpt-5.6-luna/2026-07-27"
     },
@@ -185,7 +243,10 @@
       "id": "openai-gpt-5.5-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.5" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.5"
+      },
       "convertTo": "gpt-5.5",
       "rateRef": "openai/gpt-5.5/2026-07-27"
     },
@@ -193,7 +254,10 @@
       "id": "openai-gpt-5.5-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.5" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.5"
+      },
       "convertTo": "gpt-5.5",
       "rateRef": "openai/gpt-5.5/2026-07-27"
     },
@@ -201,7 +265,10 @@
       "id": "openai-gpt-5.4-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.4" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.4"
+      },
       "convertTo": "gpt-5.4",
       "rateRef": "openai/gpt-5.4/2026-07-27"
     },
@@ -209,7 +276,10 @@
       "id": "openai-gpt-5.4-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.4" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.4"
+      },
       "convertTo": "gpt-5.4",
       "rateRef": "openai/gpt-5.4/2026-07-27"
     },
@@ -217,7 +287,10 @@
       "id": "openai-gpt-5.2-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.2" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.2"
+      },
       "convertTo": "gpt-5.2",
       "rateRef": "openai/gpt-5.2/2026-07-27"
     },
@@ -225,7 +298,10 @@
       "id": "openai-gpt-5.2-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.2" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.2"
+      },
       "convertTo": "gpt-5.2",
       "rateRef": "openai/gpt-5.2/2026-07-27"
     },
@@ -233,7 +309,10 @@
       "id": "openai-gpt-5.1-codex-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5.1-codex" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.1-codex"
+      },
       "convertTo": "gpt-5.1-codex",
       "rateRef": "openai/gpt-5.1-codex/2026-07-27"
     },
@@ -241,7 +320,10 @@
       "id": "openai-gpt-5.1-codex-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5.1-codex" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.1-codex"
+      },
       "convertTo": "gpt-5.1-codex",
       "rateRef": "openai/gpt-5.1-codex/2026-07-27"
     },
@@ -249,7 +331,10 @@
       "id": "openai-gpt-5-codex-exact",
       "scope": {},
       "priority": 200,
-      "when": { "kind": "exact", "value": "gpt-5-codex" },
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5-codex"
+      },
       "convertTo": "gpt-5-codex",
       "rateRef": "openai/gpt-5-codex/2026-07-27"
     },
@@ -257,7 +342,10 @@
       "id": "openai-gpt-5-codex-prefix",
       "scope": {},
       "priority": 120,
-      "when": { "kind": "prefix", "value": "gpt-5-codex" },
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5-codex"
+      },
       "convertTo": "gpt-5-codex",
       "rateRef": "openai/gpt-5-codex/2026-07-27"
     }

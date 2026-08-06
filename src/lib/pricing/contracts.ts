@@ -127,6 +127,14 @@ export const RateTierSchema = z.object({
 export const RateRuleSchema = z.object({
   id: z.string().min(1).max(128),
   canonicalModelId: z.string().min(1).max(128),
+  /**
+   * Billing-route ownership (P1-1): a rate is priced by a billing route, never
+   * by an AI tool. The rate primary key is
+   * `billingRouteId + canonicalModelId + region + effective`.
+   */
+  billingRouteId: z.string().min(1).max(128),
+  /** Region key; absent means "global" (the default region resolution). */
+  region: z.string().min(1).max(64).optional(),
   effective: z.object({ from: DateString, to: DateString.nullable() }),
   usdNanoPerMillion: NanoUsdPerMillion,
   source: SourceMetadataSchema,
@@ -141,12 +149,19 @@ export const ScopeSchema = z
     toolIds: z.array(ToolIdString).optional(),
     /** Provider-scoped rule (medium precision). */
     providers: z.array(z.string().min(1).max(64)).optional(),
+    /** Billing-route-scoped rule (P1-1); matches a resolved billingRouteId. */
+    billingRouteIds: z.array(z.string().min(1).max(128)).optional(),
   })
   .optional();
 
 export type Scope = z.infer<typeof ScopeSchema>;
 
-export const ConversionRuleSchema = z.object({
+/**
+ * Model alias rule (P1-1 evolution of the conversion rule): maps an observed
+ * (raw/normalized) model name to a canonical model id. Scope now also carries a
+ * `billingRouteIds` dimension so aliasing can be route-aware in phase 2.
+ */
+export const ModelAliasRuleSchema = z.object({
   id: z.string().min(1).max(128),
   scope: ScopeSchema,
   priority: z.number().int(),
@@ -159,7 +174,16 @@ export const ConversionRuleSchema = z.object({
   fallbackProfileRef: z.string().min(1).max(128).optional(),
 });
 
-export type ConversionRule = z.infer<typeof ConversionRuleSchema>;
+export type ModelAliasRule = z.infer<typeof ModelAliasRuleSchema>;
+
+/**
+ * @deprecated P1-1: renamed to `ModelAliasRuleSchema` (billing ownership moved
+ * to billing routes). Kept as an alias so phase-1 consumers (compile/resolve)
+ * keep working; removed in phase 2.
+ */
+export const ConversionRuleSchema = ModelAliasRuleSchema;
+/** @deprecated P1-1: use `ModelAliasRule`. */
+export type ConversionRule = ModelAliasRule;
 
 export const FallbackProfileSchema = z.object({
   id: z.string().min(1).max(128),
@@ -172,6 +196,206 @@ export const FallbackProfileSchema = z.object({
 });
 
 export type FallbackProfile = z.infer<typeof FallbackProfileSchema>;
+
+// ---------------------------------------------------------------------------
+// P1-1 pricing-ownership refactor: billing routes, model catalog, route
+// selection, model observation, rate packs.
+//
+// An AI tool is NOT a price owner: the same tool can use any compatible model
+// and multiple API/subscription accounts; the same model can be billed
+// differently via official API, aggregators, cloud-provider proxies or
+// enterprise gateways. Rates are therefore owned by *billing routes* and the
+// rate primary key is `billingRouteId + canonicalModelId + region + effective`.
+// Phase 2 rewrites compile/resolve to consume these contracts; phase 1 only
+// declares them (the legacy pack pipeline below still drives resolve).
+// ---------------------------------------------------------------------------
+
+/** How a billing route charges usage (docs P1-1). */
+export const BillingRouteKindSchema = z.enum([
+  "official-api",
+  "aggregator",
+  "cloud-provider",
+  "enterprise-gateway",
+  "subscription",
+]);
+
+export type BillingRouteKind = z.infer<typeof BillingRouteKindSchema>;
+
+/**
+ * A billing route: the entity that actually bills usage (OpenAI API, DeepSeek
+ * official API, OpenRouter aggregator, Azure proxy, enterprise gateway, ...).
+ * Routes are discovered from log evidence via `route-selection-rules.json`.
+ */
+export const BillingRouteSchema = z.object({
+  /** Stable route id; referenced by rates (`billingRouteId`) and rules. */
+  id: z.string().min(1).max(128),
+  name: z.string().min(1).max(128).optional(),
+  kind: BillingRouteKindSchema,
+  /** Billing principal, e.g. "openai", "deepseek", "openrouter". */
+  provider: z.string().min(1).max(64).optional(),
+  /** Log field names that identify this route (e.g. "endpoint", "baseUrl"). */
+  endpointEvidence: z.array(z.string().min(1).max(64)).optional(),
+  /** Log field names that identify the account plan (e.g. "accountPlan"). */
+  accountPlanEvidence: z.array(z.string().min(1).max(64)).optional(),
+  /**
+   * Region resolution. `default` applies when no region evidence was
+   * extracted; `fromEvidence` lists log fields that carry the region.
+   */
+  region: z
+    .object({
+      default: z.string().min(1).max(64).optional(),
+      fromEvidence: z.array(z.string().min(1).max(64)).optional(),
+    })
+    .optional(),
+  status: z.enum(["active", "retired"]).default("active"),
+});
+
+export type BillingRoute = z.infer<typeof BillingRouteSchema>;
+
+/**
+ * Route-selection rule: pick a billing route from log evidence (endpoint /
+ * provider / account-plan fields). Only restricted matching is allowed
+ * (equals/contains/present) - never regex or JS expressions.
+ */
+export const RouteSelectionRuleSchema = z.object({
+  id: z.string().min(1).max(128),
+  /** Higher wins; ties fall back to evidence specificity in phase 2. */
+  priority: z.number().int(),
+  when: z
+    .object({
+      kind: z.literal("evidence"),
+      /** Evidence key from `PricingLookupInput.evidence` (e.g. "endpoint"). */
+      field: z.string().min(1).max(64),
+      /** Exact match on the evidence value. */
+      equals: z.string().min(1).max(256).optional(),
+      /** Plain substring match (no regex). */
+      contains: z.string().min(1).max(256).optional(),
+      /** Field is present (non-empty). */
+      present: z.literal(true).optional(),
+    })
+    .superRefine((when, ctx) => {
+      const set = [when.equals, when.contains, when.present].filter(
+        (v) => v !== undefined,
+      );
+      if (set.length !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "when must set exactly one of equals/contains/present (restricted matching only)",
+        });
+      }
+    }),
+  routeId: z.string().min(1).max(128),
+});
+
+export type RouteSelectionRule = z.infer<typeof RouteSelectionRuleSchema>;
+
+/**
+ * Model catalog entry: authoritative declaration of a canonical model id
+ * (the id rates and alias rules reference). `aliases.profile` names the
+ * normalization profile used for alias matching.
+ */
+export const ModelCatalogEntrySchema = z.object({
+  /** Canonical model id (the key referenced by rates/alias rules). */
+  id: z.string().min(1).max(128),
+  name: z.string().min(1).max(256).optional(),
+  family: z.string().min(1).max(64).optional(),
+  provider: z.string().min(1).max(64).optional(),
+  aliases: z
+    .object({
+      profile: z.string().min(1).max(64),
+    })
+    .optional(),
+});
+
+export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
+
+/**
+ * Per-tool model observation (the tool JSON `modelObservation` section):
+ * how to extract the model name and billing evidence from that tool's logs.
+ * Tools declare *evidence extraction*, never rates or billing modes (P1-1).
+ */
+export const ToolModelObservationSchema = z.object({
+  /** Log field carrying the model name (default "model"). */
+  modelField: z.string().min(1).max(64).optional(),
+  /** Normalization profile id (default "generic-normalize-v1"). */
+  normalizeProfile: z.string().min(1).max(64).optional(),
+  /** Billing-evidence extraction: log field names per evidence kind. */
+  evidence: z
+    .object({
+      providerField: z.string().min(1).max(64).optional(),
+      endpointField: z.string().min(1).max(64).optional(),
+      accountPlanField: z.string().min(1).max(64).optional(),
+      regionField: z.string().min(1).max(64).optional(),
+    })
+    .optional(),
+  /** Usage-parsing semantics (not monetary pricing). */
+  tokenSemantics: z
+    .object({
+      reasoningIncludedInOutput: z.boolean().optional(),
+      cacheWriteBillable: z.boolean().optional(),
+    })
+    .optional(),
+});
+
+export type ToolModelObservation = z.infer<typeof ToolModelObservationSchema>;
+
+// ---------------------------------------------------------------------------
+// P1-1 data files (model-catalog / billing-routes / model-alias-rules /
+// route-selection-rules / rate-packs / fallback-profiles)
+// ---------------------------------------------------------------------------
+
+export const ModelCatalogFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.string().min(1).max(64),
+  models: z.array(ModelCatalogEntrySchema),
+});
+
+export type ModelCatalogFile = z.infer<typeof ModelCatalogFileSchema>;
+
+export const BillingRoutesFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.string().min(1).max(64),
+  routes: z.array(BillingRouteSchema),
+});
+
+export type BillingRoutesFile = z.infer<typeof BillingRoutesFileSchema>;
+
+export const ModelAliasRulesFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.string().min(1).max(64),
+  rules: z.array(ModelAliasRuleSchema),
+});
+
+export type ModelAliasRulesFile = z.infer<typeof ModelAliasRulesFileSchema>;
+
+export const RouteSelectionRulesFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.string().min(1).max(64),
+  rules: z.array(RouteSelectionRuleSchema),
+});
+
+export type RouteSelectionRulesFile = z.infer<
+  typeof RouteSelectionRulesFileSchema
+>;
+
+/** A rate pack: rates grouped by billing route (or region/effective era). */
+export const RatePackSchema = z.object({
+  schemaVersion: z.literal(1),
+  packId: z.string().min(1).max(64),
+  revision: z.string().min(1).max(64),
+  rates: z.array(RateRuleSchema).default([]),
+});
+
+export type RatePack = z.infer<typeof RatePackSchema>;
+
+export const FallbackProfilesFileSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.string().min(1).max(64),
+  profiles: z.array(FallbackProfileSchema),
+});
+
+export type FallbackProfilesFile = z.infer<typeof FallbackProfilesFileSchema>;
 
 // ---------------------------------------------------------------------------
 // Pack + manifest
@@ -195,9 +419,23 @@ export const PricingManifestEntrySchema = z.object({
   path: z.string().min(1).max(256),
 });
 
+/** Manifest entry for a P1-1 data file (no packId; it is not a rule pack). */
+export const PricingDataFileEntrySchema = z.object({
+  /** Repo-relative path to the JSON file. */
+  path: z.string().min(1).max(256),
+});
+
 export const PricingManifestSchema = z.object({
   schemaVersion: z.literal(1),
+  /** Legacy rule packs (phase-1 pipeline; phase 2 switches to the files below). */
   packs: z.array(PricingManifestEntrySchema),
+  /** P1-1 data files consumed by the phase-2 compile/resolve rewrite. */
+  modelCatalog: PricingDataFileEntrySchema.optional(),
+  billingRoutes: PricingDataFileEntrySchema.optional(),
+  modelAliasRules: PricingDataFileEntrySchema.optional(),
+  routeSelectionRules: PricingDataFileEntrySchema.optional(),
+  ratePacks: z.array(PricingManifestEntrySchema).optional(),
+  fallbackProfiles: PricingDataFileEntrySchema.optional(),
 });
 
 export type PricingManifest = z.infer<typeof PricingManifestSchema>;
@@ -245,6 +483,13 @@ export interface PricingLookupInput {
   /** ISO date/datetime; used to pick the effective rate. */
   occurredAt: string;
   tokens: PricingTokens;
+  /**
+   * Billing evidence extracted from the log (P1-1), keyed by the evidence
+   * field names declared in the tool's `modelObservation.evidence` (e.g.
+   * `{ endpoint: "https://api.deepseek.com/v1", accountPlan: "pro" }`).
+   * Phase 2 resolves the billing route from this evidence.
+   */
+  evidence?: Record<string, string>;
 }
 
 export interface PricingResolution {
@@ -255,6 +500,10 @@ export interface PricingResolution {
   conversionRuleId: string;
   rateRuleId?: string;
   fallbackProfileId?: string;
+  /** P1-1: the billing route that priced this resolution (phase 2 sets it). */
+  billingRouteId?: string;
+  /** P1-1: the route-selection rule that chose `billingRouteId` (phase 2). */
+  routeSelectionRuleId?: string;
   confidence: PricingConfidence;
   /** Machine-readable reason enum, e.g. `exact-match`, `no-rate-match`, `unpriced`. */
   reason: PricingReason;

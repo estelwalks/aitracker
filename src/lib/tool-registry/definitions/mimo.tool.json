@@ -14,10 +14,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "dataHome",
         "path": "mimocode"
       }
@@ -35,9 +32,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "unsupported",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

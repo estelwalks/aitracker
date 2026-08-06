@@ -326,23 +326,53 @@ const AgentsCapabilitySchema = z.enum(["read", "unsupported"]);
 const MarketCapabilitySchema = z.enum(["install-target", "unsupported"]);
 const SecurityCapabilitySchema = z.enum(["scan", "unsupported"]);
 
-export const RawPricingSchema = z
+/**
+ * Raw `modelObservation` section (P1-1): the tool JSON declares how to extract
+ * the model name and billing evidence from its logs - never rates, price packs
+ * or a fixed billing mode (billing ownership moved to billing routes).
+ * Mirrors `ToolModelObservationSchema` in `src/lib/pricing/contracts.ts`.
+ */
+export const RawModelObservationSchema = z
   .object({
-    provider: z.string().min(1).optional(),
-    billingMode: z.enum(["api-metered", "subscription", "unsupported"]),
-    fallbackProfileRef: z.string().min(1),
-    rulePackRefs: z.array(z.string().min(1)).default([]),
+    /** Log field carrying the model name (default "model"). */
+    modelField: z.string().min(1).max(64).optional(),
+    /** Normalization profile id (default "generic-normalize-v1"). */
+    normalizeProfile: z.string().min(1).max(64).optional(),
+    /** Billing-evidence extraction: log field names per evidence kind. */
+    evidence: z
+      .object({
+        providerField: z.string().min(1).max(64).optional(),
+        endpointField: z.string().min(1).max(64).optional(),
+        accountPlanField: z.string().min(1).max(64).optional(),
+        regionField: z.string().min(1).max(64).optional(),
+      })
+      .optional(),
+    /** Usage-parsing semantics (not monetary pricing). */
+    tokenSemantics: z
+      .object({
+        reasoningIncludedInOutput: z.boolean().optional(),
+        cacheWriteBillable: z.boolean().optional(),
+      })
+      .optional(),
   })
-  .superRefine((pricing, ctx) => {
-    if (
-      pricing.billingMode === "unsupported" &&
-      pricing.rulePackRefs.length > 0
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["pricing.rulePackRefs"],
-        message: "billingMode=unsupported must not reference rule packs",
-      });
+  .superRefine((obs, ctx) => {
+    // Every declared evidence field must be a plausible log key: no NUL/control
+    // chars (defensive; data is JSON so this is belt-and-braces).
+    const fields = [
+      obs.modelField,
+      obs.normalizeProfile,
+      obs.evidence?.providerField,
+      obs.evidence?.endpointField,
+      obs.evidence?.accountPlanField,
+      obs.evidence?.regionField,
+    ].filter((v): v is string => v !== undefined);
+    for (const f of fields) {
+      if (/\p{Cc}/u.test(f)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `modelObservation field "${f}" must not contain control chars`,
+        });
+      }
     }
   });
 
@@ -454,7 +484,8 @@ export const RawToolDefinitionSchema = z
           });
         }
       }),
-    pricing: RawPricingSchema.optional(),
+    /** P1-1: billing-evidence extraction (tools never hold rates/modes). */
+    modelObservation: RawModelObservationSchema.optional(),
   })
   .superRefine((raw, ctx) => {
     // Defensive (docs §6): catalogVisible=false is reserved for legacy
