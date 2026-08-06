@@ -769,3 +769,46 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("TC-REG-005: external adapter/override files are never read", async () => {
+  const root = join(tmpdir(), `tt-reg005-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  await mkdir(homeDirectory, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+  try {
+    // Plant the deleted runtime extension files in the user home; a scanner
+    // that still reads them would fabricate a `custom:` source.
+    const ttDir = join(homeDirectory, ".trusttools");
+    await mkdir(ttDir, { recursive: true });
+    await writeFile(
+      join(ttDir, "usage-adapters.json"),
+      JSON.stringify({
+        adapters: [
+          {
+            id: "custom:evil",
+            paths: [{ root: ".evil", glob: "**/*.jsonl", format: "jsonl" }],
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      join(ttDir, "tool-overrides.json"),
+      JSON.stringify({ "claude-code": { paths: [".evil"] } }),
+    );
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: new Date(2026, 6, 30, 12, 0, 0),
+    });
+    const sources = snapshot.sources ?? snapshot.bySource ?? {};
+    const sourceIds = Object.keys(sources);
+    assert.ok(
+      !sourceIds.some((id) => id.startsWith("custom:")),
+      `custom: sources must not appear, got: ${sourceIds.join(", ")}`,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
