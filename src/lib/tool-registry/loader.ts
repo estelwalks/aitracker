@@ -89,6 +89,7 @@ function compileUsage(
     root: projectBase(p.base, p.path) ?? p.path,
     glob: p.glob,
     format: p.format,
+    targets: p.targets,
   }));
   const mapping: UsageFieldMapping =
     usage.mapping ?? packs.genericReaderDefaults.defaultMapping;

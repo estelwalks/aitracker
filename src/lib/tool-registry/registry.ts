@@ -10,6 +10,8 @@ import {
   matchModel,
   normalizeModel,
   type ModelRateRule,
+  type PlatformStatus,
+  type PlatformTarget,
   type ToolDefinition,
   type UsageFieldMapping,
   type UsagePathSpec,
@@ -26,6 +28,8 @@ import {
   type ValidationDiagnostic,
 } from "./validate.ts";
 import { TOOL_DEFINITIONS } from "./tools/index.ts";
+import type { SharedPolicyPacks } from "./schema.ts";
+import { projectBase } from "./loader.ts";
 
 export interface UsagePlan {
   toolId: string;
@@ -57,29 +61,48 @@ export interface CompiledRegistry {
   readonly publicManifest: PublicToolManifest;
   /** Deterministic canonical string (input to the sha256 fingerprint). */
   readonly canonicalSource: string;
+  /** v1.5 shared policy packs (present when compiled from the JSON loader). */
+  readonly sharedPacks?: SharedPolicyPacks;
 }
 
-function canonicalRegistryString(defs: readonly ToolDefinition[]): string {
-  // Project only the fields whose change must invalidate downstream caches:
-  // id, reader keys, paths, session command, pricing rule ids. Sorted for
-  // determinism regardless of insertion order.
-  const projection = defs
-    .map((def) => ({
-      id: def.id,
-      usage: def.capabilities.usage.reader ?? null,
-      usagePaths: def.capabilities.usage.paths ?? [],
-      skills: def.storage?.skills?.roots ?? [],
-      skillsEnv: def.storage?.skills?.envHome ?? null,
-      sessionReader: def.capabilities.sessions.reader ?? null,
-      sessionCommand: def.capabilities.sessions.command ?? [],
-      pricingRules: (def.pricing?.rules ?? []).map((r) => r.id),
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  return JSON.stringify(projection);
+/** Deterministic stringify: recursively sorted keys (docs §8.1 canonical). */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Full canonical JSON over every definition plus the shared packs (D6): any
+ * JSON change invalidates downstream caches (usage cache fingerprint).
+ */
+function canonicalRegistryString(
+  defs: readonly ToolDefinition[],
+  packs?: SharedPolicyPacks,
+): string {
+  return stableStringify({
+    definitions: defs,
+    sharedPacks: packs ?? null,
+  });
+}
+
+export interface CompileToolRegistryOptions {
+  /** v1.5 shared policy packs (from the JSON loader). */
+  sharedPacks?: SharedPolicyPacks;
 }
 
 export function compileToolRegistry(
   defs: readonly ToolDefinition[],
+  options?: CompileToolRegistryOptions,
 ): CompiledRegistry {
   const diagnostics = validateToolDefinitions(defs);
   const byId = new Map<string, ToolDefinition>();
@@ -90,7 +113,8 @@ export function compileToolRegistry(
     byId,
     ids: defs.map((def) => def.id),
     publicManifest: generatePublicManifest(defs),
-    canonicalSource: canonicalRegistryString(defs),
+    canonicalSource: canonicalRegistryString(defs, options?.sharedPacks),
+    ...(options?.sharedPacks ? { sharedPacks: options.sharedPacks } : {}),
   };
 }
 
@@ -208,4 +232,236 @@ export function findModelRate(input: FindModelRateInput): ModelRateRule | null {
 
 export function getPublicTools(): readonly PublicTool[] {
   return getDefaultRegistry().publicManifest.tools;
+}
+
+// ---------------------------------------------------------------------------
+// v1.5 platform-aware API (docs §6.1/§7). Resolution priority: shared default
+// < platform group < platform target < tool definition.
+// ---------------------------------------------------------------------------
+
+export type PlatformOs = "macos" | "windows" | "linux";
+export type PlanCapability = "detection" | "usage" | "skills" | "sessions";
+
+export interface PlatformPathPlan {
+  toolId: string;
+  capability: PlanCapability;
+  os: PlatformOs;
+  /** Effective per-target status (windows group resolved to its targets). */
+  status: PlatformStatus;
+  /** Flattened HOME-relative paths to scan for this (os, capability). */
+  paths: readonly string[];
+}
+
+/** Expand an os to its platform targets (windows -> the windows group). */
+export function osTargets(os: PlatformOs): readonly PlatformTarget[] {
+  if (os === "windows") return ["windows10", "windows11"];
+  return [os];
+}
+
+/**
+ * Effective platform status for a tool on an os: exact target status, then the
+ * windows group, then the shared default (`supported`; legacy TS configs
+ * without `platforms` behave as all-supported).
+ */
+function platformStatusFor(
+  def: ToolDefinition,
+  os: PlatformOs,
+): PlatformStatus {
+  const platforms = def.platforms;
+  if (!platforms) return "supported";
+  for (const target of osTargets(os)) {
+    const exact = platforms[target];
+    if (exact !== undefined) return exact;
+  }
+  if (os === "windows" && platforms.windows !== undefined) {
+    return platforms.windows;
+  }
+  return "supported";
+}
+
+/**
+ * Resolve the unique per-platform plan for a tool capability (docs §6.1).
+ * `linux: planned` never produces scan paths; status "planned"/"unsupported"
+ * yields an empty path list.
+ */
+export function resolvePlatformPlan(
+  toolId: string,
+  capability: PlanCapability,
+  os: PlatformOs,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): PlatformPathPlan | null {
+  const def = registry.byId.get(toolId);
+  if (!def) return null;
+  const targets = osTargets(os);
+  const status = platformStatusFor(def, os);
+  if (status !== "supported") {
+    return { toolId, capability, os, status, paths: [] };
+  }
+
+  let paths: string[] = [];
+  if (capability === "detection") {
+    paths = (def.detection.locations ?? [])
+      .filter((loc) => loc.targets.some((t) => targets.includes(t)))
+      .map((loc) => projectLocationFor(loc))
+      .filter((p): p is string => p !== null);
+  } else if (capability === "usage") {
+    paths = (def.capabilities.usage.paths ?? [])
+      .filter(
+        (p) =>
+          p.targets === undefined || p.targets.some((t) => targets.includes(t)),
+      )
+      .map((p) => p.root);
+  } else if (capability === "skills") {
+    const skills = def.storage?.skills;
+    if (skills?.rootSpecs?.length) {
+      // rootSpecs have no explicit targets; their platform reach comes from
+      // the base (basePlatforms in platform-profiles) - keep all roots when
+      // any target matches the base, else fall back to all roots.
+      paths = skills.rootSpecs
+        .map((r) => projectLocationFor({ targets, base: r.base, path: r.path }))
+        .filter((p): p is string => p !== null);
+    } else {
+      paths = [...(skills?.roots ?? [])];
+    }
+  } else {
+    // sessions: roots are the tool's data roots / usage roots.
+    paths = (def.storage?.dataRoots ?? [])
+      .map((r) => projectLocationFor({ targets, base: r.base, path: r.path }))
+      .filter((p): p is string => p !== null);
+  }
+
+  return { toolId, capability, os, status, paths: [...new Set(paths)] };
+}
+
+function projectLocationFor(loc: {
+  targets: readonly PlatformTarget[];
+  base: string;
+  path: string;
+}): string | null {
+  return projectBase(loc.base, loc.path);
+}
+
+export interface SkillPlan {
+  toolId: string;
+  /** HOME-relative suffixes; `[0]` is the write path (envHome semantics kept). */
+  roots: readonly string[];
+  envHome?: string;
+  markers: readonly string[];
+  maxDepth: number;
+}
+
+/** Skill discovery plan (docs §7); env resolution happens at the consumer. */
+export function getSkillPlan(
+  toolId: string,
+  _env?: Record<string, string | undefined>,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): SkillPlan | null {
+  const skills = registry.byId.get(toolId)?.storage?.skills;
+  if (!skills) return null;
+  return {
+    toolId,
+    roots: skills.roots,
+    ...(skills.envHome ? { envHome: skills.envHome } : {}),
+    markers: skills.markers ?? [],
+    maxDepth: skills.maxDepth ?? 3,
+  };
+}
+
+export interface AgentPlan {
+  toolId: string;
+  mode: "read" | "unsupported";
+  roots: readonly string[];
+}
+
+export function getAgentPlan(
+  toolId: string,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): AgentPlan | null {
+  const agents = registry.byId.get(toolId)?.storage?.agents;
+  if (!agents) return null;
+  return { toolId, mode: agents.mode, roots: agents.roots };
+}
+
+export function getContextPlan(
+  toolId: string,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): ToolDefinition["capabilities"]["context"] | null {
+  return registry.byId.get(toolId)?.capabilities.context ?? null;
+}
+
+/** Session-resumable tool ids, in canonical order (docs §7). */
+export function listSessionTools(
+  registry: CompiledRegistry = getDefaultRegistry(),
+): readonly string[] {
+  return registry.definitions
+    .filter((def) => def.capabilities.sessions.mode === "resume")
+    .map((def) => def.id);
+}
+
+export interface ToolDisplayInfo {
+  id: string;
+  name: string;
+  nameZh: string;
+  icon?: string;
+}
+
+export function getToolDisplay(
+  id: string,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): ToolDisplayInfo | null {
+  const def = registry.byId.get(id);
+  if (!def) return null;
+  return {
+    id: def.id,
+    name: def.display.name,
+    nameZh: def.display.nameZh,
+    ...(def.display.icon ? { icon: def.display.icon } : {}),
+  };
+}
+
+// Shared policy getters (null when compiled without packs - legacy path).
+export function getGenericReaderDefaults(
+  registry: CompiledRegistry = getDefaultRegistry(),
+) {
+  return registry.sharedPacks?.genericReaderDefaults ?? null;
+}
+
+export function getScannerPolicy(
+  registry: CompiledRegistry = getDefaultRegistry(),
+) {
+  return registry.sharedPacks?.scannerPolicy ?? null;
+}
+
+export function getSkillMarketPolicy(
+  registry: CompiledRegistry = getDefaultRegistry(),
+) {
+  return registry.sharedPacks?.skillMarketPolicy ?? null;
+}
+
+export function getUsageTaxonomy(
+  registry: CompiledRegistry = getDefaultRegistry(),
+) {
+  return registry.sharedPacks?.usageTaxonomy ?? null;
+}
+
+export interface PricingPolicyRefs {
+  billingMode?: "api-metered" | "subscription" | "unsupported";
+  fallbackProfileRef?: string;
+  rulePackRefs: readonly string[];
+}
+
+/** Pricing policy metadata declared by the tool JSON (docs §8.2). */
+export function getPricingPolicyRefs(
+  toolId: string,
+  registry: CompiledRegistry = getDefaultRegistry(),
+): PricingPolicyRefs | null {
+  const pricing = registry.byId.get(toolId)?.pricing;
+  if (!pricing) return null;
+  return {
+    ...(pricing.billingMode ? { billingMode: pricing.billingMode } : {}),
+    ...(pricing.fallbackProfileRef
+      ? { fallbackProfileRef: pricing.fallbackProfileRef }
+      : {}),
+    rulePackRefs: pricing.rulePackRefs ?? [],
+  };
 }
