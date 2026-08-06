@@ -12,9 +12,13 @@
  *   no regex, no substring-contains, no JS expressions.
  * - Amounts are decimal strings of non-negative integers compiled to bigint
  *   `nanoUsd` (1e-9 USD); the calculator never uses JS `number` for money.
- * - Every billable tool declares `billingMode` + `fallbackProfileRef`, so an
- *   unknown model is always `estimated`/`unpriced`/`not-billable` - never a
- *   silent $0.
+ * - Rates are owned by billing routes (`billingRouteId + canonicalModelId +
+ *   region + effective`), never by AI tools. A tool only declares how to
+ *   extract model names + billing evidence from its logs (`modelObservation`).
+ * - Fallback behavior comes solely from the packaged JSON (fallback-profiles /
+ *   billing-routes `reference` declarations); no environment variable may
+ *   rewrite it. Unknown models are always `estimated`/`unpriced`/
+ *   `not-billable` - never a silent $0.
  * - The module consumes the tool registry's stable `toolId`; it has no reverse
  *   import and no network/filesystem at runtime.
  */
@@ -178,8 +182,11 @@ export type ModelAliasRule = z.infer<typeof ModelAliasRuleSchema>;
 
 /**
  * @deprecated P1-1: renamed to `ModelAliasRuleSchema` (billing ownership moved
- * to billing routes). Kept as an alias so phase-1 consumers (compile/resolve)
- * keep working; removed in phase 2.
+ * to billing routes). Retained as the compile-time rule shape (`CompiledRule`
+ * extends it) while compile() still consumes the legacy packs
+ * (`pricing-manifest.json` `packs`, content-identical to the new data files).
+ * TODO(P1-1 phase 4): switch compile() to `modelAliasRules` + `ratePacks` and
+ * delete this alias together with the legacy packs.
  */
 export const ConversionRuleSchema = ModelAliasRuleSchema;
 /** @deprecated P1-1: use `ModelAliasRule`. */
@@ -248,6 +255,13 @@ export const BillingRouteSchema = z.object({
     })
     .optional(),
   status: z.enum(["active", "retired"]).default("active"),
+  /**
+   * Reference-route declaration (P1-1 phase 3): when NO billing evidence is
+   * available, a route marked `reference: true` may still price usage, but the
+   * resolution is always `estimated` (reason `no-route-evidence`) - never an
+   * exact/official bill. Absent = this route never prices without evidence.
+   */
+  reference: z.boolean().optional(),
 });
 
 export type BillingRoute = z.infer<typeof BillingRouteSchema>;
@@ -441,26 +455,6 @@ export const PricingManifestSchema = z.object({
 export type PricingManifest = z.infer<typeof PricingManifestSchema>;
 
 // ---------------------------------------------------------------------------
-// Tool pricing policy (declared per tool, references packs/profiles)
-// ---------------------------------------------------------------------------
-
-export const ReasoningPolicySchema = z.enum([
-  "ignore",
-  "bill-as-output",
-  "separate",
-]);
-
-export const ToolPricingPolicySchema = z.object({
-  /** `unsupported` tools are never billed (e.g. read-only / no usage). */
-  billingMode: z.enum(["api-metered", "subscription", "unsupported"]),
-  rulePackRefs: z.array(z.string().min(1).max(64)).default([]),
-  fallbackProfileRef: z.string().min(1).max(128),
-  reasoningPolicy: ReasoningPolicySchema.default("ignore"),
-});
-
-export type ToolPricingPolicy = z.infer<typeof ToolPricingPolicySchema>;
-
-// ---------------------------------------------------------------------------
 // Runtime interfaces (not JSON-validated; used by compile/resolve/calculate)
 // ---------------------------------------------------------------------------
 
@@ -537,7 +531,8 @@ export type PricingReason =
   | "unpriced"
   | "no-policy"
   | "unsafe-model"
-  | "historical-rate-missing";
+  | "historical-rate-missing"
+  | "no-route-evidence";
 
 /** Parse a NanoUsdString into a bigint. Throws on malformed input (should never happen post-validation). */
 export function parseNanoUsd(value: string): bigint {

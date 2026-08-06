@@ -71,6 +71,7 @@ export const dashboard = {
     costHint: "{period} · estimated from local model catalog",
     costUnknownHint:
       "Some model prices are unknown; amount is the known lower bound",
+    costEstimatedHint: "of which {amount} is an estimate, reference only",
     tokenInput: "Input Tokens",
     tokenOutput: "Output Tokens",
     tokenCacheRead: "Cache Read Tokens",

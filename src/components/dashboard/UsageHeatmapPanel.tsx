@@ -276,7 +276,10 @@ function buildCellExtras(events: LocalUsageEvent[]): CellExtra[][] {
     cell.totalTokens += Number.isFinite(event.totalTokens)
       ? Math.max(0, event.totalTokens)
       : 0;
-    cell.costUsd += estimateEventCost(event).knownUsd;
+    // Heat indicator: exact + estimated amounts (estimated is a labeled
+    // reference subtotal in the cost UI; the heatmap shows the combined size).
+    const eventCost = estimateEventCost(event);
+    cell.costUsd += eventCost.knownUsd + eventCost.estimatedUsd;
     const cellKey = weekday * 24 + hour;
     const session =
       event.sessionId && event.sessionId.trim().length > 0

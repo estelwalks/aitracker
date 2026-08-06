@@ -975,7 +975,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-anthropic",
@@ -989,7 +990,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-google",
@@ -1003,7 +1005,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-deepseek",
@@ -1017,7 +1020,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-minimax",
@@ -1031,7 +1035,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-zhipu",
@@ -1045,7 +1050,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   },
   {
     "id": "official-volcengine",
@@ -1059,7 +1065,8 @@ export const PRICING_BILLING_ROUTES: readonly BillingRoute[] = [
     "region": {
       "default": "global"
     },
-    "status": "active"
+    "status": "active",
+    "reference": true
   }
 ];
 
@@ -1866,4 +1873,4 @@ export const PRICING_FALLBACK_PROFILES: readonly FallbackProfile[] = [
   }
 ];
 
-export const PRICING_REGISTRY_VERSION: string = "b702a19b23172c13";
+export const PRICING_REGISTRY_VERSION: string = "804d653df875fa2b";

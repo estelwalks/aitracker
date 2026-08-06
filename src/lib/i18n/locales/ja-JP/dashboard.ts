@@ -71,6 +71,7 @@ export const dashboard = {
     hitRate: "ヒット率 {rate}",
     costHint: "{period} · ローカルモデル価格表で推定",
     costUnknownHint: "一部モデルの価格が不明、金額は既知の下限",
+    costEstimatedHint: "うち {amount} は推定額（参考値）",
     tokenInput: "入力 Token",
     tokenOutput: "出力 Token",
     tokenCacheRead: "キャッシュ読み取り Token",
