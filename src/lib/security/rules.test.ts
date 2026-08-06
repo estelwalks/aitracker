@@ -105,3 +105,36 @@ test("silently drops legacy 3-kind persisted rules", () => {
 
   assert.equal(rules.length, 0);
 });
+
+import { describe, test as it } from "node:test";
+
+describe("TC-SEC-001: built-in rule boundary (user rules never alter built-ins)", () => {
+  it("user rules are parsed into an isolated list; built-in version is untouched", () => {
+    const versionBefore = SECURITY_RULES_VERSION;
+    const userRules = parseUserSecurityRules([
+      {
+        id: "user-1",
+        name: "自定义规则",
+        kind: "数据泄露",
+        pattern: "API_KEY",
+        enabled: true,
+      },
+    ]);
+    assert.equal(userRules.length, 1);
+    // The built-in library version is derived from the built-in JSON only.
+    assert.equal(SECURITY_RULES_VERSION, versionBefore);
+    // The user list is a distinct data flow - no global state mutation.
+    assert.equal(parseUserSecurityRules(null).length, 0);
+    assert.equal(
+      parseUserSecurityRules([{ id: "", name: "", kind: "x", pattern: "" }])
+        .length,
+      0,
+    );
+  });
+
+  it("an invalid user pattern is rejected without touching built-ins", () => {
+    const validation = validateSecurityRulePattern("([a-z]+");
+    assert.equal(validation.valid, false);
+    assert.equal(SECURITY_RULES_VERSION.length > 0, true);
+  });
+});
