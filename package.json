@@ -32,7 +32,8 @@
     "format": "prettier --write .",
     "generate:manifest": "node --import tsx scripts/generate-tool-manifest.mjs",
     "generate:pricing-imports": "node --import tsx scripts/generate-pricing-imports.mjs",
-    "prebuild": "npm run generate:manifest && npm run generate:pricing-imports",
+    "generate:security-rules": "node --import tsx scripts/generate-security-rules.mjs",
+    "prebuild": "npm run generate:manifest && npm run generate:pricing-imports && npm run generate:security-rules",
     "verify:tool-registry": "node --import tsx scripts/verify-tool-registry.mjs",
     "verify:pricing-rules": "node --import tsx scripts/verify-pricing-rules.mjs"
   },

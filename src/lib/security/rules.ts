@@ -5,10 +5,11 @@
  */
 
 /**
- * 规则库版本号。当内置规则集合发生结构化变更（增删/正则变更）时递增，
+ * 规则库版本号。由 security-rules.json 内容哈希派生（scripts/
+ * generate-security-rules.mjs），任何规则增删/正则变更都会自动改变版本号，
  * 用于报告回溯与版本审计。
  */
-export const SECURITY_RULES_VERSION = "2026.08.1";
+export { SECURITY_RULES_VERSION } from "./security-rules.generated.ts";
 
 /**
  * 内置安全规则的 11 个维度分类（顺序固定，对应 PRD §11）。
