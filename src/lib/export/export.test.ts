@@ -111,14 +111,14 @@ test("toExportCsv: source 通过 sourceLabels 映射, 未命中时回退原始 i
   const out = toExportCsv(
     [
       makeRow({ source: "claude-code" }),
-      makeRow({ source: "custom:internal" }),
+      makeRow({ source: "unmapped-source" }),
     ],
     { "claude-code": "Claude Code" },
   );
   const line1 = out.split("\r\n")[1].split(",");
   const line2 = out.split("\r\n")[2].split(",");
   assert.equal(line1[1], "Claude Code");
-  assert.equal(line2[1], "custom:internal"); // raw fallback
+  assert.equal(line2[1], "unmapped-source"); // raw fallback
 });
 
 test("toExportCsv: 含引号与换行的字段按 RFC 4180 转义", () => {

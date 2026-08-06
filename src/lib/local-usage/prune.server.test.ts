@@ -38,7 +38,7 @@ test("retention only removes expired files from a marked cache", async () => {
   await mkdir(cache, { recursive: true });
   const oldCache = join(cache, "old-index.json");
   const freshCache = join(cache, "fresh-index.json");
-  const config = join(root, "usage-adapters.json");
+  const config = join(root, "preserve-me.json");
   await writeFile(oldCache, "old");
   await writeFile(freshCache, "fresh");
   await writeFile(config, "must remain");
@@ -79,7 +79,7 @@ test("cache clear returns actual file and byte statistics without touching confi
   await mkdir(join(root, "cache", "nested"), { recursive: true });
   await writeFile(join(root, "cache", "index.json"), "1234");
   await writeFile(join(root, "cache", "nested", "market.json"), "123456");
-  const config = join(root, "usage-adapters.json");
+  const config = join(root, "preserve-me.json");
   await writeFile(config, "keep");
 
   const cleanup = await clearRegenerableCache(root);
