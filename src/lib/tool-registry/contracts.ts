@@ -14,9 +14,17 @@ export type ToolId = string;
 /**
  * Controlled anchor for a path base. `home` is the user home directory; an
  * `env:NAME` base is replaced by the value of env var `NAME` (when non-empty)
- * at resolution time. Configs never hold absolute paths.
+ * at resolution time. `appData`/`appDataRoaming`/`configHome`/`dataHome` are
+ * resolved per platform target (docs §6.1). Configs never hold absolute paths.
  */
-export type PathBase = "home" | `env:${string}`;
+export type PathBase =
+  | "home"
+  | "userProfile"
+  | "appData"
+  | "appDataRoaming"
+  | "configHome"
+  | "dataHome"
+  | `env:${string}`;
 
 export type UsageFormat = "json" | "jsonl" | "sqlite";
 
@@ -116,6 +124,8 @@ export interface Capabilities {
   sessions: SessionsCapability;
   market: MarketCapability;
   security: SecurityCapability;
+  /** Independent context capability (docs §6) - never a UsageReader side effect. */
+  context?: ContextCapability;
 }
 
 /** Skill discovery storage. Roots are HOME-relative suffixes; `[0]` is write path. */
@@ -125,6 +135,8 @@ export interface SkillStorage {
   envHome?: string;
   markers?: readonly string[];
   maxDepth?: number;
+  /** v1.5 platform-aware roots; the loader projects these into `roots`. */
+  rootSpecs?: readonly SkillRootSpec[];
 }
 
 export interface AgentStorage {
@@ -148,6 +160,10 @@ export interface ToolDetection {
   /** HOME-relative probe paths used to detect installation. */
   roots: readonly string[];
   executable?: readonly string[];
+  /** v1.5 platform-aware locations; the loader projects these into `roots`. */
+  locations?: readonly DetectionLocation[];
+  /** v1.5 executable form (`{shared, windows}`); loader projects into `executable`. */
+  executableSpec?: ExecutableSpec;
 }
 
 /** Declarative model matcher (data, not a function). */
@@ -177,9 +193,20 @@ export interface ModelRateRule {
 }
 
 export interface ToolPricing {
-  provider: string;
-  rules: readonly ModelRateRule[];
+  /** v1.1 legacy provider label (superseded by `rulePackRefs`). */
+  provider?: string;
+  /** Billing mode; required in the v1.5 JSON world (docs §6/§8.2). */
+  billingMode?: BillingMode;
+  /** Fallback profile id (e.g. `unpriced-v1`); required in the v1.5 JSON world. */
+  fallbackProfileRef?: string;
+  /** Rule-pack refs resolved against the pricing registry (v1.5). */
+  rulePackRefs?: readonly string[];
+  /** v1.1 legacy inline rate rules (superseded by rule packs). */
+  rules?: readonly ModelRateRule[];
 }
+
+/** Per-tool billing mode, aligned with `pricing/contracts.ts` ToolPricingPolicy. */
+export type BillingMode = "api-metered" | "subscription" | "unsupported";
 
 export interface ToolDefinition {
   id: ToolId;
@@ -192,6 +219,8 @@ export interface ToolDefinition {
    */
   catalogVisible?: boolean;
   display: ToolDisplay;
+  /** v1.5 per-platform availability; defaults to all-supported in the loader. */
+  platforms?: ToolPlatforms;
   detection: ToolDetection;
   storage?: ToolStorage;
   capabilities: Capabilities;
@@ -215,4 +244,62 @@ export function matchModel(
     });
   }
   return matcher.parts.every((part) => normalizedModel.includes(part));
+}
+
+// ---------------------------------------------------------------------------
+// v1.5 superset types (Phase 3): platform-aware declarations compiled from
+// definitions/*.tool.json. The old flattened fields above stay for consumers
+// until Phase 4 switches them; the loader projects v1.5 forms into both.
+// ---------------------------------------------------------------------------
+
+/** Platform target used in locations and platform plans (docs §6.1). */
+export type PlatformTarget = "macos" | "windows10" | "windows11" | "linux";
+/** Platform group: `windows` = [windows10, windows11]. */
+export type PlatformGroup = "windows";
+export type PlatformStatus = "supported" | "planned" | "unsupported";
+
+/**
+ * Per-tool platform availability. `windows` is the group-level status; the
+ * `windows10`/`windows11` keys are exact overrides (resolution priority:
+ * shared default < platform group < platform target < tool definition).
+ */
+export interface ToolPlatforms {
+  macos: PlatformStatus;
+  windows?: PlatformStatus;
+  windows10?: PlatformStatus;
+  windows11?: PlatformStatus;
+  linux: PlatformStatus;
+}
+
+/** A v1.5 platform-aware path declaration. `path` is relative to `base`. */
+export interface DetectionLocation {
+  targets: readonly PlatformTarget[];
+  base: PathBase;
+  path: string;
+  glob?: string;
+}
+
+/** Executable names per platform family (v1.5). */
+export interface ExecutableSpec {
+  shared?: readonly string[];
+  windows?: readonly string[];
+}
+
+/** v1.5 platform-aware skill root (`base` + `path`). */
+export interface SkillRootSpec {
+  base: PathBase;
+  path: string;
+}
+
+/**
+ * Independent context capability (docs §6): never an implicit UsageReader side
+ * effect. `native` requires a registered ContextReader key; `heuristic` only
+ * declares dimensions.
+ */
+export interface ContextCapability {
+  mode: "native" | "heuristic" | "unsupported";
+  /** ContextReader key; required when mode === "native". */
+  reader?: string;
+  /** Collected dimensions (tools/skills/commands/mcp/toolOutputs, ...). */
+  dimensions?: readonly string[];
 }

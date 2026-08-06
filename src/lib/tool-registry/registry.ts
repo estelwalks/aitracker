@@ -137,7 +137,7 @@ export function findModelRateIn(
   if (!def?.pricing) return null;
   const normalized = normalizeModel(input.model);
   const date = (input.occurredAt ?? new Date().toISOString()).slice(0, 10);
-  const matching = def.pricing.rules.filter((rule) => {
+  const matching = (def.pricing.rules ?? []).filter((rule) => {
     if (!matchModel(rule.match, normalized)) return false;
     if (rule.effectiveFrom > date) return false;
     if (rule.effectiveTo !== undefined && date > rule.effectiveTo) return false;
@@ -184,7 +184,8 @@ export function listTools(filter?: ListToolsFilter): ToolDefinition[] {
   if (filter?.capability) {
     const cap = filter.capability;
     defs = defs.filter((def) => {
-      const mode = def.capabilities[cap].mode;
+      // `context` is optional (v1.5); a missing capability is "unsupported".
+      const mode = def.capabilities[cap]?.mode ?? "unsupported";
       return filter.supportedOnly ? mode !== "unsupported" : true;
     });
   }

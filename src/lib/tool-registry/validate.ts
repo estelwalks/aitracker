@@ -315,11 +315,11 @@ export function validateToolDefinitions(
       }
     }
 
-    // Pricing rules.
+    // Pricing rules (legacy inline rules; v1.5 references rule packs instead).
     const pricing = def.pricing;
     if (pricing) {
       const ruleIds = new Set<string>();
-      for (const rule of pricing.rules) {
+      for (const rule of pricing.rules ?? []) {
         if (ruleIds.has(rule.id)) {
           diag(
             id,
@@ -354,10 +354,11 @@ export function validateToolDefinitions(
         }
       }
       // Same-priority overlap detection.
-      for (let i = 0; i < pricing.rules.length; i += 1) {
-        for (let j = i + 1; j < pricing.rules.length; j += 1) {
-          const a = pricing.rules[i];
-          const b = pricing.rules[j];
+      const rules = pricing.rules ?? [];
+      for (let i = 0; i < rules.length; i += 1) {
+        for (let j = i + 1; j < rules.length; j += 1) {
+          const a = rules[i];
+          const b = rules[j];
           const samePriority = (a.priority ?? 0) === (b.priority ?? 0);
           if (
             samePriority &&
