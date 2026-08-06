@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "packId": "china-providers",
+  "revision": "2026-08-06",
+  "rates": [
+    {
+      "id": "deepseek/deepseek-v4-pro/2026-07-27",
+      "canonicalModelId": "deepseek-v4-pro",
+      "effective": { "from": "2026-07-27", "to": null },
+      "usdNanoPerMillion": {
+        "input": "435000000",
+        "output": "870000000",
+        "cacheRead": "3625000",
+        "cacheWrite": "0"
+      },
+      "source": {
+        "kind": "official",
+        "label": "DeepSeek 官方定价",
+        "verifiedAt": "2026-07-27"
+      }
+    },
+    {
+      "id": "minimax/minimax-m2-5/2026-07-27",
+      "canonicalModelId": "minimax-m2-5",
+      "effective": { "from": "2026-07-27", "to": null },
+      "usdNanoPerMillion": {
+        "input": "300000000",
+        "output": "1200000000",
+        "cacheRead": "30000000",
+        "cacheWrite": "375000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "MiniMax 官方定价",
+        "verifiedAt": "2026-07-27"
+      }
+    },
+    {
+      "id": "minimax/minimax-m2-7-highspeed/2026-07-27",
+      "canonicalModelId": "minimax-m2-7-highspeed",
+      "effective": { "from": "2026-07-27", "to": null },
+      "usdNanoPerMillion": {
+        "input": "600000000",
+        "output": "2400000000",
+        "cacheRead": "60000000",
+        "cacheWrite": "375000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "MiniMax 官方定价",
+        "verifiedAt": "2026-07-27"
+      }
+    },
+    {
+      "id": "zhipu/glm-5/2026-07-27",
+      "canonicalModelId": "glm-5",
+      "effective": { "from": "2026-07-27", "to": null },
+      "usdNanoPerMillion": {
+        "input": "1000000000",
+        "output": "3200000000",
+        "cacheRead": "200000000",
+        "cacheWrite": null
+      },
+      "source": {
+        "kind": "community",
+        "label": "LiteLLM · GLM-5",
+        "verifiedAt": "2026-07-27"
+      }
+    },
+    {
+      "id": "volcengine/doubao-seed-2-0-code/2026-07-27",
+      "canonicalModelId": "doubao-seed-2-0-code",
+      "effective": { "from": "2026-07-27", "to": null },
+      "usdNanoPerMillion": {
+        "input": "1333333333",
+        "output": "6666666667",
+        "cacheRead": "266666667",
+        "cacheWrite": null
+      },
+      "source": {
+        "kind": "official",
+        "label": "火山引擎官方阶梯定价（CNY→USD@7.2）",
+        "verifiedAt": "2026-07-27"
+      },
+      "tiers": [
+        {
+          "maxInputTokens": 32000,
+          "rates": {
+            "input": "444444444",
+            "output": "2222222222",
+            "cacheRead": "88888889"
+          }
+        },
+        {
+          "maxInputTokens": 128000,
+          "rates": {
+            "input": "666666667",
+            "output": "3333333333",
+            "cacheRead": "133333333"
+          }
+        },
+        {
+          "maxInputTokens": null,
+          "rates": {
+            "input": "1333333333",
+            "output": "6666666667",
+            "cacheRead": "266666667"
+          }
+        }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "deepseek-v4-pro-exact",
+      "scope": {},
+      "priority": 200,
+      "when": { "kind": "exact", "value": "deepseek-v4-pro" },
+      "convertTo": "deepseek-v4-pro",
+      "rateRef": "deepseek/deepseek-v4-pro/2026-07-27"
+    },
+    {
+      "id": "minimax-m2-5-exact",
+      "scope": {},
+      "priority": 200,
+      "when": { "kind": "exact", "value": "minimax-m2-5" },
+      "convertTo": "minimax-m2-5",
+      "rateRef": "minimax/minimax-m2-5/2026-07-27"
+    },
+    {
+      "id": "minimax-m2-7-highspeed-exact",
+      "scope": {},
+      "priority": 200,
+      "when": { "kind": "exact", "value": "minimax-m2-7-highspeed" },
+      "convertTo": "minimax-m2-7-highspeed",
+      "rateRef": "minimax/minimax-m2-7-highspeed/2026-07-27"
+    },
+    {
+      "id": "glm-5-exact",
+      "scope": {},
+      "priority": 200,
+      "when": { "kind": "exact", "value": "glm-5" },
+      "convertTo": "glm-5",
+      "rateRef": "zhipu/glm-5/2026-07-27"
+    },
+    {
+      "id": "doubao-seed-2-0-code-exact",
+      "scope": {},
+      "priority": 200,
+      "when": { "kind": "exact", "value": "doubao-seed-2-0-code" },
+      "convertTo": "doubao-seed-2-0-code",
+      "rateRef": "volcengine/doubao-seed-2-0-code/2026-07-27"
+    }
+  ]
+}

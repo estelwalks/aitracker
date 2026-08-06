@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "packs": [
+    {
+      "packId": "defaults",
+      "path": "src/lib/pricing/rules/defaults.rules.json"
+    },
+    { "packId": "openai", "path": "src/lib/pricing/rules/openai.rules.json" },
+    {
+      "packId": "anthropic",
+      "path": "src/lib/pricing/rules/anthropic.rules.json"
+    },
+    { "packId": "google", "path": "src/lib/pricing/rules/google.rules.json" },
+    {
+      "packId": "china-providers",
+      "path": "src/lib/pricing/rules/china-providers.rules.json"
+    },
+    {
+      "packId": "tool-routing",
+      "path": "src/lib/pricing/rules/tool-routing.rules.json"
+    }
+  ]
+}
