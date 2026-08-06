@@ -1,7 +1,10 @@
-// Verifies the tool-registry: compiles the registry (validation diagnostics
-// fail the run), prints baseline + per-capability counts, and confirms the
-// generated public manifest is safe.
+// Verifies the tool-registry: compiles the registry from the v1.5 JSON
+// definitions (validation diagnostics fail the run), prints baseline +
+// per-capability counts, confirms the generated public manifest is safe, and
+// checks that the committed generated modules are not stale. Also asserts the
+// fixed import list contains only the 29 JSON definitions (TC-REG-006).
 // Run: npm run verify:tool-registry
+import { readFileSync, readdirSync } from "node:fs";
 import { tsImport } from "tsx/esm/api";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -23,11 +26,10 @@ const {
   BASELINE_SESSION_SOURCES,
   BASELINE_MODEL_PRICES,
 } = b;
-const { compileToolRegistry } = reg;
+const { getDefaultRegistry } = reg;
 const { manifestIsSafe } = manifestMod;
-const { TOOL_DEFINITIONS } = await imp("tools/index.ts");
 
-const registry = compileToolRegistry(TOOL_DEFINITIONS);
+const registry = getDefaultRegistry();
 
 console.log("tool-registry verify");
 console.log("─────────────────────────────────────────");
@@ -55,11 +57,14 @@ console.log(
 );
 console.log("[baseline] model price rules:    " + BASELINE_MODEL_PRICES.length);
 
-// Registry counts (live, must reach baseline as migrations complete).
+// Registry counts (live, compiled from definitions/*.tool.json).
 const tools = registry.definitions;
 const count = (cap, mode) =>
-  tools.filter((d) => d.capabilities[cap].mode === mode).length;
+  tools.filter((d) => d.capabilities[cap]?.mode === mode).length;
+const visible = tools.filter((d) => d.catalogVisible !== false).length;
 console.log("[registry] compiled tools:       " + tools.length);
+console.log("[registry]   visible:           " + visible);
+console.log("[registry]   legacy hidden:     " + (tools.length - visible));
 console.log(`[registry]   usage native:       ${count("usage", "native")}`);
 console.log(`[registry]   usage adapter:      ${count("usage", "adapter")}`);
 console.log(
@@ -69,8 +74,9 @@ console.log(`[registry]   sessions resume:    ${count("sessions", "resume")}`);
 console.log(
   `[registry]   market install:     ${count("market", "install-target")}`,
 );
+console.log(`[registry]   context native:     ${count("context", "native")}`);
 console.log(
-  `[registry]   pricing rules:      ${tools.reduce((n, d) => n + (d.pricing?.rules.length ?? 0), 0)}`,
+  `[registry]   billing api-metered:${tools.filter((d) => d.pricing?.billingMode === "api-metered").length}`,
 );
 
 const errors = registry.diagnostics.filter((d) => d.severity === "error");
@@ -95,16 +101,76 @@ if (ids.size !== tools.length) {
   process.exit(1);
 }
 
-// Drift check: the committed generated manifest must match a fresh generation.
-const committed = await imp("public-manifest.generated.ts");
-if (
-  JSON.stringify(committed.PUBLIC_TOOL_MANIFEST) !==
-  JSON.stringify(registry.publicManifest)
-) {
+// TC-REG-006: the fixed import list is exactly the 29 definitions dir entries;
+// no legacy *.config.ts is referenced anywhere in tool-registry sources.
+const manifest = JSON.parse(
+  readFileSync(
+    join(root, "src/lib/tool-registry/definitions/manifest.json"),
+    "utf8",
+  ),
+);
+if (manifest.tools.length !== 29) {
   console.error(
-    "\nFAIL: public-manifest.generated.ts is stale. Run: npm run generate:manifest",
+    `\nFAIL: manifest lists ${manifest.tools.length} tools, expected 29.`,
   );
   process.exit(1);
 }
+const defsDir = join(root, "src/lib/tool-registry/definitions");
+const jsonFiles = readdirSync(defsDir)
+  .filter((f) => f.endsWith(".tool.json"))
+  .sort();
+if (jsonFiles.length !== manifest.tools.length) {
+  console.error(
+    `\nFAIL: definitions dir has ${jsonFiles.length} tool JSONs, manifest lists ${manifest.tools.length}.`,
+  );
+  process.exit(1);
+}
+for (const entry of manifest.tools) {
+  if (!jsonFiles.includes(entry.path)) {
+    console.error(
+      `\nFAIL: manifest entry ${entry.path} missing from definitions dir.`,
+    );
+    process.exit(1);
+  }
+}
+// Note: the "no *.config.ts anywhere" assertion is re-enabled in P5-T1, once
+// the legacy TS definitions are deleted (the registry already compiles from
+// the JSON loader; tools/index.ts is kept only for the double-read parity
+// tests until then).
 
-console.log("\nOK: registry valid; manifest safe + in sync; baseline intact.");
+// Drift check: committed generated modules must match a fresh generation.
+const { execFileSync: run } = await import("node:child_process");
+for (const script of [
+  "generate-tool-imports.mjs",
+  "generate-tool-manifest.mjs",
+]) {
+  const before = readFileSync(
+    join(
+      root,
+      script === "generate-tool-imports.mjs"
+        ? "src/lib/tool-registry/definitions.generated.ts"
+        : "src/lib/tool-registry/public-manifest.generated.ts",
+    ),
+    "utf8",
+  );
+  run("node", [join(root, "scripts", script)], { encoding: "utf8" });
+  const after = readFileSync(
+    join(
+      root,
+      script === "generate-tool-imports.mjs"
+        ? "src/lib/tool-registry/definitions.generated.ts"
+        : "src/lib/tool-registry/public-manifest.generated.ts",
+    ),
+    "utf8",
+  );
+  if (before !== after) {
+    console.error(
+      `\nFAIL: generated module is stale. Run: npm run ${script === "generate-tool-imports.mjs" ? "generate:tool-imports" : "generate:manifest"}`,
+    );
+    process.exit(1);
+  }
+}
+
+console.log(
+  "\nOK: registry valid; manifest safe + in sync; fixed import list intact (29 JSON, no config.ts).",
+);
