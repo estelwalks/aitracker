@@ -46,7 +46,8 @@ test("has-data: a tool with available=true and events>0", () => {
   assert.equal(claude.events, 5);
   assert.equal(claude.lastScannedAt, "2026-08-03T00:00:00.000Z");
   assert.equal(out.totals.connectedCount, 1);
-  assert.equal(out.totals.notInstalledCount, 26);
+  // 29 catalog tools, 1 connected -> 28 not installed (aipy/cline visible).
+  assert.equal(out.totals.notInstalledCount, 28);
   assert.equal(out.totals.eventCount, 5);
 });
 
@@ -78,8 +79,8 @@ test("not-installed: tool absent from summaries", () => {
   assert.equal(cursor.status, "not-installed");
   assert.equal(cursor.events, 0);
   assert.equal(cursor.lastScannedAt, "t");
-  assert.equal(out.totals.toolCount, 27);
-  assert.equal(out.totals.notInstalledCount, 27);
+  assert.equal(out.totals.toolCount, 29);
+  assert.equal(out.totals.notInstalledCount, 29);
 });
 
 test("HOME-normalization: catalog relative path gets ~/, absolute scanner path rewritten", () => {

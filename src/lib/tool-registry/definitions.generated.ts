@@ -1723,7 +1723,6 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "aipy",
-    "catalogVisible": false,
     "display": {
       "name": "AiPy",
       "nameZh": "AiPy"
@@ -1824,7 +1823,6 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
     "id": "cline",
-    "catalogVisible": false,
     "display": {
       "name": "Cline",
       "nameZh": "Cline"
@@ -2261,4 +2259,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "e721ab060b4d9b01";
+export const TOOL_REGISTRY_VERSION: string = "060f766c68fd667c";

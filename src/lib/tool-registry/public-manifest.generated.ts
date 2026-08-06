@@ -354,6 +354,32 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "market": "unsupported",
         "security": "unsupported"
       }
+    },
+    {
+      "id": "aipy",
+      "name": "AiPy",
+      "nameZh": "AiPy",
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "cline",
+      "name": "Cline",
+      "nameZh": "Cline",
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
     }
   ],
   "skillAgentOrder": [

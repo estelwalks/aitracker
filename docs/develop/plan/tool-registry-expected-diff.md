@@ -56,3 +56,12 @@
 
 - 复核人：Claude Code（sub-agent 独立复核 + orchestrator 程序化双读）
 - 结果：29/29 定义与旧 config 投影后逐字段一致，0 差异（2026-08-06）
+
+## D-F：aipy/cline 从遗留隐藏改为用户扩展可见（2026-08-06）
+
+| 工具       | 字段           | 旧行为                                            | 新行为                                                              | 批准             |
+| ---------- | -------------- | ------------------------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| aipy/cline | catalogVisible | false（遗留采集来源，隐藏于产品目录/manifest/UI） | true（用户新增的扩展 AI 工具，与 27 工具一样展示于数据来源页等 UI） | caows 2026-08-06 |
+
+- 影响：产品目录 27 → **29**；public manifest 与 AI_TOOLS 含 aipy/cline（display 仅 nameZh，路径/reader 仍不外泄）；baseline 冻结的 27 工具语义不变（前 27 顺序匹配）。
+- 保留约束：schema 防御性校验（catalogVisible=false 仅允许 legacy 来源）不变，当前无工具使用 false。
