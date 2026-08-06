@@ -442,3 +442,146 @@ describe("RawToolDefinitionSchema - path safety", () => {
     parseFail(raw, "env:");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Shared policy packs (TC-POL-001, P3 version): pack JSON content must match
+// the frozen constants they replace, item by item.
+// ---------------------------------------------------------------------------
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const sharedDir = join(here, "definitions/_shared");
+
+function readPack(name: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(sharedDir, name), "utf8"));
+}
+
+describe("shared policy packs (TC-POL-001)", () => {
+  test("generic-reader-defaults matches COMMON_MAPPING + file-size cap", () => {
+    const pack = readPack("generic-reader-defaults.json") as {
+      defaultMapping: Record<string, string[]>;
+      defaultMaxFileSizeBytes: number;
+    };
+    const COMMON_MAPPING_FIELDS = [
+      "records",
+      "timestamp",
+      "sessionId",
+      "model",
+      "project",
+      "inputTokens",
+      "cachedInputTokens",
+      "cacheCreationInputTokens",
+      "outputTokens",
+      "reasoningOutputTokens",
+      "totalTokens",
+    ];
+    assert.deepEqual(
+      Object.keys(pack.defaultMapping).sort(),
+      [...COMMON_MAPPING_FIELDS].sort(),
+    );
+    assert.equal(pack.defaultMaxFileSizeBytes, 8 * 1024 * 1024);
+    // Spot-check a few candidates copied from adapters/catalog.ts.
+    assert.deepEqual(pack.defaultMapping.records, [
+      "events",
+      "messages",
+      "turns",
+      "history",
+      "items",
+      "data.events",
+      "data.messages",
+    ]);
+    assert.deepEqual(pack.defaultMapping.model, [
+      "model",
+      "model_id",
+      "modelId",
+      "metadata.model",
+      "usage.model",
+    ]);
+  });
+
+  test("skill-market-policy matches SKILL_AGENT_ORDER + defaults", () => {
+    const pack = readPack("skill-market-policy.json") as {
+      skillAgentOrder: string[];
+      defaultMarkers: string[];
+      defaultMaxDepth: number;
+    };
+    assert.deepEqual(pack.skillAgentOrder, [
+      "claude-code",
+      "codex",
+      "cursor",
+      "gemini-cli",
+      "opencode",
+      "grok",
+      "hermes",
+      "openclaw",
+      "antigravity",
+    ]);
+    assert.deepEqual(pack.defaultMarkers, ["SKILL.md", "skill.md"]);
+    assert.equal(pack.defaultMaxDepth, 3);
+  });
+
+  test("scanner-policy matches scanner.server.ts budgets", () => {
+    const pack = readPack("scanner-policy.json") as Record<string, unknown>;
+    assert.equal(pack.lookbackDays, 10 * 365);
+    assert.equal(pack.maxFilesPerSource, 1_200);
+    assert.equal(pack.maxDiscoveredEntriesPerSource, 30_000);
+    assert.equal(pack.maxJsonlLineLength, 16 * 1024 * 1024);
+    assert.equal(pack.futureTimestampToleranceMs, 24 * 60 * 60 * 1000);
+    assert.equal(pack.cacheFileName, "local-usage-index-v10.json");
+  });
+
+  test("usage-taxonomy matches DEBUG_COMMAND_HINTS", () => {
+    const pack = readPack("usage-taxonomy.json") as {
+      debugCommandHints: string[];
+    };
+    assert.deepEqual(pack.debugCommandHints, [
+      "diff",
+      "grep",
+      "log",
+      "status",
+      "test",
+      "lint",
+    ]);
+  });
+
+  test("platform-profiles defines windows group and base platforms", () => {
+    const pack = readPack("platform-profiles.json") as {
+      groups: { windows: string[] };
+      basePlatforms: Record<string, string[]>;
+      defaultStatus: { macos: string; windows: string; linux: string };
+    };
+    assert.deepEqual(pack.groups.windows, ["windows10", "windows11"]);
+    assert.deepEqual(pack.basePlatforms.appData, ["macos"]);
+    assert.deepEqual(pack.basePlatforms.appDataRoaming, [
+      "windows10",
+      "windows11",
+    ]);
+    assert.deepEqual(pack.basePlatforms.configHome, ["macos", "linux"]);
+    assert.equal(pack.defaultStatus.linux, "planned");
+    assert.equal(pack.defaultStatus.macos, "supported");
+  });
+
+  test("manifest lists all 29 tools in frozen UI order", () => {
+    // The manifest sits in definitions/ (it lists the definitions dir), not _shared/.
+    const pack = JSON.parse(
+      readFileSync(join(here, "definitions/manifest.json"), "utf8"),
+    ) as {
+      tools: { id: string; path: string }[];
+    };
+    assert.equal(pack.tools.length, 29);
+    assert.equal(pack.tools[0].id, "claude-code");
+    assert.equal(pack.tools[27].id, "aipy");
+    assert.equal(pack.tools[28].id, "cline");
+    const ids = new Set(pack.tools.map((t) => t.id));
+    assert.equal(ids.size, 29, "ids must be unique");
+    for (const t of pack.tools) {
+      assert.equal(
+        t.path,
+        `${t.id}.tool.json`,
+        `path must match id for ${t.id}`,
+      );
+    }
+  });
+});
