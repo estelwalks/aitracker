@@ -121,7 +121,7 @@ export const SECURITY_RULES_DATA: SecurityRulesFile = {
       "name": "十六进制执行链",
       "kind": "代码混淆",
       "severity": "中危",
-      "pattern": "(?:\\\\x[0-9a-f]{2}\\s*){4,}[^\\n]{0,60}?(?:eval|exec|Function\\s*\\()",
+      "pattern": "(?:\\\\x[0-9a-f]{2}){4,32}\\s*[^\\n]{0,60}?(?:eval|exec|Function\\s*\\()",
       "message": "发现十六进制字符串解码后立即执行的可疑代码"
     },
     {
@@ -215,4 +215,4 @@ export const SECURITY_RULES_DATA: SecurityRulesFile = {
   ]
 };
 
-export const SECURITY_RULES_VERSION: string = "614fb9f9ad4d960b";
+export const SECURITY_RULES_VERSION: string = "d9f217c0cd672aee";
