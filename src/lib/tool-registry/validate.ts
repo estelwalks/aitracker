@@ -37,6 +37,14 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "grok-session-v1",
 ]);
 
+export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([
+  "claude-context-v1",
+  "codex-context-v1",
+]);
+
+const PLATFORM_TARGETS = new Set(["macos", "windows10", "windows11", "linux"]);
+const PLATFORM_STATUSES = new Set(["supported", "planned", "unsupported"]);
+
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/u;
 const ENV_VAR_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
@@ -150,6 +158,56 @@ export function validateToolDefinitions(
     for (const root of def.detection.roots) {
       if (isUnsafePath(root))
         diag(id, "unsafe-detection-root", `detection root "${root}" is unsafe`);
+    }
+
+    // v1.5 platform-aware fields (defensive; the JSON schema already enforces).
+    const platforms = def.platforms;
+    if (platforms) {
+      for (const [target, status] of Object.entries(platforms)) {
+        if (
+          target === "windows" ||
+          target === "windows10" ||
+          target === "windows11"
+        )
+          continue;
+        if (!PLATFORM_TARGETS.has(target)) {
+          diag(
+            id,
+            "invalid-platform-target",
+            `unknown platform target "${target}"`,
+          );
+        }
+        if (!PLATFORM_STATUSES.has(status)) {
+          diag(
+            id,
+            "invalid-platform-status",
+            `invalid platform status "${status}" for ${target}`,
+          );
+        }
+      }
+    }
+    const locations = def.detection.locations;
+    if (locations) {
+      const seenTargets = new Set<string>();
+      for (const loc of locations) {
+        for (const target of loc.targets) {
+          if (seenTargets.has(target)) {
+            diag(
+              id,
+              "duplicate-platform-location",
+              `duplicate detection target "${target}" (same-level duplicate fails the build)`,
+            );
+          }
+          seenTargets.add(target);
+        }
+        if (isUnsafePath(loc.path)) {
+          diag(
+            id,
+            "unsafe-detection-location",
+            `detection location path "${loc.path}" is unsafe`,
+          );
+        }
+      }
     }
 
     // Storage path safety.
@@ -299,6 +357,40 @@ export function validateToolDefinitions(
       );
     }
 
+    // Context capability (v1.5): native needs a registered reader.
+    const context = def.capabilities.context;
+    if (context) {
+      if (context.mode === "native") {
+        if (context.reader === undefined) {
+          diag(
+            id,
+            "context-missing-reader",
+            "context.mode=native requires a reader key",
+          );
+        } else if (!BUILTIN_CONTEXT_READERS.has(context.reader)) {
+          diag(
+            id,
+            "unknown-context-reader",
+            `context reader "${context.reader}" is not registered`,
+          );
+        }
+      } else if (context.mode === "unsupported") {
+        if (context.reader !== undefined || context.dimensions !== undefined) {
+          diag(
+            id,
+            "unsupported-context-has-config",
+            "context.mode=unsupported must not declare reader or dimensions",
+          );
+        }
+      } else if (!context.dimensions?.length) {
+        diag(
+          id,
+          "context-missing-dimensions",
+          "context.mode=heuristic requires dimensions",
+        );
+      }
+    }
+
     // Market capability: install-target requires writable skills.
     const market = def.capabilities.market;
     if (market.mode === "install-target") {
@@ -315,8 +407,40 @@ export function validateToolDefinitions(
       }
     }
 
-    // Pricing rules (legacy inline rules; v1.5 references rule packs instead).
+    // Pricing (v1.5): billingMode/fallbackProfileRef policy metadata.
     const pricing = def.pricing;
+    if (pricing) {
+      if (
+        pricing.billingMode !== undefined &&
+        !["api-metered", "subscription", "unsupported"].includes(
+          pricing.billingMode,
+        )
+      ) {
+        diag(
+          id,
+          "invalid-billing-mode",
+          `billingMode "${pricing.billingMode}" is not a known mode`,
+        );
+      }
+      if (
+        pricing.billingMode === "unsupported" &&
+        pricing.rulePackRefs?.length
+      ) {
+        diag(
+          id,
+          "unsupported-billing-has-refs",
+          "billingMode=unsupported must not reference rule packs",
+        );
+      }
+      if (pricing.billingMode !== undefined && !pricing.fallbackProfileRef) {
+        diag(
+          id,
+          "pricing-missing-fallback",
+          "pricing requires a fallbackProfileRef",
+        );
+      }
+    }
+    // Pricing rules (legacy inline rules; v1.5 references rule packs instead).
     if (pricing) {
       const ruleIds = new Set<string>();
       for (const rule of pricing.rules ?? []) {
