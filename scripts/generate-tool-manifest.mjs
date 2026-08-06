@@ -37,7 +37,12 @@ if (registry.diagnostics.length > 0) {
   process.exit(1);
 }
 
-const manifest = generatePublicManifest(TOOL_DEFINITIONS);
+const { loadBuiltinDefinitions } = await tsImport(
+  join(root, "src/lib/tool-registry/loader.ts"),
+  import.meta.url,
+);
+const builtin = loadBuiltinDefinitions();
+const manifest = generatePublicManifest(TOOL_DEFINITIONS, builtin.sharedPacks);
 if (!manifestIsSafe(manifest)) {
   console.error(
     "Generated manifest failed safety check (leaks sensitive fields).",

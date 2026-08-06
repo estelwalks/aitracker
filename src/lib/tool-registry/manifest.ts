@@ -7,6 +7,7 @@
  * browser bundle imports.
  */
 import type { ToolDefinition } from "./contracts.ts";
+import type { SharedPolicyPacks } from "./schema.ts";
 
 export type PublicCapabilityMode = string;
 
@@ -30,10 +31,13 @@ export interface PublicTool {
 export interface PublicToolManifest {
   configVersion: 1;
   tools: readonly PublicTool[];
+  /** Canonical skill-agent UI order (from skill-market-policy.json). */
+  skillAgentOrder?: readonly string[];
 }
 
 export function generatePublicManifest(
   defs: readonly ToolDefinition[],
+  sharedPacks?: SharedPolicyPacks,
 ): PublicToolManifest {
   return {
     configVersion: 1,
@@ -53,6 +57,9 @@ export function generatePublicManifest(
           security: def.capabilities.security.mode,
         },
       })),
+    ...(sharedPacks
+      ? { skillAgentOrder: sharedPacks.skillMarketPolicy.skillAgentOrder }
+      : {}),
   };
 }
 
