@@ -4,20 +4,21 @@ import test from "node:test";
 import { AI_TOOLS, usageLogParsingFor } from "../../tools/catalog.ts";
 import { SKILL_AGENT_RULES } from "../../local-skills/skill-rules.server.ts";
 import { BUILTIN_USAGE_ADAPTERS } from "../../local-usage/adapters/catalog.ts";
-import { MODEL_PRICES, priceMatches } from "../../pricing/catalog.ts";
 import {
   buildResumeCommand,
   isResumeSafeId,
 } from "../../local-sessions/resume-id.ts";
 import {
-  BASELINE_MODEL_PRICES,
   BASELINE_SESSION_SOURCES,
   BASELINE_SKILL_AGENTS,
   BASELINE_TOOLS,
   BASELINE_USAGE_ADAPTERS,
   BASELINE_USAGE_PARSING,
-  type BaselinePriceMatcher,
 } from "./baseline.ts";
+
+// Pricing baseline parity (BASELINE_MODEL_PRICES reproduced via the offline
+// rule-pack resolver) lives in src/lib/pricing/parity.test.ts - model prices
+// are no longer a static `MODEL_PRICES` catalog.
 
 test("baseline tools match the live AI_TOOLS catalog (27 tools)", () => {
   assert.equal(AI_TOOLS.length, BASELINE_TOOLS.length);
@@ -105,71 +106,4 @@ test("baseline session sources match the live resume command templates", () => {
   // isResumeSafeId is the guard referenced by the baseline.
   assert.equal(isResumeSafeId("abc123"), true);
   assert.equal(isResumeSafeId("foo; rm -rf /"), false);
-});
-
-function normalizeModel(model: string): string {
-  return model.trim().toLowerCase().replaceAll("_", "-").replaceAll(".", "-");
-}
-
-function baselineMatcherMatches(
-  matcher: BaselinePriceMatcher,
-  normalizedModel: string,
-): boolean {
-  if (matcher.kind === "exactOrSnapshot") {
-    return matcher.names.some((name) => {
-      const n = normalizeModel(name);
-      return normalizedModel === n || normalizedModel.startsWith(`${n}-20`);
-    });
-  }
-  return matcher.parts.every((part) => normalizedModel.includes(part));
-}
-
-// Battery of model strings (already in normalized form) covering every matcher
-// branch plus negative cases.
-const MODEL_BATTERY = [
-  "gpt-5-6-sol",
-  "gpt-5-6-sol-2026-07-27",
-  "gpt-5-6-terra",
-  "gpt-5-6-luna",
-  "gpt-5-5",
-  "gpt-5-4",
-  "gpt-5-2",
-  "gpt-5-1-codex",
-  "gpt-5-codex",
-  "gpt-4",
-  "claude-opus-4-20250514",
-  "claude-sonnet-4-20250514",
-  "claude-3-7-sonnet",
-  "claude-3-5-haiku",
-  "claude-3-opus",
-  "gemini-pro",
-  "unknown-model",
-];
-
-test("baseline model prices match the live MODEL_PRICES (rates + matcher behavior)", () => {
-  assert.equal(MODEL_PRICES.length, BASELINE_MODEL_PRICES.length);
-  for (const expected of BASELINE_MODEL_PRICES) {
-    const live = MODEL_PRICES.find((price) => price.id === expected.id);
-    assert.ok(
-      live,
-      `baseline price "${expected.id}" missing from MODEL_PRICES`,
-    );
-    assert.equal(live.label, expected.label);
-    assert.equal(live.effectiveDate, expected.effectiveDate);
-    assert.equal(live.inputUsdPerMillion, expected.inputUsdPerMillion);
-    assert.equal(live.outputUsdPerMillion, expected.outputUsdPerMillion);
-    assert.equal(live.cacheReadUsdPerMillion, expected.cacheReadUsdPerMillion);
-    assert.equal(
-      live.cacheWriteUsdPerMillion,
-      expected.cacheWriteUsdPerMillion,
-    );
-
-    for (const model of MODEL_BATTERY) {
-      assert.equal(
-        priceMatches(live, model),
-        baselineMatcherMatches(expected.matcher, model),
-        `matcher drift for price "${expected.id}" on model "${model}"`,
-      );
-    }
-  }
 });
