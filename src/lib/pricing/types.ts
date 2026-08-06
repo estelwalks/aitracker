@@ -1,26 +1,16 @@
-export interface RuntimeModelPrice {
-  model: string;
-  inputUsdPerMillion: number;
-  outputUsdPerMillion: number;
-  cacheReadUsdPerMillion: number;
-  cacheWriteUsdPerMillion: number | null;
-  source: string;
-  tiers?: RuntimePriceTier[];
-}
+import type { Currency } from "../i18n/locale";
 
-export interface RuntimePriceTier {
-  maxInputTokens: number | null;
-  inputUsdPerMillion: number;
-  outputUsdPerMillion: number;
-  cacheReadUsdPerMillion: number;
-}
-
+/**
+ * Exchange-rate snapshot for display-currency conversion. Model prices come
+ * from the offline rule-pack registry (resolve.ts), NOT this snapshot; the
+ * snapshot only carries exchange rates + the rule-pack version stamp so the UI
+ * can show "price version / rate date / rate source" (docs §6.5: split rule
+ * version from exchange snapshot).
+ */
 export interface PricingSnapshot {
   generatedAt: string;
-  prices: Record<string, RuntimeModelPrice>;
-  priceSource: "live" | "cache" | "stale-cache" | "fallback";
-  priceSourceLabel: string;
-  modelCount: number;
+  /** Offline rule-pack version (sha256 prefix) backing model prices. */
+  pricingRulesVersion: string;
   usdToCny: number;
   exchangeRateDate: string;
   exchangeRateSource: "live" | "cache" | "stale-cache" | "fallback";
