@@ -1,5 +1,4 @@
 import type { UsageAdapterContract, UsageFieldMapping } from "./types.ts";
-import { USAGE_ADAPTER_PRESETS } from "./presets.ts";
 import { listTools } from "../../tool-registry/registry.ts";
 
 export const GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;
@@ -90,27 +89,12 @@ const COMMON_MAPPING: UsageFieldMapping = {
   ],
 };
 
-function builtin(
-  source: UsageAdapterContract["source"],
-  paths: UsageAdapterContract["paths"],
-  mapping: UsageFieldMapping = COMMON_MAPPING,
-): UsageAdapterContract {
-  return {
-    source,
-    paths,
-    mapping,
-    maxFileSizeBytes: GENERIC_ADAPTER_MAX_FILE_SIZE_BYTES,
-    kind: "builtin",
-  };
-}
-
 /**
  * Built-in usage adapters, derived from the tool-registry: one entry per tool
- * with a non-unsupported `usage` capability, plus two LEGACY adapter sources
- * (`cline`, `aipy`) that are real tools but not in the 27-tool PRD catalog and
- * therefore have no `*.config.ts`. The scanner still dispatches native readers
- * (claude-code/codex/workbuddy) via hardcoded calls; this catalog feeds the
- * generic adapter pipeline and the source-id universe.
+ * (including `catalogVisible=false` legacy sources aipy/cline) with a
+ * non-unsupported `usage` capability. The scanner still dispatches native
+ * readers (claude-code/codex/workbuddy) via hardcoded calls; this catalog feeds
+ * the generic adapter pipeline and the source-id universe.
  */
 const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
   .filter(
@@ -134,38 +118,8 @@ const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
     return entry;
   });
 
-// cline / aipy are usage sources but not PRD catalog tools -> legacy entries.
-const LEGACY_USAGE_ADAPTERS: UsageAdapterContract[] = [
-  builtin("cline", [
-    {
-      root: "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-    {
-      root: ".config/Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-    {
-      root: "AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
-      glob: "**/*.json",
-      format: "json",
-    },
-  ]),
-  {
-    source: "aipy",
-    paths: [...USAGE_ADAPTER_PRESETS.aipy.paths],
-    mapping: USAGE_ADAPTER_PRESETS.aipy.mapping,
-    query: USAGE_ADAPTER_PRESETS.aipy.query,
-    maxFileSizeBytes: 512 * 1024 * 1024,
-    kind: "builtin",
-  },
-];
-
 export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
   ...REGISTRY_USAGE_ADAPTERS,
-  ...LEGACY_USAGE_ADAPTERS,
 ];
 
 export const GENERIC_BUILTIN_USAGE_ADAPTERS = BUILTIN_USAGE_ADAPTERS.filter(

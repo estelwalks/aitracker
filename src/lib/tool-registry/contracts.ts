@@ -184,6 +184,13 @@ export interface ToolPricing {
 export interface ToolDefinition {
   id: ToolId;
   configVersion: 1;
+  /**
+   * False only for legacy collection sources (aipy/cline) that must stay
+   * compatible with usage scanning but are not part of the product catalog
+   * (hidden from the public manifest, detection UI and market). Defaults to
+   * true (docs §6: catalogVisible=false 仅用于遗留来源).
+   */
+  catalogVisible?: boolean;
   display: ToolDisplay;
   detection: ToolDetection;
   storage?: ToolStorage;

@@ -35,6 +35,8 @@ import droid from "./droid.config.ts";
 import mimo from "./mimo.config.ts";
 import zcode from "./zcode.config.ts";
 import anythingllm from "./anythingllm.config.ts";
+import aipy from "./aipy.config.ts";
+import cline from "./cline.config.ts";
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   claudeCode,
@@ -64,4 +66,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   mimo,
   zcode,
   anythingllm,
+  // Legacy collection sources (catalogVisible=false): real usage sources that
+  // are not part of the 27-tool product catalog (docs §6).
+  aipy,
+  cline,
 ];
