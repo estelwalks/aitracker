@@ -9,7 +9,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RawToolDefinition, SharedPolicyPacks } from "./schema.ts";
 import { SharedPolicyPackSchema } from "./schema.ts";
-import { compileRawTool, projectBase, validateRulePackRefs } from "./loader.ts";
+import {
+  buildBasePrefixes,
+  compileRawTool,
+  projectBase,
+  projectBaseWithEnv,
+  validateRulePackRefs,
+} from "./loader.ts";
 import { validateToolDefinitions } from "./validate.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -83,6 +89,66 @@ describe("projectBase", () => {
 
   test("env bases cannot be projected", () => {
     assert.equal(projectBase("env:CODEX_HOME", "x"), null);
+  });
+});
+
+describe("platform-profile-driven projection (F5-T1)", () => {
+  test("prefixes derive from platform-profiles (xdgFallback drives XDG bases)", () => {
+    const prefixes = buildBasePrefixes(packs.platformProfiles);
+    assert.equal(prefixes.get("home"), "");
+    assert.equal(prefixes.get("userProfile"), "AppData/");
+    assert.equal(prefixes.get("appData"), "Library/Application Support/");
+    assert.equal(prefixes.get("appDataRoaming"), "AppData/Roaming/");
+    assert.equal(prefixes.get("configHome"), ".config/");
+    assert.equal(prefixes.get("dataHome"), ".local/share/");
+    // Bases the profile does not declare are absent from the table.
+    assert.equal(prefixes.has("env:CODEX_HOME"), false);
+    assert.equal(prefixes.size, 6);
+  });
+
+  test("projectBaseWithEnv honors XDG_CONFIG_HOME/XDG_DATA_HOME when set", () => {
+    assert.deepEqual(
+      projectBaseWithEnv("configHome", "opencode", {
+        XDG_CONFIG_HOME: "/custom/cfg",
+      }),
+      { path: "/custom/cfg/opencode", homeRelative: false },
+    );
+    assert.deepEqual(
+      projectBaseWithEnv("dataHome", "zed", {
+        XDG_DATA_HOME: "/custom/data",
+      }),
+      { path: "/custom/data/zed", homeRelative: false },
+    );
+  });
+
+  test("projectBaseWithEnv falls back to xdgFallback when unset", () => {
+    assert.deepEqual(projectBaseWithEnv("configHome", "opencode", {}), {
+      path: ".config/opencode",
+      homeRelative: true,
+    });
+    assert.deepEqual(projectBaseWithEnv("dataHome", "zed", {}), {
+      path: ".local/share/zed",
+      homeRelative: true,
+    });
+  });
+
+  test("projectBaseWithEnv resolves env:NAME bases when the variable is set", () => {
+    assert.deepEqual(
+      projectBaseWithEnv("env:PF_HOME", "data", {
+        PF_HOME: "/pf-home",
+      }),
+      { path: "/pf-home/data", homeRelative: false },
+    );
+    assert.equal(projectBaseWithEnv("env:PF_HOME", "data", {}), null);
+  });
+
+  test("non-XDG bases ignore the environment", () => {
+    assert.deepEqual(
+      projectBaseWithEnv("appData", "V", {
+        XDG_CONFIG_HOME: "/custom/cfg",
+      }),
+      { path: "Library/Application Support/V", homeRelative: true },
+    );
   });
 });
 

@@ -281,9 +281,12 @@ import {
   getSkillPlan,
   listSessionTools,
   osTargets,
+  resolvePlatformPaths,
   resolvePlatformPlan,
+  type PlatformEnv,
 } from "./registry.ts";
 import { computeToolRegistryVersion } from "./fingerprint.server.ts";
+import { SHARED_POLICY_PACKS } from "./definitions.generated.ts";
 
 function v15Tool(): ToolDefinition {
   return {
@@ -442,6 +445,307 @@ describe("canonical source & version hash (D6, TC-REG-004 plan layer)", () => {
       computeToolRegistryVersion(reg),
       computeRegistryFingerprint(reg),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-1 (F5): platform-profiles.json drives path resolution - base-target
+// validation (F5-T2), profile defaultStatus, XDG/env-aware resolution
+// (F5-T1), and per-target expansion fixtures (F5-T3).
+// ---------------------------------------------------------------------------
+
+/** Covers every profile base + an invalid base-target combo + an env base. */
+function profileFixture(
+  platforms: ToolDefinition["platforms"] = {
+    macos: "supported",
+    windows: "supported",
+    linux: "planned",
+  },
+): ToolDefinition {
+  return {
+    id: "profile-fixture",
+    configVersion: 1,
+    display: { name: "PF", nameZh: "PF" },
+    platforms,
+    detection: {
+      roots: [],
+      locations: [
+        { targets: ["macos"], base: "appData", path: "PF" },
+        { targets: ["windows10"], base: "userProfile", path: "W10" },
+        { targets: ["windows11"], base: "userProfile", path: "W11" },
+        {
+          targets: ["windows10", "windows11"],
+          base: "appDataRoaming",
+          path: "PF",
+        },
+        { targets: ["macos", "linux"], base: "configHome", path: "pf" },
+        { targets: ["macos", "linux"], base: "dataHome", path: "pf" },
+        {
+          targets: ["macos", "windows10", "windows11", "linux"],
+          base: "home",
+          path: ".pf",
+        },
+        // F5-T2: configHome is declared for macos/linux only, not windows.
+        {
+          targets: ["windows10", "windows11"],
+          base: "configHome",
+          path: "bad",
+        },
+        { targets: ["macos"], base: "env:PF_HOME", path: "data" },
+      ],
+    },
+    storage: { dataRoots: [{ base: "configHome", path: "pf-data" }] },
+    capabilities: {
+      usage: { mode: "unsupported" },
+      skills: { mode: "unsupported" },
+      agents: { mode: "unsupported" },
+      sessions: { mode: "unsupported" },
+      market: { mode: "unsupported" },
+      security: { mode: "unsupported" },
+    },
+  };
+}
+
+function regWithPacks(def: ToolDefinition) {
+  return compileToolRegistry([def], { sharedPacks: SHARED_POLICY_PACKS });
+}
+
+describe("platform-profiles drive path resolution (P2-1 F5)", () => {
+  it("macOS expands appData/configHome/dataHome/home; env bases are skipped", () => {
+    const reg = regWithPacks(profileFixture());
+    const mac = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "macos",
+      reg,
+    );
+    assert.equal(mac?.status, "supported");
+    assert.deepEqual(mac?.paths, [
+      "Library/Application Support/PF",
+      ".config/pf",
+      ".local/share/pf",
+      ".pf",
+    ]);
+    // env:PF_HOME cannot be flattened -> skipped with a diagnostic.
+    assert.ok(
+      mac?.skippedLocations?.some((s) => s.base === "env:PF_HOME"),
+      `expected env:PF_HOME skip, got ${JSON.stringify(mac?.skippedLocations)}`,
+    );
+  });
+
+  it("Windows 10 and 11 both expand userProfile/appDataRoaming/home", () => {
+    const reg = regWithPacks(profileFixture());
+    const win = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "windows",
+      reg,
+    );
+    assert.deepEqual(win?.paths, [
+      "AppData/W10",
+      "AppData/W11",
+      "AppData/Roaming/PF",
+      ".pf",
+    ]);
+  });
+
+  it("a base not declared for the target is skipped with a diagnostic (F5-T2)", () => {
+    const reg = regWithPacks(profileFixture());
+    const win = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "windows",
+      reg,
+    );
+    // configHome is macos/linux only -> the windows location never expands.
+    assert.ok(!win?.paths.includes(".config/bad"));
+    const skip = win?.skippedLocations?.find(
+      (s) => s.base === "configHome" && s.path === "bad",
+    );
+    assert.ok(
+      skip,
+      `expected configHome/bad skip, got ${JSON.stringify(win?.skippedLocations)}`,
+    );
+    assert.match(skip!.reason, /windows/);
+    assert.match(skip!.reason, /basePlatforms/);
+  });
+
+  it("without sharedPacks every base projects as before (legacy parity)", () => {
+    // No profile -> no base-target validation -> the "bad" windows location
+    // projects like the pre-F5 code did (profiles are the gate, not the code).
+    const reg = compileToolRegistry([profileFixture()]);
+    const win = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "windows",
+      reg,
+    );
+    assert.deepEqual(win?.paths, [
+      "AppData/W10",
+      "AppData/W11",
+      "AppData/Roaming/PF",
+      ".pf",
+      ".config/bad",
+    ]);
+    assert.equal(win?.skippedLocations, undefined);
+  });
+
+  it("linux planned never produces scan paths", () => {
+    const reg = regWithPacks(profileFixture());
+    const linux = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "linux",
+      reg,
+    );
+    assert.equal(linux?.status, "planned");
+    assert.deepEqual(linux?.paths, []);
+  });
+
+  it("status falls back to profile defaultStatus when platforms omit an os", () => {
+    const def = profileFixture();
+    delete def.platforms;
+    const reg = regWithPacks(def);
+    assert.equal(
+      resolvePlatformPlan("profile-fixture", "detection", "linux", reg)?.status,
+      "planned",
+    );
+    assert.equal(
+      resolvePlatformPlan("profile-fixture", "detection", "macos", reg)?.status,
+      "supported",
+    );
+    assert.equal(
+      resolvePlatformPlan("profile-fixture", "detection", "windows", reg)
+        ?.status,
+      "supported",
+    );
+  });
+});
+
+describe("XDG/env-aware resolution (F5-T1 resolvePlatformPaths)", () => {
+  const linuxDef = profileFixture({
+    macos: "supported",
+    windows: "supported",
+    linux: "supported",
+  });
+
+  it("XDG_CONFIG_HOME overrides configHome; unset bases fall back to xdgFallback", () => {
+    const reg = regWithPacks(linuxDef);
+    const env: PlatformEnv = { XDG_CONFIG_HOME: "/custom/cfg" };
+    const res = resolvePlatformPaths(
+      "profile-fixture",
+      "detection",
+      "linux",
+      env,
+      reg,
+    );
+    assert.equal(res?.status, "supported");
+    assert.deepEqual(
+      res?.paths.find((p) => p.base === "configHome"),
+      {
+        path: "/custom/cfg/pf",
+        base: "configHome",
+        homeRelative: false,
+      },
+    );
+    assert.deepEqual(
+      res?.paths.find((p) => p.base === "dataHome"),
+      {
+        path: ".local/share/pf",
+        base: "dataHome",
+        homeRelative: true,
+      },
+    );
+  });
+
+  it("XDG_DATA_HOME overrides dataHome", () => {
+    const reg = regWithPacks(linuxDef);
+    const res = resolvePlatformPaths(
+      "profile-fixture",
+      "detection",
+      "linux",
+      { XDG_DATA_HOME: "/custom/data" },
+      reg,
+    );
+    assert.deepEqual(
+      res?.paths.find((p) => p.base === "dataHome"),
+      {
+        path: "/custom/data/pf",
+        base: "dataHome",
+        homeRelative: false,
+      },
+    );
+  });
+
+  it("env:NAME bases resolve when the variable is set and skip when unset", () => {
+    const reg = regWithPacks(linuxDef);
+    const set = resolvePlatformPaths(
+      "profile-fixture",
+      "detection",
+      "macos",
+      { PF_HOME: "/pf-home" },
+      reg,
+    );
+    assert.deepEqual(
+      set?.paths.find((p) => p.base === "env:PF_HOME"),
+      {
+        path: "/pf-home/data",
+        base: "env:PF_HOME",
+        homeRelative: false,
+      },
+    );
+    const unset = resolvePlatformPaths(
+      "profile-fixture",
+      "detection",
+      "macos",
+      {},
+      reg,
+    );
+    assert.ok(
+      unset?.skippedLocations.some((s) => s.base === "env:PF_HOME"),
+      `expected env:PF_HOME skip, got ${JSON.stringify(unset?.skippedLocations)}`,
+    );
+  });
+
+  it("sessions dataRoots resolve against XDG too", () => {
+    const reg = regWithPacks(linuxDef);
+    const res = resolvePlatformPaths(
+      "profile-fixture",
+      "sessions",
+      "linux",
+      { XDG_CONFIG_HOME: "/cfg" },
+      reg,
+    );
+    assert.deepEqual(
+      res?.paths.find((p) => p.base === "configHome"),
+      {
+        path: "/cfg/pf-data",
+        base: "configHome",
+        homeRelative: false,
+      },
+    );
+  });
+
+  it("without XDG vars the env-aware paths equal the default plan paths", () => {
+    const reg = regWithPacks(linuxDef);
+    const plan = resolvePlatformPlan(
+      "profile-fixture",
+      "detection",
+      "linux",
+      reg,
+    );
+    const res = resolvePlatformPaths(
+      "profile-fixture",
+      "detection",
+      "linux",
+      {},
+      reg,
+    );
+    assert.deepEqual(
+      res?.paths.map((p) => p.path),
+      plan?.paths,
+    );
+    assert.ok(res?.paths.every((p) => p.homeRelative === true));
   });
 });
 
