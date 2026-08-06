@@ -261,6 +261,8 @@ export interface PricingResolution {
   packageVersion: string;
   /** Known cost in nanoUSD; absent when `confidence` is `unpriced`/`not-billable`. */
   knownUsdNano?: bigint;
+  /** Notional cache-read saving in nanoUSD (when a rate matched). */
+  cacheSavingsUsdNano?: bigint;
   /** Per-token cost breakdown in nanoUSD (when a rate or estimate applied). */
   costBreakdown?: {
     input: bigint;

@@ -264,6 +264,7 @@ export function resolvePrice(
         reason: matcherReason(rule.normalizedWhen.kind),
         packageVersion: registry.version,
         knownUsdNano: cost.knownUsdNano,
+        cacheSavingsUsdNano: cost.cacheSavingsUsdNano,
         costBreakdown: cost.breakdown,
         sourceLabel: rule.rate.source.label,
       };

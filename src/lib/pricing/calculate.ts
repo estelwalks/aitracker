@@ -13,6 +13,8 @@
  *   resolver applies the tool's fallback policy.
  * - `reasoningPolicy`: `ignore` (default, pre-migration parity) does not bill
  *   reasoning; `bill-as-output`/`separate` bill reasoning at the output rate.
+ * - `cacheSavingsUsdNano` is the notional saving from cache reads (cache-read
+ *   tokens billed at the cache-read rate instead of the input rate), floored at 0.
  */
 import {
   parseNanoUsd,
@@ -33,6 +35,8 @@ export interface CostBreakdown {
 
 export interface CostResult {
   knownUsdNano: bigint;
+  /** Notional cache-read saving vs billing cached tokens at the input rate. */
+  cacheSavingsUsdNano: bigint;
   breakdown: CostBreakdown;
 }
 
@@ -106,8 +110,15 @@ export function calculateCost(
       ? 0n
       : perMillion(tokens.reasoningOutput, tier.output);
 
+  // Notional saving: cached tokens billed at cache-read rate instead of input rate.
+  const cacheSavingsUsdNano =
+    tier.input > tier.cacheRead
+      ? perMillion(tokens.cacheRead, tier.input - tier.cacheRead)
+      : 0n;
+
   return {
     knownUsdNano: input + output + cacheRead + cacheWrite + reasoning,
+    cacheSavingsUsdNano,
     breakdown: { input, output, cacheRead, cacheWrite, reasoning },
   };
 }
