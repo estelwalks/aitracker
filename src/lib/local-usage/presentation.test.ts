@@ -7,7 +7,9 @@ import {
   filterDailyUsage,
   filterUsageEvents,
   resolveUsageRange,
+  sourceLabel,
 } from "./presentation";
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 import type { LocalUsageDaily, LocalUsageEvent } from "./types";
 
 function makeEvent(
@@ -26,6 +28,16 @@ function makeEvent(
     ...input,
   };
 }
+
+test("sourceLabel projects the manifest nameZh for every catalog source (F6-T2)", () => {
+  for (const tool of PUBLIC_TOOL_MANIFEST.tools) {
+    assert.equal(sourceLabel(tool.id), tool.nameZh);
+  }
+});
+
+test("sourceLabel falls back to the raw id for unknown sources", () => {
+  assert.equal(sourceLabel("not-a-tool"), "not-a-tool");
+});
 
 test("resolveUsageRange 支持本年范围", () => {
   const now = new Date(2026, 6, 28, 9, 30, 0);

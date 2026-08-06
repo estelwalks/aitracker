@@ -12,6 +12,7 @@ import {
   filterEventsByPeriod,
   formatCostAmount,
   formatMoney,
+  sourceName,
 } from "./index";
 
 function event(overrides: Partial<LocalUsageEvent> = {}): LocalUsageEvent {
@@ -29,6 +30,13 @@ function event(overrides: Partial<LocalUsageEvent> = {}): LocalUsageEvent {
     ...overrides,
   };
 }
+
+test("sourceName projects the registry name; unknown ids fall back (F6-T3)", () => {
+  assert.equal(sourceName("claude-code"), "Claude Code");
+  assert.equal(sourceName("codex"), "Codex CLI");
+  assert.equal(sourceName("aipy"), "AiPy");
+  assert.equal(sourceName("not-a-tool"), "not-a-tool");
+});
 
 test("区分输入、输出和缓存读取价格，推理 Token 不重复计费", () => {
   const cost = estimateEventCost(event());

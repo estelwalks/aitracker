@@ -25,6 +25,7 @@ export type TokenTypeKey =
 
 import { resolvePrice } from "./resolve.ts";
 import { getDefaultPricingRegistry } from "./registry.ts";
+import { getToolDisplay } from "../tool-registry/registry.ts";
 import { getToolPricingPolicy } from "./tool-policy.ts";
 
 /**
@@ -274,12 +275,14 @@ export function formatCostAmount(
   return formatMoney(locale, cost.knownUsd, currency, rate);
 }
 
+/**
+ * Display name for a usage source (F6-T3): projected from the tool registry's
+ * canonical `name` via `getToolDisplay`. Unknown ids (not in the registry)
+ * fall back to the raw id. This module already depends on the registry
+ * (tool-policy.ts), so no new bundle surface is added.
+ */
 export function sourceName(source: LocalUsageSource | string) {
-  return source === "claude-code"
-    ? "Claude Code"
-    : source === "codex"
-      ? "Codex"
-      : source;
+  return getToolDisplay(source)?.name ?? source;
 }
 
 function perMillion(tokens: number, rate: number) {

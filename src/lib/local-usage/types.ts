@@ -1,20 +1,25 @@
 import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
 /**
- * The known usage source ids.
+ * The known usage source ids (F6-T2).
  *
- * The primary set is the 27 PRD v1.2 tools, derived from `AI_TOOL_IDS` (the
- * single source of truth in `src/lib/tools/catalog.ts`). Two legacy adapter
- * source ids (`aipy`, `cline`) are retained on top of the PRD list because the
- * builtin usage adapters in `adapters/catalog.ts` and their golden fixtures
- * still reference them — see BUILTIN_USAGE_ADAPTERS. `windsurf`/`qoder` etc.
- * are intentionally NOT included; they were never wired to an adapter.
+ * Projected from the browser-safe public manifest — the single authority for
+ * the source universe: every catalog tool id, plus the ids of legacy-marked
+ * tools (`legacy: true`, stamped by `generatePublicManifest` from
+ * `LEGACY_TOOL_IDS` in the tool-registry). Deduped because legacy sources
+ * (aipy/cline) are also catalog-visible today. No source ids are hardcoded in
+ * this module; a tool that leaves the catalog but keeps `legacy` stays
+ * scannable, and one that fully disappears from the registry drops out.
  */
-const LEGACY_ADAPTER_SOURCES = ["aipy", "cline"] as const;
+const MANIFEST_TOOL_IDS: readonly string[] = PUBLIC_TOOL_MANIFEST.tools.map(
+  (tool) => tool.id,
+);
+const LEGACY_TOOL_IDS: readonly string[] = PUBLIC_TOOL_MANIFEST.tools
+  .filter((tool) => tool.legacy === true)
+  .map((tool) => tool.id);
 
 export const KNOWN_LOCAL_USAGE_SOURCES = [
-  ...PUBLIC_TOOL_MANIFEST.tools.map((tool) => tool.id),
-  ...LEGACY_ADAPTER_SOURCES,
+  ...new Set([...MANIFEST_TOOL_IDS, ...LEGACY_TOOL_IDS]),
 ] as const;
 
 export type KnownLocalUsageSource = (typeof KNOWN_LOCAL_USAGE_SOURCES)[number];
