@@ -14,12 +14,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".kiro"
       }
@@ -37,9 +32,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "unsupported",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

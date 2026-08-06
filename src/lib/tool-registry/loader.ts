@@ -24,7 +24,6 @@ import type {
   RawToolDefinition,
   SharedPolicyPacks,
 } from "./schema.ts";
-import { PRICING_PACKS } from "../pricing/pricing-definitions.generated.ts";
 import {
   RAW_TOOL_DEFINITIONS,
   SHARED_POLICY_PACKS,
@@ -300,13 +299,21 @@ export function compileRawTool(
         ? { context: raw.capabilities.context }
         : {}),
     },
-    ...(raw.pricing
+    ...(raw.modelObservation
       ? {
+          // P1-1: the runtime `pricing` field is now the modelObservation
+          // projection (billing evidence extraction, never rates/modes). Phase 2
+          // renames the field to `modelObservation`.
           pricing: {
-            billingMode: raw.pricing.billingMode,
-            fallbackProfileRef: raw.pricing.fallbackProfileRef,
-            rulePackRefs: [...raw.pricing.rulePackRefs],
-            ...(raw.pricing.provider ? { provider: raw.pricing.provider } : {}),
+            modelField: raw.modelObservation.modelField ?? "model",
+            normalizeProfile:
+              raw.modelObservation.normalizeProfile ?? "generic-normalize-v1",
+            ...(raw.modelObservation.evidence
+              ? { evidence: raw.modelObservation.evidence }
+              : {}),
+            ...(raw.modelObservation.tokenSemantics
+              ? { tokenSemantics: raw.modelObservation.tokenSemantics }
+              : {}),
           },
         }
       : {}),
@@ -324,21 +331,29 @@ export function compileRawTools(
   return raws.map((raw) => compileRawTool(raw, packs));
 }
 
+/** Normalization profile ids known to the pricing module (normalize.ts). */
+export const KNOWN_NORMALIZE_PROFILES: readonly string[] = [
+  "generic-normalize-v1",
+];
+
 /**
- * Verify every `pricing.rulePackRefs` entry resolves to a built-in pack id
- * (docs §8.2; pricing packs live in src/lib/pricing/rules/ - approved diff D3).
- * Returns per-tool error messages (empty when all refs resolve).
+ * Verify every `modelObservation.normalizeProfile` resolves to a known
+ * normalization profile (P1-1; replaced the legacy rule-pack ref check, since
+ * tools no longer reference price packs). Absent profile defaults to
+ * `generic-normalize-v1`. Returns per-tool error messages (empty when all
+ * refs resolve).
  */
-export function validateRulePackRefs(
+export function validateModelObservationProfiles(
   raws: readonly RawToolDefinition[],
 ): string[] {
-  const known = new Set(PRICING_PACKS.map((p) => p.packId));
   const errors: string[] = [];
   for (const raw of raws) {
-    for (const ref of raw.pricing?.rulePackRefs ?? []) {
-      if (!known.has(ref)) {
-        errors.push(`${raw.id}: unknown rule pack "${ref}"`);
-      }
+    const profile =
+      raw.modelObservation?.normalizeProfile ?? "generic-normalize-v1";
+    if (!KNOWN_NORMALIZE_PROFILES.includes(profile)) {
+      errors.push(
+        `${raw.id}: unknown normalize profile "${profile}" (known: ${KNOWN_NORMALIZE_PROFILES.join(", ")})`,
+      );
     }
   }
   return errors;
@@ -355,9 +370,9 @@ export interface BuiltinDefinitions {
  * never scans directories, reads JSON, or accepts external paths (docs §4/§5).
  */
 export function loadBuiltinDefinitions(): BuiltinDefinitions {
-  const errors = validateRulePackRefs(RAW_TOOL_DEFINITIONS);
+  const errors = validateModelObservationProfiles(RAW_TOOL_DEFINITIONS);
   if (errors.length > 0) {
-    throw new Error(`Rule-pack reference errors:\n${errors.join("\n")}`);
+    throw new Error(`Model-observation profile errors:\n${errors.join("\n")}`);
   }
   return {
     definitions: compileRawTools(RAW_TOOL_DEFINITIONS, SHARED_POLICY_PACKS),

@@ -14,12 +14,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".workbuddy"
       }
@@ -31,12 +26,7 @@
       "reader": "workbuddy-native",
       "paths": [
         {
-          "targets": [
-            "macos",
-            "windows10",
-            "windows11",
-            "linux"
-          ],
+          "targets": ["macos", "windows10", "windows11", "linux"],
           "base": "home",
           "path": ".workbuddy/projects",
           "glob": "**/*.jsonl",
@@ -52,9 +42,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "api-metered",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

@@ -19,5 +19,26 @@
       "packId": "tool-routing",
       "path": "src/lib/pricing/rules/tool-routing.rules.json"
     }
-  ]
+  ],
+  "modelCatalog": {
+    "path": "src/lib/pricing/rules/model-catalog.json"
+  },
+  "billingRoutes": {
+    "path": "src/lib/pricing/rules/billing-routes.json"
+  },
+  "modelAliasRules": {
+    "path": "src/lib/pricing/rules/model-alias-rules.json"
+  },
+  "routeSelectionRules": {
+    "path": "src/lib/pricing/rules/route-selection-rules.json"
+  },
+  "ratePacks": [
+    {
+      "packId": "official-routes",
+      "path": "src/lib/pricing/rules/rate-packs/official.routes.json"
+    }
+  ],
+  "fallbackProfiles": {
+    "path": "src/lib/pricing/rules/fallback-profiles.json"
+  }
 }

@@ -14,17 +14,12 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos"
-        ],
+        "targets": ["macos"],
         "base": "appData",
         "path": "Zed"
       },
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "dataHome",
         "path": "zed"
       }
@@ -42,9 +37,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "unsupported",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

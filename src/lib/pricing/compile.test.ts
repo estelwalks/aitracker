@@ -26,6 +26,7 @@ test("duplicate rate id is an error", () => {
   const rate = {
     id: "dup/rate/2026-01-01",
     canonicalModelId: "dup",
+    billingRouteId: "route/1",
     effective: { from: "2026-01-01", to: null },
     usdNanoPerMillion: {
       input: "1",
@@ -72,6 +73,7 @@ test("unresolved rateRef is an error", () => {
 test("two rates for the same canonical model on overlapping dates is an error", () => {
   const base = {
     canonicalModelId: "shared",
+    billingRouteId: "route/1",
     usdNanoPerMillion: {
       input: "1",
       output: "2",
@@ -99,6 +101,7 @@ test("same matcher+scope+priority+interval rules is an overlap error", () => {
   const rate = {
     id: "rate/1",
     canonicalModelId: "m",
+    billingRouteId: "route/1",
     effective: { from: "2026-01-01", to: null },
     usdNanoPerMillion: {
       input: "1",
@@ -141,6 +144,7 @@ test("exact ranks above prefix in the sorted index", () => {
   const rate = {
     id: "rate/1",
     canonicalModelId: "m",
+    billingRouteId: "route/1",
     effective: { from: "2026-01-01", to: null },
     usdNanoPerMillion: {
       input: "1",
@@ -184,6 +188,7 @@ test("tool-scoped rule ranks above global rule", () => {
   const rate = {
     id: "rate/1",
     canonicalModelId: "m",
+    billingRouteId: "route/1",
     effective: { from: "2026-01-01", to: null },
     usdNanoPerMillion: {
       input: "1",
@@ -231,6 +236,7 @@ test("unreferenced rate and profile produce warnings", () => {
       {
         id: "unused-rate",
         canonicalModelId: "m",
+        billingRouteId: "route/1",
         effective: { from: "2026-01-01", to: null },
         usdNanoPerMillion: {
           input: "1",
