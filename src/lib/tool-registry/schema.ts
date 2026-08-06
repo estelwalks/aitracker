@@ -477,3 +477,90 @@ export const RawToolDefinitionSchema = z
 
 export type RawToolDefinition = z.infer<typeof RawToolDefinitionSchema>;
 export type RawUsagePath = z.infer<typeof RawUsagePathSchema>;
+
+// ---------------------------------------------------------------------------
+// Shared policy packs (docs §6.2): each pack configures facts, never
+// implementation. The loader/registry consume these after build-time parsing.
+// ---------------------------------------------------------------------------
+
+export const PlatformProfilesSchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  targets: z.array(PlatformTargetSchema).min(1),
+  groups: z.object({
+    windows: z.array(z.enum(["windows10", "windows11"])).length(2),
+  }),
+  basePlatforms: z.record(PathBaseSchema, z.array(PlatformTargetSchema).min(1)),
+  xdgFallback: z.record(z.string().min(1), z.string().min(1)),
+  defaultStatus: z.object({
+    macos: PlatformStatusSchema,
+    windows: PlatformStatusSchema,
+    linux: PlatformStatusSchema,
+  }),
+});
+
+export const GenericReaderDefaultsSchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  defaultMapping: RawUsageMappingSchema,
+  defaultMaxFileSizeBytes: z.number().int().positive(),
+});
+
+export const ScannerPolicySchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  lookbackDays: z.number().int().positive(),
+  maxFilesPerSource: z.number().int().positive(),
+  maxDiscoveredEntriesPerSource: z.number().int().positive(),
+  maxJsonlLineLength: z.number().int().positive(),
+  futureTimestampToleranceMs: z.number().int().positive(),
+  cacheFileName: z.string().min(1),
+  cacheNote: z.string().optional(),
+});
+
+export const SkillMarketPolicySchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  skillAgentOrder: z.array(z.string().regex(TOOL_ID_PATTERN)).min(1),
+  defaultMarkers: z.array(z.string().min(1)).min(1),
+  defaultMaxDepth: z.number().int().positive(),
+  marketInstallCondition: z.object({
+    requires: z.array(z.string().min(1)).min(1),
+    note: z.string().optional(),
+  }),
+});
+
+export const UsageTaxonomySchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  debugCommandHints: z.array(z.string().min(1)).min(1),
+  behaviorPriority: z.array(z.string().min(1)).min(1),
+  contextDimensions: z.record(
+    z.string().min(1),
+    z.object({ i18nKey: z.string().min(1) }),
+  ),
+});
+
+export const DefinitionsManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  description: z.string().optional(),
+  tools: z
+    .array(
+      z.object({
+        id: z.string().regex(TOOL_ID_PATTERN),
+        path: z.string().regex(/^[a-z0-9-]+\.tool\.json$/),
+      }),
+    )
+    .min(1),
+});
+
+export const SharedPolicyPackSchema = z.object({
+  platformProfiles: PlatformProfilesSchema,
+  genericReaderDefaults: GenericReaderDefaultsSchema,
+  scannerPolicy: ScannerPolicySchema,
+  skillMarketPolicy: SkillMarketPolicySchema,
+  usageTaxonomy: UsageTaxonomySchema,
+  definitionsManifest: DefinitionsManifestSchema,
+});
+
+export type SharedPolicyPacks = z.infer<typeof SharedPolicyPackSchema>;
