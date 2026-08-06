@@ -44,7 +44,29 @@ export interface SecurityReport {
   durationMs: number;
   /** 命中规则库的版本号，便于审计与回溯 */
   rulesVersion: string;
+  /**
+   * 扫描因正则执行预算超限而提前中止（存在未完整扫描的维度）。
+   * 触发条件见 `scanDimension` 的预算说明；不持久化标志的旧报告无此字段。
+   */
+  truncated?: boolean;
 }
+
+/**
+ * 正则执行预算（偏差清单 P1 / F4-T3）：内建与用户规则均已通过构建期/保存期
+ * ReDoS gate（redos.ts），理论上不存在指数级回溯；预算是对「大文件 × 多规则」
+ * 场景的兜底，防止合法但超大的输入（单文件上限 100MB）长时间阻塞 UI 线程。
+ *
+ * 实现：以「字符步进」估算每次 `test()` 的成本（无锚点扫描对每行至少访问
+ * 每个字符一次，`line.length` 是线性下界）。预算按维度独立累计：
+ * - `MAX_REGEX_STEPS_PER_RULE_LINE`：单条规则对单行——行超过该预算即中止
+ *   当前维度（单行超长时无法用调用计数兜底，必须提前退出）；
+ * - `MAX_REGEX_STEPS_TOTAL`：维度内所有规则×行累计超过该预算即中止当前维度。
+ * 中止的维度在报告中以 `truncated: true` 标记，UI/历史不做其他假设。
+ *
+ * 均为纯整数计数（无计时），在浏览器与 Node 下行为一致且可确定性测试。
+ */
+export const MAX_REGEX_STEPS_PER_RULE_LINE = 200_000;
+export const MAX_REGEX_STEPS_TOTAL = 5_000_000;
 
 /** Compiled built-in rule (pattern string validated at build time, compiled here). */
 type BuiltInRule = CompiledBuiltinRule;
@@ -135,44 +157,75 @@ export function computeRiskScore(risks: SecurityRisk[]): number {
   return Math.min(100, score);
 }
 
+interface ScanBudgetState {
+  /** 是否至少有一个维度因预算超限被中止（写入报告 `truncated`）。 */
+  truncated: boolean;
+}
+
+/**
+ * 对单个维度执行一次规则扫描。预算说明见 `MAX_REGEX_STEPS_*` 注释：
+ * 超长单行（> 200k 字符）与累计步进超限（> 5M）都会立即中止该维度。
+ * `file.content.split(/\r?\n/)` 本身是 O(n) 线性切分（V8 对 `\r?\n` 无回溯
+ * 风险），100MB 上限下的开销为毫秒级；预算约束的是其后逐行×逐规则的匹配工作。
+ */
 function scanDimension(
   files: SecurityInputFile[],
   rules: BuiltInRule[],
   userRules: CompiledUserRule[],
   risks: SecurityRisk[],
+  budget: ScanBudgetState,
 ): void {
+  let steps = 0;
   for (const file of files) {
     const lines = file.content.split(/\r?\n/);
-    lines.forEach((line, index) => {
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index]!;
+      // 单条规则对单行预算：超长单行无法用调用计数兜底，直接中止该维度
+      if (line.length > MAX_REGEX_STEPS_PER_RULE_LINE) {
+        budget.truncated = true;
+        return;
+      }
       for (const rule of rules) {
         rule.regex.lastIndex = 0;
-        if (!rule.regex.test(line)) continue;
-        risks.push({
-          kind: rule.kind,
-          severity: rule.severity,
-          source: "内置规则",
-          ruleName: rule.name,
-          file: file.name,
-          line: index + 1,
-          message: rule.message,
-          excerpt: maskedExcerpt(line),
-        });
+        if (rule.regex.test(line)) {
+          risks.push({
+            kind: rule.kind,
+            severity: rule.severity,
+            source: "内置规则",
+            ruleName: rule.name,
+            file: file.name,
+            line: index + 1,
+            message: rule.message,
+            excerpt: maskedExcerpt(line),
+          });
+        }
+        steps += line.length;
+        if (steps > MAX_REGEX_STEPS_TOTAL) {
+          budget.truncated = true;
+          return;
+        }
       }
       for (const rule of userRules) {
         rule.regex.lastIndex = 0;
-        if (!rule.regex.test(line)) continue;
-        risks.push({
-          kind: rule.kind,
-          severity: rule.severity,
-          source: "用户规则",
-          ruleName: rule.name,
-          file: file.name,
-          line: index + 1,
-          message: `命中用户配置规则“${rule.name}”`,
-          excerpt: maskedExcerpt(line),
-        });
+        if (rule.regex.test(line)) {
+          risks.push({
+            kind: rule.kind,
+            severity: rule.severity,
+            source: "用户规则",
+            ruleName: rule.name,
+            file: file.name,
+            line: index + 1,
+            message: `命中用户配置规则“${rule.name}”`,
+            excerpt: maskedExcerpt(line),
+          });
+        }
+        steps += line.length;
+        if (steps > MAX_REGEX_STEPS_TOTAL) {
+          budget.truncated = true;
+          return;
+        }
       }
-    });
+    }
   }
 }
 
@@ -180,6 +233,7 @@ function buildReport(
   files: SecurityInputFile[],
   risks: SecurityRisk[],
   startedAt: number,
+  truncated: boolean,
 ): SecurityReport {
   return {
     scannedAt: new Date().toISOString(),
@@ -194,6 +248,7 @@ function buildReport(
     riskScore: computeRiskScore(risks),
     durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
     rulesVersion: SECURITY_RULES_VERSION,
+    ...(truncated ? { truncated: true } : {}),
   };
 }
 
@@ -208,15 +263,17 @@ export function scanSecurityFiles(
   const startedAt = performance.now();
   const risks: SecurityRisk[] = [];
   const compiledUserRules = compileUserRules(userRules);
+  const budget: ScanBudgetState = { truncated: false };
   for (const kind of SECURITY_RULE_KINDS) {
     scanDimension(
       files,
       RULES.filter((rule) => rule.kind === kind),
       compiledUserRules.filter((rule) => rule.kind === kind),
       risks,
+      budget,
     );
   }
-  return buildReport(files, risks, startedAt);
+  return buildReport(files, risks, startedAt, budget.truncated);
 }
 
 export interface LocalScanProgress {
@@ -238,6 +295,7 @@ export async function scanSecurityFilesWithProgress(
   const risks: SecurityRisk[] = [];
   const compiledUserRules = compileUserRules(userRules);
   const totalDimensions = SECURITY_RULE_KINDS.length;
+  const budget: ScanBudgetState = { truncated: false };
 
   for (const [index, kind] of SECURITY_RULE_KINDS.entries()) {
     scanDimension(
@@ -245,6 +303,7 @@ export async function scanSecurityFilesWithProgress(
       RULES.filter((rule) => rule.kind === kind),
       compiledUserRules.filter((rule) => rule.kind === kind),
       risks,
+      budget,
     );
     onProgress?.({
       completedDimensions: index + 1,
@@ -255,5 +314,5 @@ export async function scanSecurityFilesWithProgress(
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
-  return buildReport(files, risks, startedAt);
+  return buildReport(files, risks, startedAt, budget.truncated);
 }

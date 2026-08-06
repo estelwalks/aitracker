@@ -4,6 +4,8 @@
  * PRD v3.0 v1.2 §11 FR-019：安全扫描覆盖 11 个维度，规则库带版本号。
  */
 
+import { detectReDoS } from "./redos.ts";
+
 /**
  * 规则库版本号。由 security-rules.json 内容哈希派生（scripts/
  * generate-security-rules.mjs），任何规则增删/正则变更都会自动改变版本号，
@@ -55,7 +57,6 @@ export function validateSecurityRulePattern(
   }
   try {
     new RegExp(normalized, "i");
-    return { valid: true, message: "" };
   } catch (error) {
     return {
       valid: false,
@@ -65,6 +66,13 @@ export function validateSecurityRulePattern(
           : "正则表达式无效",
     };
   }
+  // ReDoS 防护：与内建规则共用同一安全 gate（redos.ts），
+  // 拒绝嵌套/重叠量词等可能导致扫描卡死的危险回溯形态。
+  const danger = detectReDoS(normalized);
+  if (danger !== null) {
+    return { valid: false, message: danger };
+  }
+  return { valid: true, message: "" };
 }
 
 export function isSecurityRuleKind(value: unknown): value is SecurityRuleKind {

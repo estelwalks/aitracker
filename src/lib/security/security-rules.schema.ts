@@ -10,6 +10,9 @@
 import { z } from "zod";
 
 import { SECURITY_RULE_KINDS } from "./rules.ts";
+import { detectReDoS } from "./redos.ts";
+
+export { detectReDoS } from "./redos.ts";
 
 export const SecuritySeveritySchema = z.enum(["高危", "中危", "低危"]);
 export type SecuritySeverity = z.infer<typeof SecuritySeveritySchema>;
@@ -39,19 +42,23 @@ export type SecurityRulesFile = z.infer<typeof SecurityRulesFileSchema>;
 /**
  * Build-time pattern safety gate (docs: 构建期安全正则校验). Hard checks:
  * non-empty, ≤500 chars, compiles with the `i` flag (the runtime compiler never
- * applies `g`, avoiding lastIndex state). The existing 26 patterns are
- * hand-reviewed for catastrophic-backtracking shapes (no ambiguous nested
- * quantifiers such as `(X+)+`); future PRs must keep that constraint and the
- * code-review checklist covers it (ReDoS 防护固定在 TypeScript + 单行有界输入).
+ * applies `g`, avoiding lastIndex state), and no dangerous catastrophic-
+ * backtracking shapes (nested/overlapping quantifiers, ambiguous multi-branch
+ * alternation under a quantifier, backreferences, adjacent quantifiers).
+ *
+ * The ReDoS detection itself lives in `redos.ts` (zero-dependency module shared
+ * with user-rule validation in `rules.ts`; see its header for the detector
+ * model). `detectReDoS(pattern)` returns a human-readable danger description
+ * for callers that need to surface the reason (e.g. user-rule save errors).
  */
 export function isSafeSecurityPattern(pattern: string): boolean {
   if (pattern.length === 0 || pattern.length > 500) return false;
   try {
     new RegExp(pattern, "i");
-    return true;
   } catch {
     return false;
   }
+  return detectReDoS(pattern) === null;
 }
 
 export interface CompiledBuiltinRule extends BuiltinSecurityRule {
