@@ -11,8 +11,7 @@
  *   `executable + 子命令` 签名（与 codex-context 同口径）。
  * - Skill 名、工具名、MCP server/tool 名属统计字段，允许采集。
  *
- * 实现思路参考 TokenTracker 的可观察行为（按 content block type/name 分类），
- * 但使用应用自有类型与分类口径，不复制其代码结构。
+ * 按 content block 的 type/name 分类，并使用应用自有类型与分类口径。
  */
 
 import type {
