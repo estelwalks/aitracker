@@ -4,9 +4,9 @@
 | -------- | -------------------------------------- |
 | 文档类型 | 架构设计文档 (ARCH)                    |
 | 项目名称 | TrustTools-AI工具模块化                |
-| 版本     | v1.5                                   |
+| 版本     | v1.6                                   |
 | 创建日期 | 2026-08-05 14:39:08                    |
-| 更新日期 | 2026-08-05 16:55:05                    |
+| 更新日期 | 2026-08-06 17:07:33                    |
 | 生成工具 | agile-feature-dev、architecture-design |
 | 文档状态 | 草稿                                   |
 
@@ -14,6 +14,7 @@
 
 | 版本 | 修改时间            | 修改内容                                                   |
 | ---- | ------------------- | ---------------------------------------------------------- |
+| v1.6 | 2026-08-06 17:07:33 | 回写决策记录 D2/D3 批准差异：pricing/security 目录漂移、生成/校验入口与依赖方向（P3-1） |
 | v1.5 | 2026-08-05 16:55:05 | 补齐共享规则包、配置边界和当前代码残留的迁移要求           |
 | v1.4 | 2026-08-05 16:35:57 | 定价专项方案改为内建离线规则包，移除模型价网络权威路径     |
 | v1.3 | 2026-08-05 16:12:35 | 补齐遗漏能力、跨平台路径模型和共享配置集                   |
@@ -99,10 +100,10 @@ src/lib/tool-registry/
 │   │   ├── generic-reader-defaults.json # 通用 JSON/JSONL 字段候选、默认文件上限
 │   │   ├── scanner-policy.json    # lookback、文件/目录/行数上限、缓存版本策略
 │   │   ├── skill-market-policy.json # Skill/Market 的 toolId 顺序和可安装过滤策略
-│   │   ├── usage-taxonomy.json    # 使用行为分类、可展示类别与受控 debug hint
-│   │   └── pricing-manifest.json  # pricing 专项 rule pack 入口（见专项架构）
+│   │   └── usage-taxonomy.json    # 使用行为分类、可展示类别与受控 debug hint
 │   ├── _rules/
-│   │   └── security-rules.json    # 内建安全扫描规则、severity、版本与分类
+│   │   └── README.md             # 指针：security-rules.json 实际位于 src/lib/security/（批准 diff D2）
+│   ├── manifest.json             # 有序 29 个 {id, path}，UI 顺序冻结基线（决策 D7）
 │   ├── codex.tool.json
 │   ├── claude-code.tool.json
 │   ├── cursor.tool.json
@@ -110,24 +111,38 @@ src/lib/tool-registry/
 │   ├── cline.tool.json           # legacySupport=true, catalogVisible=false
 │   └── ...每个支持来源一个文件
 ├── definitions.generated.ts     # build 前生成的内建 JSON import 清单
-├── readers/
-│   ├── contracts.ts             # UsageReader、SessionReader 接口
-│   ├── usage-readers.ts         # ReaderKey -> 内建 usage reader
-│   ├── session-readers.ts       # ReaderKey -> 内建 session reader
-│   ├── codex.ts                 # 从现有 Codex reader 迁入
-│   └── claude-code.ts           # 从现有 Claude reader 迁入
-└── pricing/
-    ├── contracts.ts
-    └── index.ts                 # ToolDefinition[] -> 已排序价格查询索引
+└── readers/
+    ├── contracts.ts             # UsageReader、SessionReader 接口
+    ├── usage-readers.ts         # ReaderKey -> 内建 usage reader 的 key 分派（解析实现留在 local-usage/adapters、claude-context.ts、codex-context.ts）
+    └── session-readers.ts       # ReaderKey -> 内建 session reader
 
-src/lib/local-usage/             # 保留扫描、聚合、缓存；只查询 registry
+src/lib/local-usage/             # 保留扫描、聚合、缓存；只查询 registry；原生 usage/context reader 实现所在
 src/lib/local-skills/            # 保留文件发现、安装和同步；只查询 registry
 src/lib/local-sessions/          # 保留聚合视图；只调用 session reader registry
 src/lib/tools/                   # 过渡期兼容导出，最终仅保留 detection 或删除
-src/lib/pricing/                 # 保留费用算法与动态快照；静态目录迁至 tool-registry
+src/lib/pricing/                 # 定价模块：契约 + compiler + resolver + 费率数据；规则数据不入 tool-registry（批准 diff D3）
+├── contracts.ts / compile.ts / normalize.ts / resolve.ts / calculate.ts
+├── index.ts / registry.ts / tool-policy.ts / dynamic.server.ts / server-fns.ts
+├── pricing-definitions.generated.ts # npm run generate:pricing-imports 生成（compile/registry 消费）
+└── rules/                       # 规则数据（pricing-manifest.json 入口 + 6 个 rule pack + 定价目录）
+    ├── pricing-manifest.json    # pack 清单与各 JSON 路径（见专项架构）
+    ├── {defaults,openai,anthropic,google,china-providers,tool-routing}.rules.json
+    ├── model-catalog.json / billing-routes.json / model-alias-rules.json
+    ├── route-selection-rules.json / fallback-profiles.json / rate-packs/
+    └── tool JSON 只声明 modelObservation；pricing 模块经 pricing-definitions.generated.ts 解析规则
+
+src/lib/security/                # 内建安全规则事实源（批准 diff D2）
+├── security-rules.json          # 内建安全扫描规则、severity、版本与分类（26 条）
+└── security-rules.generated.ts  # npm run generate:security-rules 生成（sha256 版本化）
 ```
 
 `scripts/generate-tool-imports.mjs` 只扫描仓库内固定 `definitions/` 源目录，并生成带显式 JSON import 的 `definitions.generated.ts`；应用运行时不扫描任何目录、不接受路径参数、更不根据用户输入动态 import。依赖方向必须为：`routes/components -> 领域服务 -> tool-registry contracts/registry -> JSON definitions`；Reader 实现可以依赖本领域解析工具，但 JSON 定义不依赖任何实现。`tool-registry` 不得导入 route、React、Electron IPC 或 server function。`public-manifest.generated.ts` 由校验通过的 registry 在 prebuild 生成，只包含 display、能力状态与 i18n key；浏览器不得导入完整 definitions 或 Node Reader。
+
+pricing 与 security 的规则数据不在 tool-registry 目录内（批准 diff，见《tool-registry-json-migration-decisions.md》D2/D3），生成/校验入口与依赖边界如下：
+
+- **pricing**：实现位于 `src/lib/pricing/`，规则数据位于 `src/lib/pricing/rules/`（`pricing-manifest.json` 入口 + 6 个 rule pack + model-catalog/billing-routes/model-alias-rules/route-selection-rules/rate-packs/fallback-profiles）。`npm run generate:pricing-imports` 生成 `src/lib/pricing/pricing-definitions.generated.ts`；`npm run verify:pricing-rules` 在构建期校验规则重叠、未知匹配与 parity。
+- **security**：内建安全规则事实源位于 `src/lib/security/security-rules.json`；`npm run generate:security-rules`（`node --import tsx scripts/generate-security-rules.mjs`）生成 `security-rules.generated.ts`，已接入 prebuild，构建期安全 gate 校验。
+- **依赖方向**：pricing 只消费 tool-registry 注册表派生结果（`getToolDisplay`/`getPricingPolicyRefs`/`getUsagePlan`，即 toolId 与 modelObservation 相关），tool-registry 不反向 import pricing 的规则数据；security 不依赖 tool-registry 与 pricing。
 
 共享配置集只保存跨工具重复的声明数据，不能含 Reader 代码、命令或可执行表达式。工具 JSON 通过受限 ID 引用共享 profile/rule set；loader 在构建期展开引用并检测循环、未知 ID 和同字段冲突。共享配置的优先级固定为 `shared default < platform group < platform target < tool definition`；这里的最后一层是内建工具文件，不是用户 override。同一层级重复定义即构建失败。
 
@@ -222,17 +237,17 @@ src/lib/pricing/                 # 保留费用算法与动态快照；静态目
 
 ### 6.2 共享策略与专项规则的边界
 
-| 规则包                         | 应配置的事实                                                  | 主要消费者                         | 不应配置的实现                           |
-| ------------------------------ | ------------------------------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| `platform-profiles.json`       | OS target/group、路径 base、XDG fallback、planned 状态        | detection、usage、skills、sessions | `wsl.exe` 调用、path/realpath 实现。     |
-| `generic-reader-defaults.json` | 通用记录字段候选、格式、默认 file-size 上限                   | generic UsageReader                | JSON/JSONL/SQLite 解析代码、SQL 执行器。 |
-| `scanner-policy.json`          | lookback、每来源文件/目录/行数上限、缓存命名/失效策略         | local-usage/session scanner        | 文件遍历、缓存读写、超时实现。           |
-| `skill-market-policy.json`     | 以 `toolId` 表示的 UI 顺序、市场可安装条件、默认 marker/depth | Skills、Market                     | 下载、解压、原子安装与路径安全实现。     |
-| `usage-taxonomy.json`          | 工具/命令类别、展示名称、受控分类 hint                        | Context/Usage Dashboard            | 上下文解析、脱敏/命令签名算法。          |
-| `pricing/*.rules.json`         | 模型转换、费率、历史生效期、fallback profile                  | Pricing Registry                   | 金额计算、汇率请求、JSON loader。        |
-| `security-rules.json`          | 内建 rule id、类别、severity、pattern、消息、rulesVersion     | Security scanner                   | RegExp 编译、ReDoS 防护、文件读取。      |
+| 规则包                                       | 应配置的事实                                                  | 主要消费者                         | 不应配置的实现                           |
+| -------------------------------------------- | ------------------------------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| `platform-profiles.json`                     | OS target/group、路径 base、XDG fallback、planned 状态        | detection、usage、skills、sessions | `wsl.exe` 调用、path/realpath 实现。     |
+| `generic-reader-defaults.json`               | 通用记录字段候选、格式、默认 file-size 上限                   | generic UsageReader                | JSON/JSONL/SQLite 解析代码、SQL 执行器。 |
+| `scanner-policy.json`                        | lookback、每来源文件/目录/行数上限、缓存命名/失效策略         | local-usage/session scanner        | 文件遍历、缓存读写、超时实现。           |
+| `skill-market-policy.json`                   | 以 `toolId` 表示的 UI 顺序、市场可安装条件、默认 marker/depth | Skills、Market                     | 下载、解压、原子安装与路径安全实现。     |
+| `usage-taxonomy.json`                        | 工具/命令类别、展示名称、受控分类 hint                        | Context/Usage Dashboard            | 上下文解析、脱敏/命令签名算法。          |
+| `src/lib/pricing/rules/*.rules.json`         | 模型转换、费率、历史生效期、fallback profile（入口 pricing-manifest.json） | Pricing Registry                   | 金额计算、汇率请求、JSON loader。        |
+| `src/lib/security/security-rules.json`       | 内建 rule id、类别、severity、pattern、消息、rulesVersion     | Security scanner                   | RegExp 编译、ReDoS 防护、文件读取。      |
 
-`security-rules.json` 与用户个人安全规则是不同边界：前者是随客户端发布的内建规则包；后者属于用户状态，只能经过严格 schema/长度/安全正则校验后存储，不能影响工具探测、Reader、价格或会话命令。`tool-overrides.json`、`usage-adapters.json` 和 `custom:*` 不属于本期允许的配置层，必须删除而不是迁入共享包。
+`src/lib/security/security-rules.json` 与用户个人安全规则是不同边界：前者是随客户端发布的内建规则包；后者属于用户状态，只能经过严格 schema/长度/安全正则校验后存储，不能影响工具探测、Reader、价格或会话命令。`tool-overrides.json`、`usage-adapters.json` 和 `custom:*` 不属于本期允许的配置层，必须删除而不是迁入共享包。
 
 必须保留在 TypeScript 的内容包括 Reader/ContextReader/SessionReader 实现、路径与 WSL 解析、resume ID 和路径安全校验、网络/解压/缓存 I/O、BigInt 费用计算及安全规则的正则防护。它们是受控执行面，不是运营可任意编辑的数据。
 
@@ -279,7 +294,7 @@ flowchart LR
 | 层级      | 位置                                                        | 权威性           | 允许内容                                                     |
 | --------- | ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------ |
 | 内建定义  | `src/lib/tool-registry/definitions/*.tool.json`             | 最高，随应用发布 | 工具能力、跨平台路径、Reader Key、恢复模板、价格规则包引用。 |
-| 共享定义  | `definitions/_shared/*.json` 与 `pricing/*.rules.json`      | 最高，随应用发布 | 平台 profile、平台组、共享价格规则包。                       |
+| 共享定义  | `src/lib/tool-registry/definitions/_shared/*.json` 与 `src/lib/pricing/rules/*.rules.json` | 最高，随应用发布 | 平台 profile、平台组、共享价格规则包。                       |
 | 生成产物  | `definitions.generated.ts` / `public-manifest.generated.ts` | 从属，不手工编辑 | JSON import 清单、公开 UI 投影、内建定义版本 hash。          |
 | 缓存/快照 | `~/.trusttools/*`                                           | 非权威           | 用量索引、市场缓存、汇率展示快照。可删除重建。               |
 
