@@ -7,17 +7,25 @@ import type {
   LocalUsageTotals,
 } from "../local-usage";
 import type { UsagePeriod } from "../local-usage/presentation";
-import { MODEL_PRICES, priceMatches, type ModelPrice } from "./catalog";
-import { normalizeModel } from "../tool-registry/contracts.ts";
 import type { PricingSnapshot, RuntimeModelPrice } from "./types";
 
 export type { PricingSnapshot, RuntimeModelPrice } from "./types";
+export type {
+  ToolPricingPolicy,
+  PricingConfidence,
+  PricingResolution,
+} from "./contracts";
+export { PRICING_RULES_VERSION } from "./registry.ts";
 
 import type { Currency } from "../i18n/locale";
 export type { Currency } from "../i18n/locale";
 export type UsageDimension = "source" | "model" | "project" | "tokenType";
 export type TokenTypeKey =
   "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
+
+import { resolvePrice } from "./resolve.ts";
+import { getDefaultPricingRegistry } from "./registry.ts";
+import { getToolPricingPolicy } from "./tool-policy.ts";
 
 /**
  * Built-in baseline exchange rates (offline fallback). These are static
@@ -34,18 +42,12 @@ export const BUILTIN_RATES: Record<Currency, number> = {
 export const DEFAULT_USD_TO_CNY = BUILTIN_RATES.CNY;
 let activePricingSnapshot: PricingSnapshot | null = null;
 /**
- * True when the active snapshot contains `toolId:model` keys. The snapshot is
- * currently model-keyed; the flag lets `findModelRate` skip the toolId-key
- * lookup (and its string concat) on the per-event hot path - the dual-read only
- * pays off once per-tool live prices exist.
+ * Apply a pricing snapshot. Model prices now come from the offline rule-pack
+ * registry (resolve.ts); the snapshot only carries exchange rates for display
+ * currency conversion.
  */
-let activeSnapshotHasToolKeys = false;
-
 export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
   activePricingSnapshot = snapshot;
-  activeSnapshotHasToolKeys =
-    snapshot !== null &&
-    Object.keys(snapshot.prices).some((key) => key.includes(":"));
 }
 
 export function currentUsdToCny(): number {
@@ -88,104 +90,57 @@ const EMPTY_COUNTS: LocalTokenCounts = {
   totalTokens: 0,
 };
 
-function runtimeToModelPrice(
-  model: string,
-  normalized: string,
-  runtime: NonNullable<PricingSnapshot["prices"][string]>,
-): ModelPrice {
-  return {
-    id: normalized,
-    label: model,
-    effectiveDate: activePricingSnapshot?.generatedAt.slice(0, 10) ?? "",
-    inputUsdPerMillion: runtime.inputUsdPerMillion,
-    outputUsdPerMillion: runtime.outputUsdPerMillion,
-    cacheReadUsdPerMillion: runtime.cacheReadUsdPerMillion,
-    cacheWriteUsdPerMillion: runtime.cacheWriteUsdPerMillion,
-    tiers: runtime.tiers,
-    match: { kind: "exactOrSnapshot", names: [normalized] },
-  };
-}
+const NANO_PER_USD = 1_000_000_000n;
 
-export function findModelPrice(model: string): ModelPrice | undefined {
-  const normalized = normalizeModel(model);
-  const runtime = activePricingSnapshot?.prices[normalized];
-  if (runtime) return runtimeToModelPrice(model, normalized, runtime);
-  return MODEL_PRICES.find((price) => priceMatches(price, normalized));
-}
-
-export interface FindModelRateInput {
-  /** Usage source id (the tool the event came from). */
-  toolId: string;
-  model: string;
-  occurredAt?: string;
+/** Convert nanoUSD (bigint) to a USD `number` for the display-layer CostEstimate. */
+function nanoToUsd(nano: bigint): number {
+  return Number(nano) / Number(NANO_PER_USD);
 }
 
 /**
- * Source-aware price lookup (audit P1). Checks the dynamic snapshot with the
- * new `toolId:model` key first, then falls back to the legacy `model` key
- * (dual-read), then the static declarative rules. The snapshot is currently
- * model-keyed, so the `toolId:model` key is absent and behavior is unchanged;
- * when per-tool live prices appear, the tool-specific key wins. Unknown models
- * return `null` (never a guessed price).
+ * Estimate the cost of a single usage event via the offline source-aware pricing
+ * registry (docs §5). Model prices come from the built-in rule packs; the
+ * exchange-rate snapshot only affects display currency, not the USD amount.
+ * Unknown / unpriced / not-billable models map to the legacy "unknown" cost
+ * (complete: false) so the UI shows "price unknown" rather than $0.
  */
-export function findModelRate(input: FindModelRateInput): ModelPrice | null {
-  const normalized = normalizeModel(input.model);
-  const prices = activePricingSnapshot?.prices;
-  let runtime: RuntimeModelPrice | undefined;
-  if (prices) {
-    runtime = activeSnapshotHasToolKeys
-      ? (prices[`${input.toolId}:${normalized}`] ?? prices[normalized])
-      : prices[normalized];
-  }
-  if (runtime) return runtimeToModelPrice(input.model, normalized, runtime);
-  return MODEL_PRICES.find((price) => priceMatches(price, normalized)) ?? null;
-}
-
 export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
-  const price = findModelRate({ toolId: event.source, model: event.model });
-  if (price == null) {
-    return unknownCost(event.model);
-  }
-  if (
-    event.cacheCreationInputTokens > 0 &&
-    price.cacheWriteUsdPerMillion == null
-  ) {
-    return unknownCost(event.model);
-  }
-
-  const tier =
-    price.tiers?.find(
-      (candidate) =>
-        candidate.maxInputTokens == null ||
-        event.inputTokens +
-          event.cachedInputTokens +
-          event.cacheCreationInputTokens <=
-          candidate.maxInputTokens,
-    ) ?? price;
-  const knownUsd =
-    perMillion(event.inputTokens, tier.inputUsdPerMillion) +
-    perMillion(event.outputTokens, tier.outputUsdPerMillion) +
-    perMillion(event.cachedInputTokens, tier.cacheReadUsdPerMillion) +
-    perMillion(
-      event.cacheCreationInputTokens,
-      price.cacheWriteUsdPerMillion ?? 0,
-    );
-  const cacheSavingsUsd = Math.max(
-    0,
-    perMillion(
-      event.cachedInputTokens,
-      tier.inputUsdPerMillion - tier.cacheReadUsdPerMillion,
-    ),
+  const registry = getDefaultPricingRegistry();
+  const policy = getToolPricingPolicy(event.source);
+  const resolution = resolvePrice(
+    registry,
+    {
+      toolId: event.source,
+      rawModel: event.model,
+      occurredAt: event.timestamp,
+      tokens: {
+        input: BigInt(event.inputTokens),
+        output: BigInt(event.outputTokens),
+        cacheRead: BigInt(event.cachedInputTokens),
+        cacheWrite: BigInt(event.cacheCreationInputTokens),
+        reasoningOutput: BigInt(event.reasoningOutputTokens),
+      },
+    },
+    policy,
   );
 
-  return {
-    knownUsd,
-    cacheSavingsUsd,
-    pricedEvents: 1,
-    unknownEvents: 0,
-    unknownModels: [],
-    complete: true,
-  };
+  if (
+    resolution.confidence === "exact" &&
+    resolution.knownUsdNano !== undefined
+  ) {
+    return {
+      knownUsd: nanoToUsd(resolution.knownUsdNano),
+      cacheSavingsUsd:
+        resolution.cacheSavingsUsdNano !== undefined
+          ? nanoToUsd(resolution.cacheSavingsUsdNano)
+          : 0,
+      pricedEvents: 1,
+      unknownEvents: 0,
+      unknownModels: [],
+      complete: true,
+    };
+  }
+  return unknownCost(event.model);
 }
 
 export function estimateUsageCost(events: LocalUsageEvent[]): CostEstimate {
