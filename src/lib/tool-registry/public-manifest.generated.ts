@@ -355,5 +355,16 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "security": "unsupported"
       }
     }
+  ],
+  "skillAgentOrder": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli",
+    "opencode",
+    "grok",
+    "hermes",
+    "openclaw",
+    "antigravity"
   ]
 };
