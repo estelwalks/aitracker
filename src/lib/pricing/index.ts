@@ -7,9 +7,9 @@ import type {
   LocalUsageTotals,
 } from "../local-usage";
 import type { UsagePeriod } from "../local-usage/presentation";
-import type { PricingSnapshot, RuntimeModelPrice } from "./types";
+import type { PricingSnapshot } from "./types";
 
-export type { PricingSnapshot, RuntimeModelPrice } from "./types";
+export type { PricingSnapshot } from "./types";
 export type {
   ToolPricingPolicy,
   PricingConfidence,

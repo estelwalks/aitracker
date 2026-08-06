@@ -4,26 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import type { LocalUsageEvent } from "../local-usage";
 import { buildPricingSnapshot } from "./dynamic.server.ts";
-import { applyPricingSnapshot, estimateEventCost } from "./index.ts";
 
-function event(model: string, inputTokens: number): LocalUsageEvent {
-  return {
-    source: "codex",
-    timestamp: "2026-07-28T10:00:00.000Z",
-    model,
-    project: "test",
-    inputTokens,
-    cachedInputTokens: 0,
-    cacheCreationInputTokens: 0,
-    outputTokens: 1_000_000,
-    reasoningOutputTokens: 0,
-    totalTokens: inputTokens + 1_000_000,
-  };
-}
-
-test("loads dynamic prices, official overrides, tiered Doubao pricing, and latest exchange rate", async () => {
+/**
+ * Model prices are resolved offline from the rule-pack registry (resolve.ts);
+ * this snapshot only carries exchange rates + the rule-pack version stamp. The
+ * frankfurter mock uses the real response shape `{ date, rates: { CNY, JPY, KRW } }`.
+ */
+test("loads latest exchange rate and stamps the offline rule-pack version", async () => {
   const homeDirectory = await mkdtemp(join(tmpdir(), "tt-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
@@ -31,43 +19,54 @@ test("loads dynamic prices, official overrides, tiered Doubao pricing, and lates
       return Response.json({
         date: "2026-07-28",
         base: "USD",
-        quote: "CNY",
-        rate: 8,
+        rates: { CNY: 8, JPY: 200, KRW: 1600 },
       });
     }
-    return Response.json({
-      "glm-5.2": {
-        input_cost_per_token: 0.0000014,
-        output_cost_per_token: 0.0000044,
-        cache_read_input_token_cost: 2.6e-7,
-      },
-    });
+    throw new Error(`unexpected fetch: ${url}`);
   };
 
   try {
-    const snapshot = await buildPricingSnapshot(
-      ["glm-5.2", "MiniMax-M2.7-highspeed", "doubao-seed-2-0-code"],
-      {
-        homeDirectory,
-        now: new Date("2026-07-28T12:00:00.000Z"),
-        fetcher,
-      },
-    );
-    assert.equal(snapshot.priceSource, "live");
+    const snapshot = await buildPricingSnapshot([], {
+      homeDirectory,
+      now: new Date("2026-07-28T12:00:00.000Z"),
+      fetcher,
+    });
     assert.equal(snapshot.exchangeRateSource, "live");
     assert.equal(snapshot.usdToCny, 8);
-    assert.equal(snapshot.prices["glm-5-2"]?.inputUsdPerMillion, 1.4);
-    assert.equal(
-      snapshot.prices["minimax-m2-7-highspeed"]?.outputUsdPerMillion,
-      2.4,
-    );
-    assert.equal(snapshot.prices["doubao-seed-2-0-code"]?.tiers?.length, 3);
+    assert.equal(snapshot.exchangeRates.JPY, 200);
+    assert.equal(snapshot.exchangeRates.KRW, 1600);
+    assert.equal(snapshot.exchangeRates.USD, 1);
+    assert.equal(typeof snapshot.pricingRulesVersion, "string");
+    assert.ok(snapshot.pricingRulesVersion.length > 0);
+  } finally {
+    await rm(homeDirectory, { recursive: true, force: true });
+  }
+});
 
-    applyPricingSnapshot(snapshot);
-    const doubao = estimateEventCost(event("doubao-seed-2-0-code", 200_000));
-    assert.equal(doubao.knownUsd * snapshot.usdToCny, 49.92);
+test("Doubao tiered pricing is resolved offline from rule packs (parity at USD@7.2)", async () => {
+  // Model pricing no longer flows through the snapshot; it is resolved per event
+  // from the rule-pack registry. The Doubao tiered case is covered in
+  // resolve.test.ts / parity.test.ts (200k input -> open tier -> 6.93 USD).
+  const { estimateEventCost } = await import("./index.ts");
+  const { applyPricingSnapshot } = await import("./index.ts");
+  try {
+    applyPricingSnapshot(null);
+    const cost = estimateEventCost({
+      source: "codex",
+      timestamp: "2026-07-28T10:00:00.000Z",
+      model: "doubao-seed-2-0-code",
+      project: "test",
+      inputTokens: 200_000,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 1_000_000,
+      reasoningOutputTokens: 0,
+      totalTokens: 1_200_000,
+    });
+    // tier3 (open): 0.2MTok*(9.6/7.2) + 1MTok*(48/7.2) = 6.9333... USD
+    assert.ok(Math.abs(cost.knownUsd - 6.933333333) < 1e-6);
+    assert.equal(cost.complete, true);
   } finally {
     applyPricingSnapshot(null);
-    await rm(homeDirectory, { recursive: true, force: true });
   }
 });
