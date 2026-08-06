@@ -9,7 +9,11 @@ import { describe, test } from "node:test";
 
 import type { ToolDefinition } from "./contracts.ts";
 import type { SharedPolicyPacks } from "./schema.ts";
-import { generatePublicManifest, LEGACY_TOOL_IDS } from "./manifest.ts";
+import {
+  generatePublicManifest,
+  LEGACY_TOOL_IDS,
+  manifestIsSafe,
+} from "./manifest.ts";
 import { PUBLIC_TOOL_MANIFEST } from "./public-manifest.generated.ts";
 
 function def(id: string): ToolDefinition {
@@ -77,6 +81,29 @@ describe("generatePublicManifest legacy projection (F6-T2)", () => {
         `legacy id "${id}" missing from the generated manifest`,
       );
     }
+  });
+});
+
+describe("generatePublicManifest platform projection", () => {
+  test("projects support facts but not platform path configuration", () => {
+    const manifest = generatePublicManifest([
+      {
+        ...def("platform-tool"),
+        platforms: {
+          macos: "supported",
+          windows: "planned",
+          windows11: "unsupported",
+          linux: "planned",
+        },
+      },
+    ]);
+    assert.deepEqual(manifest.tools[0].platforms, {
+      macos: "supported",
+      windows10: "planned",
+      windows11: "unsupported",
+      linux: "planned",
+    });
+    assert.equal(manifestIsSafe(manifest), true);
   });
 });
 

@@ -6,7 +6,7 @@
  * `public-manifest.generated.ts`, which is the ONLY registry-derived module the
  * browser bundle imports.
  */
-import type { ToolDefinition } from "./contracts.ts";
+import type { PlatformStatus, ToolDefinition } from "./contracts.ts";
 import type { SharedPolicyPacks } from "./schema.ts";
 
 export type PublicCapabilityMode = string;
@@ -18,6 +18,17 @@ export interface PublicCapabilityStatus {
   sessions: "resume" | "unsupported";
   market: "install-target" | "unsupported";
   security: "scan" | "unsupported";
+}
+
+/**
+ * Browser-safe platform availability. This deliberately describes support
+ * status only; path bases and resolved locations remain server-only.
+ */
+export interface PublicPlatformAvailability {
+  macos: PlatformStatus;
+  windows10: PlatformStatus;
+  windows11: PlatformStatus;
+  linux: PlatformStatus;
 }
 
 export interface PublicTool {
@@ -32,6 +43,7 @@ export interface PublicTool {
    * instead of hardcoding ids.
    */
   legacy?: boolean;
+  platforms: PublicPlatformAvailability;
   capabilities: PublicCapabilityStatus;
 }
 
@@ -65,6 +77,7 @@ export function generatePublicManifest(
         nameZh: def.display.nameZh,
         ...(def.display.icon ? { icon: def.display.icon } : {}),
         ...(LEGACY_TOOL_IDS.includes(def.id) ? { legacy: true } : {}),
+        platforms: projectPublicPlatforms(def, sharedPacks?.platformProfiles),
         capabilities: {
           usage: def.capabilities.usage.mode,
           skills: def.capabilities.skills.mode,
@@ -77,6 +90,31 @@ export function generatePublicManifest(
     ...(sharedPacks
       ? { skillAgentOrder: requireSkillAgentOrder(sharedPacks) }
       : {}),
+  };
+}
+
+/**
+ * Applies the registry's public support-status precedence without exposing
+ * any platform path or environment configuration. Shared policy defaults are
+ * used when available; the fallback preserves legacy registry behavior.
+ */
+function projectPublicPlatforms(
+  def: ToolDefinition,
+  profiles: SharedPolicyPacks["platformProfiles"] | undefined,
+): PublicPlatformAvailability {
+  const platforms = def.platforms;
+  const defaults = profiles?.defaultStatus ?? {
+    macos: "supported",
+    windows: "supported",
+    linux: "planned",
+  };
+  const macos = platforms?.macos ?? defaults.macos;
+  const windows = platforms?.windows ?? defaults.windows;
+  return {
+    macos,
+    windows10: platforms?.windows10 ?? windows,
+    windows11: platforms?.windows11 ?? windows,
+    linux: platforms?.linux ?? defaults.linux,
   };
 }
 
