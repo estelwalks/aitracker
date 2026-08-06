@@ -1813,12 +1813,11 @@ export async function scanLocalUsage(
       ).catch((error) => sourceFailure(adapter.source, error)),
     ),
   ]);
-  const bridge = await import("./aitracker-bridge.server.ts")
-    .then(({ collectAITrackerUsage }) =>
-      collectAITrackerUsage({ homeDirectory }),
-    )
-    .catch(() => ({ events: [], summaries: [] }));
 
+  // The AITracker bridge is excluded from the scan path (P1-4): bridge
+  // data is only reachable through the explicit manual migration entry point
+  // in aitracker-bridge.server.ts and is never merged into normal scans.
+  // The snapshot below is built exclusively from the native adapters above.
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
@@ -1855,24 +1854,17 @@ export async function scanLocalUsage(
     ...workbuddy.events,
     ...genericResults.flatMap((result) => result.events),
   ];
-  const nativeSources = new Set(nativeEvents.map((event) => event.source));
-  const events = [
-    ...nativeEvents,
-    ...bridge.events.filter((event) => !nativeSources.has(event.source)),
-  ].map((event) => ({
+  const events = nativeEvents.map((event) => ({
     ...event,
     project: normalizeProjectPath(event.project, homeDirectory),
   }));
-  const summaries = [
+  const summaryBySource = new Map<LocalUsageSource, LocalUsageSourceSummary>();
+  for (const summary of [
     claude.summary,
     codex.summary,
     workbuddy.summary,
     ...genericResults.map((result) => result.summary),
-  ];
-  const summaryBySource = new Map<LocalUsageSource, LocalUsageSourceSummary>();
-  for (const summary of bridge.summaries)
-    summaryBySource.set(summary.source, summary);
-  for (const summary of summaries) {
+  ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {
       summaryBySource.set(summary.source, summary);
     }

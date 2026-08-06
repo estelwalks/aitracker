@@ -8,9 +8,10 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
+import { ENV } from "../app-config";
 import { scanLocalUsage } from "./scanner.server.ts";
 import type { LocalUsageEvent } from "./types.ts";
 
@@ -809,6 +810,76 @@ test("TC-REG-005: external adapter/override files are never read", async () => {
       `custom: sources must not appear, got: ${sourceIds.join(", ")}`,
     );
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("P1-4: bridge queue data is never merged into normal scans", async () => {
+  const root = join(
+    tmpdir(),
+    `tt-bridge-isolation-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  await mkdir(homeDirectory, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+
+  // Plant a AITracker queue file with a canonical bridge source in the
+  // fake home. A scanner still wired to the bridge would read it and emit
+  // `github-copilot` events even though the fake home has no tool logs.
+  const queueFile = join(
+    homeDirectory,
+    ".trusttools",
+    "aitracker-runtime",
+    ".aitracker",
+    "tracker",
+    "queue.jsonl",
+  );
+  await mkdir(dirname(queueFile), { recursive: true });
+  await writeFile(
+    queueFile,
+    [
+      JSON.stringify({
+        hour_start: "2026-07-27T10:00:00",
+        source: "github-copilot",
+        model: "gpt-4o",
+        project_key: "demo",
+        input_tokens: 100,
+        output_tokens: 50,
+        total_tokens: 150,
+      }),
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  // Even with the bridge opt-in env var set, the scan path must not execute
+  // or merge the bridge.
+  process.env[ENV.ENABLE_LEGACY_BRIDGE] = "1";
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const bridgeSources: LocalUsageEvent["source"][] = [
+      "github-copilot",
+      "gemini-cli",
+      "roo-code",
+    ];
+    const presentSources = new Set(
+      snapshot.details.map((event) => event.source),
+    );
+    for (const source of bridgeSources) {
+      assert.ok(
+        !presentSources.has(source),
+        `bridge source ${source} must not appear in scan events`,
+      );
+    }
+    // The fake home has no tool logs, so no events at all are expected.
+    assert.equal(snapshot.events, 0);
+  } finally {
+    delete process.env[ENV.ENABLE_LEGACY_BRIDGE];
     await rm(root, { recursive: true, force: true });
   }
 });
