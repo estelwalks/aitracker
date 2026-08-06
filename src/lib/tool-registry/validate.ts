@@ -188,18 +188,21 @@ export function validateToolDefinitions(
     }
     const locations = def.detection.locations;
     if (locations) {
-      const seenTargets = new Set<string>();
+      const seenDeclarations = new Set<string>();
       for (const loc of locations) {
-        for (const target of loc.targets) {
-          if (seenTargets.has(target)) {
-            diag(
-              id,
-              "duplicate-platform-location",
-              `duplicate detection target "${target}" (same-level duplicate fails the build)`,
-            );
-          }
-          seenTargets.add(target);
+        const key = JSON.stringify({
+          targets: [...loc.targets].sort(),
+          base: loc.base,
+          path: loc.path,
+        });
+        if (seenDeclarations.has(key)) {
+          diag(
+            id,
+            "duplicate-platform-location",
+            `duplicate detection location (same targets/base/path) fails the build`,
+          );
         }
+        seenDeclarations.add(key);
         if (isUnsafePath(loc.path)) {
           diag(
             id,

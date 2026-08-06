@@ -29,7 +29,7 @@ import {
 } from "./validate.ts";
 import { TOOL_DEFINITIONS } from "./tools/index.ts";
 import type { SharedPolicyPacks } from "./schema.ts";
-import { projectBase } from "./loader.ts";
+import { loadBuiltinDefinitions, projectBase } from "./loader.ts";
 
 export interface UsagePlan {
   toolId: string;
@@ -177,13 +177,19 @@ export function findModelRateIn(
 }
 
 // ---------------------------------------------------------------------------
-// Default-registry convenience wrappers (compiled lazily from TOOL_DEFINITIONS).
-// Used by migrated consumers. M1 tests exercise compileToolRegistry directly;
-// these wrappers are covered once M2 populates TOOL_DEFINITIONS.
+// Default-registry convenience wrappers. Compiled lazily from the v1.5 JSON
+// definitions (definitions.generated.ts) via the loader - runtime never reads
+// JSON or scans directories. `TOOL_DEFINITIONS` (the legacy TS configs) stays
+// importable for the double-read parity tests until Phase 5 removes it.
 
 let _default: CompiledRegistry | null = null;
 export function getDefaultRegistry(): CompiledRegistry {
-  if (!_default) _default = compileToolRegistry(TOOL_DEFINITIONS);
+  if (!_default) {
+    const builtin = loadBuiltinDefinitions();
+    _default = compileToolRegistry(builtin.definitions, {
+      sharedPacks: builtin.sharedPacks,
+    });
+  }
   return _default;
 }
 

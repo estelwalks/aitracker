@@ -21,6 +21,11 @@ import type {
 } from "./contracts.ts";
 import type { RawToolDefinition, SharedPolicyPacks } from "./schema.ts";
 import { PRICING_PACKS } from "../pricing/pricing-definitions.generated.ts";
+import {
+  RAW_TOOL_DEFINITIONS,
+  SHARED_POLICY_PACKS,
+  TOOL_REGISTRY_VERSION,
+} from "./definitions.generated.ts";
 
 /**
  * The JSON-world `base` narrows to `string` in TypeScript (enum + env regex);
@@ -244,4 +249,26 @@ export function validateRulePackRefs(
     }
   }
   return errors;
+}
+
+export interface BuiltinDefinitions {
+  definitions: readonly ToolDefinition[];
+  sharedPacks: SharedPolicyPacks;
+  toolRegistryVersion: string;
+}
+
+/**
+ * Load the built-in definitions from the build-time generated module. Runtime
+ * never scans directories, reads JSON, or accepts external paths (docs §4/§5).
+ */
+export function loadBuiltinDefinitions(): BuiltinDefinitions {
+  const errors = validateRulePackRefs(RAW_TOOL_DEFINITIONS);
+  if (errors.length > 0) {
+    throw new Error(`Rule-pack reference errors:\n${errors.join("\n")}`);
+  }
+  return {
+    definitions: compileRawTools(RAW_TOOL_DEFINITIONS, SHARED_POLICY_PACKS),
+    sharedPacks: SHARED_POLICY_PACKS,
+    toolRegistryVersion: TOOL_REGISTRY_VERSION,
+  };
 }

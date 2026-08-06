@@ -1,0 +1,75 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "github-copilot",
+  "display": {
+    "name": "GitHub Copilot",
+    "nameZh": "GitHub Copilot"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": [
+          "macos",
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "github-copilot"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic",
+      "paths": [
+        {
+          "targets": [
+            "macos",
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "github-copilot",
+          "glob": "**/*usage*.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "github-copilot",
+          "glob": "**/*usage*.json",
+          "format": "json"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "github-copilot",
+          "glob": "**/*usage*.json",
+          "format": "json"
+        }
+      ]
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "pricing": {
+    "billingMode": "api-metered",
+    "fallbackProfileRef": "unpriced-v1",
+    "rulePackRefs": []
+  }
+}
