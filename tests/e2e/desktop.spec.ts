@@ -1,42 +1,22 @@
-import { gzipSync } from "node:zlib";
-
 import { expect, test, type Page } from "playwright/test";
 
-function writeTarOctal(
-  buffer: Buffer,
-  offset: number,
-  length: number,
-  value: number,
-) {
-  const octal = value.toString(8).padStart(length - 1, "0");
-  buffer.write(octal, offset, length - 1, "ascii");
-  buffer[offset + length - 1] = 0;
-}
+/** 安全扫描的 SKILL.md fixture：不含 `---` 等会命中注入规则的特征。 */
+const SAFE_SKILL_MD =
+  "# Safe fixture\n\nThis is a harmless skill fixture for the e2e test.\n";
 
-function createTarGz(name: string, content: string): Buffer {
-  const body = Buffer.from(content, "utf8");
-  const header = Buffer.alloc(512);
-
-  header.write(name, 0, 100, "utf8");
-  writeTarOctal(header, 100, 8, 0o644);
-  writeTarOctal(header, 108, 8, 0);
-  writeTarOctal(header, 116, 8, 0);
-  writeTarOctal(header, 124, 12, body.length);
-  writeTarOctal(header, 136, 12, Math.floor(Date.now() / 1000));
-  header.fill(0x20, 148, 156);
-  header[156] = "0".charCodeAt(0);
-  header.write("ustar\0", 257, 6, "ascii");
-  header.write("00", 263, 2, "ascii");
-
-  const checksum = header.reduce((sum, byte) => sum + byte, 0);
-  const checksumText = checksum.toString(8).padStart(6, "0");
-  header.write(checksumText, 148, 6, "ascii");
-  header[154] = 0;
-  header[155] = 0x20;
-
-  const padding = Buffer.alloc((512 - (body.length % 512)) % 512);
-  return gzipSync(Buffer.concat([header, body, padding, Buffer.alloc(1024)]));
-}
+test.beforeEach(async ({ page }) => {
+  // 固定浏览器系统语言为 zh-CN 且无存储偏好，保证默认语言为中文
+  // （与 locale.spec.ts 的既有做法一致；否则 Playwright 默认 en-US 会在
+  // 客户端 i18n 收敛时把界面翻成英文，破坏中文文案断言）。
+  await page.addInitScript(() => {
+    window.localStorage.removeItem("tt-locale");
+    window.localStorage.removeItem("tt-locale-mode");
+    Object.defineProperty(window.navigator, "language", {
+      get: () => "zh-CN",
+      configurable: true,
+    });
+  });
+});
 
 const routes = [
   { path: "/", heading: "首页总览" },
@@ -77,34 +57,28 @@ for (const route of routes) {
 test("首页展示真实数据", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByText("真实数据", { exact: true })).toBeVisible();
-  await expect(page.getByText(/真实本地日志/)).toBeVisible();
+  // 真实本地快照信号：统计区间带最近同步时间戳 + 已同步徽标
+  await expect(page.getByText(/统计区间：今日 · 最近同步/)).toBeVisible();
+  await expect(page.getByText("已同步", { exact: true })).toBeVisible();
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
 });
 
-test("首页展示周时热力图和整体预算提示", async ({ page }) => {
+test("首页展示 7 × 24 热力图与真实事件聚合", async ({ page }) => {
   await page.goto("/");
 
   await expect(
-    page.getByText("整体费用预算预警", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/非 Provider 预算/)).toBeVisible();
-  await expect(
-    page.getByText("周 × 时使用热力图", { exact: true }),
+    page.getByText("7 × 24 消耗热力图", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("本机时区 · 真实事件 timestamp 聚合", { exact: true }),
+    page.getByText("按周导航 · 本机时区", { exact: true }),
   ).toBeVisible();
 
   const heatmapCells = page.getByLabel(
     /周[一二三四五六日] \d+ 时，\d+ 个事件，\d+ Token/,
   );
-  const emptyHeatmap = page.getByText(
-    "暂无可聚合的真实事件时间，热力图保持为空。",
-    {
-      exact: true,
-    },
-  );
+  const emptyHeatmap = page.getByText("当前周无可用事件，热力图保持为空。", {
+    exact: true,
+  });
   expect(
     (await heatmapCells.count()) > 0 || (await emptyHeatmap.isVisible()),
   ).toBe(true);
@@ -113,7 +87,7 @@ test("首页展示周时热力图和整体预算提示", async ({ page }) => {
 test("Skill 展示真实数量与轮询说明", async ({ page }) => {
   await page.goto("/skills");
 
-  await expect(page.getByText(/\d+ 个真实 Skill/)).toBeVisible();
+  await expect(page.getByText(/\d+ 个本地 Skill/)).toBeVisible();
   await expect(
     page.getByText("页面可见时每 5 秒按变更指纹轮询（非原生 watcher）", {
       exact: true,
@@ -132,19 +106,19 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
   await expect(page.getByText("已选 2 项", { exact: true })).toBeVisible();
 
   const selectAll = page.getByRole("checkbox", {
-    name: "全选当前筛选",
+    name: "全选当前页",
     exact: true,
   });
   await selectAll.check();
   await expect(selectAll).toBeChecked();
   await expect(
-    page.getByRole("button", { name: "批量清理", exact: true }),
+    page.getByRole("button", { name: "批量卸载", exact: true }),
   ).toBeEnabled();
 
   await selectAll.uncheck();
   await expect(page.getByText("已选 0 项", { exact: true })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "批量清理", exact: true }),
+    page.getByRole("button", { name: "批量卸载", exact: true }),
   ).toBeDisabled();
 });
 
@@ -153,113 +127,94 @@ test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
 
   const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
   await search.fill("draw.io");
-  await search.press("Enter");
-  await expect(page.getByText("实时数据", { exact: true })).toBeVisible({
+  await expect(page.getByText(/关键词“draw\.io”/)).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText(/关键词“draw\.io”/)).toBeVisible();
+  await expect(page.getByText(/数据更新于/)).toBeVisible();
   await expect(
     page
-      .locator("article")
+      .locator("tbody tr")
       .filter({ hasText: /draw.?io/i })
       .first(),
   ).toBeVisible();
 });
 
-test("安全 AI 开关默认关闭且可开启", async ({ page }) => {
+test("安全页默认展示本机扫描额度且未执行扫描", async ({ page }) => {
   await page.goto("/security");
 
-  const aiReview = page.getByRole("checkbox");
-  await expect(aiReview).not.toBeChecked();
-  await aiReview.check();
-  await expect(aiReview).toBeChecked();
+  // 新会话默认额度：今日剩余 10 / 10 次，历史为空
+  await expect(
+    page.getByText("今日剩余 10 / 10 次", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("尚未执行扫描。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
 });
 
-test("安全页本机解包扫描运行时生成的安全 tar.gz", async ({ page }) => {
+test("安全页本机扫描 SKILL.md 运行时生成真实安全报告", async ({ page }) => {
   await page.goto("/security");
 
-  const aiReview = page.getByRole("checkbox");
-  await expect(aiReview).not.toBeChecked();
-  await expect(page.getByText("今日 0/10 次", { exact: true })).toBeVisible();
-  await expect(page.getByText(/^当前时间 \d{2}:\d{2}:\d{2}$/)).toBeVisible();
+  await expect(
+    page.getByText("今日剩余 10 / 10 次", { exact: true }),
+  ).toBeVisible();
 
-  const archive = createTarGz(
-    "safe-skill/SKILL.md",
-    "---\nname: safe-e2e-skill\ndescription: harmless fixture\n---\n\n# Safe fixture\n",
-  );
-  await page.locator('input[type="file"][accept*=".tar"]').setInputFiles({
-    name: "safe-e2e-skill.tar.gz",
-    mimeType: "application/gzip",
-    buffer: archive,
+  await page.locator('input[type="file"][accept*=".md"]').setInputFiles({
+    name: "SKILL.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from(SAFE_SKILL_MD),
   });
 
   await expect(
-    page.getByText("压缩包已在本机安全解包并完成真实扫描", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/safe-e2e-skill\.tar\.gz · 1 个条目/),
-  ).toBeVisible();
-  await expect(
-    page.getByText("安全报告 · 1 个文件", { exact: true }),
+    page.getByText("安全报告 · SKILL.md", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("综合判定：安全", { exact: true })).toBeVisible();
-  await expect(page.getByText("今日 1/10 次", { exact: true })).toBeVisible();
-  await expect(aiReview).not.toBeChecked();
-  await expect(page.getByText("未请求", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("未启用 AI 二次审查，结论仅来自本地静态规则。", {
-      exact: true,
-    }),
+    page.getByText("11 个维度均未命中静态风险规则。", { exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByText("今日剩余 9 / 10 次", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("本地扫描完成：安全", { exact: true }),
+  ).toBeVisible();
+  // 检测历史写入真实扫描条目
+  await expect(page.getByText("展示 1 / 1 条", { exact: true })).toBeVisible();
 });
 
 test("设置加载完成", async ({ page }) => {
   await page.goto("/settings");
 
-  await expect(page.getByText("已载入本机设置", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "设置", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("界面语言", { exact: true })).toBeVisible();
+  await expect(page.getByText("数据路径", { exact: true })).toBeVisible();
+  await expect(page.getByText("清除缓存", { exact: true })).toBeVisible();
 });
 
-test("本地采集状态仅在设置的数据采集分类展示真实结果", async ({ page }) => {
+test("本地采集状态仅在数据来源页展示真实结果", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
 
   await page.goto("/sources");
-  await expect(page.getByText("真实数据源", { exact: true })).toHaveCount(0);
-
-  await page.goto("/settings");
-  await page.getByRole("button", { name: "数据采集", exact: true }).click();
-
-  await expect(page.getByText("真实数据源", { exact: true })).toBeVisible();
-  await expect(page.getByText(/本地采集状态 · 生成时间/)).toBeVisible();
-  await expect(page.getByText(/生成时间：/)).toBeVisible();
-  await expect(page.getByTestId("local-usage-adapter")).toHaveCount(10);
-  await expect(page.getByText(/文件读取/).first()).toBeVisible();
-  await expect(page.getByText(/^事件 \d+/).first()).toBeVisible();
-  await expect(page.getByText(/^异常行 \d+$/).first()).toBeVisible();
-  await expect(page.getByText("真实数据", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "数据来源", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("已接入 / 总探测", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("采集事件总数", { exact: true })).toBeVisible();
+  // 逐工具真实状态：存在有数据的工具与解析说明
+  await expect(page.getByText("有数据", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/采集事件 \d+/).first()).toBeVisible();
+  await expect(page.getByText(/日志解析：/).first()).toBeVisible();
 });
 
-test("设置页 Provider 预算可添加并在当前隔离上下文持久化", async ({ page }) => {
+test("设置页偏好可修改并在当前隔离上下文持久化", async ({ page }) => {
   await page.goto("/settings");
-  await page.getByRole("button", { name: "预警", exact: true }).click();
 
-  await page
-    .getByRole("textbox", { name: "服务商名称", exact: true })
-    .fill("E2E Provider");
-  await page.getByLabel("每日预算", { exact: true }).fill("11");
-  await page.getByLabel("每周预算", { exact: true }).fill("55");
-  await page.getByLabel("每月预算", { exact: true }).fill("199");
-  await page.getByRole("button", { name: "新增", exact: true }).click();
-
-  await expect(page.getByText("E2E Provider", { exact: true })).toBeVisible();
-  await expect(page.getByText("日 ¥11", { exact: true })).toBeVisible();
-  await expect(page.getByText("周 ¥55", { exact: true })).toBeVisible();
-  await expect(page.getByText("月 ¥199", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "USD", exact: true }).click();
+  await expect(page).toHaveURL(/currency=USD/);
 
   await page.reload();
-  await page.getByRole("button", { name: "预警", exact: true }).click();
-  await expect(page.getByText("E2E Provider", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "删除服务商预算 E2E Provider" }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/currency=USD/);
 });
