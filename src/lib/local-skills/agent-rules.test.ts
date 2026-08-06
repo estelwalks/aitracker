@@ -7,7 +7,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SKILL_AGENT_ORDER, SKILL_AGENTS } from "./agent-rules.ts";
+import {
+  requireSkillAgentOrder,
+  SKILL_AGENT_ORDER,
+  SKILL_AGENTS,
+} from "./agent-rules.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -33,5 +37,32 @@ describe("skill-market policy derivation (TC-POL-001)", () => {
   test("SKILL_AGENTS labels stay in canonical order and are unique", () => {
     assert.equal(SKILL_AGENTS.length, policy.skillAgentOrder.length);
     assert.equal(new Set(SKILL_AGENTS).size, SKILL_AGENTS.length);
+  });
+});
+
+describe("requireSkillAgentOrder (F6-T1: no fallback)", () => {
+  test("a manifest without skillAgentOrder fails fast at module load", () => {
+    const stale = { configVersion: 1, tools: [] } as const;
+    assert.throws(() => requireSkillAgentOrder(stale), /skillAgentOrder/);
+  });
+
+  test("an empty order fails fast", () => {
+    const stale = {
+      configVersion: 1,
+      tools: [],
+      skillAgentOrder: [],
+    } as const;
+    assert.throws(() => requireSkillAgentOrder(stale), /skillAgentOrder/);
+  });
+
+  test("a valid order passes through unchanged", () => {
+    assert.deepEqual(
+      requireSkillAgentOrder({
+        configVersion: 1,
+        tools: [],
+        skillAgentOrder: ["claude-code", "codex"],
+      }),
+      ["claude-code", "codex"],
+    );
   });
 });

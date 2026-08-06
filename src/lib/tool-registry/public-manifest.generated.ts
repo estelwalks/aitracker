@@ -359,6 +359,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "aipy",
       "name": "AiPy",
       "nameZh": "AiPy",
+      "legacy": true,
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
@@ -372,6 +373,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cline",
       "name": "Cline",
       "nameZh": "Cline",
+      "legacy": true,
       "capabilities": {
         "usage": "adapter",
         "skills": "unsupported",
