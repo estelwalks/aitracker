@@ -109,7 +109,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 
 首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会在 `~/.trusttools/cache/local-usage-index-v10.json` 建立仅包含结构化 Token 事件的文件级索引。后续按增量游标和文件变化刷新，缓存使用临时文件加原子重命名写入。
 
-采集范围与 Token Tracker 的 27 个 AI 工具保持兼容，并额外支持 AiPy。项目原有的 Cline 读取仍然保留。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置兼容采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 AITracker 原生 reader 作为校验与降级路径。
+采集范围覆盖 27 个产品目录工具，并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 AITracker 原生 reader 作为校验与降级路径。
 
 真实采集实现位于：
 
