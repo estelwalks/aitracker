@@ -88,3 +88,24 @@
 | #   | 工具 | 字段 | 旧行为 | 新行为 | 批准 |
 | --- | ---- | ---- | ------ | ------ | ---- |
 |     |      |      |        |        |      |
+
+## 实施完成（P6-T3，2026-08-06）
+
+本迁移（Phase 3-6，对应总计划 M1-M6 的工具注册表部分）已全部完成并提交（commit 3c2fbd3..e7a8a0d）：
+
+| 决策                   | 落实状态                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| D1 转换方式            | ✅ convert-tool-configs.mjs 一次性转换 29 定义（P5-T1 已删），sub-agent 独立复核 29/29 逐字段一致                          |
+| D2 security-rules 位置 | ✅ 保持 src/lib/security/；definitions/_rules/README.md 指针落盘                                                           |
+| D3 pricing 位置        | ✅ 保持 src/lib/pricing/rules/；loader 经 pricing-definitions.generated.ts 解析引用                                        |
+| D4 平台分类            | ✅ locations 全 target 展开与旧 roots 逐项相等（parity 断言）；Windows 探针收敛、Linux XDG 展开按预期（expected-diff D-A） |
+| D5 platforms 语义      | ✅ 29/29 `{macos:supported, windows:supported, linux:planned}`；linux planned 不产生扫描计划（TC-PLAT-002）                |
+| D6 canonicalSource     | ✅ 全量 canonical JSON；toolRegistryVersion = sha256 进缓存指纹                                                            |
+| D7 顺序保真            | ✅ definitions/manifest.json 显式 29 条有序清单；生成脚本按序输出                                                          |
+| D8 缓存实现留 TS       | ✅ PERSISTENT_CACHE_VERSION/缓存文件名策略；scanner-policy.json 只配预算事实                                               |
+| D9 SQL 防写            | ✅ schema refine（SELECT 开头、无 ;/ATTACH/DROP/INSERT/UPDATE/DELETE/PRAGMA）                                              |
+| D10 context capability | ✅ claude-code/claude-context-v1、codex/codex-context-v1 native 注册；其余 unsupported                                     |
+| D11 findModelRate 保留 | ✅ 保留（无内联规则返回 null）；tool-policy 切至 getPricingPolicyRefs（P4-T5）                                             |
+| D12 executable         | ✅ claude-code/codex/grok 声明 shared；其余空                                                                              |
+
+**质量门禁（P6-T1）**：lint 0 error / tsc 0 error / 348 单测全过（含 TC-REG-001~006、TC-PLAT-001/002、TC-POL/SKL/USG/SES/CTX/SEC/BRG）/ 4 个 generate 幂等 / verify:tool-registry + verify:pricing-rules OK / e2e 19/19（修复 10 个过期 UI 文案失败）/ build + build:electron OK。
