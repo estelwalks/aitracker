@@ -27,7 +27,6 @@ import {
   validateToolDefinitions,
   type ValidationDiagnostic,
 } from "./validate.ts";
-import { TOOL_DEFINITIONS } from "./tools/index.ts";
 import type { SharedPolicyPacks } from "./schema.ts";
 import { loadBuiltinDefinitions, projectBase } from "./loader.ts";
 
@@ -179,8 +178,7 @@ export function findModelRateIn(
 // ---------------------------------------------------------------------------
 // Default-registry convenience wrappers. Compiled lazily from the v1.5 JSON
 // definitions (definitions.generated.ts) via the loader - runtime never reads
-// JSON or scans directories. `TOOL_DEFINITIONS` (the legacy TS configs) stays
-// importable for the double-read parity tests until Phase 5 removes it.
+// JSON or scans directories.
 
 let _default: CompiledRegistry | null = null;
 export function getDefaultRegistry(): CompiledRegistry {

@@ -133,10 +133,28 @@ for (const entry of manifest.tools) {
     process.exit(1);
   }
 }
-// Note: the "no *.config.ts anywhere" assertion is re-enabled in P5-T1, once
-// the legacy TS definitions are deleted (the registry already compiles from
-// the JSON loader; tools/index.ts is kept only for the double-read parity
-// tests until then).
+// TC-REG-006 (completed): no legacy TS config anywhere in the registry.
+const { execFileSync } = await import("node:child_process");
+let grep = "";
+try {
+  grep = execFileSync(
+    "rg",
+    [
+      "-l",
+      "--no-messages",
+      "config\\.ts|define-tool|tools/index",
+      "src/lib/tool-registry",
+    ],
+    { encoding: "utf8" },
+  ).trim();
+} catch (e) {
+  // rg exits 1 when there are no matches - which is the desired outcome.
+  if (e.status !== 1) throw e;
+}
+if (grep) {
+  console.error(`\nFAIL: legacy TS config references remain: ${grep}`);
+  process.exit(1);
+}
 
 // Drift check: committed generated modules must match a fresh generation.
 const { execFileSync: run } = await import("node:child_process");
