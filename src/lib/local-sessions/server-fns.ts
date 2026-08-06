@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { AppError } from "../errors";
+import { listSessionTools } from "../tool-registry/registry.ts";
 
 import type {
   SessionFilter,
@@ -9,11 +10,12 @@ import type {
   SessionSummary,
 } from "./types.ts";
 
-const ALLOWED_SOURCES: readonly SessionSource[] = [
-  "claude-code",
-  "codex",
-  "grok",
-];
+/**
+ * Session-resumable sources (P4-T4): derived from the registry's
+ * `sessions.mode = "resume"` capability instead of a hardcoded whitelist.
+ */
+const ALLOWED_SOURCES: readonly SessionSource[] =
+  listSessionTools() as readonly SessionSource[];
 const ALLOWED_RANGES: readonly SessionFilter["range"][] = [
   "all",
   "7d",
