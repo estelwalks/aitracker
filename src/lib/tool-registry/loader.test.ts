@@ -14,7 +14,7 @@ import {
   compileRawTool,
   projectBase,
   projectBaseWithEnv,
-  validateRulePackRefs,
+  validateModelObservationProfiles,
 } from "./loader.ts";
 import { validateToolDefinitions } from "./validate.ts";
 
@@ -277,20 +277,28 @@ describe("compileRawTool - projection", () => {
     assert.deepEqual(def.detection.executableSpec?.windows, ["codex.exe"]);
   });
 
-  test("pricing policy metadata survives; rules default to absent", () => {
+  test("modelObservation projects into pricing with defaults; legacy fields absent", () => {
     const def = compileRawTool(
       rawTool({
-        pricing: {
-          billingMode: "api-metered",
-          fallbackProfileRef: "unpriced-v1",
-          rulePackRefs: ["openai"],
+        modelObservation: {
+          modelField: "model",
+          evidence: { endpointField: "endpoint" },
         },
       }),
       packs,
     );
-    assert.equal(def.pricing?.billingMode, "api-metered");
-    assert.deepEqual(def.pricing?.rulePackRefs, ["openai"]);
+    assert.equal(def.pricing?.modelField, "model");
+    assert.equal(def.pricing?.normalizeProfile, "generic-normalize-v1");
+    assert.deepEqual(def.pricing?.evidence, { endpointField: "endpoint" });
+    // P1-1: tools no longer hold rates or billing modes.
+    assert.equal(def.pricing?.billingMode, undefined);
+    assert.deepEqual(def.pricing?.rulePackRefs, undefined);
     assert.equal(def.pricing?.rules, undefined);
+  });
+
+  test("modelObservation absent means no pricing projection", () => {
+    const def = compileRawTool(rawTool(), packs);
+    assert.equal(def.pricing, undefined);
   });
 });
 
@@ -334,31 +342,24 @@ describe("compileRawTool - compiled definitions pass validation", () => {
   });
 });
 
-describe("validateRulePackRefs", () => {
-  test("known pack ids pass", () => {
+describe("validateModelObservationProfiles", () => {
+  test("known normalize profiles pass (absent defaults to generic-normalize-v1)", () => {
     const raws = [
+      rawTool({ modelObservation: { modelField: "model" } }),
       rawTool({
-        pricing: {
-          billingMode: "api-metered",
-          fallbackProfileRef: "unpriced-v1",
-          rulePackRefs: ["openai", "tool-routing"],
-        },
+        modelObservation: { normalizeProfile: "generic-normalize-v1" },
       }),
     ];
-    assert.deepEqual(validateRulePackRefs(raws), []);
+    assert.deepEqual(validateModelObservationProfiles(raws), []);
   });
 
-  test("unknown pack id is reported with the tool id", () => {
+  test("unknown normalize profile is reported with the tool id", () => {
     const raws = [
       rawTool({
-        pricing: {
-          billingMode: "api-metered",
-          fallbackProfileRef: "unpriced-v1",
-          rulePackRefs: ["does-not-exist"],
-        },
+        modelObservation: { normalizeProfile: "does-not-exist" },
       }),
     ];
-    const errors = validateRulePackRefs(raws);
+    const errors = validateModelObservationProfiles(raws);
     assert.equal(errors.length, 1);
     assert.ok(errors[0].includes("loader-tool"));
     assert.ok(errors[0].includes("does-not-exist"));

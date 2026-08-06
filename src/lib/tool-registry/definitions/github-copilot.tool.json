@@ -14,10 +14,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "configHome",
         "path": "github-copilot"
       }
@@ -29,29 +26,21 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": [
-            "macos",
-            "linux"
-          ],
+          "targets": ["macos", "linux"],
           "base": "configHome",
           "path": "github-copilot",
           "glob": "**/*usage*.jsonl",
           "format": "jsonl"
         },
         {
-          "targets": [
-            "macos"
-          ],
+          "targets": ["macos"],
           "base": "appData",
           "path": "github-copilot",
           "glob": "**/*usage*.json",
           "format": "json"
         },
         {
-          "targets": [
-            "windows10",
-            "windows11"
-          ],
+          "targets": ["windows10", "windows11"],
           "base": "appDataRoaming",
           "path": "github-copilot",
           "glob": "**/*usage*.json",
@@ -67,9 +56,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "api-metered",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

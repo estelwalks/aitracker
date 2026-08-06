@@ -14,12 +14,7 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".openclaw"
       }
@@ -33,10 +28,7 @@
           "path": ".openclaw/workspace/skills"
         }
       ],
-      "markers": [
-        "SKILL.md",
-        "skill.md"
-      ],
+      "markers": ["SKILL.md", "skill.md"],
       "maxDepth": 3
     }
   },
@@ -52,9 +44,7 @@
     "market": "install-target",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "unsupported",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

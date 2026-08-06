@@ -14,20 +14,12 @@
   "detection": {
     "locations": [
       {
-        "targets": [
-          "macos",
-          "linux"
-        ],
+        "targets": ["macos", "linux"],
         "base": "dataHome",
         "path": "goose"
       },
       {
-        "targets": [
-          "macos",
-          "windows10",
-          "windows11",
-          "linux"
-        ],
+        "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
         "path": ".goose"
       }
@@ -45,9 +37,7 @@
     "market": "unsupported",
     "security": "unsupported"
   },
-  "pricing": {
-    "billingMode": "unsupported",
-    "fallbackProfileRef": "unpriced-v1",
-    "rulePackRefs": []
+  "modelObservation": {
+    "modelField": "model"
   }
 }

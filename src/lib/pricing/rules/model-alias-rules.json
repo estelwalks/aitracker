@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-08-06",
+  "rules": [
+    {
+      "id": "openai-gpt-5.6-sol-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-sol"
+      },
+      "convertTo": "gpt-5.6-sol",
+      "rateRef": "openai/gpt-5.6-sol/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.6-sol-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-sol"
+      },
+      "convertTo": "gpt-5.6-sol",
+      "rateRef": "openai/gpt-5.6-sol/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.6-terra-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-terra"
+      },
+      "convertTo": "gpt-5.6-terra",
+      "rateRef": "openai/gpt-5.6-terra/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.6-terra-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-terra"
+      },
+      "convertTo": "gpt-5.6-terra",
+      "rateRef": "openai/gpt-5.6-terra/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.6-luna-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.6-luna"
+      },
+      "convertTo": "gpt-5.6-luna",
+      "rateRef": "openai/gpt-5.6-luna/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.6-luna-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.6-luna"
+      },
+      "convertTo": "gpt-5.6-luna",
+      "rateRef": "openai/gpt-5.6-luna/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.5-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.5"
+      },
+      "convertTo": "gpt-5.5",
+      "rateRef": "openai/gpt-5.5/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.5-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.5"
+      },
+      "convertTo": "gpt-5.5",
+      "rateRef": "openai/gpt-5.5/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.4-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.4"
+      },
+      "convertTo": "gpt-5.4",
+      "rateRef": "openai/gpt-5.4/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.4-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.4"
+      },
+      "convertTo": "gpt-5.4",
+      "rateRef": "openai/gpt-5.4/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.2-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.2"
+      },
+      "convertTo": "gpt-5.2",
+      "rateRef": "openai/gpt-5.2/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.2-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.2"
+      },
+      "convertTo": "gpt-5.2",
+      "rateRef": "openai/gpt-5.2/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.1-codex-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5.1-codex"
+      },
+      "convertTo": "gpt-5.1-codex",
+      "rateRef": "openai/gpt-5.1-codex/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5.1-codex-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5.1-codex"
+      },
+      "convertTo": "gpt-5.1-codex",
+      "rateRef": "openai/gpt-5.1-codex/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5-codex-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "gpt-5-codex"
+      },
+      "convertTo": "gpt-5-codex",
+      "rateRef": "openai/gpt-5-codex/2026-07-27"
+    },
+    {
+      "id": "openai-gpt-5-codex-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "gpt-5-codex"
+      },
+      "convertTo": "gpt-5-codex",
+      "rateRef": "openai/gpt-5-codex/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-opus-4-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-opus-4"
+      },
+      "convertTo": "claude-opus-4",
+      "rateRef": "anthropic/claude-opus-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-opus-4-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-opus-4"
+      },
+      "convertTo": "claude-opus-4",
+      "rateRef": "anthropic/claude-opus-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-sonnet-4-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-sonnet-4"
+      },
+      "convertTo": "claude-sonnet-4",
+      "rateRef": "anthropic/claude-sonnet-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-sonnet-4-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-sonnet-4"
+      },
+      "convertTo": "claude-sonnet-4",
+      "rateRef": "anthropic/claude-sonnet-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-7-sonnet-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-3-7-sonnet"
+      },
+      "convertTo": "claude-3-7-sonnet",
+      "rateRef": "anthropic/claude-3-7-sonnet/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-7-sonnet-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-3-7-sonnet"
+      },
+      "convertTo": "claude-3-7-sonnet",
+      "rateRef": "anthropic/claude-3-7-sonnet/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-5-haiku-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-3-5-haiku"
+      },
+      "convertTo": "claude-3-5-haiku",
+      "rateRef": "anthropic/claude-3-5-haiku/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-5-haiku-prefix",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-3-5-haiku"
+      },
+      "convertTo": "claude-3-5-haiku",
+      "rateRef": "anthropic/claude-3-5-haiku/2026-07-27"
+    },
+    {
+      "id": "deepseek-v4-pro-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "deepseek-v4-pro"
+      },
+      "convertTo": "deepseek-v4-pro",
+      "rateRef": "deepseek/deepseek-v4-pro/2026-07-27"
+    },
+    {
+      "id": "minimax-m2-5-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "minimax-m2-5"
+      },
+      "convertTo": "minimax-m2-5",
+      "rateRef": "minimax/minimax-m2-5/2026-07-27"
+    },
+    {
+      "id": "minimax-m2-7-highspeed-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "minimax-m2-7-highspeed"
+      },
+      "convertTo": "minimax-m2-7-highspeed",
+      "rateRef": "minimax/minimax-m2-7-highspeed/2026-07-27"
+    },
+    {
+      "id": "glm-5-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "glm-5"
+      },
+      "convertTo": "glm-5",
+      "rateRef": "zhipu/glm-5/2026-07-27"
+    },
+    {
+      "id": "doubao-seed-2-0-code-exact",
+      "scope": {
+        "billingRouteIds": []
+      },
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "doubao-seed-2-0-code"
+      },
+      "convertTo": "doubao-seed-2-0-code",
+      "rateRef": "volcengine/doubao-seed-2-0-code/2026-07-27"
+    }
+  ]
+}

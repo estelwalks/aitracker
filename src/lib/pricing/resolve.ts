@@ -125,6 +125,9 @@ function applyProfile(
       {
         id: profile.id,
         canonicalModelId: normalizedModel,
+        // P1-1 compat shim: the generic estimate acts as a synthetic billing
+        // route. TODO(P1-1 phase 2): remove with the ToolPricingPolicy rewrite.
+        billingRouteId: "estimate-generic-v1",
         effective: { from: "0000-01-01", to: null },
         usdNanoPerMillion: profile.usdNanoPerMillion,
         source: {
