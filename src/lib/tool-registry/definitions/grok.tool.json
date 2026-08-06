@@ -1,0 +1,99 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "grok",
+  "display": {
+    "name": "Grok Build",
+    "nameZh": "Grok Build"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".grok"
+      }
+    ],
+    "executable": {
+      "shared": [
+        "grok"
+      ]
+    }
+  },
+  "storage": {
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".grok/skills"
+        }
+      ],
+      "envHome": "GROK_HOME",
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
+      "maxDepth": 3
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic",
+      "paths": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".grok/sessions",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".grok/logs",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        }
+      ]
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "resume",
+      "reader": "grok-session-v1",
+      "command": [
+        "grok",
+        "--resume",
+        "{sessionId}"
+      ]
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  },
+  "pricing": {
+    "billingMode": "api-metered",
+    "fallbackProfileRef": "unpriced-v1",
+    "rulePackRefs": []
+  }
+}

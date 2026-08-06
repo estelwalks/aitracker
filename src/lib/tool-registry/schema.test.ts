@@ -348,8 +348,22 @@ describe("RawToolDefinitionSchema - invalid combinations", () => {
     );
   });
 
-  test("duplicate detection target at the same level fails", () => {
+  test("identical detection declarations at the same level fail", () => {
     parseFail(
+      validTool({
+        detection: {
+          locations: [
+            { targets: ["macos"], base: "home", path: ".a" },
+            { targets: ["macos"], base: "home", path: ".a" },
+          ],
+        },
+      }),
+      "duplicate detection location",
+    );
+  });
+
+  test("distinct paths covering the same target are allowed", () => {
+    parseOk(
       validTool({
         detection: {
           locations: [
@@ -358,7 +372,6 @@ describe("RawToolDefinitionSchema - invalid combinations", () => {
           ],
         },
       }),
-      "duplicate detection target",
     );
   });
 

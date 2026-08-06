@@ -1,0 +1,45 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "codebuddy",
+  "display": {
+    "name": "CodeBuddy",
+    "nameZh": "CodeBuddy"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".codebuddy"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "pricing": {
+    "billingMode": "unsupported",
+    "fallbackProfileRef": "unpriced-v1",
+    "rulePackRefs": []
+  }
+}

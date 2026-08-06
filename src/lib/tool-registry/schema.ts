@@ -370,18 +370,24 @@ export const RawToolDefinitionSchema = z
         executable: ExecutableSchema.optional(),
       })
       .superRefine((detection, ctx) => {
+        // Same-level duplicate = the exact same location declared twice.
+        // Distinct paths may legitimately cover the same target (a platform can
+        // have several probe roots); only identical declarations fail.
         const seen = new Set<string>();
         for (const loc of detection.locations) {
-          for (const target of loc.targets) {
-            if (seen.has(target)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["detection.locations"],
-                message: `duplicate detection target "${target}" (same-level duplicate fails the build)`,
-              });
-            }
-            seen.add(target);
+          const key = JSON.stringify({
+            targets: [...loc.targets].sort(),
+            base: loc.base,
+            path: loc.path,
+          });
+          if (seen.has(key)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["detection.locations"],
+              message: `duplicate detection location (same targets/base/path) fails the build`,
+            });
           }
+          seen.add(key);
         }
       }),
     storage: z

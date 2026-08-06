@@ -254,7 +254,7 @@ describe("compileRawTool - compiled definitions pass validation", () => {
         detection: {
           locations: [
             { targets: ["macos"], base: "home", path: ".a" },
-            { targets: ["macos"], base: "home", path: ".b" },
+            { targets: ["macos"], base: "home", path: ".a" },
           ],
         },
       }),
