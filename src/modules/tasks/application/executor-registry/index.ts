@@ -5,7 +5,7 @@ import type {
   TaskExecutionResult,
   TaskExecutor,
 } from "../scheduler.ts";
-import type { UsageApplication } from "../../../usage/application/index.ts";
+import type { UsageApplication } from "../../../usage/index.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
