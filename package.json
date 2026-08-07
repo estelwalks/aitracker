@@ -40,6 +40,7 @@
     "verify:tool-registry": "node --import tsx scripts/verify-tool-registry.mjs",
     "verify:pricing-rules": "node --import tsx scripts/verify-pricing-rules.mjs",
     "verify:architecture": "node scripts/verify-module-boundaries.mjs",
+    "verify:architecture:blocking": "node scripts/verify-module-boundaries.mjs --blocking",
     "verify:job-catalog": "node --import tsx scripts/verify-job-catalog.mjs",
     "verify:module-catalog": "node --import tsx scripts/verify-module-catalog.mjs"
   },

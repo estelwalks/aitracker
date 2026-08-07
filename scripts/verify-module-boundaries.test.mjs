@@ -8,7 +8,9 @@ import {
   ROUTE_LINE_LIMIT,
   analyzeProject,
   extractImportSources,
+  getBlockingFindings,
   hasPageCollectionInterval,
+  MIGRATION_ALLOWLIST,
   validateAllowlist,
 } from "./verify-module-boundaries.mjs";
 
@@ -139,6 +141,21 @@ test("analyzeProject permits only a fully documented temporary allowlist entry",
       assert.deepEqual(validateAllowlist([{ type: "route-line-limit" }]), [
         "allowlist[0] is missing required field(s): file, reason, owner, expiresAtPhase",
       ]);
+    },
+  );
+});
+
+test("the migration baseline is explicit and does not hide newly introduced findings", async () => {
+  assert.ok(MIGRATION_ALLOWLIST.length > 0);
+  assert.equal(validateAllowlist(MIGRATION_ALLOWLIST).length, 0);
+  await withFixture(
+    {
+      "src/routes/new.ts": "setInterval(refresh, 5000);\n",
+    },
+    async (root) => {
+      const report = await analyzeProject(root);
+      assert.equal(report.violations[0]?.type, "route-collection-interval");
+      assert.equal(getBlockingFindings(report).length, 1);
     },
   );
 });

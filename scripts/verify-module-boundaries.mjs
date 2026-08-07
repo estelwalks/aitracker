@@ -1,9 +1,7 @@
 // Reports architecture-boundary drift during the modular-monolith migration.
-//
-// This P0 verifier is intentionally report-only: it always exits successfully
-// so the existing routes can be migrated incrementally. P8 promotes the same
-// checks to a blocking CI gate after the migration allowlist reaches zero.
-// Run: npm run verify:architecture
+// `--blocking` promotes any finding not covered by the explicit migration
+// baseline into a non-zero exit code. The normal command remains report-only
+// so local migration work is easy to inspect.
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -28,7 +26,56 @@ export const MODULE_REQUIRED_ENTRIES = Object.freeze([
  *
  * Do not add wildcards, permanent exceptions, or executable configuration.
  */
-export const MIGRATION_ALLOWLIST = Object.freeze([]);
+export const MIGRATION_ALLOWLIST = Object.freeze([
+  // Generated route graph and locale/rule registries are known transitional
+  // cycles. They are tracked here until their respective P8 cleanup tasks.
+  {
+    type: "relative-import-cycle",
+    file: "src/lib/i18n/messages.ts",
+    reason:
+      "Locale index cycle is retained while generated catalogs are migrated.",
+    owner: "architecture",
+    expiresAtPhase: "P8",
+  },
+  {
+    type: "relative-import-cycle",
+    file: "src/lib/security/rules.ts",
+    reason:
+      "Generated security rule schema cycle is retained until rule packaging cleanup.",
+    owner: "security",
+    expiresAtPhase: "P8",
+  },
+  {
+    type: "relative-import-cycle",
+    file: "src/routeTree.gen.ts",
+    reason:
+      "TanStack generated route graph references the router by design during migration.",
+    owner: "frontend",
+    expiresAtPhase: "P8",
+  },
+  {
+    type: "relative-import-cycle",
+    file: "src/modules/settings/index.ts",
+    reason:
+      "Settings presentation currently imports the module contract through the public barrel; split the contract import during P8 cleanup.",
+    owner: "settings",
+    expiresAtPhase: "P8",
+  },
+  ...[
+    "src/routes/__root.tsx",
+    "src/routes/index.tsx",
+    "src/routes/market.tsx",
+    "src/routes/settings.tsx",
+    "src/routes/skills.tsx",
+  ].map((file) => ({
+    type: "route-line-limit",
+    file,
+    reason:
+      "Legacy route remains oversized until its feature UI is moved to module presentation.",
+    owner: "frontend",
+    expiresAtPhase: "P8",
+  })),
+]);
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"];
 const ALLOWLIST_FIELDS = ["type", "file", "reason", "owner", "expiresAtPhase"];
@@ -196,6 +243,17 @@ export function isAllowlisted(violation, allowlist) {
   );
 }
 
+export function getBlockingFindings(report) {
+  return [
+    ...report.allowlistErrors.map((detail) => ({
+      type: "allowlist-configuration",
+      file: "migration-allowlist",
+      detail,
+    })),
+    ...report.violations,
+  ];
+}
+
 export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
   const sourceRoot = resolve(root, "src");
   const allowlistErrors = validateAllowlist(allowlist);
@@ -326,9 +384,9 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
   };
 }
 
-export function formatReport(report) {
+export function formatReport(report, mode = "report") {
   const lines = [
-    "architecture verify (report mode)",
+    `architecture verify (${mode} mode)`,
     "─────────────────────────────────────────",
     `route line limit: ${ROUTE_LINE_LIMIT}`,
     `migration allowlist entries: ${MIGRATION_ALLOWLIST.length}`,
@@ -356,9 +414,14 @@ export function formatReport(report) {
       `allowlisted migration findings: ${report.suppressed.length}`,
     );
   }
+  const blockingFindings = getBlockingFindings(report);
   lines.push(
     "",
-    "Report mode only: exits 0; P8 promotes approved rules to blocking CI.",
+    mode === "blocking"
+      ? blockingFindings.length === 0
+        ? "Blocking gate passed: no findings outside the migration baseline."
+        : `Blocking gate failed: ${blockingFindings.length} finding(s) require migration or an explicitly documented baseline entry.`
+      : "Report mode only: exits 0. Use --blocking for CI enforcement.",
   );
   return lines.join("\n");
 }
@@ -367,7 +430,11 @@ export async function main(
   root = resolve(dirname(fileURLToPath(import.meta.url)), ".."),
 ) {
   const report = await analyzeProject(root);
-  console.log(formatReport(report));
+  const blocking =
+    process.argv.includes("--blocking") ||
+    process.env.ARCHITECTURE_VERIFY_BLOCKING === "1";
+  console.log(formatReport(report, blocking ? "blocking" : "report"));
+  if (blocking && getBlockingFindings(report).length > 0) process.exitCode = 1;
   return report;
 }
 
