@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { APP_ID } from "../../../lib/app-config";
 
 import { NodeAtomicJsonStore } from "../../../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { createTaskPreferenceRepository } from "../infrastructure/task-preference-repository.ts";
@@ -16,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 async function temp<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "trusttools-tasks-"));
+  const dir = await mkdtemp(join(tmpdir(), `${APP_ID}-tasks-`));
   try {
     return await fn(dir);
   } finally {

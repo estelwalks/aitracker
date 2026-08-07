@@ -9,6 +9,7 @@ import type {
   TargetRef,
 } from "../contracts.ts";
 import type { PackageRef } from "../../skill-catalog/contracts.ts";
+import { APP_DATA_DIR } from "../../../lib/app-config";
 
 /** Server-only target mapping. The renderer receives only TargetRef values. */
 export interface ServerSkillTarget {
@@ -44,7 +45,7 @@ function requireSeparator(): string {
 }
 
 function targetDirectory(target: ServerSkillTarget): string {
-  return join(target.root, ".trusttools", "skills");
+  return join(target.root, APP_DATA_DIR, "skills");
 }
 
 /** Controlled adapter: every external path is resolved from a server-owned target map. */

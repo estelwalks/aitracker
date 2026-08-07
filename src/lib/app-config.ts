@@ -57,6 +57,8 @@ export const DESKTOP_GLOBAL = `${APP_ID}Desktop`;
  * docs reference these; renaming breaks outside callers]
  */
 export const ENV = {
+  RUNTIME: `${APP_ID.toUpperCase()}_RUNTIME`,
+  ENABLE_BACKGROUND_TASKS: `${APP_ID.toUpperCase()}_ENABLE_BACKGROUND_TASKS`,
   DEV_URL: `${APP_ID.toUpperCase()}_DEV_URL`,
   DEV_HOST: `${APP_ID.toUpperCase()}_DEV_HOST`,
   DEV_PORT: `${APP_ID.toUpperCase()}_DEV_PORT`,

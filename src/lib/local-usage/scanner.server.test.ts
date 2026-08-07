@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { APP_DATA_DIR } from "../app-config";
 
 import { scanLocalUsage } from "./scanner.server.ts";
 import type { LocalUsageEvent } from "./types.ts";
@@ -779,7 +780,7 @@ test("TC-REG-005: external adapter/override files are never read", async () => {
   try {
     // Plant the deleted runtime extension files in the user home; a scanner
     // that still reads them would fabricate a `custom:` source.
-    const ttDir = join(homeDirectory, ".trusttools");
+    const ttDir = join(homeDirectory, APP_DATA_DIR);
     await mkdir(ttDir, { recursive: true });
     await writeFile(
       join(ttDir, "usage-adapters.json"),
