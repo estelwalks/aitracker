@@ -138,7 +138,7 @@ export function MarketPage({ initial }: { initial: MarketPageData }) {
       .finally(() => {
         if (sequence === requestSequence.current) setLoading(false);
       });
-  }, [page, query, sort, retrySequence]);
+  }, [page, query, sort, retrySequence, t]);
 
   // Installed skill names (for "已安装" tags)
   const installedSkillNames = useMemo(
