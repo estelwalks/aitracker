@@ -123,3 +123,40 @@ test("provenance and durable fields never accept paths, commands or credentials"
     }),
   );
 });
+
+test("createDraft stamps the security verdict onto the version and asset, and transitions preserve it", async () => {
+  const fixtureState = fixture();
+  const { repository } = fixtureState;
+  const draft = await repository.createDraft({
+    kind: "memory",
+    title: "Distilled note",
+    content: "hello",
+    createdBy: "user",
+    securityVerdict: "clean",
+  });
+  assert.equal(draft.ok, true);
+  if (!draft.ok) return;
+  assert.equal(draft.value.securityVerdict, "clean");
+
+  const asset = fixtureState.document.assets.find(
+    (item) => item.assetId === draft.value.assetId,
+  );
+  assert.equal(asset?.securityVerdict, "clean");
+
+  // Transitions spread the existing version, so the verdict survives approve.
+  const approved = await repository.approve(draft.value.assetId, "user");
+  assert.equal(approved.ok, true);
+  assert.equal(approved.ok && approved.value.securityVerdict, "clean");
+});
+
+test("createDraft without a securityVerdict leaves it undefined (consumers must treat as unknown)", async () => {
+  const { repository } = fixture();
+  const draft = await repository.createDraft({
+    kind: "memory",
+    title: "Legacy note",
+    content: "hello",
+    createdBy: "user",
+  });
+  assert.equal(draft.ok, true);
+  assert.equal(draft.ok && draft.value.securityVerdict, undefined);
+});
