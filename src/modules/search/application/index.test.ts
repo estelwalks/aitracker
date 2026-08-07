@@ -97,7 +97,7 @@ test("projection consumes public events and can be disposed", () => {
 });
 
 test("query path does not invoke a scanner", () => {
-  let scannerCalls = 0;
+  const scannerCalls = 0;
   const service = new SearchIndexService(
     {
       read: async () =>
