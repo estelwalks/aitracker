@@ -55,4 +55,21 @@ export const common = {
     kindWeekly: "周报",
     updatedAt: "更新于 {time}",
   },
+  distillation: {
+    pageTitle: "蒸馏工作台",
+    pageDesc:
+      "从选定的会话元数据提炼知识草稿，经审批后写入知识库。仅读取脱敏后的会话概要，不读取会话正文。",
+    selectSessions: "选择会话（最多 {max} 个）",
+    start: "开始蒸馏",
+    startHint: "选择至少一个会话后开始。",
+    noSessions: "暂无可蒸馏的会话",
+    noSessionsDesc: "本地未扫描到会话时，列表为空。",
+    selected: "已选 {count} 个",
+    candidate: "候选",
+    approve: "通过并写入知识库",
+    cancel: "取消",
+    candidateNote:
+      "候选项保存在服务端内存，刷新页面后不保留；完整审批 UI 在候选项持久化后提供。",
+    selectedTurns: "{count} 轮",
+  },
 } as const;

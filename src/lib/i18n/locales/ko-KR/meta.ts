@@ -11,6 +11,7 @@ export const meta = {
     sessions: "세션 복원 · {appName} V3.0",
     sources: "데이터 소스 · {appName} V3.0",
     reports: "브리핑 및 메모리 · {appName} V3.0",
+    distill: "증류 워크벤치 · {appName} V3.0",
     settings: "설정 · {appName} V3.0",
     notFound: "페이지를 찾을 수 없음 · {appName} V3.0",
   },

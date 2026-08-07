@@ -9,6 +9,8 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
+  X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -41,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(200);
+  const [navQuery, setNavQuery] = useState("");
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
@@ -55,15 +58,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  const visibleNav = nav.filter((item) =>
+    t(item.label).toLocaleLowerCase().includes(navQuery.toLocaleLowerCase()),
+  );
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <aside
         className="fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200"
         style={{ width: collapsed ? 56 : sidebarWidth }}
       >
-        <div className="flex h-14 items-center gap-2 px-3">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-bold text-primary-foreground">
-            T
+        <div className="flex h-[72px] items-center gap-2 px-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
+            TT
           </div>
           {!collapsed && (
             <div className="min-w-0 leading-tight">
@@ -75,8 +82,31 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </div>
 
-        <nav className="mt-2 flex-1 space-y-0.5 px-1.5">
-          {nav.map((item) => {
+        {!collapsed && (
+          <div className="relative mx-3 mb-4">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={navQuery}
+              onChange={(event) => setNavQuery(event.target.value)}
+              placeholder={t("common.search")}
+              aria-label={t("common.search")}
+              className="h-9 w-full rounded-lg border border-sidebar-border bg-sidebar-accent/50 pr-8 pl-9 text-xs outline-none transition focus:border-primary/70 focus:bg-sidebar-accent"
+            />
+            {navQuery && (
+              <button
+                type="button"
+                onClick={() => setNavQuery("")}
+                aria-label={t("common.close")}
+                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        <nav className="flex-1 space-y-1 px-2">
+          {visibleNav.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
             const Icon = item.icon;
@@ -86,14 +116,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 title={label}
-                className={`relative flex h-9 items-center gap-2.5 rounded-sm px-2.5 text-sm transition-colors ${
+                className={`relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm transition-colors ${
                   active
-                    ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                    ? "bg-primary/12 font-medium text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 }`}
               >
                 {active && (
-                  <span className="absolute top-1.5 bottom-1.5 -left-1.5 w-[3px] rounded-r bg-primary" />
+                  <span className="absolute top-2 bottom-2 -left-2 w-[3px] rounded-r bg-primary" />
                 )}
                 <Icon className="size-4 shrink-0" strokeWidth={1.75} />
                 {!collapsed && <span className="truncate">{label}</span>}
@@ -102,10 +132,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="border-t border-sidebar-border p-1.5">
+        <div className="border-t border-sidebar-border p-2">
           <button
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" strokeWidth={1.75} />
@@ -129,7 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200"
         style={{ paddingLeft: collapsed ? 56 : sidebarWidth }}
       >
-        <main className="tt-scroll min-w-0 flex-1 px-3 py-4 pb-14 sm:px-4 md:px-6 2xl:px-8">
+        <main className="tt-scroll min-w-0 flex-1 px-3 py-5 pb-14 sm:px-5 md:px-8 2xl:px-10">
           <div className="tt-container">{children}</div>
         </main>
 

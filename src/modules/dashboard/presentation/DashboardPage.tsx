@@ -360,10 +360,10 @@ export function DashboardPage({ data }: { data: DashboardReadModel }) {
   return (
     <>
       {/* ---- Sticky Header Bar ---- */}
-      <div className="sticky top-0 z-30 -mx-3 mb-3 border-b border-border bg-background/85 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 2xl:-mx-8 2xl:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div className="dashboard-overview-header sticky top-0 z-30 mb-4 backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
           <div className="flex min-w-0 items-baseline gap-2">
-            <h1 className="text-base font-semibold tracking-tight">
+            <h1 className="text-xl font-semibold tracking-tight">
               {t("dashboard.title")}
             </h1>
             <span className="truncate text-[12px] text-muted-foreground">

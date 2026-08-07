@@ -39,6 +39,15 @@ export const errors = {
   sessions: {
     filterInvalid: "Invalid session filter",
   },
+  distillation: {
+    invalidSelection: "Select 1 to 8 distinct sessions",
+    sessionNotFound: "A selected session does not exist or is unavailable",
+    cancelled: "Distillation cancelled",
+    notFound: "Candidate does not exist",
+    notWaiting: "Candidate is not awaiting approval",
+    knowledgeUnavailable: "Knowledge store is unavailable",
+    knowledgeFailed: "Knowledge entry could not be written",
+  },
   pricing: {
     modelListInvalid: "Invalid model list",
     rateResponseIncomplete: "Incomplete exchange-rate response",

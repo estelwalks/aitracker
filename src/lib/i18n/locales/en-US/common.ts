@@ -59,4 +59,21 @@ export const common = {
     kindWeekly: "Weekly",
     updatedAt: "Updated {time}",
   },
+  distillation: {
+    pageTitle: "Distillation Workbench",
+    pageDesc:
+      "Distill knowledge drafts from the metadata of selected sessions and write them to the knowledge library after approval. Only sanitized session summaries are read — never the conversation content.",
+    selectSessions: "Select sessions (up to {max})",
+    start: "Start distillation",
+    startHint: "Select at least one session to start.",
+    noSessions: "No sessions available to distill",
+    noSessionsDesc: "When no local sessions are scanned, the list is empty.",
+    selected: "{count} selected",
+    candidate: "Candidate",
+    approve: "Approve & write to knowledge",
+    cancel: "Cancel",
+    candidateNote:
+      "Candidates are kept in server memory and are not retained after refresh; the full approval UI will arrive once candidates are persisted.",
+    selectedTurns: "{count} turns",
+  },
 } as const;
