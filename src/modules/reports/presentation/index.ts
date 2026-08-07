@@ -98,6 +98,17 @@ export interface ReportsPresentationApi {
 }
 
 const DEFAULT_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+const SAFE_OPAQUE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
+const SAFE_TITLE = /^[\p{L}\p{N} .:_-]{1,256}$/u;
+
+function safeUiText(value: string | undefined, fallback: string): string {
+  if (!value || !SAFE_TITLE.test(value)) return fallback;
+  return value;
+}
+
+function safeUiRef(value: string): string | undefined {
+  return SAFE_OPAQUE.test(value) ? value : undefined;
+}
 
 function taskRunToRun(value: TaskRunSummaryPublic): ReportRun | undefined {
   if (value.taskId !== "reports.generate") return undefined;
@@ -164,7 +175,7 @@ function itemFor(
       definition?.definitionId ??
       "unknown",
     kind: report?.kind ?? definition?.kind ?? "daily",
-    title: report?.title ?? definition?.title ?? "Report",
+    title: safeUiText(report?.title ?? definition?.title, "Report"),
     status,
     ...(report?.generatedAt ? { generatedAt: report.generatedAt } : {}),
     ...(report?.templateVersion === undefined
@@ -259,13 +270,14 @@ export function createReportsPresentation(
                       now().getTime(),
                       staleAfterMs,
                     ),
-                    assets: selected.assets.map((asset) => ({
-                      assetId: asset.assetId,
-                      kind: asset.kind,
-                    })),
-                    evidence: selected.evidence.map((evidence) => ({
-                      ...evidence,
-                    })),
+                    assets: selected.assets.flatMap((asset) => {
+                      const assetId = safeUiRef(asset.assetId);
+                      return assetId ? [{ assetId, kind: asset.kind }] : [];
+                    }),
+                    evidence: selected.evidence.flatMap((evidence) => {
+                      const ref = safeUiRef(evidence.ref);
+                      return ref ? [{ ...evidence, ref }] : [];
+                    }),
                   },
                 }
               : {}),

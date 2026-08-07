@@ -163,6 +163,32 @@ test("retains a failed run alongside the previous report and keeps renderer payl
   assert.match(serialized, /errors\.reports\.generationFailed/);
 });
 
+test("drops unsafe opaque references from the detail DTO", async () => {
+  const query = createReportsPresentation({
+    reports: app(),
+    source: {
+      listReports: async () => [
+        report({
+          assets: [{ assetId: "/Users/private/report.md", kind: "attachment" }],
+          evidence: [
+            {
+              module: "usage",
+              ref: "C:\\private\\usage.json",
+              observedAt: "2026-08-07T00:00:00.000Z",
+            },
+          ],
+        }),
+      ],
+      listRuns: async () => [],
+    },
+  });
+  const result = await query.query({ reportId: "report:old" });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.selected?.assets, []);
+  assert.deepEqual(result.value.selected?.evidence, []);
+});
+
 test("immediate generation is delegated through the public reports application", async () => {
   let received: unknown;
   const reports = {
