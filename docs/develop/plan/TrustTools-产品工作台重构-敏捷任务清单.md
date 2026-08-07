@@ -155,7 +155,7 @@ flowchart LR
 | ID | 工作项 | 依赖 | 验收 |
 |----|--------|------|------|
 | P7-01 | 重建导航 module catalog | P2,P4,P5,P6 | 核心/防护/基础设施分组由安全 manifest 生成。 |
-| P7-02 | 逐页 thin route 迁移 | P2,P4,P5,P6 | **进行中**：Sources、Sessions、Security、Settings 已 <=80 行；首页、Market、Skills、`__root` 仍需拆分。 |
+| P7-02 | 逐页 thin route 迁移 | P2,P4,P5,P6 | **已完成**：首页、Agents、Distill、Reports、Security、Tracker、Market、Skills、Settings 路由均已迁移到模块 presentation，均 <=80 行。 |
 | P7-03 | 统一状态组件 | P3,P4 | fresh/stale/running/waiting-approval/failed/empty 的文案和无障碍一致。 |
 | P7-04 | 四语言补齐 | P7-01 | 新 Job、审批、AI 降级、安全状态均有 zh/en/ja/ko key；locale 检查通过。 |
 | P7-05 | 删除页面扫描轮询 | P3,P7-02 | 仅 Job 状态低频兜底；不存在页面直接 scanner 调用。 |
@@ -168,8 +168,8 @@ flowchart LR
 |----|--------|------|------|
 | P8-01 | 删除旧 facade/双事实源 | P7 | local-* 旧导出仅在无消费者后删除；无永久 feature flag。 |
 | P8-02 | 门禁转强制 | P7 | **已完成（收敛基线）**：`verify:architecture:blocking` 已阻断新增违规；首页、Market、Settings、Skills 路由拆分完成并已从白名单删除，仅保留 `__root` 与已登记循环依赖基线。 |
-| P8-03 | 跨平台 smoke | P3,P6 | macOS x64/arm64、Windows x64：启动、扫描、Job、安装确认；Linux：schema/XDG/planned。 |
-| P8-04 | 性能与恢复演练 | P3,P5 | 大日志、队列、断电写入、重启恢复、模型超时、离线市场符合预算。 |
+| P8-03 | 跨平台 smoke | P3,P6 | **已完成契约层**：覆盖 macOS、Windows 10/11 supported，Linux planned/disabled，平台路径计划与 Windows 组策略一致性；真实打包矩阵仍需在各 CI runner 执行。 |
+| P8-04 | 性能与恢复演练 | P3,P5 | **已完成测试层**：覆盖大日志性能、队列 single-flight、Windows 原子写冲突、重启恢复、离线定价/用量降级；真实断电演练仍需在发布环境执行。 |
 | P8-05 | 开源卫生检查 | P8-01 | **已完成首版**：`check:opensource-hygiene` 已扫描本机路径、TokenTracker 残留、凭据和私有 import；README/ADR 已补充，后续随发布持续执行。 |
 
 ## 12. 关键验收场景
