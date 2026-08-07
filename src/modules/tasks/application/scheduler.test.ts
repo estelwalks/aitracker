@@ -119,7 +119,7 @@ test("startup performs abandoned-run recovery before scheduling", async () => {
         return [];
       },
     },
-    setTimeout: ((handler, _delay) => {
+    setTimeout: ((handler: () => void, _delay: number) => {
       const timer = setTimeout(handler, 60_000);
       timers.push(timer);
       return timer;
