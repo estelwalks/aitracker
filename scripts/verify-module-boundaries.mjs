@@ -26,16 +26,7 @@ export const MODULE_REQUIRED_ENTRIES = Object.freeze([
  *
  * Do not add wildcards, permanent exceptions, or executable configuration.
  */
-export const MIGRATION_ALLOWLIST = Object.freeze([
-  {
-    type: "relative-import-cycle",
-    file: "src/modules/settings/index.ts",
-    reason:
-      "Settings presentation currently imports the module contract through the public barrel; split the contract import during P8 cleanup.",
-    owner: "settings",
-    expiresAtPhase: "P8",
-  },
-]);
+export const MIGRATION_ALLOWLIST = Object.freeze([]);
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"];
 const ALLOWLIST_FIELDS = ["type", "file", "reason", "owner", "expiresAtPhase"];

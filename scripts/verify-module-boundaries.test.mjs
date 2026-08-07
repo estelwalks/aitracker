@@ -210,9 +210,6 @@ test("completed feature routes are no longer part of the migration baseline", ()
   }
 });
 
-test("P8 baseline retains only the known settings cycle", () => {
-  assert.deepEqual(
-    MIGRATION_ALLOWLIST.map((entry) => `${entry.type}:${entry.file}`),
-    ["relative-import-cycle:src/modules/settings/index.ts"],
-  );
+test("P8 baseline is empty after completed boundary cleanup", () => {
+  assert.deepEqual(MIGRATION_ALLOWLIST, []);
 });
