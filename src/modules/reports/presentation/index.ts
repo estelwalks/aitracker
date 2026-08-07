@@ -4,7 +4,7 @@ import type {
   KnowledgeAssetKind,
   KnowledgeRepository,
 } from "../../knowledge/contracts.ts";
-import type { TaskApi, TaskRunSummaryPublic } from "../../tasks/api.server.ts";
+import type { TaskApi, TaskRunSummaryPublic } from "../../tasks/index.ts";
 import type {
   GenerateReportInput,
   ReportDefinitionSummary,

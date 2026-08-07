@@ -1,5 +1,5 @@
-import type { ChangeProposal } from "../../optimization/application/proposals/contracts.ts";
-import type { SkillPackage } from "../../skill-catalog/contracts.ts";
+import type { ChangeProposal } from "../../optimization/index.ts";
+import type { SkillPackage } from "../../skill-catalog/index.ts";
 import type {
   DistributionRun,
   DistributionRunRef,

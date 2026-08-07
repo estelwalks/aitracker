@@ -10,8 +10,8 @@ import type {
   ProposalApproval,
   TargetCapability,
 } from "../contracts.ts";
-import type { SkillPackage } from "../../skill-catalog/contracts.ts";
-import { packageHash } from "../../skill-catalog/domain.ts";
+import type { SkillPackage } from "../../skill-catalog/index.ts";
+import { packageHash } from "../../skill-catalog/index.ts";
 
 const hash = packageHash(`sha256-${"a".repeat(64)}`);
 const skill: SkillPackage = {

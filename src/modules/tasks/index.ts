@@ -11,6 +11,13 @@ export type {
   TaskRun,
   TaskRunSummary,
 } from "./application/task-storage.ts";
+export type {
+  TaskApi,
+  TaskApiErrorCode,
+  TaskDefinitionPublic,
+  TaskPreferencePublic,
+  TaskRunSummaryPublic,
+} from "./application/task-api.ts";
 export {
   createExecutorRegistry,
   EXECUTOR_ERROR_CODES,
