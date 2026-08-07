@@ -3,6 +3,8 @@ export type {
   AssetAssessment,
   AssetFinding,
   AssetHashRef,
+  AssessmentFindingCounts,
+  AssessmentHistorySummary,
   AssetKind,
   AssetRef,
   AssetVerdict,
@@ -14,6 +16,12 @@ export type {
   PublishGateDecision,
   PublishGateReason,
   RuleVersion,
+  ScanJobRef,
+  ScanJobRequest,
+  ScanJobResult,
+  ScanJobStatus,
+  ScanRequest,
+  SelectionRef,
   SecurityAssessmentInput,
   SecurityAssessmentModuleContract,
   SecurityAssessmentModuleId,
@@ -25,4 +33,8 @@ export {
 } from "./application/index";
 export { assessmentFromSecurityReport } from "./adapters/scanner";
 export { gateForDistillationCandidate } from "./adapters/distillation";
+export {
+  assessmentHistorySummary,
+  parseScanRequest,
+} from "./application/index";
 export type { SecurityAssessmentViewModel } from "./presentation";
