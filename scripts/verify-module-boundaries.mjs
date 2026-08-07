@@ -27,8 +27,8 @@ export const MODULE_REQUIRED_ENTRIES = Object.freeze([
  * Do not add wildcards, permanent exceptions, or executable configuration.
  */
 export const MIGRATION_ALLOWLIST = Object.freeze([
-  // Generated route graph and locale/rule registries are known transitional
-  // cycles. They are tracked here until their respective P8 cleanup tasks.
+  // Locale/rule registries are known transitional cycles. Generated route
+  // graphs are classified below as tooling-intrinsic instead of allowlisted.
   {
     type: "relative-import-cycle",
     file: "src/lib/i18n/messages.ts",
@@ -43,14 +43,6 @@ export const MIGRATION_ALLOWLIST = Object.freeze([
     reason:
       "Generated security rule schema cycle is retained until rule packaging cleanup.",
     owner: "security",
-    expiresAtPhase: "P8",
-  },
-  {
-    type: "relative-import-cycle",
-    file: "src/routeTree.gen.ts",
-    reason:
-      "TanStack generated route graph references the router by design during migration.",
-    owner: "frontend",
     expiresAtPhase: "P8",
   },
   {
@@ -237,6 +229,13 @@ export function isAllowlisted(violation, allowlist) {
   );
 }
 
+/** TanStack's generated route graph has an intrinsic type-only router edge. */
+export function isGeneratedToolingCycle(cycle) {
+  return (
+    cycle.includes("src/routeTree.gen.ts") && cycle.includes("src/router.tsx")
+  );
+}
+
 export function getBlockingFindings(report) {
   return [
     ...report.allowlistErrors.map((detail) => ({
@@ -252,7 +251,12 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
   const sourceRoot = resolve(root, "src");
   const allowlistErrors = validateAllowlist(allowlist);
   if (!existsSync(sourceRoot)) {
-    return { allowlistErrors, violations: [], suppressed: [] };
+    return {
+      allowlistErrors,
+      violations: [],
+      suppressed: [],
+      generatedToolingCycles: [],
+    };
   }
 
   const files = (await listSourceFiles(sourceRoot)).sort();
@@ -353,8 +357,13 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
     }
   }
 
+  const generatedToolingCycles = [];
   for (const cycle of findRelativeImportCycles(graph)) {
     const formatted = cycle.map((file) => toRepoPath(root, file));
+    if (isGeneratedToolingCycle(formatted)) {
+      generatedToolingCycles.push(formatted);
+      continue;
+    }
     violations.push({
       type: "relative-import-cycle",
       file: formatted[0],
@@ -375,6 +384,7 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
     suppressed: sorted.filter((violation) =>
       isAllowlisted(violation, allowlist),
     ),
+    generatedToolingCycles,
   };
 }
 
@@ -406,6 +416,12 @@ export function formatReport(report, mode = "report") {
     lines.push(
       "",
       `allowlisted migration findings: ${report.suppressed.length}`,
+    );
+  }
+  if (report.generatedToolingCycles.length > 0) {
+    lines.push(
+      "",
+      `generated-tooling intrinsic cycles: ${report.generatedToolingCycles.length}`,
     );
   }
   const blockingFindings = getBlockingFindings(report);
