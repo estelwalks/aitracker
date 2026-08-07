@@ -152,3 +152,15 @@ Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可�
 - `/security`：安全检测
 - `/memory`：记忆聚合
 - `/settings`：本地设置
+
+# TrustTools
+
+TrustTools is a local-first, cross-platform dashboard for AI development assets.
+
+## Open-source hygiene
+
+Before opening a pull request, run `npm run check:opensource-hygiene`. The
+check scans source and build configuration for machine-specific absolute paths,
+TokenTracker remnants, credential-shaped values, and undeclared private imports.
+Documentation, tests, fixtures, generated build output, and dependency folders
+are excluded because they may contain deliberate examples or snapshots.
