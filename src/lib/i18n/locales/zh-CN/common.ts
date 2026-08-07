@@ -32,4 +32,14 @@ export const common = {
   lastUpdatedAt: "上次更新 {time}",
   reload: "重新加载",
   localServiceUnavailable: "本地服务暂时无法完成请求，请刷新页面或返回首页。",
+  status: {
+    fresh: "数据最新",
+    stale: "数据已过期",
+    running: "处理中",
+    waitingApproval: "等待确认",
+    failed: "处理失败",
+    empty: "暂无数据",
+    offline: "离线模式",
+    disabled: "已停用",
+  },
 } as const;
