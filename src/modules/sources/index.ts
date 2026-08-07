@@ -12,3 +12,4 @@ export type {
   SourcesModuleId,
 } from "./contracts.ts";
 export { createSourcesApplication } from "./application/index.ts";
+export type { SourcesViewModel } from "./presentation/index.ts";

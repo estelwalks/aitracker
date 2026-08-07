@@ -10,10 +10,15 @@ export type {
   UsageScanBudget,
   UsageSnapshotDto,
 } from "./contracts";
-export { createAtomicSnapshotRepository } from "./infrastructure/atomic-snapshot-repository.ts";
-export { createLegacyUsageCollector } from "./infrastructure/legacy-usage-collector.server.ts";
 export {
-  createLegacyUsageScanner,
-  toPublicUsageSnapshot,
-} from "./infrastructure/legacy-usage-adapter.server.ts";
+  createUsageApplication,
+  type GetUsageSnapshotRequest,
+  type RefreshUsageOutcome,
+  type UsageApplication,
+  type UsageApplicationErrorCode,
+  type UsageApplicationOptions,
+  type UsageClock,
+  type UsageSnapshotState,
+  type UsageSnapshotView,
+} from "./application/index.ts";
 export type { UsageViewModel } from "./presentation";

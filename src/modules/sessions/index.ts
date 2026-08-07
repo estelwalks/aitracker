@@ -20,3 +20,4 @@ export type {
   SessionSource,
 } from "./contracts.ts";
 export { createSessionQueryService } from "./application/index.ts";
+export type { SessionsViewModel } from "./presentation/index.ts";

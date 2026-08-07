@@ -12,13 +12,20 @@ import type {
 import type { LocalUsageTotals } from "../../lib/local-usage/types.ts";
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
+import type { SkillSnapshot } from "../../lib/local-skills/types";
 
 /** Inputs accepted by the dashboard query. Infrastructure stays behind the API adapter. */
 export interface DashboardQuery {
   readonly locale: Locale;
   readonly snapshot: LocalUsageSnapshot;
   readonly pricing: PricingSnapshot | null;
-  readonly skills: { readonly skills: readonly unknown[] } | null;
+  /**
+   * The scanner result is already a plain-data DTO (no class instances,
+   * functions, or opaque values), so it can safely cross the ServerFn
+   * boundary. Keep the concrete type here instead of `unknown[]`; TanStack's
+   * serializability validator must be able to inspect every nested field.
+   */
+  readonly skills: SkillSnapshot | null;
   readonly error: string | null;
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
