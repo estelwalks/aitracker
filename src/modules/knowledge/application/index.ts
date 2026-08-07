@@ -33,7 +33,7 @@ const safe = (value: string, field: string): string => {
 const safeHash = (value: string): KnowledgeVersion["contentHash"] => {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{1,255}$/.test(value))
     throw new TypeError("contentHash is invalid");
-  return value;
+  return value as KnowledgeVersion["contentHash"];
 };
 const safeProvenance = (
   input: CreateDraftInput["provenance"],
