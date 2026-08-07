@@ -167,7 +167,7 @@ flowchart LR
 | ID | 工作项 | 依赖 | 验收 |
 |----|--------|------|------|
 | P8-01 | 删除旧 facade/双事实源 | P7 | local-* 旧导出仅在无消费者后删除；无永久 feature flag。 |
-| P8-02 | 门禁转强制 | P7 | **已完成（部分基线）**：`verify:architecture:blocking` 已阻断新增违规；既有循环依赖和超长路由须按 ADR-006 迁移基线逐项删除。 |
+| P8-02 | 门禁转强制 | P7 | **已完成（收敛基线）**：`verify:architecture:blocking` 已阻断新增违规；首页、Market、Settings、Skills 路由拆分完成并已从白名单删除，仅保留 `__root` 与已登记循环依赖基线。 |
 | P8-03 | 跨平台 smoke | P3,P6 | macOS x64/arm64、Windows x64：启动、扫描、Job、安装确认；Linux：schema/XDG/planned。 |
 | P8-04 | 性能与恢复演练 | P3,P5 | 大日志、队列、断电写入、重启恢复、模型超时、离线市场符合预算。 |
 | P8-05 | 开源卫生检查 | P8-01 | **已完成首版**：`check:opensource-hygiene` 已扫描本机路径、TokenTracker 残留、凭据和私有 import；README/ADR 已补充，后续随发布持续执行。 |
