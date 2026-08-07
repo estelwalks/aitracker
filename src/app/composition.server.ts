@@ -18,6 +18,16 @@ import {
 import { createTaskPreferenceRepository } from "../modules/tasks/infrastructure/task-preference-repository.ts";
 import { createTaskRunRepository } from "../modules/tasks/infrastructure/task-run-repository.ts";
 import type { TaskScheduler } from "../modules/tasks/application/scheduler.ts";
+import {
+  createAiExecutor,
+  type AIExecutorPort,
+} from "../modules/ai-orchestration/ai-executor.ts";
+import {
+  createProviderRegistry,
+  createRegistryRouter,
+  offlineProvider,
+} from "../modules/ai-orchestration/provider-registry.ts";
+import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -43,6 +53,12 @@ export interface CompositionRoot {
   readonly scheduler: TaskScheduler;
   readonly preferences: TaskPreferenceRepository;
   readonly runs: TaskRunRepository;
+  /**
+   * AI executor for distillation/reports. Backed by the provider registry with
+   * the offline provider registered, so consumers get a deterministic fallback
+   * response until a real provider is registered.
+   */
+  readonly aiExecutor: AIExecutorPort;
   /** Resolved data root (`process.env.TRUSTTOOLS_USAGE_HOME ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -108,7 +124,16 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     executors: executorRegistry.executors,
   });
 
-  return { scheduler, preferences, runs, dataRoot };
+  // AI orchestration: register the deterministic offline provider by default so
+  // distillation/reports get a stable fallback. A real provider can be
+  // registered later without touching this wiring.
+  const aiRegistry = createProviderRegistry([offlineProvider]);
+  const aiExecutor = createAiExecutor({
+    router: createRegistryRouter(aiRegistry),
+    offlineFallback: deterministicOfflineFallback,
+  });
+
+  return { scheduler, preferences, runs, aiExecutor, dataRoot };
 }
 
 /**
