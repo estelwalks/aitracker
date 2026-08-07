@@ -27,24 +27,6 @@ export const MODULE_REQUIRED_ENTRIES = Object.freeze([
  * Do not add wildcards, permanent exceptions, or executable configuration.
  */
 export const MIGRATION_ALLOWLIST = Object.freeze([
-  // Locale/rule registries are known transitional cycles. Generated route
-  // graphs are classified below as tooling-intrinsic instead of allowlisted.
-  {
-    type: "relative-import-cycle",
-    file: "src/lib/i18n/messages.ts",
-    reason:
-      "Locale index cycle is retained while generated catalogs are migrated.",
-    owner: "architecture",
-    expiresAtPhase: "P8",
-  },
-  {
-    type: "relative-import-cycle",
-    file: "src/lib/security/rules.ts",
-    reason:
-      "Generated security rule schema cycle is retained until rule packaging cleanup.",
-    owner: "security",
-    expiresAtPhase: "P8",
-  },
   {
     type: "relative-import-cycle",
     file: "src/modules/settings/index.ts",
@@ -53,14 +35,6 @@ export const MIGRATION_ALLOWLIST = Object.freeze([
     owner: "settings",
     expiresAtPhase: "P8",
   },
-  ...["src/routes/__root.tsx"].map((file) => ({
-    type: "route-line-limit",
-    file,
-    reason:
-      "Root route remains oversized while the application shell and generated route integration are migrated.",
-    owner: "frontend",
-    expiresAtPhase: "P8",
-  })),
 ]);
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"];
