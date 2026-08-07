@@ -3,6 +3,8 @@ import { en } from "./locales/en-US";
 import { ja } from "./locales/ja-JP";
 import { ko } from "./locales/ko-KR";
 import type { Locale } from "./locale";
+import type { MessageLeaf, PluralMessage, Translations } from "./schema";
+export type { MessageKey, MessageParams, Translations } from "./schema";
 
 /**
  * Typed message layer. The zh dictionary is the single source of truth for
@@ -11,55 +13,7 @@ import type { Locale } from "./locale";
  * lookups fall back to zh-CN and never throw to the UI.
  */
 
-export type PluralMessage = { one: string; other: string };
-export type MessageLeaf = string | PluralMessage;
-
-type DeepWiden<T> = T extends string
-  ? string
-  : T extends PluralMessage
-    ? { one: string; other: string }
-    : T extends readonly unknown[]
-      ? { [K in keyof T]: DeepWiden<T[K]> }
-      : T extends object
-        ? { [K in keyof T]: DeepWiden<T[K]> }
-        : T;
-
-/** Widened zh shape — the constraint applied to every other locale. */
-export type Translations = DeepWiden<typeof zh>;
-
-/** Dot-path union of all translation keys, e.g. "settings.languages.zhCN". */
-export type MessageKey = Paths<typeof zh>;
-
-type Paths<T, P extends string = ""> = {
-  [K in keyof T]: T[K] extends MessageLeaf
-    ? `${P}${K & string}`
-    : Paths<T[K], `${P}${K & string}.`>;
-}[keyof T];
-
-/** Look up the leaf type at a dot path. */
-type At<T, K extends string> = K extends `${infer Head}.${infer Tail}`
-  ? Head extends keyof T
-    ? At<T[Head], Tail>
-    : never
-  : K extends keyof T
-    ? T[K]
-    : never;
-
-/** Extract `{name}` placeholders from a zh literal. */
-type Placeholders<S extends string> =
-  S extends `${string}{${infer Name}}${infer Rest}`
-    ? Name | Placeholders<Rest>
-    : never;
-
-/**
- * Parameter object required for a key. Derived from the zh literal, so a key
- * without placeholders accepts no params (`undefined`).
- */
-export type MessageParams<K extends MessageKey> = [
-  Placeholders<At<typeof zh, K>>,
-] extends [never]
-  ? undefined
-  : Record<Placeholders<At<typeof zh, K>>, string | number>;
+/** The schema is defined separately so locale dictionaries do not import this resolver. */
 
 export const catalogs: Record<Locale, Translations> = {
   "zh-CN": zh,

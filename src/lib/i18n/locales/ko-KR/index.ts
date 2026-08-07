@@ -1,5 +1,5 @@
 // AI 번역 초안, 검토 대기 (2026-08)
-import type { Translations } from "../../messages";
+import type { Translations } from "../../schema";
 
 import { common } from "./common";
 import { dashboard } from "./dashboard";
