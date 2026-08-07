@@ -159,3 +159,18 @@ test("the migration baseline is explicit and does not hide newly introduced find
     },
   );
 });
+
+test("completed feature routes are no longer part of the migration baseline", () => {
+  const routeLineEntries = MIGRATION_ALLOWLIST.filter(
+    (entry) => entry.type === "route-line-limit",
+  ).map((entry) => entry.file);
+  assert.deepEqual(routeLineEntries, ["src/routes/__root.tsx"]);
+  for (const completedRoute of [
+    "src/routes/index.tsx",
+    "src/routes/market.tsx",
+    "src/routes/settings.tsx",
+    "src/routes/skills.tsx",
+  ]) {
+    assert.equal(routeLineEntries.includes(completedRoute), false);
+  }
+});

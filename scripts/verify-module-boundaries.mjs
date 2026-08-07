@@ -63,15 +63,11 @@ export const MIGRATION_ALLOWLIST = Object.freeze([
   },
   ...[
     "src/routes/__root.tsx",
-    "src/routes/index.tsx",
-    "src/routes/market.tsx",
-    "src/routes/settings.tsx",
-    "src/routes/skills.tsx",
   ].map((file) => ({
     type: "route-line-limit",
     file,
     reason:
-      "Legacy route remains oversized until its feature UI is moved to module presentation.",
+      "Root route remains oversized while the application shell and generated route integration are migrated.",
     owner: "frontend",
     expiresAtPhase: "P8",
   })),
