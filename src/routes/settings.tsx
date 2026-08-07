@@ -33,7 +33,12 @@ import {
   brandParams,
   STORAGE_KEY_PREFIX,
 } from "../lib/app-config";
-import type { StorageUsage } from "../lib/local-usage/prune.server";
+import {
+  applyRetentionPolicyQuery,
+  clearRegenerableCacheQuery,
+  getStorageUsageQuery,
+  type StorageUsage,
+} from "../modules/settings";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,9 +53,7 @@ import {
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     try {
-      const { getStorageUsageFn } =
-        await import("../lib/local-usage/prune.server");
-      const usage = await getStorageUsageFn();
+      const usage = await getStorageUsageQuery();
       return {
         locale: resolveLocaleFromSearch(location.search),
         storageUsage: usage,
@@ -311,9 +314,9 @@ function SettingsPage() {
   const changeRetentionDays = async (retentionDays: number) => {
     update("retentionDays", retentionDays);
     try {
-      const { applyRetentionPolicyFn } =
-        await import("../lib/local-usage/prune.server");
-      const result = await applyRetentionPolicyFn({ data: { retentionDays } });
+      const result = await applyRetentionPolicyQuery({
+        data: { retentionDays },
+      });
       setStorageUsage(result.usage);
       if (result.cleanup.removedFiles > 0) {
         toast.success(
@@ -337,9 +340,7 @@ function SettingsPage() {
   const handleClearCache = async () => {
     setClearingData(true);
     try {
-      const { clearRegenerableCacheFn } =
-        await import("../lib/local-usage/prune.server");
-      const result = await clearRegenerableCacheFn();
+      const result = await clearRegenerableCacheQuery();
       setStorageUsage(result.usage);
       toast.success(
         result.cleanup.removedFiles > 0
