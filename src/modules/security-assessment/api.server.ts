@@ -1,4 +1,4 @@
-import type { TaskApi } from "../tasks/api.server.ts";
+import type { TaskApi } from "../tasks/index.ts";
 import {
   scanSecurityFiles,
   type SecurityInputFile,

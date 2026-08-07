@@ -6,7 +6,7 @@ import type {
   KnowledgeVersion,
 } from "../../knowledge/contracts.ts";
 import type { SessionSummary } from "../../sessions/contracts.ts";
-import { createSessionQueryService } from "../../sessions/application/index.ts";
+import { createSessionQueryService } from "../../sessions/index.ts";
 import { createDistillationApplication } from "./index.ts";
 
 const session = (

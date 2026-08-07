@@ -19,5 +19,4 @@ export {
   querySnapshot,
   assertSearchDocument,
 } from "./domain";
-export { createSearchIndexRepository } from "./infrastructure/repository";
 export type { SearchViewModel } from "./presentation";
