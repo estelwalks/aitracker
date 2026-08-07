@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createLegacyResumeSessionPort } from "./legacy-session-adapter.server.ts";
+import {
+  createLegacyResumeSessionPort,
+  toPublicSession,
+} from "./legacy-session-adapter.server.ts";
 import type { SessionRecord } from "../../../lib/local-sessions/types.ts";
 import { isErr } from "../../../shared/result.ts";
 
@@ -70,6 +73,17 @@ function resumableRecord(): SessionRecord {
     resumeCommand: "codex resume abc",
   };
 }
+
+test("legacy projection strips private session fields", () => {
+  const publicView = toPublicSession(resumableRecord());
+  const serialized = JSON.stringify(publicView);
+  assert.doesNotMatch(
+    serialized,
+    /projectRef|resumeCommand|command|prompt|response|transcript/,
+  );
+  assert.equal(publicView.projectKey, "demo");
+  assert.equal(publicView.resumeAvailable, true);
+});
 
 test("resume maps executor failure and cancellation to stable codes", async () => {
   const scanner = { scan: async () => [resumableRecord()] };
