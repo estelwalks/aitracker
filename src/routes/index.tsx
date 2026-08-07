@@ -37,24 +37,15 @@ import {
 import { ContextBreakdown } from "../components/dashboard/ContextBreakdown";
 import { UsageHeatmapPanel } from "../components/dashboard/UsageHeatmapPanel";
 import { UsageDetailTable } from "../components/dashboard/UsageDetailTable";
-import {
-  TokenPoster,
-  type PosterData,
-  type PosterPeriod,
-} from "../components/TokenPoster";
-import {
-  getLocalUsageSnapshot,
-  refreshLocalUsageSnapshot,
-} from "../lib/local-usage";
+import { TokenPoster, type PosterPeriod } from "../components/TokenPoster";
+import { refreshLocalUsageSnapshot } from "../lib/local-usage";
 import {
   aggregateEventsByTime,
   cacheRate,
   computeMoM,
-  createEmptyUsageSnapshot,
   filterDailyUsage,
   filterUsageEvents,
   previousPeriodTotal,
-  resolveUsageRange,
   shareOf,
   sourceLabel,
   totalsFromDaily,
@@ -64,61 +55,27 @@ import type { LocalUsageSnapshot } from "../lib/local-usage";
 import {
   aggregatePricedUsage,
   applyPricingSnapshot,
-  convertUsd,
-  estimateEventCost,
   estimateUsageCost,
   formatMoney,
 } from "../lib/pricing";
-import { getPricingSnapshot } from "../lib/pricing/server-fns";
-import { getLocalSkills } from "../lib/local-skills/server-fns";
 import { PUBLIC_TOOL_MANIFEST } from "../lib/tool-registry/public-manifest.generated";
-import {
-  toExportCsv,
-  toExportJson,
-  downloadExport,
-  type ExportRow,
-} from "../lib/export";
+import { toExportCsv, toExportJson, downloadExport } from "../lib/export";
 import { useI18n } from "../lib/i18n/context";
-import type { BoundFormatters } from "../lib/i18n/format";
-import { resolveLocaleFromSearch, type Locale } from "../lib/i18n/locale";
+import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { brandParams } from "../lib/app-config";
+import { getDashboardReadModel } from "../modules/dashboard/query";
+import {
+  buildDashboardExport,
+  buildDashboardPosterData,
+} from "../modules/dashboard/presentation";
 
 type TFunction = ReturnType<typeof useI18n>["t"];
 
 export const Route = createFileRoute("/")({
   loader: async ({ location }) => {
     const locale = resolveLocaleFromSearch(location.search);
-    const usageResult = await Promise.resolve(getLocalUsageSnapshot()).then(
-      (value) => ({ status: "fulfilled" as const, value }),
-      (reason) => ({ status: "rejected" as const, reason }),
-    );
-    const snapshot =
-      usageResult.status === "fulfilled"
-        ? usageResult.value
-        : createEmptyUsageSnapshot();
-    const [skillsResult, pricingResult] = await Promise.allSettled([
-      getLocalSkills(),
-      getPricingSnapshot({
-        data: [...new Set(snapshot.details.map((event) => event.model))],
-      }),
-    ]);
-    return {
-      snapshot,
-      error:
-        usageResult.status === "rejected"
-          ? usageResult.reason instanceof Error
-            ? usageResult.reason.message
-            : getMessage(
-                catalogs[locale],
-                "dashboard.onboarding.localReadFailed",
-              )
-          : null,
-      skills: skillsResult.status === "fulfilled" ? skillsResult.value : null,
-      pricing:
-        pricingResult.status === "fulfilled" ? pricingResult.value : null,
-      locale,
-    };
+    return getDashboardReadModel({ data: locale });
   },
   head: ({ loaderData }) => ({
     meta: [
@@ -323,17 +280,16 @@ function Dashboard() {
 
   const posterData = useMemo(
     () =>
-      buildPosterData(
-        selectedEvents,
-        selectedTotals,
-        selectedCost,
+      buildDashboardPosterData({
+        events: selectedEvents,
+        totals: selectedTotals,
+        cost: selectedCost,
         period,
-        periodLabels[period],
+        periodLabel: periodLabels[period],
         from,
         to,
         format,
-        locale,
-      ),
+      }),
     [
       selectedEvents,
       selectedTotals,
@@ -343,48 +299,15 @@ function Dashboard() {
       from,
       to,
       format,
-      locale,
     ],
   );
 
   const handleExport = (format: "csv" | "json") => {
-    const rate = rates?.rates[displayCurrency] ?? 1;
-    const rateDate = rates?.date ?? "";
-    const rows: ExportRow[] = selectedEvents.map((event) => {
-      const cost = estimateEventCost(event);
-      // Four-state export (audit P1-1): exact and estimated events export
-      // their amount (estimated amounts are reference/estimate values; the
-      // cost column carries no exactness claim); unpriced/not-billable events
-      // export no cost at all, exactly as before.
-      const exportable = cost.unknownEvents === 0;
-      const amountUsd = cost.knownUsd + cost.estimatedUsd;
-      return {
-        timestamp: event.timestamp,
-        source: event.source,
-        model: event.model,
-        project: event.project,
-        inputTokens: event.inputTokens,
-        outputTokens: event.outputTokens,
-        cachedInputTokens: event.cachedInputTokens,
-        cacheCreationInputTokens: event.cacheCreationInputTokens,
-        reasoningOutputTokens: event.reasoningOutputTokens,
-        ...(exportable
-          ? {
-              cost: amountUsd,
-              costDisplay: convertUsd(amountUsd, displayCurrency, rate),
-              currency: displayCurrency,
-              rate,
-              rateDate,
-            }
-          : {}),
-      };
+    const { rows, sourceLabels } = buildDashboardExport({
+      events: selectedEvents,
+      displayCurrency,
+      rates: rates ?? undefined,
     });
-    const sourceLabels: Record<string, string> = {};
-    for (const event of selectedEvents) {
-      if (!(event.source in sourceLabels)) {
-        sourceLabels[event.source] = sourceLabel(event.source);
-      }
-    }
     const content =
       format === "csv"
         ? toExportCsv(rows, sourceLabels, [
@@ -1135,70 +1058,4 @@ function CapabilityCard({
       <p className="text-xs text-muted-foreground">{desc}</p>
     </div>
   );
-}
-
-/**
- * FR-008 - Build the {@link PosterData} shape from the current selection.
- *
- * Reconstructs the poster data from the period-filtered events, totals, and
- * cost estimate. Trend points are daily token totals; providers are source
- * breakdowns; models are the top 3 by tokens.
- */
-function buildPosterData(
-  events: LocalUsageSnapshot["details"],
-  totals: ReturnType<typeof totalsFromDaily>,
-  cost: ReturnType<typeof estimateUsageCost>,
-  period: UsagePeriod,
-  periodLabel: string,
-  from: string,
-  to: string,
-  format: BoundFormatters & { formatUsd: (amountUsd: number) => string },
-  locale: Locale,
-): PosterData {
-  const range = resolveUsageRange(period, from, to);
-  const rangeLabel =
-    range.valid && range.from && range.to
-      ? `${format.formatDate(parseLocalDate(range.from))} ~ ${format.formatDate(parseLocalDate(range.to))}`
-      : "";
-
-  const trend = aggregateEventsByTime(events, "day").map((b) => b.totalTokens);
-
-  const sourceRows = aggregatePricedUsage(events, "source").filter(
-    (r) => r.totalTokens > 0,
-  );
-  const providers = sourceRows.map((r) => ({
-    name: sourceLabel(r.key),
-    value: r.totalTokens,
-  }));
-
-  const modelRows = aggregatePricedUsage(events, "model").filter(
-    (r) => r.totalTokens > 0,
-  );
-  const grandTotal = modelRows.reduce((s, r) => s + r.totalTokens, 0);
-  const models = modelRows.slice(0, 3).map((r) => ({
-    name: r.key,
-    tokens: format.formatTokens(r.totalTokens),
-    pct: shareOf(r.totalTokens, grandTotal),
-  }));
-
-  return {
-    periodLabel,
-    rangeLabel,
-    tokens: totals.totalTokens,
-    // Poster shows the combined total; estimated amounts are separately
-    // labeled in the dashboard cost display (audit P1-1 four states).
-    costLabel: format.formatUsd(cost.knownUsd + cost.estimatedUsd),
-    savedLabel: format.formatUsd(cost.cacheSavingsUsd),
-    hitRate: cacheRate(totals),
-    trend,
-    providers,
-    models,
-    unknownPriceModels: cost.unknownModels.length,
-  };
-}
-
-/** Parse a "YYYY-MM-DD" key as a local calendar date (avoids UTC timezone shift). */
-function parseLocalDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1);
 }
