@@ -34,4 +34,14 @@ export const common = {
   reload: "다시 로드",
   localServiceUnavailable:
     "로컬 서비스가 요청을 완료하지 못했습니다. 페이지를 새로고침하거나 홈으로 돌아가세요.",
+  status: {
+    fresh: "최신 데이터",
+    stale: "오래된 데이터",
+    running: "처리 중",
+    waitingApproval: "승인 대기",
+    failed: "실패",
+    empty: "데이터 없음",
+    offline: "오프라인",
+    disabled: "비활성화됨",
+  },
 } as const;
