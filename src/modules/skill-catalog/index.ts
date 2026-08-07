@@ -32,3 +32,19 @@ export {
   parseSkillPackageMetadata,
   projectSkillPackage,
 } from "./application/index.ts";
+export {
+  getLocalSkills,
+  requestApprovedBatchUninstall,
+  requestApprovedSkillInstall,
+  requestApprovedSkillSync,
+  requestApprovedSkillUninstall,
+  updateSkillBlacklist,
+} from "./query.ts";
+export type {
+  BatchUninstallResult,
+  LocalSkill,
+  SkillAgent,
+  SkillInstallation,
+  SkillSnapshot,
+  SkillSyncResult,
+} from "./query.ts";
