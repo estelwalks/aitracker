@@ -7,6 +7,8 @@ export type AssessmentRef = `assessment:${string}`;
 export type FindingRef = `finding:${string}`;
 export type EvidenceRef = `evidence:${string}`;
 export type AssetHashRef = `asset-hash:${string}`;
+export type SelectionRef = `selection:${string}`;
+export type ScanJobRef = `scan-job:${string}`;
 
 export type AssetKind = "skill" | "package" | "knowledge" | "distillation";
 export type AssetVerdict = "clean" | "suspicious" | "dangerous" | "unknown";
@@ -76,4 +78,51 @@ export interface SecurityAssessmentInput {
 export interface SecurityAssessmentModuleContract {
   readonly module: SecurityAssessmentModuleId;
   readonly schemaVersion: 1;
+}
+
+/** Browser input. A selection ref is issued by the local/server picker; it is
+ * deliberately not a filesystem path, URL, upload, or source-content field. */
+export interface ScanRequest {
+  readonly assetRef: AssetRef;
+  readonly assetKind: AssetKind;
+  readonly selectionRef: SelectionRef;
+}
+
+export interface ScanJobRequest {
+  readonly jobRef: ScanJobRef;
+  readonly taskId: string;
+  readonly assetRef: AssetRef;
+  readonly assetKind: AssetKind;
+  readonly selectionRef: SelectionRef;
+  readonly requestedAt: string;
+}
+
+export type ScanJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+/** Public job result. No source, path, command, line, excerpt or raw error. */
+export interface ScanJobResult {
+  readonly jobRef: ScanJobRef;
+  readonly status: ScanJobStatus;
+  readonly assessment?: AssetAssessment;
+  readonly errorCode?: `errors.${string}`;
+  readonly finishedAt?: string;
+}
+
+export interface AssessmentFindingCounts {
+  readonly high: number;
+  readonly medium: number;
+  readonly low: number;
+  readonly total: number;
+}
+
+/** History projection suitable for the renderer; evidence remains opaque. */
+export interface AssessmentHistorySummary {
+  readonly assessmentRef: AssessmentRef;
+  readonly assetRef: AssetRef;
+  readonly assetKind: AssetKind;
+  readonly verdict: AssetVerdict;
+  readonly findingCounts: AssessmentFindingCounts;
+  readonly ruleVersion: RuleVersion;
+  readonly evidenceCount: number;
+  readonly lastScannedAt: string;
 }
