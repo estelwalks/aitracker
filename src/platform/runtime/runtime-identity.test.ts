@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ENV } from "../../lib/app-config";
 
 import {
   createNodeRuntimeIdentity,
@@ -26,7 +27,7 @@ test("web requires an explicit true flag to enable background work", () => {
   const identity = createNodeRuntimeIdentity({
     env: {
       NODE_ENV: "development",
-      TRUSTTOOLS_ENABLE_BACKGROUND_TASKS: "true",
+      [ENV.ENABLE_BACKGROUND_TASKS]: "true",
     },
     platform: "win32",
   });
@@ -37,13 +38,13 @@ test("web requires an explicit true flag to enable background work", () => {
 
 test("desktop is enabled on supported desktop platforms and can be disabled", () => {
   const enabled = createNodeRuntimeIdentity({
-    env: { TRUSTTOOLS_RUNTIME: "desktop" },
+    env: { [ENV.RUNTIME]: "desktop" },
     platform: "darwin",
   });
   const disabled = createNodeRuntimeIdentity({
     env: {
-      TRUSTTOOLS_RUNTIME: "desktop",
-      TRUSTTOOLS_ENABLE_BACKGROUND_TASKS: "false",
+      [ENV.RUNTIME]: "desktop",
+      [ENV.ENABLE_BACKGROUND_TASKS]: "false",
     },
     platform: "win32",
   });
