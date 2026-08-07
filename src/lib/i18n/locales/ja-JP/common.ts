@@ -46,4 +46,18 @@ export const common = {
     offline: "オフライン",
     disabled: "無効",
   },
+  reports: {
+    pageTitle: "ブリーフィングとメモリ",
+    pageDesc:
+      "日次・週次の Token 使用量、リスク、知識の変化をまとめたローカルブリーフィングを生成します。",
+    definitions: "ブリーフィングテンプレート",
+    reports: "生成済みブリーフィング",
+    emptyTitle: "ブリーフィングなし",
+    emptyDesc: "生成後にブリーフィングがここに表示されます。",
+    generate: "ブリーフィングを生成",
+    generateHint: "生成機能は今後のリリースでスケジューラに接続されます。",
+    kindDaily: "日次",
+    kindWeekly: "週次",
+    updatedAt: "更新 {time}",
+  },
 } as const;
