@@ -10,6 +10,7 @@ import {
   extractImportSources,
   getBlockingFindings,
   hasPageCollectionInterval,
+  isGeneratedToolingCycle,
   MIGRATION_ALLOWLIST,
   validateAllowlist,
 } from "./verify-module-boundaries.mjs";
@@ -36,6 +37,40 @@ test("extractImportSources finds static imports and exports", () => {
       'import { value } from "./value"; export { value } from "./value"; import "./side-effect";',
     ),
     ["./side-effect", "./value"],
+  );
+});
+
+test("generated TanStack route graph cycles are classified as tooling intrinsic", () => {
+  assert.equal(
+    isGeneratedToolingCycle([
+      "src/routeTree.gen.ts",
+      "src/router.tsx",
+      "src/routeTree.gen.ts",
+    ]),
+    true,
+  );
+  assert.equal(
+    isGeneratedToolingCycle([
+      "src/cycle-a.ts",
+      "src/cycle-b.ts",
+      "src/cycle-a.ts",
+    ]),
+    false,
+  );
+});
+
+test("analyzeProject excludes the generated route graph from business cycle findings", async () => {
+  await withFixture(
+    {
+      "src/routeTree.gen.ts":
+        'import type { getRouter } from "./router.tsx";\n',
+      "src/router.tsx": 'import { routeTree } from "./routeTree.gen";\n',
+    },
+    async (root) => {
+      const report = await analyzeProject(root, []);
+      assert.equal(report.violations.length, 0);
+      assert.equal(report.generatedToolingCycles.length, 1);
+    },
   );
 });
 
