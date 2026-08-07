@@ -1,6 +1,4 @@
-export { distillationModuleId } from "./contracts";
-export type {
-  DistillationModuleContract,
-  DistillationModuleId,
-} from "./contracts";
+export * from "./contracts.ts";
+export * from "./domain.ts";
+export { createDistillationApplication } from "./application/index.ts";
 export type { DistillationViewModel } from "./presentation";
