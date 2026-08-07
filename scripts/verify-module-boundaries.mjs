@@ -61,9 +61,7 @@ export const MIGRATION_ALLOWLIST = Object.freeze([
     owner: "settings",
     expiresAtPhase: "P8",
   },
-  ...[
-    "src/routes/__root.tsx",
-  ].map((file) => ({
+  ...["src/routes/__root.tsx"].map((file) => ({
     type: "route-line-limit",
     file,
     reason:
