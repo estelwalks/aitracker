@@ -64,6 +64,19 @@ export function extractImportSources(source) {
   return [...imports].sort();
 }
 
+/**
+ * Page-level collection polling is intentionally forbidden. A small interval
+ * used only to animate an install progress indicator is the sole current UI
+ * exception; it must be explicitly named `progressTimerRef` so the exception
+ * remains reviewable rather than becoming a general escape hatch.
+ */
+export function hasPageCollectionInterval(source) {
+  return (
+    /\b(?:window\.)?setInterval\s*\(/.test(source) &&
+    !/progressTimerRef/.test(source)
+  );
+}
+
 function resolveRelativeImport(sourceFile, importSource, sourceFiles) {
   if (!importSource.startsWith(".")) return undefined;
 
@@ -214,6 +227,14 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
           type: "route-line-limit",
           file: repoPath,
           detail: `${lineCount} lines (limit ${ROUTE_LINE_LIMIT})`,
+        });
+      }
+      if (hasPageCollectionInterval(source)) {
+        violations.push({
+          type: "route-collection-interval",
+          file: repoPath,
+          detail:
+            "setInterval is not allowed in routes; use a Task/Job status query instead",
         });
       }
       for (const importSource of imports.filter(
