@@ -1,5 +1,6 @@
 import "./lib/error-capture";
 
+import { ensureBackgroundRuntimeStarted } from "./app/bootstrap.server.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
@@ -59,6 +60,9 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // The bootstrap is a no-op for web development by policy, while desktop
+      // composition may inject the scheduler before the first SSR request.
+      await ensureBackgroundRuntimeStarted();
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(request, response);
