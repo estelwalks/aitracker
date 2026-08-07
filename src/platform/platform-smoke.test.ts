@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ENV } from "../lib/app-config";
 
 import { PUBLIC_MODULE_CATALOG } from "../app/module-catalog.generated.ts";
 import {
@@ -53,7 +54,7 @@ test("Linux is visible as planned and runtime startup remains disabled", () => {
 test("Node runtime mapping is deterministic for supported platform targets", () => {
   for (const { node, os } of platformMatrix) {
     const identity = createNodeRuntimeIdentity({
-      env: { TRUSTTOOLS_RUNTIME: "desktop" },
+      env: { [ENV.RUNTIME]: "desktop" },
       platform: node,
     });
     assert.equal(identity.platform, os === "windows" ? "windows" : "macos");

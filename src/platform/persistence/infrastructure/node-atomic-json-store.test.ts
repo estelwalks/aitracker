@@ -3,6 +3,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { APP_ID } from "../../../lib/app-config";
 
 import { NodeAtomicJsonStore } from "./node-atomic-json-store.ts";
 import { NodeFileLock, mapNodeError } from "./node-file-lock.ts";
@@ -34,7 +35,7 @@ const schema = {
 async function withTempDirectory<T>(
   run: (directory: string) => Promise<T>,
 ): Promise<T> {
-  const directory = await mkdtemp(join(tmpdir(), "trusttools-persistence-"));
+  const directory = await mkdtemp(join(tmpdir(), `${APP_ID}-persistence-`));
   try {
     return await run(directory);
   } finally {

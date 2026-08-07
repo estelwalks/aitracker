@@ -5,6 +5,7 @@ import {
   type RuntimeMode,
   type RuntimePlatform,
 } from "./contracts.ts";
+import { ENV } from "../../lib/app-config";
 
 /** Dependencies are injectable to keep runtime detection deterministic. */
 export interface NodeRuntimeIdentityDependencies {
@@ -35,9 +36,7 @@ export function createNodeRuntimeIdentity(
     kind,
     mode,
     platform,
-    enableBackgroundTasks: parseBooleanFlag(
-      env.TRUSTTOOLS_ENABLE_BACKGROUND_TASKS,
-    ),
+    enableBackgroundTasks: parseBooleanFlag(env[ENV.ENABLE_BACKGROUND_TASKS]),
   });
 }
 
@@ -45,7 +44,7 @@ export function runtimeKindFromEnvironment(
   env: Readonly<Record<string, string | undefined>>,
   versions: Readonly<{ electron?: string }> = {},
 ): RuntimeKind {
-  const configured = env.TRUSTTOOLS_RUNTIME;
+  const configured = env[ENV.RUNTIME];
   if (
     configured === "desktop" ||
     configured === "web" ||
