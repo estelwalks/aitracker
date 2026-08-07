@@ -42,7 +42,8 @@
     "verify:architecture": "node scripts/verify-module-boundaries.mjs",
     "verify:architecture:blocking": "node scripts/verify-module-boundaries.mjs --blocking",
     "verify:job-catalog": "node --import tsx scripts/verify-job-catalog.mjs",
-    "verify:module-catalog": "node --import tsx scripts/verify-module-catalog.mjs"
+    "verify:module-catalog": "node --import tsx scripts/verify-module-catalog.mjs",
+    "check:opensource-hygiene": "node scripts/check-open-source-hygiene.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
