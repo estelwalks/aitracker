@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "id": "usage.refresh",
+      "executorKey": "refresh-usage-v1",
+      "category": "collection",
+      "defaultSchedule": { "kind": "interval", "minutes": 15 },
+      "constraints": {
+        "minMinutes": 5,
+        "maxMinutes": 1440,
+        "singleFlight": true
+      },
+      "startupPolicy": "if-stale",
+      "retry": { "maxAttempts": 2, "backoffSeconds": [30, 120] },
+      "timeoutMs": 120000,
+      "queue": "background",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": true, "i18nKey": "tasks.usageRefresh" }
+    },
+    {
+      "id": "skills.refresh",
+      "executorKey": "refresh-skills-v1",
+      "category": "collection",
+      "defaultSchedule": { "kind": "interval", "minutes": 60 },
+      "constraints": {
+        "minMinutes": 15,
+        "maxMinutes": 10080,
+        "singleFlight": true
+      },
+      "startupPolicy": "if-stale",
+      "retry": { "maxAttempts": 2, "backoffSeconds": [60, 300] },
+      "timeoutMs": 180000,
+      "queue": "background",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": true, "i18nKey": "tasks.skillsRefresh" }
+    },
+    {
+      "id": "sessions.refresh",
+      "executorKey": "refresh-sessions-v1",
+      "category": "collection",
+      "defaultSchedule": { "kind": "interval", "minutes": 30 },
+      "constraints": {
+        "minMinutes": 5,
+        "maxMinutes": 1440,
+        "singleFlight": true
+      },
+      "startupPolicy": "disabled",
+      "retry": { "maxAttempts": 1, "backoffSeconds": [60] },
+      "timeoutMs": 180000,
+      "queue": "background",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": true, "i18nKey": "tasks.sessionsRefresh" }
+    },
+    {
+      "id": "retention.apply",
+      "executorKey": "apply-retention-v1",
+      "category": "maintenance",
+      "defaultSchedule": { "kind": "daily", "localTime": "03:00" },
+      "constraints": {
+        "minMinutes": 1440,
+        "maxMinutes": 10080,
+        "singleFlight": true
+      },
+      "startupPolicy": "disabled",
+      "retry": { "maxAttempts": 1, "backoffSeconds": [300] },
+      "timeoutMs": 120000,
+      "queue": "maintenance",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": true, "i18nKey": "tasks.retentionApply" }
+    },
+    {
+      "id": "reports.generate",
+      "executorKey": "generate-report-v1",
+      "category": "report",
+      "defaultSchedule": {
+        "kind": "weekly",
+        "weekday": 1,
+        "localTime": "09:00"
+      },
+      "constraints": {
+        "minMinutes": 10080,
+        "maxMinutes": 10080,
+        "singleFlight": true
+      },
+      "startupPolicy": "disabled",
+      "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+      "timeoutMs": 300000,
+      "queue": "interactive",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+    }
+  ]
+}
