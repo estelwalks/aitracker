@@ -4,6 +4,7 @@ export type {
   EvidenceRef,
   GenerateReportInput,
   ReportDefinition,
+  ReportDefinitionSummary,
   ReportKind,
   ReportRun,
   ReportRunStatus,
