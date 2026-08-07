@@ -6,4 +6,3 @@ export {
   createKnowledgeApplication,
   createKnowledgeRepository,
 } from "./application/index.ts";
-export { createSha256HashPort } from "./infrastructure/hash-port.server.ts";
