@@ -31,6 +31,16 @@ export interface ReportDefinition {
   readonly enabled: boolean;
 }
 
+/** Renderer-safe catalog entry; template body remains server-only. */
+export interface ReportDefinitionSummary {
+  readonly definitionId: string;
+  readonly kind: ReportKind;
+  readonly title: string;
+  readonly templateVersion: number;
+  readonly scheduleRef: ScheduleRef;
+  readonly enabled: boolean;
+}
+
 export interface EvidenceRef {
   readonly module: "usage" | "insights" | "security" | "knowledge" | "tasks";
   readonly ref: string;
@@ -121,7 +131,7 @@ export interface ReportGenerationPort {
 }
 
 export interface ReportsApplication {
-  readonly definitions: readonly ReportDefinition[];
+  readonly definitions: readonly ReportDefinitionSummary[];
   createDraft(input: {
     readonly definitionId: string;
     readonly actor: string;
