@@ -1,4 +1,4 @@
-import type { Translations } from "../../messages";
+import type { Translations } from "../../schema";
 
 import { common } from "./common";
 import { dashboard } from "./dashboard";
