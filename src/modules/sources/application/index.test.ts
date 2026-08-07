@@ -72,6 +72,8 @@ const base: SourceHealthInputs = {
 
 test("projects health from injected snapshots without exposing diagnostics", async () => {
   let reads = 0;
+  const probes = 0;
+  const scans = 0;
   const result = await createSourcesApplication({
     repository: {
       async read() {
@@ -84,6 +86,8 @@ test("projects health from injected snapshots without exposing diagnostics", asy
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(reads, 1);
+  assert.equal(probes, 0);
+  assert.equal(scans, 0);
   const codex = result.value.sources.find((item) => item.sourceId === "codex");
   assert.deepEqual(codex, {
     sourceId: "codex",
