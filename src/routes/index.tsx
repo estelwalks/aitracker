@@ -69,11 +69,12 @@ import {
   buildDashboardExport,
   buildDashboardPosterData,
 } from "../modules/dashboard/presentation";
+import type { DashboardReadModel } from "../modules/dashboard/contracts";
 
 type TFunction = ReturnType<typeof useI18n>["t"];
 
 export const Route = createFileRoute("/")({
-  loader: async ({ location }) => {
+  loader: async ({ location }): Promise<DashboardReadModel> => {
     const locale = resolveLocaleFromSearch(location.search);
     return getDashboardReadModel({ data: locale });
   },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JOB_EXECUTOR_KEYS } from "../../definitions/contracts.ts";
 import { createExecutorRegistry } from "./index.ts";
-import type { UsageApplication } from "../../../usage/application/index.ts";
+import type { UsageApplication } from "../../../usage/index.ts";
 import type { TaskExecutionContext } from "../scheduler.ts";
 
 function context(): TaskExecutionContext {
