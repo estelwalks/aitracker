@@ -26,8 +26,13 @@ test("docs, fixtures and tests are excluded to avoid example false positives", (
   const root = mkdtempSync(join(tmpdir(), "trusttools-hygiene-"));
   mkdirSync(join(root, "docs"));
   mkdirSync(join(root, "fixtures"));
+  mkdirSync(join(root, ".output"));
   writeFileSync(join(root, "docs", "example.md"), "AITracker /Users/alice");
   writeFileSync(join(root, "fixtures", "sample.ts"), "sk-12345678901234567890");
   writeFileSync(join(root, "sample.test.ts"), "AITracker /Users/alice");
+  writeFileSync(
+    join(root, ".output", "manifest.json"),
+    '"/Users/alice/.cache" sk-12345678901234567890',
+  );
   assert.deepEqual(scanRepository(root), []);
 });

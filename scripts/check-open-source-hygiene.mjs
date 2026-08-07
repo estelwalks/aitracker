@@ -5,6 +5,10 @@ const DEFAULT_ROOT = resolve(new URL("..", import.meta.url).pathname);
 const EXCLUDED_DIRS = new Set([
   ".claude",
   ".git",
+  ".nitro",
+  ".output",
+  ".turbo",
+  ".vercel",
   ".next",
   "build",
   "coverage",
@@ -12,6 +16,8 @@ const EXCLUDED_DIRS = new Set([
   "docs",
   "fixtures",
   "node_modules",
+  "out",
+  "release",
   "test-results",
 ]);
 const SOURCE_EXTENSIONS = new Set([
