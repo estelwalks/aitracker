@@ -97,7 +97,11 @@ test("cancels a running executor through AbortSignal", async () => {
     executors: {
       "refresh-usage-v1": async (context) => {
         signal = context.signal;
-        await new Promise(() => undefined);
+        await new Promise<void>((resolve) =>
+          context.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          }),
+        );
       },
     },
   });
