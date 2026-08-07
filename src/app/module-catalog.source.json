@@ -3,57 +3,235 @@
   "modules": [
     {
       "id": "dashboard",
-      "navigation": { "group": "core", "route": "/" },
-      "i18n": { "labelKey": "nav.dashboard" },
-      "capabilities": ["read-dashboard"]
+      "navigation": { "group": "core", "route": "/", "order": 10 },
+      "i18n": { "labelKey": "module.dashboard" },
+      "capabilities": ["read-dashboard"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "usage",
-      "navigation": { "group": "core", "route": "/sources" },
-      "i18n": { "labelKey": "nav.sources" },
-      "capabilities": ["read-usage"]
+      "navigation": { "group": "core", "route": "/usage", "order": 20 },
+      "i18n": { "labelKey": "module.usage" },
+      "capabilities": ["read-usage"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "tracker",
+      "navigation": { "group": "core", "route": "/tracker", "order": 30 },
+      "i18n": { "labelKey": "module.tracker" },
+      "capabilities": ["read-usage"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "agent-directory",
-      "navigation": { "group": "core", "route": "/skills" },
-      "i18n": { "labelKey": "nav.skills" },
-      "capabilities": ["read-agents"]
+      "navigation": { "group": "core", "route": "/agents", "order": 40 },
+      "i18n": { "labelKey": "module.agentDirectory" },
+      "capabilities": ["read-agents"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "skill-catalog",
-      "navigation": { "group": "core", "route": "/skills" },
-      "i18n": { "labelKey": "nav.skills" },
-      "capabilities": ["read-skills"]
+      "navigation": { "group": "core", "route": "/skills", "order": 50 },
+      "i18n": { "labelKey": "module.skillCatalog" },
+      "capabilities": ["read-skills"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "skill-distribution",
-      "navigation": { "group": "core", "route": "/market" },
-      "i18n": { "labelKey": "nav.market" },
-      "capabilities": ["install-skills"]
+      "navigation": { "group": "core", "route": "/market", "order": 60 },
+      "i18n": { "labelKey": "module.skillDistribution" },
+      "capabilities": ["install-skills"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "distillation",
+      "navigation": { "group": "core", "route": "/distill", "order": 70 },
+      "i18n": { "labelKey": "module.distillation" },
+      "capabilities": ["run-distillation"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "knowledge",
+      "navigation": { "group": "core", "route": "/knowledge", "order": 80 },
+      "i18n": { "labelKey": "module.knowledge" },
+      "capabilities": ["read-knowledge"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "reports",
+      "navigation": { "group": "core", "route": "/reports", "order": 90 },
+      "i18n": { "labelKey": "module.reports" },
+      "capabilities": ["generate-reports"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "security-assessment",
-      "navigation": { "group": "defense", "route": "/security" },
-      "i18n": { "labelKey": "nav.security" },
-      "capabilities": ["scan-security"]
+      "navigation": {
+        "group": "protection",
+        "route": "/security/assessment",
+        "order": 110
+      },
+      "i18n": { "labelKey": "module.securityAssessment" },
+      "capabilities": ["scan-security"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "security-monitor",
-      "navigation": { "group": "defense", "route": "/security" },
-      "i18n": { "labelKey": "nav.security" },
-      "capabilities": ["monitor-security"]
+      "navigation": {
+        "group": "protection",
+        "route": "/security/monitor",
+        "order": 120
+      },
+      "i18n": { "labelKey": "module.securityMonitor" },
+      "capabilities": ["monitor-security"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "search",
+      "navigation": { "group": "core", "route": "/search", "order": 130 },
+      "i18n": { "labelKey": "module.search" },
+      "capabilities": ["search-local-data"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "sessions",
+      "navigation": { "group": "core", "route": "/sessions", "order": 131 },
+      "i18n": { "labelKey": "module.sessions" },
+      "capabilities": ["read-sessions"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "projects",
+      "navigation": { "group": "core", "route": "/projects", "order": 132 },
+      "i18n": { "labelKey": "module.projects" },
+      "capabilities": ["read-projects"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "insights",
+      "navigation": { "group": "core", "route": "/insights", "order": 133 },
+      "i18n": { "labelKey": "module.insights" },
+      "capabilities": ["read-insights"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
+    },
+    {
+      "id": "optimization",
+      "navigation": { "group": "core", "route": "/optimization", "order": 134 },
+      "i18n": { "labelKey": "module.optimization" },
+      "capabilities": ["propose-optimization"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "tasks",
-      "navigation": { "group": "infrastructure", "route": "/settings" },
-      "i18n": { "labelKey": "nav.settings" },
-      "capabilities": ["configure-tasks"]
+      "navigation": {
+        "group": "infrastructure",
+        "route": "/tasks",
+        "order": 210
+      },
+      "i18n": { "labelKey": "module.tasks" },
+      "capabilities": ["configure-tasks"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     },
     {
       "id": "settings",
-      "navigation": { "group": "infrastructure", "route": "/settings" },
-      "i18n": { "labelKey": "nav.settings" },
-      "capabilities": ["manage-settings"]
+      "navigation": {
+        "group": "infrastructure",
+        "route": "/settings",
+        "order": 220
+      },
+      "i18n": { "labelKey": "module.settings" },
+      "capabilities": ["manage-settings"],
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      }
     }
   ]
 }
