@@ -6,6 +6,8 @@ import { brandParams } from "../lib/app-config";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
+// The route forwards opaque installationRef values from the public query facade;
+// filesystem paths remain confined to server-side adapters.
 export const Route = createFileRoute("/skills")({
   loader: async ({ location }) => {
     const data = await getLocalSkills();
