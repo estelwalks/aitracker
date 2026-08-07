@@ -172,6 +172,7 @@ export function createKnowledgeRepository(
           provenance: clone(safeProvenance(input.provenance)),
           createdBy,
           status: "draft",
+          securityVerdict: input.securityVerdict,
           createdAt: now,
           updatedAt: now,
           audit: {
@@ -186,6 +187,8 @@ export function createKnowledgeRepository(
               status: "draft",
               title,
               kind: input.kind,
+              securityVerdict:
+                input.securityVerdict ?? existing.securityVerdict,
               updatedAt: now,
             }
           : {
@@ -194,6 +197,7 @@ export function createKnowledgeRepository(
               title,
               currentVersion: version,
               status: "draft",
+              securityVerdict: input.securityVerdict,
               createdAt: now,
               updatedAt: now,
             };

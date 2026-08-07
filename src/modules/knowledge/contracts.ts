@@ -3,6 +3,7 @@ import type {
   AtomicJsonStore,
   Clock,
 } from "../../platform/persistence/contracts.ts";
+import type { AssetVerdict } from "../security-assessment/contracts.ts";
 
 export const knowledgeModuleId = "knowledge" as const;
 export type KnowledgeModuleId = typeof knowledgeModuleId;
@@ -35,6 +36,13 @@ export interface KnowledgeVersion {
   readonly provenance: readonly Provenance[];
   readonly createdBy: string;
   readonly status: KnowledgeStatus;
+  /**
+   * Security verdict carried from the producing flow (distillation
+   * assessment gate). Optional: legacy/legacy-imported assets may lack it,
+   * and a missing verdict must be treated as "unknown" by consumers, never
+   * as "clean".
+   */
+  readonly securityVerdict?: AssetVerdict;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly audit: Readonly<{ action: string; actor: string }>;
@@ -46,6 +54,8 @@ export interface KnowledgeAsset {
   readonly title: string;
   readonly currentVersion: number;
   readonly status: KnowledgeStatus;
+  /** Mirrors the latest version's security verdict, if any. */
+  readonly securityVerdict?: AssetVerdict;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -59,6 +69,8 @@ export interface CreateDraftInput {
   readonly contentRef?: string;
   readonly contentHash?: ContentHash;
   readonly provenance?: readonly Provenance[];
+  /** Security verdict stamped onto the new version (e.g. from a distillation gate). */
+  readonly securityVerdict?: AssetVerdict;
   readonly createdBy: string;
   readonly actor?: string;
 }
