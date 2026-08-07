@@ -88,6 +88,25 @@ test("failed start is mapped to a stable error and can be retried", async () => 
   assert.equal(attempts, 2);
 });
 
+test("factory failures are also mapped and do not poison a retry", async () => {
+  let attempts = 0;
+  const bootstrap = createBackgroundRuntimeBootstrap({
+    getRuntimeIdentity: () => identity(true),
+    createBackgroundRuntime: () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("secret credential");
+      return { start: () => undefined };
+    },
+  });
+
+  await assert.rejects(
+    bootstrap.ensureStarted(),
+    BackgroundRuntimeBootstrapError,
+  );
+  assert.equal((await bootstrap.ensureStarted()).status, "started");
+  assert.equal(attempts, 2);
+});
+
 test("stop is explicit, idempotent, and waits for a successful start", async () => {
   let starts = 0;
   let stops = 0;
