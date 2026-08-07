@@ -28,7 +28,6 @@ import {
 } from "../lib/pricing/server-fns";
 import { ThemeProvider } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
-import { refreshLocalUsageSnapshot } from "../lib/local-usage";
 import { seedDailyCountFromPlatform } from "../lib/security/daily-limit";
 
 function NotFoundComponent() {
@@ -195,7 +194,7 @@ function RootComponent() {
       >
         <ThemeProvider>
           <PlatformPersistenceSeed />
-          <LocalUsageAutoRefresh />
+          {/* Collection is task-driven; routes invalidate explicitly after user actions. */}
           <AppShell>
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
@@ -215,55 +214,5 @@ function PlatformPersistenceSeed() {
   useEffect(() => {
     void seedDailyCountFromPlatform();
   }, []);
-  return null;
-}
-
-function LocalUsageAutoRefresh() {
-  const router = useRouter();
-
-  useEffect(() => {
-    let refreshing = false;
-    let lastRefresh = Date.now();
-
-    const refresh = async (force = false) => {
-      const pathname = router.state.location.pathname;
-      if (
-        refreshing ||
-        document.visibilityState !== "visible" ||
-        (pathname !== "/" &&
-          pathname !== "/sessions" &&
-          pathname !== "/sources")
-      ) {
-        return;
-      }
-      const interval = 5_000;
-      if (!force && Date.now() - lastRefresh < interval) return;
-
-      refreshing = true;
-      try {
-        await refreshLocalUsageSnapshot();
-        lastRefresh = Date.now();
-        await router.invalidate();
-      } catch {
-        return;
-      } finally {
-        refreshing = false;
-      }
-    };
-
-    const timer = window.setInterval(() => void refresh(), 5_000);
-    const onFocus = () => void refresh(true);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refresh(true);
-    };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [router]);
-
   return null;
 }
