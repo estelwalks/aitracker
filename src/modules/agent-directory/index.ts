@@ -16,3 +16,6 @@ export type {
 } from "./contracts";
 export { projectAgentDefinitions } from "./registry-projection";
 export type { AgentDirectoryViewModel } from "./presentation";
+
+// Server composition roots import this explicit adapter path. It is not
+// re-exported from the browser-safe module entry.
