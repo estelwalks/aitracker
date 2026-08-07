@@ -1,6 +1,40 @@
-export { skillCatalogModuleId } from "./contracts";
+export { skillCatalogModuleId } from "./contracts.ts";
 export type {
+  Installability,
+  OfflineCache,
+  OfflineCacheDocument,
+  PackageHash,
+  PackageRef,
+  SecurityVerdict,
+  SkillCatalogErrorCode,
+  SkillCatalogFilter,
   SkillCatalogModuleContract,
   SkillCatalogModuleId,
-} from "./contracts";
-export type { SkillCatalogViewModel } from "./presentation";
+  SkillPackage,
+  SkillPackageDto,
+  SkillPackageMetadataInput,
+  SkillPackageRecord,
+  SkillSource,
+  SkillSourceKind,
+  SkillSourceRef,
+} from "./contracts.ts";
+export {
+  applySecurityAssessment,
+  dedupePackages,
+  filterSkillPackages,
+  normalizeSkillPackage,
+  packageHash,
+  toSkillPackageDto,
+  verifyPackageHash,
+} from "./domain.ts";
+export {
+  evaluateInstallability,
+  parseSkillPackageMetadata,
+  projectSkillPackage,
+} from "./application/index.ts";
+export {
+  cacheDocumentFromEntries,
+  createOfflineCache,
+  loadOfflineCache,
+  saveOfflineCache,
+} from "./infrastructure/offline-cache.ts";
