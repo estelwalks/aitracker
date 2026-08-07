@@ -129,5 +129,5 @@ export const requestApprovedSkillInstall = createServerFn({ method: "POST" })
     return projectInstallResult(installed);
   });
 
-export type { SkillSnapshot } from "../skill-catalog/query.ts";
-export { getLocalSkills } from "../skill-catalog/query.ts";
+export type { SkillSnapshot } from "../skill-catalog/index.ts";
+export { getLocalSkills } from "../skill-catalog/index.ts";
