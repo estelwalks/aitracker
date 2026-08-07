@@ -36,4 +36,14 @@ export const common = {
   reload: "再読み込み",
   localServiceUnavailable:
     "ローカルサービスがリクエストを完了できませんでした。ページを再読み込みするか、ホームに戻ってください。",
+  status: {
+    fresh: "最新",
+    stale: "期限切れ",
+    running: "処理中",
+    waitingApproval: "確認待ち",
+    failed: "失敗",
+    empty: "データなし",
+    offline: "オフライン",
+    disabled: "無効",
+  },
 } as const;

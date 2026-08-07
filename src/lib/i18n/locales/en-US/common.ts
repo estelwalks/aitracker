@@ -34,4 +34,14 @@ export const common = {
   reload: "Reload",
   localServiceUnavailable:
     "The local service could not complete the request — reload the page or go back to the dashboard.",
+  status: {
+    fresh: "Up to date",
+    stale: "Out of date",
+    running: "In progress",
+    waitingApproval: "Awaiting approval",
+    failed: "Failed",
+    empty: "No data",
+    offline: "Offline",
+    disabled: "Disabled",
+  },
 } as const;
