@@ -7,7 +7,11 @@ import type {
   TaskPreferencesFile,
   JobRun,
 } from "./task-storage.ts";
-import { createTaskScheduler, nextRunAt } from "./scheduler.ts";
+import {
+  createTaskScheduler,
+  nextRunAt,
+  type SchedulerOptions,
+} from "./scheduler.ts";
 
 function harness() {
   const runs: JobRun[] = [];
@@ -110,6 +114,15 @@ test("startup performs abandoned-run recovery before scheduling", async () => {
   const h = harness();
   let recoveries = 0;
   const timers: ReturnType<typeof setTimeout>[] = [];
+  const scheduleTimer: NonNullable<SchedulerOptions["setTimeout"]> = (
+    handler,
+    delay,
+  ) => {
+    const timer = setTimeout(handler, delay);
+    timers.push(timer);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    return timer;
+  };
   const scheduler = createTaskScheduler({
     preferences: h.prefs,
     runs: {
@@ -119,11 +132,7 @@ test("startup performs abandoned-run recovery before scheduling", async () => {
         return [];
       },
     },
-    setTimeout: ((handler: () => void, _delay: number) => {
-      const timer = setTimeout(handler, 60_000);
-      timers.push(timer);
-      return timer;
-    }) as typeof setTimeout,
+    setTimeout: scheduleTimer,
   });
   await scheduler.start();
   assert.equal(recoveries, 1);
