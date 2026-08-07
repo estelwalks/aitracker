@@ -16,3 +16,17 @@ export type {
   TargetCapability,
   UninstallPlan,
 } from "./contracts.ts";
+export {
+  getLocalSkills,
+  getMarketSkills,
+  MARKET_AGENTS,
+  requestApprovedSkillInstall,
+} from "./query.ts";
+export type {
+  InstallSkillResult,
+  MarketAgent,
+  MarketListResult,
+  MarketSkill,
+  MarketSort,
+  SkillSnapshot,
+} from "./query.ts";
