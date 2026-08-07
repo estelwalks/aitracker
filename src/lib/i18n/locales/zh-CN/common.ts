@@ -42,4 +42,17 @@ export const common = {
     offline: "离线模式",
     disabled: "已停用",
   },
+  reports: {
+    pageTitle: "简报与记忆",
+    pageDesc: "汇总每日与每周的 Token 使用、风险与知识变化，生成本地简报。",
+    definitions: "简报模板",
+    reports: "已生成简报",
+    emptyTitle: "暂无简报",
+    emptyDesc: "首次生成后，简报将在此处列出。",
+    generate: "生成简报",
+    generateHint: "生成能力将在后续版本接入调度器。",
+    kindDaily: "日报",
+    kindWeekly: "周报",
+    updatedAt: "更新于 {time}",
+  },
 } as const;

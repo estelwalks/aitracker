@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
@@ -75,11 +76,11 @@ export interface CompositionRoot {
    * Generation currently runs against the deterministic offline model.
    */
   readonly reports: ReportsApplication;
-  /** Resolved data root (`process.env.TRUSTTOOLS_USAGE_HOME ?? homedir()`). */
+  /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
   readonly dataRoot: string;
 }
 
-const COMPOSITION_GLOBAL = "__TRUSTTOOLS_COMPOSITION__" as const;
+export const COMPOSITION_GLOBAL = `__${APP_ID.toUpperCase()}_COMPOSITION__`;
 
 let composition: CompositionRoot | undefined;
 
@@ -99,8 +100,8 @@ function writeGlobalCache(value: Promise<CompositionRoot> | undefined): void {
 }
 
 async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
-  const dataRoot = process.env.TRUSTTOOLS_USAGE_HOME ?? homedir();
-  const tasksDir = join(dataRoot, ".trusttools", "tasks");
+  const dataRoot = process.env[ENV.USAGE_HOME] ?? homedir();
+  const tasksDir = join(dataRoot, APP_DATA_DIR, "tasks");
   // Lazy: ensured on first construction so a fresh install incurs no I/O
   // until the scheduler is actually requested. `recursive: true` is a no-op
   // when the directory already exists.

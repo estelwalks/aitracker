@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { NodeAtomicJsonStore } from "../../../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import { TEST_TMP_PREFIX } from "../../../lib/app-config.ts";
 import {
   createAtomicReportStore,
   DEFAULT_REPORT_FILE,
@@ -16,7 +17,7 @@ import type { ReportDocument, ReportRun } from "../contracts.ts";
 const clock = { now: () => new Date("2026-08-07T00:00:00.000Z") };
 
 async function temp<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), `trusttools-reports-`));
+  const dir = await mkdtemp(join(tmpdir(), `${TEST_TMP_PREFIX}reports-`));
   try {
     return await fn(dir);
   } finally {

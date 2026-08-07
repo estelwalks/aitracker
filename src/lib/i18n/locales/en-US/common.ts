@@ -44,4 +44,19 @@ export const common = {
     offline: "Offline",
     disabled: "Disabled",
   },
+  reports: {
+    pageTitle: "Briefings & Memory",
+    pageDesc:
+      "Summarize daily and weekly token usage, risks and knowledge changes into local briefings.",
+    definitions: "Brief Templates",
+    reports: "Generated Briefings",
+    emptyTitle: "No briefings yet",
+    emptyDesc: "Once generated, briefings will be listed here.",
+    generate: "Generate briefing",
+    generateHint:
+      "Generation will be wired to the scheduler in a later release.",
+    kindDaily: "Daily",
+    kindWeekly: "Weekly",
+    updatedAt: "Updated {time}",
+  },
 } as const;

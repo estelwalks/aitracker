@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { APP_DATA_DIR, ENV, TEST_TMP_PREFIX } from "../lib/app-config.ts";
 import {
   getCompositionRoot,
   resetCompositionRootForTests,
@@ -12,9 +13,9 @@ import type { JobRun } from "../modules/tasks/application/task-storage.ts";
 
 /**
  * End-to-end integration for the composition-wired scheduler. Uses the REAL
- * getCompositionRoot() (not injected fakes) against an isolated
- * TRUSTTOOLS_USAGE_HOME so it exercises AtomicJsonStore → repository →
- * scheduler with the same wiring production uses.
+ * getCompositionRoot() (not injected fakes) against an isolated usage-home env
+ * var so it exercises AtomicJsonStore → repository → scheduler with the same
+ * wiring production uses.
  *
  * Scope: these tests prove the *composition wiring* is live — that start()
  * drives recoverRunning() against the AtomicJsonStore-backed repository and
@@ -32,9 +33,11 @@ async function isolatedRoot<T>(
     dir: string,
   ) => Promise<T>,
 ): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "trusttools-composition-it-"));
-  const savedHome = process.env.TRUSTTOOLS_USAGE_HOME;
-  process.env.TRUSTTOOLS_USAGE_HOME = dir;
+  const dir = await mkdtemp(
+    join(tmpdir(), `${TEST_TMP_PREFIX}composition-it-`),
+  );
+  const savedHome = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = dir;
   try {
     const root = await getCompositionRoot();
     try {
@@ -44,8 +47,8 @@ async function isolatedRoot<T>(
     }
   } finally {
     resetCompositionRootForTests();
-    if (savedHome === undefined) delete process.env.TRUSTTOOLS_USAGE_HOME;
-    else process.env.TRUSTTOOLS_USAGE_HOME = savedHome;
+    if (savedHome === undefined) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = savedHome;
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
@@ -92,7 +95,7 @@ test("appended runs persist to the on-disk JSON file through the wired AtomicJso
     // The AtomicJsonStore wraps the file as { schemaVersion, data }; reading
     // the raw file proves the commit is durable on the wired repository.
     const raw = await readFile(
-      join(dir, ".trusttools", "tasks", "runs.v1.json"),
+      join(dir, APP_DATA_DIR, "tasks", "runs.v1.json"),
       "utf8",
     );
     const wrapped = JSON.parse(raw) as { data: { runs: JobRun[] } };
@@ -111,7 +114,7 @@ test("composition exposes a scheduler, preferences and runs bound to the resolve
     assert.equal(
       root.dataRoot,
       dir,
-      "data root must follow TRUSTTOOLS_USAGE_HOME",
+      "data root must follow the configured usage-home env var",
     );
     // getNextRunAt exercises the catalog binding without scheduling execution.
     const next = root.scheduler.getNextRunAt("usage.refresh" as never);
