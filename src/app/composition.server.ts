@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 import { SystemClock } from "../platform/persistence/clock.ts";
@@ -28,6 +29,15 @@ import {
   offlineProvider,
 } from "../modules/ai-orchestration/provider-registry.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
+import { createReportsApplication } from "../modules/reports/application/index.ts";
+import type { ReportsApplication } from "../modules/reports/index.ts";
+import {
+  DEFAULT_REPORT_FILE,
+  createAtomicReportStore,
+  reportStoreSchema,
+} from "../modules/reports/infrastructure/atomic-report-store.ts";
+import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
+import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -59,6 +69,12 @@ export interface CompositionRoot {
    * response until a real provider is registered.
    */
   readonly aiExecutor: AIExecutorPort;
+  /**
+   * Reports application. Backed by an AtomicJsonStore-backed report store, the
+   * AI generation adapter (using `aiExecutor`) and the offline context port.
+   * Generation currently runs against the deterministic offline model.
+   */
+  readonly reports: ReportsApplication;
   /** Resolved data root (`process.env.TRUSTTOOLS_USAGE_HOME ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -109,21 +125,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
   const runs = createTaskRunRepository({ store: runsStore, clock });
 
-  // TODO(usage-migration): inject the real `usage` application once the
-  // local-usage scanner ports land (follow-up task). Until then every
-  // executor resolves to a safe `unavailable` state — the scheduler is
-  // fully assembled but performs no collection. Passing `{}` is intentional
-  // and is NOT a placeholder to fill with a synthetic collector: a fake
-  // collector would create a second source of truth for usage data.
-  const executorRegistry = createExecutorRegistry();
-
-  const scheduler = createTaskScheduler({
-    preferences,
-    runs,
-    clock,
-    executors: executorRegistry.executors,
-  });
-
   // AI orchestration: register the deterministic offline provider by default so
   // distillation/reports get a stable fallback. A real provider can be
   // registered later without touching this wiring.
@@ -133,7 +134,39 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     offlineFallback: deterministicOfflineFallback,
   });
 
-  return { scheduler, preferences, runs, aiExecutor, dataRoot };
+  // Reports: assemble the application after aiExecutor so the generation
+  // adapter can depend on it. The store lives next to the task runs under the
+  // same `.trusttools/tasks` directory so all scheduler state is co-located.
+  const reportsStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "reports.v1.json"),
+    defaultValue: DEFAULT_REPORT_FILE,
+    schema: reportStoreSchema(),
+    clock,
+  });
+  const reports = createReportsApplication({
+    store: createAtomicReportStore({ store: reportsStore }),
+    context: createReportContextPort(),
+    generation: createReportGenerationPort({ ai: aiExecutor }),
+    now: () => new Date(),
+    createId: (prefix) => `${prefix}:${randomUUID()}`,
+  });
+
+  // TODO(usage-migration): inject the real `usage` application once the
+  // local-usage scanner ports land (follow-up task). Until then the usage/
+  // sessions/skills/retention executors resolve to a safe `unavailable` state.
+  // `reports` IS wired above, so `reports.generate` runs end-to-end against the
+  // offline model. Passing only `reports` is intentional and is NOT a
+  // placeholder for synthetic collectors.
+  const executorRegistry = createExecutorRegistry({ reports });
+
+  const scheduler = createTaskScheduler({
+    preferences,
+    runs,
+    clock,
+    executors: executorRegistry.executors,
+  });
+
+  return { scheduler, preferences, runs, aiExecutor, reports, dataRoot };
 }
 
 /**
