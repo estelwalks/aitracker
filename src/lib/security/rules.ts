@@ -6,6 +6,14 @@
 
 import { detectReDoS } from "./redos.ts";
 
+import {
+  SECURITY_RULE_KINDS,
+  type SecurityRuleKind,
+} from "./security-rule-kinds.ts";
+
+export { SECURITY_RULE_KINDS } from "./security-rule-kinds.ts";
+export type { SecurityRuleKind } from "./security-rule-kinds.ts";
+
 /**
  * 规则库版本号。由 security-rules.json 内容哈希派生（scripts/
  * generate-security-rules.mjs），任何规则增删/正则变更都会自动改变版本号，
@@ -16,22 +24,6 @@ export { SECURITY_RULES_VERSION } from "./security-rules.generated.ts";
 /**
  * 内置安全规则的 11 个维度分类（顺序固定，对应 PRD §11）。
  */
-export const SECURITY_RULE_KINDS = [
-  "远程命令执行",
-  "数据泄露",
-  "密钥泄露",
-  "持久化",
-  "破坏性操作",
-  "代码混淆",
-  "注入攻击",
-  "权限提升",
-  "文件访问",
-  "网络外联",
-  "提示注入",
-] as const;
-
-export type SecurityRuleKind = (typeof SECURITY_RULE_KINDS)[number];
-
 export interface UserSecurityRule {
   id: string;
   name: string;
