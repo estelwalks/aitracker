@@ -13,3 +13,4 @@ export {
   type DashboardPosterData,
   type DashboardViewModel,
 } from "./presentation";
+export { DashboardPage } from "./presentation/DashboardPage";
