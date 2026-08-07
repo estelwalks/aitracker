@@ -41,7 +41,7 @@ import {
   clearRegenerableCacheQuery,
   getStorageUsageQuery,
   type StorageUsage,
-} from "..";
+} from "../query";
 import {
   AlertDialog,
   AlertDialogAction,
