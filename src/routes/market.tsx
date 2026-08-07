@@ -41,19 +41,19 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import {
+  getLocalSkills,
   getMarketSkills,
   MARKET_AGENTS,
-  requestSkillInstall,
-} from "../lib/local-market";
+  requestApprovedSkillInstall,
+} from "../modules/skill-distribution/query";
 import type {
   InstallSkillResult,
   MarketAgent,
   MarketListResult,
   MarketSkill,
   MarketSort,
-} from "../lib/local-market";
-import { getLocalSkills } from "../lib/local-skills/server-fns";
-import type { SkillSnapshot } from "../lib/local-skills/types";
+  SkillSnapshot,
+} from "../modules/skill-distribution/query";
 import { toUiError } from "../lib/errors";
 import { useI18n } from "../lib/i18n/context";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
@@ -621,16 +621,11 @@ function SkillDetailDrawer({
     startProgress();
 
     try {
-      const nextOutcome = await requestSkillInstall({
+      const nextOutcome = await requestApprovedSkillInstall({
         data: {
-          skill: {
-            name: skill.name,
-            repoOwner: skill.repoOwner,
-            repoName: skill.repoName,
-            repoPath: skill.repoPath,
-            slug: skill.slug,
-          },
-          agents: [selectedAgent],
+          confirmed: true,
+          packageRef: skill.packageRef,
+          agent: selectedAgent,
         },
       });
 
@@ -991,9 +986,9 @@ function InstallOutcome({ outcome }: { outcome: InstallSkillResult }) {
             .slice(0, 20)
             .map((finding, index) => (
               <li
-                key={`${finding.path}:${finding.line}:${finding.rule}:${index}`}
+                key={`${finding.ref}:${finding.line}:${finding.rule}:${index}`}
               >
-                [{finding.severity}] {finding.path}
+                [{finding.severity}] {finding.rule}
                 {finding.line ? `:${finding.line}` : ""} · {finding.message}
               </li>
             ))}

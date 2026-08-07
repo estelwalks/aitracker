@@ -67,19 +67,17 @@ import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { cn } from "../lib/utils";
 import {
-  batchUninstallSkills,
   getLocalSkills,
-  installSkill,
-  syncLocalSkill,
-  uninstallSkill,
+  requestApprovedBatchUninstall,
+  requestApprovedSkillInstall,
+  requestApprovedSkillSync,
+  requestApprovedSkillUninstall,
   updateSkillBlacklist,
-} from "../lib/local-skills/server-fns";
-import {
   SKILL_AGENTS,
   type LocalSkill,
   type SkillAgent,
   type SkillSnapshot,
-} from "../lib/local-skills/types";
+} from "../modules/skill-catalog/query";
 
 export const Route = createFileRoute("/skills")({
   loader: async ({ location }) => {
@@ -303,19 +301,28 @@ function SkillsPage() {
     try {
       if (target.type === "single") {
         for (const installation of target.skill.installations) {
-          await uninstallSkill({ data: installation.path });
+          await requestApprovedSkillUninstall({
+            data: {
+              confirmed: true,
+              installationRef: installation.installationRef,
+            },
+          });
         }
         await refresh(t("skills.toast.deleted", { name: target.skill.name }));
       } else {
-        const paths = [
+        const installationRefs = [
           ...new Set(
-            target.skills.flatMap((s) => s.installations.map((i) => i.path)),
+            target.skills.flatMap((s) =>
+              s.installations.map((i) => i.installationRef),
+            ),
           ),
         ];
-        if (paths.length === 0) {
+        if (installationRefs.length === 0) {
           toast.success(t("skills.toast.nothingToUninstall"));
         } else {
-          const result = await batchUninstallSkills({ data: paths });
+          const result = await requestApprovedBatchUninstall({
+            data: { confirmed: true, installationRefs },
+          });
           setCheckedIds(new Set());
           await refresh();
           if (result.succeeded.length > 0) {
@@ -332,7 +339,7 @@ function SkillsPage() {
                 details: result.failed
                   .map((f) =>
                     t("skills.toast.uninstallFailedItem", {
-                      path: f.path,
+                      path: f.installationRef,
                       error: t(f.errorCode ?? "errors.generic", f.errorParams),
                     }),
                   )
@@ -451,8 +458,8 @@ function SkillsPage() {
 
     try {
       for (const skill of skills) {
-        const sourcePath = skill.installations[0]?.path;
-        if (!sourcePath) continue;
+        const sourceInstallationRef = skill.installations[0]?.installationRef;
+        if (!sourceInstallationRef) continue;
 
         // Partition target agents: overwrite (no-conflict + conflict-overwrite) vs skip
         const overwriteAgents: string[] = [];
@@ -472,9 +479,10 @@ function SkillsPage() {
 
         if (overwriteAgents.length > 0) {
           try {
-            const result = await syncLocalSkill({
+            const result = await requestApprovedSkillSync({
               data: {
-                sourcePath,
+                confirmed: true,
+                installationRef: sourceInstallationRef,
                 targetAgents: overwriteAgents,
                 onConflict: "overwrite",
               },
@@ -498,9 +506,10 @@ function SkillsPage() {
 
         if (skipAgents.length > 0) {
           try {
-            const result = await syncLocalSkill({
+            const result = await requestApprovedSkillSync({
               data: {
-                sourcePath,
+                confirmed: true,
+                installationRef: sourceInstallationRef,
                 targetAgents: skipAgents,
                 onConflict: "skip",
               },
@@ -777,7 +786,7 @@ function SkillsPage() {
                         </div>
                         {skill.installations[0] && (
                           <div className="tt-num mt-0.5 truncate text-[10px] text-muted-foreground">
-                            {skill.installations[0].path}
+                            {skill.installations[0].agent}
                           </div>
                         )}
                       </TableCell>
@@ -927,17 +936,17 @@ function SkillsPage() {
               </SheetHeader>
 
               <div className="mt-4 space-y-4 text-[13px]">
-                {/* Source path */}
+                {/* Opaque installation identity */}
                 <div>
                   <div className="tt-label mb-1">
-                    {t("skills.detail.sourcePath")}
+                    {t("skills.detail.installStatus")}
                   </div>
                   {detailSkill.installations.map((inst) => (
                     <div
-                      key={inst.path}
+                      key={inst.installationRef}
                       className="tt-num mt-1 break-all text-[11px] text-muted-foreground"
                     >
-                      {inst.path}
+                      {inst.agent}
                     </div>
                   ))}
                 </div>
@@ -991,7 +1000,7 @@ function SkillsPage() {
                             {installation && (
                               <>
                                 <div className="tt-num mt-1 break-all text-[10px] text-muted-foreground">
-                                  {installation.path}
+                                  {installation.agent}
                                 </div>
                                 <div className="mt-1 text-[10px] text-muted-foreground">
                                   {t("skills.detail.installedAt", {
@@ -1051,8 +1060,12 @@ function SkillsPage() {
                               onClick={() =>
                                 run(
                                   () =>
-                                    uninstallSkill({
-                                      data: installation.path,
+                                    requestApprovedSkillUninstall({
+                                      data: {
+                                        confirmed: true,
+                                        installationRef:
+                                          installation.installationRef,
+                                      },
                                     }),
                                   t("skills.toast.uninstalledFrom", {
                                     name: detailSkill.name,
@@ -1074,10 +1087,12 @@ function SkillsPage() {
                               onClick={() =>
                                 run(
                                   () =>
-                                    installSkill({
+                                    requestApprovedSkillInstall({
                                       data: {
-                                        sourcePath:
-                                          detailSkill.installations[0].path,
+                                        confirmed: true,
+                                        installationRef:
+                                          detailSkill.installations[0]
+                                            .installationRef,
                                         targetAgent: agentName,
                                       },
                                     }),
