@@ -14,7 +14,7 @@ import type {
   SessionSummary,
 } from "../contracts.ts";
 
-function publicSession(record: SessionRecord): SessionSummary {
+export function toPublicSession(record: SessionRecord): SessionSummary {
   return {
     sessionId: record.sessionId,
     source: record.source,
@@ -41,7 +41,7 @@ export function createLegacySessionRepository(): SessionRepository {
     async list(signal) {
       if (signal?.aborted) return [];
       const summary = await scanLocalSessions();
-      return summary.sessions.map(publicSession);
+      return summary.sessions.map(toPublicSession);
     },
   };
 }
