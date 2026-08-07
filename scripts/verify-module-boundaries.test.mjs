@@ -199,7 +199,7 @@ test("completed feature routes are no longer part of the migration baseline", ()
   const routeLineEntries = MIGRATION_ALLOWLIST.filter(
     (entry) => entry.type === "route-line-limit",
   ).map((entry) => entry.file);
-  assert.deepEqual(routeLineEntries, ["src/routes/__root.tsx"]);
+  assert.deepEqual(routeLineEntries, []);
   for (const completedRoute of [
     "src/routes/index.tsx",
     "src/routes/market.tsx",
@@ -208,4 +208,11 @@ test("completed feature routes are no longer part of the migration baseline", ()
   ]) {
     assert.equal(routeLineEntries.includes(completedRoute), false);
   }
+});
+
+test("P8 baseline retains only the known settings cycle", () => {
+  assert.deepEqual(
+    MIGRATION_ALLOWLIST.map((entry) => `${entry.type}:${entry.file}`),
+    ["relative-import-cycle:src/modules/settings/index.ts"],
+  );
 });
