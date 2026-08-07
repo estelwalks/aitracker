@@ -1,5 +1,5 @@
-import type { AssetAssessment } from "../security-assessment/contracts.ts";
-import { evaluatePublishGate } from "../security-assessment/application/index.ts";
+import type { AssetAssessment } from "../security-assessment/index.ts";
+import { evaluatePublishGate } from "../security-assessment/index.ts";
 import type {
   Installability,
   PackageHash,

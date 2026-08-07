@@ -3,14 +3,14 @@ import {
   applyApproved,
   reject,
   rollbackApplied,
-} from "../optimization/application/proposals/index.ts";
+} from "../optimization/index.ts";
 import type {
   ChangeDispatchResult,
   ChangeProposal,
   ProposalApplicationOptions,
   ProposalErrorCode,
-} from "../optimization/application/proposals/contracts.ts";
-import type { SkillPackage } from "../skill-catalog/contracts.ts";
+} from "../optimization/index.ts";
+import type { SkillPackage } from "../skill-catalog/index.ts";
 import { executeInstallPlan } from "./application/index.ts";
 import type {
   DistributionErrorCode,
