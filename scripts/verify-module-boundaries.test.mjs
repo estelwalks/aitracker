@@ -8,6 +8,7 @@ import {
   ROUTE_LINE_LIMIT,
   analyzeProject,
   extractImportSources,
+  hasPageCollectionInterval,
   validateAllowlist,
 } from "./verify-module-boundaries.mjs";
 
@@ -34,6 +35,17 @@ test("extractImportSources finds static imports and exports", () => {
     ),
     ["./side-effect", "./value"],
   );
+});
+
+test("page collection intervals are rejected while install progress animation is allowed", () => {
+  assert.equal(hasPageCollectionInterval("setInterval(refresh, 5000)"), true);
+  assert.equal(
+    hasPageCollectionInterval(
+      "const progressTimerRef = useRef(null); setInterval(tick, 300);",
+    ),
+    false,
+  );
+  assert.equal(hasPageCollectionInterval("setTimeout(refresh, 250)"), false);
 });
 
 test("analyzeProject reports all P0 architecture-boundary categories", async () => {

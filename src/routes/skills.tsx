@@ -70,7 +70,6 @@ import {
   batchUninstallSkills,
   getLocalSkills,
   installSkill,
-  refreshSkillMarketEvidence,
   syncLocalSkill,
   uninstallSkill,
   updateSkillBlacklist,
@@ -163,6 +162,9 @@ function SkillsPage() {
   }, [snapshot]);
 
   const refresh = useCallback(async (message?: string) => {
+    // Refresh is invoked only after an explicit user mutation (install,
+    // uninstall, sync, or blacklist update). Background market-evidence scans
+    // belong to the Tasks/Job runtime and must not be started by this route.
     const next = await getLocalSkills();
     if (next.fingerprint !== snapshotRef.current.fingerprint) {
       snapshotRef.current = next;
@@ -173,30 +175,6 @@ function SkillsPage() {
     }
     if (message) toast.success(message);
   }, []);
-
-  useEffect(() => {
-    let stopped = false;
-    const synchronize = async () => {
-      if (stopped || document.visibilityState !== "visible" || busyRef.current)
-        return;
-      try {
-        await refreshSkillMarketEvidence();
-        await refresh();
-      } catch {
-        return;
-      }
-    };
-    const timer = window.setInterval(synchronize, 5_000);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void synchronize();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [refresh]);
 
   // Reset to first page when filters or sort change
   useEffect(() => {
