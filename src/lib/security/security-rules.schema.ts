@@ -9,8 +9,8 @@
  */
 import { z } from "zod";
 
-import { SECURITY_RULE_KINDS } from "./rules.ts";
 import { detectReDoS } from "./redos.ts";
+import { SECURITY_RULE_KINDS } from "./security-rule-kinds.ts";
 
 export { detectReDoS } from "./redos.ts";
 
