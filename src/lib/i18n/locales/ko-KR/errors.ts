@@ -40,6 +40,15 @@ export const errors = {
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",
   },
+  distillation: {
+    invalidSelection: "1~8개의 중복 없는 세션을 선택하세요",
+    sessionNotFound: "선택한 세션이 존재하지 않거나 사용할 수 없습니다",
+    cancelled: "증류가 취소되었습니다",
+    notFound: "후보가 존재하지 않습니다",
+    notWaiting: "후보가 승인 대기 상태가 아닙니다",
+    knowledgeUnavailable: "지식 저장소를 사용할 수 없습니다",
+    knowledgeFailed: "지식 항목을 기록하지 못했습니다",
+  },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",
     rateResponseIncomplete: "환율 응답이 불완전합니다",

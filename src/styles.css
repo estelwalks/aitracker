@@ -64,10 +64,10 @@
 
   /* 四语言字体回退栈:中文/日文/韩文依次回退,数字与代码继续 JetBrains Mono */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans",
-    "Yu Gothic UI", "Yu Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP",
-    "Noto Sans KR", "Malgun Gothic", "Microsoft YaHei", "Apple SD Gothic Neo",
-    system-ui, sans-serif;
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Yu Gothic UI",
+    "Yu Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans KR",
+    "Malgun Gothic", "Microsoft YaHei", "Apple SD Gothic Neo", system-ui,
+    sans-serif;
   --font-mono:
     "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
 }
@@ -384,6 +384,94 @@
     border-right: 1px solid;
     border-bottom: 1px solid;
   }
+}
+
+/* V4 workspace surfaces: a quieter foundation with focused blue accents. */
+.dashboard-overview-header {
+  isolation: isolate;
+  position: sticky;
+  padding: 1rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 24%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 88% 0%,
+      color-mix(in oklab, var(--color-primary) 18%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-surface) 94%, transparent),
+      var(--color-surface)
+    );
+  box-shadow: 0 16px 40px -34px
+    color-mix(in oklab, var(--color-primary) 80%, transparent);
+}
+
+.skills-filter-panel {
+  padding: 1rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 20%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-primary) 12%, transparent),
+      transparent 38%
+    ),
+    var(--color-surface);
+}
+
+.skill-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.skill-filter-chip:hover {
+  border-color: color-mix(
+    in oklab,
+    var(--color-primary) 50%,
+    var(--color-border)
+  );
+  color: var(--color-foreground);
+}
+
+.skill-filter-chip > span {
+  min-width: 1.15rem;
+  padding: 0.02rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-muted) 84%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.skill-filter-chip-active {
+  border-color: color-mix(
+    in oklab,
+    var(--color-primary) 64%,
+    var(--color-border)
+  );
+  background: color-mix(in oklab, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+}
+
+.skill-filter-chip-active > span {
+  background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  color: var(--color-primary);
 }
 
 /* Dashboard trend summary row */

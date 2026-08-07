@@ -37,6 +37,15 @@ export const errors = {
   sessions: {
     filterInvalid: "会话过滤参数不合法",
   },
+  distillation: {
+    invalidSelection: "请选择 1 至 8 个不重复的会话",
+    sessionNotFound: "所选会话不存在或不可用",
+    cancelled: "蒸馏已取消",
+    notFound: "候选项不存在",
+    notWaiting: "候选项不在待审批状态",
+    knowledgeUnavailable: "知识库不可用",
+    knowledgeFailed: "知识条目写入失败",
+  },
   pricing: {
     modelListInvalid: "模型列表不合法",
     rateResponseIncomplete: "汇率响应不完整",

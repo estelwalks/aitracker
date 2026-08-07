@@ -10,6 +10,7 @@ export const meta = {
     sessions: "Sessions · {appName} V3.0",
     sources: "Data Sources · {appName} V3.0",
     reports: "Briefings & Memory · {appName} V3.0",
+    distill: "Distillation Workbench · {appName} V3.0",
     settings: "Settings · {appName} V3.0",
     notFound: "Page Not Found · {appName} V3.0",
   },

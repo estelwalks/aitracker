@@ -181,6 +181,21 @@ export function SkillsPage({ initial }: SkillsPageProps) {
     [snapshot.skills],
   );
 
+  const agentCounts = useMemo(
+    () =>
+      new Map(
+        SKILL_AGENTS.map((name) => [
+          name,
+          snapshot.skills.filter((skill) =>
+            skill.installations.some(
+              (installation) => installation.agent === name,
+            ),
+          ).length,
+        ]),
+      ),
+    [snapshot.skills],
+  );
+
   // Filtered list (search by name OR description + agent filter)
   const filtered = useMemo(
     () =>
@@ -565,41 +580,56 @@ export function SkillsPage({ initial }: SkillsPageProps) {
       />
 
       {/* Filter bar */}
-      <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 p-3">
-        <span className="text-[11px] text-muted-foreground">
-          {t("skills.pollingHint")}
-        </span>
-        <div className="relative min-w-[180px] flex-1 sm:max-w-64">
-          <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("skills.searchPlaceholder")}
-            className="h-8 w-full rounded-sm border border-border bg-surface-2 pl-8 text-[13px] outline-none focus:border-primary"
-          />
+      <div className="skills-filter-panel mb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{t("skills.pageHeader")}</div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {t("skills.pollingHint")}
+            </p>
+          </div>
+          <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+            <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("skills.searchPlaceholder")}
+              className="h-10 w-full rounded-lg border border-border bg-background/70 pl-9 text-[13px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </div>
+          <TTButton
+            disabled={busy}
+            onClick={() =>
+              run(() => Promise.resolve(), t("skills.toast.rescanned"))
+            }
+          >
+            <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
+            {t("skills.actions.rescan")}
+          </TTButton>
         </div>
-        <select
-          value={agent}
-          onChange={(event) =>
-            setAgent(event.target.value as "all" | SkillAgent)
-          }
-          className="h-8 rounded-sm border border-border bg-surface px-2 text-[13px]"
-        >
-          <option value="all">{t("skills.filter.agentAll")}</option>
-          {SKILL_AGENTS.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </select>
-        <TTButton
-          className="ml-auto"
-          disabled={busy}
-          onClick={() =>
-            run(() => Promise.resolve(), t("skills.toast.rescanned"))
-          }
-        >
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
-          {t("skills.actions.rescan")}
-        </TTButton>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setAgent("all")}
+            className={`skill-filter-chip ${agent === "all" ? "skill-filter-chip-active" : ""}`}
+          >
+            {t("skills.filter.agentAll")}
+            <span>{format.formatNumber(snapshot.skills.length)}</span>
+          </button>
+          {SKILL_AGENTS.filter((name) => (agentCounts.get(name) ?? 0) > 0).map(
+            (name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setAgent(name)}
+                className={`skill-filter-chip ${agent === name ? "skill-filter-chip-active" : ""}`}
+              >
+                {name}
+                <span>{format.formatNumber(agentCounts.get(name) ?? 0)}</span>
+              </button>
+            ),
+          )}
+        </div>
       </div>
 
       {/* Skill table */}

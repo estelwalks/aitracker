@@ -50,6 +50,7 @@ const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
   ["/sessions", "meta.titles.sessions"],
   ["/sources", "meta.titles.sources"],
   ["/reports", "meta.titles.reports"],
+  ["/distill", "meta.titles.distill"],
   ["/settings", "meta.titles.settings"],
   ["/", "meta.titles.dashboard"],
 ];

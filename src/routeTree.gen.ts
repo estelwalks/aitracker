@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DistillRouteImport } from './routes/distill'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
@@ -22,6 +23,11 @@ import { Route as SourcesRouteImport } from './routes/sources'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DistillRoute = DistillRouteImport.update({
+  id: '/distill',
+  path: '/distill',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MarketRoute = MarketRouteImport.update({
@@ -67,6 +73,7 @@ const SourcesRoute = SourcesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/distill'
     | '/market'
     | '/reports'
     | '/security'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/distill'
     | '/market'
     | '/reports'
     | '/security'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/distill'
     | '/market'
     | '/reports'
     | '/security'
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DistillRoute: typeof DistillRoute
   MarketRoute: typeof MarketRoute
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/distill': {
+      id: '/distill'
+      path: '/distill'
+      fullPath: '/distill'
+      preLoaderRoute: typeof DistillRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/market': {
@@ -217,6 +237,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DistillRoute: DistillRoute,
   MarketRoute: MarketRoute,
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
