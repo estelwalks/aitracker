@@ -60,4 +60,22 @@ export const common = {
     kindWeekly: "週次",
     updatedAt: "更新 {time}",
   },
+  distillation: {
+    pageTitle: "蒸留ワークベンチ",
+    pageDesc:
+      "選択したセッションのメタデータからナレッジ草案を抽出し、承認後にナレッジライブラリへ書き込みます。読み取るのはマスキング済みのセッション概要のみで、会話本文は読み取りません。",
+    selectSessions: "セッションを選択（最大 {max} 件）",
+    start: "蒸留を開始",
+    startHint: "開始するにはセッションを 1 件以上選択してください。",
+    noSessions: "蒸留可能なセッションがありません",
+    noSessionsDesc:
+      "ローカルセッションがスキャンされていない場合、リストは空です。",
+    selected: "{count} 件選択",
+    candidate: "候補",
+    approve: "承認してナレッジに書き込む",
+    cancel: "キャンセル",
+    candidateNote:
+      "候補はサーバーメモリに保持され、リロード後は失われます。候補が永続化された時点で完全な承認 UI を提供します。",
+    selectedTurns: "{count} ターン",
+  },
 } as const;

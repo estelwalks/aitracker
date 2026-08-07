@@ -39,6 +39,17 @@ import {
 } from "../modules/reports/infrastructure/atomic-report-store.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
+import { createKnowledgeRepository } from "../modules/knowledge/application/index.ts";
+import {
+  DEFAULT_KNOWLEDGE_DOCUMENT,
+  knowledgeDocumentSchema,
+} from "../modules/knowledge/infrastructure/atomic-knowledge-store.ts";
+import { createSha256HashPort } from "../modules/knowledge/infrastructure/hash-port.server.ts";
+import { createDistillationApplication } from "../modules/distillation/application/index.ts";
+import type { DistillationApplication } from "../modules/distillation/index.ts";
+import { createSessionQueryService } from "../modules/sessions/index.ts";
+import type { SessionQueryPort } from "../modules/sessions/contracts.ts";
+import { createLegacySessionRepository } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -76,6 +87,20 @@ export interface CompositionRoot {
    * Generation currently runs against the deterministic offline model.
    */
   readonly reports: ReportsApplication;
+  /**
+   * Distillation application. Backed by the legacy local-sessions repository
+   * (wrapped as a `SessionQueryPort`), `aiExecutor` and an AtomicJsonStore-backed
+   * knowledge repository. Candidates live in-memory until approved; approval is
+   * the only path that writes to the knowledge repository.
+   */
+  readonly distillation: DistillationApplication;
+  /**
+   * Session query port shared by the distillation workbench. Backed by the
+   * same legacy local-sessions scanner as `/sessions`. Exposed so the
+   * distillation transport can render the session picker without reaching
+   * into the application's private ports.
+   */
+  readonly sessions: SessionQueryPort;
   /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -152,6 +177,39 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     createId: (prefix) => `${prefix}:${randomUUID()}`,
   });
 
+  // Distillation: assemble after reports and knowledge so it can depend on
+  // both. The knowledge repository persists distilled drafts (only after
+  // explicit approval in the distillation application). The sessions port is
+  // backed by the legacy local-sessions scanner — the same source the
+  // `/sessions` route reads. `dataRoot` mirrors the scanner's `$HOME`-relative
+  // storage.
+  //
+  // TODO(security-gate): `gateForDistillationCandidate` could not be wired
+  // here this round — the distillation application keeps no `AssetAssessment`,
+  // so the gate has nothing to read. `createDraft` is therefore called
+  // without `securityVerdict` (consumers treat the missing verdict as
+  // "unknown", never "clean"). Stamping a verdict at approval time is a
+  // follow-up once distillation carries an assessment reference.
+  const knowledgeStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "knowledge.v1.json"),
+    defaultValue: DEFAULT_KNOWLEDGE_DOCUMENT,
+    schema: knowledgeDocumentSchema(),
+    clock,
+  });
+  const knowledge = createKnowledgeRepository({
+    store: knowledgeStore,
+    clock,
+    hash: createSha256HashPort(),
+  });
+  const sessions = createSessionQueryService(createLegacySessionRepository());
+  const distillation = createDistillationApplication({
+    sessions,
+    ai: aiExecutor,
+    knowledge,
+    now: () => new Date(),
+    createCandidateId: () => `candidate:${randomUUID()}`,
+  });
+
   // TODO(usage-migration): inject the real `usage` application once the
   // local-usage scanner ports land (follow-up task). Until then the usage/
   // sessions/skills/retention executors resolve to a safe `unavailable` state.
@@ -167,7 +225,16 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     executors: executorRegistry.executors,
   });
 
-  return { scheduler, preferences, runs, aiExecutor, reports, dataRoot };
+  return {
+    scheduler,
+    preferences,
+    runs,
+    aiExecutor,
+    reports,
+    distillation,
+    sessions,
+    dataRoot,
+  };
 }
 
 /**

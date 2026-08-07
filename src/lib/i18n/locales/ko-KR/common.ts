@@ -58,4 +58,21 @@ export const common = {
     kindWeekly: "주간",
     updatedAt: "업데이트 {time}",
   },
+  distillation: {
+    pageTitle: "증류 워크벤치",
+    pageDesc:
+      "선택한 세션의 메타데이터에서 지식 초안을 추출하여 승인 후 지식 라이브러리에 기록합니다. 마스킹된 세션 요약만 읽으며, 대화 본문은 읽지 않습니다.",
+    selectSessions: "세션 선택(최대 {max}개)",
+    start: "증류 시작",
+    startHint: "시작하려면 세션을 하나 이상 선택하세요.",
+    noSessions: "증류할 수 있는 세션이 없습니다",
+    noSessionsDesc: "로컬 세션이 스캔되지 않으면 목록이 비어 있습니다.",
+    selected: "{count}개 선택됨",
+    candidate: "후보",
+    approve: "승인 후 지식에 기록",
+    cancel: "취소",
+    candidateNote:
+      "후보는 서버 메모리에 보관되며 새로고침 후 유지되지 않습니다. 후보가 영속화된 후에 전체 승인 UI를 제공합니다.",
+    selectedTurns: "{count}턴",
+  },
 } as const;

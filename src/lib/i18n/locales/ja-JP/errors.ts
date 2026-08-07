@@ -46,6 +46,15 @@ export const errors = {
   sessions: {
     filterInvalid: "セッションフィルターが不正です",
   },
+  distillation: {
+    invalidSelection: "1〜8 個の重複しないセッションを選択してください",
+    sessionNotFound: "選択したセッションが存在しないか利用できません",
+    cancelled: "蒸留はキャンセルされました",
+    notFound: "候補が存在しません",
+    notWaiting: "候補は承認待ちではありません",
+    knowledgeUnavailable: "ナレッジストアが利用できません",
+    knowledgeFailed: "ナレッジエントリの書き込みに失敗しました",
+  },
   pricing: {
     modelListInvalid: "モデルリストが不正です",
     rateResponseIncomplete: "為替レートの応答が不完全です",
