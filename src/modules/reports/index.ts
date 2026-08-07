@@ -21,7 +21,6 @@ export type {
 export { BUILTIN_REPORT_DEFINITIONS } from "./domain.ts";
 export { createReportsApplication } from "./application/index.ts";
 export type { ReportsApplicationOptions } from "./application/index.ts";
-export { createInMemoryReportStore } from "./infrastructure/in-memory-store.ts";
 export {
   createReportsPresentation,
   createTaskBackedReportsSource,
