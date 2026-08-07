@@ -83,9 +83,12 @@ export function createBackgroundRuntimeBootstrap(
         return startPromise;
       }
 
-      const candidate = dependencies.createBackgroundRuntime();
-      runtime = candidate;
-      startPromise = Promise.resolve(candidate.start())
+      startPromise = Promise.resolve()
+        .then(() => {
+          const candidate = dependencies.createBackgroundRuntime();
+          runtime = candidate;
+          return candidate.start();
+        })
         .then(() => ({
           status: "started" as const,
           reason: identity.backgroundTasksReason,
