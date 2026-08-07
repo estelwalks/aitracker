@@ -6,6 +6,7 @@ import type {
   TaskExecutor,
 } from "../scheduler.ts";
 import type { UsageApplication } from "../../../usage/index.ts";
+import type { ReportsApplication } from "../../../reports/contracts.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
@@ -28,6 +29,7 @@ export interface ExecutorRegistryOptions {
   readonly sessions?: RefreshSessionsPort;
   readonly skills?: RefreshSkillsPort;
   readonly retention?: ApplyRetentionPort;
+  readonly reports?: ReportsApplication;
 }
 
 export interface ExecutorRegistry {
@@ -99,8 +101,35 @@ function bindPort(
   };
 }
 
-function bindNotImplemented(): TaskExecutor {
-  return async () => unavailable();
+/**
+ * Reports executor. The task scheduler only carries opaque task/run ids, so
+ * the executor derives the report definition from the reports application's
+ * built-in catalog. The catalog exposes a `reports.generate` task that maps
+ * to the daily brief; weekly review is produced by its own scheduled run of
+ * the same use case (the application's `generate` accepts a `definitionId`).
+ *
+ * For now the executor picks the first enabled definition with kind
+ * `"daily"`; if the catalog shape grows, this stays deterministic. When no
+ * reports application is injected the executor fails safe (`unavailable`),
+ * matching the other adapters.
+ */
+function bindReports(app: ReportsApplication | undefined): TaskExecutor {
+  return async () => {
+    if (!app) return unavailable();
+    const definition = app.definitions.find(
+      (item) => item.kind === "daily" && item.enabled,
+    );
+    if (!definition) return unavailable();
+    const result = await app.generate({
+      definitionId: definition.definitionId,
+      trigger: "schedule",
+    });
+    if (!result.ok)
+      throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.failed);
+    // Reports have no `scanned`/`changed`/`diagnosticCount` semantics; an
+    // empty summary keeps the run record minimal and schema-valid.
+    return {};
+  };
 }
 
 /**
@@ -116,7 +145,7 @@ export function createExecutorRegistry(
     "refresh-skills-v1": bindPort(options.skills),
     "refresh-sessions-v1": bindPort(options.sessions),
     "apply-retention-v1": bindPort(options.retention),
-    "generate-report-v1": bindNotImplemented(),
+    "generate-report-v1": bindReports(options.reports),
   };
   const allowed = new Set<string>(JOB_EXECUTOR_KEYS);
   return Object.freeze({
