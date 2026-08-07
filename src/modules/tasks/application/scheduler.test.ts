@@ -106,6 +106,31 @@ test("cancels a running executor through AbortSignal", async () => {
   assert.equal(signal.aborted, true);
 });
 
+test("startup performs abandoned-run recovery before scheduling", async () => {
+  const h = harness();
+  let recoveries = 0;
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: {
+      ...h.repository,
+      recoverRunning: async () => {
+        recoveries += 1;
+        return [];
+      },
+    },
+    setTimeout: ((handler, _delay) => {
+      const timer = setTimeout(handler, 60_000);
+      timers.push(timer);
+      return timer;
+    }) as typeof setTimeout,
+  });
+  await scheduler.start();
+  assert.equal(recoveries, 1);
+  await scheduler.stop();
+  timers.forEach((timer) => clearTimeout(timer));
+});
+
 test("does not expose execution error details in JobRun", async () => {
   const h = harness();
   const scheduler = createTaskScheduler({

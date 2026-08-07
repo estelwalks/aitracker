@@ -138,3 +138,38 @@ test("run repository appends, compacts and recovers running records", async () =
     );
   });
 });
+
+test("restart recovery is durable and idempotent", async () => {
+  await temp(async (dir) => {
+    const path = join(dir, "runs.json");
+    const createRepository = () =>
+      createTaskRunRepository({
+        store: new NodeAtomicJsonStore({
+          filePath: path,
+          defaultValue: DEFAULT_TASK_RUNS,
+          schema: taskRunsSchema(),
+          clock,
+        }),
+        clock,
+      });
+
+    const first = createRepository();
+    await first.append(run({ runId: "crash-before-shutdown" }));
+
+    // A fresh repository instance models a process restart. The previous
+    // running record is converted to an explicit terminal state on startup.
+    const restarted = createRepository();
+    const recovered = await restarted.recoverRunning();
+    assert.deepEqual(
+      recovered.map((item) => ({ runId: item.runId, status: item.status })),
+      [{ runId: "crash-before-shutdown", status: "abandoned" }],
+    );
+    assert.equal(
+      (await restarted.list({ limit: 1 }))[0]?.errorCode,
+      "errors.tasks.abandoned",
+    );
+
+    // Re-running recovery must not append another terminal transition.
+    assert.deepEqual(await restarted.recoverRunning(), []);
+  });
+});
