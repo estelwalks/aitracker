@@ -6,6 +6,10 @@ import { brandParams } from "../lib/app-config";
 import { getStorageUsageQuery } from "../modules/settings";
 import { SettingsPage } from "../modules/settings/presentation";
 
+function SettingsRouteComponent() {
+  return <SettingsPage loaderData={Route.useLoaderData()} />;
+}
+
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     try {
@@ -44,5 +48,5 @@ export const Route = createFileRoute("/settings")({
       },
     ],
   }),
-  component: () => <SettingsPage loaderData={Route.useLoaderData()} />,
+  component: SettingsRouteComponent,
 });
