@@ -3,6 +3,7 @@ import {
   type RuntimeIdentity,
 } from "../platform/runtime";
 import type { TaskScheduler } from "../modules/tasks/application/scheduler.ts";
+import { getCompositionRoot } from "./composition.server.ts";
 
 /**
  * Lifecycle port for the future scheduler and other background services.
@@ -128,16 +129,33 @@ export function createBackgroundRuntimeBootstrap(
 }
 
 /**
- * Placeholder runtime for P1. It deliberately performs no collection or
- * scheduling; P3 replaces this factory with the task scheduler adapter.
+ * Production background runtime. Lazily resolves the composition root (which
+ * constructs the scheduler and its repositories on first call) and forwards
+ * lifecycle to the real scheduler.
+ *
+ * The composition root is only built once a request reaches this runtime's
+ * `start` — and `ensureStarted` only calls `start` when
+ * `RuntimeIdentity.backgroundTasksEnabled` is true — so Web dev mode (where
+ * background tasks are disabled by policy) never triggers the scheduler or its
+ * data-root I/O. `stop` reuses the idempotent singleton, which resolves without
+ * reconstruction since bootstrap only stops after a successful start.
  */
-function createEmptyBackgroundRuntime(): BackgroundRuntime {
-  return { start: () => undefined };
+function createCompositionBackgroundRuntime(): BackgroundRuntime {
+  return {
+    start: async () => {
+      const { scheduler } = await getCompositionRoot();
+      await scheduler.start();
+    },
+    stop: async () => {
+      const { scheduler } = await getCompositionRoot();
+      await scheduler.stop();
+    },
+  };
 }
 
 const productionBootstrap = createBackgroundRuntimeBootstrap({
   getRuntimeIdentity: createNodeRuntimeIdentity,
-  createBackgroundRuntime: createEmptyBackgroundRuntime,
+  createBackgroundRuntime: createCompositionBackgroundRuntime,
 });
 
 /**
