@@ -15,6 +15,15 @@ export type {
   TaskRunRepository,
   TaskPreferenceRepository,
 } from "./task-storage.ts";
+export { createTaskApi } from "./task-api.ts";
+export type {
+  CreateTaskApiOptions,
+  TaskApi,
+  TaskApiErrorCode,
+  TaskDefinitionPublic,
+  TaskPreferencePublic,
+  TaskRunSummaryPublic,
+} from "./task-api.ts";
 
 export {
   createExecutorRegistry,
