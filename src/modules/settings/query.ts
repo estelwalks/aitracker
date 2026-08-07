@@ -15,9 +15,8 @@ import type {
  */
 export const getStorageUsageQuery = createServerFn({ method: "GET" }).handler(
   async (): Promise<StorageUsage> => {
-    const { getStorageUsageFn } = await import(
-      "../../lib/local-usage/prune.server"
-    );
+    const { getStorageUsageFn } =
+      await import("../../lib/local-usage/prune.server");
     return getStorageUsageFn();
   },
 );
@@ -34,10 +33,11 @@ export const applyRetentionPolicyQuery = createServerFn({ method: "POST" })
     return value as { retentionDays: number };
   })
   .handler(
-    async ({ data }): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-      const { applyRetentionPolicyFn } = await import(
-        "../../lib/local-usage/prune.server"
-      );
+    async ({
+      data,
+    }): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
+      const { applyRetentionPolicyFn } =
+        await import("../../lib/local-usage/prune.server");
       return applyRetentionPolicyFn({ data });
     },
   );
@@ -46,9 +46,8 @@ export const clearRegenerableCacheQuery = createServerFn({
   method: "POST",
 }).handler(
   async (): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-    const { clearRegenerableCacheFn } = await import(
-      "../../lib/local-usage/prune.server"
-    );
+    const { clearRegenerableCacheFn } =
+      await import("../../lib/local-usage/prune.server");
     return clearRegenerableCacheFn();
   },
 );
