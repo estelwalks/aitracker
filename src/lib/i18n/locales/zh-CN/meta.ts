@@ -9,6 +9,7 @@ export const meta = {
     security: "安全检测 · {appName} V3.0",
     sessions: "会话恢复 · {appName} V3.0",
     sources: "数据来源 · {appName} V3.0",
+    reports: "简报与记忆 · {appName} V3.0",
     settings: "设置 · {appName} V3.0",
     notFound: "页面不存在 · {appName} V3.0",
   },

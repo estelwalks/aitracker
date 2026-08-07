@@ -5,29 +5,37 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { ENV } from "../lib/app-config.ts";
 import {
+  COMPOSITION_GLOBAL,
   getCompositionRoot,
   resetCompositionRootForTests,
 } from "./composition.server.ts";
 
+type CompositionGlobal = Record<typeof COMPOSITION_GLOBAL, unknown>;
+
+function compositionGlobal(): CompositionGlobal {
+  return globalThis as unknown as CompositionGlobal;
+}
+
 /**
- * The composition root resolves its data root from
- * `process.env.TRUSTTOOLS_USAGE_HOME`. Each test points that variable at an
- * isolated temp directory so concurrent test processes never share state.
+ * The composition root resolves its data root from the configured usage-home
+ * env var. Each test points that variable at an isolated temp directory so
+ * concurrent test processes never share state.
  */
 async function withIsolatedDataRoot<T>(
   fn: (dir: string) => Promise<T>,
 ): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), `tt-composition-${randomUUID()}-`));
-  const previous = process.env.TRUSTTOOLS_USAGE_HOME;
-  process.env.TRUSTTOOLS_USAGE_HOME = dir;
+  const previous = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = dir;
   resetCompositionRootForTests();
   try {
     return await fn(dir);
   } finally {
     resetCompositionRootForTests();
-    if (previous === undefined) delete process.env.TRUSTTOOLS_USAGE_HOME;
-    else process.env.TRUSTTOOLS_USAGE_HOME = previous;
+    if (previous === undefined) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = previous;
     await rm(dir, { recursive: true, force: true });
   }
 }
@@ -53,18 +61,14 @@ test("getCompositionRoot exposes the scheduler, repositories and resolved data r
 
 test("getCompositionRoot publishes the in-flight promise on globalThis to survive HMR", async () => {
   await withIsolatedDataRoot(async () => {
-    const g = globalThis as unknown as {
-      __TRUSTTOOLS_COMPOSITION__?: Promise<unknown>;
-    };
-
     const pending = getCompositionRoot();
     assert.ok(
-      g.__TRUSTTOOLS_COMPOSITION__,
+      compositionGlobal()[COMPOSITION_GLOBAL],
       "global cache must be set before construction resolves",
     );
 
     const root = await pending;
-    assert.equal(await g.__TRUSTTOOLS_COMPOSITION__, root);
+    assert.equal(await compositionGlobal()[COMPOSITION_GLOBAL], root);
   });
 });
 
@@ -76,15 +80,12 @@ test("resetCompositionRootForTests forces the next call to construct a fresh roo
 
     assert.notEqual(second, first);
 
-    const g = globalThis as unknown as {
-      __TRUSTTOOLS_COMPOSITION__?: Promise<unknown>;
-    };
     assert.ok(
-      g.__TRUSTTOOLS_COMPOSITION__,
+      compositionGlobal()[COMPOSITION_GLOBAL],
       "global cache must be repopulated after re-construction",
     );
     // The global cache holds the in-flight promise, whose resolved value
     // must be the newly constructed root (not the discarded first one).
-    assert.equal(await g.__TRUSTTOOLS_COMPOSITION__, second);
+    assert.equal(await compositionGlobal()[COMPOSITION_GLOBAL], second);
   });
 });

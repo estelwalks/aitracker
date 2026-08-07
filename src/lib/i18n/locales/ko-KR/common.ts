@@ -44,4 +44,18 @@ export const common = {
     offline: "오프라인",
     disabled: "비활성화됨",
   },
+  reports: {
+    pageTitle: "브리핑 및 메모리",
+    pageDesc:
+      "일일 및 주간 Token 사용량, 위험, 지식 변화를 요약한 로컬 브리핑을 생성합니다.",
+    definitions: "브리핑 템플릿",
+    reports: "생성된 브리핑",
+    emptyTitle: "브리핑 없음",
+    emptyDesc: "생성 후 브리핑이 여기에 표시됩니다.",
+    generate: "브리핑 생성",
+    generateHint: "생성 기능은 향후 릴리스에서 스케줄러에 연결됩니다.",
+    kindDaily: "일일",
+    kindWeekly: "주간",
+    updatedAt: "업데이트 {time}",
+  },
 } as const;
