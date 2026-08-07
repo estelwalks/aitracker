@@ -1,5 +1,6 @@
 import type {
   ReportDefinition,
+  ReportDefinitionSummary,
   ReportDocument,
   ReportKind,
   ReportSummary,
@@ -51,6 +52,19 @@ export function toReportSummary(
     templateVersion: document.templateVersion,
     evidence: document.evidence,
     assets: document.assets,
+  };
+}
+
+export function toDefinitionSummary(
+  definition: ReportDefinition,
+): ReportDefinitionSummary {
+  return {
+    definitionId: definition.definitionId,
+    kind: definition.kind,
+    title: definition.title,
+    templateVersion: definition.template.version,
+    scheduleRef: definition.scheduleRef,
+    enabled: definition.enabled,
   };
 }
 

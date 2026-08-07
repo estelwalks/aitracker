@@ -3,6 +3,7 @@ import {
   BUILTIN_REPORT_DEFINITIONS,
   canTransition,
   safeReportText,
+  toDefinitionSummary,
   toReportSummary,
 } from "../domain.ts";
 import type {
@@ -202,7 +203,7 @@ export function createReportsApplication(
   };
 
   return {
-    definitions,
+    definitions: definitions.map(toDefinitionSummary),
     createDraft,
     generate,
     get,

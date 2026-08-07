@@ -58,6 +58,14 @@ test("built-in daily and weekly definitions have independent template versions a
   );
 });
 
+test("public definition catalog contains template versions but not template prompts", () => {
+  const state = app();
+  const serialized = JSON.stringify(state.app.definitions);
+  assert.match(serialized, /templateVersion/);
+  assert.doesNotMatch(serialized, /Summarize the supplied/);
+  assert.doesNotMatch(serialized, /"template"\s*:/);
+});
+
 test("manual and scheduled generation share the same use case and produce equivalent summaries", async () => {
   const first = app();
   const manual = await first.app.generate({
