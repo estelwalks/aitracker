@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BackgroundRuntimeBootstrapError,
   createBackgroundRuntimeBootstrap,
   type BackgroundRuntime,
 } from "./bootstrap.server.ts";
@@ -60,4 +61,71 @@ test("background bootstrap does not construct a runtime when policy disables it"
     status: "disabled",
     reason: "web-default-disabled",
   });
+});
+
+test("failed start is mapped to a stable error and can be retried", async () => {
+  let attempts = 0;
+  const bootstrap = createBackgroundRuntimeBootstrap({
+    getRuntimeIdentity: () => identity(true),
+    createBackgroundRuntime: () => ({
+      start: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("secret path /Users/me/token");
+      },
+    }),
+  });
+
+  await assert.rejects(bootstrap.ensureStarted(), (error: unknown) => {
+    assert.ok(error instanceof BackgroundRuntimeBootstrapError);
+    assert.equal(error.code, "errors.runtime.bootstrap-failed");
+    assert.equal(error.message.includes("/Users/me"), false);
+    return true;
+  });
+  assert.deepEqual(await bootstrap.ensureStarted(), {
+    status: "started",
+    reason: "explicitly-enabled",
+  });
+  assert.equal(attempts, 2);
+});
+
+test("stop is explicit, idempotent, and waits for a successful start", async () => {
+  let starts = 0;
+  let stops = 0;
+  const bootstrap = createBackgroundRuntimeBootstrap({
+    getRuntimeIdentity: () => identity(true),
+    createBackgroundRuntime: () => ({
+      start: async () => {
+        starts += 1;
+        await Promise.resolve();
+      },
+      stop: async () => {
+        stops += 1;
+      },
+    }),
+  });
+
+  const starting = bootstrap.ensureStarted();
+  await Promise.all([starting, bootstrap.stop(), bootstrap.stop()]);
+  assert.equal(starts, 1);
+  assert.equal(stops, 1);
+
+  await bootstrap.stop();
+  assert.equal(stops, 1);
+});
+
+test("disabled bootstrap stop is a no-op", async () => {
+  let stops = 0;
+  const bootstrap = createBackgroundRuntimeBootstrap({
+    getRuntimeIdentity: () => identity(false),
+    createBackgroundRuntime: () => ({
+      start: () => undefined,
+      stop: () => {
+        stops += 1;
+      },
+    }),
+  });
+
+  await bootstrap.ensureStarted();
+  await bootstrap.stop();
+  assert.equal(stops, 0);
 });
