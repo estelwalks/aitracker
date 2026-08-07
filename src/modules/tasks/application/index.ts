@@ -15,3 +15,15 @@ export type {
   TaskRunRepository,
   TaskPreferenceRepository,
 } from "./task-storage.ts";
+
+export {
+  createExecutorRegistry,
+  EXECUTOR_ERROR_CODES,
+} from "./executor-registry/index.ts";
+export type {
+  ApplyRetentionPort,
+  ExecutorRegistry,
+  ExecutorRegistryOptions,
+  RefreshSessionsPort,
+  RefreshSkillsPort,
+} from "./executor-registry/index.ts";
