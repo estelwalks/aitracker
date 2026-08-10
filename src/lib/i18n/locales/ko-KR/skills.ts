@@ -11,6 +11,9 @@ export const skills = {
     agentAll: "설치 위치: 전체",
     source: "소스",
     sourceAll: "모든 소스",
+    sourceRecorded: "기록된 원본",
+    sourceManaged: "관리 항목",
+    sourceUnclassified: "미분류",
     updateStatus: "업데이트 상태",
     updateAll: "모든 업데이트 상태",
     sort: "정렬",
@@ -25,6 +28,9 @@ export const skills = {
     updatesHint: "기존 업데이트 증거 기반",
     lastScan: "마지막 스캔",
     localScanOnly: "로컬 스캔 시각",
+    coverageHint: "적용됨 / 사용 가능한 Agent",
+    unassigned: "미할당 자산",
+    unassignedHint: "현재 어떤 Agent에도 설치되지 않음",
   },
   source: { frontmatter: "메타데이터", market: "마켓", unknown: "알 수 없음" },
   update: {
@@ -44,6 +50,7 @@ export const skills = {
     rescan: "다시 스캔",
     sync: "동기화",
     syncTitle: "Agent 간 동기화",
+    inspect: "보기",
     uninstall: "제거",
     install: "설치",
     uninstallAll: "모든 복사본 제거",
@@ -81,6 +88,18 @@ export const skills = {
   },
   aria: {
     selectSkill: "{name} 선택",
+    openSkill: "{name} 보기",
+  },
+  workspace: {
+    eyebrow: "Skill 자산 작업 공간",
+    description:
+      "로컬 스캔을 기반으로 설치, 동기화 및 접근 제어를 관리합니다. 마지막 스캔: {time}.",
+    coverage: "Agent 적용 범위",
+    coverageHint: "{active}개 적용 / {available}개 사용 가능",
+    coveragePanelHint: "사용 가능한 Agent를 선택해 자산을 필터링합니다",
+    availableIn: "사용 가능 위치",
+    notAssigned: "Agent에 할당되지 않음",
+    version: "버전 근거",
   },
   pagination: {
     range: "{start}-{end}번째 / 전체 {total}개",
@@ -97,6 +116,7 @@ export const skills = {
     source: "소스: {source}",
     notProvided: "제공되지 않음",
     updateStatus: "업데이트 상태: {status}({reason})",
+    updateStatusShort: "업데이트 상태: {status}",
     updateAvailable: "업데이트 가능",
     updateCurrent: "이미 최신 증거 버전",
     updateUnknown: "판단할 수 없음",
@@ -107,6 +127,11 @@ export const skills = {
     singleDesc: "설치된 모든 도구에서 {name}을(를) 제거합니다.",
     batchDesc: "설치된 모든 도구에서 Skill {count}개를 제거합니다.",
     irreversible: "이 작업은 되돌릴 수 없습니다",
+  },
+  blacklist: {
+    title: "블랙리스트 추가 확인",
+    desc: "{name}은(는) 수동으로 블랙리스트에서 제거할 때까지 Agent에 설치할 수 없습니다.",
+    confirm: "블랙리스트에 추가",
   },
   sync: {
     title: "Skill 동기화",

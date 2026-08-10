@@ -10,6 +10,9 @@ export const skills = {
     agentAll: "Install location: All",
     source: "Source",
     sourceAll: "All sources",
+    sourceRecorded: "Recorded origin",
+    sourceManaged: "Managed entries",
+    sourceUnclassified: "Unclassified",
     updateStatus: "Update status",
     updateAll: "All update states",
     sort: "Sort",
@@ -24,6 +27,9 @@ export const skills = {
     updatesHint: "Based on available update evidence",
     lastScan: "Last scan",
     localScanOnly: "Local scanner timestamp",
+    coverageHint: "Covered / available Agents",
+    unassigned: "Unassigned assets",
+    unassignedHint: "Not currently installed to an Agent",
   },
   source: {
     frontmatter: "Metadata",
@@ -47,6 +53,7 @@ export const skills = {
     rescan: "Rescan",
     sync: "Sync",
     syncTitle: "Sync across Agents",
+    inspect: "Inspect",
     uninstall: "Uninstall",
     install: "Install",
     uninstallAll: "Uninstall all copies",
@@ -84,6 +91,18 @@ export const skills = {
   },
   aria: {
     selectSkill: "Select {name}",
+    openSkill: "Inspect {name}",
+  },
+  workspace: {
+    eyebrow: "Skill asset workspace",
+    description:
+      "Coordinate installation, sync, and access control from a local scan. Last scan: {time}.",
+    coverage: "Agent coverage",
+    coverageHint: "{active} covered / {available} available",
+    coveragePanelHint: "Select an available Agent to filter its assets",
+    availableIn: "Available in",
+    notAssigned: "Not assigned to an Agent",
+    version: "Version evidence",
   },
   pagination: {
     range: "Items {start}-{end} of {total}",
@@ -100,6 +119,7 @@ export const skills = {
     source: "Source: {source}",
     notProvided: "Not provided",
     updateStatus: "Update status: {status} ({reason})",
+    updateStatusShort: "Update status: {status}",
     updateAvailable: "Update available",
     updateCurrent: "Already at the current evidence version",
     updateUnknown: "Cannot determine",
@@ -110,6 +130,11 @@ export const skills = {
     singleDesc: "Will be removed from all installed tools: {name}.",
     batchDesc: "Will be removed from all installed tools: {count} Skills.",
     irreversible: "This action cannot be undone",
+  },
+  blacklist: {
+    title: "Confirm blacklist",
+    desc: "{name} cannot be installed to an Agent until it is manually removed from the blacklist.",
+    confirm: "Add to blacklist",
   },
   sync: {
     title: "Sync Skill",

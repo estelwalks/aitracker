@@ -10,9 +10,11 @@ import {
   ChevronRight,
   Copy,
   Download,
+  Layers3,
   RefreshCw,
   Search,
   ShieldBan,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,14 +53,6 @@ import {
   SheetTitle,
 } from "../../../components/ui/sheet";
 import { Checkbox } from "../../../components/ui/checkbox";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../../components/ui/table";
 import { Badge } from "../../../components/ui/badge";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
@@ -74,17 +68,18 @@ import {
   type LocalSkill,
   type SkillAgent,
   type SkillSnapshot,
+  type SkillWorkspaceSnapshot,
 } from "../query";
 import {
   availableAssetSorts,
-  buildSkillAssetSummary,
+  buildSkillWorkspace,
   querySkillAssets,
   type AssetSortKey,
   type AssetSourceFilter,
   type AssetUpdateFilter,
 } from "../application";
 
-export type SkillsPageProps = { initial: SkillSnapshot };
+export type SkillsPageProps = { initial: SkillWorkspaceSnapshot };
 
 const PAGE_SIZE = 25;
 
@@ -115,7 +110,8 @@ type UninstallTarget =
 
 export function SkillsPage({ initial }: SkillsPageProps) {
   const { t, format } = useI18n();
-  const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial);
+  const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial.snapshot);
+  const [workspace, setWorkspace] = useState(initial.workspace);
   const [query, setQuery] = useState("");
   const [agent, setAgent] = useState<"all" | SkillAgent>("all");
   const [source, setSource] = useState<AssetSourceFilter>("all");
@@ -130,6 +126,9 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   );
   const [uninstallTarget, setUninstallTarget] =
     useState<UninstallTarget | null>(null);
+  const [blacklistTarget, setBlacklistTarget] = useState<LocalSkill | null>(
+    null,
+  );
   const [syncScope, setSyncScope] = useState<SyncScopeState | null>(null);
   const [syncConflict, setSyncConflict] = useState<SyncConflictState | null>(
     null,
@@ -147,9 +146,11 @@ export function SkillsPage({ initial }: SkillsPageProps) {
     if (next.fingerprint !== snapshotRef.current.fingerprint) {
       snapshotRef.current = next;
       setSnapshot(next);
+      setWorkspace(buildSkillWorkspace(next));
     } else if (message) {
       snapshotRef.current = next;
       setSnapshot(next);
+      setWorkspace(buildSkillWorkspace(next));
     }
     if (message) toast.success(message);
   }, []);
@@ -163,6 +164,7 @@ export function SkillsPage({ initial }: SkillsPageProps) {
       const next = await getLocalSkills();
       snapshotRef.current = next;
       setSnapshot(next);
+      setWorkspace(buildSkillWorkspace(next));
       toast.success(t("skills.toast.rescanned"));
     } catch (error) {
       const ui = toUiError(error);
@@ -199,31 +201,20 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   const detectedAgents = useMemo(
     () =>
       new Set(
-        SKILL_AGENTS.filter((a) =>
-          snapshot.skills.some((s) =>
-            s.installations.some((i) => i.agent === a),
-          ),
-        ),
+        workspace.coverage
+          .filter((item) => item.installed)
+          .map((item) => item.agent),
       ),
-    [snapshot.skills],
+    [workspace.coverage],
   );
 
   const agentCounts = useMemo(
     () =>
-      new Map(
-        SKILL_AGENTS.map((name) => [
-          name,
-          snapshot.skills.filter((skill) =>
-            skill.installations.some(
-              (installation) => installation.agent === name,
-            ),
-          ).length,
-        ]),
-      ),
-    [snapshot.skills],
+      new Map(workspace.facets.agents.map((item) => [item.value, item.count])),
+    [workspace.facets.agents],
   );
 
-  const summary = useMemo(() => buildSkillAssetSummary(snapshot), [snapshot]);
+  const summary = workspace.summary;
   const sortOptions = useMemo(() => availableAssetSorts(snapshot), [snapshot]);
   const assets = useMemo(
     () =>
@@ -578,8 +569,6 @@ export function SkillsPage({ initial }: SkillsPageProps) {
 
   const updateStatusLabel = (value: AssetUpdateFilter) =>
     t(`skills.update.${value}`);
-  const sourceLabel = (value: Exclude<AssetSourceFilter, "all">) =>
-    t(`skills.source.${value}`);
   const sortLabel = (value: AssetSortKey) => t(`skills.sort.${value}`);
 
   return (
@@ -597,6 +586,32 @@ export function SkillsPage({ initial }: SkillsPageProps) {
         </TTButton>
       </PageHeader>
 
+      <section className="skill-workspace-hero mb-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[11px] font-medium tracking-[0.13em] text-primary uppercase">
+            <Sparkles className="size-3.5" />
+            {t("skills.workspace.eyebrow")}
+          </div>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            {t("skills.workspace.description", {
+              time: format.formatDateTime(summary.lastScannedAt, false),
+            })}
+          </p>
+        </div>
+        <div className="skill-workspace-health">
+          <span className="tt-label">{t("skills.workspace.coverage")}</span>
+          <span className="tt-num text-xl text-foreground">
+            {format.formatNumber(summary.coveragePercent)}%
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {t("skills.workspace.coverageHint", {
+              active: format.formatNumber(summary.activeAgentCount),
+              available: format.formatNumber(summary.availableAgentCount),
+            })}
+          </span>
+        </div>
+      </section>
+
       <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label={t("skills.summary.assets")}
@@ -607,22 +622,51 @@ export function SkillsPage({ initial }: SkillsPageProps) {
         />
         <Stat
           label={t("skills.summary.agentCoverage")}
-          value={`${format.formatNumber(summary.detectedAgentCount)} / ${format.formatNumber(SKILL_AGENTS.length)}`}
-          hint={t("skills.summary.detectedAgents")}
+          value={`${format.formatNumber(summary.activeAgentCount)} / ${format.formatNumber(summary.availableAgentCount)}`}
+          hint={t("skills.summary.coverageHint")}
         />
         <Stat
           label={t("skills.summary.updates")}
-          value={format.formatNumber(
-            assets.filter((skill) => skill.updateStatus === "available").length,
-          )}
+          value={format.formatNumber(summary.updateAvailableCount)}
           hint={t("skills.summary.updatesHint")}
         />
         <Stat
-          label={t("skills.summary.lastScan")}
-          value={format.formatDateTime(summary.lastScannedAt, false)}
-          hint={t("skills.summary.localScanOnly")}
+          label={t("skills.summary.unassigned")}
+          value={format.formatNumber(summary.unassignedSkillCount)}
+          hint={t("skills.summary.unassignedHint")}
         />
       </div>
+
+      <Panel
+        className="mb-4"
+        title={t("skills.workspace.coverage")}
+        action={
+          <span className="text-[11px] text-muted-foreground">
+            {t("skills.workspace.coveragePanelHint")}
+          </span>
+        }
+        bodyClassName="p-0"
+      >
+        <div className="skill-coverage-rail">
+          {workspace.coverage.map((item) => (
+            <button
+              key={item.agent}
+              type="button"
+              disabled={!item.installed}
+              onClick={() => item.installed && setAgent(item.agent)}
+              className={cn(
+                "skill-coverage-node",
+                agent === item.agent && "skill-coverage-node-active",
+                item.state === "covered" && "skill-coverage-node-covered",
+              )}
+            >
+              <span className="skill-coverage-dot" aria-hidden="true" />
+              <span className="min-w-0 truncate font-medium">{item.agent}</span>
+              <span className="tt-num text-[11px]">{item.skillCount}</span>
+            </button>
+          ))}
+        </div>
+      </Panel>
 
       {/* Filter bar */}
       <div className="skills-filter-panel mb-4">
@@ -676,9 +720,13 @@ export function SkillsPage({ initial }: SkillsPageProps) {
             className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
           >
             <option value="all">{t("skills.filter.sourceAll")}</option>
-            <option value="frontmatter">{sourceLabel("frontmatter")}</option>
-            <option value="market">{sourceLabel("market")}</option>
-            <option value="unknown">{sourceLabel("unknown")}</option>
+            <option value="frontmatter">
+              {t("skills.filter.sourceRecorded")}
+            </option>
+            <option value="market">{t("skills.filter.sourceManaged")}</option>
+            <option value="unknown">
+              {t("skills.filter.sourceUnclassified")}
+            </option>
           </select>
           <select
             aria-label={t("skills.filter.updateStatus")}
@@ -725,7 +773,7 @@ export function SkillsPage({ initial }: SkillsPageProps) {
         </div>
       </div>
 
-      {/* Skill table */}
+      {/* Asset operation cards: rendered from browser-safe workspace items only. */}
       <Panel
         title={t("skills.table.title", {
           count: format.formatNumber(assets.length),
@@ -800,191 +848,145 @@ export function SkillsPage({ initial }: SkillsPageProps) {
               </div>
             </div>
 
-            {/* Table */}
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[40px] pl-4" />
-                  <TableHead className="whitespace-nowrap">
-                    {t("skills.table.name")}
-                  </TableHead>
-                  <TableHead className="min-w-[100px]">
-                    {t("skills.table.desc")}
-                  </TableHead>
-                  <TableHead className="w-[200px]">
-                    {t("skills.table.agentCoverage")}
-                  </TableHead>
-                  <TableHead className="w-[120px] whitespace-nowrap">
-                    {t("skills.table.source")}
-                  </TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap">
-                    {t("skills.table.version")}
-                  </TableHead>
-                  <TableHead className="w-[140px] whitespace-nowrap">
-                    {t("skills.table.modifiedAt")}
-                  </TableHead>
-                  <TableHead className="w-[140px] whitespace-nowrap">
-                    {t("skills.table.lastUsed")}
-                  </TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap">
-                    {t("skills.table.updateStatus")}
-                  </TableHead>
-                  <TableHead className="w-[130px] pr-4">
-                    {t("skills.table.actions")}
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paged.map((skill) => {
-                  const agents = skill.installations.map((i) => i.agent);
-                  const visibleAgents = expandedAgents.has(skill.id)
-                    ? agents
-                    : agents.slice(0, 3);
-                  const hiddenCount = agents.length - visibleAgents.length;
-                  return (
-                    <TableRow
-                      key={skill.id}
-                      className={cn(
-                        "cursor-default",
-                        checkedIds.has(skill.id) && "bg-accent/30",
-                      )}
+            <div className="skill-workspace-list">
+              {paged.map((skill) => {
+                const agents = skill.installedAgents;
+                const visibleAgents = expandedAgents.has(skill.id)
+                  ? agents
+                  : agents.slice(0, 3);
+                const hiddenCount = agents.length - visibleAgents.length;
+                const isSelected = checkedIds.has(skill.id);
+                const statusTone =
+                  skill.updateStatus === "available"
+                    ? "warn"
+                    : skill.updateStatus === "current"
+                      ? "ok"
+                      : "neutral";
+                return (
+                  <article
+                    key={skill.id}
+                    className={cn(
+                      "skill-workspace-card",
+                      isSelected && "skill-workspace-card-selected",
+                    )}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(checked) =>
+                        toggleChecked(skill.id, checked === true)
+                      }
+                      disabled={busy}
+                      aria-label={t("skills.aria.selectSkill", {
+                        name: skill.name,
+                      })}
+                    />
+                    <button
+                      type="button"
+                      aria-label={t("skills.aria.openSkill", {
+                        name: skill.name,
+                      })}
+                      onClick={() => setDetailSkillId(skill.id)}
+                      className="skill-workspace-mark"
                     >
-                      <TableCell className="pl-4">
-                        <Checkbox
-                          checked={checkedIds.has(skill.id)}
-                          onCheckedChange={(checked) =>
-                            toggleChecked(skill.id, checked === true)
-                          }
-                          disabled={busy}
-                          aria-label={t("skills.aria.selectSkill", {
-                            name: skill.name,
-                          })}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setDetailSkillId(skill.id)}
-                            className="truncate text-left text-[13px] font-medium text-foreground hover:text-primary hover:underline"
-                          >
-                            {skill.name}
-                          </button>
-                          {snapshot.blacklist.includes(skill.name) && (
-                            <span className="rounded-sm bg-danger/15 px-1.5 py-0.5 text-[10px] text-danger">
-                              {t("skills.badge.blacklisted")}
-                            </span>
-                          )}
-                        </div>
-                        {skill.installations[0] && (
-                          <div className="tt-num mt-0.5 truncate text-[10px] text-muted-foreground">
-                            {skill.installations[0].agent}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-[260px]">
-                        <span className="line-clamp-2 text-[12px] text-muted-foreground">
-                          {skill.description ?? "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {visibleAgents.map((a, idx) => (
-                            <Badge
-                              key={`${a}-${idx}`}
-                              variant="secondary"
-                              className="text-[10px] font-normal"
-                            >
-                              {a}
-                            </Badge>
-                          ))}
-                          {hiddenCount > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => toggleAgentsExpanded(skill.id)}
-                              className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                              +{hiddenCount}
-                            </button>
-                          )}
-                          {hiddenCount === 0 &&
-                            expandedAgents.has(skill.id) &&
-                            agents.length > 3 && (
-                              <button
-                                type="button"
-                                onClick={() => toggleAgentsExpanded(skill.id)}
-                                className="text-[10px] text-muted-foreground hover:text-foreground"
-                              >
-                                {t("common.collapse")}
-                              </button>
-                            )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {skill.sourceKinds.map((kind) => (
-                            <StatusBadge key={kind} tone="neutral">
-                              {sourceLabel(kind)}
-                            </StatusBadge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="max-w-[130px] truncate text-[12px] text-muted-foreground">
-                        {skill.versions.length > 0
-                          ? skill.versions.join(", ")
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
-                        {skill.latestModifiedAt
-                          ? format.formatDateTime(skill.latestModifiedAt, false)
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
-                        {skill.lastUsedAt
-                          ? format.formatDateTime(skill.lastUsedAt, false)
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          tone={
-                            skill.updateStatus === "available"
-                              ? "warn"
-                              : skill.updateStatus === "current"
-                                ? "ok"
-                                : "neutral"
-                          }
+                      {skill.name.slice(0, 2).toUpperCase()}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailSkillId(skill.id)}
+                          className="truncate text-left text-[13px] font-semibold text-foreground hover:text-primary hover:underline"
                         >
+                          {skill.name}
+                        </button>
+                        <StatusBadge tone={statusTone}>
                           {updateStatusLabel(skill.updateStatus)}
                         </StatusBadge>
-                      </TableCell>
-                      <TableCell className="pr-4">
-                        <div className="flex items-center gap-1">
-                          <TTButton
-                            size="sm"
-                            disabled={busy || skill.installations.length === 0}
-                            onClick={() => openSyncScope([skill])}
-                            title={t("skills.actions.syncTitle")}
+                        {snapshot.blacklist.includes(skill.name) && (
+                          <StatusBadge tone="danger">
+                            {t("skills.badge.blacklisted")}
+                          </StatusBadge>
+                        )}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
+                        {skill.description ?? t("skills.detail.noDescription")}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="tt-label mr-1">
+                          {t("skills.workspace.availableIn")}
+                        </span>
+                        {visibleAgents.map((agentName) => (
+                          <span key={agentName} className="skill-agent-chip">
+                            {agentName}
+                          </span>
+                        ))}
+                        {hiddenCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleAgentsExpanded(skill.id)}
+                            className="skill-agent-chip skill-agent-chip-more"
                           >
-                            <Copy className="size-3" />{" "}
-                            {t("skills.actions.sync")}
-                          </TTButton>
-                          <TTButton
-                            size="sm"
-                            variant="danger"
-                            disabled={busy}
-                            onClick={() => openUninstall(skill)}
-                            title={t("skills.actions.uninstall")}
+                            +{hiddenCount}
+                          </button>
+                        )}
+                        {expandedAgents.has(skill.id) && agents.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleAgentsExpanded(skill.id)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground"
                           >
-                            <Trash2 className="size-3" />{" "}
-                            {t("skills.actions.uninstall")}
-                          </TTButton>
+                            {t("common.collapse")}
+                          </button>
+                        )}
+                        {agents.length === 0 && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {t("skills.workspace.notAssigned")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="skill-workspace-card-actions">
+                      <div className="text-right text-[11px] text-muted-foreground">
+                        <div className="tt-label">
+                          {t("skills.workspace.version")}
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        <div className="mt-1">
+                          {skill.versions.join(", ") || "—"}
+                        </div>
+                      </div>
+                      <TTButton
+                        size="sm"
+                        disabled={busy || skill.installations.length === 0}
+                        onClick={() => openSyncScope([skill])}
+                        title={t("skills.actions.syncTitle")}
+                      >
+                        <Copy className="size-3" /> {t("skills.actions.sync")}
+                      </TTButton>
+                      <TTButton
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setDetailSkillId(skill.id)}
+                        title={t("skills.actions.inspect")}
+                      >
+                        <Layers3 className="size-3" />{" "}
+                        {t("skills.actions.inspect")}
+                      </TTButton>
+                      <TTButton
+                        size="sm"
+                        variant="danger"
+                        disabled={busy}
+                        onClick={() => openUninstall(skill)}
+                        title={t("skills.actions.uninstall")}
+                      >
+                        <Trash2 className="size-3" />{" "}
+                        {t("skills.actions.uninstall")}
+                      </TTButton>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
 
             {/* Pagination footer */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2">
@@ -1147,13 +1149,6 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                                       installation.version ??
                                       t("skills.detail.notProvided"),
                                   })}
-                                  {" · "}
-                                  {t("skills.detail.source", {
-                                    source:
-                                      installation.source == null
-                                        ? t("skills.detail.notProvided")
-                                        : sourceLabel(installation.source.kind),
-                                  })}
                                 </div>
                                 <div
                                   className={cn(
@@ -1163,7 +1158,7 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                                       : "text-muted-foreground",
                                   )}
                                 >
-                                  {t("skills.detail.updateStatus", {
+                                  {t("skills.detail.updateStatusShort", {
                                     status:
                                       installation.updateStatus === "available"
                                         ? t("skills.detail.updateAvailable")
@@ -1171,7 +1166,6 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                                             "current"
                                           ? t("skills.detail.updateCurrent")
                                           : t("skills.detail.updateUnknown"),
-                                    reason: installation.updateReason,
                                   })}
                                 </div>
                               </>
@@ -1243,20 +1237,19 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                   <TTButton
                     disabled={busy}
                     variant={isBlocked ? "default" : "danger"}
-                    onClick={() =>
-                      run(
+                    onClick={() => {
+                      if (!isBlocked) {
+                        setBlacklistTarget(detailSkill);
+                        return;
+                      }
+                      void run(
                         () =>
                           updateSkillBlacklist({
-                            data: {
-                              name: detailSkill.name,
-                              blocked: !isBlocked,
-                            },
+                            data: { name: detailSkill.name, blocked: false },
                           }),
-                        isBlocked
-                          ? t("skills.toast.unblocked")
-                          : t("skills.toast.blocked"),
-                      )
-                    }
+                        t("skills.toast.unblocked"),
+                      );
+                    }}
                   >
                     <ShieldBan className="size-3.5" />
                     {isBlocked
@@ -1326,6 +1319,51 @@ export function SkillsPage({ initial }: SkillsPageProps) {
               className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
             >
               {t("skills.uninstall.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={blacklistTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setBlacklistTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldBan className="size-5 text-danger" />
+              {t("skills.blacklist.title")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("skills.blacklist.desc", {
+                name: blacklistTarget?.name ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(event) => {
+                event.preventDefault();
+                const target = blacklistTarget;
+                setBlacklistTarget(null);
+                if (!target) return;
+                void run(
+                  () =>
+                    updateSkillBlacklist({
+                      data: { name: target.name, blocked: true },
+                    }),
+                  t("skills.toast.blocked"),
+                );
+              }}
+              className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
+            >
+              {t("skills.blacklist.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
