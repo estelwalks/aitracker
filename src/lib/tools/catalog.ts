@@ -5,7 +5,15 @@
  * consumers (detection, usage sources, skills scanner, onboarding) keep working
  * without per-file edits.
  */
-import { getUsagePlan, listTools } from "../tool-registry/registry.ts";
+import {
+  getUsagePlan,
+  listTools,
+  officialDownloadUrlFor,
+  toolSurfaceFor,
+  type ToolSurface,
+} from "../tool-registry/registry.ts";
+
+export type { ToolSurface } from "../tool-registry/registry.ts";
 
 export interface AiTool {
   /** Stable lowercase-kebab identifier (used as the usage `source` id). */
@@ -18,6 +26,10 @@ export interface AiTool {
    * known - the tool then renders as "未安装".
    */
   detectRoots: readonly string[];
+  /** Registry-owned product surface label for browser-safe source cards. */
+  toolSurface: ToolSurface;
+  /** Verified official URL, or null when the registry has no safe link. */
+  officialDownloadUrl: string | null;
 }
 
 /**
@@ -46,6 +58,8 @@ export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   id: def.id,
   nameZh: def.display.nameZh,
   detectRoots: def.detection.roots,
+  toolSurface: toolSurfaceFor(def.id),
+  officialDownloadUrl: officialDownloadUrlFor(def.id),
 }));
 
 /** Stable lowercase-kebab ids for the 29 visible catalog tools (legacy sources excluded). */
