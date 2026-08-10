@@ -65,6 +65,11 @@ export const dashboard = {
     tokens: "Token 総量",
     cacheSavings: "キャッシュ削減額",
     skills: "Skill 数",
+    sessions: "セッション数",
+    unavailable: "利用不可",
+    sessionUnavailableHint:
+      "セッションデータを取得できないため、推定値は表示しません",
+    sessionMetrics: "{turns} ターン · 編集 {edits} 回 · {minutes} 分",
     skillUnit: "個",
     skillScanNote: "ローカルスキャン対象",
     vsPrevious: "vs 前の期間",
