@@ -14,6 +14,7 @@ import type {
   Schedule,
   JobRun,
   JobRunStatus,
+  TaskPreference,
   TaskPreferenceRepository,
   TaskRunRepository,
 } from "./task-storage.ts";
@@ -105,6 +106,42 @@ export function nextRunAt(schedule: Schedule, from: Date): Date {
   return candidate;
 }
 
+/**
+ * Resolves the user override once, before any due calculation.  The scheduler
+ * must never use the catalog schedule when a valid preference is present:
+ * doing so makes an enabled 60 minute task fire every 15 minutes when another
+ * task wakes the shared timer.
+ */
+export function effectiveSchedule(
+  definition: JobTypeDefinition,
+  preference: TaskPreference | undefined,
+): Schedule {
+  return preference?.schedule ?? (definition.defaultSchedule as Schedule);
+}
+
+/** Last *successful terminal* completion. Failed/cancelled attempts do not
+ * advance collection freshness and therefore cannot postpone a retry. */
+export function lastSuccessfulFinishedAt(
+  runs: readonly JobRun[],
+): Date | undefined {
+  let latest: Date | undefined;
+  for (const run of runs) {
+    if (run.status !== "succeeded" || !run.finishedAt) continue;
+    const value = new Date(run.finishedAt);
+    if (Number.isNaN(value.getTime())) continue;
+    if (!latest || value > latest) latest = value;
+  }
+  return latest;
+}
+
+export function isScheduleDue(
+  schedule: Schedule,
+  lastSuccess: Date | undefined,
+  now: Date,
+): boolean {
+  return lastSuccess === undefined || nextRunAt(schedule, lastSuccess) <= now;
+}
+
 function stableJitter(runId: string, attempt: number): number {
   let hash = 2166136261;
   for (const char of `${runId}:${attempt}`)
@@ -118,6 +155,18 @@ function asError(value: unknown): TaskExecutionError {
     retryable: false,
   });
 }
+
+function taskErrorCode(error: TaskExecutionError): `errors.${string}` {
+  const code = error.code;
+  // Task-run persistence intentionally accepts a compact lowercase code
+  // grammar. Feature-level error keys may be camel-cased for i18n, so retain
+  // those only in in-memory diagnostics and persist the scheduler fallback.
+  return code && /^errors\.[a-z0-9][a-z0-9._-]*$/.test(code)
+    ? (code as `errors.${string}`)
+    : "errors.tasks.execution-failed";
+}
+
+const DEFAULT_ENABLED_TASK_IDS = new Set(["security.monitor"]);
 
 export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const clock = options.clock ?? new SystemClock();
@@ -136,15 +185,33 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     string,
     { run: JobRun; controller: AbortController }
   >();
+  const activeExecutions = new Set<Promise<void>>();
   let sequence = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let started = false;
+  // A successful terminal record is the source of truth for freshness. This
+  // small in-memory guard merely prevents a slow/failed task from repeatedly
+  // being enqueued while its last success remains stale.
+  const lastScheduledAt = new Map<string, Date>();
 
   const definitionFor = (taskId: TaskId) =>
     catalog.find((item) => item.id === taskId);
   const nowIso = () => clock.now().toISOString();
+  // NodeAtomicJsonStore deliberately reports simultaneous writer/reader
+  // attempts as a lock conflict. Scheduler transitions are asynchronous, so
+  // serialize this runtime's own accesses instead of turning a harmless
+  // completion + scheduling read into a failed listener.
+  let runStoreTail: Promise<void> = Promise.resolve();
+  const withRuns = async <T>(operation: () => Promise<T>): Promise<T> => {
+    const next = runStoreTail.then(operation, operation);
+    runStoreTail = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  };
   const append = async (run: JobRun) => {
-    await options.runs.append(run);
+    await withRuns(() => options.runs.append(run));
     return run;
   };
   const transition = async (
@@ -176,9 +243,13 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         startedAt: nowIso(),
       });
       active.set(item.run.taskId, { run: running, controller });
-      void execute(running, item.definition, controller).finally(() => {
-        void drain();
-      });
+      const execution = execute(running, item.definition, controller).finally(
+        () => {
+          void drain();
+        },
+      );
+      activeExecutions.add(execution);
+      void execution.finally(() => activeExecutions.delete(execution));
     }
   };
 
@@ -230,7 +301,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
           delay * (1 + stableJitter(run.runId, run.attempt) * 0.1),
         );
         const retryRun = await transition(run, "failed", {
-          errorCode: error.code ?? "errors.tasks.execution-failed",
+          errorCode: taskErrorCode(error),
           retryable: true,
         });
         setTimer(() => {
@@ -245,7 +316,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         }, jittered);
       } else
         await transition(run, "failed", {
-          errorCode: error.code ?? "errors.tasks.execution-failed",
+          errorCode: taskErrorCode(error),
           retryable: Boolean(error.retryable),
         });
     } finally {
@@ -254,32 +325,64 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     }
   };
 
-  const scheduleNext = () => {
+  const enabled = (taskId: string, preference: TaskPreference | undefined) =>
+    preference?.enabled ?? DEFAULT_ENABLED_TASK_IDS.has(taskId);
+
+  const isDue = async (
+    definition: JobTypeDefinition,
+    preference: TaskPreference | undefined,
+    now: Date,
+  ): Promise<boolean> => {
+    if (!enabled(definition.id, preference)) return false;
+    const schedule = effectiveSchedule(definition, preference);
+    const recentlyScheduled = lastScheduledAt.get(definition.id);
+    if (recentlyScheduled && nextRunAt(schedule, recentlyScheduled) > now)
+      return false;
+    const runs = await withRuns(() =>
+      options.runs.list({ taskId: definition.id }),
+    );
+    return isScheduleDue(schedule, lastSuccessfulFinishedAt(runs), now);
+  };
+
+  const scheduleNext = async () => {
     if (!started) return;
     if (timer !== undefined) clearTimer(timer);
     let soonest: Date | undefined;
     for (const definition of catalog) {
-      const taskId = createTaskId(definition.id);
-      const preference = undefined; // preferences are read asynchronously on start/run
-      void preference;
-      const candidate = nextRunAt(
-        definition.defaultSchedule as Schedule,
-        clock.now(),
+      const preference = await options.preferences.get(definition.id);
+      if (!enabled(definition.id, preference)) continue;
+      const schedule = effectiveSchedule(definition, preference);
+      const runs = await withRuns(() =>
+        options.runs.list({ taskId: definition.id }),
       );
+      const lastSuccess = lastSuccessfulFinishedAt(runs);
+      const scheduled = lastScheduledAt.get(definition.id);
+      const base =
+        scheduled && (!lastSuccess || scheduled > lastSuccess)
+          ? scheduled
+          : lastSuccess;
+      // A never-successful enabled task is intentionally scheduled promptly;
+      // the wake handler records a dispatch timestamp before it re-arms.
+      const candidate = base ? nextRunAt(schedule, base) : clock.now();
       if (!soonest || candidate < soonest) soonest = candidate;
-      void taskId;
     }
     if (soonest)
       timer = setTimer(
         () => {
           void (async () => {
+            if (!started) return;
+            const now = clock.now();
             for (const definition of catalog) {
+              if (!started) return;
               const id = createTaskId(definition.id);
               const preference = await options.preferences.get(id);
-              if (preference?.enabled)
+              if (!started) return;
+              if (await isDue(definition, preference, now)) {
+                lastScheduledAt.set(definition.id, now);
                 await runNow({ taskId: id, reason: "schedule" });
+              }
             }
-            scheduleNext();
+            await scheduleNext();
           })();
         },
         Math.max(0, soonest.getTime() - clock.now().getTime()),
@@ -347,8 +450,18 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     async start() {
       if (started) return;
       started = true;
-      await options.runs.recoverRunning();
-      scheduleNext();
+      await withRuns(() => options.runs.recoverRunning());
+      const now = clock.now();
+      for (const definition of catalog) {
+        if (definition.startupPolicy !== "if-stale") continue;
+        const taskId = createTaskId(definition.id);
+        const preference = await options.preferences.get(taskId);
+        if (await isDue(definition, preference, now)) {
+          lastScheduledAt.set(definition.id, now);
+          await runNow({ taskId, reason: "startup" });
+        }
+      }
+      await scheduleNext();
     },
     async stop() {
       started = false;
@@ -356,7 +469,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         clearTimer(timer);
         timer = undefined;
       }
+      // Do not start queued background work while shutdown waits for an
+      // already-running collector to acknowledge its abort signal.
+      queue.length = 0;
       for (const item of active.values()) item.controller.abort();
+      await Promise.allSettled([...activeExecutions]);
     },
     runNow,
     async cancel(runId) {

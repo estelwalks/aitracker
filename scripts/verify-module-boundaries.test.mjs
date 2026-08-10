@@ -181,7 +181,6 @@ test("analyzeProject permits only a fully documented temporary allowlist entry",
 });
 
 test("the migration baseline is explicit and does not hide newly introduced findings", async () => {
-  assert.ok(MIGRATION_ALLOWLIST.length > 0);
   assert.equal(validateAllowlist(MIGRATION_ALLOWLIST).length, 0);
   await withFixture(
     {
@@ -204,7 +203,7 @@ test("completed feature routes are no longer part of the migration baseline", ()
     "src/routes/index.tsx",
     "src/routes/market.tsx",
     "src/routes/settings.tsx",
-    "src/routes/skills.tsx",
+    "src/routes/agents.tsx",
   ]) {
     assert.equal(routeLineEntries.includes(completedRoute), false);
   }

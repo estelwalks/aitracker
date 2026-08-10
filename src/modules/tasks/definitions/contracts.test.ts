@@ -5,7 +5,7 @@ import { assertSafeStaticCatalog, JobCatalogSchema } from "./contracts";
 
 test("job catalog accepts the embedded catalog", () => {
   assertSafeStaticCatalog(raw);
-  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 5);
+  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 6);
 });
 
 test("job catalog rejects duplicate ids and invalid schedules", () => {

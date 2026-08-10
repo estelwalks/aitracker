@@ -69,7 +69,7 @@ export const PUBLIC_MODULE_CATALOG: PublicModuleCatalog = {
       id: "agent-directory",
       navigation: {
         group: "core",
-        route: "/agents",
+        route: "/sources",
         order: 40,
       },
       i18n: {
@@ -87,7 +87,7 @@ export const PUBLIC_MODULE_CATALOG: PublicModuleCatalog = {
       id: "skill-catalog",
       navigation: {
         group: "core",
-        route: "/skills",
+        route: "/agents",
         order: 50,
       },
       i18n: {

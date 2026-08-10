@@ -1,60 +1,33 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import {
+  buildSkillWorkspace,
+  type SkillWorkspace,
+} from "./application/asset-view.ts";
+
+import type { SkillSnapshot as LegacySkillSnapshot } from "../../lib/local-skills/types.ts";
 import type {
-  BatchUninstallResult as LegacyBatchUninstallResult,
-  LocalSkill as LegacyLocalSkill,
-  SkillAgent as LegacySkillAgent,
-  SkillSnapshot as LegacySkillSnapshot,
-  SkillSyncResult as LegacySkillSyncResult,
-} from "../../lib/local-skills/types.ts";
+  BatchUninstallResult,
+  LocalSkill,
+  SkillAgent,
+  SkillInstallation,
+  SkillSnapshot,
+  SkillSyncResult,
+} from "./query/contracts.ts";
 
-export type SkillInstallation = Omit<
-  LegacyLocalSkill["installations"][number],
-  "path" | "source"
-> & {
-  readonly installationRef: string;
-  readonly source: {
-    readonly kind: "frontmatter" | "market";
-    readonly label: string;
-  } | null;
-};
-export type LocalSkill = Omit<LegacyLocalSkill, "installations"> & {
-  readonly installations: readonly SkillInstallation[];
-};
-export type SkillSnapshot = Omit<
-  LegacySkillSnapshot,
-  "roots" | "agents" | "skills"
-> & {
-  readonly roots: Record<SkillAgent, { readonly count: number }>;
-  readonly agents: Record<SkillAgent, { installed: boolean }>;
-  readonly skills: readonly LocalSkill[];
-};
-export type SkillAgent = LegacySkillAgent;
-export type BatchUninstallResult = Omit<
-  LegacyBatchUninstallResult,
-  "succeeded" | "failed"
-> & {
-  readonly succeeded: readonly string[];
-  readonly failed: readonly (Omit<
-    LegacyBatchUninstallResult["failed"][number],
-    "path"
-  > & {
-    readonly installationRef: string;
-  })[];
-};
-export type SkillSyncResult = Omit<
-  LegacySkillSyncResult,
-  "succeeded" | "failed"
-> & {
-  readonly succeeded: readonly { agent: string; installationRef: string }[];
-  readonly failed: readonly (Omit<
-    LegacySkillSyncResult["failed"][number],
-    "agent"
-  > & {
-    readonly agent: string;
-  })[];
-};
-
+export type {
+  BatchUninstallResult,
+  LocalSkill,
+  SkillAgent,
+  SkillInstallation,
+  SkillSnapshot,
+  SkillSyncResult,
+} from "./query/contracts.ts";
+/** Server query result consumed by the Skill operations workspace route. */
+export interface SkillWorkspaceSnapshot {
+  readonly snapshot: SkillSnapshot;
+  readonly workspace: SkillWorkspace;
+}
 export { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 
 const refFor = (skillId: string, agent: string, index: number) =>
@@ -88,9 +61,7 @@ function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
         installedAt: installation.installedAt,
         modifiedAt: installation.modifiedAt,
         version: installation.version,
-        source: installation.source
-          ? { kind: installation.source.kind, label: installation.source.label }
-          : null,
+        source: installation.source ? { kind: installation.source.kind } : null,
         updateStatus: installation.updateStatus,
         updateReason: installation.updateReason,
       })),
@@ -119,6 +90,18 @@ function resolveInstallation(value: LegacySkillSnapshot, ref: string) {
 
 export const getLocalSkills = createServerFn({ method: "GET" }).handler(
   async (): Promise<SkillSnapshot> => projectSnapshot(await legacySnapshot()),
+);
+
+/**
+ * A single public query boundary for the workspace shell. Both the raw
+ * snapshot and the UI projection have already been stripped of filesystem and
+ * source-location data before they cross the server boundary.
+ */
+export const getSkillWorkspace = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SkillWorkspaceSnapshot> => {
+    const snapshot = projectSnapshot(await legacySnapshot());
+    return { snapshot, workspace: buildSkillWorkspace(snapshot) };
+  },
 );
 
 export const requestApprovedSkillUninstall = createServerFn({ method: "POST" })

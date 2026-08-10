@@ -9,6 +9,9 @@ import type {
 } from "./task-storage.ts";
 import {
   createTaskScheduler,
+  effectiveSchedule,
+  isScheduleDue,
+  lastSuccessfulFinishedAt,
   nextRunAt,
   type SchedulerOptions,
 } from "./scheduler.ts";
@@ -57,6 +60,48 @@ test("calculates interval, daily and weekly schedules in local time", () => {
       from,
     ).getDate(),
     5,
+  );
+});
+
+test("uses the effective schedule and last successful completion for freshness", () => {
+  const definition = {
+    id: "usage.refresh",
+    defaultSchedule: { kind: "interval", minutes: 15 },
+  } as Parameters<typeof effectiveSchedule>[0];
+  const schedule = effectiveSchedule(definition, {
+    enabled: true,
+    schedule: { kind: "interval", minutes: 60 },
+  });
+  assert.deepEqual(schedule, { kind: "interval", minutes: 60 });
+
+  const last = lastSuccessfulFinishedAt([
+    {
+      runId: "run:failed",
+      taskId: "usage.refresh",
+      trigger: "schedule",
+      status: "failed",
+      attempt: 1,
+      correlationId: "corr:failed",
+      finishedAt: "2026-08-10T09:55:00.000Z",
+    },
+    {
+      runId: "run:success",
+      taskId: "usage.refresh",
+      trigger: "schedule",
+      status: "succeeded",
+      attempt: 1,
+      correlationId: "corr:success",
+      finishedAt: "2026-08-10T09:00:00.000Z",
+    },
+  ]);
+  assert.equal(last?.toISOString(), "2026-08-10T09:00:00.000Z");
+  assert.equal(
+    isScheduleDue(schedule, last, new Date("2026-08-10T09:59:59.000Z")),
+    false,
+  );
+  assert.equal(
+    isScheduleDue(schedule, last, new Date("2026-08-10T10:00:00.000Z")),
+    true,
   );
 });
 

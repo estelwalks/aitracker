@@ -50,6 +50,26 @@ import type { DistillationApplication } from "../modules/distillation/index.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
 import type { SessionQueryPort } from "../modules/sessions/contracts.ts";
 import { createLegacySessionRepository } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import {
+  createUsageApplication,
+  type UsageApplication,
+  type UsageSnapshotDto,
+} from "../modules/usage/index.ts";
+import { createNullableAtomicSnapshotRepository } from "../modules/usage/infrastructure/atomic-snapshot-repository.ts";
+import { createLegacyUsageCollector } from "../modules/usage/infrastructure/legacy-usage-collector.server.ts";
+import { scanLocalSkills } from "../lib/local-skills/scanner.server.ts";
+import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
+import { createMonitoringRuntime } from "../modules/monitoring/application/index.ts";
+import {
+  createAtomicMonitoringStatusStore,
+  monitoringStatusSchema,
+} from "../modules/monitoring/infrastructure.ts";
+import { createLocalSkillSecurityMonitor } from "../modules/security-assessment/adapters/local-skill-monitor.server.ts";
+import {
+  createAtomicSecurityAssessmentHistoryStore,
+  securityAssessmentHistorySchema,
+} from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
+import type { SecurityAssessmentHistoryDocument } from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -101,6 +121,10 @@ export interface CompositionRoot {
    * into the application's private ports.
    */
   readonly sessions: SessionQueryPort;
+  /** Local-only usage application used by the collector scheduler. */
+  readonly usage: UsageApplication;
+  /** Renderer-safe heartbeat for the desktop background listener. */
+  readonly monitoring: MonitoringRuntime;
   /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -150,6 +174,69 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     clock,
   });
   const runs = createTaskRunRepository({ store: runsStore, clock });
+
+  // Usage snapshots are a sanitized feature DTO: legacy adapters remove
+  // paths, command arguments and raw diagnostic locations before this store
+  // is written. Keep the parser deliberately narrow at the persistence seam;
+  // the collector remains the owner of the full structural contract.
+  const usageSnapshotStore = new NodeAtomicJsonStore<UsageSnapshotDto | null>({
+    filePath: join(tasksDir, "usage-snapshot.v1.json"),
+    defaultValue: null,
+    schema: {
+      currentVersion: 1,
+      parse(value): UsageSnapshotDto | null {
+        if (value === null) return null;
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          typeof (value as { generatedAt?: unknown }).generatedAt !== "string"
+        )
+          throw new TypeError("Invalid usage snapshot");
+        return value as UsageSnapshotDto;
+      },
+    },
+    clock,
+  });
+  const usageSnapshotRepository =
+    createNullableAtomicSnapshotRepository(usageSnapshotStore);
+  const usage = createUsageApplication({
+    collector: createLegacyUsageCollector(),
+    repository: usageSnapshotRepository,
+    clock: { now: () => clock.now().getTime() },
+  });
+
+  const monitoringStore = new NodeAtomicJsonStore<
+    import("../modules/monitoring/contracts.ts").MonitoringStatus | null
+  >({
+    filePath: join(tasksDir, "monitoring.v1.json"),
+    defaultValue: null,
+    schema: {
+      ...monitoringStatusSchema,
+      parse(value) {
+        return value === null ? null : monitoringStatusSchema.parse(value);
+      },
+    },
+    clock,
+  });
+  const monitoring = createMonitoringRuntime({
+    store: createAtomicMonitoringStatusStore(monitoringStore),
+    now: () => clock.now(),
+  });
+
+  // The security monitor is default-enabled in the scheduler below. This
+  // adapter reads only discovered local Skill/package content, never follows
+  // symlinks, and persists only opaque hashes plus assessment summaries.
+  const securityHistoryStore =
+    new NodeAtomicJsonStore<SecurityAssessmentHistoryDocument>({
+      filePath: join(tasksDir, "security-assessments.v1.json"),
+      defaultValue: { entries: [] },
+      schema: securityAssessmentHistorySchema,
+      clock,
+    });
+  const security = createLocalSkillSecurityMonitor({
+    history: createAtomicSecurityAssessmentHistoryStore(securityHistoryStore),
+    now: () => clock.now(),
+  });
 
   // AI orchestration: register the deterministic offline provider by default so
   // distillation/reports get a stable fallback. A real provider can be
@@ -210,13 +297,34 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     createCandidateId: () => `candidate:${randomUUID()}`,
   });
 
-  // TODO(usage-migration): inject the real `usage` application once the
-  // local-usage scanner ports land (follow-up task). Until then the usage/
-  // sessions/skills/retention executors resolve to a safe `unavailable` state.
-  // `reports` IS wired above, so `reports.generate` runs end-to-end against the
-  // offline model. Passing only `reports` is intentional and is NOT a
-  // placeholder for synthetic collectors.
-  const executorRegistry = createExecutorRegistry({ reports });
+  // Refresh adapters deliberately invoke feature ports rather than exposing a
+  // scanner or filesystem path to the task module. Their output is discarded:
+  // each feature keeps its own read cache/privacy projection, while the
+  // monitoring runtime records only success/failure heartbeats.
+  const executorRegistry = createExecutorRegistry({
+    usage,
+    sessions: {
+      async refresh({ signal }) {
+        const result = await sessions.query({ pageSize: 1, signal });
+        if (!result.ok) throw new Error(result.error.code);
+      },
+    },
+    skills: {
+      async refresh({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        const current = await usage.getUsageSnapshot({
+          maxAgeMs: Number.MAX_SAFE_INTEGER,
+        });
+        if (!current.ok) throw new Error(current.error.code);
+        await scanLocalSkills({
+          usageEvents: current.value.snapshot?.details ?? [],
+        });
+      },
+    },
+    security,
+    reports,
+    monitoring,
+  });
 
   const scheduler = createTaskScheduler({
     preferences,
@@ -233,6 +341,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     reports,
     distillation,
     sessions,
+    usage,
+    monitoring,
     dataRoot,
   };
 }

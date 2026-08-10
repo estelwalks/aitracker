@@ -15,6 +15,38 @@ import type {
   SkillPackageRecord,
 } from "../contracts.ts";
 
+export {
+  availableAssetSorts,
+  buildSkillAssetSummary,
+  buildSkillWorkspace,
+  querySkillAssets,
+  toSkillAssetView,
+} from "./asset-view.ts";
+export type {
+  AssetSortDirection,
+  AssetSortKey,
+  AssetSourceFilter,
+  AssetUpdateFilter,
+  SkillAssetFilters,
+  SkillAssetSummary,
+  SkillAssetView,
+  SkillAgentCoverage,
+  SkillWorkspace,
+  SkillWorkspaceFacet,
+  SkillWorkspaceFacets,
+  SkillWorkspaceSummary,
+} from "./asset-view.ts";
+export { buildToolOverview } from "./tool-overview.ts";
+export type {
+  ToolOverviewBreakdownRow,
+  ToolOverviewCard,
+  ToolOverviewContextRow,
+  ToolOverviewSkillUsage,
+  ToolOverviewState,
+  ToolOverviewTrendPoint,
+  ToolOverviewView,
+} from "./tool-overview.ts";
+
 export interface SkillCatalogApplication {
   readonly contract: SkillCatalogModuleContract;
 }
