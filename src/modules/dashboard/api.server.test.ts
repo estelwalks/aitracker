@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
+import { APP_ID } from "../../lib/app-config.ts";
 import { toDashboardSnapshot } from "./api.server.ts";
 
 const rawSnapshot: LocalUsageSnapshot = {
@@ -48,7 +49,7 @@ const rawSnapshot: LocalUsageSnapshot = {
       source: "codex",
       timestamp: "2026-08-10T00:00:00.000Z",
       model: "gpt-test",
-      project: "/Users/example/work/trusttools",
+      project: `/Users/example/work/${APP_ID}`,
       sessionId: "opaque-session",
       inputTokens: 10,
       cachedInputTokens: 0,
@@ -87,7 +88,7 @@ test("dashboard snapshot projects scanner data without paths or command summarie
     malformedLines: 0,
     events: 1,
   });
-  assert.equal(result.details[0]?.project, "trusttools");
+  assert.equal(result.details[0]?.project, APP_ID);
   assert.equal("commands" in (result.details[0]?.context ?? {}), false);
   assert.equal(JSON.stringify(result).includes("/Users/example"), false);
 });
