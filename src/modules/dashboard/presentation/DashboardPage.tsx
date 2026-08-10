@@ -49,6 +49,7 @@ import {
   filterDailyUsage,
   filterUsageEvents,
   previousPeriodTotal,
+  resolveUsageRange,
   shareOf,
   sourceLabel,
   totalsFromDaily,
@@ -79,7 +80,7 @@ function daysAgo(days: number): string {
 }
 
 export function DashboardPage({ data }: { data: DashboardReadModel }) {
-  const { snapshot, error, skills, pricing } = data;
+  const { snapshot, error, skills, sessions, pricing } = data;
   const router = useRouter();
   const { locale, t, format, displayCurrency, rates } = useI18n();
   applyPricingSnapshot(pricing);
@@ -121,6 +122,28 @@ export function DashboardPage({ data }: { data: DashboardReadModel }) {
     () => filterUsageEvents(snapshot.details, period, from, to),
     [snapshot.details, period, from, to],
   );
+  const selectedSessionMetrics = useMemo(() => {
+    if (!sessions.available) return null;
+    const range = resolveUsageRange(period, from, to);
+    if (!range.valid || !range.fromDate || !range.toDate) return null;
+    const records = sessions.records.filter((session) => {
+      const startedAt = new Date(session.startedAt);
+      return (
+        !Number.isNaN(startedAt.getTime()) &&
+        startedAt >= range.fromDate! &&
+        startedAt <= range.toDate!
+      );
+    });
+    return records.reduce(
+      (summary, session) => ({
+        count: summary.count + 1,
+        durationMs: summary.durationMs + Math.max(0, session.durationMs),
+        turns: summary.turns + Math.max(0, session.turns),
+        editTurns: summary.editTurns + Math.max(0, session.editTurns),
+      }),
+      { count: 0, durationMs: 0, turns: 0, editTurns: 0 },
+    );
+  }, [sessions, period, from, to]);
   const selectedCost = useMemo(
     () => estimateUsageCost(selectedEvents),
     [selectedEvents],
@@ -541,7 +564,7 @@ export function DashboardPage({ data }: { data: DashboardReadModel }) {
                   {t("dashboard.kpi.skills")}
                 </div>
                 <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
-                  {skills?.skills.length ?? 0}
+                  {skills.count}
                   <span className="text-base text-muted-foreground">
                     {" "}
                     {t("dashboard.kpi.skillUnit")}
@@ -549,6 +572,31 @@ export function DashboardPage({ data }: { data: DashboardReadModel }) {
                 </div>
                 <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
                   {t("dashboard.kpi.skillScanNote")}
+                </div>
+              </Link>
+
+              <Link
+                to="/sessions"
+                className="tt-metric tt-corner min-w-[212px] flex-1 snap-start px-4 py-3"
+              >
+                <div className="tt-label whitespace-nowrap font-mono uppercase">
+                  {t("dashboard.kpi.sessions")}
+                </div>
+                <div className="tt-num mt-1.5 whitespace-nowrap text-2xl">
+                  {selectedSessionMetrics == null
+                    ? t("dashboard.kpi.unavailable")
+                    : format.formatNumber(selectedSessionMetrics.count)}
+                </div>
+                <div className="mt-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                  {selectedSessionMetrics == null
+                    ? t("dashboard.kpi.sessionUnavailableHint")
+                    : t("dashboard.kpi.sessionMetrics", {
+                        turns: selectedSessionMetrics.turns,
+                        edits: selectedSessionMetrics.editTurns,
+                        minutes: Math.round(
+                          selectedSessionMetrics.durationMs / 60_000,
+                        ),
+                      })}
                 </div>
               </Link>
 
