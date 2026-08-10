@@ -238,6 +238,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 34%, transparent);
+    color: var(--color-foreground);
+  }
+
   /* 中文优先排版：数字等宽对齐 */
   table,
   .tnum {
@@ -246,9 +251,12 @@
 }
 
 @utility tt-panel {
+  position: relative;
+  overflow: hidden;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px -28px rgba(0, 0, 0, 0.82);
 }
 
 @utility tt-num {
@@ -274,6 +282,8 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
   overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
 }
 
 /* 内容主区：随视口宽度平滑缩放的内边距与最大宽度 */
@@ -281,6 +291,63 @@
   width: 100%;
   margin-inline: auto;
   max-width: 1720px;
+}
+
+@utility tt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--color-surface-2) 78%, transparent),
+      color-mix(in oklab, var(--color-surface) 92%, transparent)
+    );
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 3%, transparent);
+}
+
+@utility tt-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+
+  & thead {
+    background: color-mix(in oklab, var(--color-surface-2) 72%, transparent);
+  }
+
+  & th {
+    height: 2.375rem;
+    padding-inline: 0.875rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.075em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  & td {
+    min-height: 2.75rem;
+    padding: 0.625rem 0.875rem;
+    border-top: 1px solid color-mix(in oklab, var(--color-border) 78%, transparent);
+    vertical-align: middle;
+  }
+
+  & tbody tr {
+    transition: background-color 0.16s ease;
+  }
+
+  & tbody tr:hover {
+    background: color-mix(in oklab, var(--color-primary) 5%, transparent);
+  }
 }
 
 /* 科技感：网格底纹 / 边角标记 / 扫描线 */
@@ -358,6 +425,133 @@
   }
   &:hover::after {
     opacity: 1;
+  }
+}
+
+/* Application chrome: structured, compact, and intentionally data-first. */
+.tt-app-shell {
+  background:
+    radial-gradient(
+      circle at 88% -8%,
+      color-mix(in oklab, var(--color-primary) 10%, transparent),
+      transparent 28rem
+    ),
+    var(--color-background);
+}
+
+.tt-sidebar {
+  box-shadow: 10px 0 30px -28px rgba(0, 0, 0, 0.9);
+}
+
+.tt-brand-mark {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 20px -12px color-mix(in oklab, var(--color-primary) 94%, transparent);
+}
+
+.tt-nav-item {
+  isolation: isolate;
+}
+
+.tt-nav-item::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  content: "";
+  transition: border-color 0.16s ease;
+}
+
+.tt-nav-item[aria-current="page"]::after {
+  border-color: color-mix(in oklab, var(--color-primary) 24%, transparent);
+}
+
+.tt-app-main {
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-foreground) 1.7%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 100% 4.5rem;
+}
+
+.tt-status-bar {
+  box-shadow: 0 -12px 28px -26px rgba(0, 0, 0, 0.9);
+}
+
+.tt-panel > header {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-2) 50%, transparent),
+    transparent 72%
+  );
+}
+
+.tt-page-header h1 {
+  text-wrap: balance;
+}
+
+.tt-empty-state {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-surface-2) 46%, transparent),
+    transparent 60%
+  );
+}
+
+.tt-stat + .tt-stat {
+  border-left: 1px solid var(--color-border);
+}
+
+/* Table components wrapped in a horizontal rail inherit the terminal table
+   treatment without requiring every legacy module to change its DTO/view. */
+.tt-xscroll > table {
+  width: 100%;
+  min-width: max-content;
+}
+
+.tt-xscroll > table thead {
+  background: color-mix(in oklab, var(--color-surface-2) 55%, transparent);
+}
+
+.tt-xscroll > table th {
+  color: var(--color-muted-foreground);
+  font-size: 0.6875rem;
+  letter-spacing: 0.065em;
+  white-space: nowrap;
+}
+
+.tt-xscroll > table tbody tr {
+  transition: background-color 0.16s ease;
+}
+
+.tt-xscroll > table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-primary) 5%, transparent);
+}
+
+@media (max-width: 640px) {
+  .tt-toolbar {
+    align-items: stretch;
+  }
+
+  .tt-toolbar > * {
+    max-width: 100%;
+  }
+
+  .tt-status-bar > :nth-child(2) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
