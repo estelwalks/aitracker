@@ -13,4 +13,19 @@ test("skills route consumes opaque installation refs only", () => {
   );
   assert.match(source, /installationRef/);
   assert.doesNotMatch(source, /source:\s*\{[^}]*label/);
+  assert.match(source, /getSkillWorkspace/);
+});
+
+test("operations workspace does not render paths, roots, or raw source labels", () => {
+  const source = readFileSync(
+    new URL("./presentation/SkillsPage.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /installation\.path|sourcePath\s*:|\.roots\b/);
+  assert.doesNotMatch(
+    source,
+    /sourceLabel\(|skills\.detail\.source|updateReason/,
+  );
+  assert.match(source, /buildSkillWorkspace/);
+  assert.match(source, /skill-workspace-card/);
 });

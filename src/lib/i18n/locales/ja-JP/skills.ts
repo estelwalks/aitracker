@@ -11,6 +11,9 @@ export const skills = {
     agentAll: "インストール先: すべて",
     source: "ソース",
     sourceAll: "すべてのソース",
+    sourceRecorded: "記録済みの起点",
+    sourceManaged: "管理対象エントリ",
+    sourceUnclassified: "未分類",
     updateStatus: "更新状態",
     updateAll: "すべての更新状態",
     sort: "並び替え",
@@ -25,6 +28,9 @@ export const skills = {
     updatesHint: "既存の更新エビデンスに基づく",
     lastScan: "最終スキャン",
     localScanOnly: "ローカルスキャン時刻",
+    coverageHint: "カバー済み / 利用可能 Agent",
+    unassigned: "未割り当ての資産",
+    unassignedHint: "現在どの Agent にもインストールされていません",
   },
   source: { frontmatter: "メタデータ", market: "マーケット", unknown: "不明" },
   update: {
@@ -44,6 +50,7 @@ export const skills = {
     rescan: "再スキャン",
     sync: "同期",
     syncTitle: "Agent 間で同期",
+    inspect: "詳細",
     uninstall: "アンインストール",
     install: "インストール",
     uninstallAll: "全コピーをアンインストール",
@@ -81,6 +88,18 @@ export const skills = {
   },
   aria: {
     selectSkill: "{name} を選択",
+    openSkill: "{name} を確認",
+  },
+  workspace: {
+    eyebrow: "Skill 資産ワークスペース",
+    description:
+      "ローカルスキャンに基づき、インストール、同期、アクセス制御をまとめて管理します。最終スキャン: {time}。",
+    coverage: "Agent カバレッジ",
+    coverageHint: "{active} 件をカバー / {available} 件が利用可能",
+    coveragePanelHint: "利用可能な Agent を選んで資産を絞り込みます",
+    availableIn: "利用可能な場所",
+    notAssigned: "Agent に未割り当て",
+    version: "バージョン情報",
   },
   pagination: {
     range: "{start}-{end} 件目 / 全 {total} 件",
@@ -97,6 +116,7 @@ export const skills = {
     source: "ソース: {source}",
     notProvided: "未提供",
     updateStatus: "更新状態: {status}（{reason}）",
+    updateStatusShort: "更新状態: {status}",
     updateAvailable: "更新可能",
     updateCurrent: "既に最新のエビデンス版",
     updateUnknown: "判断できません",
@@ -108,6 +128,11 @@ export const skills = {
     batchDesc:
       "インストール済みの全ツールから {count} 個の Skill を削除します。",
     irreversible: "この操作は取り消せません",
+  },
+  blacklist: {
+    title: "ブラックリストへの追加を確認",
+    desc: "{name} は、手動でブラックリストから除外するまで Agent にインストールできません。",
+    confirm: "ブラックリストに追加",
   },
   sync: {
     title: "Skill を同期",
