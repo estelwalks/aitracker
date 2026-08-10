@@ -355,6 +355,15 @@ async function scanClaudeCodeSessions(
   const projectsRoot = join(claudeDirectory, "projects");
   const files = await collectJsonlFiles([projectsRoot], () => true);
   const fragments = new Map<string, SessionFragment>();
+  const usageByMessage = new Map<
+    string,
+    {
+      sessionId: string;
+      timestamp: RecordTimestamp;
+      tokens: SessionTokenCounts;
+    }
+  >();
+  const assistantMessages = new Set<string>();
 
   for (const file of files) {
     let sawSessionId = false;
@@ -365,6 +374,7 @@ async function scanClaudeCodeSessions(
       cwd?: string;
       timestamp?: RecordTimestamp;
       tokens?: SessionTokenCounts;
+      messageId?: string;
       isAssistant?: boolean;
       isEditTurn?: boolean;
       subagent?: boolean;
@@ -389,6 +399,7 @@ async function scanClaudeCodeSessions(
       if (sessionId != null) sawSessionId = true;
 
       const message = asObject(record.message);
+      const messageId = stringValue(message?.id);
       const usage = asObject(message?.usage);
       const model = stringValue(message?.model);
       const isAssistant =
@@ -414,8 +425,7 @@ async function scanClaudeCodeSessions(
           inputTokens +
           outputTokens +
           cachedInputTokens +
-          cacheCreationInputTokens +
-          reasoningOutputTokens;
+          cacheCreationInputTokens;
         if (totalTokens > 0) {
           tokens = {
             inputTokens,
@@ -464,6 +474,7 @@ async function scanClaudeCodeSessions(
         cwd,
         timestamp,
         tokens,
+        messageId,
         isAssistant,
         isEditTurn: isEditTurn || undefined,
         subagent: subagent || undefined,
@@ -498,15 +509,39 @@ async function scanClaudeCodeSessions(
         fragment.timestamps.push(entry.timestamp);
       }
       if (entry.tokens != null) {
-        addTokenCounts(fragment.totals, entry.tokens);
+        if (entry.messageId == null || entry.timestamp == null) {
+          // Preserve legacy records that predate message ids. Current Claude
+          // records are deduplicated below using the same identity as usage.
+          addTokenCounts(fragment.totals, entry.tokens);
+        } else {
+          const identity = `${fileSessionId}:${entry.messageId}`;
+          const existing = usageByMessage.get(identity);
+          if (
+            existing == null ||
+            entry.tokens.totalTokens > existing.tokens.totalTokens ||
+            (entry.tokens.totalTokens === existing.tokens.totalTokens &&
+              entry.timestamp.ms > existing.timestamp.ms)
+          ) {
+            usageByMessage.set(identity, {
+              sessionId: fileSessionId,
+              timestamp: entry.timestamp,
+              tokens: entry.tokens,
+            });
+          }
+        }
       }
-      if (entry.isAssistant) {
+      const assistantIdentity =
+        entry.messageId == null ? null : `${fileSessionId}:${entry.messageId}`;
+      const firstAssistantObservation =
+        assistantIdentity == null || !assistantMessages.has(assistantIdentity);
+      if (assistantIdentity != null) assistantMessages.add(assistantIdentity);
+      if (entry.isAssistant && firstAssistantObservation) {
         assistantSeen += 1;
       }
-      if (entry.subagent) {
+      if (entry.subagent && firstAssistantObservation) {
         fragment.subagentCalls += 1;
       }
-      if (entry.isEditTurn) {
+      if (entry.isEditTurn && firstAssistantObservation) {
         fragment.editTurns += 1;
       }
       fragment.terminalStatus = mergeTerminalStatus(
@@ -518,6 +553,11 @@ async function scanClaudeCodeSessions(
     fragment.turns += assistantSeen;
 
     fragments.set(fileSessionId, fragment);
+  }
+
+  for (const usage of usageByMessage.values()) {
+    const fragment = fragments.get(usage.sessionId);
+    if (fragment != null) addTokenCounts(fragment.totals, usage.tokens);
   }
 
   return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
@@ -594,7 +634,6 @@ async function scanCodexSessions(
     let previousTotalUsage: JsonObject | undefined;
     // Track which turns carried an edit tool (best-effort).
     let pendingEditTurn = false;
-    let turnAssistantSeen = 0;
 
     const perFileTotals = emptyTokenCounts();
     const timestamps: RecordTimestamp[] = [];
@@ -615,9 +654,9 @@ async function scanCodexSessions(
 
       // session_meta carries the authoritative id and (sometimes) cwd.
       if (recordType === "session_meta" || payloadType === "session_meta") {
-        // Prefer the nested payload when present; fall back to the record.
-        const metaPayload: JsonObject =
-          payload != null && payloadType === "session_meta" ? payload : record;
+        // Current Codex envelopes carry the kind on record.type and omit
+        // payload.type. The payload is still the authoritative metadata body.
+        const metaPayload: JsonObject = payload ?? record;
         const id = stringValue(
           metaPayload.id ?? metaPayload.sessionId ?? metaPayload.session_id,
         );
@@ -629,8 +668,7 @@ async function scanCodexSessions(
 
       // turn_context carries model + cwd (NOT model_provider — that's provenance).
       if (recordType === "turn_context" || payloadType === "turn_context") {
-        const ctxPayload: JsonObject =
-          payload != null && payloadType === "turn_context" ? payload : record;
+        const ctxPayload: JsonObject = payload ?? record;
         const model = stringValue(ctxPayload.model);
         if (model != null) context.model = model;
         const cwd = stringValue(ctxPayload.cwd);
@@ -640,9 +678,15 @@ async function scanCodexSessions(
       }
 
       // Look for tool-execution metadata to flag edit turns (name only).
-      if (recordType === "function_call" || payloadType === "function_call") {
-        const callPayload: JsonObject =
-          payload != null && payloadType === "function_call" ? payload : record;
+      const item = asObject(payload?.item) ?? asObject(payload?.response_item);
+      const itemType = stringValue(item?.type);
+      const callType = itemType ?? payloadType ?? recordType;
+      if (callType === "patch_apply_end") {
+        pendingEditTurn = true;
+        return;
+      }
+      if (callType === "function_call" || callType === "custom_tool_call") {
+        const callPayload: JsonObject = item ?? payload ?? record;
         const name = (
           stringValue(callPayload.name) ??
           stringValue(asObject(callPayload.msg)?.name) ??
@@ -720,8 +764,7 @@ async function scanCodexSessions(
           inputTokens +
           outputTokens +
           cachedInputTokens +
-          cacheCreationInputTokens +
-          reasoningOutputTokens;
+          cacheCreationInputTokens;
         if (totalTokens > 0) {
           perFileTotals.inputTokens += inputTokens;
           perFileTotals.outputTokens += outputTokens;
@@ -732,7 +775,6 @@ async function scanCodexSessions(
         }
       }
 
-      turnAssistantSeen += 1;
       assistantTurns += 1;
       if (pendingEditTurn) {
         editTurns += 1;
@@ -906,8 +948,7 @@ async function scanGrokSessions(
             inputTokens +
             outputTokens +
             cachedInputTokens +
-            cacheCreationInputTokens +
-            reasoningOutputTokens;
+            cacheCreationInputTokens;
           if (totalTokens > 0) {
             perFileTotals.inputTokens += inputTokens;
             perFileTotals.outputTokens += outputTokens;
