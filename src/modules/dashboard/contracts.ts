@@ -79,6 +79,9 @@ export interface DashboardProjectSessionAggregate {
   readonly source: string;
   readonly date: string;
   readonly count: number;
+  readonly turns: number;
+  readonly editTurns: number;
+  readonly subagentCalls: number;
 }
 
 /** Same privacy boundary as project aggregates, grouped for tool workflow KPIs. */
@@ -86,6 +89,9 @@ export interface DashboardSourceSessionAggregate {
   readonly source: string;
   readonly date: string;
   readonly count: number;
+  readonly turns: number;
+  readonly editTurns: number;
+  readonly subagentCalls: number;
 }
 
 export interface DashboardSessionsSummary {
@@ -113,6 +119,17 @@ export interface DashboardV2Event extends LocalTokenCounts {
     readonly skillCalls: number;
     readonly toolOutputCalls: number;
   };
+  /** Field-level evidence prevents an unobserved metric from rendering as zero. */
+  readonly evidence: DashboardV2ContextAvailability;
+}
+
+export interface DashboardV2ContextAvailability {
+  readonly textResponses: boolean;
+  readonly toolCalls: boolean;
+  readonly skillCalls: boolean;
+  readonly toolOutputCalls: boolean;
+  readonly reasoningTokens: boolean;
+  readonly systemPromptTokens: boolean;
 }
 
 export interface DashboardV2Tool {
@@ -120,6 +137,18 @@ export interface DashboardV2Tool {
   readonly name: string;
   readonly available: boolean;
   readonly detected: boolean;
+  readonly usageSupport: "native" | "adapter" | "unsupported";
+}
+
+export interface DashboardV2AvailabilityMetric {
+  readonly count: number | null;
+  readonly available: boolean;
+}
+
+export interface DashboardV2OutputAvailability {
+  readonly securityRuns: DashboardV2AvailabilityMetric;
+  readonly distillationOutputs: DashboardV2AvailabilityMetric;
+  readonly dailyReports: DashboardV2AvailabilityMetric;
 }
 
 export interface DashboardV2Snapshot {
@@ -130,6 +159,7 @@ export interface DashboardV2Snapshot {
   readonly skills: DashboardSkillSummary;
   readonly sessions: DashboardSessionsSummary;
   readonly pricingAvailable: boolean;
+  readonly outputAvailability: DashboardV2OutputAvailability;
 }
 
 export interface DashboardV2TrendPoint {
@@ -147,6 +177,7 @@ export interface DashboardV2CalendarSummary {
   readonly days: number;
   readonly activeDays: number;
   readonly longestStreak: number;
+  readonly totalTokens: number;
 }
 
 export interface DashboardV2BreakdownRow {
@@ -236,6 +267,11 @@ export interface DashboardV2View {
   readonly sessions: number | null;
   readonly skills: number | null;
   readonly activeTools: number;
+  readonly usageSupportedToolCount: number;
+  /** Full cardinality before any presentation Top-N projection. */
+  readonly modelCount: number;
+  readonly projectCount: number;
+  readonly outputAvailability: DashboardV2OutputAvailability;
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
@@ -246,6 +282,7 @@ export interface DashboardV2View {
   readonly calendar: readonly DashboardV2CalendarPoint[];
   readonly calendarSummary: DashboardV2CalendarSummary;
   readonly context: DashboardV2ContextCounts;
+  readonly contextAvailability: DashboardV2ContextAvailability;
 }
 
 /** Inputs accepted by the dashboard query. Infrastructure stays behind the API adapter. */

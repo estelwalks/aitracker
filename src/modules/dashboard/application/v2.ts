@@ -11,6 +11,7 @@ import type {
   DashboardV2CalendarPoint,
   DashboardV2CalendarSummary,
   DashboardV2ContextCounts,
+  DashboardV2ContextAvailability,
   DashboardV2Event,
   DashboardV2Snapshot,
   DashboardV2TrendPoint,
@@ -38,6 +39,15 @@ const emptyContext = (): DashboardV2ContextCounts => ({
   toolCalls: 0,
   skillCalls: 0,
   toolOutputCalls: 0,
+});
+
+const emptyContextAvailability = (): DashboardV2ContextAvailability => ({
+  textResponses: false,
+  toolCalls: false,
+  skillCalls: false,
+  toolOutputCalls: false,
+  reasoningTokens: false,
+  systemPromptTokens: false,
 });
 
 function totalsFor(events: readonly DashboardV2Event[]): LocalUsageTotals {
@@ -90,6 +100,10 @@ function dateKey(timestamp: string): string | null {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
   const rows = new Map<
     string,
@@ -108,6 +122,31 @@ function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
   );
 }
 
+function completeDailyRange(
+  observed: readonly DashboardV2TrendPoint[],
+  range: ReturnType<typeof resolveUsageRange>,
+): DashboardV2TrendPoint[] {
+  if (!range.valid || !range.fromDate || !range.toDate) return [];
+  const byDate = new Map(observed.map((point) => [point.date, point]));
+  const firstObserved = observed[0]?.date;
+  const start =
+    range.from === "1970-01-01" && firstObserved
+      ? new Date(`${firstObserved}T00:00:00`)
+      : range.from === "1970-01-01"
+        ? range.toDate
+        : range.fromDate;
+  const points: DashboardV2TrendPoint[] = [];
+  for (
+    let cursor = new Date(start);
+    cursor <= range.toDate;
+    cursor = addLocalDays(cursor, 1)
+  ) {
+    const date = localDateKey(cursor);
+    points.push(byDate.get(date) ?? { date, tokens: 0, events: 0 });
+  }
+  return points;
+}
+
 function addLocalDays(date: Date, amount: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + amount);
@@ -116,25 +155,24 @@ function addLocalDays(date: Date, amount: number): Date {
 
 function calendarFor(
   trend: readonly DashboardV2TrendPoint[],
-  range: ReturnType<typeof resolveUsageRange>,
+  toDate: Date | null,
 ): { points: DashboardV2CalendarPoint[]; summary: DashboardV2CalendarSummary } {
-  if (!range.valid || !range.toDate || trend.length === 0)
+  if (toDate == null || Number.isNaN(toDate.getTime()))
     return {
       points: [],
-      summary: { days: 0, activeDays: 0, longestStreak: 0 },
+      summary: {
+        days: 0,
+        activeDays: 0,
+        longestStreak: 0,
+        totalTokens: 0,
+      },
     };
   const observedByDate = new Map(trend.map((point) => [point.date, point]));
-  // The all-time range uses a 1970 sentinel. The activity surface is a
-  // genuine rolling twelve-month calendar, rather than either a fake year or
-  // decades of zero-filled cells.
-  const start =
-    range.from === "1970-01-01"
-      ? addLocalDays(range.toDate, -364)
-      : range.fromDate!;
+  const start = addLocalDays(toDate, -364);
   const points: DashboardV2CalendarPoint[] = [];
   for (
     let cursor = new Date(start);
-    cursor <= range.toDate;
+    cursor <= toDate;
     cursor = addLocalDays(cursor, 1)
   ) {
     const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
@@ -143,7 +181,7 @@ function calendarFor(
       date: key,
       tokens: observed?.tokens ?? 0,
       events: observed?.events ?? 0,
-      active: observed != null,
+      active: (observed?.events ?? 0) > 0,
     });
   }
   let streak = 0;
@@ -158,6 +196,7 @@ function calendarFor(
       days: points.length,
       activeDays: points.filter((point) => point.active).length,
       longestStreak,
+      totalTokens: points.reduce((sum, point) => sum + point.tokens, 0),
     },
   };
 }
@@ -217,6 +256,54 @@ function contextFor(
     },
     { ...emptyContext() },
   );
+}
+
+function contextAvailabilityFor(
+  events: readonly DashboardV2Event[],
+): DashboardV2ContextAvailability {
+  return events.reduce(
+    (availability, event) => ({
+      textResponses: availability.textResponses || event.evidence.textResponses,
+      toolCalls: availability.toolCalls || event.evidence.toolCalls,
+      skillCalls: availability.skillCalls || event.evidence.skillCalls,
+      toolOutputCalls:
+        availability.toolOutputCalls || event.evidence.toolOutputCalls,
+      reasoningTokens:
+        availability.reasoningTokens || event.evidence.reasoningTokens,
+      systemPromptTokens:
+        availability.systemPromptTokens || event.evidence.systemPromptTokens,
+    }),
+    emptyContextAvailability(),
+  );
+}
+
+function topWithRest(
+  rows: readonly DashboardV2BreakdownRow[],
+  limit: number,
+): DashboardV2BreakdownRow[] {
+  if (rows.length <= limit) return [...rows];
+  const head = rows.slice(0, Math.max(1, limit - 1));
+  const tail = rows.slice(head.length);
+  const nullableSum = (values: readonly (number | null)[]) =>
+    values.some((value) => value == null)
+      ? null
+      : values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return [
+    ...head,
+    {
+      key: "other",
+      tokens: tail.reduce((sum, row) => sum + row.tokens, 0),
+      events: tail.reduce((sum, row) => sum + row.events, 0),
+      share: tail.reduce((sum, row) => sum + row.share, 0),
+      estimatedCostUsd: nullableSum(tail.map((row) => row.estimatedCostUsd)),
+      estimatedCostIsPartial: tail.some(
+        (row) => row.estimatedCostIsPartial || row.estimatedCostUsd == null,
+      ),
+      previousTokens: null,
+      deltaPercent: null,
+      sessions: nullableSum(tail.map((row) => row.sessions)),
+    },
+  ];
 }
 
 function filterV2Events(
@@ -476,14 +563,17 @@ export function createDashboardV2View(
   // A known-but-currently-empty source is intentionally not promoted into a
   // tool card. This avoids presenting catalog availability as activity.
   const activeTools = tools.filter((tool) => tool.events > 0).length;
-  const trend = daily(events);
+  const observedTrend = daily(events);
+  const trend = completeDailyRange(observedTrend, range);
   const currentProjectSessions = projectSessionCounts(
     snapshot,
     range.fromDate,
     range.toDate,
   );
+  const allModelRows = ranked(events, (event) => event.model);
+  const allProjectRows = ranked(events, (event) => event.project);
   const models = enrichRows(
-    ranked(events, (event) => event.model).slice(0, 8),
+    allModelRows.slice(0, 8),
     events,
     previousEvents,
     (event) => event.model,
@@ -491,16 +581,33 @@ export function createDashboardV2View(
     totals.totalTokens,
     null,
   );
-  const projects = enrichRows(
-    ranked(events, (event) => event.project).slice(0, 8),
-    events,
-    previousEvents,
-    (event) => event.project,
-    snapshot.pricingAvailable,
-    totals.totalTokens,
-    currentProjectSessions,
+  const projects = topWithRest(
+    enrichRows(
+      allProjectRows,
+      events,
+      previousEvents,
+      (event) => event.project,
+      snapshot.pricingAvailable,
+      totals.totalTokens,
+      currentProjectSessions,
+    ),
+    11,
   );
-  const calendar = calendarFor(trend, range);
+  const generatedAt = new Date(snapshot.generatedAt);
+  if (!Number.isNaN(generatedAt.getTime()))
+    generatedAt.setHours(23, 59, 59, 999);
+  const calendarTo =
+    range.toDate == null
+      ? null
+      : Number.isNaN(generatedAt.getTime())
+        ? range.toDate
+        : new Date(Math.min(range.toDate.getTime(), generatedAt.getTime()));
+  const calendarFrom = calendarTo ? addLocalDays(calendarTo, -364) : null;
+  const calendarEvents =
+    calendarFrom && calendarTo
+      ? filterV2Events(snapshot.events, calendarFrom, calendarTo)
+      : [];
+  const calendar = calendarFor(daily(calendarEvents), calendarTo);
   const tokenComparison = comparableDelta(
     totals.totalTokens,
     previousTotals.totalTokens,
@@ -558,6 +665,12 @@ export function createDashboardV2View(
     sessions: selectedSessions(snapshot, period, from, to),
     skills: snapshot.skills.available ? snapshot.skills.count : null,
     activeTools,
+    usageSupportedToolCount: snapshot.tools.filter(
+      (tool) => tool.usageSupport !== "unsupported",
+    ).length,
+    modelCount: allModelRows.length,
+    projectCount: allProjectRows.length,
+    outputAvailability: snapshot.outputAvailability,
     tools,
     trend,
     models,
@@ -565,5 +678,6 @@ export function createDashboardV2View(
     calendar: calendar.points,
     calendarSummary: calendar.summary,
     context: contextFor(events),
+    contextAvailability: contextAvailabilityFor(events),
   };
 }

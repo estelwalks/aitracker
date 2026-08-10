@@ -3,7 +3,6 @@ import {
   Activity,
   CalendarDays,
   CircleDollarSign,
-  FolderKanban,
   ShieldCheck,
   Sparkles,
   Shuffle,
@@ -155,6 +154,7 @@ function BreakdownTable({
   type: "models" | "projects";
 }) {
   const { format, t } = useI18n();
+  const maxShare = Math.max(...rows.map((row) => row.share), 1);
   if (rows.length === 0)
     return (
       <p className="py-10 text-sm text-muted-foreground">
@@ -189,10 +189,20 @@ function BreakdownTable({
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, 8).map((row) => (
+          {(type === "models" ? rows.slice(0, 8) : rows).map((row) => (
             <tr key={row.key}>
               <td title={row.key}>
                 <span className="block max-w-52 truncate">{row.key}</span>
+                {type === "models" ? (
+                  <div className="mt-2 h-[3px] w-full overflow-hidden bg-surface-2">
+                    <div
+                      className="h-full bg-primary shadow-[0_0_6px_-1px_var(--color-primary)]"
+                      style={{
+                        width: `${Math.max(3, (row.share / maxShare) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                ) : null}
               </td>
               <td>
                 {format.formatPercent(
@@ -204,7 +214,12 @@ function BreakdownTable({
                   <td className="tt-num">
                     {row.estimatedCostUsd == null
                       ? t("dashboard.kpi.unavailable")
-                      : format.formatUsd(row.estimatedCostUsd)}
+                      : t(
+                          row.estimatedCostIsPartial
+                            ? "pricing.estimatedUnknown"
+                            : "pricing.estimated",
+                          { amount: format.formatUsd(row.estimatedCostUsd) },
+                        )}
                   </td>
                   <td className="tt-num">{format.formatNumber(row.events)}</td>
                 </>
@@ -237,6 +252,12 @@ function CalendarHeatmap({
   const { t, format } = useI18n();
   const cells = points.slice(-364);
   const max = Math.max(...cells.map((point) => point.tokens), 1);
+  const weekCount = Math.ceil(cells.length / 7);
+  const monthLabels = Array.from({ length: weekCount }, (_, week) => {
+    const month = cells[week * 7]?.date.slice(0, 7) ?? "";
+    const previous = cells[(week - 1) * 7]?.date.slice(0, 7);
+    return week === 0 || month !== previous ? month.slice(5) : "";
+  });
   if (cells.length === 0)
     return (
       <p className="py-10 text-sm text-muted-foreground">
@@ -245,30 +266,47 @@ function CalendarHeatmap({
     );
   return (
     <div className="mt-5">
-      <div
-        className="dashboard-calendar-grid"
-        aria-label={t("dashboard.v2.calendarTitle")}
-      >
-        {cells.map((point) => {
-          // Calendar zero-fill represents coverage of the selected range, not
-          // observed usage. Keep those cells visually distinct so an empty
-          // day can never look like a low-volume active day.
-          const intensity = point.active
-            ? Math.max(0.12, point.tokens / max)
-            : 0.12;
-          return (
-            <span
-              key={point.date}
-              title={`${point.date} · ${format.formatTokens(point.tokens)}`}
-              className={
-                point.active
-                  ? "dashboard-calendar-cell"
-                  : "dashboard-calendar-cell dashboard-calendar-cell-inactive"
-              }
-              style={{ opacity: intensity }}
-            />
-          );
-        })}
+      <div className="ml-8 flex gap-[0.2rem] overflow-hidden text-[9px] text-muted-foreground">
+        {monthLabels.map((month, index) => (
+          <span className="w-[0.65rem] shrink-0" key={`${month}-${index}`}>
+            {month}
+          </span>
+        ))}
+      </div>
+      <div className="mt-1 grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2">
+        <div className="grid grid-rows-7 text-[9px] leading-[0.65rem] text-muted-foreground">
+          <span>{t("dashboard.heatmap.monday")}</span>
+          <span />
+          <span>{t("dashboard.heatmap.wednesday")}</span>
+          <span />
+          <span>{t("dashboard.heatmap.friday")}</span>
+          <span />
+          <span />
+        </div>
+        <div
+          className="dashboard-calendar-grid"
+          aria-label={t("dashboard.v2.calendarTitle")}
+        >
+          {cells.map((point) => {
+            // Calendar zero-fill represents coverage of the selected range,
+            // not observed usage. Tooltips expose the underlying local date.
+            const intensity = point.active
+              ? Math.max(0.12, point.tokens / max)
+              : 0.12;
+            return (
+              <span
+                key={point.date}
+                title={`${point.date} · ${format.formatTokens(point.tokens)}`}
+                className={
+                  point.active
+                    ? "dashboard-calendar-cell"
+                    : "dashboard-calendar-cell dashboard-calendar-cell-inactive"
+                }
+                style={{ opacity: intensity }}
+              />
+            );
+          })}
+        </div>
       </div>
       <div className="mt-3 flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
         <span>{t("dashboard.heatmap.low")}</span>
@@ -341,6 +379,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const [to, setTo] = useState(daysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
   const [insightIndex, setInsightIndex] = useState(0);
+  const [projectTopN, setProjectTopN] = useState<3 | 5 | 10>(5);
   useEffect(() => {
     // This only re-reads renderer-safe aggregates already persisted by the
     // background service. It neither triggers a scan nor opens local files.
@@ -402,6 +441,43 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const topTool = allToolsView.tools[0];
   const cache = view.cacheRate;
   const security = securityMetric(data.monitoring, t);
+  const visibleProjectRows = useMemo(() => {
+    const named = view.projects.filter((row) => row.key !== "other");
+    const existingRest = view.projects.find((row) => row.key === "other");
+    const top = named.slice(0, projectTopN);
+    const rest = [
+      ...named.slice(projectTopN),
+      ...(existingRest ? [existingRest] : []),
+    ];
+    if (rest.length === 0) return top;
+    const tokens = rest.reduce((sum, row) => sum + row.tokens, 0);
+    const events = rest.reduce((sum, row) => sum + row.events, 0);
+    const priced = rest.every((row) => row.estimatedCostUsd != null);
+    const sessionsKnown = rest.every((row) => row.sessions != null);
+    return [
+      ...top,
+      {
+        key: "other",
+        tokens,
+        events,
+        share: view.totals.totalTokens
+          ? (tokens / view.totals.totalTokens) * 100
+          : 0,
+        estimatedCostUsd: priced
+          ? rest.reduce((sum, row) => sum + (row.estimatedCostUsd ?? 0), 0)
+          : null,
+        estimatedCostIsPartial: rest.some((row) => row.estimatedCostIsPartial),
+        previousTokens: null,
+        deltaPercent: null,
+        sessions: sessionsKnown
+          ? rest.reduce((sum, row) => sum + (row.sessions ?? 0), 0)
+          : null,
+      },
+    ];
+  }, [projectTopN, view.projects, view.totals.totalTokens]);
+  const visibleProjectShare = visibleProjectRows
+    .filter((row) => row.key !== "other")
+    .reduce((sum, row) => sum + row.share, 0);
   const metrics = [
     {
       icon: Activity,
@@ -447,35 +523,45 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     },
     {
       icon: Wrench,
-      label: t("dashboard.v2.activeTools", { count: "" }),
+      label: t("dashboard.v2.agentActivityLabel"),
       value: format.formatNumber(allToolsView.activeTools),
       hint: t("dashboard.v2.toolCountHint", {
         detected: data.v2.tools.filter((tool) => tool.detected).length,
+        supported: allToolsView.usageSupportedToolCount,
         total: data.v2.tools.length,
       }),
     },
     {
       icon: ShieldCheck,
-      label: t("dashboard.v2.securityLabel"),
-      ...security,
+      label: t("dashboard.v2.securityRunsLabel"),
+      value:
+        view.outputAvailability.securityRuns.available &&
+        view.outputAvailability.securityRuns.count != null
+          ? format.formatNumber(view.outputAvailability.securityRuns.count)
+          : t("dashboard.kpi.unavailable"),
+      hint: t("dashboard.v2.outputUnavailableHint"),
     },
     {
       icon: Sparkles,
-      label: t("dashboard.v2.assetsLabel"),
+      label: t("dashboard.v2.distillationOutputsLabel"),
       value:
-        view.skills == null
-          ? t("dashboard.kpi.unavailable")
-          : format.formatNumber(view.skills),
-      hint:
-        view.skills == null
-          ? t("dashboard.v2.skillUnavailable")
-          : t("dashboard.kpi.skillScanNote"),
+        view.outputAvailability.distillationOutputs.available &&
+        view.outputAvailability.distillationOutputs.count != null
+          ? format.formatNumber(
+              view.outputAvailability.distillationOutputs.count,
+            )
+          : t("dashboard.kpi.unavailable"),
+      hint: t("dashboard.v2.outputUnavailableHint"),
     },
     {
-      icon: FolderKanban,
-      label: t("dashboard.v2.projectsTitle"),
-      value: format.formatNumber(view.projects.length),
-      hint: t("dashboard.v2.projectHint"),
+      icon: CalendarDays,
+      label: t("dashboard.v2.dailyReportsLabel"),
+      value:
+        view.outputAvailability.dailyReports.available &&
+        view.outputAvailability.dailyReports.count != null
+          ? format.formatNumber(view.outputAvailability.dailyReports.count)
+          : t("dashboard.kpi.unavailable"),
+      hint: t("dashboard.v2.outputUnavailableHint"),
     },
   ];
   return (
@@ -580,6 +666,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
           <small>
             {t("dashboard.v2.toolCountHint", {
               detected: data.v2.tools.filter((tool) => tool.detected).length,
+              supported: allToolsView.usageSupportedToolCount,
               total: data.v2.tools.length,
             })}
           </small>
@@ -594,18 +681,17 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         </article>
         <article className="dashboard-spotlight-card">
           <Sparkles className="size-4" />
-          <p>{t("dashboard.v2.assetsLabel")}</p>
+          <p>{t("dashboard.v2.distillationAssetsLabel")}</p>
           <strong className="tt-num">
-            {view.skills == null
-              ? t("dashboard.kpi.unavailable")
-              : format.formatNumber(view.skills)}
+            {view.outputAvailability.distillationOutputs.available &&
+            view.outputAvailability.distillationOutputs.count != null
+              ? format.formatNumber(
+                  view.outputAvailability.distillationOutputs.count,
+                )
+              : t("dashboard.kpi.unavailable")}
           </strong>
-          <small>
-            {view.skills == null
-              ? t("dashboard.v2.skillUnavailable")
-              : t("dashboard.kpi.skillScanNote")}
-          </small>
-          <Link to="/agents">{t("dashboard.v2.openSkills")}</Link>
+          <small>{t("dashboard.v2.outputUnavailableHint")}</small>
+          <Link to="/distill">{t("nav.distill")}</Link>
         </article>
         <article className="dashboard-spotlight-card">
           <Activity className="size-4" />
@@ -742,15 +828,27 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
             </div>
             <div>
               <dt>{t("dashboard.v2.responses")}</dt>
-              <dd>{format.formatNumber(view.context.textResponses)}</dd>
+              <dd>
+                {view.contextAvailability.textResponses
+                  ? format.formatNumber(view.context.textResponses)
+                  : t("dashboard.kpi.unavailable")}
+              </dd>
             </div>
             <div>
               <dt>{t("dashboard.context.dimTool")}</dt>
-              <dd>{format.formatNumber(view.context.toolCalls)}</dd>
+              <dd>
+                {view.contextAvailability.toolCalls
+                  ? format.formatNumber(view.context.toolCalls)
+                  : t("dashboard.kpi.unavailable")}
+              </dd>
             </div>
             <div>
               <dt>{t("dashboard.context.dimSkill")}</dt>
-              <dd>{format.formatNumber(view.context.skillCalls)}</dd>
+              <dd>
+                {view.contextAvailability.skillCalls
+                  ? format.formatNumber(view.context.skillCalls)
+                  : t("dashboard.kpi.unavailable")}
+              </dd>
             </div>
             <div>
               <dt>{t("dashboard.kpi.sessions")}</dt>
@@ -788,14 +886,12 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         </div>
         <TrendChart points={view.trend} />
       </section>
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="space-y-4">
         <article className="dashboard-panel">
           <div className="dashboard-panel-head">
             <div>
               <h2>{t("dashboard.v2.modelsTitle")}</h2>
-              <p>
-                {t("dashboard.v2.modelHint", { count: view.models.length })}
-              </p>
+              <p>{t("dashboard.v2.modelHint", { count: view.modelCount })}</p>
             </div>
             <Delta value={view.comparison.tokens.deltaPercent} />
           </div>
@@ -808,16 +904,61 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         <article className="dashboard-panel">
           <div className="dashboard-panel-head">
             <div>
-              <h2>{t("dashboard.v2.projectsTitle")}</h2>
+              <div className="flex items-center gap-2.5">
+                <h2>{t("dashboard.v2.projectsTitle")}</h2>
+                <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9.5px] text-emerald-500">
+                  ACTIVE
+                </span>
+              </div>
               <p>{t("dashboard.v2.projectHint")}</p>
             </div>
-            <Delta value={view.comparison.tokens.deltaPercent} />
+            <div className="flex items-center gap-3">
+              <Delta value={view.comparison.tokens.deltaPercent} />
+              <div className="flex rounded-full bg-surface-1 p-0.5">
+                {([3, 5, 10] as const).map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => setProjectTopN(count)}
+                    className={`rounded-full px-2.5 py-1 font-mono text-[10px] ${projectTopN === count ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                  >
+                    TOP {count}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <BreakdownTable
-            rows={view.projects}
-            total={view.totals.totalTokens}
-            type="projects"
-          />
+          <div className="mt-4 flex flex-col overflow-hidden rounded-xl bg-surface-1/30 md:flex-row">
+            <div className="flex min-w-56 flex-col items-center justify-center gap-4 px-6 py-5">
+              <div
+                className="grid size-[136px] place-items-center rounded-full"
+                style={{
+                  background: `conic-gradient(var(--color-primary) 0 ${visibleProjectShare}%, var(--color-border) ${visibleProjectShare}% 100%)`,
+                }}
+              >
+                <div className="grid size-[104px] place-items-center rounded-full bg-card text-center">
+                  <div>
+                    <strong className="tt-num block font-mono text-[22px] leading-none">
+                      {format.formatNumber(view.projectCount)}
+                    </strong>
+                    <span className="mt-1 block font-mono text-[9.5px] uppercase tracking-widest text-muted-foreground">
+                      {t("dashboard.v2.projectCountLabel")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="font-mono text-[10px] text-muted-foreground">
+                TOP {projectTopN} · {format.formatPercent(visibleProjectShare)}
+              </p>
+            </div>
+            <div className="min-w-0 flex-1 bg-card px-2">
+              <BreakdownTable
+                rows={visibleProjectRows}
+                total={view.totals.totalTokens}
+                type="projects"
+              />
+            </div>
+          </div>
         </article>
       </section>
       <section className="dashboard-panel">
@@ -827,7 +968,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
             <p>
               {t("dashboard.v2.calendarHint", {
                 count: view.calendarSummary.activeDays,
-                tokens: format.formatTokens(view.totals.totalTokens),
+                tokens: format.formatTokens(view.calendarSummary.totalTokens),
               })}{" "}
               ·{" "}
               {t("dashboard.v2.streakHint", {

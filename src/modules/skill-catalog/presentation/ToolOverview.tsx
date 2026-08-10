@@ -119,6 +119,12 @@ function ToolBadgeWall({
                   : t("skills.agentOverview.sessionsShort", {
                       count: format.formatNumber(card.sessions),
                     })}
+                {" · "}
+                {card.subagentCalls == null
+                  ? DASH
+                  : t("skills.agentOverview.subagentsShort", {
+                      count: format.formatNumber(card.subagentCalls),
+                    })}
               </p>
               <p className="tt-num">
                 {card.cacheRate == null
@@ -372,14 +378,22 @@ function ContextTreePanel({
   const total = view.totalTokens;
 
   const compose = view.tokenComposition;
-  const messagesTokens = compose.inputTokens + compose.outputTokens;
-  const reasoningTokens = compose.reasoningOutputTokens;
-  const tokenTotal = messagesTokens + reasoningTokens;
+  const messagesTokens =
+    compose.inputTokens +
+    compose.cachedInputTokens +
+    compose.cacheCreationInputTokens +
+    compose.outputTokens;
+  const reasoningTokens = view.reasoningAvailable
+    ? compose.reasoningOutputTokens
+    : null;
+  const tokenTotal = messagesTokens + (reasoningTokens ?? 0);
   const pct = (value: number) =>
     tokenTotal === 0 ? null : (value / tokenTotal) * 100;
   const toolCalls =
-    view.context.find((row) => row.key === "toolCalls")?.count ?? 0;
-  const skillCalls = view.skillUsage.observed ? view.skillUsage.calls : 0;
+    view.context.find((row) => row.key === "toolCalls")?.count ?? null;
+  const toolOutputCalls =
+    view.context.find((row) => row.key === "toolOutputCalls")?.count ?? null;
+  const skillCalls = view.skillUsage.observed ? view.skillUsage.calls : null;
 
   const tree: ContextNode[] = [
     {
@@ -412,14 +426,14 @@ function ContextTreePanel({
       label: t("skills.agentOverview.reasoningTokens"),
       tokens: reasoningTokens,
       calls: null,
-      pct: pct(reasoningTokens),
+      pct: reasoningTokens == null ? null : pct(reasoningTokens),
       children: [
         {
           id: "reasoning-thinking",
           label: t("skills.agentOverview.contextThinkingTokens"),
           tokens: reasoningTokens,
           calls: null,
-          pct: pct(reasoningTokens),
+          pct: reasoningTokens == null ? null : pct(reasoningTokens),
           children: [],
         },
       ],
@@ -427,10 +441,22 @@ function ContextTreePanel({
     {
       id: "system",
       label: t("skills.agentOverview.systemPrompt"),
-      tokens: 0,
+      tokens: null,
       calls: null,
       pct: null,
       note: t("skills.agentOverview.notSeparatelyObserved"),
+      children: [],
+    },
+    {
+      id: "tool-outputs",
+      label: t("skills.agentOverview.toolOutputCalls"),
+      tokens: null,
+      calls: toolOutputCalls,
+      pct: null,
+      note:
+        toolOutputCalls == null
+          ? t("skills.agentOverview.notSeparatelyObserved")
+          : undefined,
       children: [],
     },
     {
@@ -446,8 +472,12 @@ function ContextTreePanel({
       id: "skills",
       label: t("skills.agentOverview.contextSkillCalls"),
       tokens: null,
-      calls: skillCalls > 0 ? skillCalls : null,
+      calls: skillCalls,
       pct: null,
+      note:
+        skillCalls == null
+          ? t("skills.agentOverview.notSeparatelyObserved")
+          : undefined,
       children: [],
     },
   ];
@@ -590,7 +620,13 @@ function ToolModelPanel({
           const metaB = isModels
             ? row.estimatedCostUsd == null
               ? DASH
-              : `${row.estimatedCostIsPartial ? "~" : ""}${format.formatUsd(row.estimatedCostUsd)}`
+              : row.estimatedCostIsPartial
+                ? t("pricing.estimatedUnknown", {
+                    amount: format.formatUsd(row.estimatedCostUsd),
+                  })
+                : t("pricing.estimated", {
+                    amount: format.formatUsd(row.estimatedCostUsd),
+                  })
             : t("skills.agentOverview.pctShort", {
                 percent: format.formatNumber(
                   totalTokens > 0 ? (row.tokens / totalTokens) * 100 : 0,
@@ -800,7 +836,7 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
   return (
     <section className="space-y-5 pb-12">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-[15px] leading-[25.5px] font-semibold tracking-tight">
           {t("skills.agentOverview.title")}
         </h1>
       </div>
