@@ -56,6 +56,24 @@
       "ui": { "settingsVisible": true, "i18nKey": "tasks.sessionsRefresh" }
     },
     {
+      "id": "security.monitor",
+      "executorKey": "monitor-security-v1",
+      "category": "collection",
+      "defaultSchedule": { "kind": "interval", "minutes": 60 },
+      "constraints": {
+        "minMinutes": 15,
+        "maxMinutes": 10080,
+        "singleFlight": true
+      },
+      "startupPolicy": "if-stale",
+      "retry": { "maxAttempts": 1, "backoffSeconds": [120] },
+      "timeoutMs": 300000,
+      "queue": "background",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": { "settingsVisible": false, "i18nKey": "tasks.skillsRefresh" }
+    },
+    {
       "id": "retention.apply",
       "executorKey": "apply-retention-v1",
       "category": "maintenance",

@@ -8,7 +8,7 @@ export interface DashboardApplication {
   readonly read: (query: DashboardQuery) => DashboardReadModel;
 }
 
-export { createDashboardV2View } from "./v2.ts";
+export { createDashboardV2HeroView, createDashboardV2View } from "./v2.ts";
 
 /** Pure composition facade; adapters provide the query data. */
 export function createDashboardApplication(): DashboardApplication {

@@ -17,8 +17,12 @@ import type {
   ScanJobRequest,
   ScanJobResult,
   ScanRequest,
+  SecurityAssessmentHistoryStore,
   SecurityAssessmentModuleContract,
 } from "./contracts.ts";
+
+/** Compatibility export for server API consumers; the port lives in contracts. */
+export type { SecurityAssessmentHistoryStore } from "./contracts.ts";
 
 export type SecurityAssessmentApiResponse = SecurityAssessmentModuleContract;
 
@@ -27,12 +31,6 @@ export interface SecuritySelectionResolver {
   resolve(
     selectionRef: ScanRequest["selectionRef"],
   ): Promise<readonly SecurityInputFile[]>;
-}
-
-export interface SecurityAssessmentHistoryStore {
-  latest(assetRef: AssetRef): Promise<AssetAssessment | undefined>;
-  save(assessment: AssetAssessment): Promise<void>;
-  list(): Promise<readonly AssetAssessment[]>;
 }
 
 export interface SecurityAssessmentServerApi {

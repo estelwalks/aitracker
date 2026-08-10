@@ -5,6 +5,8 @@ import {
 } from "../../../lib/local-usage/presentation.ts";
 import type { LocalUsageTotals } from "../../../lib/local-usage/types.ts";
 import type {
+  DashboardV2Insight,
+  DashboardV2HeroView,
   DashboardV2BreakdownRow,
   DashboardV2CalendarPoint,
   DashboardV2CalendarSummary,
@@ -14,6 +16,10 @@ import type {
   DashboardV2TrendPoint,
   DashboardV2View,
 } from "../contracts.ts";
+import type { MonitoringStatus } from "../../monitoring/index.ts";
+
+const liveWindowMs = 15 * 60 * 1000;
+const heartbeatWindowMs = 20 * 60 * 1000;
 
 const emptyTotals = (): LocalUsageTotals => ({
   events: 0,
@@ -201,6 +207,119 @@ function filterV2Events(
       timestamp <= toDate
     );
   });
+}
+
+function validDateTime(value: string | undefined): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+/**
+ * Creates the Hero projection from the same browser-safe dashboard snapshot.
+ * The monitoring input is already a public, aggregate-only contract; this
+ * module never learns scanner paths, sources, commands, or raw findings.
+ */
+export function createDashboardV2HeroView(input: {
+  readonly snapshot: DashboardV2Snapshot;
+  readonly monitoring: MonitoringStatus | null;
+  readonly activeInsightCount: number;
+  readonly now?: Date;
+}): DashboardV2HeroView {
+  const now = input.now ?? new Date();
+  const nowTime = now.getTime();
+  const detectedTools = input.snapshot.tools.filter(
+    (tool) => tool.detected,
+  ).length;
+  const liveSources = new Set(
+    input.snapshot.events
+      .filter((event) => {
+        const timestamp = validDateTime(event.timestamp);
+        return (
+          timestamp != null &&
+          nowTime - timestamp >= 0 &&
+          nowTime - timestamp <= liveWindowMs
+        );
+      })
+      .map((event) => event.source),
+  );
+  const liveTools = input.snapshot.tools.filter(
+    (tool) =>
+      tool.detected && liveSources.has(tool.id as DashboardV2Event["source"]),
+  ).length;
+  const heartbeatAt = validDateTime(input.monitoring?.heartbeatAt);
+  const heartbeatFresh =
+    input.monitoring?.running === true &&
+    heartbeatAt != null &&
+    nowTime - heartbeatAt >= 0 &&
+    nowTime - heartbeatAt <= heartbeatWindowMs;
+  const hasFailure =
+    input.monitoring?.collectors.some(
+      (collector) =>
+        collector.state === "failed" || collector.state === "degraded",
+    ) ?? false;
+  const health =
+    input.monitoring == null
+      ? "unavailable"
+      : !input.monitoring.running
+        ? "available"
+        : !heartbeatFresh || hasFailure
+          ? "degraded"
+          : "listening";
+  const monitoring = {
+    health,
+    isLive: health === "listening",
+    liveTools,
+    detectedTools,
+    pendingCount:
+      Math.max(0, input.activeInsightCount) +
+      (input.monitoring?.pendingCount ?? 0),
+  } as const;
+  const allTime = createDashboardV2View(input.snapshot, "all");
+  const topTool = allTime.tools[0];
+  const cost = input.snapshot.pricingAvailable
+    ? estimateUsageCost(
+        input.snapshot.events.map(({ context: _context, ...event }) => event),
+      )
+    : null;
+  const insights: DashboardV2Insight[] = [];
+  if (allTime.totals.events > 0) {
+    insights.push({
+      id: "usage",
+      kind: "usage",
+      toolName: topTool?.name,
+      tokens: allTime.totals.totalTokens,
+    });
+  }
+  const inputTokens =
+    allTime.totals.inputTokens +
+    allTime.totals.cachedInputTokens +
+    allTime.totals.cacheCreationInputTokens;
+  if (inputTokens > 0 && allTime.totals.cachedInputTokens > 0) {
+    insights.push({
+      id: "cache",
+      kind: "cache",
+      cacheRate: (allTime.totals.cachedInputTokens / inputTokens) * 100,
+    });
+  }
+  if (cost && cost.unknownEvents === 0) {
+    insights.push({
+      id: "cost",
+      kind: "cost",
+      estimatedCostUsd: cost.knownUsd + cost.estimatedUsd,
+    });
+  }
+  if (input.monitoring?.security) {
+    const riskCount =
+      input.monitoring.security.suspiciousCount +
+      input.monitoring.security.dangerousCount;
+    insights.push({ id: "security", kind: "security", riskCount });
+  }
+  insights.push({ id: "monitoring", kind: "monitoring" });
+  if (insights.length === 1 && insights[0]?.kind === "monitoring") {
+    insights.unshift({ id: "empty", kind: "empty" });
+  }
+  return { insights, monitoring };
 }
 
 function selectedSessions(

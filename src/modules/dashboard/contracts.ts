@@ -17,6 +17,7 @@ import type {
 } from "../../lib/local-usage/types.ts";
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
+import type { MonitoringStatus } from "../monitoring/index.ts";
 
 /** Browser-safe usage event. Raw commands and filesystem references are omitted. */
 export interface DashboardUsageEvent extends LocalTokenCounts {
@@ -152,6 +153,37 @@ export interface DashboardV2ContextCounts {
   readonly toolOutputCalls: number;
 }
 
+/** A presentation-neutral observation assembled from locally observed data. */
+export type DashboardV2InsightKind =
+  "usage" | "cache" | "cost" | "monitoring" | "security" | "empty";
+
+export interface DashboardV2Insight {
+  readonly id: DashboardV2InsightKind;
+  readonly kind: DashboardV2InsightKind;
+  readonly toolName?: string;
+  readonly tokens?: number;
+  readonly cacheRate?: number;
+  readonly estimatedCostUsd?: number;
+  readonly riskCount?: number;
+}
+
+export type DashboardV2MonitoringHealth =
+  "listening" | "available" | "degraded" | "unavailable";
+
+/** Derived solely from the monitoring module's renderer-safe DTO. */
+export interface DashboardV2MonitoringView {
+  readonly health: DashboardV2MonitoringHealth;
+  readonly isLive: boolean;
+  readonly liveTools: number;
+  readonly detectedTools: number;
+  readonly pendingCount: number;
+}
+
+export interface DashboardV2HeroView {
+  readonly insights: readonly DashboardV2Insight[];
+  readonly monitoring: DashboardV2MonitoringView;
+}
+
 /** Complete, period-specific and renderer-safe V2 view model. */
 export interface DashboardV2View {
   readonly period: import("../../lib/local-usage/presentation.ts").UsagePeriod;
@@ -183,6 +215,8 @@ export interface DashboardQuery {
   readonly pricing: PricingSnapshot | null;
   readonly skills: DashboardSkillSummary;
   readonly sessions: DashboardSessionsSummary;
+  /** Null only when the public monitoring-status read could not be completed. */
+  readonly monitoring: MonitoringStatus | null;
   readonly error: string | null;
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
