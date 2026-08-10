@@ -167,6 +167,34 @@ export const dashboard = {
   v2: {
     heroTitle: "오늘의 인사이트",
     localOnly: "로컬 분석",
+    pendingItems: "대기 항목 {count}개",
+    realtimeAnalysis: "실시간 분석 중",
+    rotateInsight: "다음 인사이트",
+    insightDotsAria: "인사이트 전환",
+    insightDot: "인사이트 {index}",
+    monitoringAria: "로컬 리스너 상태",
+    monitoring: {
+      listening: "시스템이 계속 모니터링 중",
+      available: "리스너가 현재 중지됨",
+      degraded: "리스너 상태 확인 필요",
+      unavailable: "리스너 상태를 사용할 수 없음",
+    },
+    agentsLive: "{live} / {detected} agents live",
+    liveBadge: "LIVE",
+    insights: {
+      usage: "{tool}의 관측 사용량이 가장 높으며 총 {tokens}입니다.",
+      cache:
+        "관측된 캐시 적중률은 {rate}이며 로컬 요청 사용량만으로 계산됩니다.",
+      cost: "인식 가능한 모델의 로컬 비용 추정 합계는 {cost}입니다.",
+      securityRisk:
+        "백그라운드 보안 검사에서 확인이 필요한 집계 항목 {count}개를 발견했습니다.",
+      securityClean:
+        "백그라운드 보안 검사가 완료되었고 집계 위험 항목이 없습니다.",
+      monitoring:
+        "리스너 상태는 로컬 백그라운드 서비스의 최신 저장 하트비트에서 가져옵니다.",
+      empty:
+        "분석할 로컬 사용량, 캐시, 비용 또는 보안 집계 데이터를 기다리는 중입니다.",
+    },
     spotlightTitle: "시스템 스냅샷",
     overviewLabel: "개요",
     cacheLabel: "캐시 적중",
@@ -174,6 +202,9 @@ export const dashboard = {
     toolCountHint: "{detected}개 감지 · {total}개 지원",
     securityLabel: "보안 상태",
     securityHint: "여기에 안전하게 표시할 집계 데이터가 없습니다",
+    securityAttention: "확인 항목 {count}개",
+    securityClean: "정상",
+    securityScanSummary: "로컬 자산 {assessed} / {discovered}개 검사됨",
     assetsLabel: "Skill 자산",
     todayUsage: "오늘 사용량",
     viewUsage: "사용량 보기",

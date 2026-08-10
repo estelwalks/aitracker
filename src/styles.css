@@ -540,6 +540,36 @@
   font-size: 0.625rem;
 }
 
+.dashboard-hero-pending {
+  background: color-mix(in oklab, var(--color-warning) 14%, transparent);
+  color: color-mix(in oklab, var(--color-warning) 78%, var(--color-foreground));
+}
+
+.dashboard-hero-status-listening {
+  background: color-mix(in oklab, var(--color-ok) 13%, transparent);
+  color: var(--color-ok);
+}
+
+.dashboard-hero-status-degraded {
+  background: color-mix(in oklab, var(--color-warning) 13%, transparent);
+  color: color-mix(in oklab, var(--color-warning) 78%, var(--color-foreground));
+}
+
+.dashboard-insight-dot {
+  width: 0.625rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-foreground) 15%, transparent);
+  transition:
+    width 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.dashboard-insight-dot-active {
+  width: 2.25rem;
+  background: color-mix(in oklab, var(--color-foreground) 72%, transparent);
+}
+
 .dashboard-hero-refresh {
   flex: 0 0 auto;
   cursor: pointer;
@@ -551,6 +581,60 @@
 .dashboard-hero-refresh:hover {
   background: var(--color-accent);
   color: var(--color-foreground);
+}
+
+.dashboard-monitoring-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in oklab, var(--color-card) 88%, var(--color-surface));
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+.dashboard-monitoring-strip > span + span::before {
+  margin-right: 0.55rem;
+  color: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+  content: "·";
+}
+
+.dashboard-monitoring-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-foreground);
+}
+
+.dashboard-monitoring-indicator {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--color-muted-foreground);
+}
+
+.dashboard-monitoring-listening .dashboard-monitoring-indicator {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--color-ok) 16%, transparent);
+}
+
+.dashboard-monitoring-degraded .dashboard-monitoring-indicator {
+  background: var(--color-warning);
+}
+
+.dashboard-monitoring-strip > strong {
+  margin-left: auto;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-ok) 16%, transparent);
+  padding: 0.15rem 0.42rem;
+  color: var(--color-ok);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
 }
 
 .dashboard-spotlight-grid,
@@ -773,6 +857,9 @@
   }
   .dashboard-insight-orb {
     display: none;
+  }
+  .dashboard-monitoring-strip > strong {
+    margin-left: 0;
   }
   .dashboard-range-bar {
     grid-template-columns: 1fr;

@@ -4,19 +4,22 @@ import {
   CalendarDays,
   CircleDollarSign,
   FolderKanban,
-  RefreshCw,
   ShieldCheck,
   Sparkles,
+  Shuffle,
   Wrench,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../../lib/i18n/context.tsx";
-import { refreshLocalUsageSnapshot } from "../../../lib/local-usage/index.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
-import { createDashboardV2View } from "../application/v2.ts";
+import {
+  createDashboardV2HeroView,
+  createDashboardV2View,
+} from "../application/v2.ts";
 import type {
   DashboardReadModel,
   DashboardV2BreakdownRow,
+  DashboardV2Insight,
   DashboardV2TrendPoint,
 } from "../contracts.ts";
 
@@ -226,6 +229,58 @@ function CalendarHeatmap({
   );
 }
 
+function HeroInsight({ insight }: { insight: DashboardV2Insight }) {
+  const { t, format } = useI18n();
+  switch (insight.kind) {
+    case "usage":
+      return t("dashboard.v2.insights.usage", {
+        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
+        tokens: format.formatTokens(insight.tokens ?? 0),
+      });
+    case "cache":
+      return t("dashboard.v2.insights.cache", {
+        rate: format.formatPercent(Math.round(insight.cacheRate ?? 0)),
+      });
+    case "cost":
+      return t("dashboard.v2.insights.cost", {
+        cost: format.formatUsd(insight.estimatedCostUsd ?? 0),
+      });
+    case "security":
+      return insight.riskCount
+        ? t("dashboard.v2.insights.securityRisk", { count: insight.riskCount })
+        : t("dashboard.v2.insights.securityClean");
+    case "monitoring":
+      return t("dashboard.v2.insights.monitoring");
+    case "empty":
+      return t("dashboard.v2.insights.empty");
+  }
+}
+
+function securityMetric(
+  monitoring: DashboardReadModel["monitoring"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  const security = monitoring?.security;
+  if (!security) {
+    return {
+      value: t("dashboard.kpi.unavailable"),
+      hint: t("dashboard.v2.securityHint"),
+      unavailable: true,
+    };
+  }
+  const riskCount = security.dangerousCount + security.suspiciousCount;
+  return {
+    value: riskCount
+      ? t("dashboard.v2.securityAttention", { count: riskCount })
+      : t("dashboard.v2.securityClean"),
+    hint: t("dashboard.v2.securityScanSummary", {
+      assessed: security.assessedAssetCount,
+      discovered: security.discoveredAssetCount,
+    }),
+    unavailable: false,
+  };
+}
+
 export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const { t, format } = useI18n();
   const router = useRouter();
@@ -233,7 +288,13 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const [from, setFrom] = useState(daysAgo(29));
   const [to, setTo] = useState(daysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
-  const [refreshing, setRefreshing] = useState(false);
+  const [insightIndex, setInsightIndex] = useState(0);
+  useEffect(() => {
+    // This only re-reads renderer-safe aggregates already persisted by the
+    // background service. It neither triggers a scan nor opens local files.
+    const refresh = window.setInterval(() => void router.invalidate(), 30_000);
+    return () => window.clearInterval(refresh);
+  }, [router]);
   const scopedSnapshot = useMemo(
     () =>
       selectedTool === "all"
@@ -258,6 +319,17 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     () => createDashboardV2View(data.v2, "today"),
     [data.v2],
   );
+  const hero = useMemo(
+    () =>
+      createDashboardV2HeroView({
+        snapshot: data.v2,
+        monitoring: data.monitoring,
+        activeInsightCount: data.activeInsightCount ?? 0,
+      }),
+    [data.activeInsightCount, data.monitoring, data.v2],
+  );
+  const activeInsight =
+    hero.insights[insightIndex % hero.insights.length] ?? hero.insights[0];
   const periodOptions: readonly { value: UsagePeriod; label: string }[] = [
     { value: "today", label: t("dashboard.period.today") },
     { value: "7d", label: t("dashboard.period.lastNDays", { count: 7 }) },
@@ -266,27 +338,8 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     { value: "custom", label: t("dashboard.period.custom") },
   ];
   const topTool = allToolsView.tools[0];
-  const handleRefresh = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      await refreshLocalUsageSnapshot();
-      await router.invalidate();
-    } finally {
-      setRefreshing(false);
-    }
-  };
-  const insight = !view.hasData
-    ? t("dashboard.v2.noData")
-    : t("dashboard.v2.insight", {
-        tool:
-          selectedTool === "all"
-            ? (topTool?.name ?? t("dashboard.v2.unknownTool"))
-            : (allToolsView.tools.find((tool) => tool.id === selectedTool)
-                ?.name ?? t("dashboard.v2.unknownTool")),
-        tokens: format.formatTokens(view.totals.totalTokens),
-      });
   const cache = cacheRate(view);
+  const security = securityMetric(data.monitoring, t);
   const metrics = [
     {
       icon: Activity,
@@ -337,9 +390,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     {
       icon: ShieldCheck,
       label: t("dashboard.v2.securityLabel"),
-      value: t("dashboard.kpi.unavailable"),
-      hint: t("dashboard.v2.securityHint"),
-      unavailable: true,
+      ...security,
     },
     {
       icon: Sparkles,
@@ -373,33 +424,82 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
               <h1 className="text-[15px] font-semibold tracking-tight">
                 {t("dashboard.v2.heroTitle")}
               </h1>
-              <span className="dashboard-hero-pill">
-                {t("dashboard.v2.localOnly")}
+              <span className="dashboard-hero-pill dashboard-hero-pending">
+                {t("dashboard.v2.pendingItems", {
+                  count: hero.monitoring.pendingCount,
+                })}
+              </span>
+              <span
+                className={`dashboard-hero-pill dashboard-hero-status dashboard-hero-status-${hero.monitoring.health}`}
+              >
+                {hero.monitoring.isLive
+                  ? t("dashboard.v2.realtimeAnalysis")
+                  : t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
               </span>
             </div>
             <p className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]">
-              {insight}
+              {activeInsight ? <HeroInsight insight={activeInsight} /> : null}
             </p>
-            <div className="mt-5 flex gap-1.5">
-              <span className="h-1 w-9 rounded-full bg-foreground/70" />
-              <span className="h-1 w-2.5 rounded-full bg-foreground/15" />
-              <span className="h-1 w-2.5 rounded-full bg-foreground/15" />
+            <div
+              className="mt-5 flex gap-1.5"
+              role="tablist"
+              aria-label={t("dashboard.v2.insightDotsAria")}
+            >
+              {hero.insights.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === insightIndex % hero.insights.length}
+                  aria-label={t("dashboard.v2.insightDot", {
+                    index: index + 1,
+                  })}
+                  onClick={() => setInsightIndex(index)}
+                  className={
+                    index === insightIndex % hero.insights.length
+                      ? "dashboard-insight-dot dashboard-insight-dot-active"
+                      : "dashboard-insight-dot"
+                  }
+                />
+              ))}
             </div>
           </div>
           <button
             type="button"
-            onClick={() => void handleRefresh()}
-            disabled={refreshing}
+            onClick={() =>
+              setInsightIndex((current) =>
+                hero.insights.length ? (current + 1) % hero.insights.length : 0,
+              )
+            }
             className="dashboard-hero-refresh"
           >
-            <RefreshCw
-              className={`size-3 ${refreshing ? "animate-spin" : ""}`}
-            />
-            {refreshing
-              ? t("dashboard.refresh.syncing")
-              : t("dashboard.refresh.now")}
+            <Shuffle className="size-3" />
+            {t("dashboard.v2.rotateInsight")}
           </button>
         </div>
+      </section>
+      <section
+        className={`dashboard-monitoring-strip dashboard-monitoring-${hero.monitoring.health}`}
+        aria-label={t("dashboard.v2.monitoringAria")}
+      >
+        <span className="dashboard-monitoring-status">
+          <span className="dashboard-monitoring-indicator" aria-hidden="true" />
+          {t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
+        </span>
+        <span>
+          {t("dashboard.v2.agentsLive", {
+            live: hero.monitoring.liveTools,
+            detected: hero.monitoring.detectedTools,
+          })}
+        </span>
+        <span>
+          {t("dashboard.v2.pendingItems", {
+            count: hero.monitoring.pendingCount,
+          })}
+        </span>
+        {hero.monitoring.isLive ? (
+          <strong>{t("dashboard.v2.liveBadge")}</strong>
+        ) : null}
       </section>
       <section
         className="dashboard-spotlight-grid"

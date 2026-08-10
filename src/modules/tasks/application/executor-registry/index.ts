@@ -7,6 +7,11 @@ import type {
 } from "../scheduler.ts";
 import type { UsageApplication } from "../../../usage/index.ts";
 import type { ReportsApplication } from "../../../reports/contracts.ts";
+import type { BackgroundSkillSecurityScanPort } from "../../../security-assessment/contracts.ts";
+import type {
+  MonitoringCollectorId,
+  MonitoringRecorder,
+} from "../../../monitoring/contracts.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
@@ -30,6 +35,9 @@ export interface ExecutorRegistryOptions {
   readonly skills?: RefreshSkillsPort;
   readonly retention?: ApplyRetentionPort;
   readonly reports?: ReportsApplication;
+  readonly security?: BackgroundSkillSecurityScanPort;
+  /** Operational status only; it never receives collector inputs or output. */
+  readonly monitoring?: MonitoringRecorder;
 }
 
 export interface ExecutorRegistry {
@@ -132,6 +140,72 @@ function bindReports(app: ReportsApplication | undefined): TaskExecutor {
   };
 }
 
+function bindSecurity(
+  security: BackgroundSkillSecurityScanPort | undefined,
+  monitoring: MonitoringRecorder | undefined,
+): TaskExecutor {
+  return async () => {
+    if (!security) return unavailable();
+    try {
+      const result = await security.scanDiscoveredSkills();
+      const counts = { clean: 0, suspicious: 0, dangerous: 0, unknown: 0 };
+      for (const assessment of result.assessments)
+        counts[assessment.verdict] += 1;
+      await monitoring?.securityCompleted({
+        assessedAt: result.assessedAt,
+        discoveredAssetCount: result.discoveredAssetCount,
+        assessedAssetCount: result.assessedAssetCount,
+        failedAssetCount: result.failedAssetCount,
+        cleanCount: counts.clean,
+        suspiciousCount: counts.suspicious,
+        dangerousCount: counts.dangerous,
+        unknownCount: counts.unknown,
+      });
+      return {
+        summary: {
+          scanned: result.assessedAssetCount,
+          diagnosticCount: result.failedAssetCount,
+        },
+      };
+    } catch {
+      throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.failed);
+    }
+  };
+}
+
+function stableErrorCode(caught: unknown): `errors.${string}` {
+  if (
+    caught instanceof ControlledExecutorError &&
+    caught.code.startsWith("errors.")
+  )
+    return caught.code as `errors.${string}`;
+  return EXECUTOR_ERROR_CODES.failed;
+}
+
+function monitored(
+  collector: MonitoringCollectorId,
+  executor: TaskExecutor,
+  recorder: MonitoringRecorder | undefined,
+): TaskExecutor {
+  if (!recorder) return executor;
+  return async (context) => {
+    await recorder.started(collector);
+    try {
+      const result = await executor(context);
+      await recorder.succeeded(collector);
+      return result;
+    } catch (caught) {
+      // Recording failure must never mask the task's stable executor error.
+      try {
+        await recorder.failed(collector, stableErrorCode(caught));
+      } catch {
+        // Persistence errors remain server diagnostics, not scheduler output.
+      }
+      throw caught;
+    }
+  };
+}
+
 /**
  * Builds the complete static registry. The key list is the generated catalog
  * allowlist; adding a catalog key without adding a binding is a type/build
@@ -141,9 +215,26 @@ export function createExecutorRegistry(
   options: ExecutorRegistryOptions = {},
 ): ExecutorRegistry {
   const executors: Record<JobExecutorKey, TaskExecutor> = {
-    "refresh-usage-v1": bindUsage(options.usage),
-    "refresh-skills-v1": bindPort(options.skills),
-    "refresh-sessions-v1": bindPort(options.sessions),
+    "refresh-usage-v1": monitored(
+      "usage",
+      bindUsage(options.usage),
+      options.monitoring,
+    ),
+    "refresh-skills-v1": monitored(
+      "skills",
+      bindPort(options.skills),
+      options.monitoring,
+    ),
+    "refresh-sessions-v1": monitored(
+      "sessions",
+      bindPort(options.sessions),
+      options.monitoring,
+    ),
+    "monitor-security-v1": monitored(
+      "security",
+      bindSecurity(options.security, options.monitoring),
+      options.monitoring,
+    ),
     "apply-retention-v1": bindPort(options.retention),
     "generate-report-v1": bindReports(options.reports),
   };

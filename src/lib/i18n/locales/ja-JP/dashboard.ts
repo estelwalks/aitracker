@@ -171,6 +171,34 @@ export const dashboard = {
   v2: {
     heroTitle: "今日の洞察",
     localOnly: "ローカル分析",
+    pendingItems: "{count} 件の保留項目",
+    realtimeAnalysis: "リアルタイム分析中",
+    rotateInsight: "次のインサイト",
+    insightDotsAria: "インサイトの切り替え",
+    insightDot: "インサイト {index}",
+    monitoringAria: "ローカルリスナーの状態",
+    monitoring: {
+      listening: "システムは継続して監視中",
+      available: "リスナーは現在停止中",
+      degraded: "リスナーの状態に注意が必要です",
+      unavailable: "リスナー状態は利用できません",
+    },
+    agentsLive: "{live} / {detected} agents live",
+    liveBadge: "LIVE",
+    insights: {
+      usage: "{tool} は観測済み使用量が最多で、合計 {tokens} です。",
+      cache:
+        "観測済みのキャッシュヒット率は {rate} です。ローカルのリクエスト使用量のみで算出しています。",
+      cost: "認識可能なモデルのローカル費用見積りは合計 {cost} です。",
+      securityRisk:
+        "バックグラウンドのセキュリティスキャンで、注意が必要な集計項目が {count} 件見つかりました。",
+      securityClean:
+        "バックグラウンドのセキュリティスキャンが完了し、集計上のリスク項目はありません。",
+      monitoring:
+        "リスナー状態はローカルバックグラウンドサービスの最新永続化ハートビートに基づきます。",
+      empty:
+        "分析できるローカルの使用量、キャッシュ、費用、またはセキュリティ集計データを待っています。",
+    },
     spotlightTitle: "システムスナップショット",
     overviewLabel: "概要",
     cacheLabel: "キャッシュヒット",
@@ -178,6 +206,10 @@ export const dashboard = {
     toolCountHint: "{detected} 件検出 · {total} 件対応",
     securityLabel: "セキュリティ状況",
     securityHint: "ここで安全に表示できる集計はありません",
+    securityAttention: "要確認 {count} 件",
+    securityClean: "正常",
+    securityScanSummary:
+      "ローカル資産 {assessed} / {discovered} 件をスキャン済み",
     assetsLabel: "Skill 資産",
     todayUsage: "今日の使用量",
     viewUsage: "使用量を見る",
