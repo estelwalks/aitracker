@@ -68,18 +68,31 @@ export interface DashboardSkillSummary {
 }
 
 /** Session metrics use the existing public sessions DTO, pared to dashboard needs. */
-export interface DashboardSessionRecord {
-  readonly startedAt: string;
-  readonly endedAt: string;
-  readonly durationMs: number;
-  readonly turns: number;
-  readonly editTurns: number;
+/**
+ * A server-composed session count for one display-safe project and local day.
+ * It deliberately contains neither session ids nor local paths, so dashboard
+ * project rows can be useful without turning the dashboard into a session
+ * browser.
+ */
+export interface DashboardProjectSessionAggregate {
+  readonly project: string;
+  readonly source: string;
+  readonly date: string;
+  readonly count: number;
+}
+
+/** Same privacy boundary as project aggregates, grouped for tool workflow KPIs. */
+export interface DashboardSourceSessionAggregate {
+  readonly source: string;
+  readonly date: string;
+  readonly count: number;
 }
 
 export interface DashboardSessionsSummary {
   readonly available: boolean;
   readonly generatedAt: string | null;
-  readonly records: DashboardSessionRecord[];
+  readonly byProjectDay: readonly DashboardProjectSessionAggregate[];
+  readonly bySourceDay: readonly DashboardSourceSessionAggregate[];
 }
 
 /**
@@ -144,6 +157,29 @@ export interface DashboardV2BreakdownRow {
   /** Null represents unavailable pricing, not a free model. */
   readonly estimatedCostUsd: number | null;
   readonly estimatedCostIsPartial: boolean;
+  /** Equal-length previous window value when there is enough observed data. */
+  readonly previousTokens: number | null;
+  /** Percent change against previousTokens; null means not comparable. */
+  readonly deltaPercent: number | null;
+  /** Present for projects only, aggregated on the server without session ids. */
+  readonly sessions: number | null;
+}
+
+export interface DashboardV2MetricDelta {
+  readonly previous: number | null;
+  readonly deltaPercent: number | null;
+}
+
+export interface DashboardV2CacheDelta extends DashboardV2MetricDelta {
+  /** Cache rate is compared in percentage points, rather than token volume. */
+  readonly deltaPoints: number | null;
+}
+
+export interface DashboardV2Comparison {
+  readonly tokens: DashboardV2MetricDelta;
+  readonly events: DashboardV2MetricDelta;
+  readonly cost: DashboardV2MetricDelta;
+  readonly cacheRate: DashboardV2CacheDelta;
 }
 
 export interface DashboardV2ContextCounts {
@@ -193,6 +229,10 @@ export interface DashboardV2View {
   readonly totals: LocalUsageTotals;
   readonly estimatedCostUsd: number | null;
   readonly estimatedCostIsPartial: boolean;
+  /** Null when the selected events do not expose any input-token denominator. */
+  readonly cacheRate: number | null;
+  /** Only emitted when an equal-length prior window has sufficient evidence. */
+  readonly comparison: DashboardV2Comparison;
   readonly sessions: number | null;
   readonly skills: number | null;
   readonly activeTools: number;

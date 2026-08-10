@@ -11,15 +11,15 @@ const snapshot: DashboardV2Snapshot = {
   sessions: {
     available: true,
     generatedAt: null,
-    records: [
+    byProjectDay: [
       {
-        startedAt: "2026-08-10T10:00:00.000Z",
-        endedAt: "2026-08-10T10:10:00.000Z",
-        durationMs: 600_000,
-        turns: 2,
-        editTurns: 1,
+        project: "trusttools_webapp",
+        source: "codex",
+        date: "2026-08-10",
+        count: 1,
       },
     ],
+    bySourceDay: [{ source: "codex", date: "2026-08-10", count: 1 }],
   },
   tools: [{ id: "codex", name: "Codex CLI", available: true, detected: true }],
   events: [
@@ -90,7 +90,12 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
     {
       ...snapshot,
       pricingAvailable: false,
-      sessions: { available: false, generatedAt: null, records: [] },
+      sessions: {
+        available: false,
+        generatedAt: null,
+        byProjectDay: [],
+        bySourceDay: [],
+      },
     },
     "today",
     "2026-08-10",
@@ -99,6 +104,78 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
 
   assert.equal(view.sessions, null);
   assert.equal(view.estimatedCostUsd, null);
+});
+
+test("Dashboard V2 derives safe previous-window, model and project aggregates", () => {
+  const event = (
+    timestamp: string,
+    project: string,
+    model: string,
+    totalTokens: number,
+  ): DashboardV2Snapshot["events"][number] => ({
+    ...snapshot.events[0]!,
+    timestamp,
+    project,
+    model,
+    inputTokens: totalTokens - 20,
+    cachedInputTokens: 20,
+    outputTokens: 0,
+    totalTokens,
+  });
+  const comparisonSnapshot: DashboardV2Snapshot = {
+    ...snapshot,
+    pricingAvailable: true,
+    sessions: {
+      available: true,
+      generatedAt: null,
+      byProjectDay: [
+        {
+          project: "alpha",
+          source: "codex",
+          date: "2026-08-08",
+          count: 1,
+        },
+        {
+          project: "alpha",
+          source: "codex",
+          date: "2026-08-10",
+          count: 2,
+        },
+      ],
+      bySourceDay: [
+        { source: "codex", date: "2026-08-08", count: 2 },
+        { source: "codex", date: "2026-08-10", count: 3 },
+      ],
+    },
+    events: [
+      event("2026-08-08T10:00:00.000Z", "alpha", "gpt-4o", 100),
+      event("2026-08-09T10:00:00.000Z", "alpha", "gpt-4o", 100),
+      event("2026-08-08T12:00:00.000Z", "beta", "gpt-4o-mini", 100),
+      event("2026-08-09T12:00:00.000Z", "beta", "gpt-4o-mini", 100),
+      event("2026-08-10T10:00:00.000Z", "alpha", "gpt-4o", 200),
+      event("2026-08-11T10:00:00.000Z", "alpha", "gpt-4o", 200),
+      event("2026-08-10T12:00:00.000Z", "beta", "gpt-4o-mini", 100),
+      event("2026-08-11T12:00:00.000Z", "beta", "gpt-4o-mini", 100),
+    ],
+  };
+  const view = createDashboardV2View(
+    comparisonSnapshot,
+    "custom",
+    "2026-08-10",
+    "2026-08-11",
+  );
+
+  assert.equal(view.comparison.tokens.previous, 400);
+  assert.equal(view.comparison.tokens.deltaPercent, 50);
+  assert.equal(view.comparison.events.previous, 4);
+  assert.equal(view.comparison.cacheRate.deltaPoints, -6.666666666666666);
+  assert.equal(view.models[0]?.estimatedCostUsd != null, true);
+  assert.equal(view.models[0]?.events, 2);
+  assert.equal(view.models[0]?.share, (400 / 600) * 100);
+  assert.equal(view.models[0]?.deltaPercent, 100);
+  assert.equal(view.projects[0]?.key, "alpha");
+  assert.equal(view.projects[0]?.sessions, 2);
+  assert.equal(view.projects[0]?.deltaPercent, 100);
 });
 
 test("Dashboard V2 Hero derives live listener state and insights from safe observations", () => {

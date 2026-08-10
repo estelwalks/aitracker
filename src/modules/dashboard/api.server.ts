@@ -28,6 +28,67 @@ function projectKey(project: string): string {
   return normalized.split("/").filter(Boolean).at(-1) ?? "unknown";
 }
 
+function localDateKey(timestamp: string): string | null {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Collapse local sessions before they cross the dashboard boundary. Project
+ * rows only need a count by local day; session identifiers, source paths and
+ * session metadata never leave this server adapter.
+ */
+function aggregateDashboardProjectSessions(
+  sessions: readonly {
+    projectKey: string;
+    source: string;
+    startedAt: string;
+  }[],
+) {
+  const counts = new Map<string, number>();
+  for (const session of sessions) {
+    const date = localDateKey(session.startedAt);
+    if (date == null) continue;
+    const project = projectKey(session.projectKey);
+    const key = `${project}\u0000${session.source}\u0000${date}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([key, count]) => {
+      const [project, source, date] = key.split("\u0000");
+      return { project: project!, source: source!, date: date!, count };
+    })
+    .sort(
+      (left, right) =>
+        left.project.localeCompare(right.project) ||
+        left.source.localeCompare(right.source) ||
+        left.date.localeCompare(right.date),
+    );
+}
+
+function aggregateDashboardSourceSessions(
+  sessions: readonly { source: string; startedAt: string }[],
+) {
+  const counts = new Map<string, number>();
+  for (const session of sessions) {
+    const date = localDateKey(session.startedAt);
+    if (date == null) continue;
+    const key = `${session.source}\u0000${date}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([key, count]) => {
+      const [source, date] = key.split("\u0000");
+      return { source: source!, date: date!, count };
+    })
+    .sort(
+      (left, right) =>
+        left.source.localeCompare(right.source) ||
+        left.date.localeCompare(right.date),
+    );
+}
+
 function toDashboardEvent(event: {
   source: DashboardUsageEvent["source"];
   timestamp: string;
@@ -219,15 +280,19 @@ export async function loadDashboardReadModel(
       ? {
           available: true,
           generatedAt: sessionsResult.value.generatedAt,
-          records: sessionsResult.value.sessions.map((session) => ({
-            startedAt: session.startedAt,
-            endedAt: session.endedAt,
-            durationMs: session.durationMs,
-            turns: session.turns,
-            editTurns: session.editTurns,
-          })),
+          byProjectDay: aggregateDashboardProjectSessions(
+            sessionsResult.value.sessions,
+          ),
+          bySourceDay: aggregateDashboardSourceSessions(
+            sessionsResult.value.sessions,
+          ),
         }
-      : { available: false, generatedAt: null, records: [] };
+      : {
+          available: false,
+          generatedAt: null,
+          byProjectDay: [],
+          bySourceDay: [],
+        };
   const pricing =
     pricingResult.status === "fulfilled" ? pricingResult.value : null;
   return createDashboardApplication().read({
