@@ -19,6 +19,23 @@ test("installation facts use only catalog probe roots", () => {
   );
 });
 
+test("installation facts merge executable and directory evidence", () => {
+  const home = "/isolated/home";
+  const facts = deriveToolInstallationFacts(
+    AI_TOOLS,
+    new Set([`${home}/.codex`]),
+    home,
+    "macos",
+    new Map([["claude-code", ["/usr/local/bin/claude"]]]),
+  );
+  const claude = facts.find((fact) => fact.id === "claude-code");
+  assert.equal(claude?.installed, true);
+  assert.deepEqual(claude?.detectedPaths, ["/usr/local/bin/claude"]);
+  const codex = facts.find((fact) => fact.id === "codex");
+  assert.equal(codex?.installed, true);
+  assert.deepEqual(codex?.detectedPaths, [`${home}/.codex`]);
+});
+
 import { describe, test as it } from "node:test";
 import { detectRootsForOs, osFromProcess } from "./detection.server.ts";
 
