@@ -8,31 +8,32 @@ import {
   IdCard,
   LayoutDashboard,
   LogIn,
-  ShieldCheck,
-  Settings,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Settings,
+  ShieldCheck,
   X,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { useI18n } from "../lib/i18n/context";
 import { APP_NAME } from "../lib/app-config";
+import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 
 type NavItem = {
   to:
     | "/"
     | "/agents"
-    | "/market"
+    | "/tracker"
     | "/security"
-    | "/sessions"
+    | "/chats"
     | "/sources"
     | "/distill"
     | "/reports";
   label: MessageKey;
   icon: typeof LayoutDashboard;
+  hero?: boolean;
 };
 
 const navGroups: ReadonlyArray<{
@@ -44,8 +45,13 @@ const navGroups: ReadonlyArray<{
     items: [
       { to: "/", label: "nav.dashboard", icon: LayoutDashboard },
       { to: "/agents", label: "nav.skills", icon: IdCard },
-      { to: "/sessions", label: "nav.sessions", icon: History },
-      { to: "/distill", label: "nav.distill", icon: FlaskConical },
+      { to: "/chats", label: "nav.sessions", icon: History },
+      {
+        to: "/distill",
+        label: "nav.distill",
+        icon: FlaskConical,
+        hero: true,
+      },
       { to: "/reports", label: "nav.reports", icon: BookHeart },
     ],
   },
@@ -53,7 +59,7 @@ const navGroups: ReadonlyArray<{
     label: "nav.groupGuard",
     items: [
       { to: "/security", label: "nav.security", icon: ShieldCheck },
-      { to: "/market", label: "nav.market", icon: Flame },
+      { to: "/tracker", label: "nav.market", icon: Flame },
     ],
   },
   {
@@ -62,10 +68,32 @@ const navGroups: ReadonlyArray<{
   },
 ];
 
+function isNavActive(pathname: string, to: NavItem["to"]) {
+  if (to === "/") return pathname === "/";
+  if (to === "/chats")
+    return pathname.startsWith("/chats") || pathname.startsWith("/sessions");
+  if (to === "/tracker")
+    return pathname.startsWith("/tracker") || pathname.startsWith("/market");
+  return pathname.startsWith(to);
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
+  const [collapsed, setCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
   const [navQuery, setNavQuery] = useState("");
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    const onResize = () => {
+      const width = window.innerWidth;
+      setCollapsed(width < 1024);
+      setSidebarWidth(Math.round(Math.min(272, Math.max(212, width * 0.155))));
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -77,25 +105,27 @@ export function AppShell({ children }: { children: ReactNode }) {
       ),
     }))
     .filter((group) => group.items.length > 0);
+  const railWidth = collapsed ? 64 : sidebarWidth;
 
   return (
     <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
-      <input
-        id="tt-sidebar-toggle"
-        type="checkbox"
-        className="tt-sidebar-toggle sr-only"
-        aria-label={t("nav.collapse")}
-      />
-      <aside className="tt-sidebar fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="tt-sidebar-brand flex h-16 items-center gap-2.5 px-3">
+      <aside
+        className="tt-sidebar fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar"
+        style={{ width: railWidth }}
+      >
+        <div
+          className={`tt-sidebar-brand flex h-16 items-center px-3 ${collapsed ? "justify-center" : "gap-2.5"}`}
+        >
           <div className="tt-brand-mark flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground font-mono text-[11px] font-black tracking-[0.08em] text-background">
             TT
           </div>
-          <div className="tt-sidebar-copy min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold tracking-[0.02em]">
-              {APP_NAME}
+          {!collapsed && (
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-semibold tracking-[0.02em]">
+                {APP_NAME}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <nav
@@ -104,15 +134,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {visibleGroups.map((group) => (
             <div key={group.label} className="mb-3">
-              <p className="tt-sidebar-group-label px-3 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.18em] text-muted-foreground uppercase">
-                {t(group.label)}
-              </p>
+              {!collapsed && (
+                <p className="px-3 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.18em] text-muted-foreground uppercase">
+                  {t(group.label)}
+                </p>
+              )}
               <div className="space-y-0.5">
                 {group.items.map((item) => {
-                  const active =
-                    item.to === "/"
-                      ? pathname === "/"
-                      : pathname.startsWith(item.to);
+                  const active = isNavActive(pathname, item.to);
                   const Icon = item.icon;
                   const label = t(item.label);
                   return (
@@ -120,13 +149,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={item.to}
                       to={item.to}
                       title={label}
-                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : item.hero ? "border border-primary/25 bg-primary/10 font-medium text-primary hover:bg-primary/15" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                       aria-current={active ? "page" : undefined}
                     >
                       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
-                      <span className="tt-sidebar-copy min-w-0 flex-1 truncate">
-                        {label}
-                      </span>
+                      {!collapsed && (
+                        <span className="min-w-0 flex-1 truncate">{label}</span>
+                      )}
                     </Link>
                   );
                 })}
@@ -140,43 +169,46 @@ export function AppShell({ children }: { children: ReactNode }) {
             type="button"
             disabled
             title={t("nav.loginUnavailable")}
-            className="tt-sidebar-bottom-control flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground opacity-60"
+            className={`flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground opacity-60 ${collapsed ? "justify-center" : ""}`}
           >
             <LogIn className="size-4 shrink-0" strokeWidth={1.75} />
-            <span className="tt-sidebar-copy flex min-w-0 flex-1 items-center gap-1.5 truncate">
-              {t("nav.login")}
-              <span className="ml-auto rounded-sm bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] uppercase">
-                {t("nav.soon")}
+            {!collapsed && (
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+                {t("nav.login")}
+                <span className="ml-auto rounded-sm bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] uppercase">
+                  {t("nav.soon")}
+                </span>
               </span>
-            </span>
+            )}
           </button>
           <Link
             to="/settings"
             title={t("nav.settings")}
-            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"} ${collapsed ? "justify-center" : ""}`}
           >
             <Settings className="size-4 shrink-0" strokeWidth={1.75} />
-            <span className="tt-sidebar-copy">{t("nav.settings")}</span>
+            {!collapsed && <span>{t("nav.settings")}</span>}
           </Link>
-          <label
-            htmlFor="tt-sidebar-toggle"
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
             title={t("nav.collapse")}
-            className="tt-sidebar-bottom-control tt-sidebar-collapse-control flex h-9 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className={`flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center" : ""}`}
           >
-            <PanelLeftClose
-              className="tt-sidebar-collapse-close size-4"
-              strokeWidth={1.75}
-            />
-            <PanelLeftOpen
-              className="tt-sidebar-collapse-open size-4"
-              strokeWidth={1.75}
-            />
-            <span className="tt-sidebar-copy">{t("nav.collapse")}</span>
-          </label>
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" strokeWidth={1.75} />
+            ) : (
+              <PanelLeftClose className="size-4" strokeWidth={1.75} />
+            )}
+            {!collapsed && <span>{t("nav.collapse")}</span>}
+          </button>
         </div>
       </aside>
 
-      <div className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col">
+      <div
+        className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
+        style={{ paddingLeft: railWidth }}
+      >
         <header className="tt-shell-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 px-4 md:px-6">
           <div className="relative hidden max-w-2xl flex-1 sm:block">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />

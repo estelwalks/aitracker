@@ -7,6 +7,7 @@ import {
   type UsageLogParsing,
   usageLogParsingFor,
 } from "../tools/catalog.ts";
+import type { ToolSurface } from "../tool-registry/registry.ts";
 import {
   detectToolInstallations,
   type ToolInstallationFact,
@@ -25,6 +26,13 @@ export interface UsageSourceEntry {
   lastScannedAt: string | null;
   /** HOME-relative probe paths (normalized to ~/) used to detect the tool. */
   paths: string[];
+  /** Registry-owned product surface, safe for the browser. */
+  toolSurface: ToolSurface;
+  /** Verified vendor-owned install URL, null when unavailable. */
+  officialDownloadUrl: string | null;
+  /** Scanner counts, never a claim that a fixed total exists. */
+  filesRead: number;
+  filesConsidered: number;
   /** Capability, not a claim that a usable log was found. */
   usageLogParsing: UsageLogParsing;
 }
@@ -47,15 +55,17 @@ export interface UsageSourcesSummary {
 /**
  * Normalize an absolute filesystem path to a ~/ form for display. Catalog
  * `detectRoots` are already HOME-relative (e.g. ".claude"), so they get a
- * leading "~/". Absolute scanner `paths` that start with HOME are rewritten;
- * anything else is returned unchanged.
+ * leading "~/". Absolute scanner paths are rendered only when they are under
+ * HOME; an external path is omitted rather than leaked to the browser.
  */
-function normalizeForDisplay(path: string, homeDir: string): string {
+function normalizeForDisplay(path: string, homeDir: string): string | null {
   if (path.startsWith("/")) {
     if (path === homeDir) return "~";
     if (path.startsWith(`${homeDir}/`))
       return `~/${path.slice(homeDir.length + 1)}`;
-    return path;
+    // A scanner can resolve an XDG or environment path outside HOME. Those
+    // paths are useful internally, but must never cross the browser boundary.
+    return null;
   }
   return path.startsWith("~/") ? path : `~/${path}`;
 }
@@ -99,7 +109,9 @@ export function deriveUsageSources(
       installation?.detectedPaths && installation.detectedPaths.length > 0
         ? installation.detectedPaths
         : tool.detectRoots;
-    const paths = rawPaths.map((path) => normalizeForDisplay(path, homeDir));
+    const paths = rawPaths
+      .map((path) => normalizeForDisplay(path, homeDir))
+      .filter((path): path is string => path !== null);
 
     let status: UsageSourceStatus;
     if (installed && events > 0) {
@@ -125,6 +137,10 @@ export function deriveUsageSources(
       malformedLines,
       lastScannedAt: generatedAt,
       paths,
+      toolSurface: tool.toolSurface,
+      officialDownloadUrl: tool.officialDownloadUrl,
+      filesRead: summary?.filesRead ?? 0,
+      filesConsidered: summary?.filesConsidered ?? 0,
       usageLogParsing: usageLogParsingFor(tool.id),
     };
   });
