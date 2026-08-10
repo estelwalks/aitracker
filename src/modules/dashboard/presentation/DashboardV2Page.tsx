@@ -29,14 +29,6 @@ function daysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function cacheRate(view: ReturnType<typeof createDashboardV2View>): number {
-  const input =
-    view.totals.inputTokens +
-    view.totals.cachedInputTokens +
-    view.totals.cacheCreationInputTokens;
-  return input === 0 ? 0 : (view.totals.cachedInputTokens / input) * 100;
-}
-
 function TrendChart({ points }: { points: readonly DashboardV2TrendPoint[] }) {
   const { t, format } = useI18n();
   const path = useMemo(() => {
@@ -88,11 +80,29 @@ function TrendChart({ points }: { points: readonly DashboardV2TrendPoint[] }) {
   );
 }
 
-function Delta({ unavailable = false }: { unavailable?: boolean }) {
-  const { t } = useI18n();
+function Delta({
+  value = null,
+  points = false,
+}: {
+  value?: number | null;
+  points?: boolean;
+}) {
+  const { format, t } = useI18n();
+  const unavailable = value == null || !Number.isFinite(value);
   return (
-    <span className="font-mono text-[10px] text-muted-foreground">
-      {unavailable ? t("dashboard.kpi.unavailable") : "—"}
+    <span
+      className={
+        unavailable
+          ? "font-mono text-[10px] text-muted-foreground"
+          : value >= 0
+            ? "font-mono text-[10px] text-[var(--color-ok)]"
+            : "font-mono text-[10px] text-[var(--color-warning)]"
+      }
+      title={t("dashboard.kpi.vsPrevious")}
+    >
+      {unavailable
+        ? t("dashboard.kpi.unavailable")
+        : `${value > 0 ? "+" : ""}${format.formatPercent(value)}${points ? " pt" : ""}`}
     </span>
   );
 }
@@ -102,13 +112,15 @@ function MetricCard({
   label,
   value,
   hint,
-  unavailable,
+  delta,
+  deltaPoints,
 }: {
   icon: typeof Activity;
   label: string;
   value: string;
   hint: string;
-  unavailable?: boolean;
+  delta?: number | null;
+  deltaPoints?: boolean;
 }) {
   return (
     <div className="dashboard-metric-card">
@@ -117,7 +129,7 @@ function MetricCard({
           <Icon className="size-3" />
           {label}
         </span>
-        <Delta unavailable={unavailable} />
+        <Delta value={delta} points={deltaPoints} />
       </div>
       <div className="tt-num mt-2 text-[25px] leading-none font-black tracking-tight">
         {value}
@@ -161,8 +173,18 @@ function BreakdownTable({
               )}
             </th>
             <th>{t("dashboard.detail.share")}</th>
-            <th>{t("dashboard.kpi.tokens")}</th>
-            <th>{t("dashboard.v2.eventShort")}</th>
+            {type === "models" ? (
+              <>
+                <th>{t("dashboard.kpi.cost")}</th>
+                <th>{t("dashboard.v2.eventShort")}</th>
+              </>
+            ) : (
+              <>
+                <th>{t("dashboard.kpi.tokens")}</th>
+                <th>{t("dashboard.kpi.sessions")}</th>
+              </>
+            )}
+            <th>{t("dashboard.kpi.vsPrevious")}</th>
           </tr>
         </thead>
         <tbody>
@@ -176,8 +198,28 @@ function BreakdownTable({
                   total ? Math.round((row.tokens / total) * 100) : 0,
                 )}
               </td>
-              <td className="tt-num">{format.formatTokens(row.tokens)}</td>
-              <td className="tt-num">{format.formatNumber(row.events)}</td>
+              {type === "models" ? (
+                <>
+                  <td className="tt-num">
+                    {row.estimatedCostUsd == null
+                      ? t("dashboard.kpi.unavailable")
+                      : format.formatUsd(row.estimatedCostUsd)}
+                  </td>
+                  <td className="tt-num">{format.formatNumber(row.events)}</td>
+                </>
+              ) : (
+                <>
+                  <td className="tt-num">{format.formatTokens(row.tokens)}</td>
+                  <td className="tt-num">
+                    {row.sessions == null
+                      ? t("dashboard.kpi.unavailable")
+                      : format.formatNumber(row.sessions)}
+                  </td>
+                </>
+              )}
+              <td>
+                <Delta value={row.deltaPercent} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -304,6 +346,15 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
             events: data.v2.events.filter(
               (event) => event.source === selectedTool,
             ),
+            sessions: {
+              ...data.v2.sessions,
+              byProjectDay: data.v2.sessions.byProjectDay.filter(
+                (row) => row.source === selectedTool,
+              ),
+              bySourceDay: data.v2.sessions.bySourceDay.filter(
+                (row) => row.source === selectedTool,
+              ),
+            },
           },
     [data.v2, selectedTool],
   );
@@ -334,11 +385,12 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     { value: "today", label: t("dashboard.period.today") },
     { value: "7d", label: t("dashboard.period.lastNDays", { count: 7 }) },
     { value: "30d", label: t("dashboard.period.lastNDays", { count: 30 }) },
+    { value: "year", label: t("dashboard.period.year") },
     { value: "all", label: t("dashboard.period.all") },
     { value: "custom", label: t("dashboard.period.custom") },
   ];
   const topTool = allToolsView.tools[0];
-  const cache = cacheRate(view);
+  const cache = view.cacheRate;
   const security = securityMetric(data.monitoring, t);
   const metrics = [
     {
@@ -346,6 +398,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       label: t("dashboard.kpi.tokens"),
       value: format.formatTokens(view.totals.totalTokens),
       hint: t("dashboard.v2.eventCount", { count: view.totals.events }),
+      delta: view.comparison.tokens.deltaPercent,
     },
     {
       icon: CircleDollarSign,
@@ -357,7 +410,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       hint: view.estimatedCostIsPartial
         ? t("dashboard.v2.partialCost")
         : t("dashboard.v2.estimatedCost"),
-      unavailable: view.estimatedCostUsd == null,
+      delta: view.comparison.cost.deltaPercent,
     },
     {
       icon: CalendarDays,
@@ -370,13 +423,17 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view.sessions == null
           ? t("dashboard.kpi.sessionUnavailableHint")
           : t("dashboard.v2.selectedRange"),
-      unavailable: view.sessions == null,
     },
     {
       icon: Activity,
       label: t("dashboard.v2.cacheLabel"),
-      value: format.formatPercent(Math.round(cache)),
+      value:
+        cache == null
+          ? t("dashboard.kpi.unavailable")
+          : format.formatPercent(Math.round(cache)),
       hint: t("dashboard.v2.cacheHint"),
+      delta: view.comparison.cacheRate.deltaPoints,
+      deltaPoints: true,
     },
     {
       icon: Wrench,
@@ -403,7 +460,6 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view.skills == null
           ? t("dashboard.v2.skillUnavailable")
           : t("dashboard.kpi.skillScanNote"),
-      unavailable: view.skills == null,
     },
     {
       icon: FolderKanban,
@@ -550,7 +606,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
           <small>
             {todayView.estimatedCostUsd == null
               ? t("dashboard.kpi.unavailable")
-              : `${format.formatUsd(todayView.estimatedCostUsd)} · ${t("dashboard.v2.cacheLabel")} ${format.formatPercent(Math.round(cacheRate(todayView)))}`}
+              : `${format.formatUsd(todayView.estimatedCostUsd)} · ${t("dashboard.v2.cacheLabel")} ${todayView.cacheRate == null ? t("dashboard.kpi.unavailable") : format.formatPercent(Math.round(todayView.cacheRate))}`}
           </small>
           <button type="button" onClick={() => setPeriod("today")}>
             {t("dashboard.v2.viewUsage")}
@@ -646,6 +702,60 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
           ))}
         </div>
       </section>
+      {selectedTool !== "all" ? (
+        <section
+          className="dashboard-panel"
+          aria-label={t("dashboard.v2.contextTitle")}
+        >
+          <div className="dashboard-panel-head">
+            <div>
+              <h2>
+                {allToolsView.tools.find((tool) => tool.id === selectedTool)
+                  ?.name ?? t("dashboard.v2.unknownTool")}
+              </h2>
+              <p>{t("dashboard.v2.contextTitle")}</p>
+            </div>
+            <span>{t("dashboard.v2.selectedRange")}</span>
+          </div>
+          <dl className="dashboard-workflow-grid">
+            <div>
+              <dt>{t("dashboard.kpi.tokens")}</dt>
+              <dd>{format.formatTokens(view.totals.totalTokens)}</dd>
+            </div>
+            <div>
+              <dt>{t("dashboard.v2.cacheLabel")}</dt>
+              <dd>
+                {view.cacheRate == null
+                  ? t("dashboard.kpi.unavailable")
+                  : format.formatPercent(view.cacheRate)}
+              </dd>
+            </div>
+            <div>
+              <dt>{t("dashboard.v2.responses")}</dt>
+              <dd>{format.formatNumber(view.context.textResponses)}</dd>
+            </div>
+            <div>
+              <dt>{t("dashboard.context.dimTool")}</dt>
+              <dd>{format.formatNumber(view.context.toolCalls)}</dd>
+            </div>
+            <div>
+              <dt>{t("dashboard.context.dimSkill")}</dt>
+              <dd>{format.formatNumber(view.context.skillCalls)}</dd>
+            </div>
+            <div>
+              <dt>{t("dashboard.kpi.sessions")}</dt>
+              <dd>
+                {view.sessions == null
+                  ? t("dashboard.kpi.unavailable")
+                  : format.formatNumber(view.sessions)}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-4 font-mono text-[10px] text-muted-foreground">
+            {t("dashboard.v2.contextNote")}
+          </p>
+        </section>
+      ) : null}
       <section className="dashboard-panel">
         <div className="dashboard-panel-head">
           <div>
@@ -659,7 +769,9 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
                 ),
               })}{" "}
               · {t("dashboard.v2.cacheLabel")}{" "}
-              {format.formatPercent(Math.round(cache))}
+              {cache == null
+                ? t("dashboard.kpi.unavailable")
+                : format.formatPercent(Math.round(cache))}
             </p>
           </div>
           <span>{t("dashboard.v2.selectedRange")}</span>
@@ -675,7 +787,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
                 {t("dashboard.v2.modelHint", { count: view.models.length })}
               </p>
             </div>
-            <Delta />
+            <Delta value={view.comparison.tokens.deltaPercent} />
           </div>
           <BreakdownTable
             rows={view.models}
@@ -689,7 +801,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
               <h2>{t("dashboard.v2.projectsTitle")}</h2>
               <p>{t("dashboard.v2.projectHint")}</p>
             </div>
-            <Delta />
+            <Delta value={view.comparison.tokens.deltaPercent} />
           </div>
           <BreakdownTable
             rows={view.projects}

@@ -20,6 +20,8 @@ import type { MonitoringStatus } from "../../monitoring/index.ts";
 
 const liveWindowMs = 15 * 60 * 1000;
 const heartbeatWindowMs = 20 * 60 * 1000;
+/** Avoid presenting a one-event fluctuation as a meaningful period comparison. */
+const minimumComparableEvents = 2;
 
 const emptyTotals = (): LocalUsageTotals => ({
   events: 0,
@@ -76,6 +78,9 @@ function ranked(
       share: 0,
       estimatedCostUsd: null,
       estimatedCostIsPartial: false,
+      previousTokens: null,
+      deltaPercent: null,
+      sessions: null,
     }));
 }
 
@@ -119,10 +124,13 @@ function calendarFor(
       summary: { days: 0, activeDays: 0, longestStreak: 0 },
     };
   const observedByDate = new Map(trend.map((point) => [point.date, point]));
-  // The all-time range uses a 1970 sentinel. Calendar coverage instead starts
-  // with the first actual local day; we never manufacture decades of empties.
-  const observedStart = new Date(`${trend[0]!.date}T00:00:00`);
-  const start = range.from === "1970-01-01" ? observedStart : range.fromDate!;
+  // The all-time range uses a 1970 sentinel. The activity surface is a
+  // genuine rolling twelve-month calendar, rather than either a fake year or
+  // decades of zero-filled cells.
+  const start =
+    range.from === "1970-01-01"
+      ? addLocalDays(range.toDate, -364)
+      : range.fromDate!;
   const points: DashboardV2CalendarPoint[] = [];
   for (
     let cursor = new Date(start);
@@ -157,9 +165,11 @@ function calendarFor(
 function enrichRows(
   rows: readonly DashboardV2BreakdownRow[],
   events: readonly DashboardV2Event[],
+  previousEvents: readonly DashboardV2Event[],
   keyOf: (event: DashboardV2Event) => string,
   pricingAvailable: boolean,
   totalTokens: number,
+  projectSessions: ReadonlyMap<string, number> | null,
 ): DashboardV2BreakdownRow[] {
   return rows.map((row) => {
     const related = events.filter(
@@ -170,11 +180,26 @@ function enrichRows(
           related.map(({ context: _context, ...event }) => event),
         )
       : null;
+    const previous = previousEvents.filter(
+      (event) => (keyOf(event) || "unknown") === row.key,
+    );
+    const previousTotals = totalsFor(previous);
+    const comparable =
+      related.length >= minimumComparableEvents &&
+      previous.length >= minimumComparableEvents &&
+      previousTotals.totalTokens > 0;
     return {
       ...row,
       share: totalTokens === 0 ? 0 : (row.tokens / totalTokens) * 100,
       estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
       estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
+      previousTokens: comparable ? previousTotals.totalTokens : null,
+      deltaPercent: comparable
+        ? ((row.tokens - previousTotals.totalTokens) /
+            previousTotals.totalTokens) *
+          100
+        : null,
+      sessions: projectSessions?.get(row.key) ?? null,
     };
   });
 }
@@ -331,14 +356,72 @@ function selectedSessions(
   if (!snapshot.sessions.available) return null;
   const range = resolveUsageRange(period, from, to);
   if (!range.valid || !range.fromDate || !range.toDate) return null;
-  return snapshot.sessions.records.filter((session) => {
-    const startedAt = new Date(session.startedAt);
-    return (
-      !Number.isNaN(startedAt.getTime()) &&
-      startedAt >= range.fromDate! &&
-      startedAt <= range.toDate!
-    );
-  }).length;
+  return snapshot.sessions.bySourceDay.reduce((total, session) => {
+    const startedAt = new Date(`${session.date}T00:00:00`);
+    return startedAt >= range.fromDate! && startedAt <= range.toDate!
+      ? total + session.count
+      : total;
+  }, 0);
+}
+
+function previousWindow(
+  period: UsagePeriod,
+  range: ReturnType<typeof resolveUsageRange>,
+): { fromDate: Date; toDate: Date } | null {
+  // An all-time window has no coherent predecessor. For all other concrete
+  // date ranges (including custom), the immediately preceding equal span is
+  // unambiguous and is more useful than a made-up calendar comparison.
+  if (period === "all" || !range.valid || !range.fromDate || !range.toDate) {
+    return null;
+  }
+  const previousTo = new Date(range.fromDate.getTime() - 1);
+  const span = range.toDate.getTime() - range.fromDate.getTime();
+  return {
+    fromDate: new Date(previousTo.getTime() - span),
+    toDate: previousTo,
+  };
+}
+
+function observedCacheRate(totals: LocalUsageTotals): number | null {
+  const input =
+    totals.inputTokens +
+    totals.cachedInputTokens +
+    totals.cacheCreationInputTokens;
+  return input === 0 ? null : (totals.cachedInputTokens / input) * 100;
+}
+
+function comparableDelta(
+  current: number,
+  previous: number,
+  currentEvents: number,
+  previousEvents: number,
+): { previous: number | null; deltaPercent: number | null } {
+  if (
+    currentEvents < minimumComparableEvents ||
+    previousEvents < minimumComparableEvents ||
+    previous <= 0
+  ) {
+    return { previous: null, deltaPercent: null };
+  }
+  return {
+    previous,
+    deltaPercent: ((current - previous) / previous) * 100,
+  };
+}
+
+function projectSessionCounts(
+  snapshot: DashboardV2Snapshot,
+  fromDate: Date | null,
+  toDate: Date | null,
+): ReadonlyMap<string, number> | null {
+  if (!snapshot.sessions.available || !fromDate || !toDate) return null;
+  const counts = new Map<string, number>();
+  for (const row of snapshot.sessions.byProjectDay) {
+    const date = new Date(`${row.date}T00:00:00`);
+    if (date < fromDate || date > toDate) continue;
+    counts.set(row.project, (counts.get(row.project) ?? 0) + row.count);
+  }
+  return counts;
 }
 
 /**
@@ -358,8 +441,22 @@ export function createDashboardV2View(
       ? filterV2Events(snapshot.events, range.fromDate, range.toDate)
       : [];
   const totals = totalsFor(events);
+  const previousRange = previousWindow(period, range);
+  const previousEvents = previousRange
+    ? filterV2Events(
+        snapshot.events,
+        previousRange.fromDate,
+        previousRange.toDate,
+      )
+    : [];
+  const previousTotals = totalsFor(previousEvents);
   const cost = snapshot.pricingAvailable
     ? estimateUsageCost(events.map(({ context: _context, ...event }) => event))
+    : null;
+  const previousCost = snapshot.pricingAvailable
+    ? estimateUsageCost(
+        previousEvents.map(({ context: _context, ...event }) => event),
+      )
     : null;
   const bySource = ranked(events, (event) => event.source);
   const tools = snapshot.tools
@@ -380,21 +477,62 @@ export function createDashboardV2View(
   // tool card. This avoids presenting catalog availability as activity.
   const activeTools = tools.filter((tool) => tool.events > 0).length;
   const trend = daily(events);
+  const currentProjectSessions = projectSessionCounts(
+    snapshot,
+    range.fromDate,
+    range.toDate,
+  );
   const models = enrichRows(
     ranked(events, (event) => event.model).slice(0, 8),
     events,
+    previousEvents,
     (event) => event.model,
     snapshot.pricingAvailable,
     totals.totalTokens,
+    null,
   );
   const projects = enrichRows(
     ranked(events, (event) => event.project).slice(0, 8),
     events,
+    previousEvents,
     (event) => event.project,
     snapshot.pricingAvailable,
     totals.totalTokens,
+    currentProjectSessions,
   );
   const calendar = calendarFor(trend, range);
+  const tokenComparison = comparableDelta(
+    totals.totalTokens,
+    previousTotals.totalTokens,
+    totals.events,
+    previousTotals.events,
+  );
+  const eventComparison = comparableDelta(
+    totals.events,
+    previousTotals.events,
+    totals.events,
+    previousTotals.events,
+  );
+  const currentCacheRate = observedCacheRate(totals);
+  const previousCacheRate = observedCacheRate(previousTotals);
+  const cacheComparable =
+    currentCacheRate != null &&
+    previousCacheRate != null &&
+    totals.events >= minimumComparableEvents &&
+    previousTotals.events >= minimumComparableEvents;
+  const costComparable =
+    cost != null &&
+    previousCost != null &&
+    cost.unknownEvents === 0 &&
+    previousCost.unknownEvents === 0;
+  const costComparison = costComparable
+    ? comparableDelta(
+        cost.knownUsd + cost.estimatedUsd,
+        previousCost.knownUsd + previousCost.estimatedUsd,
+        totals.events,
+        previousTotals.events,
+      )
+    : { previous: null, deltaPercent: null };
 
   return {
     period,
@@ -404,6 +542,19 @@ export function createDashboardV2View(
     totals,
     estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
     estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
+    cacheRate: currentCacheRate,
+    comparison: {
+      tokens: tokenComparison,
+      events: eventComparison,
+      cost: costComparison,
+      cacheRate: {
+        previous: cacheComparable ? previousCacheRate : null,
+        deltaPercent: null,
+        deltaPoints: cacheComparable
+          ? currentCacheRate - previousCacheRate
+          : null,
+      },
+    },
     sessions: selectedSessions(snapshot, period, from, to),
     skills: snapshot.skills.available ? snapshot.skills.count : null,
     activeTools,
