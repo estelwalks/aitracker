@@ -669,6 +669,263 @@
   color: var(--color-primary);
 }
 
+/* Skill operations workspace: all cards consume safe, aggregate projections. */
+.skill-workspace-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 30%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 92% 4%,
+      color-mix(in oklab, var(--color-primary) 22%, transparent),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-surface) 92%, transparent),
+      var(--color-surface)
+    );
+}
+
+.skill-workspace-health {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 0.55rem;
+  min-width: 10.5rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--color-border);
+}
+
+.skill-workspace-health > :last-child {
+  grid-column: 1 / -1;
+}
+
+.skill-coverage-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.skill-coverage-node {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 3rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--color-surface);
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  text-align: left;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.skill-coverage-node:not(:disabled):hover,
+.skill-coverage-node-active {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 10%,
+    var(--color-surface)
+  );
+  color: var(--color-foreground);
+}
+
+.skill-coverage-node:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.skill-coverage-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-muted-foreground);
+}
+
+.skill-coverage-node-covered .skill-coverage-dot {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 14%, transparent);
+}
+
+.skill-workspace-list {
+  display: grid;
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.skill-workspace-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-surface);
+  transition: background-color 0.18s ease;
+}
+
+.skill-workspace-card:hover,
+.skill-workspace-card-selected {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 6%,
+    var(--color-surface)
+  );
+}
+
+.skill-workspace-card > [role="checkbox"] {
+  margin-top: 0.45rem;
+}
+
+.skill-workspace-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 34%, var(--color-border));
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.skill-workspace-mark:hover {
+  background: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+
+.skill-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0.08rem 0.45rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 23%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-primary) 7%, transparent);
+  color: var(--color-muted-foreground);
+  font-size: 0.65rem;
+}
+
+.skill-agent-chip-more {
+  cursor: pointer;
+}
+
+.skill-agent-chip-more:hover {
+  color: var(--color-primary);
+}
+
+.skill-workspace-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
+.skill-workspace-card-actions > :first-child {
+  min-width: 5.4rem;
+  margin-right: 0.25rem;
+}
+
+/* Shared V3 chrome: softer workspace depth from the latest prototype. These
+   tokens are visual-only and keep every existing theme's semantic colors. */
+:root {
+  --elev-1:
+    0 1px 1px oklch(0 0 0 / 0.34), 0 10px 26px -18px oklch(0 0 0 / 0.78);
+  --elev-2:
+    0 2px 6px oklch(0 0 0 / 0.42), 0 22px 48px -24px oklch(0 0 0 / 0.88);
+  --hairline: inset 0 1px 0 oklch(1 0 0 / 0.055);
+}
+
+.theme-light {
+  --elev-1:
+    0 1px 2px oklch(0.4 0.02 258 / 0.08),
+    0 8px 22px -14px oklch(0.4 0.02 258 / 0.28);
+  --elev-2:
+    0 2px 6px oklch(0.4 0.02 258 / 0.1),
+    0 18px 40px -20px oklch(0.4 0.02 258 / 0.38);
+  --hairline: inset 0 1px 0 oklch(1 0 0 / 0.9);
+}
+
+.tt-app-shell {
+  background:
+    radial-gradient(
+      circle at 88% -8%,
+      color-mix(in oklab, var(--color-primary) 9%, transparent),
+      transparent 30rem
+    ),
+    var(--color-background);
+}
+
+.tt-sidebar {
+  box-shadow: 8px 0 28px -24px oklch(0 0 0 / 0.9);
+}
+
+.tt-shell-header {
+  background: color-mix(in oklab, var(--color-background) 82%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 -1px 0
+    color-mix(in oklab, var(--color-foreground) 5%, transparent);
+}
+
+.tt-brand-mark {
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.tt-nav-item[aria-current="page"] {
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+}
+
+.tt-panel,
+.tt-metric,
+.tt-empty-state {
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.tt-panel:hover,
+.tt-metric:hover {
+  box-shadow: var(--elev-2), var(--hairline);
+}
+
+.tt-panel > header {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-2) 48%, transparent),
+    transparent 70%
+  );
+}
+
+@media (max-width: 760px) {
+  .skill-workspace-health {
+    padding-top: 0.7rem;
+    padding-left: 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .skill-workspace-card {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .skill-workspace-card-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+}
+
 /* Dashboard trend summary row */
 .dashboard-trend-summary {
   display: grid;
