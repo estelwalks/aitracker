@@ -76,8 +76,11 @@ test("formatMoney: 币种不随语言变, 金额分位规则保留", () => {
 
 test("formatTokens: K/M/B 缩写与语言无关", () => {
   assert.equal(formatTokens("zh-CN", 999), "999");
+  assert.equal(formatTokens("zh-CN", 1000), "1K");
   assert.equal(formatTokens("en-US", 1500), "1.5K");
   assert.equal(formatTokens("zh-CN", 1_234_567), "1.23M");
+  assert.equal(formatTokens("zh-CN", 780_000_000), "780M");
+  assert.equal(formatTokens("en-US", 1_200_000_000), "1.2B");
   assert.equal(formatTokens("en-US", 2_000_000_000), "2B");
   assert.equal(formatTokens("zh-CN", 12_345), "12.3K"); // 与旧 trimFixed 行为一致
   assert.equal(formatTokens("zh-CN", Number.NaN), "—");

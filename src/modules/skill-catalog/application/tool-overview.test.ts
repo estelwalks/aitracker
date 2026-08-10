@@ -5,10 +5,26 @@ import { buildToolOverview } from "./tool-overview.ts";
 import type { DashboardV2Snapshot } from "../../dashboard/contracts.ts";
 import { APP_ID } from "../../../lib/app-config.ts";
 
+const codexEvidence = {
+  textResponses: true,
+  toolCalls: true,
+  skillCalls: true,
+  toolOutputCalls: true,
+  reasoningTokens: true,
+  systemPromptTokens: false,
+} as const;
+
+const emptyWorkflow = { turns: 0, editTurns: 0, subagentCalls: 0 } as const;
+
 const input: DashboardV2Snapshot = {
   generatedAt: "2026-08-10T12:00:00.000Z",
   mode: "real",
   pricingAvailable: false,
+  outputAvailability: {
+    securityRuns: { count: null, available: false },
+    distillationOutputs: { count: null, available: false },
+    dailyReports: { count: null, available: false },
+  },
   skills: { available: true, count: 2, generatedAt: null },
   sessions: {
     available: true,
@@ -19,14 +35,44 @@ const input: DashboardV2Snapshot = {
         project: APP_ID,
         date: "2026-08-10",
         count: 2,
+        turns: 4,
+        editTurns: 1,
+        subagentCalls: 3,
       },
     ],
-    bySourceDay: [{ source: "codex", date: "2026-08-10", count: 2 }],
+    bySourceDay: [
+      {
+        source: "codex",
+        date: "2026-08-10",
+        count: 2,
+        turns: 4,
+        editTurns: 1,
+        subagentCalls: 3,
+      },
+    ],
   },
   tools: [
-    { id: "codex", name: "Codex CLI", available: true, detected: true },
-    { id: "cursor", name: "Cursor", available: true, detected: false },
-    { id: "other", name: "Other", available: false, detected: false },
+    {
+      id: "codex",
+      name: "Codex CLI",
+      available: true,
+      detected: true,
+      usageSupport: "native",
+    },
+    {
+      id: "cursor",
+      name: "Cursor",
+      available: true,
+      detected: false,
+      usageSupport: "adapter",
+    },
+    {
+      id: "other",
+      name: "Other",
+      available: false,
+      detected: false,
+      usageSupport: "unsupported",
+    },
   ],
   events: [
     {
@@ -46,6 +92,7 @@ const input: DashboardV2Snapshot = {
         skillCalls: 0,
         toolOutputCalls: 0,
       },
+      evidence: codexEvidence,
     },
     {
       source: "codex",
@@ -64,6 +111,7 @@ const input: DashboardV2Snapshot = {
         skillCalls: 0,
         toolOutputCalls: 0,
       },
+      evidence: codexEvidence,
     },
   ],
 };
@@ -87,6 +135,7 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
       tokens: claude.tokens,
       events: claude.events,
       sessions: claude.sessions,
+      subagentCalls: claude.subagentCalls,
       cacheRate: claude.cacheRate,
       skillUsage: claude.skillUsage,
     },
@@ -95,6 +144,7 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
       tokens: 0,
       events: 0,
       sessions: 0,
+      subagentCalls: 0,
       cacheRate: null,
       skillUsage: { observed: false, calls: 0 },
     },
@@ -102,6 +152,10 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   assert.equal(view.cards[1]?.tokens, 150);
   assert.equal(view.cards[1]?.events, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.sessions, 2);
+  assert.equal(
+    view.cards.find((card) => card.id === "codex")?.subagentCalls,
+    3,
+  );
   assert.equal(view.cards.find((card) => card.id === "codex")?.cacheRate, 0);
   assert.equal(view.cards.find((card) => card.id === "codex")?.messages, 2);
   assert.equal(view.projects[0]?.sessions, 2);
@@ -140,6 +194,7 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
           name: "Claude Code",
           available: false,
           detected: true,
+          usageSupport: "native",
         },
         ...input.tools,
       ],
@@ -161,6 +216,7 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
     events: 0,
     share: 0,
     sessions: 0,
+    subagentCalls: 0,
     cacheRate: null,
     messages: null,
     lastActiveAt: null,
@@ -200,7 +256,7 @@ test("detail rows retain real priced cost semantics when pricing is available", 
   });
 });
 
-test("tool card names use the server-projected registry display name", () => {
+test("tool card names retain the canonical product labels", () => {
   const view = buildToolOverview(
     {
       ...input,
@@ -214,10 +270,10 @@ test("tool card names use the server-projected registry display name", () => {
     "2026-08-10",
   );
 
-  assert.equal(view.selected?.name, "Configured Codex");
+  assert.equal(view.selected?.name, "Codex CLI");
   assert.equal(
     view.cards.find((card) => card.id === "codex")?.name,
-    "Configured Codex",
+    "Codex CLI",
   );
   assert.equal(
     view.cards.find((card) => card.id === "claude-code")?.name,
@@ -243,7 +299,12 @@ test("tool overview selection and all details use the same custom range", () => 
         ...input.sessions,
         bySourceDay: [
           ...input.sessions.bySourceDay,
-          { source: "cursor", date: "2026-08-09", count: 9 },
+          {
+            source: "cursor",
+            date: "2026-08-09",
+            count: 9,
+            ...emptyWorkflow,
+          },
         ],
       },
     },
@@ -261,6 +322,73 @@ test("tool overview selection and all details use the same custom range", () => 
   assert.equal(view.projects[0]?.key, APP_ID);
   assert.equal(view.sessions, 2);
   assert.equal(view.cards.length, 2);
+});
+
+test("tool overview fills natural days and keeps token composition mutually exclusive", () => {
+  const reasoningInput: DashboardV2Snapshot = {
+    ...input,
+    events: [
+      {
+        ...input.events[0]!,
+        inputTokens: 60,
+        cachedInputTokens: 20,
+        cacheCreationInputTokens: 10,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+        totalTokens: 110,
+      },
+    ],
+  };
+  const view = buildToolOverview(
+    reasoningInput,
+    "codex",
+    "custom",
+    "2026-08-09",
+    "2026-08-11",
+  );
+
+  assert.deepEqual(view.trend, [
+    { date: "2026-08-09", tokens: 0 },
+    { date: "2026-08-10", tokens: 110 },
+    { date: "2026-08-11", tokens: 0 },
+  ]);
+  assert.equal(view.naturalDays, 3);
+  assert.deepEqual(view.tokenComposition, {
+    inputTokens: 60,
+    cachedInputTokens: 20,
+    cacheCreationInputTokens: 10,
+    outputTokens: 15,
+    reasoningOutputTokens: 5,
+  });
+  assert.equal(
+    Object.values(view.tokenComposition).reduce((sum, value) => sum + value, 0),
+    view.totalTokens,
+  );
+});
+
+test("Claude tool outputs remain unavailable instead of becoming an observed zero", () => {
+  const claudeEvent: DashboardV2Snapshot["events"][number] = {
+    ...input.events[0]!,
+    source: "claude-code",
+    evidence: {
+      ...codexEvidence,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+    },
+  };
+  const view = buildToolOverview(
+    { ...input, events: [claudeEvent] },
+    "claude-code",
+    "today",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  const outputs = view.context.find((row) => row.key === "toolOutputCalls");
+  assert.equal(outputs?.available, false);
+  assert.equal(outputs?.count, null);
+  assert.equal(view.reasoningAvailable, false);
+  assert.deepEqual(view.skillUsage, { observed: true, calls: 0 });
 });
 
 test("tool overview stays within renderer-safe aggregate fields", () => {

@@ -43,6 +43,8 @@ export interface ToolOverviewCard {
   readonly share: number;
   /** Null is an unavailable session source, never a synthetic zero. */
   readonly sessions: number | null;
+  /** Null means the session scanner is unavailable. */
+  readonly subagentCalls: number | null;
   /** Null means the source did not expose a cacheable input denominator. */
   readonly cacheRate: number | null;
   /** Null is no event evidence; zero is an observed range with no responses. */
@@ -75,7 +77,8 @@ export interface ToolOverviewBreakdownRow {
 
 export interface ToolOverviewContextRow {
   readonly key: keyof DashboardV2ContextCounts;
-  readonly count: number;
+  readonly count: number | null;
+  readonly available: boolean;
 }
 
 export interface ToolOverviewTokenComposition {
@@ -100,6 +103,7 @@ export interface ToolOverviewView {
   readonly availableToolCount: number;
   readonly totalTokens: number;
   readonly totalEvents: number;
+  readonly naturalDays: number;
   readonly sessions: number | null;
   readonly cacheRate: number | null;
   readonly trend: readonly ToolOverviewTrendPoint[];
@@ -107,6 +111,8 @@ export interface ToolOverviewView {
   readonly projects: readonly ToolOverviewBreakdownRow[];
   readonly context: readonly ToolOverviewContextRow[];
   readonly tokenComposition: ToolOverviewTokenComposition;
+  readonly reasoningAvailable: boolean;
+  readonly systemPromptAvailable: boolean;
   readonly skillUsage: ToolOverviewSkillUsage;
 }
 
@@ -188,6 +194,34 @@ function trend(events: readonly DashboardV2Event[]): ToolOverviewTrendPoint[] {
     .sort((left, right) => left.date.localeCompare(right.date));
 }
 
+function completeTrend(
+  events: readonly DashboardV2Event[],
+  period: UsagePeriod,
+  from?: string,
+  to?: string,
+): ToolOverviewTrendPoint[] {
+  const observed = trend(events);
+  const byDate = new Map(observed.map((point) => [point.date, point]));
+  const range = resolveUsageRange(period, from, to);
+  if (!range.valid || !range.fromDate || !range.toDate) return [];
+  const start =
+    period === "all"
+      ? observed[0]
+        ? new Date(`${observed[0].date}T00:00:00`)
+        : range.toDate
+      : range.fromDate;
+  const points: ToolOverviewTrendPoint[] = [];
+  for (
+    let cursor = new Date(start);
+    cursor <= range.toDate;
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    points.push(byDate.get(date) ?? { date, tokens: 0 });
+  }
+  return points;
+}
+
 function context(
   events: readonly DashboardV2Event[],
 ): ToolOverviewContextRow[] {
@@ -197,14 +231,28 @@ function context(
     skillCalls: 0,
     toolOutputCalls: 0,
   };
+  const evidence: Record<keyof DashboardV2ContextCounts, boolean> = {
+    textResponses: false,
+    toolCalls: false,
+    skillCalls: false,
+    toolOutputCalls: false,
+  };
   for (const event of events) {
     counts.textResponses += event.context.textResponses;
     counts.toolCalls += event.context.toolCalls;
     counts.skillCalls += event.context.skillCalls;
     counts.toolOutputCalls += event.context.toolOutputCalls;
+    evidence.textResponses ||= event.evidence.textResponses;
+    evidence.toolCalls ||= event.evidence.toolCalls;
+    evidence.skillCalls ||= event.evidence.skillCalls;
+    evidence.toolOutputCalls ||= event.evidence.toolOutputCalls;
   }
   return (Object.keys(counts) as (keyof DashboardV2ContextCounts)[]).map(
-    (key) => ({ key, count: counts[key] }),
+    (key) => ({
+      key,
+      count: evidence[key] ? counts[key] : null,
+      available: evidence[key],
+    }),
   );
 }
 
@@ -217,7 +265,11 @@ function tokenComposition(
       cachedInputTokens: total.cachedInputTokens + event.cachedInputTokens,
       cacheCreationInputTokens:
         total.cacheCreationInputTokens + event.cacheCreationInputTokens,
-      outputTokens: total.outputTokens + event.outputTokens,
+      // output includes reasoning in current provider schemas; expose the
+      // mutually-exclusive assistant-response slice to avoid double counting.
+      outputTokens:
+        total.outputTokens +
+        Math.max(0, event.outputTokens - event.reasoningOutputTokens),
       reasoningOutputTokens:
         total.reasoningOutputTokens + event.reasoningOutputTokens,
     }),
@@ -236,7 +288,7 @@ function skillUsage(
 ): ToolOverviewSkillUsage {
   // V2 projects source logs into aggregate counts. A zero is therefore
   // observed evidence whenever an event exists; an empty event set is not.
-  const observed = events.length > 0;
+  const observed = events.some((event) => event.evidence.skillCalls);
   return {
     observed,
     calls: events.reduce((total, event) => total + event.context.skillCalls, 0),
@@ -293,6 +345,23 @@ function sessionsForSource(
   );
 }
 
+function subagentsForSource(
+  snapshot: DashboardV2Snapshot,
+  source: string,
+  period: UsagePeriod,
+  from?: string,
+  to?: string,
+): number | null {
+  if (!snapshot.sessions.available) return null;
+  return snapshot.sessions.bySourceDay.reduce(
+    (total, row) =>
+      row.source === source && dateWithinRange(row.date, period, from, to)
+        ? total + row.subagentCalls
+        : total,
+    0,
+  );
+}
+
 function projectSessionsForSource(
   snapshot: DashboardV2Snapshot,
   source: string,
@@ -336,7 +405,7 @@ export function buildToolOverview(
       // manifest, whose name is the registry definition's `display.name`.
       // Keep the fixed text only for a missing source projection so the
       // two-card layout remains usable while a scanner is unavailable.
-      name: scannedTool?.name ?? configuredTool.name,
+      name: configuredTool.name,
       available: scannedTool?.available ?? false,
       detected: scannedTool?.detected ?? false,
     };
@@ -366,14 +435,14 @@ export function buildToolOverview(
       events: events.length,
       share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
       sessions: sessionsForSource(snapshot, tool.id, period, from, to),
+      subagentCalls: subagentsForSource(snapshot, tool.id, period, from, to),
       cacheRate: cacheRate(events),
-      messages:
-        events.length === 0
-          ? null
-          : events.reduce(
-              (total, event) => total + event.context.textResponses,
-              0,
-            ),
+      messages: !events.some((event) => event.evidence.textResponses)
+        ? null
+        : events.reduce(
+            (total, event) => total + event.context.textResponses,
+            0,
+          ),
       lastActiveAt,
       skillUsage: skillUsage(events),
     };
@@ -405,11 +474,12 @@ export function buildToolOverview(
       0,
     ),
     totalEvents: selectedEvents.length,
+    naturalDays: completeTrend(selectedEvents, period, from, to).length,
     sessions: selected
       ? sessionsForSource(snapshot, selected.id, period, from, to)
       : null,
     cacheRate: cacheRate(selectedEvents),
-    trend: trend(selectedEvents),
+    trend: completeTrend(selectedEvents, period, from, to),
     models: rank(
       selectedEvents,
       (event) => event.model,
@@ -423,6 +493,12 @@ export function buildToolOverview(
     ),
     context: context(selectedEvents),
     tokenComposition: tokenComposition(selectedEvents),
+    reasoningAvailable: selectedEvents.some(
+      (event) => event.evidence.reasoningTokens,
+    ),
+    systemPromptAvailable: selectedEvents.some(
+      (event) => event.evidence.systemPromptTokens,
+    ),
     skillUsage: skillUsage(selectedEvents),
   };
 }

@@ -48,5 +48,5 @@ export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   detectRoots: def.detection.roots,
 }));
 
-/** Stable lowercase-kebab ids for the 27 visible catalog tools (legacy sources excluded). */
+/** Stable lowercase-kebab ids for the 29 visible catalog tools (legacy sources excluded). */
 export const AI_TOOL_IDS: readonly string[] = AI_TOOLS.map((tool) => tool.id);
