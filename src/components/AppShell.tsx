@@ -40,10 +40,11 @@ const nav: Array<{
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const [navQuery, setNavQuery] = useState("");
+  const [lastUpdated, setLastUpdated] = useState("—");
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
@@ -58,24 +59,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // This is deliberately derived in the client instead of shipping a stale
+  // prototype timestamp in the application chrome. It marks the current UI
+  // session becoming ready; data-owning modules render their own source times.
+  useEffect(() => {
+    setLastUpdated(
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: "short",
+        timeStyle: "medium",
+      }).format(new Date()),
+    );
+  }, [locale]);
+
   const visibleNav = nav.filter((item) =>
     t(item.label).toLocaleLowerCase().includes(navQuery.toLocaleLowerCase()),
   );
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
       <aside
-        className="fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200"
+        className="tt-sidebar fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200"
         style={{ width: collapsed ? 56 : sidebarWidth }}
       >
-        <div className="flex h-[72px] items-center gap-2 px-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
+        <div className="flex h-16 items-center gap-2.5 px-3">
+          <div className="tt-brand-mark flex size-9 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-bold tracking-[0.08em] text-primary-foreground">
             TT
           </div>
           {!collapsed && (
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-semibold">{APP_NAME}</div>
-              <div className="tt-num text-[10px] text-muted-foreground">
+              <div className="truncate text-sm font-semibold tracking-[0.02em]">
+                {APP_NAME}
+              </div>
+              <div className="tt-num mt-0.5 text-[10px] tracking-[0.08em] text-muted-foreground">
                 v{APP_VERSION}
               </div>
             </div>
@@ -105,7 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <nav className="flex-1 space-y-1 px-2">
+        <nav aria-label={APP_NAME} className="flex-1 space-y-1 px-2">
           {visibleNav.map((item) => {
             const active =
               item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
@@ -116,11 +131,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.to}
                 to={item.to}
                 title={label}
-                className={`relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm transition-colors ${
+                className={`tt-nav-item relative flex h-10 items-center gap-3 rounded-md px-2.5 text-sm transition-colors ${
                   active
                     ? "bg-primary/12 font-medium text-sidebar-accent-foreground"
                     : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 }`}
+                aria-current={active ? "page" : undefined}
               >
                 {active && (
                   <span className="absolute top-2 bottom-2 -left-2 w-[3px] rounded-r bg-primary" />
@@ -134,8 +150,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="border-t border-sidebar-border p-2">
           <button
+            type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            aria-expanded={!collapsed}
+            title={t("common.collapse")}
+            className="flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" strokeWidth={1.75} />
@@ -159,12 +178,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200"
         style={{ paddingLeft: collapsed ? 56 : sidebarWidth }}
       >
-        <main className="tt-scroll min-w-0 flex-1 px-3 py-5 pb-14 sm:px-5 md:px-8 2xl:px-10">
+        <main className="tt-app-main tt-scroll min-w-0 flex-1 px-3 py-5 pb-14 sm:px-5 md:px-8 2xl:px-10">
           <div className="tt-container">{children}</div>
         </main>
 
         <div
-          className="fixed right-0 bottom-0 z-20 flex h-8 items-center gap-3 overflow-hidden border-t border-border bg-sidebar px-3 text-[11px] whitespace-nowrap text-muted-foreground transition-[left] duration-200 md:gap-5 md:px-4"
+          className="tt-status-bar fixed right-0 bottom-0 z-20 flex h-8 items-center gap-3 overflow-hidden border-t border-border bg-sidebar px-3 text-[11px] whitespace-nowrap text-muted-foreground transition-[left] duration-200 md:gap-5 md:px-4"
           style={{ left: collapsed ? 56 : sidebarWidth }}
         >
           <span className="flex items-center gap-1.5">
@@ -176,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {t("common.dataCollectionLive")}
           </span>
           <span className="tt-num ml-auto shrink-0">
-            {t("common.lastUpdatedAt", { time: "2026-07-27 10:24:07" })}
+            {t("common.lastUpdatedAt", { time: lastUpdated })}
           </span>
         </div>
       </div>
