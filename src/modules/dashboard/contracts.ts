@@ -151,6 +151,27 @@ export interface DashboardV2OutputAvailability {
   readonly dailyReports: DashboardV2AvailabilityMetric;
 }
 
+/**
+ * Browser-safe projection of an optional server-generated dashboard insight.
+ * Configuration, endpoint, API key, provider request and raw response stay in
+ * the server adapter; this DTO only states whether a validated result exists.
+ */
+export interface DashboardAIInsightView {
+  readonly status:
+    "not-configured" | "idle" | "ready" | "failed" | "invalid-output";
+  readonly configured: boolean;
+  readonly generatedAt: string | null;
+  readonly model: string | null;
+  readonly insight: {
+    readonly headline: string;
+    readonly insights: readonly {
+      readonly title: string;
+      readonly detail: string;
+      readonly severity: "info" | "attention" | "risk";
+    }[];
+  } | null;
+}
+
 export interface DashboardV2Snapshot {
   readonly generatedAt: string;
   readonly mode: LocalUsageSnapshot["mode"];
@@ -298,6 +319,8 @@ export interface DashboardQuery {
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
   readonly activeInsightCount?: number;
+  /** Cache-only server projection; loading the dashboard never invokes a model. */
+  readonly aiInsight?: DashboardAIInsightView;
   readonly v2: DashboardV2Snapshot;
 }
 
