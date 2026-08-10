@@ -1,3 +1,4 @@
+import type { UsageReaderKey } from "../../tool-registry/contracts.ts";
 import type { LocalUsageSource } from "../types.ts";
 
 export type UsageLogFormat = "json" | "jsonl" | "sqlite";
@@ -24,6 +25,7 @@ export interface UsageFieldMapping {
 
 export interface UsageAdapterContract {
   source: LocalUsageSource;
+  reader: UsageReaderKey;
   paths: UsageAdapterPath[];
   mapping: UsageFieldMapping;
   query?: string;

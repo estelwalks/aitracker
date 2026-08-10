@@ -34,7 +34,24 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "unsupported"
+      "mode": "native",
+      "reader": "openclaw-session-v1",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".openclaw/agents",
+          "glob": "*/sessions/**/*.jsonl*",
+          "format": "jsonl"
+        },
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".openclaw/agents",
+          "glob": "*/session-sqlite-import-archive/**/*.jsonl*",
+          "format": "jsonl"
+        }
+      ]
     },
     "skills": "read-write",
     "agents": "unsupported",

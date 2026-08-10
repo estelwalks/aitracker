@@ -38,21 +38,14 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "adapter",
-      "reader": "generic",
+      "mode": "native",
+      "reader": "grok-turn-v1",
       "paths": [
         {
           "targets": ["macos", "windows10", "windows11", "linux"],
           "base": "home",
           "path": ".grok/sessions",
-          "glob": "**/*.jsonl",
-          "format": "jsonl"
-        },
-        {
-          "targets": ["macos", "windows10", "windows11", "linux"],
-          "base": "home",
-          "path": ".grok/logs",
-          "glob": "**/*.jsonl",
+          "glob": "**/updates.jsonl",
           "format": "jsonl"
         }
       ]

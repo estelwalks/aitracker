@@ -398,18 +398,55 @@ test("Grok: title precedence generated_title over session_summary, id from summa
       join(sessionDir, "updates.jsonl"),
       [
         JSON.stringify({
-          type: "turn_completed",
-          timestamp: "2026-08-01T11:00:00.000Z",
-          usage: {
-            modelUsage: [
-              {
-                modelId: "grok-4",
-                inputTokens: 80,
-                outputTokens: 30,
-                cachedInputTokens: 10,
-                reasoningOutputTokens: 7,
+          timestamp: 1785581940,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: { sessionUpdate: "tool_call", title: "Apply patch" },
+            _meta: {
+              eventId: "tool-current-1",
+              agentTimestampMs: 1785581940000,
+              "x.ai/tool": { name: "apply_patch" },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: 1785581970,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: { sessionUpdate: "tool_call", title: "Spawn subagent" },
+            _meta: {
+              eventId: "tool-current-2",
+              agentTimestampMs: 1785581970000,
+              "x.ai/tool": { name: "spawn_subagent" },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: 1785582000,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: {
+              sessionUpdate: "turn_completed",
+              usage: {
+                modelUsage: {
+                  "grok-4": {
+                    inputTokens: 80,
+                    outputTokens: 30,
+                    cachedReadTokens: 10,
+                    reasoningTokens: 7,
+                    totalTokens: 110,
+                  },
+                },
               },
-            ],
+            },
+            _meta: {
+              eventId: "turn-current-1",
+              agentTimestampMs: 1785582000000,
+              totalTokens: 999999,
+            },
           },
         }),
       ].join("\n") + "\n",
@@ -423,11 +460,13 @@ test("Grok: title precedence generated_title over session_summary, id from summa
     assert.equal(session.title, "Build dashboard");
     assert.equal(session.model, "grok-4");
     assert.equal(session.projectKey, "grokproj");
-    assert.equal(session.totals.inputTokens, 80);
+    assert.equal(session.totals.inputTokens, 70);
     assert.equal(session.totals.cachedInputTokens, 10);
     assert.equal(session.totals.outputTokens, 30);
     assert.equal(session.totals.reasoningOutputTokens, 7);
-    assert.equal(session.totals.totalTokens, 120);
+    assert.equal(session.totals.totalTokens, 110);
+    assert.equal(session.editTurns, 1);
+    assert.equal(session.subagentCalls, 1);
     assert.equal(session.resumeCommand, `grok --resume ${sessionId}`);
     assertPrivacyClean(session);
   });

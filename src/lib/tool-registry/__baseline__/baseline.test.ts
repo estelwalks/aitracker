@@ -29,7 +29,12 @@ test("baseline tools match the live AI_TOOLS catalog (27 baseline + aipy/cline)"
     const live = AI_TOOLS.find((tool) => tool.id === expected.id);
     assert.ok(live, `baseline tool "${expected.id}" missing from AI_TOOLS`);
     assert.equal(live.nameZh, expected.nameZh);
-    assert.deepEqual([...live.detectRoots], [...expected.detectRoots]);
+    assert.deepEqual(
+      [...live.detectRoots],
+      expected.id === "gemini-cli"
+        ? [".gemini/tmp"]
+        : [...expected.detectRoots],
+    );
   }
   // The 27 baseline tools come first in canonical order; the extensions follow.
   assert.deepEqual(
@@ -45,7 +50,12 @@ test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
     // was labeled "adapter" by the frozen catalog constants but its declared
     // usage mode is native (`workbuddy-native`); the registry-derived value is
     // the correction.
-    if (tool.id === "workbuddy") {
+    if (
+      tool.id === "workbuddy" ||
+      tool.id === "gemini-cli" ||
+      tool.id === "grok" ||
+      tool.id === "openclaw"
+    ) {
       assert.equal(usageLogParsingFor(tool.id), "native");
       continue;
     }
@@ -74,25 +84,47 @@ test("baseline skill agents match the live SKILL_AGENT_RULES (9 agents)", () => 
   }
 });
 
-test("baseline usage adapters match the live BUILTIN_USAGE_ADAPTERS (12 sources)", () => {
-  assert.equal(BUILTIN_USAGE_ADAPTERS.length, BASELINE_USAGE_ADAPTERS.length);
+test("baseline usage adapters remain represented and OpenClaw adds one native source", () => {
+  assert.equal(
+    BUILTIN_USAGE_ADAPTERS.length,
+    BASELINE_USAGE_ADAPTERS.length + 1,
+  );
   for (const expected of BASELINE_USAGE_ADAPTERS) {
     const live = BUILTIN_USAGE_ADAPTERS.find(
       (adapter) => adapter.source === expected.source,
     );
     assert.ok(live, `baseline adapter "${expected.source}" missing`);
-    assert.deepEqual(
-      live.paths.map((path) => ({
-        root: path.root,
-        glob: path.glob,
-        format: path.format,
-      })),
-      expected.paths.map((path) => ({
-        root: path.root,
-        glob: path.glob,
-        format: path.format,
-      })),
-    );
+    const actualPaths = live.paths.map((path) => ({
+      root: path.root,
+      glob: path.glob,
+      format: path.format,
+    }));
+    if (expected.source === "gemini-cli") {
+      assert.deepEqual(actualPaths, [
+        {
+          root: ".gemini/tmp",
+          glob: "**/chats/session-*.json",
+          format: "json",
+        },
+      ]);
+    } else if (expected.source === "grok") {
+      assert.deepEqual(actualPaths, [
+        {
+          root: ".grok/sessions",
+          glob: "**/updates.jsonl",
+          format: "jsonl",
+        },
+      ]);
+    } else {
+      assert.deepEqual(
+        actualPaths,
+        expected.paths.map((path) => ({
+          root: path.root,
+          glob: path.glob,
+          format: path.format,
+        })),
+      );
+    }
     const customMapping =
       expected.source === "aipy" || expected.source === "workbuddy";
     assert.equal(customMapping, expected.customMapping);
@@ -102,6 +134,11 @@ test("baseline usage adapters match the live BUILTIN_USAGE_ADAPTERS (12 sources)
     );
     assert.equal(live.maxFileSizeBytes, expected.maxFileSizeBytes);
   }
+  assert.equal(
+    BUILTIN_USAGE_ADAPTERS.find((adapter) => adapter.source === "openclaw")
+      ?.reader,
+    "openclaw-session-v1",
+  );
 });
 
 test("baseline session sources match the live resume command templates", () => {

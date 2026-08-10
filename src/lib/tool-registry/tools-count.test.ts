@@ -38,7 +38,12 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
     const def = registry.byId.get(expected.id);
     assert.ok(def, `tool "${expected.id}" missing from registry`);
     assert.equal(def.display.nameZh, expected.nameZh);
-    assert.deepEqual([...def.detection.roots], [...expected.detectRoots]);
+    assert.deepEqual(
+      [...def.detection.roots],
+      expected.id === "gemini-cli"
+        ? [".gemini/tmp"]
+        : [...expected.detectRoots],
+    );
   }
   // The user extension tools are present and visible.
   for (const id of EXTENSION_IDS) {
@@ -73,14 +78,19 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
   ];
-  // 12 tools carry a usage capability: 3 native + 7 catalog adapter + 2 extension adapter.
-  const BASELINE_USAGE_NATIVE = new Set(["claude-code", "codex", "workbuddy"]);
+  // 13 tools carry a usage capability: 6 native + 5 catalog adapter + 2 extension adapter.
+  const BASELINE_USAGE_NATIVE = new Set([
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "grok",
+    "openclaw",
+    "workbuddy",
+  ]);
   const BASELINE_USAGE_ADAPTER = new Set([
     "cursor",
-    "gemini-cli",
     "kimi-code",
     "opencode",
-    "grok",
     "github-copilot",
     "roo-code",
     "aipy",
