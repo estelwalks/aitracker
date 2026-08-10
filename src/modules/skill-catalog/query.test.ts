@@ -14,6 +14,7 @@ test("skills route consumes opaque installation refs only", () => {
   assert.match(source, /installationRef/);
   assert.doesNotMatch(source, /source:\s*\{[^}]*label/);
   assert.match(source, /getSkillWorkspace/);
+  assert.match(source, /showWorkspace=\{false\}/);
 });
 
 test("operations workspace does not render paths, roots, or raw source labels", () => {

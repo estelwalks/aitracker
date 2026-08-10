@@ -92,6 +92,8 @@ import {
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
   usage: DashboardReadModel;
+  /** The prototype-aligned `/agents` route only renders the tool dashboard. */
+  showWorkspace?: boolean;
 };
 
 const PAGE_SIZE = 25;
@@ -127,7 +129,11 @@ type UninstallTarget =
   | { type: "single"; skill: LocalSkill }
   | { type: "batch"; skills: LocalSkill[] };
 
-export function SkillsPage({ initial, usage }: SkillsPageProps) {
+export function SkillsPage({
+  initial,
+  usage,
+  showWorkspace = true,
+}: SkillsPageProps) {
   const { t, format } = useI18n();
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial.snapshot);
   const [workspace, setWorkspace] = useState(initial.workspace);
@@ -1123,1037 +1129,1078 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
         </Panel>
       </section>
 
-      <PageHeader
-        title={t("skills.agentOverview.workspaceTitle")}
-        desc={t("skills.agentOverview.workspaceDesc")}
-      >
-        <TTButton disabled={busy} onClick={() => void rescan()}>
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-          {t("skills.actions.rescan")}
-        </TTButton>
-      </PageHeader>
+      {showWorkspace ? (
+        <>
+          <PageHeader
+            title={t("skills.agentOverview.workspaceTitle")}
+            desc={t("skills.agentOverview.workspaceDesc")}
+          >
+            <TTButton disabled={busy} onClick={() => void rescan()}>
+              <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
+              {t("skills.actions.rescan")}
+            </TTButton>
+          </PageHeader>
 
-      <section className="skill-workspace-hero mb-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] font-medium tracking-[0.13em] text-primary uppercase">
-            <Sparkles className="size-3.5" />
-            {t("skills.workspace.eyebrow")}
-          </div>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {t("skills.workspace.description", {
-              time: format.formatDateTime(summary.lastScannedAt, false),
-            })}
-          </p>
-        </div>
-        <div className="skill-workspace-health">
-          <span className="tt-label">{t("skills.workspace.coverage")}</span>
-          <span className="tt-num text-xl text-foreground">
-            {format.formatNumber(summary.coveragePercent)}%
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            {t("skills.workspace.coverageHint", {
-              active: format.formatNumber(summary.activeAgentCount),
-              available: format.formatNumber(summary.availableAgentCount),
-            })}
-          </span>
-        </div>
-      </section>
+          <section className="skill-workspace-hero mb-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-medium tracking-[0.13em] text-primary uppercase">
+                <Sparkles className="size-3.5" />
+                {t("skills.workspace.eyebrow")}
+              </div>
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                {t("skills.workspace.description", {
+                  time: format.formatDateTime(summary.lastScannedAt, false),
+                })}
+              </p>
+            </div>
+            <div className="skill-workspace-health">
+              <span className="tt-label">{t("skills.workspace.coverage")}</span>
+              <span className="tt-num text-xl text-foreground">
+                {format.formatNumber(summary.coveragePercent)}%
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {t("skills.workspace.coverageHint", {
+                  active: format.formatNumber(summary.activeAgentCount),
+                  available: format.formatNumber(summary.availableAgentCount),
+                })}
+              </span>
+            </div>
+          </section>
 
-      <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label={t("skills.summary.assets")}
-          value={format.formatNumber(summary.skillCount)}
-          hint={t("skills.summary.installations", {
-            count: format.formatNumber(summary.installationCount),
-          })}
-        />
-        <Stat
-          label={t("skills.summary.agentCoverage")}
-          value={`${format.formatNumber(summary.activeAgentCount)} / ${format.formatNumber(summary.availableAgentCount)}`}
-          hint={t("skills.summary.coverageHint")}
-        />
-        <Stat
-          label={t("skills.summary.updates")}
-          value={format.formatNumber(summary.updateAvailableCount)}
-          hint={t("skills.summary.updatesHint")}
-        />
-        <Stat
-          label={t("skills.summary.unassigned")}
-          value={format.formatNumber(summary.unassignedSkillCount)}
-          hint={t("skills.summary.unassignedHint")}
-        />
-      </div>
-
-      <Panel
-        className="mb-4"
-        title={t("skills.workspace.coverage")}
-        action={
-          <span className="text-[11px] text-muted-foreground">
-            {t("skills.workspace.coveragePanelHint")}
-          </span>
-        }
-        bodyClassName="p-0"
-      >
-        <div className="skill-coverage-rail">
-          {workspace.coverage.map((item) => (
-            <button
-              key={item.agent}
-              type="button"
-              disabled={!item.installed}
-              onClick={() => item.installed && setAgent(item.agent)}
-              className={cn(
-                "skill-coverage-node",
-                agent === item.agent && "skill-coverage-node-active",
-                item.state === "covered" && "skill-coverage-node-covered",
-              )}
-            >
-              <span className="skill-coverage-dot" aria-hidden="true" />
-              <span className="min-w-0 truncate font-medium">{item.agent}</span>
-              <span className="tt-num text-[11px]">{item.skillCount}</span>
-            </button>
-          ))}
-        </div>
-      </Panel>
-
-      {/* Filter bar */}
-      <div className="skills-filter-panel mb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">{t("skills.pageHeader")}</div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {t("skills.pollingHint")}
-            </p>
-          </div>
-          <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
-            <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("skills.searchPlaceholder")}
-              className="h-10 w-full rounded-lg border border-border bg-background/70 pl-9 text-[13px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+          <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label={t("skills.summary.assets")}
+              value={format.formatNumber(summary.skillCount)}
+              hint={t("skills.summary.installations", {
+                count: format.formatNumber(summary.installationCount),
+              })}
+            />
+            <Stat
+              label={t("skills.summary.agentCoverage")}
+              value={`${format.formatNumber(summary.activeAgentCount)} / ${format.formatNumber(summary.availableAgentCount)}`}
+              hint={t("skills.summary.coverageHint")}
+            />
+            <Stat
+              label={t("skills.summary.updates")}
+              value={format.formatNumber(summary.updateAvailableCount)}
+              hint={t("skills.summary.updatesHint")}
+            />
+            <Stat
+              label={t("skills.summary.unassigned")}
+              value={format.formatNumber(summary.unassignedSkillCount)}
+              hint={t("skills.summary.unassignedHint")}
             />
           </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setAgent("all")}
-            className={`skill-filter-chip ${agent === "all" ? "skill-filter-chip-active" : ""}`}
-          >
-            {t("skills.filter.agentAll")}
-            <span>{format.formatNumber(snapshot.skills.length)}</span>
-          </button>
-          {SKILL_AGENTS.filter((name) => (agentCounts.get(name) ?? 0) > 0).map(
-            (name) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => setAgent(name)}
-                className={`skill-filter-chip ${agent === name ? "skill-filter-chip-active" : ""}`}
-              >
-                {name}
-                <span>{format.formatNumber(agentCounts.get(name) ?? 0)}</span>
-              </button>
-            ),
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-border/70 pt-3">
-          <select
-            aria-label={t("skills.filter.source")}
-            value={source}
-            onChange={(event) =>
-              setSource(event.target.value as AssetSourceFilter)
-            }
-            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
-          >
-            <option value="all">{t("skills.filter.sourceAll")}</option>
-            <option value="frontmatter">
-              {t("skills.filter.sourceRecorded")}
-            </option>
-            <option value="market">{t("skills.filter.sourceManaged")}</option>
-            <option value="unknown">
-              {t("skills.filter.sourceUnclassified")}
-            </option>
-          </select>
-          <select
-            aria-label={t("skills.filter.updateStatus")}
-            value={updateStatus}
-            onChange={(event) =>
-              setUpdateStatus(event.target.value as AssetUpdateFilter)
-            }
-            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
-          >
-            <option value="all">{t("skills.filter.updateAll")}</option>
-            <option value="available">{updateStatusLabel("available")}</option>
-            <option value="current">{updateStatusLabel("current")}</option>
-            <option value="unknown">{updateStatusLabel("unknown")}</option>
-          </select>
-          <select
-            aria-label={t("skills.filter.sort")}
-            value={sort}
-            onChange={(event) => setSort(event.target.value as AssetSortKey)}
-            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
-          >
-            {sortOptions.map((option) => (
-              <option key={option} value={option}>
-                {sortLabel(option)}
-              </option>
-            ))}
-          </select>
-          <TTButton
-            size="sm"
-            variant="ghost"
-            onClick={() =>
-              setSortDir((direction) => (direction === "asc" ? "desc" : "asc"))
-            }
-            title={t("skills.filter.sortDirection")}
-          >
-            {sortDir === "asc" ? (
-              <ArrowUp className="size-3" />
-            ) : (
-              <ArrowDown className="size-3" />
-            )}
-            {sortDir === "asc"
-              ? t("skills.sort.ascending")
-              : t("skills.sort.descending")}
-          </TTButton>
-        </div>
-      </div>
 
-      {/* Asset operation cards: rendered from browser-safe workspace items only. */}
-      <Panel
-        title={t("skills.table.title", {
-          count: format.formatNumber(assets.length),
-        })}
-        bodyClassName="p-0"
-      >
-        {assets.length === 0 ? (
-          <div className="p-4">
-            <EmptyState
-              title={t("skills.empty.title")}
-              desc={t("skills.empty.desc")}
-              actions={
-                <>
-                  <Link to="/settings">
-                    <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
-                  </Link>
-                  <Link to="/market">
-                    <TTButton>{t("skills.actions.goMarket")}</TTButton>
-                  </Link>
-                </>
-              }
-            />
-          </div>
-        ) : (
-          <>
-            {/* Batch action bar */}
-            <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2">
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Checkbox
-                  checked={
-                    allPagedChecked
-                      ? true
-                      : checkedPaged.length > 0
-                        ? "indeterminate"
-                        : false
-                  }
-                  onCheckedChange={() => toggleAllPaged()}
-                  disabled={busy}
-                  aria-label={t("skills.batch.selectPage")}
+          <Panel
+            className="mb-4"
+            title={t("skills.workspace.coverage")}
+            action={
+              <span className="text-[11px] text-muted-foreground">
+                {t("skills.workspace.coveragePanelHint")}
+              </span>
+            }
+            bodyClassName="p-0"
+          >
+            <div className="skill-coverage-rail">
+              {workspace.coverage.map((item) => (
+                <button
+                  key={item.agent}
+                  type="button"
+                  disabled={!item.installed}
+                  onClick={() => item.installed && setAgent(item.agent)}
+                  className={cn(
+                    "skill-coverage-node",
+                    agent === item.agent && "skill-coverage-node-active",
+                    item.state === "covered" && "skill-coverage-node-covered",
+                  )}
+                >
+                  <span className="skill-coverage-dot" aria-hidden="true" />
+                  <span className="min-w-0 truncate font-medium">
+                    {item.agent}
+                  </span>
+                  <span className="tt-num text-[11px]">{item.skillCount}</span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+
+          {/* Filter bar */}
+          <div className="skills-filter-panel mb-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">
+                  {t("skills.pageHeader")}
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {t("skills.pollingHint")}
+                </p>
+              </div>
+              <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+                <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("skills.searchPlaceholder")}
+                  className="h-10 w-full rounded-lg border border-border bg-background/70 pl-9 text-[13px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
                 />
-                {t("skills.batch.selectPage")}
-              </label>
-              <span className="text-xs text-muted-foreground">
-                {t("skills.batch.selectedCount", {
-                  count: format.formatNumber(checkedSkills.length),
-                })}
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <TTButton
-                  size="sm"
-                  disabled={busy || checkedSkills.length === 0}
-                  onClick={() => openSyncScope(checkedSkills)}
-                >
-                  <Copy className="size-3" /> {t("skills.batch.sync")}
-                </TTButton>
-                <TTButton
-                  size="sm"
-                  variant="danger"
-                  disabled={busy || checkedSkills.length === 0}
-                  onClick={openBatchUninstall}
-                >
-                  <Trash2 className="size-3" /> {t("skills.batch.uninstall")}
-                </TTButton>
-                <TTButton
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy || checkedSkills.length === 0}
-                  onClick={clearSelection}
-                >
-                  {t("skills.batch.clearSelection")}
-                </TTButton>
               </div>
             </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAgent("all")}
+                className={`skill-filter-chip ${agent === "all" ? "skill-filter-chip-active" : ""}`}
+              >
+                {t("skills.filter.agentAll")}
+                <span>{format.formatNumber(snapshot.skills.length)}</span>
+              </button>
+              {SKILL_AGENTS.filter(
+                (name) => (agentCounts.get(name) ?? 0) > 0,
+              ).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setAgent(name)}
+                  className={`skill-filter-chip ${agent === name ? "skill-filter-chip-active" : ""}`}
+                >
+                  {name}
+                  <span>{format.formatNumber(agentCounts.get(name) ?? 0)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border/70 pt-3">
+              <select
+                aria-label={t("skills.filter.source")}
+                value={source}
+                onChange={(event) =>
+                  setSource(event.target.value as AssetSourceFilter)
+                }
+                className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+              >
+                <option value="all">{t("skills.filter.sourceAll")}</option>
+                <option value="frontmatter">
+                  {t("skills.filter.sourceRecorded")}
+                </option>
+                <option value="market">
+                  {t("skills.filter.sourceManaged")}
+                </option>
+                <option value="unknown">
+                  {t("skills.filter.sourceUnclassified")}
+                </option>
+              </select>
+              <select
+                aria-label={t("skills.filter.updateStatus")}
+                value={updateStatus}
+                onChange={(event) =>
+                  setUpdateStatus(event.target.value as AssetUpdateFilter)
+                }
+                className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+              >
+                <option value="all">{t("skills.filter.updateAll")}</option>
+                <option value="available">
+                  {updateStatusLabel("available")}
+                </option>
+                <option value="current">{updateStatusLabel("current")}</option>
+                <option value="unknown">{updateStatusLabel("unknown")}</option>
+              </select>
+              <select
+                aria-label={t("skills.filter.sort")}
+                value={sort}
+                onChange={(event) =>
+                  setSort(event.target.value as AssetSortKey)
+                }
+                className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+              >
+                {sortOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {sortLabel(option)}
+                  </option>
+                ))}
+              </select>
+              <TTButton
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setSortDir((direction) =>
+                    direction === "asc" ? "desc" : "asc",
+                  )
+                }
+                title={t("skills.filter.sortDirection")}
+              >
+                {sortDir === "asc" ? (
+                  <ArrowUp className="size-3" />
+                ) : (
+                  <ArrowDown className="size-3" />
+                )}
+                {sortDir === "asc"
+                  ? t("skills.sort.ascending")
+                  : t("skills.sort.descending")}
+              </TTButton>
+            </div>
+          </div>
 
-            <div className="skill-workspace-list">
-              {paged.map((skill) => {
-                const agents = skill.installedAgents;
-                const visibleAgents = expandedAgents.has(skill.id)
-                  ? agents
-                  : agents.slice(0, 3);
-                const hiddenCount = agents.length - visibleAgents.length;
-                const isSelected = checkedIds.has(skill.id);
-                const statusTone =
-                  skill.updateStatus === "available"
-                    ? "warn"
-                    : skill.updateStatus === "current"
-                      ? "ok"
-                      : "neutral";
-                return (
-                  <article
-                    key={skill.id}
-                    className={cn(
-                      "skill-workspace-card",
-                      isSelected && "skill-workspace-card-selected",
-                    )}
-                  >
+          {/* Asset operation cards: rendered from browser-safe workspace items only. */}
+          <Panel
+            title={t("skills.table.title", {
+              count: format.formatNumber(assets.length),
+            })}
+            bodyClassName="p-0"
+          >
+            {assets.length === 0 ? (
+              <div className="p-4">
+                <EmptyState
+                  title={t("skills.empty.title")}
+                  desc={t("skills.empty.desc")}
+                  actions={
+                    <>
+                      <Link to="/settings">
+                        <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
+                      </Link>
+                      <Link to="/market">
+                        <TTButton>{t("skills.actions.goMarket")}</TTButton>
+                      </Link>
+                    </>
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                {/* Batch action bar */}
+                <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Checkbox
-                      checked={isSelected}
-                      onCheckedChange={(checked) =>
-                        toggleChecked(skill.id, checked === true)
+                      checked={
+                        allPagedChecked
+                          ? true
+                          : checkedPaged.length > 0
+                            ? "indeterminate"
+                            : false
                       }
+                      onCheckedChange={() => toggleAllPaged()}
                       disabled={busy}
-                      aria-label={t("skills.aria.selectSkill", {
-                        name: skill.name,
-                      })}
+                      aria-label={t("skills.batch.selectPage")}
                     />
-                    <button
-                      type="button"
-                      aria-label={t("skills.aria.openSkill", {
-                        name: skill.name,
-                      })}
-                      onClick={() => setDetailSkillId(skill.id)}
-                      className="skill-workspace-mark"
-                    >
-                      {skill.name.slice(0, 2).toUpperCase()}
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setDetailSkillId(skill.id)}
-                          className="truncate text-left text-[13px] font-semibold text-foreground hover:text-primary hover:underline"
-                        >
-                          {skill.name}
-                        </button>
-                        <StatusBadge tone={statusTone}>
-                          {updateStatusLabel(skill.updateStatus)}
-                        </StatusBadge>
-                        {snapshot.blacklist.includes(skill.name) && (
-                          <StatusBadge tone="danger">
-                            {t("skills.badge.blacklisted")}
-                          </StatusBadge>
-                        )}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
-                        {skill.description ?? t("skills.detail.noDescription")}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        <span className="tt-label mr-1">
-                          {t("skills.workspace.availableIn")}
-                        </span>
-                        {visibleAgents.map((agentName) => (
-                          <span key={agentName} className="skill-agent-chip">
-                            {agentName}
-                          </span>
-                        ))}
-                        {hiddenCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleAgentsExpanded(skill.id)}
-                            className="skill-agent-chip skill-agent-chip-more"
-                          >
-                            +{hiddenCount}
-                          </button>
-                        )}
-                        {expandedAgents.has(skill.id) && agents.length > 3 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleAgentsExpanded(skill.id)}
-                            className="text-[10px] text-muted-foreground hover:text-foreground"
-                          >
-                            {t("common.collapse")}
-                          </button>
-                        )}
-                        {agents.length === 0 && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {t("skills.workspace.notAssigned")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="skill-workspace-card-actions">
-                      <div className="text-right text-[11px] text-muted-foreground">
-                        <div className="tt-label">
-                          {t("skills.workspace.version")}
-                        </div>
-                        <div className="mt-1">
-                          {skill.versions.join(", ") || "—"}
-                        </div>
-                      </div>
-                      <TTButton
-                        size="sm"
-                        disabled={busy || skill.installations.length === 0}
-                        onClick={() => openSyncScope([skill])}
-                        title={t("skills.actions.syncTitle")}
-                      >
-                        <Copy className="size-3" /> {t("skills.actions.sync")}
-                      </TTButton>
-                      <TTButton
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => setDetailSkillId(skill.id)}
-                        title={t("skills.actions.inspect")}
-                      >
-                        <Layers3 className="size-3" />{" "}
-                        {t("skills.actions.inspect")}
-                      </TTButton>
-                      <TTButton
-                        size="sm"
-                        variant="danger"
-                        disabled={busy}
-                        onClick={() => openUninstall(skill)}
-                        title={t("skills.actions.uninstall")}
-                      >
-                        <Trash2 className="size-3" />{" "}
-                        {t("skills.actions.uninstall")}
-                      </TTButton>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            {/* Pagination footer */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2">
-              <span className="text-xs text-muted-foreground">
-                {t("skills.pagination.range", {
-                  start: format.formatNumber(rangeStart),
-                  end: format.formatNumber(rangeEnd),
-                  total: format.formatNumber(assets.length),
-                })}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setPage(1)}
-                  disabled={currentPage === 1 || busy}
-                  className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronFirst className="size-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1 || busy}
-                  className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="size-3" />
-                </button>
-                <span className="px-2 text-xs text-muted-foreground">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages || busy}
-                  className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronRight className="size-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage(totalPages)}
-                  disabled={currentPage === totalPages || busy}
-                  className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLast className="size-3" />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </Panel>
-
-      {/* FR-015: Detail Drawer */}
-      <Sheet
-        open={detailSkillId !== null}
-        onOpenChange={(open) => {
-          if (!open) setDetailSkillId(null);
-        }}
-      >
-        <SheetContent
-          side="right"
-          className="w-full overflow-y-auto sm:max-w-lg"
-        >
-          {detailSkill && (
-            <>
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  {detailSkill.name}
-                </SheetTitle>
-                <SheetDescription>
-                  {detailSkill.description ?? t("skills.detail.noDescription")}
-                </SheetDescription>
-              </SheetHeader>
-
-              <div className="mt-4 space-y-4 text-[13px]">
-                {/* Opaque installation identity */}
-                <div>
-                  <div className="tt-label mb-1">
-                    {t("skills.detail.installStatus")}
-                  </div>
-                  {detailSkill.installations.map((inst) => (
-                    <div
-                      key={inst.installationRef}
-                      className="tt-num mt-1 break-all text-[11px] text-muted-foreground"
-                    >
-                      {inst.agent}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Last used */}
-                <div className="text-[12px] text-muted-foreground">
-                  {detailSkill.lastUsedAt == null
-                    ? t("skills.detail.noLastUsed")
-                    : t("skills.detail.lastUsedAt", {
-                        time: format.formatDateTime(
-                          detailSkill.lastUsedAt,
-                          false,
-                        ),
-                      })}
-                </div>
-
-                {/* Per-agent install status (all 9 agents) */}
-                <div>
-                  <div className="tt-label mb-2">
-                    {t("skills.detail.installStatus")}
-                  </div>
-                  <ul className="space-y-2">
-                    {SKILL_AGENTS.map((agentName) => {
-                      const installation = detailSkill.installations.find(
-                        (i) => i.agent === agentName,
-                      );
-                      return (
-                        <li
-                          key={agentName}
-                          className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface-2 p-2"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{agentName}</span>
-                              {installation ? (
-                                <Badge
-                                  variant="secondary"
-                                  className="bg-ok/15 text-ok"
-                                >
-                                  {t("common.installed")}
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant="outline"
-                                  className="text-muted-foreground"
-                                >
-                                  {t("common.notInstalled")}
-                                </Badge>
-                              )}
-                            </div>
-                            {installation && (
-                              <>
-                                <div className="tt-num mt-1 break-all text-[10px] text-muted-foreground">
-                                  {installation.agent}
-                                </div>
-                                <div className="mt-1 text-[10px] text-muted-foreground">
-                                  {t("skills.detail.installedAt", {
-                                    time: format.formatDateTime(
-                                      installation.installedAt,
-                                      false,
-                                    ),
-                                  })}
-                                  {" · "}
-                                  {t("skills.detail.modifiedAt", {
-                                    time: format.formatDateTime(
-                                      installation.modifiedAt,
-                                      false,
-                                    ),
-                                  })}
-                                </div>
-                                <div className="mt-1 text-[10px] text-muted-foreground">
-                                  {t("skills.detail.version", {
-                                    version:
-                                      installation.version ??
-                                      t("skills.detail.notProvided"),
-                                  })}
-                                </div>
-                                <div
-                                  className={cn(
-                                    "mt-1 text-[10px]",
-                                    installation.updateStatus === "available"
-                                      ? "text-warn"
-                                      : "text-muted-foreground",
-                                  )}
-                                >
-                                  {t("skills.detail.updateStatusShort", {
-                                    status:
-                                      installation.updateStatus === "available"
-                                        ? t("skills.detail.updateAvailable")
-                                        : installation.updateStatus ===
-                                            "current"
-                                          ? t("skills.detail.updateCurrent")
-                                          : t("skills.detail.updateUnknown"),
-                                  })}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          {installation ? (
-                            <TTButton
-                              size="sm"
-                              variant="danger"
-                              disabled={busy}
-                              onClick={() =>
-                                run(
-                                  () =>
-                                    requestApprovedSkillUninstall({
-                                      data: {
-                                        confirmed: true,
-                                        installationRef:
-                                          installation.installationRef,
-                                      },
-                                    }),
-                                  t("skills.toast.uninstalledFrom", {
-                                    name: detailSkill.name,
-                                    agent: agentName,
-                                  }),
-                                )
-                              }
-                            >
-                              {t("skills.actions.uninstall")}
-                            </TTButton>
-                          ) : (
-                            <TTButton
-                              size="sm"
-                              disabled={
-                                busy ||
-                                isBlocked ||
-                                detailSkill.installations.length === 0
-                              }
-                              onClick={() =>
-                                run(
-                                  () =>
-                                    requestApprovedSkillInstall({
-                                      data: {
-                                        confirmed: true,
-                                        installationRef:
-                                          detailSkill.installations[0]
-                                            .installationRef,
-                                        targetAgent: agentName,
-                                      },
-                                    }),
-                                  t("skills.toast.installedTo", {
-                                    name: detailSkill.name,
-                                    agent: agentName,
-                                  }),
-                                )
-                              }
-                            >
-                              <Download className="size-3" />{" "}
-                              {t("skills.actions.install")}
-                            </TTButton>
-                          )}
-                        </li>
-                      );
+                    {t("skills.batch.selectPage")}
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {t("skills.batch.selectedCount", {
+                      count: format.formatNumber(checkedSkills.length),
                     })}
-                  </ul>
+                  </span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <TTButton
+                      size="sm"
+                      disabled={busy || checkedSkills.length === 0}
+                      onClick={() => openSyncScope(checkedSkills)}
+                    >
+                      <Copy className="size-3" /> {t("skills.batch.sync")}
+                    </TTButton>
+                    <TTButton
+                      size="sm"
+                      variant="danger"
+                      disabled={busy || checkedSkills.length === 0}
+                      onClick={openBatchUninstall}
+                    >
+                      <Trash2 className="size-3" />{" "}
+                      {t("skills.batch.uninstall")}
+                    </TTButton>
+                    <TTButton
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy || checkedSkills.length === 0}
+                      onClick={clearSelection}
+                    >
+                      {t("skills.batch.clearSelection")}
+                    </TTButton>
+                  </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2 border-t border-border pt-3">
-                  <TTButton
-                    disabled={busy}
-                    variant={isBlocked ? "default" : "danger"}
-                    onClick={() => {
-                      if (!isBlocked) {
-                        setBlacklistTarget(detailSkill);
-                        return;
-                      }
-                      void run(
-                        () =>
-                          updateSkillBlacklist({
-                            data: { name: detailSkill.name, blocked: false },
-                          }),
-                        t("skills.toast.unblocked"),
-                      );
-                    }}
-                  >
-                    <ShieldBan className="size-3.5" />
-                    {isBlocked
-                      ? t("skills.actions.unblock")
-                      : t("skills.actions.block")}
-                  </TTButton>
-                  <TTButton
-                    variant="danger"
-                    disabled={busy}
-                    onClick={() => {
-                      setDetailSkillId(null);
-                      openUninstall(detailSkill);
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />{" "}
-                    {t("skills.actions.uninstallAll")}
-                  </TTButton>
-                </div>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* FR-016: Uninstall confirmation AlertDialog */}
-      <AlertDialog
-        open={uninstallTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setUninstallTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-danger" />
-              {t("skills.uninstall.title")}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-1">
-                <p>
-                  {uninstallTarget?.type === "batch"
-                    ? t("skills.uninstall.batchDesc", {
-                        count: format.formatNumber(
-                          uninstallTarget.skills.length,
-                        ),
-                      })
-                    : t("skills.uninstall.singleDesc", {
-                        name: uninstallTarget?.skill.name ?? "",
-                      })}
-                </p>
-                <p className="text-danger">
-                  {t("skills.uninstall.irreversible")}
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>
-              {t("common.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy}
-              onClick={(e) => {
-                e.preventDefault();
-                void confirmUninstall();
-              }}
-              className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
-            >
-              {t("skills.uninstall.confirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={blacklistTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setBlacklistTarget(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldBan className="size-5 text-danger" />
-              {t("skills.blacklist.title")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("skills.blacklist.desc", {
-                name: blacklistTarget?.name ?? "",
-              })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>
-              {t("common.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy}
-              onClick={(event) => {
-                event.preventDefault();
-                const target = blacklistTarget;
-                setBlacklistTarget(null);
-                if (!target) return;
-                void run(
-                  () =>
-                    updateSkillBlacklist({
-                      data: { name: target.name, blocked: true },
-                    }),
-                  t("skills.toast.blocked"),
-                );
-              }}
-              className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
-            >
-              {t("skills.blacklist.confirm")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* FR-017: Sync scope Dialog */}
-      <Dialog
-        open={syncScope !== null}
-        onOpenChange={(open) => {
-          if (!open) setSyncScope(null);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("skills.sync.title")}</DialogTitle>
-            <DialogDescription>{t("skills.sync.desc")}</DialogDescription>
-          </DialogHeader>
-
-          {syncScope && (
-            <div className="space-y-3">
-              {/* Scope options */}
-              <div className="space-y-2">
-                <label
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors",
-                    syncScope.mode === "global"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-border-strong",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    checked={syncScope.mode === "global"}
-                    onChange={() =>
-                      setSyncScope((s) => (s ? { ...s, mode: "global" } : s))
-                    }
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="text-sm font-medium">
-                      {t("skills.sync.globalMode")}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      {t("skills.sync.globalModeHint")}
-                    </div>
-                  </div>
-                </label>
-                <label
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors",
-                    syncScope.mode === "specific"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-border-strong",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    checked={syncScope.mode === "specific"}
-                    onChange={() =>
-                      setSyncScope((s) => (s ? { ...s, mode: "specific" } : s))
-                    }
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="text-sm font-medium">
-                      {t("skills.sync.specificMode")}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      {t("skills.sync.specificModeHint")}
-                    </div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Agent list for specific mode */}
-              {syncScope.mode === "specific" && (
-                <div className="max-h-[240px] space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                  {SKILL_AGENTS.map((agentName) => {
-                    const detected = detectedAgents.has(agentName);
+                <div className="skill-workspace-list">
+                  {paged.map((skill) => {
+                    const agents = skill.installedAgents;
+                    const visibleAgents = expandedAgents.has(skill.id)
+                      ? agents
+                      : agents.slice(0, 3);
+                    const hiddenCount = agents.length - visibleAgents.length;
+                    const isSelected = checkedIds.has(skill.id);
+                    const statusTone =
+                      skill.updateStatus === "available"
+                        ? "warn"
+                        : skill.updateStatus === "current"
+                          ? "ok"
+                          : "neutral";
                     return (
-                      <label
-                        key={agentName}
+                      <article
+                        key={skill.id}
                         className={cn(
-                          "flex items-center gap-2 rounded-sm p-1.5",
-                          detected
-                            ? "cursor-pointer hover:bg-accent"
-                            : "cursor-not-allowed opacity-50",
+                          "skill-workspace-card",
+                          isSelected && "skill-workspace-card-selected",
                         )}
                       >
                         <Checkbox
-                          checked={syncScope.selectedAgents.has(agentName)}
-                          onCheckedChange={(checked) => {
-                            if (!detected) return;
-                            setSyncScope((s) => {
-                              if (!s) return s;
-                              const next = new Set(s.selectedAgents);
-                              if (checked === true) next.add(agentName);
-                              else next.delete(agentName);
-                              return { ...s, selectedAgents: next };
-                            });
-                          }}
-                          disabled={!detected}
+                          checked={isSelected}
+                          onCheckedChange={(checked) =>
+                            toggleChecked(skill.id, checked === true)
+                          }
+                          disabled={busy}
+                          aria-label={t("skills.aria.selectSkill", {
+                            name: skill.name,
+                          })}
                         />
-                        <span className="text-[13px]">{agentName}</span>
-                        {!detected && (
-                          <Badge
-                            variant="outline"
-                            className="ml-auto text-[10px] text-muted-foreground"
+                        <button
+                          type="button"
+                          aria-label={t("skills.aria.openSkill", {
+                            name: skill.name,
+                          })}
+                          onClick={() => setDetailSkillId(skill.id)}
+                          className="skill-workspace-mark"
+                        >
+                          {skill.name.slice(0, 2).toUpperCase()}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setDetailSkillId(skill.id)}
+                              className="truncate text-left text-[13px] font-semibold text-foreground hover:text-primary hover:underline"
+                            >
+                              {skill.name}
+                            </button>
+                            <StatusBadge tone={statusTone}>
+                              {updateStatusLabel(skill.updateStatus)}
+                            </StatusBadge>
+                            {snapshot.blacklist.includes(skill.name) && (
+                              <StatusBadge tone="danger">
+                                {t("skills.badge.blacklisted")}
+                              </StatusBadge>
+                            )}
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">
+                            {skill.description ??
+                              t("skills.detail.noDescription")}
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                            <span className="tt-label mr-1">
+                              {t("skills.workspace.availableIn")}
+                            </span>
+                            {visibleAgents.map((agentName) => (
+                              <span
+                                key={agentName}
+                                className="skill-agent-chip"
+                              >
+                                {agentName}
+                              </span>
+                            ))}
+                            {hiddenCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleAgentsExpanded(skill.id)}
+                                className="skill-agent-chip skill-agent-chip-more"
+                              >
+                                +{hiddenCount}
+                              </button>
+                            )}
+                            {expandedAgents.has(skill.id) &&
+                              agents.length > 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAgentsExpanded(skill.id)}
+                                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                                >
+                                  {t("common.collapse")}
+                                </button>
+                              )}
+                            {agents.length === 0 && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {t("skills.workspace.notAssigned")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="skill-workspace-card-actions">
+                          <div className="text-right text-[11px] text-muted-foreground">
+                            <div className="tt-label">
+                              {t("skills.workspace.version")}
+                            </div>
+                            <div className="mt-1">
+                              {skill.versions.join(", ") || "—"}
+                            </div>
+                          </div>
+                          <TTButton
+                            size="sm"
+                            disabled={busy || skill.installations.length === 0}
+                            onClick={() => openSyncScope([skill])}
+                            title={t("skills.actions.syncTitle")}
                           >
-                            {t("common.notInstalled")}
-                          </Badge>
-                        )}
-                      </label>
+                            <Copy className="size-3" />{" "}
+                            {t("skills.actions.sync")}
+                          </TTButton>
+                          <TTButton
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => setDetailSkillId(skill.id)}
+                            title={t("skills.actions.inspect")}
+                          >
+                            <Layers3 className="size-3" />{" "}
+                            {t("skills.actions.inspect")}
+                          </TTButton>
+                          <TTButton
+                            size="sm"
+                            variant="danger"
+                            disabled={busy}
+                            onClick={() => openUninstall(skill)}
+                            title={t("skills.actions.uninstall")}
+                          >
+                            <Trash2 className="size-3" />{" "}
+                            {t("skills.actions.uninstall")}
+                          </TTButton>
+                        </div>
+                      </article>
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
 
-          <DialogFooter>
-            <TTButton
-              variant="default"
-              disabled={busy}
-              onClick={() => setSyncScope(null)}
+                {/* Pagination footer */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2">
+                  <span className="text-xs text-muted-foreground">
+                    {t("skills.pagination.range", {
+                      start: format.formatNumber(rangeStart),
+                      end: format.formatNumber(rangeEnd),
+                      total: format.formatNumber(assets.length),
+                    })}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPage(1)}
+                      disabled={currentPage === 1 || busy}
+                      className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronFirst className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || busy}
+                      className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLeft className="size-3" />
+                    </button>
+                    <span className="px-2 text-xs text-muted-foreground">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages || busy}
+                      className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronRight className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage(totalPages)}
+                      disabled={currentPage === totalPages || busy}
+                      className="rounded-sm border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLast className="size-3" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </Panel>
+
+          {/* FR-015: Detail Drawer */}
+          <Sheet
+            open={detailSkillId !== null}
+            onOpenChange={(open) => {
+              if (!open) setDetailSkillId(null);
+            }}
+          >
+            <SheetContent
+              side="right"
+              className="w-full overflow-y-auto sm:max-w-lg"
             >
-              {t("common.cancel")}
-            </TTButton>
-            <TTButton
-              variant="primary"
-              disabled={busy}
-              onClick={confirmSyncScope}
-            >
-              {t("skills.sync.start")}
-            </TTButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {detailSkill && (
+                <>
+                  <SheetHeader>
+                    <SheetTitle className="flex items-center gap-2">
+                      {detailSkill.name}
+                    </SheetTitle>
+                    <SheetDescription>
+                      {detailSkill.description ??
+                        t("skills.detail.noDescription")}
+                    </SheetDescription>
+                  </SheetHeader>
 
-      {/* FR-017: Sync conflict Dialog */}
-      <Dialog
-        open={syncConflict !== null}
-        onOpenChange={(open) => {
-          if (!open) setSyncConflict(null);
-        }}
-      >
-        <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="size-5 text-warn" />
-              {t("skills.conflict.title")}
-            </DialogTitle>
-            <DialogDescription>{t("skills.conflict.desc")}</DialogDescription>
-          </DialogHeader>
-
-          {syncConflict && (
-            <div className="space-y-3">
-              {/* Top-level bulk actions */}
-              <div className="flex items-center gap-2">
-                <TTButton
-                  size="sm"
-                  onClick={() => setAllConflictResolutions("overwrite")}
-                >
-                  {t("skills.conflict.overwriteAll")}
-                </TTButton>
-                <TTButton
-                  size="sm"
-                  variant="default"
-                  onClick={() => setAllConflictResolutions("skip")}
-                >
-                  {t("skills.conflict.skipAll")}
-                </TTButton>
-              </div>
-
-              {/* Conflict list */}
-              <ul className="space-y-2">
-                {syncConflict.conflicts.map((conflict, index) => (
-                  <li
-                    key={`${conflict.skillId}-${conflict.agent}`}
-                    className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface-2 p-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium">
-                        {conflict.skillName}
+                  <div className="mt-4 space-y-4 text-[13px]">
+                    {/* Opaque installation identity */}
+                    <div>
+                      <div className="tt-label mb-1">
+                        {t("skills.detail.installStatus")}
                       </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {t("skills.conflict.targetAgent", {
-                          agent: conflict.agent,
+                      {detailSkill.installations.map((inst) => (
+                        <div
+                          key={inst.installationRef}
+                          className="tt-num mt-1 break-all text-[11px] text-muted-foreground"
+                        >
+                          {inst.agent}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Last used */}
+                    <div className="text-[12px] text-muted-foreground">
+                      {detailSkill.lastUsedAt == null
+                        ? t("skills.detail.noLastUsed")
+                        : t("skills.detail.lastUsedAt", {
+                            time: format.formatDateTime(
+                              detailSkill.lastUsedAt,
+                              false,
+                            ),
+                          })}
+                    </div>
+
+                    {/* Per-agent install status (all 9 agents) */}
+                    <div>
+                      <div className="tt-label mb-2">
+                        {t("skills.detail.installStatus")}
+                      </div>
+                      <ul className="space-y-2">
+                        {SKILL_AGENTS.map((agentName) => {
+                          const installation = detailSkill.installations.find(
+                            (i) => i.agent === agentName,
+                          );
+                          return (
+                            <li
+                              key={agentName}
+                              className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface-2 p-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">
+                                    {agentName}
+                                  </span>
+                                  {installation ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-ok/15 text-ok"
+                                    >
+                                      {t("common.installed")}
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-muted-foreground"
+                                    >
+                                      {t("common.notInstalled")}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {installation && (
+                                  <>
+                                    <div className="tt-num mt-1 break-all text-[10px] text-muted-foreground">
+                                      {installation.agent}
+                                    </div>
+                                    <div className="mt-1 text-[10px] text-muted-foreground">
+                                      {t("skills.detail.installedAt", {
+                                        time: format.formatDateTime(
+                                          installation.installedAt,
+                                          false,
+                                        ),
+                                      })}
+                                      {" · "}
+                                      {t("skills.detail.modifiedAt", {
+                                        time: format.formatDateTime(
+                                          installation.modifiedAt,
+                                          false,
+                                        ),
+                                      })}
+                                    </div>
+                                    <div className="mt-1 text-[10px] text-muted-foreground">
+                                      {t("skills.detail.version", {
+                                        version:
+                                          installation.version ??
+                                          t("skills.detail.notProvided"),
+                                      })}
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "mt-1 text-[10px]",
+                                        installation.updateStatus ===
+                                          "available"
+                                          ? "text-warn"
+                                          : "text-muted-foreground",
+                                      )}
+                                    >
+                                      {t("skills.detail.updateStatusShort", {
+                                        status:
+                                          installation.updateStatus ===
+                                          "available"
+                                            ? t("skills.detail.updateAvailable")
+                                            : installation.updateStatus ===
+                                                "current"
+                                              ? t("skills.detail.updateCurrent")
+                                              : t(
+                                                  "skills.detail.updateUnknown",
+                                                ),
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {installation ? (
+                                <TTButton
+                                  size="sm"
+                                  variant="danger"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    run(
+                                      () =>
+                                        requestApprovedSkillUninstall({
+                                          data: {
+                                            confirmed: true,
+                                            installationRef:
+                                              installation.installationRef,
+                                          },
+                                        }),
+                                      t("skills.toast.uninstalledFrom", {
+                                        name: detailSkill.name,
+                                        agent: agentName,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  {t("skills.actions.uninstall")}
+                                </TTButton>
+                              ) : (
+                                <TTButton
+                                  size="sm"
+                                  disabled={
+                                    busy ||
+                                    isBlocked ||
+                                    detailSkill.installations.length === 0
+                                  }
+                                  onClick={() =>
+                                    run(
+                                      () =>
+                                        requestApprovedSkillInstall({
+                                          data: {
+                                            confirmed: true,
+                                            installationRef:
+                                              detailSkill.installations[0]
+                                                .installationRef,
+                                            targetAgent: agentName,
+                                          },
+                                        }),
+                                      t("skills.toast.installedTo", {
+                                        name: detailSkill.name,
+                                        agent: agentName,
+                                      }),
+                                    )
+                                  }
+                                >
+                                  <Download className="size-3" />{" "}
+                                  {t("skills.actions.install")}
+                                </TTButton>
+                              )}
+                            </li>
+                          );
                         })}
-                      </div>
+                      </ul>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConflictResolution(index, "overwrite")
-                        }
-                        className={cn(
-                          "rounded-sm border px-2 py-1 text-[11px] transition-colors",
-                          conflict.resolution === "overwrite"
-                            ? "border-primary bg-primary/15 text-primary"
-                            : "border-border text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {t("skills.conflict.overwrite")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConflictResolution(index, "skip")}
-                        className={cn(
-                          "rounded-sm border px-2 py-1 text-[11px] transition-colors",
-                          conflict.resolution === "skip"
-                            ? "border-primary bg-primary/15 text-primary"
-                            : "border-border text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {t("skills.conflict.skip")}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
-          <DialogFooter>
-            <TTButton
-              variant="default"
-              disabled={busy}
-              onClick={() => setSyncConflict(null)}
-            >
-              {t("common.cancel")}
-            </TTButton>
-            <TTButton
-              variant="primary"
-              disabled={busy}
-              onClick={confirmSyncConflict}
-            >
-              {t("skills.sync.start")}
-            </TTButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+                      <TTButton
+                        disabled={busy}
+                        variant={isBlocked ? "default" : "danger"}
+                        onClick={() => {
+                          if (!isBlocked) {
+                            setBlacklistTarget(detailSkill);
+                            return;
+                          }
+                          void run(
+                            () =>
+                              updateSkillBlacklist({
+                                data: {
+                                  name: detailSkill.name,
+                                  blocked: false,
+                                },
+                              }),
+                            t("skills.toast.unblocked"),
+                          );
+                        }}
+                      >
+                        <ShieldBan className="size-3.5" />
+                        {isBlocked
+                          ? t("skills.actions.unblock")
+                          : t("skills.actions.block")}
+                      </TTButton>
+                      <TTButton
+                        variant="danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setDetailSkillId(null);
+                          openUninstall(detailSkill);
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />{" "}
+                        {t("skills.actions.uninstallAll")}
+                      </TTButton>
+                    </div>
+                  </div>
+                </>
+              )}
+            </SheetContent>
+          </Sheet>
+
+          {/* FR-016: Uninstall confirmation AlertDialog */}
+          <AlertDialog
+            open={uninstallTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setUninstallTarget(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="size-5 text-danger" />
+                  {t("skills.uninstall.title")}
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-1">
+                    <p>
+                      {uninstallTarget?.type === "batch"
+                        ? t("skills.uninstall.batchDesc", {
+                            count: format.formatNumber(
+                              uninstallTarget.skills.length,
+                            ),
+                          })
+                        : t("skills.uninstall.singleDesc", {
+                            name: uninstallTarget?.skill.name ?? "",
+                          })}
+                    </p>
+                    <p className="text-danger">
+                      {t("skills.uninstall.irreversible")}
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>
+                  {t("common.cancel")}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={busy}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void confirmUninstall();
+                  }}
+                  className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
+                >
+                  {t("skills.uninstall.confirm")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
+            open={blacklistTarget !== null}
+            onOpenChange={(open) => {
+              if (!open) setBlacklistTarget(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <ShieldBan className="size-5 text-danger" />
+                  {t("skills.blacklist.title")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("skills.blacklist.desc", {
+                    name: blacklistTarget?.name ?? "",
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={busy}>
+                  {t("common.cancel")}
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={busy}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    const target = blacklistTarget;
+                    setBlacklistTarget(null);
+                    if (!target) return;
+                    void run(
+                      () =>
+                        updateSkillBlacklist({
+                          data: { name: target.name, blocked: true },
+                        }),
+                      t("skills.toast.blocked"),
+                    );
+                  }}
+                  className="border-danger bg-danger text-white shadow-sm hover:bg-danger/90"
+                >
+                  {t("skills.blacklist.confirm")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* FR-017: Sync scope Dialog */}
+          <Dialog
+            open={syncScope !== null}
+            onOpenChange={(open) => {
+              if (!open) setSyncScope(null);
+            }}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t("skills.sync.title")}</DialogTitle>
+                <DialogDescription>{t("skills.sync.desc")}</DialogDescription>
+              </DialogHeader>
+
+              {syncScope && (
+                <div className="space-y-3">
+                  {/* Scope options */}
+                  <div className="space-y-2">
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors",
+                        syncScope.mode === "global"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-border-strong",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        checked={syncScope.mode === "global"}
+                        onChange={() =>
+                          setSyncScope((s) =>
+                            s ? { ...s, mode: "global" } : s,
+                          )
+                        }
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="text-sm font-medium">
+                          {t("skills.sync.globalMode")}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                          {t("skills.sync.globalModeHint")}
+                        </div>
+                      </div>
+                    </label>
+                    <label
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors",
+                        syncScope.mode === "specific"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-border-strong",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        checked={syncScope.mode === "specific"}
+                        onChange={() =>
+                          setSyncScope((s) =>
+                            s ? { ...s, mode: "specific" } : s,
+                          )
+                        }
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="text-sm font-medium">
+                          {t("skills.sync.specificMode")}
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                          {t("skills.sync.specificModeHint")}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Agent list for specific mode */}
+                  {syncScope.mode === "specific" && (
+                    <div className="max-h-[240px] space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                      {SKILL_AGENTS.map((agentName) => {
+                        const detected = detectedAgents.has(agentName);
+                        return (
+                          <label
+                            key={agentName}
+                            className={cn(
+                              "flex items-center gap-2 rounded-sm p-1.5",
+                              detected
+                                ? "cursor-pointer hover:bg-accent"
+                                : "cursor-not-allowed opacity-50",
+                            )}
+                          >
+                            <Checkbox
+                              checked={syncScope.selectedAgents.has(agentName)}
+                              onCheckedChange={(checked) => {
+                                if (!detected) return;
+                                setSyncScope((s) => {
+                                  if (!s) return s;
+                                  const next = new Set(s.selectedAgents);
+                                  if (checked === true) next.add(agentName);
+                                  else next.delete(agentName);
+                                  return { ...s, selectedAgents: next };
+                                });
+                              }}
+                              disabled={!detected}
+                            />
+                            <span className="text-[13px]">{agentName}</span>
+                            {!detected && (
+                              <Badge
+                                variant="outline"
+                                className="ml-auto text-[10px] text-muted-foreground"
+                              >
+                                {t("common.notInstalled")}
+                              </Badge>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <DialogFooter>
+                <TTButton
+                  variant="default"
+                  disabled={busy}
+                  onClick={() => setSyncScope(null)}
+                >
+                  {t("common.cancel")}
+                </TTButton>
+                <TTButton
+                  variant="primary"
+                  disabled={busy}
+                  onClick={confirmSyncScope}
+                >
+                  {t("skills.sync.start")}
+                </TTButton>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* FR-017: Sync conflict Dialog */}
+          <Dialog
+            open={syncConflict !== null}
+            onOpenChange={(open) => {
+              if (!open) setSyncConflict(null);
+            }}
+          >
+            <DialogContent className="max-h-[80vh] max-w-lg overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="size-5 text-warn" />
+                  {t("skills.conflict.title")}
+                </DialogTitle>
+                <DialogDescription>
+                  {t("skills.conflict.desc")}
+                </DialogDescription>
+              </DialogHeader>
+
+              {syncConflict && (
+                <div className="space-y-3">
+                  {/* Top-level bulk actions */}
+                  <div className="flex items-center gap-2">
+                    <TTButton
+                      size="sm"
+                      onClick={() => setAllConflictResolutions("overwrite")}
+                    >
+                      {t("skills.conflict.overwriteAll")}
+                    </TTButton>
+                    <TTButton
+                      size="sm"
+                      variant="default"
+                      onClick={() => setAllConflictResolutions("skip")}
+                    >
+                      {t("skills.conflict.skipAll")}
+                    </TTButton>
+                  </div>
+
+                  {/* Conflict list */}
+                  <ul className="space-y-2">
+                    {syncConflict.conflicts.map((conflict, index) => (
+                      <li
+                        key={`${conflict.skillId}-${conflict.agent}`}
+                        className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface-2 p-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium">
+                            {conflict.skillName}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {t("skills.conflict.targetAgent", {
+                              agent: conflict.agent,
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConflictResolution(index, "overwrite")
+                            }
+                            className={cn(
+                              "rounded-sm border px-2 py-1 text-[11px] transition-colors",
+                              conflict.resolution === "overwrite"
+                                ? "border-primary bg-primary/15 text-primary"
+                                : "border-border text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {t("skills.conflict.overwrite")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConflictResolution(index, "skip")}
+                            className={cn(
+                              "rounded-sm border px-2 py-1 text-[11px] transition-colors",
+                              conflict.resolution === "skip"
+                                ? "border-primary bg-primary/15 text-primary"
+                                : "border-border text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {t("skills.conflict.skip")}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <DialogFooter>
+                <TTButton
+                  variant="default"
+                  disabled={busy}
+                  onClick={() => setSyncConflict(null)}
+                >
+                  {t("common.cancel")}
+                </TTButton>
+                <TTButton
+                  variant="primary"
+                  disabled={busy}
+                  onClick={confirmSyncConflict}
+                >
+                  {t("skills.sync.start")}
+                </TTButton>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : null}
     </>
   );
 }
