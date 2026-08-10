@@ -102,6 +102,7 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   assert.equal(view.cards[1]?.events, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.sessions, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.cacheRate, 0);
+  assert.equal(view.cards.find((card) => card.id === "codex")?.messages, 2);
   assert.equal(view.projects[0]?.sessions, 2);
   assert.equal(view.models[0]?.key, "gpt-test");
   assert.equal(view.projects[0]?.key, "trusttools");
@@ -160,6 +161,7 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
     share: 0,
     sessions: 0,
     cacheRate: null,
+    messages: null,
     lastActiveAt: null,
     skillUsage: { observed: false, calls: 0 },
   });
