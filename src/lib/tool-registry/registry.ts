@@ -42,6 +42,90 @@ export interface UsagePlan {
   query?: string;
 }
 
+/**
+ * Browser presentation metadata is kept next to the registry rather than in a
+ * page-local list.  These values describe the product surface only; they do
+ * not disclose paths, commands, or parser configuration.
+ */
+export type ToolSurface = "cli" | "ide" | "plugin" | "desktop";
+
+const TOOL_SURFACES: Readonly<Record<string, ToolSurface>> = {
+  "claude-code": "cli",
+  codex: "cli",
+  cursor: "ide",
+  kiro: "ide",
+  "gemini-cli": "cli",
+  opencode: "cli",
+  openclaw: "cli",
+  "every-code": "cli",
+  hermes: "cli",
+  "github-copilot": "plugin",
+  "kimi-code": "cli",
+  omp: "cli",
+  codebuddy: "cli",
+  workbuddy: "cli",
+  grok: "cli",
+  "kilo-cli": "cli",
+  kilocode: "plugin",
+  antigravity: "desktop",
+  pi: "cli",
+  craft: "cli",
+  "roo-code": "plugin",
+  zed: "ide",
+  goose: "cli",
+  droid: "cli",
+  mimo: "cli",
+  zcode: "cli",
+  anythingllm: "desktop",
+  aipy: "cli",
+  cline: "plugin",
+};
+
+/**
+ * Only verified vendor-owned links are listed. A null value is intentional:
+ * the Sources UI must show the link as unavailable rather than fabricate a
+ * search-engine URL.
+ */
+const OFFICIAL_DOWNLOAD_URLS: Readonly<Record<string, string | null>> = {
+  "claude-code": "https://docs.anthropic.com/en/docs/claude-code/overview",
+  codex: "https://developers.openai.com/codex/cli/",
+  cursor: "https://www.cursor.com/downloads",
+  kiro: "https://kiro.dev/",
+  "gemini-cli": "https://github.com/google-gemini/gemini-cli",
+  opencode: "https://opencode.ai/",
+  openclaw: "https://openclaw.ai/",
+  "every-code": null,
+  hermes: null,
+  "github-copilot": "https://github.com/features/copilot",
+  "kimi-code": "https://www.kimi.com/code",
+  omp: null,
+  codebuddy: null,
+  workbuddy: null,
+  grok: "https://x.ai/grok",
+  "kilo-cli": null,
+  kilocode: "https://kilocode.ai/",
+  antigravity: null,
+  pi: null,
+  craft: null,
+  "roo-code": "https://roocode.com/",
+  zed: "https://zed.dev/download",
+  goose: "https://block.github.io/goose/",
+  droid: null,
+  mimo: null,
+  zcode: null,
+  anythingllm: "https://anythingllm.com/",
+  aipy: null,
+  cline: "https://cline.bot/",
+};
+
+export function toolSurfaceFor(toolId: string): ToolSurface {
+  return TOOL_SURFACES[toolId] ?? "cli";
+}
+
+export function officialDownloadUrlFor(toolId: string): string | null {
+  return OFFICIAL_DOWNLOAD_URLS[toolId] ?? null;
+}
+
 export interface SessionPlan {
   toolId: string;
   reader: SessionReaderKey;
