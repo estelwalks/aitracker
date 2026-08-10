@@ -4,26 +4,29 @@
 | -------- | ------------------- |
 | 文档类型 | 架构设计文档 (ARCH) |
 | 项目名称 | trusttools_webapp   |
-| 版本     | v1.3                |
+| 版本     | v1.4                |
 | 创建日期 | 2026-08-10 15:16:44 |
-| 更新日期 | 2026-08-10 19:24:53 |
+| 更新日期 | 2026-08-10 19:50:04 |
 | 生成工具 | agile-feature-dev   |
 | 文档状态 | 草稿                |
 
 ## 修订记录
 
-| 版本 | 修改时间            | 修改内容                                                       |
-| ---- | ------------------- | -------------------------------------------------------------- |
-| v1.0 | 2026-08-10 15:16:44 | 初始版本                                                       |
-| v1.1 | 2026-08-10 18:19:30 | 增补 reader 修复、字段证据与 Token 对账架构                    |
-| v1.2 | 2026-08-10 19:01:25 | 增补 TokenTracker 对照后的三类原生 Usage reader 与估算隔离决策 |
-| v1.3 | 2026-08-10 19:24:53 | 三类原生 reader 落地并通过缓存幂等、跨副本去重与 registry 校验 |
+| 版本 | 修改时间            | 修改内容                                                             |
+| ---- | ------------------- | -------------------------------------------------------------------- |
+| v1.0 | 2026-08-10 15:16:44 | 初始版本                                                             |
+| v1.1 | 2026-08-10 18:19:30 | 增补 reader 修复、字段证据与 Token 对账架构                          |
+| v1.2 | 2026-08-10 19:01:25 | 增补 TokenTracker 对照后的三类原生 Usage reader 与估算隔离决策       |
+| v1.3 | 2026-08-10 19:24:53 | 三类原生 reader 落地并通过缓存幂等、跨副本去重与 registry 校验       |
+| v1.4 | 2026-08-10 19:50:04 | 扩展 Dashboard/Sources/导航原型层，并定义受控 LLM 洞察与迁移清单架构 |
 
 ## 1. 模块边界
 
 `dashboard` 负责首页总览的只读投影：API 载入聚合快照，`application/v2.ts` 计算同范围视图与 Hero 视图，`presentation/DashboardV2Page.tsx` 只保存页面筛选状态并渲染。
 
 `skill-catalog` 负责工具概览与 Skill 工作台：`application/tool-overview.ts` 将同一 `DashboardV2Snapshot` 按工具聚合；`presentation/SkillsPage.tsx` 渲染工具概览后复用现有的 Skill 受控操作。页面路由仅协调两个浏览器安全的读模型。
+
+`sources` 继续拥有来源扫描投影，但增加原型所需的工具类型、相对目录、读取进度、关联 Skill 和迁移能力状态；只有 `~/` 相对目录可跨服务端边界。`AppShell` 拥有路由别名和状态式折叠，不承载数据聚合。
 
 ## 2. 数据流
 
@@ -39,6 +42,12 @@ DashboardV2Snapshot / MonitoringStatus / SkillWorkspaceSnapshot
 dashboard application/v2 ───────→ 首页总览
               ↓
 skill-catalog application/tool-overview ─→ 工具概览
+              ↓
+sources projection / migration-availability ─→ Sources
+              ↓
+safe dashboard aggregate ─→ insight orchestration ─→ configured LLM
+              ↓                                      ↘ status/cache
+Dashboard hero / refresh action
 ```
 
 所有展示契约仅含聚合指标。路径、原始日志、会话内容与扫描细节保留在服务端适配器层。
@@ -53,6 +62,10 @@ skill-catalog application/tool-overview ─→ 工具概览
 - Token 归一：input 包含 cache-read、output 包含 reasoning 时只记一次；reasoning 仅作为 output 的细分。
 - 双链对账：Usage 与 Session reader 对同一源使用相同去重键和 Token 语义，测试允许显式说明的采样差异，不接受重复累计。
 - 隐私安全：命令只保留安全签名/类别；不得为补齐展示读取或传输原始提示词与对话内容。
+- LLM 适配器：在 `ai-orchestration` 增加服务端 OpenAI-compatible provider；composition root 仅在三个 `TRUSTTOOLS_LLM_*` 环境变量完整时注册。洞察输入是 schema 化聚合，输出是受限 JSON；没有配置时路由保持 offline，且 UI 显示未配置。
+- 洞察缓存：服务端保存短 TTL 的最后成功/失败状态，Dashboard loader 只读缓存；用户显式“刷新洞察”才触发网络调用，避免页面加载隐式消耗和重复请求。
+- Sources 迁移能力：当前没有可验证的第三方导出/导入协议，因此 presentation 只投影 disabled 原因；不生成下载包、不调用第三方写入，也不伪造成功 toast。未来迁移必须以独立 bounded context 实现版本化 schema、目标工具适配器、用户确认和完整性校验。
+- 路由兼容：新增 `/chats`、`/tracker` 作为主展示路由或别名，保留 `/sessions`、`/market` 以免破坏旧链接。
 
 ## 4. Reader 修复与扩展
 
