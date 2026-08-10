@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { buildToolOverview } from "./tool-overview.ts";
 import type { DashboardV2Snapshot } from "../../dashboard/contracts.ts";
+import { APP_ID } from "../../../lib/app-config.ts";
 
 const input: DashboardV2Snapshot = {
   generatedAt: "2026-08-10T12:00:00.000Z",
@@ -15,7 +16,7 @@ const input: DashboardV2Snapshot = {
     byProjectDay: [
       {
         source: "codex",
-        project: "trusttools",
+        project: APP_ID,
         date: "2026-08-10",
         count: 2,
       },
@@ -32,7 +33,7 @@ const input: DashboardV2Snapshot = {
       source: "codex",
       timestamp: "2026-08-10T10:00:00.000Z",
       model: "gpt-test",
-      project: "trusttools",
+      project: APP_ID,
       inputTokens: 80,
       cachedInputTokens: 0,
       cacheCreationInputTokens: 0,
@@ -50,7 +51,7 @@ const input: DashboardV2Snapshot = {
       source: "codex",
       timestamp: "2026-08-10T11:00:00.000Z",
       model: "gpt-test",
-      project: "trusttools",
+      project: APP_ID,
       inputTokens: 40,
       cachedInputTokens: 0,
       cacheCreationInputTokens: 0,
@@ -105,7 +106,7 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   assert.equal(view.cards.find((card) => card.id === "codex")?.messages, 2);
   assert.equal(view.projects[0]?.sessions, 2);
   assert.equal(view.models[0]?.key, "gpt-test");
-  assert.equal(view.projects[0]?.key, "trusttools");
+  assert.equal(view.projects[0]?.key, APP_ID);
 });
 
 test("skill evidence preserves observed zero and unavailable sessions", () => {
@@ -257,7 +258,7 @@ test("tool overview selection and all details use the same custom range", () => 
   assert.equal(view.totalEvents, 2);
   assert.deepEqual(view.trend, [{ date: "2026-08-10", tokens: 150 }]);
   assert.equal(view.models[0]?.key, "gpt-test");
-  assert.equal(view.projects[0]?.key, "trusttools");
+  assert.equal(view.projects[0]?.key, APP_ID);
   assert.equal(view.sessions, 2);
   assert.equal(view.cards.length, 2);
 });
