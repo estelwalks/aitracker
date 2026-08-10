@@ -143,12 +143,19 @@ export function createBackgroundRuntimeBootstrap(
 function createCompositionBackgroundRuntime(): BackgroundRuntime {
   return {
     start: async () => {
-      const { scheduler } = await getCompositionRoot();
-      await scheduler.start();
+      const { scheduler, monitoring } = await getCompositionRoot();
+      await monitoring.start();
+      try {
+        await scheduler.start();
+      } catch (error) {
+        await monitoring.stop();
+        throw error;
+      }
     },
     stop: async () => {
-      const { scheduler } = await getCompositionRoot();
+      const { scheduler, monitoring } = await getCompositionRoot();
       await scheduler.stop();
+      await monitoring.stop();
     },
   };
 }

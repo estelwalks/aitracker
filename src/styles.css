@@ -238,6 +238,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 34%, transparent);
+    color: var(--color-foreground);
+  }
+
   /* 中文优先排版：数字等宽对齐 */
   table,
   .tnum {
@@ -246,9 +251,12 @@
 }
 
 @utility tt-panel {
+  position: relative;
+  overflow: hidden;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px -28px rgba(0, 0, 0, 0.82);
 }
 
 @utility tt-num {
@@ -274,6 +282,8 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
   overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
 }
 
 /* 内容主区：随视口宽度平滑缩放的内边距与最大宽度 */
@@ -281,6 +291,64 @@
   width: 100%;
   margin-inline: auto;
   max-width: 1720px;
+}
+
+@utility tt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-2) 78%, transparent),
+    color-mix(in oklab, var(--color-surface) 92%, transparent)
+  );
+  box-shadow: inset 0 1px 0
+    color-mix(in oklab, var(--color-foreground) 3%, transparent);
+}
+
+@utility tt-table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+
+  & thead {
+    background: color-mix(in oklab, var(--color-surface-2) 72%, transparent);
+  }
+
+  & th {
+    height: 2.375rem;
+    padding-inline: 0.875rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.075em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  & td {
+    min-height: 2.75rem;
+    padding: 0.625rem 0.875rem;
+    border-top: 1px solid
+      color-mix(in oklab, var(--color-border) 78%, transparent);
+    vertical-align: middle;
+  }
+
+  & tbody tr {
+    transition: background-color 0.16s ease;
+  }
+
+  & tbody tr:hover {
+    background: color-mix(in oklab, var(--color-primary) 5%, transparent);
+  }
 }
 
 /* 科技感：网格底纹 / 边角标记 / 扫描线 */
@@ -358,6 +426,563 @@
   }
   &:hover::after {
     opacity: 1;
+  }
+}
+
+/* Application chrome: structured, compact, and intentionally data-first. */
+.tt-app-shell {
+  background:
+    radial-gradient(
+      circle at 88% -8%,
+      color-mix(in oklab, var(--color-primary) 10%, transparent),
+      transparent 28rem
+    ),
+    var(--color-background);
+}
+
+.tt-sidebar {
+  box-shadow: 10px 0 30px -28px rgba(0, 0, 0, 0.9);
+}
+
+.tt-brand-mark {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 20px -12px color-mix(in oklab, var(--color-primary) 94%, transparent);
+}
+
+.tt-nav-item {
+  isolation: isolate;
+}
+
+.tt-nav-item::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  content: "";
+  transition: border-color 0.16s ease;
+}
+
+.tt-nav-item[aria-current="page"]::after {
+  border-color: color-mix(in oklab, var(--color-primary) 24%, transparent);
+}
+
+.tt-app-main {
+  background-image: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--color-foreground) 1.7%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 100% 4.5rem;
+}
+
+.tt-status-bar {
+  box-shadow: 0 -12px 28px -26px rgba(0, 0, 0, 0.9);
+}
+
+.tt-panel > header {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-2) 50%, transparent),
+    transparent 72%
+  );
+}
+
+/* Dashboard V3 mirrors the reference hierarchy while remaining data agnostic. */
+.dashboard-v3 {
+  max-width: 1720px;
+}
+
+.dashboard-insight-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.75rem;
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-ok) 18%, transparent),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      color-mix(in oklab, var(--color-foreground) 8%, transparent),
+      transparent 38%
+    ),
+    var(--color-card);
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.dashboard-insight-orb {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-ok) 14%, var(--color-surface));
+  color: var(--color-ok);
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-ok) 30%, transparent);
+}
+
+.dashboard-hero-pill,
+.dashboard-hero-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+.dashboard-hero-pending {
+  background: color-mix(in oklab, var(--color-warning) 14%, transparent);
+  color: color-mix(in oklab, var(--color-warning) 78%, var(--color-foreground));
+}
+
+.dashboard-hero-status-listening {
+  background: color-mix(in oklab, var(--color-ok) 13%, transparent);
+  color: var(--color-ok);
+}
+
+.dashboard-hero-status-degraded {
+  background: color-mix(in oklab, var(--color-warning) 13%, transparent);
+  color: color-mix(in oklab, var(--color-warning) 78%, var(--color-foreground));
+}
+
+.dashboard-insight-dot {
+  width: 0.625rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-foreground) 15%, transparent);
+  transition:
+    width 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.dashboard-insight-dot-active {
+  width: 2.25rem;
+  background: color-mix(in oklab, var(--color-foreground) 72%, transparent);
+}
+
+.dashboard-hero-refresh {
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.dashboard-hero-refresh:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.dashboard-monitoring-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
+  border-radius: 0.8rem;
+  background: color-mix(in oklab, var(--color-card) 88%, var(--color-surface));
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+.dashboard-monitoring-strip > span + span::before {
+  margin-right: 0.55rem;
+  color: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+  content: "·";
+}
+
+.dashboard-monitoring-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-foreground);
+}
+
+.dashboard-monitoring-indicator {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--color-muted-foreground);
+}
+
+.dashboard-monitoring-listening .dashboard-monitoring-indicator {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--color-ok) 16%, transparent);
+}
+
+.dashboard-monitoring-degraded .dashboard-monitoring-indicator {
+  background: var(--color-warning);
+}
+
+.dashboard-monitoring-strip > strong {
+  margin-left: auto;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-ok) 16%, transparent);
+  padding: 0.15rem 0.42rem;
+  color: var(--color-ok);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-spotlight-grid,
+.dashboard-metric-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-spotlight-card,
+.dashboard-metric-card,
+.dashboard-panel {
+  min-width: 0;
+  border-radius: 1rem;
+  background: var(--color-card);
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.dashboard-spotlight-card {
+  display: flex;
+  min-height: 11.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1.25rem;
+  color: var(--color-muted-foreground);
+}
+
+.dashboard-spotlight-card > strong {
+  margin-top: 0.9rem;
+  color: var(--color-foreground);
+  font-size: clamp(1.65rem, 2.1vw, 2.35rem);
+  line-height: 1;
+}
+
+.dashboard-spotlight-card > p {
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+}
+.dashboard-spotlight-card > small {
+  margin-top: 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+.dashboard-spotlight-card > a,
+.dashboard-spotlight-card > button {
+  margin-top: auto;
+  border-radius: 999px;
+  background: var(--color-foreground);
+  padding: 0.38rem 0.7rem;
+  color: var(--color-background);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.dashboard-range-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-inline: -0.25rem;
+  padding: 0.65rem 0.25rem;
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--color-background) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.dashboard-range-bar button,
+.dashboard-range-bar input {
+  min-height: 2rem;
+  border-radius: 0.6rem;
+  padding-inline: 0.65rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.dashboard-range-bar button:hover {
+  color: var(--color-foreground);
+}
+.dashboard-range-bar .dashboard-range-active {
+  background: var(--color-surface-2);
+  color: var(--color-foreground);
+}
+.dashboard-range-bar input {
+  background: var(--color-surface-2);
+}
+
+.dashboard-metric-grid {
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
+}
+.dashboard-metric-card {
+  min-height: 6.1rem;
+  padding: 1rem;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dashboard-tool-rail {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.dashboard-tool-rail > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.dashboard-tool-rail > button:hover,
+.dashboard-tool-rail > .dashboard-tool-active {
+  background: var(--color-foreground);
+  color: var(--color-background);
+}
+
+.dashboard-panel {
+  padding: 1.15rem;
+}
+.dashboard-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.dashboard-panel-head h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.dashboard-panel-head p {
+  margin-top: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--color-muted-foreground);
+}
+
+.dashboard-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 1rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
+}
+.dashboard-workflow-grid > div {
+  min-width: 0;
+  padding: 0.75rem;
+  background: var(--color-card);
+}
+.dashboard-workflow-grid dt {
+  overflow: hidden;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.dashboard-workflow-grid dd {
+  margin-top: 0.4rem;
+  overflow: hidden;
+  color: var(--color-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.dashboard-breakdown-table {
+  width: 100%;
+  min-width: 28rem;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.dashboard-breakdown-table th {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 400;
+  text-align: left;
+}
+.dashboard-breakdown-table td {
+  padding: 0.72rem 0.65rem;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-foreground) 6%, transparent);
+}
+.dashboard-breakdown-table tr:last-child td {
+  border-bottom: 0;
+}
+.dashboard-breakdown-table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-foreground) 4%, transparent);
+}
+
+.dashboard-calendar-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+  overflow-x: auto;
+}
+.dashboard-calendar-cell {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 0.18rem;
+  background: var(--color-primary);
+}
+
+.dashboard-calendar-cell-inactive {
+  background: var(--color-border);
+}
+
+/* Reference navigation rail: fixed black foundation, with theme-specific
+   light mode still supplied by the existing .theme-light sidebar tokens. */
+:root {
+  --sidebar: oklch(0.05 0 0);
+  --sidebar-foreground: oklch(0.93 0.003 286);
+  --sidebar-accent: oklch(1 0 0 / 0.08);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.27 0 0);
+}
+
+.tt-sidebar {
+  box-shadow:
+    1px 0 0 oklch(1 0 0 / 0.035),
+    8px 0 28px -24px oklch(0 0 0 / 0.9);
+}
+
+.tt-nav-item[aria-current="page"]::after {
+  border-color: transparent;
+}
+
+@media (max-width: 1040px) {
+  .dashboard-spotlight-grid,
+  .dashboard-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 860px) {
+  .dashboard-workflow-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .dashboard-insight-hero {
+    padding: 1.25rem;
+  }
+  .dashboard-insight-orb {
+    display: none;
+  }
+  .dashboard-monitoring-strip > strong {
+    margin-left: 0;
+  }
+  .dashboard-range-bar {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-range-bar > div:last-child {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.2rem;
+  }
+  .dashboard-spotlight-card {
+    min-height: 10rem;
+  }
+  .dashboard-workflow-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tt-page-header h1 {
+  text-wrap: balance;
+}
+
+.tt-empty-state {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-surface-2) 46%, transparent),
+    transparent 60%
+  );
+}
+
+.tt-stat + .tt-stat {
+  border-left: 1px solid var(--color-border);
+}
+
+/* Table components wrapped in a horizontal rail inherit the terminal table
+   treatment without requiring every legacy module to change its DTO/view. */
+.tt-xscroll > table {
+  width: 100%;
+  min-width: max-content;
+}
+
+.tt-xscroll > table thead {
+  background: color-mix(in oklab, var(--color-surface-2) 55%, transparent);
+}
+
+.tt-xscroll > table th {
+  color: var(--color-muted-foreground);
+  font-size: 0.6875rem;
+  letter-spacing: 0.065em;
+  white-space: nowrap;
+}
+
+.tt-xscroll > table tbody tr {
+  transition: background-color 0.16s ease;
+}
+
+.tt-xscroll > table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-primary) 5%, transparent);
+}
+
+@media (max-width: 640px) {
+  .tt-toolbar {
+    align-items: stretch;
+  }
+
+  .tt-toolbar > * {
+    max-width: 100%;
+  }
+
+  .tt-status-bar > :nth-child(2) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -472,6 +1097,786 @@
 .skill-filter-chip-active > span {
   background: color-mix(in oklab, var(--color-primary) 18%, transparent);
   color: var(--color-primary);
+}
+
+/* Skill operations workspace: all cards consume safe, aggregate projections. */
+.skill-workspace-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 30%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 92% 4%,
+      color-mix(in oklab, var(--color-primary) 22%, transparent),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-surface) 92%, transparent),
+      var(--color-surface)
+    );
+}
+
+.skill-workspace-health {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 0.55rem;
+  min-width: 10.5rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--color-border);
+}
+
+.skill-workspace-health > :last-child {
+  grid-column: 1 / -1;
+}
+
+.skill-coverage-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.skill-coverage-node {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 3rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--color-surface);
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  text-align: left;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.skill-coverage-node:not(:disabled):hover,
+.skill-coverage-node-active {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 10%,
+    var(--color-surface)
+  );
+  color: var(--color-foreground);
+}
+
+.skill-coverage-node:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.skill-coverage-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-muted-foreground);
+}
+
+.skill-coverage-node-covered .skill-coverage-dot {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 14%, transparent);
+}
+
+.skill-workspace-list {
+  display: grid;
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.skill-workspace-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-surface);
+  transition: background-color 0.18s ease;
+}
+
+.skill-workspace-card:hover,
+.skill-workspace-card-selected {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 6%,
+    var(--color-surface)
+  );
+}
+
+.skill-workspace-card > [role="checkbox"] {
+  margin-top: 0.45rem;
+}
+
+.skill-workspace-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 34%, var(--color-border));
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.skill-workspace-mark:hover {
+  background: color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+
+.skill-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.25rem;
+  padding: 0.08rem 0.45rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 23%, var(--color-border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-primary) 7%, transparent);
+  color: var(--color-muted-foreground);
+  font-size: 0.65rem;
+}
+
+.skill-agent-chip-more {
+  cursor: pointer;
+}
+
+.skill-agent-chip-more:hover {
+  color: var(--color-primary);
+}
+
+.skill-workspace-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
+.skill-workspace-card-actions > :first-child {
+  min-width: 5.4rem;
+  margin-right: 0.25rem;
+}
+
+/* /agents mirrors the operational hierarchy of the live tool overview. */
+.tool-overview-reference {
+  width: min(100%, 76rem);
+  margin-inline: auto;
+}
+
+.tool-overview-insight {
+  min-height: 6.8rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-primary) 15%, transparent),
+      transparent 30%
+    ),
+    var(--color-surface);
+}
+
+.tool-overview-insight-refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.62rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.48rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.tool-overview-insight-refresh:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  color: var(--color-foreground);
+}
+
+.tool-overview-insight-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.tool-overview-insight-dots {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+}
+
+.tool-overview-insight-dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.45;
+}
+
+.tool-overview-insight-dot-active {
+  width: 1rem;
+  background: var(--color-primary);
+  opacity: 1;
+}
+
+.tool-overview-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1.25rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+
+.tool-overview-status-strip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.tool-overview-orb,
+.tool-overview-card-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: color-mix(in oklab, var(--color-primary) 13%, transparent);
+  color: var(--color-primary);
+}
+
+.tool-overview-orb {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.tool-overview-card-wall {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.tool-overview-agent-card {
+  min-height: 10.8rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  text-align: left;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.tool-overview-agent-card:hover,
+.tool-overview-agent-card-selected {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.tool-overview-agent-card[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--color-primary) 65%, transparent);
+}
+
+.tool-overview-card-mark {
+  width: 1.55rem;
+  height: 1.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.tool-overview-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.67rem;
+}
+
+.tool-overview-state::before {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--color-muted-foreground);
+  content: "";
+}
+
+.tool-overview-state-active {
+  color: var(--color-ok);
+}
+
+.tool-overview-state-active::before {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 12%, transparent);
+}
+
+.tool-overview-state-dormant {
+  color: var(--color-warn);
+}
+
+.tool-overview-state-dormant::before {
+  background: var(--color-warn);
+}
+
+.tool-overview-agent-card:has(
+  .tool-overview-state:not(.tool-overview-state-active)
+) {
+  background: color-mix(
+    in oklab,
+    var(--color-surface) 92%,
+    var(--color-background)
+  );
+}
+
+.tool-overview-card-rule {
+  height: 0.28rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-card-rule > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.tool-overview-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.7rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.tool-overview-card-facts p:last-child {
+  grid-column: 1 / -1;
+}
+
+.tool-overview-periods,
+.tool-overview-detail-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 0.55rem;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.tool-overview-detail-periods {
+  justify-content: flex-end;
+}
+
+.tool-overview-period,
+.tool-overview-periods input,
+.tool-overview-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.36rem 0.58rem;
+  border-radius: 0.38rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.tool-overview-periods input {
+  min-width: 8rem;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-period:hover,
+.tool-overview-detail-tabs button:hover {
+  color: var(--color-foreground);
+}
+
+.tool-overview-period-active,
+.tool-overview-detail-tab-active {
+  background: var(--color-background);
+  color: var(--color-foreground) !important;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.tool-overview-trend {
+  display: flex;
+  align-items: end;
+  gap: 0.35rem;
+  min-height: 8.75rem;
+  padding: 0.75rem 0.25rem 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tool-overview-composed-trend {
+  height: 13.75rem;
+  margin-top: 0.75rem;
+}
+
+.tool-overview-trend-point {
+  display: grid;
+  flex: 1 1 1.5rem;
+  min-width: 1.2rem;
+  height: 8rem;
+  grid-template-rows: 1fr auto;
+  align-items: end;
+  gap: 0.45rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.tool-overview-trend-bar {
+  display: block;
+  width: 100%;
+  min-height: 0.35rem;
+  border-radius: 0.22rem 0.22rem 0 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-primary) 78%, white),
+    var(--color-primary)
+  );
+}
+
+.tool-overview-context-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: auto minmax(8rem, 1fr) auto minmax(5rem, 8rem) minmax(
+      5rem,
+      11rem
+    );
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+  text-align: left;
+}
+
+.tool-overview-context-row:hover {
+  color: var(--color-foreground);
+}
+
+.tool-overview-context-explanation {
+  margin: 0.2rem 0 0.45rem 1.45rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.tool-overview-context-track,
+.tool-overview-breakdown-track {
+  display: block;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-context-track > span,
+.tool-overview-breakdown-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 78%,
+    var(--color-foreground)
+  );
+}
+
+.tool-overview-breakdown-row {
+  display: grid;
+  grid-template-columns:
+    minmax(7.5rem, 12rem) minmax(5rem, 1fr)
+    6.5rem 3.75rem 4.25rem;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.tool-overview-compact-empty {
+  display: grid;
+  min-height: 5.5rem;
+  place-items: center start;
+  margin: 0;
+}
+
+.tool-overview-security-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.tool-overview-security-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 4.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-security-grid span {
+  color: var(--color-muted-foreground);
+  font-size: 0.68rem;
+}
+
+.tool-overview-security-grid strong {
+  font-size: 1.1rem;
+}
+
+@media (max-width: 680px) {
+  .tool-overview-reference {
+    width: 100%;
+  }
+
+  .tool-overview-card-wall {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tool-overview-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .tool-overview-detail-periods {
+    justify-content: flex-start;
+  }
+
+  .tool-overview-context-row {
+    grid-template-columns: auto minmax(0, 1fr) auto 5.75rem;
+  }
+
+  .tool-overview-context-track {
+    display: none;
+  }
+
+  .tool-overview-card-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-overview-card-facts p:last-child {
+    grid-column: auto;
+  }
+
+  .tool-overview-breakdown-row {
+    grid-template-columns: minmax(0, 1fr) 5.5rem 3.75rem 4rem;
+  }
+
+  .tool-overview-breakdown-track {
+    display: none;
+  }
+
+  .tool-overview-security-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Shared V3 chrome: softer workspace depth from the latest prototype. These
+   tokens are visual-only and keep every existing theme's semantic colors. */
+:root {
+  --elev-1:
+    0 1px 1px oklch(0 0 0 / 0.34), 0 10px 26px -18px oklch(0 0 0 / 0.78);
+  --elev-2:
+    0 2px 6px oklch(0 0 0 / 0.42), 0 22px 48px -24px oklch(0 0 0 / 0.88);
+  --hairline: inset 0 1px 0 oklch(1 0 0 / 0.055);
+}
+
+.theme-light {
+  --elev-1:
+    0 1px 2px oklch(0.4 0.02 258 / 0.08),
+    0 8px 22px -14px oklch(0.4 0.02 258 / 0.28);
+  --elev-2:
+    0 2px 6px oklch(0.4 0.02 258 / 0.1),
+    0 18px 40px -20px oklch(0.4 0.02 258 / 0.38);
+  --hairline: inset 0 1px 0 oklch(1 0 0 / 0.9);
+}
+
+.tt-app-shell {
+  background:
+    radial-gradient(
+      circle at 88% -8%,
+      color-mix(in oklab, var(--color-primary) 9%, transparent),
+      transparent 30rem
+    ),
+    var(--color-background);
+}
+
+.tt-sidebar {
+  box-shadow: 8px 0 28px -24px oklch(0 0 0 / 0.9);
+}
+
+/* The navigation rail is deliberately driven by a native checkbox. This keeps
+   its 212px ↔ 64px transition functional even if React's event layer is
+   temporarily recovering from a development HMR update. */
+.tt-app-shell {
+  --tt-sidebar-width: 212px;
+}
+
+.tt-sidebar,
+.tt-shell-content {
+  transition:
+    width 200ms ease,
+    padding-left 200ms ease;
+}
+
+.tt-sidebar {
+  width: var(--tt-sidebar-width);
+  z-index: 40;
+  pointer-events: auto;
+}
+
+.tt-shell-content {
+  position: relative;
+  z-index: 0;
+  padding-left: var(--tt-sidebar-width);
+}
+
+/* The content column is full-width and only offset with padding. Keep its
+   stacking context behind the fixed navigation rail so it can never intercept
+   navigation or collapse-control clicks. */
+.tt-sidebar nav,
+.tt-sidebar a,
+.tt-sidebar-collapse-control {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.tt-sidebar-collapse-open {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar,
+.tt-sidebar-toggle:checked ~ .tt-shell-content {
+  --tt-sidebar-width: 64px;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-brand,
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-bottom-control {
+  justify-content: center;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-copy,
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-group-label {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-close {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-open {
+  display: block;
+}
+
+@media (max-width: 1023px) {
+  .tt-app-shell {
+    --tt-sidebar-width: 64px;
+  }
+
+  .tt-sidebar-brand,
+  .tt-sidebar-bottom-control {
+    justify-content: center;
+  }
+
+  .tt-sidebar-copy,
+  .tt-sidebar-group-label {
+    display: none;
+  }
+
+  .tt-sidebar-collapse-close {
+    display: none;
+  }
+
+  .tt-sidebar-collapse-open {
+    display: block;
+  }
+}
+
+.tt-shell-header {
+  background: color-mix(in oklab, var(--color-background) 82%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 -1px 0
+    color-mix(in oklab, var(--color-foreground) 5%, transparent);
+}
+
+.tt-brand-mark {
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.tt-nav-item[aria-current="page"] {
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+}
+
+.tt-panel,
+.tt-metric,
+.tt-empty-state {
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.tt-panel:hover,
+.tt-metric:hover {
+  box-shadow: var(--elev-2), var(--hairline);
+}
+
+.tt-panel > header {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-2) 48%, transparent),
+    transparent 70%
+  );
+}
+
+@media (max-width: 760px) {
+  .skill-workspace-health {
+    padding-top: 0.7rem;
+    padding-left: 0;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+
+  .skill-workspace-card {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .skill-workspace-card-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
 }
 
 /* Dashboard trend summary row */

@@ -147,7 +147,7 @@ Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可�
 
 - `/`：首页 Dashboard
 - `/tokens`：Token 分析
-- `/skills`：Skill 管理
+- `/agents`：工具概览与 Skill 管理
 - `/market`：Skill 市场
 - `/security`：安全检测
 - `/memory`：记忆聚合

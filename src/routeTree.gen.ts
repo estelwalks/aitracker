@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as DistillRouteImport } from './routes/distill'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as ReportsRouteImport } from './routes/reports'
@@ -17,12 +18,16 @@ import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsRoute = AgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DistillRoute = DistillRouteImport.update({
@@ -60,11 +65,6 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SkillsRoute = SkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
@@ -73,6 +73,7 @@ const SourcesRoute = SourcesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
@@ -80,11 +81,11 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
@@ -92,12 +93,12 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
   '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
@@ -105,13 +106,13 @@ export interface FileRoutesById {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agents'
     | '/distill'
     | '/market'
     | '/reports'
@@ -119,11 +120,11 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
-    | '/skills'
     | '/sources'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agents'
     | '/distill'
     | '/market'
     | '/reports'
@@ -131,11 +132,11 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
-    | '/skills'
     | '/sources'
   id:
     | '__root__'
     | '/'
+    | '/agents'
     | '/distill'
     | '/market'
     | '/reports'
@@ -143,12 +144,12 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
-    | '/skills'
     | '/sources'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsRoute: typeof AgentsRoute
   DistillRoute: typeof DistillRoute
   MarketRoute: typeof MarketRoute
   ReportsRoute: typeof ReportsRoute
@@ -156,7 +157,6 @@ export interface RootRouteChildren {
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
 }
 
@@ -167,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/distill': {
@@ -218,13 +225,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/skills': {
-      id: '/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof SkillsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sources': {
       id: '/sources'
       path: '/sources'
@@ -237,6 +237,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsRoute: AgentsRoute,
   DistillRoute: DistillRoute,
   MarketRoute: MarketRoute,
   ReportsRoute: ReportsRoute,
@@ -244,7 +245,6 @@ const rootRouteChildren: RootRouteChildren = {
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
 }
 export const routeTree = rootRouteImport

@@ -21,7 +21,6 @@ import type {
   SessionSource,
   SessionStatus,
 } from "../../contracts";
-export { getSessionsQuery } from "../api.server";
 
 const SOURCE_META: Record<
   string,
@@ -89,13 +88,16 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   const [projectId, setProjectId] = useState("all");
   const [range, setRange] =
     useState<NonNullable<SessionFilter["range"]>>("all");
-  const filter: SessionFilter = {
-    keyword: keyword.trim() || undefined,
-    source: source === "all" ? undefined : source,
-    status: status === "all" ? undefined : status,
-    projectId: projectId === "all" ? undefined : projectId,
-    range,
-  };
+  const filter = useMemo<SessionFilter>(
+    () => ({
+      keyword: keyword.trim() || undefined,
+      source: source === "all" ? undefined : source,
+      status: status === "all" ? undefined : status,
+      projectId: projectId === "all" ? undefined : projectId,
+      range,
+    }),
+    [keyword, projectId, range, source, status],
+  );
   const [appliedFilter, setAppliedFilter] = useState(filter);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -107,7 +109,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [keyword, source, status, projectId, range]);
+  }, [filter]);
   useEffect(() => {
     let cancelled = false;
     void getSessionsQuerySafe(appliedFilter)

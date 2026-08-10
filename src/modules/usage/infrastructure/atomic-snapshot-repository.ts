@@ -14,3 +14,19 @@ export function createAtomicSnapshotRepository(
     },
   };
 }
+
+/** Same atomic adapter for the production empty-state document. JSON cannot
+ * represent `undefined`, so the on-disk absence sentinel is `null`; callers
+ * still receive the domain's `undefined` for "no snapshot yet". */
+export function createNullableAtomicSnapshotRepository(
+  store: AtomicJsonStore<UsageSnapshotDto | null>,
+): SnapshotRepository {
+  return {
+    async load() {
+      return (await store.read()).value ?? undefined;
+    },
+    async save(snapshot) {
+      await store.write(snapshot);
+    },
+  };
+}

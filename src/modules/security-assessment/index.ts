@@ -5,6 +5,8 @@ export type {
   AssetHashRef,
   AssessmentFindingCounts,
   AssessmentHistorySummary,
+  BackgroundSkillSecurityScanPort,
+  BackgroundSkillSecurityScanResult,
   AssetKind,
   AssetRef,
   AssetVerdict,
@@ -23,6 +25,7 @@ export type {
   ScanRequest,
   SelectionRef,
   SecurityAssessmentInput,
+  SecurityAssessmentHistoryStore,
   SecurityAssessmentModuleContract,
   SecurityAssessmentModuleId,
 } from "./contracts";

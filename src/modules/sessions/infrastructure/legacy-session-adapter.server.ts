@@ -5,36 +5,16 @@ import {
 import { scanLocalSessions } from "../../../lib/local-sessions/scanner.server.ts";
 import type { SessionRecord } from "../../../lib/local-sessions/types.ts";
 import { err, ok, type Result } from "../../../shared/result.ts";
+import { toPublicSession } from "../application/public-projection.ts";
 import type {
   ResumeSessionErrorCode,
   ResumeSessionPort,
   ResumeSessionRequest,
   ResumeSessionResult,
   SessionRepository,
-  SessionSummary,
 } from "../contracts.ts";
 
-export function toPublicSession(record: SessionRecord): SessionSummary {
-  return {
-    sessionId: record.sessionId,
-    source: record.source,
-    title: record.title,
-    projectKey: record.projectKey,
-    model: record.model,
-    startedAt: record.startedAt,
-    endedAt: record.endedAt,
-    durationMs: record.durationMs,
-    turns: record.turns,
-    editTurns: record.editTurns,
-    retryTurns: record.retryTurns,
-    totals: record.totals,
-    cost: record.cost,
-    subagentCalls: record.subagentCalls,
-    status: record.status,
-    statusReason: record.statusReason,
-    resumeAvailable: record.resumeSafe,
-  };
-}
+export { toPublicSession } from "../application/public-projection.ts";
 
 export function createLegacySessionRepository(): SessionRepository {
   return {
