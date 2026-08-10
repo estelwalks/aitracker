@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Activity,
   ArrowDown,
   ArrowUp,
   Bot,
@@ -16,7 +17,9 @@ import {
   Layers3,
   MessagesSquare,
   RefreshCw,
+  RotateCcw,
   Search,
+  ShieldCheck,
   ShieldBan,
   Sparkles,
   Trash2,
@@ -131,6 +134,7 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
+  const [insightIndex, setInsightIndex] = useState(0);
   const [page, setPage] = useState(1);
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
@@ -242,13 +246,8 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
     [agent, query, snapshot, sort, sortDir, source, updateStatus],
   );
   const toolOverview = useMemo(
-    () =>
-      buildToolOverview(
-        { tools: usage.v2.tools, events: usage.snapshot.details },
-        selectedToolId,
-        toolPeriod,
-      ),
-    [selectedToolId, toolPeriod, usage.snapshot.details, usage.v2.tools],
+    () => buildToolOverview(usage.v2, selectedToolId, toolPeriod),
+    [selectedToolId, toolPeriod, usage.v2],
   );
 
   // Paginated list
@@ -605,6 +604,93 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
     1,
   );
   const maxDetailTokens = Math.max(...detailRows.map((item) => item.tokens), 1);
+  const security = usage.monitoring?.security;
+  const insights = [
+    ...(toolOverview.selected == null
+      ? [
+          {
+            id: "empty",
+            title: t("skills.agentOverview.insightTitle"),
+            description: t("skills.agentOverview.noActivity"),
+            detail: t("skills.agentOverview.noActivity"),
+          },
+        ]
+      : [
+          {
+            id: "activity",
+            title: t("skills.agentOverview.insightActivityTitle", {
+              tool: toolOverview.selected.name,
+            }),
+            description: t("skills.agentOverview.insightActivityDescription", {
+              events: format.formatNumber(toolOverview.totalEvents),
+              tokens: format.formatTokens(toolOverview.totalTokens),
+            }),
+            detail: toolOverview.selected.lastActiveAt
+              ? t("skills.agentOverview.lastActive", {
+                  time: format.formatDateTime(
+                    toolOverview.selected.lastActiveAt,
+                    false,
+                  ),
+                })
+              : t("skills.agentOverview.noActivity"),
+          },
+        ]),
+    ...(toolOverview.cacheRate == null
+      ? []
+      : [
+          {
+            id: "cache",
+            title: t("skills.agentOverview.insightCacheTitle"),
+            description: t("skills.agentOverview.insightCacheDescription", {
+              rate: format.formatPercent(toolOverview.cacheRate),
+            }),
+            detail: t("skills.agentOverview.cacheEvidence"),
+          },
+        ]),
+    ...(toolOverview.skillUsage.observed
+      ? [
+          {
+            id: "skill",
+            title: t("skills.agentOverview.insightSkillTitle"),
+            description: t("skills.agentOverview.insightSkillDescription", {
+              count: format.formatNumber(toolOverview.skillUsage.calls),
+            }),
+            detail: t("skills.agentOverview.skillEvidenceObserved", {
+              count: format.formatNumber(toolOverview.skillUsage.calls),
+            }),
+          },
+        ]
+      : []),
+    ...(toolOverview.sessions == null
+      ? []
+      : [
+          {
+            id: "sessions",
+            title: t("skills.agentOverview.insightSessionTitle"),
+            description: t("skills.agentOverview.insightSessionDescription", {
+              count: format.formatNumber(toolOverview.sessions),
+            }),
+            detail: t("skills.agentOverview.sessionAggregateHint"),
+          },
+        ]),
+    ...(security == null
+      ? []
+      : [
+          {
+            id: "security",
+            title: t("skills.agentOverview.insightSecurityTitle"),
+            description: t("skills.agentOverview.insightSecurityDescription", {
+              count: format.formatNumber(
+                security.suspiciousCount + security.dangerousCount,
+              ),
+            }),
+            detail: t("skills.agentOverview.securityAssessed", {
+              count: format.formatNumber(security.assessedAssetCount),
+            }),
+          },
+        ]),
+  ];
+  const currentInsight = insights[insightIndex % insights.length]!;
 
   return (
     <>
@@ -616,37 +702,84 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
         </div>
 
         <section className="tool-overview-insight">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="tool-overview-orb">
-              <Bot className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">
-                {toolOverview.selected?.name ??
-                  t("skills.agentOverview.insightTitle")}
-              </h2>
-              <p className="mt-2 max-w-4xl text-[13px] leading-6 text-muted-foreground">
-                {toolOverview.selected == null
-                  ? t("skills.agentOverview.noActivity")
-                  : t("skills.agentOverview.insightDescription")}
-              </p>
-              {toolOverview.selected && (
-                <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-                  {t("skills.agentOverview.observedEvents", {
-                    count: format.formatNumber(toolOverview.totalEvents),
-                  })}
-                  {" · "}
-                  {toolOverview.skillUsage.observed
-                    ? t("skills.agentOverview.skillEvidenceObserved", {
-                        count: format.formatNumber(
-                          toolOverview.skillUsage.calls,
-                        ),
-                      })
-                    : t("skills.agentOverview.skillEvidenceUnavailable")}
+          <div className="flex min-w-0 items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="tool-overview-orb">
+                <Bot className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold">
+                  {currentInsight.title}
+                </h2>
+                <p className="mt-2 max-w-3xl text-[13px] leading-6 text-muted-foreground">
+                  {currentInsight.description}
                 </p>
-              )}
+                <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+                  {currentInsight.detail}
+                </p>
+                {insights.length > 1 && (
+                  <div
+                    className="tool-overview-insight-dots"
+                    role="tablist"
+                    aria-label={t("skills.agentOverview.insightTitle")}
+                  >
+                    {insights.map((item, index) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={index === insightIndex % insights.length}
+                        aria-label={t("skills.agentOverview.insightDot", {
+                          index: format.formatNumber(index + 1),
+                        })}
+                        onClick={() => setInsightIndex(index)}
+                        className={cn(
+                          "tool-overview-insight-dot",
+                          index === insightIndex % insights.length &&
+                            "tool-overview-insight-dot-active",
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
+            <button
+              type="button"
+              disabled={insights.length < 2}
+              onClick={() =>
+                setInsightIndex((current) =>
+                  insights.length ? (current + 1) % insights.length : 0,
+                )
+              }
+              className="tool-overview-insight-refresh"
+            >
+              <RotateCcw className="size-3" />
+              {t("skills.agentOverview.rotateInsight")}
+            </button>
           </div>
+        </section>
+
+        <section className="tool-overview-status-strip">
+          <span>
+            <Activity className="size-3.5" />
+            {t("skills.agentOverview.toolCoverage", {
+              detected: format.formatNumber(toolOverview.detectedToolCount),
+              available: format.formatNumber(toolOverview.availableToolCount),
+            })}
+          </span>
+          <span>
+            {t("skills.agentOverview.activeTools", {
+              count: format.formatNumber(toolOverview.activeToolCount),
+            })}
+          </span>
+          <span>
+            {toolOverview.sessions == null
+              ? t("skills.agentOverview.sessionsUnavailable")
+              : t("skills.agentOverview.sessionsObserved", {
+                  count: format.formatNumber(toolOverview.sessions),
+                })}
+          </span>
         </section>
 
         <div className="tool-overview-card-wall">
@@ -654,7 +787,11 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
             <button
               key={tool.id}
               type="button"
-              onClick={() => setSelectedToolId(tool.id)}
+              onClick={() => {
+                setSelectedToolId(tool.id);
+                setInsightIndex(0);
+              }}
+              aria-pressed={toolOverview.selected?.id === tool.id}
               className={cn(
                 "tool-overview-agent-card",
                 toolOverview.selected?.id === tool.id &&
@@ -676,7 +813,11 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                 >
                   {tool.active
                     ? t("skills.agentOverview.active")
-                    : t("skills.agentOverview.inactive")}
+                    : tool.state === "detected"
+                      ? t("skills.agentOverview.state.detected")
+                      : tool.state === "available"
+                        ? t("skills.agentOverview.state.available")
+                        : t("skills.agentOverview.state.unavailable")}
                 </span>
               </div>
               <div className="mt-5 flex items-end justify-between gap-3">
@@ -688,7 +829,11 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                 </span>
               </div>
               <div className="tool-overview-card-rule mt-2">
-                <span style={{ width: `${tool.active ? 100 : 10}%` }} />
+                <span
+                  style={{
+                    width: `${Math.max(tool.share, tool.active ? 3 : 0)}%`,
+                  }}
+                />
               </div>
               <div className="mt-3 space-y-1 text-left font-mono text-[10px] text-muted-foreground">
                 <p>
@@ -702,6 +847,25 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                         count: format.formatNumber(tool.skillUsage.calls),
                       })
                     : t("skills.agentOverview.skillEvidenceUnavailable")}
+                </p>
+                <p>
+                  {t("skills.agentOverview.tokenShare", {
+                    percent: format.formatPercent(tool.share),
+                  })}
+                </p>
+                <p>
+                  {tool.sessions == null
+                    ? t("skills.agentOverview.sessionsUnavailable")
+                    : t("skills.agentOverview.sessionsObserved", {
+                        count: format.formatNumber(tool.sessions),
+                      })}
+                </p>
+                <p>
+                  {tool.cacheRate == null
+                    ? t("skills.agentOverview.cacheUnavailable")
+                    : t("skills.agentOverview.cacheRate", {
+                        rate: format.formatPercent(tool.cacheRate),
+                      })}
                 </p>
                 <p>
                   {tool.lastActiveAt
@@ -730,7 +894,10 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setToolPeriod(value)}
+                  onClick={() => {
+                    setToolPeriod(value);
+                    setInsightIndex(0);
+                  }}
                   className={cn(
                     "tool-overview-period",
                     toolPeriod === value && "tool-overview-period-active",
@@ -861,11 +1028,68 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                     {format.formatTokens(row.tokens)}
                   </span>
                   <span className="text-right font-mono text-[10px] text-muted-foreground">
-                    {format.formatNumber(row.events)}
+                    {detailMode === "projects"
+                      ? row.sessions == null
+                        ? t("skills.agentOverview.sessionsUnavailable")
+                        : t("skills.agentOverview.projectSessions", {
+                            count: format.formatNumber(row.sessions),
+                          })
+                      : t("skills.agentOverview.observedEvents", {
+                          count: format.formatNumber(row.events),
+                        })}
                   </span>
                 </div>
               ))}
             </div>
+          )}
+        </Panel>
+
+        <Panel
+          title={t("skills.agentOverview.securityTitle")}
+          action={<ShieldCheck className="size-4 text-muted-foreground" />}
+        >
+          {security == null ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              {t("skills.agentOverview.securityUnavailable")}
+            </p>
+          ) : (
+            <>
+              <p className="mb-4 text-[11px] text-muted-foreground">
+                {t("skills.agentOverview.securityHint", {
+                  time: format.formatDateTime(security.assessedAt, false),
+                })}
+              </p>
+              <div className="tool-overview-security-grid">
+                <div>
+                  <span>{t("skills.agentOverview.securityAssessedLabel")}</span>
+                  <strong className="tt-num">
+                    {format.formatNumber(security.assessedAssetCount)}
+                  </strong>
+                </div>
+                <div>
+                  <span>
+                    {t("skills.agentOverview.securityAttentionLabel")}
+                  </span>
+                  <strong className="tt-num">
+                    {format.formatNumber(
+                      security.suspiciousCount + security.dangerousCount,
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>{t("skills.agentOverview.securityUnknownLabel")}</span>
+                  <strong className="tt-num">
+                    {format.formatNumber(security.unknownCount)}
+                  </strong>
+                </div>
+                <div>
+                  <span>{t("skills.agentOverview.securityFailedLabel")}</span>
+                  <strong className="tt-num">
+                    {format.formatNumber(security.failedAssetCount)}
+                  </strong>
+                </div>
+              </div>
+            </>
           )}
         </Panel>
       </section>
