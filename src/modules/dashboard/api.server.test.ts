@@ -99,7 +99,12 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   const result = toDashboardV2Snapshot({
     snapshot,
     skills: { available: true, count: 3, generatedAt: "2026-08-10T00:00:00Z" },
-    sessions: { available: true, generatedAt: null, records: [] },
+    sessions: {
+      available: true,
+      generatedAt: null,
+      byProjectDay: [],
+      bySourceDay: [],
+    },
     pricingAvailable: true,
   });
 
