@@ -268,7 +268,11 @@ export function buildToolOverview(
     const scannedTool = sourceTools.get(configuredTool.id);
     const tool = {
       id: configuredTool.id,
-      name: configuredTool.name,
+      // The dashboard snapshot is built server-side from the public tool
+      // manifest, whose name is the registry definition's `display.name`.
+      // Keep the fixed text only for a missing source projection so the
+      // two-card layout remains usable while a scanner is unavailable.
+      name: scannedTool?.name ?? configuredTool.name,
       available: scannedTool?.available ?? false,
       detected: scannedTool?.detected ?? false,
     };
