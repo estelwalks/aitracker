@@ -36,6 +36,26 @@ test("installation facts merge executable and directory evidence", () => {
   assert.deepEqual(codex?.detectedPaths, [`${home}/.codex`]);
 });
 
+test("Gemini CLI is not inferred from the shared .gemini config root", () => {
+  const home = "/isolated/home";
+  const [gemini] = deriveToolInstallationFacts(
+    AI_TOOLS.filter((tool) => tool.id === "gemini-cli"),
+    new Set([`${home}/.gemini`]),
+    home,
+    "macos",
+  );
+  assert.equal(gemini?.installed, false);
+
+  const [withSessions] = deriveToolInstallationFacts(
+    AI_TOOLS.filter((tool) => tool.id === "gemini-cli"),
+    new Set([`${home}/.gemini`, `${home}/.gemini/tmp`]),
+    home,
+    "macos",
+  );
+  assert.equal(withSessions?.installed, true);
+  assert.deepEqual(withSessions?.detectedPaths, [`${home}/.gemini/tmp`]);
+});
+
 import { describe, test as it } from "node:test";
 import { detectRootsForOs, osFromProcess } from "./detection.server.ts";
 

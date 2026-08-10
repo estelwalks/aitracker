@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import {
   mkdir,
@@ -52,6 +53,7 @@ import type {
   LocalUsageSnapshot,
   LocalUsageSource,
   LocalUsageSourceSummary,
+  LocalTokenCounts,
 } from "./types.ts";
 import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
 
@@ -173,6 +175,12 @@ interface CachedClaudeEvent {
   event: LocalUsageEvent;
 }
 
+interface CachedIdentifiedEvent {
+  /** SHA-256 identity derived only from stable ids or non-content metadata. */
+  identity: string;
+  event: LocalUsageEvent;
+}
+
 interface PersistentFileEntryBase {
   path: string;
   mtimeMs: number;
@@ -190,8 +198,17 @@ interface PersistentCodexFileEntry extends PersistentFileEntryBase {
   events: LocalUsageEvent[];
 }
 
+interface PersistentStructuredFileEntry extends PersistentFileEntryBase {
+  source: "gemini-cli" | "grok" | "openclaw";
+  identifiedEvents: CachedIdentifiedEvent[];
+  diagnostics: LocalUsageDiagnostic[];
+}
+
 interface PersistentGenericFileEntry extends PersistentFileEntryBase {
-  source: Exclude<LocalUsageSource, "claude-code" | "codex">;
+  source: Exclude<
+    LocalUsageSource,
+    "claude-code" | "codex" | "gemini-cli" | "grok" | "openclaw"
+  >;
   events: LocalUsageEvent[];
   diagnostics: LocalUsageDiagnostic[];
 }
@@ -199,6 +216,7 @@ interface PersistentGenericFileEntry extends PersistentFileEntryBase {
 type PersistentFileEntry =
   | PersistentClaudeFileEntry
   | PersistentCodexFileEntry
+  | PersistentStructuredFileEntry
   | PersistentGenericFileEntry;
 
 interface PersistentUsageIndex {
@@ -243,6 +261,21 @@ function isTimestampInRange(
 ): boolean {
   const time = timestamp.getTime();
   return time >= cutoffTime && time <= nowTime + FUTURE_TIMESTAMP_TOLERANCE_MS;
+}
+
+function privacyFingerprint(source: LocalUsageSource, value: unknown): string {
+  return createHash("sha256")
+    .update("trusttools-local-usage-event\0")
+    .update(source)
+    .update("\0")
+    .update(JSON.stringify(value))
+    .digest("hex");
+}
+
+function rawNonNegativeToken(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
 }
 
 function isCachedEvent(
@@ -387,6 +420,30 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
       size: entry.size,
       malformedLines: entry.malformedLines,
       claudeEvents,
+    };
+  }
+
+  if (source === "gemini-cli" || source === "grok" || source === "openclaw") {
+    if (!Array.isArray(entry.identifiedEvents)) return undefined;
+    const identifiedEvents: CachedIdentifiedEvent[] = [];
+    for (const value of entry.identifiedEvents) {
+      const cached = asObject(value);
+      const identity = stringValue(cached?.identity);
+      if (identity == null || !isCachedEvent(cached?.event, source)) {
+        return undefined;
+      }
+      identifiedEvents.push({ identity, event: cached.event });
+    }
+    return {
+      source,
+      path,
+      mtimeMs: entry.mtimeMs,
+      size: entry.size,
+      malformedLines: entry.malformedLines,
+      identifiedEvents,
+      diagnostics: Array.isArray(entry.diagnostics)
+        ? entry.diagnostics.filter(isCachedDiagnostic)
+        : [],
     };
   }
 
@@ -1401,6 +1458,439 @@ async function scanWorkbuddy(
   };
 }
 
+function geminiTokenSnapshot(value: unknown): LocalTokenCounts | undefined {
+  const tokens = asObject(value);
+  if (tokens == null) return undefined;
+  const inputTokens = tokenValue(tokens.input);
+  const cachedInputTokens = tokenValue(tokens.cached);
+  const output = tokenValue(tokens.output);
+  const tool = tokenValue(tokens.tool);
+  const reasoningOutputTokens = tokenValue(tokens.thoughts);
+  const outputTokens = output + tool;
+  const componentTotal =
+    inputTokens + cachedInputTokens + outputTokens + reasoningOutputTokens;
+  const totalTokens = Math.max(tokenValue(tokens.total), componentTotal);
+  return {
+    inputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens: 0,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens,
+  };
+}
+
+function diffGeminiSnapshot(
+  current: LocalTokenCounts,
+  previous?: LocalTokenCounts,
+): LocalTokenCounts | undefined {
+  if (previous == null) return current.totalTokens > 0 ? current : undefined;
+  const reset = current.totalTokens < previous.totalTokens;
+  if (reset) return current.totalTokens > 0 ? current : undefined;
+  const deltaComponents = {
+    inputTokens: Math.max(0, current.inputTokens - previous.inputTokens),
+    cachedInputTokens: Math.max(
+      0,
+      current.cachedInputTokens - previous.cachedInputTokens,
+    ),
+    cacheCreationInputTokens: Math.max(
+      0,
+      current.cacheCreationInputTokens - previous.cacheCreationInputTokens,
+    ),
+    outputTokens: Math.max(0, current.outputTokens - previous.outputTokens),
+    reasoningOutputTokens: Math.max(
+      0,
+      current.reasoningOutputTokens - previous.reasoningOutputTokens,
+    ),
+  };
+  const componentTotal =
+    deltaComponents.inputTokens +
+    deltaComponents.cachedInputTokens +
+    deltaComponents.cacheCreationInputTokens +
+    deltaComponents.outputTokens +
+    deltaComponents.reasoningOutputTokens;
+  const delta = {
+    ...deltaComponents,
+    totalTokens: Math.max(
+      componentTotal,
+      current.totalTokens - previous.totalTokens,
+    ),
+  };
+  return delta.totalTokens > 0 ? delta : undefined;
+}
+
+async function parseGeminiUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  let session: JsonObject | undefined;
+  try {
+    session = asObject(JSON.parse(await readFile(file.path, "utf8")));
+  } catch {
+    return { identifiedEvents: [], malformedLines: 1, diagnostics: [] };
+  }
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const sessionId =
+    sessionIdFromStructuredValue(
+      "gemini-cli",
+      session?.id ?? session?.sessionId ?? session?.session_id,
+    ) ?? fallbackSessionId;
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  let previous: LocalTokenCounts | undefined;
+  let model = "unknown";
+
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = asObject(messages[index]);
+    if (message == null) continue;
+    model = stringValue(message.model) ?? model;
+    const current = geminiTokenSnapshot(message.tokens);
+    if (current == null) continue;
+    const delta = diffGeminiSnapshot(current, previous);
+    previous = current;
+    const timestamp = timestampValue(message.timestamp);
+    if (delta == null || timestamp == null) continue;
+    identifiedEvents.push({
+      identity: privacyFingerprint("gemini-cli", [sessionId, index]),
+      event: {
+        source: "gemini-cli",
+        timestamp: timestamp.toISOString(),
+        sessionId,
+        model,
+        project: "unknown",
+        ...delta,
+      },
+    });
+  }
+  return { identifiedEvents, malformedLines: 0, diagnostics: [] };
+}
+
+function grokTimestamp(record: JsonObject, meta: JsonObject | undefined) {
+  const agentTimestamp = meta?.agentTimestampMs;
+  if (typeof agentTimestamp === "number" && agentTimestamp > 0) {
+    return timestampValue(agentTimestamp);
+  }
+  const envelope = record.timestamp;
+  if (typeof envelope === "number" && envelope > 0) {
+    return timestampValue(
+      envelope > 1_000_000_000_000 ? envelope : envelope * 1_000,
+    );
+  }
+  return timestampValue(envelope);
+}
+
+function grokTokenCounts(usage: JsonObject): LocalTokenCounts | undefined {
+  const rawInputTokens = tokenValue(usage.inputTokens ?? usage.input_tokens);
+  const cacheReadTokens = tokenValue(
+    usage.cachedReadTokens ??
+      usage.cacheReadTokens ??
+      usage.cache_read_input_tokens,
+  );
+  const cachedInputTokens =
+    cacheReadTokens || tokenValue(usage.cached_input_tokens);
+  const inputTokens = Math.max(0, rawInputTokens - cacheReadTokens);
+  const cacheCreationInputTokens = tokenValue(
+    usage.cachedWriteTokens ??
+      usage.cacheWriteTokens ??
+      usage.cache_creation_input_tokens,
+  );
+  const outputTokens = tokenValue(usage.outputTokens ?? usage.output_tokens);
+  const reasoningOutputTokens = tokenValue(
+    usage.reasoningTokens ?? usage.reasoning_output_tokens,
+  );
+  const componentTotal =
+    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+  const totalTokens =
+    tokenValue(usage.totalTokens ?? usage.total_tokens) || componentTotal;
+  if (totalTokens === 0) return undefined;
+  return {
+    inputTokens,
+    cachedInputTokens,
+    cacheCreationInputTokens,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens,
+  };
+}
+
+async function parseGrokUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  const malformedLines = await readJsonLines(file.path, (record) => {
+    const params = asObject(record.params);
+    const update = asObject(params?.update);
+    if (stringValue(update?.sessionUpdate) !== "turn_completed") return;
+    const usage = asObject(update?.usage);
+    const modelUsage = asObject(usage?.modelUsage);
+    const meta = asObject(params?._meta);
+    const timestamp = grokTimestamp(record, meta);
+    if (modelUsage == null || timestamp == null) return;
+    const sessionId =
+      sessionIdFromStructuredValue("grok", params?.sessionId) ??
+      fallbackSessionId;
+    const eventId = stringValue(meta?.eventId);
+
+    for (const [model, rawModelUsage] of Object.entries(modelUsage)) {
+      const counts = grokTokenCounts(asObject(rawModelUsage) ?? {});
+      if (counts == null) continue;
+      const identityMaterial =
+        eventId == null
+          ? [timestamp.toISOString(), sessionId, model, counts]
+          : [eventId, model];
+      identifiedEvents.push({
+        identity: privacyFingerprint("grok", identityMaterial),
+        event: {
+          source: "grok",
+          timestamp: timestamp.toISOString(),
+          sessionId,
+          model,
+          project: "unknown",
+          ...counts,
+        },
+      });
+    }
+  });
+  return { identifiedEvents, malformedLines, diagnostics: [] };
+}
+
+function openclawUsage(value: unknown): JsonObject | undefined {
+  const usage = asObject(value);
+  if (usage == null) return undefined;
+  for (const field of [
+    "input",
+    "cacheRead",
+    "cacheWrite",
+    "output",
+    "totalTokens",
+  ]) {
+    if (usage[field] != null && rawNonNegativeToken(usage[field]) == null) {
+      return undefined;
+    }
+  }
+  return usage;
+}
+
+async function parseOpenclawUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  const malformedLines = await readJsonLines(file.path, (record) => {
+    if (record.type !== "message") return;
+    const message = asObject(record.message);
+    if (message?.role !== "assistant") return;
+    const usage = openclawUsage(message.usage);
+    const timestamp = timestampValue(record.timestamp);
+    if (usage == null || timestamp == null) return;
+    const rawInputTokens = tokenValue(usage.input);
+    const cachedInputTokens = tokenValue(usage.cacheRead);
+    const inputTokens = Math.max(0, rawInputTokens - cachedInputTokens);
+    const cacheCreationInputTokens = tokenValue(usage.cacheWrite);
+    const outputTokens = tokenValue(usage.output);
+    const totalTokens =
+      inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+    if (totalTokens === 0) return;
+    const model = stringValue(message.model) ?? "unknown";
+    const stableId = stringValue(record.id);
+    const identityMaterial =
+      stableId == null
+        ? {
+            timestamp: record.timestamp,
+            messageTimestamp: message.timestamp,
+            responseId: stringValue(message.responseId) ?? null,
+            model,
+            provider: stringValue(message.provider) ?? null,
+            api: stringValue(message.api) ?? null,
+            inputTokens,
+            cachedInputTokens,
+            cacheCreationInputTokens,
+            outputTokens,
+            totalTokens,
+          }
+        : { stableId };
+    identifiedEvents.push({
+      identity: privacyFingerprint("openclaw", identityMaterial),
+      event: {
+        source: "openclaw",
+        timestamp: timestamp.toISOString(),
+        sessionId: fallbackSessionId,
+        model,
+        project: "unknown",
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens: 0,
+        totalTokens,
+      },
+    });
+  });
+  return { identifiedEvents, malformedLines, diagnostics: [] };
+}
+
+type StructuredParser = typeof parseGeminiUsageFile;
+
+async function scanStructuredAdapter(
+  adapter: UsageAdapterContract,
+  parser: StructuredParser,
+  mergeMode: "unique" | "multiset",
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+): Promise<SourceScanResult> {
+  const selected = await collectAdapterFiles(
+    homeDirectory,
+    adapter.paths,
+    cutoffTime,
+    maxFiles,
+  );
+  const cacheEntries: PersistentStructuredFileEntry[] = [];
+  const diagnostics: LocalUsageDiagnostic[] = [];
+  let filesRead = 0;
+  let filesReused = 0;
+  let filesParsed = 0;
+  let malformedLines = 0;
+
+  for (const file of selected.files) {
+    const cached = cachedFiles.get(file.path);
+    let entry: PersistentStructuredFileEntry;
+    if (fileSignatureMatches(file, cached, adapter.source)) {
+      entry = cached as PersistentStructuredFileEntry;
+      filesReused += 1;
+    } else if (file.size > adapter.maxFileSizeBytes) {
+      entry = {
+        source: adapter.source as PersistentStructuredFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: 0,
+        identifiedEvents: [],
+        diagnostics: [
+          diagnostic(
+            adapter,
+            "file-too-large",
+            file.path,
+            `日志超过 ${adapter.maxFileSizeBytes} 字节读取上限，已跳过。`,
+          ),
+        ],
+      };
+      filesParsed += 1;
+    } else {
+      const parsed = await parser(
+        file,
+        sessionIdFromRelativeFile(
+          adapter.source,
+          relative(homeDirectory, file.path),
+        ),
+      );
+      entry = {
+        source: adapter.source as PersistentStructuredFileEntry["source"],
+        path: file.path,
+        mtimeMs: file.modifiedAt,
+        size: file.size,
+        malformedLines: parsed.malformedLines,
+        identifiedEvents: parsed.identifiedEvents,
+        diagnostics: parsed.diagnostics,
+      };
+      filesParsed += 1;
+    }
+    cacheEntries.push(entry);
+    diagnostics.push(...entry.diagnostics);
+    malformedLines += entry.malformedLines;
+    filesRead += 1;
+  }
+
+  const events: LocalUsageEvent[] = [];
+  if (mergeMode === "unique") {
+    const byIdentity = new Map<string, LocalUsageEvent>();
+    for (const entry of cacheEntries) {
+      for (const identified of entry.identifiedEvents) {
+        if (
+          isTimestampInRange(
+            new Date(identified.event.timestamp),
+            cutoffTime,
+            nowTime,
+          ) &&
+          !byIdentity.has(identified.identity)
+        ) {
+          byIdentity.set(identified.identity, identified.event);
+        }
+      }
+    }
+    events.push(...byIdentity.values());
+  } else {
+    const maximumCount = new Map<string, number>();
+    const representative = new Map<string, LocalUsageEvent>();
+    for (const entry of cacheEntries) {
+      const perFileCount = new Map<string, number>();
+      for (const identified of entry.identifiedEvents) {
+        if (
+          !isTimestampInRange(
+            new Date(identified.event.timestamp),
+            cutoffTime,
+            nowTime,
+          )
+        ) {
+          continue;
+        }
+        perFileCount.set(
+          identified.identity,
+          (perFileCount.get(identified.identity) ?? 0) + 1,
+        );
+        representative.set(identified.identity, identified.event);
+      }
+      for (const [identity, count] of perFileCount) {
+        maximumCount.set(
+          identity,
+          Math.max(maximumCount.get(identity) ?? 0, count),
+        );
+      }
+    }
+    for (const [identity, count] of maximumCount) {
+      const event = representative.get(identity);
+      if (event == null) continue;
+      for (let occurrence = 0; occurrence < count; occurrence += 1) {
+        events.push(event);
+      }
+    }
+  }
+
+  return {
+    events,
+    summary: {
+      source: adapter.source,
+      available: events.length > 0,
+      detected: selected.detected,
+      paths: adapter.paths.map((pathConfig) =>
+        join(homeDirectory, pathConfig.root),
+      ),
+      filesConsidered: selected.files.length,
+      filesRead,
+      filesReused,
+      filesParsed,
+      malformedLines,
+      events: events.length,
+      diagnostics,
+    },
+    cacheEntries,
+  };
+}
+
 function diagnostic(
   adapter: UsageAdapterContract,
   code: LocalUsageDiagnostic["code"],
@@ -1778,47 +2268,86 @@ export async function scanLocalUsage(
   const genericAdapters = GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
     (adapter) => adapter.source !== "workbuddy",
   );
-  const [claude, codex, workbuddy, ...genericResults] = await Promise.all([
-    scanClaude(
-      claudeRoots,
+  const structuredReader = (
+    reader: "gemini-session-v1" | "grok-turn-v1" | "openclaw-session-v1",
+    parser: StructuredParser,
+    mergeMode: "unique" | "multiset",
+  ) => {
+    const adapter = BUILTIN_USAGE_ADAPTERS.find(
+      (candidate) => candidate.reader === reader,
+    );
+    if (adapter == null) {
+      throw new Error(`Missing registered usage reader plan: ${reader}`);
+    }
+    return scanStructuredAdapter(
+      adapter,
+      parser,
+      mergeMode,
       homeDirectory,
       cutoffTime,
       nowTime,
       maxFiles,
       cachedFiles,
-    ).catch((error) => sourceFailure("claude-code", error)),
-    scanCodex(
-      codexRoots,
-      homeDirectory,
-      cutoffTime,
-      nowTime,
-      maxFiles,
-      cachedFiles,
-    ).catch((error) => sourceFailure("codex", error)),
-    scanWorkbuddy(
-      homeDirectory,
-      cutoffTime,
-      nowTime,
-      maxFiles,
-      cachedFiles,
-    ).catch((error) => sourceFailure("workbuddy", error)),
-    ...genericAdapters.map((adapter) =>
-      scanGenericAdapter(
-        adapter,
+    );
+  };
+  const [claude, codex, workbuddy, gemini, grok, openclaw, ...genericResults] =
+    await Promise.all([
+      scanClaude(
+        claudeRoots,
         homeDirectory,
         cutoffTime,
         nowTime,
         maxFiles,
         cachedFiles,
-      ).catch((error) => sourceFailure(adapter.source, error)),
-    ),
-  ]);
+      ).catch((error) => sourceFailure("claude-code", error)),
+      scanCodex(
+        codexRoots,
+        homeDirectory,
+        cutoffTime,
+        nowTime,
+        maxFiles,
+        cachedFiles,
+      ).catch((error) => sourceFailure("codex", error)),
+      scanWorkbuddy(
+        homeDirectory,
+        cutoffTime,
+        nowTime,
+        maxFiles,
+        cachedFiles,
+      ).catch((error) => sourceFailure("workbuddy", error)),
+      structuredReader(
+        "gemini-session-v1",
+        parseGeminiUsageFile,
+        "unique",
+      ).catch((error) => sourceFailure("gemini-cli", error)),
+      structuredReader("grok-turn-v1", parseGrokUsageFile, "unique").catch(
+        (error) => sourceFailure("grok", error),
+      ),
+      structuredReader(
+        "openclaw-session-v1",
+        parseOpenclawUsageFile,
+        "multiset",
+      ).catch((error) => sourceFailure("openclaw", error)),
+      ...genericAdapters.map((adapter) =>
+        scanGenericAdapter(
+          adapter,
+          homeDirectory,
+          cutoffTime,
+          nowTime,
+          maxFiles,
+          cachedFiles,
+        ).catch((error) => sourceFailure(adapter.source, error)),
+      ),
+    ]);
 
   // The snapshot is built exclusively from the native adapters above.
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
     ...workbuddy.cacheEntries,
+    ...gemini.cacheEntries,
+    ...grok.cacheEntries,
+    ...openclaw.cacheEntries,
     ...genericResults.flatMap((result) => result.cacheEntries),
   ].sort((left, right) => left.path.localeCompare(right.path));
   const shouldWritePersistentIndex =
@@ -1827,6 +2356,9 @@ export async function scanLocalUsage(
       claude.summary.filesParsed > 0 ||
       codex.summary.filesParsed > 0 ||
       workbuddy.summary.filesParsed > 0 ||
+      gemini.summary.filesParsed > 0 ||
+      grok.summary.filesParsed > 0 ||
+      openclaw.summary.filesParsed > 0 ||
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
@@ -1849,6 +2381,9 @@ export async function scanLocalUsage(
     ...claude.events,
     ...codex.events,
     ...workbuddy.events,
+    ...gemini.events,
+    ...grok.events,
+    ...openclaw.events,
     ...genericResults.flatMap((result) => result.events),
   ];
   const events = nativeEvents.map((event) => ({
@@ -1860,6 +2395,9 @@ export async function scanLocalUsage(
     claude.summary,
     codex.summary,
     workbuddy.summary,
+    gemini.summary,
+    grok.summary,
+    openclaw.summary,
     ...genericResults.map((result) => result.summary),
   ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {

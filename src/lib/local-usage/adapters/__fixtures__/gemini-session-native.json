@@ -1,0 +1,52 @@
+{
+  "sessionId": "private-gemini-session",
+  "messages": [
+    {
+      "timestamp": "2026-07-27T09:00:00.000Z",
+      "model": "gemini-2.5-pro",
+      "content": "PRIVATE_GEMINI_BODY",
+      "tokens": {
+        "input": 100,
+        "cached": 20,
+        "output": 30,
+        "tool": 5,
+        "thoughts": 10,
+        "total": 165
+      }
+    },
+    {
+      "timestamp": "2026-07-27T09:01:00.000Z",
+      "tokens": {
+        "input": 160,
+        "cached": 30,
+        "output": 50,
+        "tool": 7,
+        "thoughts": 15,
+        "total": 260
+      }
+    },
+    {
+      "timestamp": "2026-07-27T09:02:00.000Z",
+      "tokens": {
+        "input": 200,
+        "cached": 25,
+        "output": 55,
+        "tool": 5,
+        "thoughts": 12,
+        "total": 300
+      }
+    },
+    {
+      "timestamp": "2026-07-27T09:03:00.000Z",
+      "model": "gemini-3-pro",
+      "tokens": {
+        "input": 10,
+        "cached": 0,
+        "output": 4,
+        "tool": 1,
+        "thoughts": 2,
+        "total": 17
+      }
+    }
+  ]
+}

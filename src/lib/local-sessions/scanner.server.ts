@@ -900,11 +900,14 @@ async function scanGrokSessions(
     let subagentCalls = 0;
     let pendingEditTurn = false;
     let terminalStatus: ExplicitTerminalStatus | undefined;
+    const seenCompletedEvents = new Set<string>();
 
     await readJsonLines(updatesPath, (record) => {
       const recordType = stringValue(record.type);
       const params = asObject(record.params);
       const meta = asObject(params?._meta);
+      const update = asObject(params?.update);
+      const sessionUpdate = stringValue(update?.sessionUpdate) ?? recordType;
       terminalStatus =
         mergeTerminalStatus(
           terminalStatus ?? null,
@@ -922,33 +925,64 @@ async function scanGrokSessions(
       const timestamp = agentTimestamp ?? envelopeTimestamp;
       if (timestamp != null) timestamps.push(timestamp);
 
-      if (recordType === "turn_completed") {
-        const usage = asObject(record.usage);
-        const modelUsage = asArray(usage?.modelUsage);
+      if (sessionUpdate === "turn_completed") {
+        const eventId = stringValue(meta?.eventId);
+        if (eventId != null && seenCompletedEvents.has(eventId)) return;
+        if (eventId != null) seenCompletedEvents.add(eventId);
+        const usage = asObject(update?.usage) ?? asObject(record.usage);
+        const keyedModelUsage = asObject(usage?.modelUsage);
+        const legacyModelUsage = asArray(usage?.modelUsage);
+        const modelUsage = keyedModelUsage
+          ? Object.entries(keyedModelUsage).map(([modelId, value]) => ({
+              modelId,
+              usage: asObject(value),
+            }))
+          : legacyModelUsage.map((value) => {
+              const item = asObject(value);
+              return {
+                modelId: stringValue(item?.modelId) ?? stringValue(item?.model),
+                usage: item,
+              };
+            });
         let turnModel: string | null = null;
         for (const entry of modelUsage) {
-          const item = asObject(entry);
+          const item = entry.usage;
           if (item == null) continue;
-          const modelId = stringValue(item.modelId) ?? stringValue(item.model);
+          const modelId = entry.modelId;
           if (modelId != null) turnModel = modelId;
-          const inputTokens = tokenValue(item.inputTokens ?? item.input_tokens);
+          const rawInputTokens = tokenValue(
+            item.inputTokens ?? item.input_tokens,
+          );
           const outputTokens = tokenValue(
             item.outputTokens ?? item.output_tokens,
           );
-          const cachedInputTokens = tokenValue(
-            item.cachedInputTokens ?? item.cached_input_tokens,
+          const cacheReadTokens = tokenValue(
+            item.cachedReadTokens ??
+              item.cacheReadTokens ??
+              item.cache_read_input_tokens,
           );
+          const cachedInputTokens =
+            cacheReadTokens ||
+            tokenValue(item.cachedInputTokens ?? item.cached_input_tokens);
+          const inputTokens = Math.max(0, rawInputTokens - cacheReadTokens);
           const cacheCreationInputTokens = tokenValue(
-            item.cacheCreationInputTokens ?? item.cache_creation_input_tokens,
+            item.cachedWriteTokens ??
+              item.cacheWriteTokens ??
+              item.cacheCreationInputTokens ??
+              item.cache_creation_input_tokens,
           );
           const reasoningOutputTokens = tokenValue(
-            item.reasoningOutputTokens ?? item.reasoning_output_tokens,
+            item.reasoningTokens ??
+              item.reasoningOutputTokens ??
+              item.reasoning_output_tokens,
           );
-          const totalTokens =
+          const componentTotal =
             inputTokens +
             outputTokens +
             cachedInputTokens +
             cacheCreationInputTokens;
+          const totalTokens =
+            tokenValue(item.totalTokens ?? item.total_tokens) || componentTotal;
           if (totalTokens > 0) {
             perFileTotals.inputTokens += inputTokens;
             perFileTotals.outputTokens += outputTokens;
@@ -969,11 +1003,14 @@ async function scanGrokSessions(
 
       // Tool-call records — only the name is inspected, never the input.
       if (
-        recordType === "tool_call" ||
-        recordType === "function_call" ||
-        recordType === "tool_use"
+        sessionUpdate === "tool_call" ||
+        sessionUpdate === "function_call" ||
+        sessionUpdate === "tool_use"
       ) {
         const name = (
+          stringValue(asObject(meta?.["x.ai/tool"])?.name) ??
+          stringValue(update?.title) ??
+          stringValue(update?.name) ??
           stringValue(record.name) ??
           stringValue(asObject(record.tool)?.name) ??
           ""

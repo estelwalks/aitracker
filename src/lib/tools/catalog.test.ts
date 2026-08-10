@@ -95,8 +95,8 @@ test("envHome override exists only for codex and grok", () => {
 
 test("usage parser capability is distinct from catalog installation roots", () => {
   assert.equal(usageLogParsingFor("codex"), "native");
-  assert.equal(usageLogParsingFor("grok"), "adapter");
-  assert.equal(usageLogParsingFor("openclaw"), "unsupported");
+  assert.equal(usageLogParsingFor("grok"), "native");
+  assert.equal(usageLogParsingFor("openclaw"), "native");
 });
 
 import { describe, test as it } from "node:test";
@@ -106,8 +106,8 @@ describe("P4-T1 registry-derived parser coverage", () => {
     assert.equal(usageLogParsingFor("claude-code"), "native");
     assert.equal(usageLogParsingFor("codex"), "native");
     assert.equal(usageLogParsingFor("workbuddy"), "native");
-    assert.equal(usageLogParsingFor("grok"), "adapter");
-    assert.equal(usageLogParsingFor("openclaw"), "unsupported");
+    assert.equal(usageLogParsingFor("grok"), "native");
+    assert.equal(usageLogParsingFor("openclaw"), "native");
     assert.equal(usageLogParsingFor("no-such-tool"), "unsupported");
   });
 });
