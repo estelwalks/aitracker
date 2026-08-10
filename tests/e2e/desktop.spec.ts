@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 
 const routes = [
   { path: "/", heading: "首页总览" },
-  { path: "/skills", heading: "Skill 管理" },
+  { path: "/agents", heading: "工具概览" },
   { path: "/market", heading: "Skill 市场" },
   { path: "/security", heading: "安全检测" },
   { path: "/settings", heading: "设置" },
@@ -85,7 +85,7 @@ test("首页展示 7 × 24 热力图与真实事件聚合", async ({ page }) => 
 });
 
 test("Skill 展示真实数量与轮询说明", async ({ page }) => {
-  await page.goto("/skills");
+  await page.goto("/agents");
 
   await expect(page.getByText(/\d+ 个本地 Skill/)).toBeVisible();
   await expect(
@@ -96,7 +96,7 @@ test("Skill 展示真实数量与轮询说明", async ({ page }) => {
 });
 
 test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({ page }) => {
-  await page.goto("/skills");
+  await page.goto("/agents");
 
   const skillCheckboxes = page.getByRole("checkbox", { name: /^选择 / });
   expect(await skillCheckboxes.count()).toBeGreaterThanOrEqual(2);

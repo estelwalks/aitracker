@@ -44,7 +44,7 @@ const CURRENCY_SEARCH_PARAM = "currency";
  * when the language switches (route `head()` re-runs only on navigation).
  */
 const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
-  ["/skills", "meta.titles.skills"],
+  ["/agents", "meta.titles.skills"],
   ["/market", "meta.titles.market"],
   ["/security", "meta.titles.security"],
   ["/sessions", "meta.titles.sessions"],

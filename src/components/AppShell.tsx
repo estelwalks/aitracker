@@ -24,7 +24,7 @@ import type { MessageKey } from "../lib/i18n/messages";
 type NavItem = {
   to:
     | "/"
-    | "/skills"
+    | "/agents"
     | "/market"
     | "/security"
     | "/sessions"
@@ -43,7 +43,7 @@ const navGroups: ReadonlyArray<{
     label: "nav.groupCore",
     items: [
       { to: "/", label: "nav.dashboard", icon: LayoutDashboard },
-      { to: "/skills", label: "nav.skills", icon: IdCard },
+      { to: "/agents", label: "nav.skills", icon: IdCard },
       { to: "/sessions", label: "nav.sessions", icon: History },
       { to: "/distill", label: "nav.distill", icon: FlaskConical },
       { to: "/reports", label: "nav.reports", icon: BookHeart },
