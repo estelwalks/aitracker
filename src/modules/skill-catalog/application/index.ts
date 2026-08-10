@@ -15,6 +15,22 @@ import type {
   SkillPackageRecord,
 } from "../contracts.ts";
 
+export {
+  availableAssetSorts,
+  buildSkillAssetSummary,
+  querySkillAssets,
+  toSkillAssetView,
+} from "./asset-view.ts";
+export type {
+  AssetSortDirection,
+  AssetSortKey,
+  AssetSourceFilter,
+  AssetUpdateFilter,
+  SkillAssetFilters,
+  SkillAssetSummary,
+  SkillAssetView,
+} from "./asset-view.ts";
+
 export interface SkillCatalogApplication {
   readonly contract: SkillCatalogModuleContract;
 }

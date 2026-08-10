@@ -13,10 +13,11 @@ export type SkillInstallation = Omit<
   "path" | "source"
 > & {
   readonly installationRef: string;
-  readonly source: {
-    readonly kind: "frontmatter" | "market";
-    readonly label: string;
-  } | null;
+  /**
+   * Renderer-safe source classification. Market repository names, URLs and
+   * frontmatter values stay in the server-side scanner record.
+   */
+  readonly source: { readonly kind: "frontmatter" | "market" } | null;
 };
 export type LocalSkill = Omit<LegacyLocalSkill, "installations"> & {
   readonly installations: readonly SkillInstallation[];
@@ -88,9 +89,7 @@ function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
         installedAt: installation.installedAt,
         modifiedAt: installation.modifiedAt,
         version: installation.version,
-        source: installation.source
-          ? { kind: installation.source.kind, label: installation.source.label }
-          : null,
+        source: installation.source ? { kind: installation.source.kind } : null,
         updateStatus: installation.updateStatus,
         updateReason: installation.updateReason,
       })),
