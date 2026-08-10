@@ -1272,13 +1272,13 @@
 
 /* /agents mirrors the operational hierarchy of the live tool overview. */
 .tool-overview-reference {
-  width: min(100%, 59.45rem);
+  width: min(100%, 76rem);
   margin-inline: auto;
 }
 
 .tool-overview-insight {
-  min-height: 8.25rem;
-  padding: 1.35rem;
+  min-height: 6.8rem;
+  padding: 1.1rem 1.2rem;
   border: 1px solid var(--color-border);
   border-radius: 1rem;
   background:
@@ -1373,13 +1373,12 @@
 
 .tool-overview-card-wall {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 20.125rem));
-  justify-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
 .tool-overview-agent-card {
-  min-height: 12.75rem;
+  min-height: 10.8rem;
   padding: 1rem;
   border: 1px solid var(--color-border);
   border-radius: 1rem;
@@ -1459,6 +1458,21 @@
   background: var(--color-primary);
 }
 
+.tool-overview-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.7rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.tool-overview-card-facts p:last-child {
+  grid-column: 1 / -1;
+}
+
 .tool-overview-periods,
 .tool-overview-detail-tabs {
   display: inline-flex;
@@ -1502,7 +1516,7 @@
   display: flex;
   align-items: end;
   gap: 0.35rem;
-  min-height: 11rem;
+  min-height: 8.75rem;
   padding: 0.75rem 0.25rem 0.25rem;
   border-bottom: 1px solid var(--color-border);
 }
@@ -1511,7 +1525,7 @@
   display: grid;
   flex: 1 1 1.5rem;
   min-width: 1.2rem;
-  height: 10.25rem;
+  height: 8rem;
   grid-template-rows: 1fr auto;
   align-items: end;
   gap: 0.45rem;
@@ -1564,9 +1578,18 @@
 
 .tool-overview-breakdown-row {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 12rem) minmax(5rem, 1fr) 6.5rem 2.5rem;
+  grid-template-columns:
+    minmax(7.5rem, 12rem) minmax(5rem, 1fr)
+    6.5rem 3.75rem 4.25rem;
   align-items: center;
   gap: 0.8rem;
+}
+
+.tool-overview-compact-empty {
+  display: grid;
+  min-height: 5.5rem;
+  place-items: center start;
+  margin: 0;
 }
 
 .tool-overview-security-grid {
@@ -1612,7 +1635,7 @@
   }
 
   .tool-overview-breakdown-row {
-    grid-template-columns: minmax(0, 1fr) 5.5rem 2.2rem;
+    grid-template-columns: minmax(0, 1fr) 5.5rem 3.75rem 4rem;
   }
 
   .tool-overview-breakdown-track {

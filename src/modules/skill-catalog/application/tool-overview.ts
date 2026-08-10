@@ -2,6 +2,7 @@ import {
   resolveUsageRange,
   type UsagePeriod,
 } from "../../../lib/local-usage/presentation.ts";
+import { estimateUsageCost } from "../../../lib/pricing/index.ts";
 import type {
   DashboardV2ContextCounts,
   DashboardV2Event,
@@ -65,11 +66,22 @@ export interface ToolOverviewBreakdownRow {
   readonly events: number;
   /** Source-scoped, server aggregated session count for project rows only. */
   readonly sessions: number | null;
+  /** Null means pricing is unavailable; a partial value carries known pricing only. */
+  readonly estimatedCostUsd: number | null;
+  readonly estimatedCostIsPartial: boolean;
 }
 
 export interface ToolOverviewContextRow {
   readonly key: keyof DashboardV2ContextCounts;
   readonly count: number;
+}
+
+export interface ToolOverviewTokenComposition {
+  readonly inputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly cacheCreationInputTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningOutputTokens: number;
 }
 
 /**
@@ -92,6 +104,7 @@ export interface ToolOverviewView {
   readonly models: readonly ToolOverviewBreakdownRow[];
   readonly projects: readonly ToolOverviewBreakdownRow[];
   readonly context: readonly ToolOverviewContextRow[];
+  readonly tokenComposition: ToolOverviewTokenComposition;
   readonly skillUsage: ToolOverviewSkillUsage;
 }
 
@@ -116,23 +129,49 @@ function inRange(
 function rank(
   events: readonly DashboardV2Event[],
   keyOf: (event: DashboardV2Event) => string,
+  pricingAvailable: boolean,
   sessionsByKey?: ReadonlyMap<string, number> | null,
 ): ToolOverviewBreakdownRow[] {
   const rows = new Map<string, ToolOverviewBreakdownRow>();
   for (const event of events) {
     const key = keyOf(event) || "unknown";
-    const current = rows.get(key) ?? { key, tokens: 0, events: 0 };
+    const current = rows.get(key) ?? {
+      key,
+      tokens: 0,
+      events: 0,
+      sessions: sessionsByKey?.get(key) ?? null,
+      estimatedCostUsd: null,
+      estimatedCostIsPartial: false,
+    };
     rows.set(key, {
       key,
       tokens: current.tokens + event.totalTokens,
       events: current.events + 1,
       sessions: sessionsByKey?.get(key) ?? null,
+      estimatedCostUsd: null,
+      estimatedCostIsPartial: false,
     });
   }
-  return [...rows.values()].sort(
-    (left, right) =>
-      right.tokens - left.tokens || left.key.localeCompare(right.key),
-  );
+  return [...rows.values()]
+    .map((row) => {
+      const related = events.filter(
+        (event) => (keyOf(event) || "unknown") === row.key,
+      );
+      const cost = pricingAvailable
+        ? estimateUsageCost(
+            related.map(({ context: _context, ...event }) => event),
+          )
+        : null;
+      return {
+        ...row,
+        estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
+        estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.tokens - left.tokens || left.key.localeCompare(right.key),
+    );
 }
 
 function trend(events: readonly DashboardV2Event[]): ToolOverviewTrendPoint[] {
@@ -164,6 +203,29 @@ function context(
   }
   return (Object.keys(counts) as (keyof DashboardV2ContextCounts)[]).map(
     (key) => ({ key, count: counts[key] }),
+  );
+}
+
+function tokenComposition(
+  events: readonly DashboardV2Event[],
+): ToolOverviewTokenComposition {
+  return events.reduce<ToolOverviewTokenComposition>(
+    (total, event) => ({
+      inputTokens: total.inputTokens + event.inputTokens,
+      cachedInputTokens: total.cachedInputTokens + event.cachedInputTokens,
+      cacheCreationInputTokens:
+        total.cacheCreationInputTokens + event.cacheCreationInputTokens,
+      outputTokens: total.outputTokens + event.outputTokens,
+      reasoningOutputTokens:
+        total.reasoningOutputTokens + event.reasoningOutputTokens,
+    }),
+    {
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+    },
   );
 }
 
@@ -307,8 +369,13 @@ export function buildToolOverview(
       skillUsage: skillUsage(events),
     };
   });
+  // A persisted/manual selection wins. On first load, prefer actual activity
+  // over installation order so the overview opens on meaningful evidence.
   const selected =
-    cards.find((card) => card.id === selectedToolId) ?? cards[0] ?? null;
+    cards.find((card) => card.id === selectedToolId) ??
+    cards.find((card) => card.active) ??
+    cards[0] ??
+    null;
   const selectedEvents = selected
     ? periodEvents.filter((event) => event.source === selected.id)
     : [];
@@ -334,13 +401,19 @@ export function buildToolOverview(
       : null,
     cacheRate: cacheRate(selectedEvents),
     trend: trend(selectedEvents),
-    models: rank(selectedEvents, (event) => event.model),
+    models: rank(
+      selectedEvents,
+      (event) => event.model,
+      snapshot.pricingAvailable,
+    ),
     projects: rank(
       selectedEvents,
       (event) => event.project,
+      snapshot.pricingAvailable,
       selectedProjectSessions,
     ),
     context: context(selectedEvents),
+    tokenComposition: tokenComposition(selectedEvents),
     skillUsage: skillUsage(selectedEvents),
   };
 }
