@@ -187,6 +187,15 @@ export interface DashboardV2TrendPoint {
   readonly date: string;
   readonly tokens: number;
   readonly events: number;
+  /** Direct request-level cached input; never inferred from costs. */
+  readonly cacheTokens: number;
+  /** Non-cached input plus cache-creation input, observed from local usage. */
+  readonly netInputTokens: number;
+  readonly outputTokens: number;
+  /** Null when the session module is not available for this date. */
+  readonly sessions: number | null;
+  /** Equal-position point from the immediately preceding equal-length range. */
+  readonly previousTokens: number | null;
 }
 
 export interface DashboardV2CalendarPoint extends DashboardV2TrendPoint {
