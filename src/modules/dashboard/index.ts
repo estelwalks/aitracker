@@ -6,7 +6,10 @@ export type {
   DashboardReadModel,
   DashboardSelection,
 } from "./contracts";
-export { createDashboardApplication } from "./application";
+export {
+  createDashboardApplication,
+  createDashboardV2View,
+} from "./application";
 export {
   buildDashboardPosterData,
   buildDashboardExport,

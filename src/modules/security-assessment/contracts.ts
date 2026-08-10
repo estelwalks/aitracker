@@ -126,3 +126,33 @@ export interface AssessmentHistorySummary {
   readonly evidenceCount: number;
   readonly lastScannedAt: string;
 }
+
+/**
+ * Durable, server-side assessment storage. Values are already privacy-safe:
+ * no source body, filesystem path, command, scanner message, or evidence
+ * payload is permitted at this boundary.
+ */
+export interface SecurityAssessmentHistoryStore {
+  latest(assetRef: AssetRef): Promise<AssetAssessment | undefined>;
+  save(assessment: AssetAssessment): Promise<void>;
+  list(): Promise<readonly AssetAssessment[]>;
+}
+
+/** Renderer-safe result of one background pass over locally discovered Skills. */
+export interface BackgroundSkillSecurityScanResult {
+  readonly assessedAt: string;
+  readonly discoveredAssetCount: number;
+  readonly assessedAssetCount: number;
+  /** Assets whose required local files could not be read completely. */
+  readonly failedAssetCount: number;
+  /** Opaque assessment summaries only; no installation, path or source data. */
+  readonly assessments: readonly AssessmentHistorySummary[];
+}
+
+/**
+ * Application port for the task executor. Its implementation is server-only;
+ * callers receive only stable aggregate metadata and opaque asset references.
+ */
+export interface BackgroundSkillSecurityScanPort {
+  scanDiscoveredSkills(): Promise<BackgroundSkillSecurityScanResult>;
+}

@@ -94,6 +94,35 @@ export const JOB_CATALOG: JobCatalog = {
       }
     },
     {
+      "id": "security.monitor",
+      "executorKey": "monitor-security-v1",
+      "category": "collection",
+      "defaultSchedule": {
+        "kind": "interval",
+        "minutes": 60
+      },
+      "constraints": {
+        "minMinutes": 15,
+        "maxMinutes": 10080,
+        "singleFlight": true
+      },
+      "startupPolicy": "if-stale",
+      "retry": {
+        "maxAttempts": 1,
+        "backoffSeconds": [
+          120
+        ]
+      },
+      "timeoutMs": 300000,
+      "queue": "background",
+      "network": "forbidden",
+      "requiresApproval": false,
+      "ui": {
+        "settingsVisible": false,
+        "i18nKey": "tasks.skillsRefresh"
+      }
+    },
+    {
       "id": "retention.apply",
       "executorKey": "apply-retention-v1",
       "category": "maintenance",
@@ -156,8 +185,8 @@ export const JOB_CATALOG: JobCatalog = {
   ]
 };
 export const JOB_DEFINITIONS: readonly JobTypeDefinition[] = JOB_CATALOG.tasks;
-export const JOB_EXECUTOR_KEYS: readonly JobExecutorKey[] = ["refresh-usage-v1","refresh-skills-v1","refresh-sessions-v1","apply-retention-v1","generate-report-v1"];
-export const JOB_CATALOG_VERSION = "f79b19470d5f3b7d";
+export const JOB_EXECUTOR_KEYS: readonly JobExecutorKey[] = ["refresh-usage-v1","refresh-skills-v1","refresh-sessions-v1","monitor-security-v1","apply-retention-v1","generate-report-v1"];
+export const JOB_CATALOG_VERSION = "3860ce8c025f6c9d";
 
 /** Explicit registry skeleton. P3-04 supplies implementations; no dynamic import is permitted. */
 export const JOB_EXECUTOR_REGISTRY: Readonly<Record<JobExecutorKey, null>> = Object.freeze(Object.fromEntries(JOB_EXECUTOR_KEYS.map((key) => [key, null])) as Record<JobExecutorKey, null>);

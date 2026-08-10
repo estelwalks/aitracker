@@ -39,7 +39,7 @@
     },
     {
       "id": "agent-directory",
-      "navigation": { "group": "core", "route": "/agents", "order": 40 },
+      "navigation": { "group": "core", "route": "/sources", "order": 40 },
       "i18n": { "labelKey": "module.agentDirectory" },
       "capabilities": ["read-agents"],
       "platforms": {
@@ -51,7 +51,7 @@
     },
     {
       "id": "skill-catalog",
-      "navigation": { "group": "core", "route": "/skills", "order": 50 },
+      "navigation": { "group": "core", "route": "/agents", "order": 50 },
       "i18n": { "labelKey": "module.skillCatalog" },
       "capabilities": ["read-skills"],
       "platforms": {

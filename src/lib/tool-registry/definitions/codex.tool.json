@@ -3,8 +3,8 @@
   "configVersion": 1,
   "id": "codex",
   "display": {
-    "name": "Codex CLI",
-    "nameZh": "Codex CLI"
+    "name": "Codex",
+    "nameZh": "Codex"
   },
   "platforms": {
     "macos": "supported",

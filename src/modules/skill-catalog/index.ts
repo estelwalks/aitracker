@@ -28,12 +28,40 @@ export {
   verifyPackageHash,
 } from "./domain.ts";
 export {
+  availableAssetSorts,
+  buildSkillAssetSummary,
+  buildSkillWorkspace,
+  buildToolOverview,
   evaluateInstallability,
   parseSkillPackageMetadata,
   projectSkillPackage,
+  querySkillAssets,
+  toSkillAssetView,
+} from "./application/index.ts";
+export type {
+  AssetSortDirection,
+  AssetSortKey,
+  AssetSourceFilter,
+  AssetUpdateFilter,
+  SkillAssetFilters,
+  SkillAssetSummary,
+  SkillAssetView,
+  SkillAgentCoverage,
+  SkillWorkspace,
+  SkillWorkspaceFacet,
+  SkillWorkspaceFacets,
+  SkillWorkspaceSummary,
+  ToolOverviewBreakdownRow,
+  ToolOverviewCard,
+  ToolOverviewContextRow,
+  ToolOverviewSkillUsage,
+  ToolOverviewState,
+  ToolOverviewTrendPoint,
+  ToolOverviewView,
 } from "./application/index.ts";
 export {
   getLocalSkills,
+  getSkillWorkspace,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
   requestApprovedSkillSync,
@@ -47,4 +75,5 @@ export type {
   SkillInstallation,
   SkillSnapshot,
   SkillSyncResult,
+  SkillWorkspaceSnapshot,
 } from "./query.ts";

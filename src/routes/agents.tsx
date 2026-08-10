@@ -1,27 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getLocalSkills } from "../modules/skill-catalog/query";
+import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { SkillsPage } from "../modules/skill-catalog/presentation";
-import { brandParams } from "../lib/app-config";
+import { getDashboardReadModel } from "../modules/dashboard/query";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
 // The route forwards opaque installationRef values from the public query facade;
 // filesystem paths remain confined to server-side adapters.
-export const Route = createFileRoute("/skills")({
+export const Route = createFileRoute("/agents")({
   loader: async ({ location }) => {
-    const data = await getLocalSkills();
-    return { ...data, locale: resolveLocaleFromSearch(location.search) };
+    const locale = resolveLocaleFromSearch(location.search);
+    const [data, usage] = await Promise.all([
+      getSkillWorkspace(),
+      getDashboardReadModel({ data: locale }),
+    ]);
+    return { ...data, usage, locale };
   },
   head: ({ loaderData }) => ({
     meta: [
-      {
-        title: getMessage(
-          catalogs[loaderData?.locale ?? "zh-CN"],
-          "meta.titles.skills",
-          brandParams,
-        ),
-      },
+      { title: "工具概览" },
       {
         name: "description",
         content: getMessage(
@@ -31,9 +29,10 @@ export const Route = createFileRoute("/skills")({
       },
     ],
   }),
-  component: SkillsRoute,
+  component: AgentsRoute,
 });
 
-function SkillsRoute() {
-  return <SkillsPage initial={Route.useLoaderData()} />;
+function AgentsRoute() {
+  const { usage, ...initial } = Route.useLoaderData();
+  return <SkillsPage initial={initial} usage={usage} showWorkspace={false} />;
 }
