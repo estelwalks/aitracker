@@ -741,6 +741,26 @@
   background: var(--color-primary);
 }
 
+/* Reference navigation rail: fixed black foundation, with theme-specific
+   light mode still supplied by the existing .theme-light sidebar tokens. */
+:root {
+  --sidebar: oklch(0.05 0 0);
+  --sidebar-foreground: oklch(0.93 0.003 286);
+  --sidebar-accent: oklch(1 0 0 / 0.08);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.27 0 0);
+}
+
+.tt-sidebar {
+  box-shadow:
+    1px 0 0 oklch(1 0 0 / 0.035),
+    8px 0 28px -24px oklch(0 0 0 / 0.9);
+}
+
+.tt-nav-item[aria-current="page"]::after {
+  border-color: transparent;
+}
+
 @media (max-width: 1040px) {
   .dashboard-spotlight-grid,
   .dashboard-metric-grid {
@@ -1388,6 +1408,79 @@
 
 .tt-sidebar {
   box-shadow: 8px 0 28px -24px oklch(0 0 0 / 0.9);
+}
+
+/* The navigation rail is deliberately driven by a native checkbox. This keeps
+   its 212px ↔ 64px transition functional even if React's event layer is
+   temporarily recovering from a development HMR update. */
+.tt-app-shell {
+  --tt-sidebar-width: 212px;
+}
+
+.tt-sidebar,
+.tt-shell-content {
+  transition:
+    width 200ms ease,
+    padding-left 200ms ease;
+}
+
+.tt-sidebar {
+  width: var(--tt-sidebar-width);
+}
+
+.tt-shell-content {
+  padding-left: var(--tt-sidebar-width);
+}
+
+.tt-sidebar-collapse-open {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar,
+.tt-sidebar-toggle:checked ~ .tt-shell-content {
+  --tt-sidebar-width: 64px;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-brand,
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-bottom-control {
+  justify-content: center;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-copy,
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-group-label {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-close {
+  display: none;
+}
+
+.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-open {
+  display: block;
+}
+
+@media (max-width: 1023px) {
+  .tt-app-shell {
+    --tt-sidebar-width: 64px;
+  }
+
+  .tt-sidebar-brand,
+  .tt-sidebar-bottom-control {
+    justify-content: center;
+  }
+
+  .tt-sidebar-copy,
+  .tt-sidebar-group-label {
+    display: none;
+  }
+
+  .tt-sidebar-collapse-close {
+    display: none;
+  }
+
+  .tt-sidebar-collapse-open {
+    display: block;
+  }
 }
 
 .tt-shell-header {
