@@ -858,6 +858,10 @@
   background: var(--color-primary);
 }
 
+.dashboard-calendar-cell-inactive {
+  background: var(--color-border);
+}
+
 /* Reference navigation rail: fixed black foundation, with theme-specific
    light mode still supplied by the existing .theme-light sidebar tokens. */
 :root {
@@ -1466,6 +1470,7 @@
 }
 
 .tool-overview-period,
+.tool-overview-periods input,
 .tool-overview-detail-tabs button {
   display: inline-flex;
   align-items: center;
@@ -1474,6 +1479,11 @@
   border-radius: 0.38rem;
   color: var(--color-muted-foreground);
   font-size: 0.7rem;
+}
+
+.tool-overview-periods input {
+  min-width: 8rem;
+  background: var(--color-surface-2);
 }
 
 .tool-overview-period:hover,

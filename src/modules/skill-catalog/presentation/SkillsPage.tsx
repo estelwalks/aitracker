@@ -96,6 +96,12 @@ export type SkillsPageProps = {
 
 const PAGE_SIZE = 25;
 
+function daysAgo(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
 // --- Sync state types ---
 
 type SyncScopeState = {
@@ -132,6 +138,8 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
   const [sort, setSort] = useState<AssetSortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
+  const [toolFrom, setToolFrom] = useState(daysAgo(29));
+  const [toolTo, setToolTo] = useState(daysAgo(0));
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
   const [insightIndex, setInsightIndex] = useState(0);
@@ -246,8 +254,9 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
     [agent, query, snapshot, sort, sortDir, source, updateStatus],
   );
   const toolOverview = useMemo(
-    () => buildToolOverview(usage.v2, selectedToolId, toolPeriod),
-    [selectedToolId, toolPeriod, usage.v2],
+    () =>
+      buildToolOverview(usage.v2, selectedToolId, toolPeriod, toolFrom, toolTo),
+    [selectedToolId, toolFrom, toolPeriod, toolTo, usage.v2],
   );
 
   // Paginated list
@@ -888,7 +897,9 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                   ["today", t("dashboard.period.today")],
                   ["7d", t("dashboard.period.lastNDays", { count: 7 })],
                   ["30d", t("dashboard.period.lastNDays", { count: 30 })],
+                  ["year", t("dashboard.period.year")],
                   ["all", t("dashboard.period.all")],
+                  ["custom", t("dashboard.period.custom")],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -906,6 +917,24 @@ export function SkillsPage({ initial, usage }: SkillsPageProps) {
                   {label}
                 </button>
               ))}
+              {toolPeriod === "custom" ? (
+                <>
+                  <input
+                    type="date"
+                    aria-label={t("dashboard.header.customFrom")}
+                    value={toolFrom}
+                    max={toolTo}
+                    onChange={(event) => setToolFrom(event.target.value)}
+                  />
+                  <input
+                    type="date"
+                    aria-label={t("dashboard.header.customTo")}
+                    value={toolTo}
+                    min={toolFrom}
+                    onChange={(event) => setToolTo(event.target.value)}
+                  />
+                </>
+              ) : null}
             </div>
           }
         >

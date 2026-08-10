@@ -114,6 +114,47 @@ test("skill evidence preserves observed zero and unavailable sessions", () => {
   assert.equal(absent.projects[0]?.sessions, null);
 });
 
+test("tool overview selection and all details use the same custom range", () => {
+  const view = buildToolOverview(
+    {
+      ...input,
+      events: [
+        ...input.events,
+        {
+          ...input.events[0]!,
+          source: "cursor",
+          timestamp: "2026-08-09T10:00:00.000Z",
+          project: "outside-range",
+          totalTokens: 900,
+        },
+      ],
+      sessions: {
+        ...input.sessions,
+        bySourceDay: [
+          ...input.sessions.bySourceDay,
+          { source: "cursor", date: "2026-08-09", count: 9 },
+        ],
+      },
+    },
+    "missing-tool",
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.selected?.id, "codex");
+  assert.equal(view.totalTokens, 150);
+  assert.equal(view.totalEvents, 2);
+  assert.deepEqual(view.trend, [{ date: "2026-08-10", tokens: 150 }]);
+  assert.equal(view.models[0]?.key, "gpt-test");
+  assert.equal(view.projects[0]?.key, "trusttools");
+  assert.equal(view.sessions, 2);
+  assert.equal(
+    view.cards.find((card) => card.id === "cursor")?.state,
+    "available",
+  );
+});
+
 test("tool overview stays within renderer-safe aggregate fields", () => {
   const view = buildToolOverview(
     input,
