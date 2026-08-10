@@ -1,10 +1,11 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import {
   Activity,
-  Boxes,
   CalendarDays,
   CircleDollarSign,
+  FolderKanban,
   RefreshCw,
+  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react";
@@ -20,12 +21,20 @@ import type {
 } from "../contracts.ts";
 
 function daysAgo(days: number): string {
-  const value = new Date();
-  value.setDate(value.getDate() - days);
-  return value.toISOString().slice(0, 10);
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
 }
 
-function TrendLine({ points }: { points: readonly DashboardV2TrendPoint[] }) {
+function cacheRate(view: ReturnType<typeof createDashboardV2View>): number {
+  const input =
+    view.totals.inputTokens +
+    view.totals.cachedInputTokens +
+    view.totals.cacheCreationInputTokens;
+  return input === 0 ? 0 : (view.totals.cachedInputTokens / input) * 100;
+}
+
+function TrendChart({ points }: { points: readonly DashboardV2TrendPoint[] }) {
   const { t, format } = useI18n();
   const path = useMemo(() => {
     if (points.length === 0) return "";
@@ -34,36 +43,36 @@ function TrendLine({ points }: { points: readonly DashboardV2TrendPoint[] }) {
       .map((point, index) => {
         const x =
           points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
-        const y = 88 - (point.tokens / max) * 72;
+        const y = 92 - (point.tokens / max) * 72;
         return `${index === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
       })
       .join(" ");
   }, [points]);
   if (points.length === 0)
     return (
-      <p className="py-10 text-sm text-muted-foreground">
+      <p className="py-14 text-sm text-muted-foreground">
         {t("dashboard.v2.noData")}
       </p>
     );
   return (
-    <div>
+    <div className="mt-5">
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         role="img"
         aria-label={t("dashboard.v2.trendAria")}
-        className="h-48 w-full overflow-visible"
+        className="h-52 w-full"
       >
-        <path d="M0,88 H100" stroke="var(--color-border)" strokeWidth="0.7" />
+        <path d="M0 92H100" stroke="var(--color-border)" strokeWidth="0.45" />
         <path
           d={path}
           fill="none"
-          stroke="var(--color-primary)"
-          strokeWidth="2.5"
+          stroke="var(--color-chart-1)"
+          strokeWidth="2"
           vectorEffect="non-scaling-stroke"
         />
       </svg>
-      <div className="mt-2 flex justify-between font-mono text-[10px] text-muted-foreground">
+      <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
         <span>{points[0]?.date}</span>
         <span>
           {format.formatTokens(
@@ -76,40 +85,143 @@ function TrendLine({ points }: { points: readonly DashboardV2TrendPoint[] }) {
   );
 }
 
-function BreakdownList({
+function Delta({ unavailable = false }: { unavailable?: boolean }) {
+  const { t } = useI18n();
+  return (
+    <span className="font-mono text-[10px] text-muted-foreground">
+      {unavailable ? t("dashboard.kpi.unavailable") : "—"}
+    </span>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  unavailable,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: string;
+  hint: string;
+  unavailable?: boolean;
+}) {
+  return (
+    <div className="dashboard-metric-card">
+      <div className="flex items-center justify-between gap-2 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+        <span className="flex items-center gap-1.5">
+          <Icon className="size-3" />
+          {label}
+        </span>
+        <Delta unavailable={unavailable} />
+      </div>
+      <div className="tt-num mt-2 text-[25px] leading-none font-black tracking-tight">
+        {value}
+      </div>
+      <p
+        className="mt-2 truncate font-mono text-[10px] text-muted-foreground"
+        title={hint}
+      >
+        {hint}
+      </p>
+    </div>
+  );
+}
+
+function BreakdownTable({
   rows,
   total,
+  type,
 }: {
   rows: readonly DashboardV2BreakdownRow[];
   total: number;
+  type: "models" | "projects";
 }) {
-  const { t, format } = useI18n();
+  const { format, t } = useI18n();
   if (rows.length === 0)
     return (
-      <p className="py-6 text-sm text-muted-foreground">
+      <p className="py-10 text-sm text-muted-foreground">
         {t("dashboard.v2.noData")}
       </p>
     );
   return (
-    <div className="space-y-3">
-      {rows.slice(0, 5).map((row) => (
-        <div key={row.key}>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="min-w-0 flex-1 truncate" title={row.key}>
-              {row.key}
-            </span>
-            <span className="tt-num text-xs text-muted-foreground">
-              {format.formatTokens(row.tokens)}
-            </span>
-          </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-2">
-            <div
-              className="h-full rounded-full bg-primary/80"
-              style={{ width: `${total ? (row.tokens / total) * 100 : 0}%` }}
+    <div className="tt-xscroll mt-4">
+      <table className="dashboard-breakdown-table">
+        <thead>
+          <tr>
+            <th>
+              {t(
+                type === "models"
+                  ? "dashboard.v2.modelsTitle"
+                  : "dashboard.v2.projectsTitle",
+              )}
+            </th>
+            <th>{t("dashboard.detail.share")}</th>
+            <th>{t("dashboard.kpi.tokens")}</th>
+            <th>{t("dashboard.v2.eventShort")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 8).map((row) => (
+            <tr key={row.key}>
+              <td title={row.key}>
+                <span className="block max-w-52 truncate">{row.key}</span>
+              </td>
+              <td>
+                {format.formatPercent(
+                  total ? Math.round((row.tokens / total) * 100) : 0,
+                )}
+              </td>
+              <td className="tt-num">{format.formatTokens(row.tokens)}</td>
+              <td className="tt-num">{format.formatNumber(row.events)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CalendarHeatmap({
+  points,
+}: {
+  points: readonly DashboardV2TrendPoint[];
+}) {
+  const { t, format } = useI18n();
+  const cells = points.slice(-364);
+  const max = Math.max(...cells.map((point) => point.tokens), 1);
+  if (cells.length === 0)
+    return (
+      <p className="py-10 text-sm text-muted-foreground">
+        {t("dashboard.v2.noData")}
+      </p>
+    );
+  return (
+    <div className="mt-5">
+      <div
+        className="dashboard-calendar-grid"
+        aria-label={t("dashboard.v2.calendarTitle")}
+      >
+        {cells.map((point) => {
+          const intensity = Math.max(0.12, point.tokens / max);
+          return (
+            <span
+              key={point.date}
+              title={`${point.date} · ${format.formatTokens(point.tokens)}`}
+              className="dashboard-calendar-cell"
+              style={{ opacity: intensity }}
             />
-          </div>
-        </div>
-      ))}
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-center justify-end gap-2 text-[10px] text-muted-foreground">
+        <span>{t("dashboard.heatmap.low")}</span>
+        <span className="size-2 rounded-sm bg-primary/20" />
+        <span className="size-2 rounded-sm bg-primary/55" />
+        <span className="size-2 rounded-sm bg-primary" />
+        <span>{t("dashboard.heatmap.high")}</span>
+      </div>
     </div>
   );
 }
@@ -122,7 +234,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const [to, setTo] = useState(daysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
-  const filteredSnapshot = useMemo(
+  const scopedSnapshot = useMemo(
     () =>
       selectedTool === "all"
         ? data.v2
@@ -135,12 +247,16 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     [data.v2, selectedTool],
   );
   const view = useMemo(
-    () => createDashboardV2View(filteredSnapshot, period, from, to),
-    [filteredSnapshot, period, from, to],
+    () => createDashboardV2View(scopedSnapshot, period, from, to),
+    [scopedSnapshot, period, from, to],
   );
-  const toolView = useMemo(
+  const allToolsView = useMemo(
     () => createDashboardV2View(data.v2, period, from, to),
     [data.v2, period, from, to],
+  );
+  const todayView = useMemo(
+    () => createDashboardV2View(data.v2, "today"),
+    [data.v2],
   );
   const periodOptions: readonly { value: UsagePeriod; label: string }[] = [
     { value: "today", label: t("dashboard.period.today") },
@@ -149,6 +265,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
     { value: "all", label: t("dashboard.period.all") },
     { value: "custom", label: t("dashboard.period.custom") },
   ];
+  const topTool = allToolsView.tools[0];
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -159,26 +276,26 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       setRefreshing(false);
     }
   };
-  const focusTool = toolView.tools.find((tool) => tool.id === selectedTool);
   const insight = !view.hasData
     ? t("dashboard.v2.noData")
     : t("dashboard.v2.insight", {
         tool:
-          focusTool?.name ??
-          toolView.tools[0]?.name ??
-          t("dashboard.v2.unknownTool"),
-        tokens: format.formatTokens(
-          focusTool?.tokens ?? toolView.tools[0]?.tokens ?? 0,
-        ),
+          selectedTool === "all"
+            ? (topTool?.name ?? t("dashboard.v2.unknownTool"))
+            : (allToolsView.tools.find((tool) => tool.id === selectedTool)
+                ?.name ?? t("dashboard.v2.unknownTool")),
+        tokens: format.formatTokens(view.totals.totalTokens),
       });
+  const cache = cacheRate(view);
   const metrics = [
     {
+      icon: Activity,
       label: t("dashboard.kpi.tokens"),
       value: format.formatTokens(view.totals.totalTokens),
       hint: t("dashboard.v2.eventCount", { count: view.totals.events }),
-      icon: Activity,
     },
     {
+      icon: CircleDollarSign,
       label: t("dashboard.kpi.cost"),
       value:
         view.estimatedCostUsd == null
@@ -187,9 +304,10 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       hint: view.estimatedCostIsPartial
         ? t("dashboard.v2.partialCost")
         : t("dashboard.v2.estimatedCost"),
-      icon: CircleDollarSign,
+      unavailable: view.estimatedCostUsd == null,
     },
     {
+      icon: CalendarDays,
       label: t("dashboard.kpi.sessions"),
       value:
         view.sessions == null
@@ -199,10 +317,33 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view.sessions == null
           ? t("dashboard.kpi.sessionUnavailableHint")
           : t("dashboard.v2.selectedRange"),
-      icon: CalendarDays,
+      unavailable: view.sessions == null,
     },
     {
-      label: t("dashboard.kpi.skills"),
+      icon: Activity,
+      label: t("dashboard.v2.cacheLabel"),
+      value: format.formatPercent(Math.round(cache)),
+      hint: t("dashboard.v2.cacheHint"),
+    },
+    {
+      icon: Wrench,
+      label: t("dashboard.v2.activeTools", { count: "" }),
+      value: format.formatNumber(allToolsView.activeTools),
+      hint: t("dashboard.v2.toolCountHint", {
+        detected: data.v2.tools.filter((tool) => tool.detected).length,
+        total: data.v2.tools.length,
+      }),
+    },
+    {
+      icon: ShieldCheck,
+      label: t("dashboard.v2.securityLabel"),
+      value: t("dashboard.kpi.unavailable"),
+      hint: t("dashboard.v2.securityHint"),
+      unavailable: true,
+    },
+    {
+      icon: Sparkles,
+      label: t("dashboard.v2.assetsLabel"),
       value:
         view.skills == null
           ? t("dashboard.kpi.unavailable")
@@ -211,253 +352,270 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view.skills == null
           ? t("dashboard.v2.skillUnavailable")
           : t("dashboard.kpi.skillScanNote"),
-      icon: Sparkles,
+      unavailable: view.skills == null,
+    },
+    {
+      icon: FolderKanban,
+      label: t("dashboard.v2.projectsTitle"),
+      value: format.formatNumber(view.projects.length),
+      hint: t("dashboard.v2.projectHint"),
     },
   ];
   return (
-    <main className="space-y-5 pb-12">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7">
-        <span className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full bg-primary/15 blur-3xl" />
-        <div className="relative">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="tt-label">{t("dashboard.v2.systemLabel")}</p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-                {t("dashboard.title")}
-              </h1>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-foreground/85">
-                {insight}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleRefresh()}
-              disabled={refreshing}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm hover:border-primary/60 disabled:opacity-60"
-            >
-              <RefreshCw
-                className={`size-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-              {refreshing
-                ? t("dashboard.refresh.syncing")
-                : t("dashboard.refresh.now")}
-            </button>
-          </div>
-          <p className="mt-5 font-mono text-[11px] text-muted-foreground">
-            {t("dashboard.header.range", {
-              period:
-                periodOptions.find((option) => option.value === period)
-                  ?.label ?? "",
-              time: format.formatDateTime(data.v2.generatedAt),
-            })}
-          </p>
-        </div>
-      </section>
-      <section className="sticky top-0 z-20 -mx-1 rounded-xl border border-border/70 bg-background/90 px-3 py-2 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-semibold">
-            {t("dashboard.v2.rangeLabel")}
+    <div className="dashboard-v3 space-y-6 pb-12">
+      <section className="dashboard-insight-hero">
+        <div className="relative flex min-w-0 gap-5">
+          <span className="dashboard-insight-orb">
+            <Sparkles className="size-6" />
           </span>
-          <div
-            className="flex flex-wrap items-center gap-1.5"
-            role="group"
-            aria-label={t("dashboard.v2.rangeLabel")}
-          >
-            {periodOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setPeriod(option.value)}
-                aria-pressed={period === option.value}
-                className={`rounded-md px-2.5 py-1.5 text-xs transition-colors ${period === option.value ? "bg-foreground text-background" : "bg-surface hover:bg-accent"}`}
-              >
-                {option.label}
-              </button>
-            ))}
-            {period === "custom" && (
-              <>
-                <input
-                  type="date"
-                  aria-label={t("dashboard.header.customFrom")}
-                  value={from}
-                  max={to}
-                  onChange={(event) => setFrom(event.target.value)}
-                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs"
-                />
-                <input
-                  type="date"
-                  aria-label={t("dashboard.header.customTo")}
-                  value={to}
-                  min={from}
-                  onChange={(event) => setTo(event.target.value)}
-                  className="rounded-md border border-border bg-surface px-2 py-1 text-xs"
-                />
-              </>
-            )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[15px] font-semibold tracking-tight">
+                {t("dashboard.v2.heroTitle")}
+              </h1>
+              <span className="dashboard-hero-pill">
+                {t("dashboard.v2.localOnly")}
+              </span>
+            </div>
+            <p className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]">
+              {insight}
+            </p>
+            <div className="mt-5 flex gap-1.5">
+              <span className="h-1 w-9 rounded-full bg-foreground/70" />
+              <span className="h-1 w-2.5 rounded-full bg-foreground/15" />
+              <span className="h-1 w-2.5 rounded-full bg-foreground/15" />
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={refreshing}
+            className="dashboard-hero-refresh"
+          >
+            <RefreshCw
+              className={`size-3 ${refreshing ? "animate-spin" : ""}`}
+            />
+            {refreshing
+              ? t("dashboard.refresh.syncing")
+              : t("dashboard.refresh.now")}
+          </button>
         </div>
       </section>
-      <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="bg-card p-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <metric.icon className="size-3.5" />
-              {metric.label}
-            </div>
-            <div className="tt-num mt-3 truncate text-2xl font-semibold">
-              {metric.value}
-            </div>
-            <p
-              className="mt-1 truncate text-[11px] text-muted-foreground"
-              title={metric.hint}
+      <section
+        className="dashboard-spotlight-grid"
+        aria-label={t("dashboard.v2.spotlightTitle")}
+      >
+        <article className="dashboard-spotlight-card">
+          <Wrench className="size-4" />
+          <p>{t("dashboard.v2.toolsTitle")}</p>
+          <strong className="tt-num">
+            {format.formatNumber(data.v2.tools.length)}
+          </strong>
+          <small>
+            {t("dashboard.v2.toolCountHint", {
+              detected: data.v2.tools.filter((tool) => tool.detected).length,
+              total: data.v2.tools.length,
+            })}
+          </small>
+          <Link to="/skills">{t("dashboard.v2.openSkills")}</Link>
+        </article>
+        <article className="dashboard-spotlight-card">
+          <ShieldCheck className="size-4" />
+          <p>{t("dashboard.v2.securityLabel")}</p>
+          <strong>{t("dashboard.kpi.unavailable")}</strong>
+          <small>{t("dashboard.v2.securityHint")}</small>
+          <Link to="/security">{t("nav.security")}</Link>
+        </article>
+        <article className="dashboard-spotlight-card">
+          <Sparkles className="size-4" />
+          <p>{t("dashboard.v2.assetsLabel")}</p>
+          <strong className="tt-num">
+            {view.skills == null
+              ? t("dashboard.kpi.unavailable")
+              : format.formatNumber(view.skills)}
+          </strong>
+          <small>
+            {view.skills == null
+              ? t("dashboard.v2.skillUnavailable")
+              : t("dashboard.kpi.skillScanNote")}
+          </small>
+          <Link to="/skills">{t("dashboard.v2.openSkills")}</Link>
+        </article>
+        <article className="dashboard-spotlight-card">
+          <Activity className="size-4" />
+          <p>{t("dashboard.v2.todayUsage")}</p>
+          <strong className="tt-num">
+            {format.formatTokens(todayView.totals.totalTokens)}
+          </strong>
+          <small>
+            {todayView.estimatedCostUsd == null
+              ? t("dashboard.kpi.unavailable")
+              : `${format.formatUsd(todayView.estimatedCostUsd)} · ${t("dashboard.v2.cacheLabel")} ${format.formatPercent(Math.round(cacheRate(todayView)))}`}
+          </small>
+          <button type="button" onClick={() => setPeriod("today")}>
+            {t("dashboard.v2.viewUsage")}
+          </button>
+        </article>
+      </section>
+      <div className="dashboard-range-bar sticky top-14 z-20">
+        <div className="min-w-0">
+          <span className="font-semibold text-[13px]">
+            {t("dashboard.v2.overviewLabel")}
+          </span>
+          <span className="ml-3 font-mono text-[11px] text-muted-foreground">
+            {format.formatTokens(view.totals.totalTokens)} tokens ·{" "}
+            {view.estimatedCostUsd == null
+              ? t("dashboard.kpi.unavailable")
+              : format.formatUsd(view.estimatedCostUsd)}{" "}
+            ·{" "}
+            {view.sessions == null
+              ? t("dashboard.kpi.unavailable")
+              : format.formatNumber(view.sessions)}
+          </span>
+        </div>
+        <div
+          className="flex flex-wrap items-center gap-1"
+          role="group"
+          aria-label={t("dashboard.v2.rangeLabel")}
+        >
+          {periodOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setPeriod(option.value)}
+              aria-pressed={period === option.value}
+              className={
+                period === option.value ? "dashboard-range-active" : ""
+              }
             >
-              {metric.hint}
-            </p>
-          </div>
+              {option.label}
+            </button>
+          ))}
+          {period === "custom" && (
+            <>
+              <input
+                type="date"
+                aria-label={t("dashboard.header.customFrom")}
+                value={from}
+                max={to}
+                onChange={(event) => setFrom(event.target.value)}
+              />
+              <input
+                type="date"
+                aria-label={t("dashboard.header.customTo")}
+                value={to}
+                min={from}
+                onChange={(event) => setTo(event.target.value)}
+              />
+            </>
+          )}
+        </div>
+      </div>
+      <section className="dashboard-metric-grid">
+        {metrics.map((metric) => (
+          <MetricCard key={metric.label} {...metric} />
         ))}
       </section>
-      <section aria-labelledby="dashboard-tools" className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="dashboard-tools" className="text-base font-semibold">
-            {t("dashboard.v2.toolsTitle")}
-          </h2>
-          <span className="font-mono text-xs text-muted-foreground">
-            {t("dashboard.v2.activeTools", { count: toolView.activeTools })}
-          </span>
-        </div>
-        <div className="tt-xscroll flex gap-2 overflow-x-auto pb-1">
+      <section>
+        <div
+          className="dashboard-tool-rail"
+          role="group"
+          aria-label={t("dashboard.v2.toolsTitle")}
+        >
           <button
             type="button"
             onClick={() => setSelectedTool("all")}
             aria-pressed={selectedTool === "all"}
-            className={`min-w-28 rounded-xl border p-3 text-left ${selectedTool === "all" ? "border-primary bg-primary/10" : "border-border bg-card hover:bg-surface-2"}`}
+            className={selectedTool === "all" ? "dashboard-tool-active" : ""}
           >
-            <Boxes className="size-4" />
-            <span className="mt-4 block text-sm font-medium">
-              {t("dashboard.context.allTools")}
-            </span>
-            <span className="mt-1 block font-mono text-[10px] text-muted-foreground">
-              {format.formatTokens(toolView.totals.totalTokens)}
-            </span>
+            {t("dashboard.context.allTools")}
           </button>
-          {toolView.tools.map((tool) => (
+          {allToolsView.tools.map((tool) => (
             <button
               key={tool.id}
               type="button"
               onClick={() => setSelectedTool(tool.id)}
               aria-pressed={selectedTool === tool.id}
-              className={`min-w-40 rounded-xl border p-3 text-left ${selectedTool === tool.id ? "border-primary bg-primary/10" : "border-border bg-card hover:bg-surface-2"}`}
+              className={
+                selectedTool === tool.id ? "dashboard-tool-active" : ""
+              }
             >
-              <Wrench className="size-4 text-primary" />
-              <span className="mt-4 block truncate text-sm font-medium">
-                {tool.name}
-              </span>
-              <span className="mt-1 block font-mono text-[10px] text-muted-foreground">
-                {tool.events > 0
-                  ? t("dashboard.v2.toolActivity", {
-                      tokens: format.formatTokens(tool.tokens),
-                      count: tool.events,
-                    })
-                  : t("dashboard.v2.noData")}
-              </span>
+              <Wrench className="size-3.5" />
+              {tool.name}
             </button>
           ))}
         </div>
       </section>
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
-        <article className="rounded-xl border border-border bg-card p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">{t("dashboard.v2.trendTitle")}</h2>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {t("dashboard.v2.selectedRange")}
-            </span>
+      <section className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h2>{t("dashboard.v2.trendTitle")}</h2>
+            <p>
+              {t("dashboard.v2.dailyAverage", {
+                tokens: format.formatTokens(
+                  view.trend.length
+                    ? Math.round(view.totals.totalTokens / view.trend.length)
+                    : 0,
+                ),
+              })}{" "}
+              · {t("dashboard.v2.cacheLabel")}{" "}
+              {format.formatPercent(Math.round(cache))}
+            </p>
           </div>
-          <TrendLine points={view.trend} />
-        </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-semibold">{t("dashboard.v2.contextTitle")}</h2>
-          <dl className="mt-5 grid grid-cols-2 gap-3">
-            {(
-              [
-                { key: "textResponses", label: t("dashboard.v2.responses") },
-                { key: "toolCalls", label: t("dashboard.context.dimTool") },
-                { key: "skillCalls", label: t("dashboard.context.dimSkill") },
-                { key: "toolOutputCalls", label: t("dashboard.v2.outputs") },
-              ] as const
-            ).map((item) => (
-              <div key={item.key} className="rounded-lg bg-surface p-3">
-                <dt className="text-xs text-muted-foreground">{item.label}</dt>
-                <dd className="tt-num mt-1 text-xl">
-                  {format.formatNumber(view.context[item.key])}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="mt-4 text-[11px] leading-5 text-muted-foreground">
-            {t("dashboard.v2.contextNote")}
-          </p>
-        </article>
+          <span>{t("dashboard.v2.selectedRange")}</span>
+        </div>
+        <TrendChart points={view.trend} />
       </section>
-      <section className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-semibold">{t("dashboard.v2.modelsTitle")}</h2>
-          <div className="mt-5">
-            <BreakdownList rows={view.models} total={view.totals.totalTokens} />
-          </div>
-        </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-semibold">{t("dashboard.v2.projectsTitle")}</h2>
-          <div className="mt-5">
-            <BreakdownList
-              rows={view.projects}
-              total={view.totals.totalTokens}
-            />
-          </div>
-        </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-semibold">{t("dashboard.v2.calendarTitle")}</h2>
-          <div className="mt-5 space-y-2">
-            {view.calendar.length === 0 ? (
-              <p className="py-6 text-sm text-muted-foreground">
-                {t("dashboard.v2.noData")}
+      <section className="grid gap-4 xl:grid-cols-2">
+        <article className="dashboard-panel">
+          <div className="dashboard-panel-head">
+            <div>
+              <h2>{t("dashboard.v2.modelsTitle")}</h2>
+              <p>
+                {t("dashboard.v2.modelHint", { count: view.models.length })}
               </p>
-            ) : (
-              view.calendar
-                .slice(-7)
-                .reverse()
-                .map((point) => (
-                  <div
-                    key={point.date}
-                    className="flex items-center gap-3 text-sm"
-                  >
-                    <time className="w-20 font-mono text-xs text-muted-foreground">
-                      {point.date.slice(5)}
-                    </time>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
-                      <div
-                        className="h-full rounded-full bg-primary/80"
-                        style={{
-                          width: `${Math.max(4, (point.tokens / Math.max(...view.calendar.map((row) => row.tokens), 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="tt-num w-16 text-right text-xs">
-                      {format.formatTokens(point.tokens)}
-                    </span>
-                  </div>
-                ))
-            )}
+            </div>
+            <Delta />
           </div>
+          <BreakdownTable
+            rows={view.models}
+            total={view.totals.totalTokens}
+            type="models"
+          />
+        </article>
+        <article className="dashboard-panel">
+          <div className="dashboard-panel-head">
+            <div>
+              <h2>{t("dashboard.v2.projectsTitle")}</h2>
+              <p>{t("dashboard.v2.projectHint")}</p>
+            </div>
+            <Delta />
+          </div>
+          <BreakdownTable
+            rows={view.projects}
+            total={view.totals.totalTokens}
+            type="projects"
+          />
         </article>
       </section>
-      <p className="text-center text-xs text-muted-foreground">
-        <Link
-          to="/skills"
-          className="underline underline-offset-4 hover:text-foreground"
-        >
-          {t("dashboard.v2.openSkills")}
-        </Link>
-      </p>
-    </main>
+      <section className="dashboard-panel">
+        <div className="dashboard-panel-head">
+          <div>
+            <h2>{t("dashboard.v2.calendarTitle")}</h2>
+            <p>
+              {t("dashboard.v2.calendarHint", {
+                count: view.calendarSummary.activeDays,
+                tokens: format.formatTokens(view.totals.totalTokens),
+              })}{" "}
+              ·{" "}
+              {t("dashboard.v2.streakHint", {
+                count: view.calendarSummary.longestStreak,
+              })}
+            </p>
+          </div>
+        </div>
+        <CalendarHeatmap points={view.calendar} />
+      </section>
+    </div>
   );
 }
