@@ -6,6 +6,8 @@ import {
 import type { LocalUsageTotals } from "../../../lib/local-usage/types.ts";
 import type {
   DashboardV2BreakdownRow,
+  DashboardV2CalendarPoint,
+  DashboardV2CalendarSummary,
   DashboardV2ContextCounts,
   DashboardV2Event,
   DashboardV2Snapshot,
@@ -58,10 +60,23 @@ function ranked(
     current.events += 1;
     rows.set(key, current);
   }
-  return [...rows.values()].sort(
-    (left, right) =>
-      right.tokens - left.tokens || left.key.localeCompare(right.key),
-  );
+  return [...rows.values()]
+    .sort(
+      (left, right) =>
+        right.tokens - left.tokens || left.key.localeCompare(right.key),
+    )
+    .map((row) => ({
+      ...row,
+      share: 0,
+      estimatedCostUsd: null,
+      estimatedCostIsPartial: false,
+    }));
+}
+
+function dateKey(timestamp: string): string | null {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
@@ -70,8 +85,8 @@ function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
     { date: string; tokens: number; events: number }
   >();
   for (const event of events) {
-    const date = event.timestamp.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) continue;
+    const date = dateKey(event.timestamp);
+    if (date == null) continue;
     const current = rows.get(date) ?? { date, tokens: 0, events: 0 };
     current.tokens += event.totalTokens;
     current.events += 1;
@@ -80,6 +95,82 @@ function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
   return [...rows.values()].sort((left, right) =>
     left.date.localeCompare(right.date),
   );
+}
+
+function addLocalDays(date: Date, amount: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+function calendarFor(
+  trend: readonly DashboardV2TrendPoint[],
+  range: ReturnType<typeof resolveUsageRange>,
+): { points: DashboardV2CalendarPoint[]; summary: DashboardV2CalendarSummary } {
+  if (!range.valid || !range.toDate || trend.length === 0)
+    return {
+      points: [],
+      summary: { days: 0, activeDays: 0, longestStreak: 0 },
+    };
+  const observedByDate = new Map(trend.map((point) => [point.date, point]));
+  // The all-time range uses a 1970 sentinel. Calendar coverage instead starts
+  // with the first actual local day; we never manufacture decades of empties.
+  const observedStart = new Date(`${trend[0]!.date}T00:00:00`);
+  const start = range.from === "1970-01-01" ? observedStart : range.fromDate!;
+  const points: DashboardV2CalendarPoint[] = [];
+  for (
+    let cursor = new Date(start);
+    cursor <= range.toDate;
+    cursor = addLocalDays(cursor, 1)
+  ) {
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    const observed = observedByDate.get(key);
+    points.push({
+      date: key,
+      tokens: observed?.tokens ?? 0,
+      events: observed?.events ?? 0,
+      active: observed != null,
+    });
+  }
+  let streak = 0;
+  let longestStreak = 0;
+  for (const point of points) {
+    streak = point.active ? streak + 1 : 0;
+    longestStreak = Math.max(longestStreak, streak);
+  }
+  return {
+    points,
+    summary: {
+      days: points.length,
+      activeDays: points.filter((point) => point.active).length,
+      longestStreak,
+    },
+  };
+}
+
+function enrichRows(
+  rows: readonly DashboardV2BreakdownRow[],
+  events: readonly DashboardV2Event[],
+  keyOf: (event: DashboardV2Event) => string,
+  pricingAvailable: boolean,
+  totalTokens: number,
+): DashboardV2BreakdownRow[] {
+  return rows.map((row) => {
+    const related = events.filter(
+      (event) => (keyOf(event) || "unknown") === row.key,
+    );
+    const cost = pricingAvailable
+      ? estimateUsageCost(
+          related.map(({ context: _context, ...event }) => event),
+        )
+      : null;
+    return {
+      ...row,
+      share: totalTokens === 0 ? 0 : (row.tokens / totalTokens) * 100,
+      estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
+      estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
+    };
+  });
 }
 
 function contextFor(
@@ -170,8 +261,21 @@ export function createDashboardV2View(
   // tool card. This avoids presenting catalog availability as activity.
   const activeTools = tools.filter((tool) => tool.events > 0).length;
   const trend = daily(events);
-  const models = ranked(events, (event) => event.model).slice(0, 8);
-  const projects = ranked(events, (event) => event.project).slice(0, 8);
+  const models = enrichRows(
+    ranked(events, (event) => event.model).slice(0, 8),
+    events,
+    (event) => event.model,
+    snapshot.pricingAvailable,
+    totals.totalTokens,
+  );
+  const projects = enrichRows(
+    ranked(events, (event) => event.project).slice(0, 8),
+    events,
+    (event) => event.project,
+    snapshot.pricingAvailable,
+    totals.totalTokens,
+  );
+  const calendar = calendarFor(trend, range);
 
   return {
     period,
@@ -188,7 +292,8 @@ export function createDashboardV2View(
     trend,
     models,
     projects,
-    calendar: trend,
+    calendar: calendar.points,
+    calendarSummary: calendar.summary,
     context: contextFor(events),
   };
 }

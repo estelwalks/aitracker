@@ -124,10 +124,25 @@ export interface DashboardV2TrendPoint {
   readonly events: number;
 }
 
+export interface DashboardV2CalendarPoint extends DashboardV2TrendPoint {
+  /** A zero-fill cell is range coverage, not a missing scanner result. */
+  readonly active: boolean;
+}
+
+export interface DashboardV2CalendarSummary {
+  readonly days: number;
+  readonly activeDays: number;
+  readonly longestStreak: number;
+}
+
 export interface DashboardV2BreakdownRow {
   readonly key: string;
   readonly tokens: number;
   readonly events: number;
+  readonly share: number;
+  /** Null represents unavailable pricing, not a free model. */
+  readonly estimatedCostUsd: number | null;
+  readonly estimatedCostIsPartial: boolean;
 }
 
 export interface DashboardV2ContextCounts {
@@ -156,7 +171,8 @@ export interface DashboardV2View {
   readonly trend: readonly DashboardV2TrendPoint[];
   readonly models: readonly DashboardV2BreakdownRow[];
   readonly projects: readonly DashboardV2BreakdownRow[];
-  readonly calendar: readonly DashboardV2TrendPoint[];
+  readonly calendar: readonly DashboardV2CalendarPoint[];
+  readonly calendarSummary: DashboardV2CalendarSummary;
   readonly context: DashboardV2ContextCounts;
 }
 
