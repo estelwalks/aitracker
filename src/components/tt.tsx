@@ -1,4 +1,47 @@
+import { Search } from "lucide-react";
 import type { ReactNode } from "react";
+
+/** Shared compact input for module toolbars and data views. */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  className = "w-full sm:w-72",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className="h-8 w-full rounded-sm border border-border bg-surface-2/70 pr-3 pl-8 text-[13px] outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15"
+      />
+    </div>
+  );
+}
+
+/** A consistent control rail for module filters, search, and actions. */
+export function Toolbar({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={`tt-toolbar ${className}`}>{children}</div>;
+}
 
 export function Panel({
   title,
@@ -16,8 +59,10 @@ export function Panel({
   return (
     <section className={`tt-panel flex flex-col ${className}`}>
       {(title || action) && (
-        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
-          <h2 className="text-[13px] font-medium tracking-wide">{title}</h2>
+        <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
+          <h2 className="text-[13px] font-medium tracking-[0.025em]">
+            {title}
+          </h2>
           {action}
         </header>
       )}
@@ -36,9 +81,9 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div className="tt-page-header mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
         {desc && (
           <p className="mt-0.5 text-[13px] text-muted-foreground">{desc}</p>
         )}
@@ -58,12 +103,13 @@ export function Segmented<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="inline-flex rounded-sm border border-border bg-surface-2 p-0.5">
+    <div className="inline-flex rounded-sm border border-border bg-surface-2/80 p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
+          type="button"
           onClick={() => onChange(o.value)}
-          className={`rounded-[3px] px-2.5 py-1 text-xs transition-colors ${
+          className={`rounded-[3px] px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
             value === o.value
               ? "bg-primary/15 font-medium text-primary"
               : "text-muted-foreground hover:text-foreground"
@@ -88,7 +134,7 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border-strong px-6 py-12 text-center">
+    <div className="tt-empty-state flex flex-col items-center justify-center rounded-sm border border-dashed border-border-strong px-6 py-12 text-center">
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
       {desc && (
@@ -130,10 +176,11 @@ export function TTButton({
   } as const;
   return (
     <button
+      type="button"
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40 ${
         size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-[13px]"
       } ${variants[variant]} ${className}`}
     >
@@ -160,7 +207,7 @@ export function Stat({
   hint?: ReactNode;
 }) {
   return (
-    <div className="px-4 py-3">
+    <div className="tt-stat px-4 py-3">
       <div className="tt-label">{label}</div>
       <div className="tt-num mt-1 text-lg">{value}</div>
       {hint && (
