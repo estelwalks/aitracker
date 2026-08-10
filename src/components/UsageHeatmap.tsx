@@ -1,4 +1,17 @@
 import type { LocalUsageEvent } from "../lib/local-usage";
+import { useI18n } from "../lib/i18n/context";
+import {
+  createBoundFormatters,
+  formatMoney,
+  type BoundFormatters,
+} from "../lib/i18n/format";
+import type { Locale } from "../lib/i18n/locale";
+import { zh } from "../lib/i18n/locales/zh-CN";
+import {
+  getMessage,
+  type MessageKey,
+  type MessageParams,
+} from "../lib/i18n/messages";
 
 export interface UsageHeatmapCell {
   weekday: number;
@@ -26,9 +39,18 @@ interface BudgetInput {
   unknownEvents?: number;
 }
 
-const weekdayLabels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+type BudgetT = <K extends MessageKey>(
+  key: K,
+  params?: MessageParams<K>,
+) => string;
 
-function aggregateUsageHeatmap(events: LocalUsageEvent[]): UsageHeatmapCell[][] {
+/** zh fallback so callers without a live `t` (e.g. tests) still get text. */
+const zhBudgetT: BudgetT = (key, params) =>
+  getMessage(zh, key, params as Record<string, string | number> | undefined);
+
+function aggregateUsageHeatmap(
+  events: LocalUsageEvent[],
+): UsageHeatmapCell[][] {
   const rows = Array.from({ length: 7 }, (_, weekday) =>
     Array.from({ length: 24 }, (_, hour) => ({
       weekday,
@@ -46,17 +68,28 @@ function aggregateUsageHeatmap(events: LocalUsageEvent[]): UsageHeatmapCell[][] 
     const cell = rows[weekday]?.[hour];
     if (!cell) continue;
     cell.events += 1;
-    cell.totalTokens += Number.isFinite(event.totalTokens) ? Math.max(0, event.totalTokens) : 0;
+    cell.totalTokens += Number.isFinite(event.totalTokens)
+      ? Math.max(0, event.totalTokens)
+      : 0;
   }
 
   return rows;
 }
 
-function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): BudgetIndicator[] {
+function buildBudgetIndicators(
+  inputs: BudgetInput[],
+  alertThreshold: number,
+  t: BudgetT = zhBudgetT,
+  format: BoundFormatters = createBoundFormatters("zh-CN"),
+): BudgetIndicator[] {
   const threshold = Math.min(100, Math.max(0, alertThreshold));
   return inputs.map((input) => {
-    const budgetCny = Number.isFinite(input.budgetCny) ? Math.max(0, input.budgetCny) : 0;
-    const spentCny = Number.isFinite(input.spentCny) ? Math.max(0, input.spentCny) : 0;
+    const budgetCny = Number.isFinite(input.budgetCny)
+      ? Math.max(0, input.budgetCny)
+      : 0;
+    const spentCny = Number.isFinite(input.spentCny)
+      ? Math.max(0, input.spentCny)
+      : 0;
     const percentage = budgetCny > 0 ? (spentCny / budgetCny) * 100 : 0;
     const hasUnknownCost = (input.unknownEvents ?? 0) > 0;
 
@@ -67,7 +100,7 @@ function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): B
         spentCny,
         percentage,
         state: "disabled",
-        message: "未设置预算",
+        message: t("dashboard.heatmap.budgetUnset"),
         hasUnknownCost,
       };
     }
@@ -79,7 +112,11 @@ function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): B
         percentage,
         state: "exceeded",
         message:
-          percentage > 100 ? `已超出 ${formatPercentage(percentage - 100)}` : "已达到预算上限",
+          percentage > 100
+            ? t("dashboard.heatmap.budgetExceeded", {
+                pct: formatPercentage(format, percentage - 100),
+              })
+            : t("dashboard.heatmap.budgetAtLimit"),
         hasUnknownCost,
       };
     }
@@ -90,7 +127,9 @@ function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): B
         spentCny,
         percentage,
         state: "warning",
-        message: `已达到 ${formatPercentage(percentage)}，接近预算上限`,
+        message: t("dashboard.heatmap.budgetWarning", {
+          pct: formatPercentage(format, percentage),
+        }),
         hasUnknownCost,
       };
     }
@@ -100,13 +139,25 @@ function buildBudgetIndicators(inputs: BudgetInput[], alertThreshold: number): B
       spentCny,
       percentage,
       state: "normal",
-      message: `剩余 ${formatCny(budgetCny - spentCny)}`,
+      message: t("dashboard.heatmap.budgetLeft", {
+        amount: format.formatMoney(budgetCny - spentCny, "CNY"),
+      }),
       hasUnknownCost,
     };
   });
 }
 
 function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
+  const { t, format } = useI18n();
+  const weekdayLabels = [
+    t("dashboard.heatmap.monday"),
+    t("dashboard.heatmap.tuesday"),
+    t("dashboard.heatmap.wednesday"),
+    t("dashboard.heatmap.thursday"),
+    t("dashboard.heatmap.friday"),
+    t("dashboard.heatmap.saturday"),
+    t("dashboard.heatmap.sunday"),
+  ];
   const rows = aggregateUsageHeatmap(events);
   const maxTokens = Math.max(0, ...rows.flat().map((cell) => cell.totalTokens));
   const totalEvents = rows.flat().reduce((sum, cell) => sum + cell.events, 0);
@@ -114,7 +165,7 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
   if (totalEvents === 0) {
     return (
       <div className="flex min-h-44 items-center justify-center rounded-sm border border-dashed border-border-strong px-4 text-center text-xs text-muted-foreground">
-        暂无可聚合的真实事件时间，热力图保持为空。
+        {t("dashboard.heatmap.empty")}
       </div>
     );
   }
@@ -125,7 +176,10 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
         <div className="grid grid-cols-[44px_repeat(24,minmax(22px,1fr))] gap-1">
           <span />
           {Array.from({ length: 24 }, (_, hour) => (
-            <span key={hour} className="tt-num text-center text-[9px] text-muted-foreground">
+            <span
+              key={hour}
+              className="tt-num text-center text-[9px] text-muted-foreground"
+            >
               {hour % 3 === 0 ? hour : ""}
             </span>
           ))}
@@ -139,11 +193,15 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
           ))}
         </div>
         <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-          <span>低</span>
+          <span>{t("dashboard.heatmap.lowLevel")}</span>
           {[0.12, 0.28, 0.48, 0.7, 1].map((opacity) => (
-            <span key={opacity} className="size-3 rounded-[2px] bg-primary" style={{ opacity }} />
+            <span
+              key={opacity}
+              className="size-3 rounded-[2px] bg-primary"
+              style={{ opacity }}
+            />
           ))}
-          <span>高 · 按 Token 强度</span>
+          <span>{t("dashboard.heatmap.highLevel")}</span>
         </div>
       </div>
     </div>
@@ -159,9 +217,12 @@ function HeatmapRow({
   cells: UsageHeatmapCell[];
   maxTokens: number;
 }) {
+  const { t, format } = useI18n();
   return (
     <>
-      <span className="flex items-center text-[10px] text-muted-foreground">{label}</span>
+      <span className="flex items-center text-[10px] text-muted-foreground">
+        {label}
+      </span>
       {cells.map((cell) => {
         const intensity = maxTokens > 0 ? cell.totalTokens / maxTokens : 0;
         return (
@@ -176,8 +237,18 @@ function HeatmapRow({
                   }
                 : undefined
             }
-            title={`${label} ${String(cell.hour).padStart(2, "0")}:00 · ${cell.events} 个事件 · ${cell.totalTokens.toLocaleString()} Token`}
-            aria-label={`${label} ${cell.hour} 时，${cell.events} 个事件，${cell.totalTokens} Token`}
+            title={t("dashboard.heatmap.cellTitleBasic", {
+              weekday: label,
+              hour: String(cell.hour).padStart(2, "0"),
+              events: cell.events,
+              tokens: format.formatNumber(cell.totalTokens),
+            })}
+            aria-label={t("dashboard.heatmap.cellAria", {
+              weekday: label,
+              hour: cell.hour,
+              events: cell.events,
+              tokens: cell.totalTokens,
+            })}
           />
         );
       })}
@@ -185,17 +256,14 @@ function HeatmapRow({
   );
 }
 
-function formatPercentage(value: number): string {
-  return `${value.toFixed(value >= 10 ? 0 : 1)}%`;
+function formatPercentage(format: BoundFormatters, value: number): string {
+  return `${format.formatNumber(value, {
+    maximumFractionDigits: value >= 10 ? 0 : 1,
+  })}%`;
 }
 
-function formatCny(value: number): string {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    minimumFractionDigits: value >= 100 ? 0 : 2,
-    maximumFractionDigits: value >= 100 ? 0 : 2,
-  }).format(value);
+function formatCny(locale: Locale, value: number): string {
+  return formatMoney(locale, value, "CNY");
 }
 
 export const UsageHeatmap = Object.assign(UsageHeatmapView, {

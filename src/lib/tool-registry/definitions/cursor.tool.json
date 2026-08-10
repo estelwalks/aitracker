@@ -1,0 +1,79 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "cursor",
+  "display": {
+    "name": "Cursor",
+    "nameZh": "Cursor"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "Cursor"
+      },
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".cursor"
+      }
+    ]
+  },
+  "storage": {
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".cursor/skills"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 3
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Cursor/User/globalStorage",
+          "glob": "**/*usage*.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Cursor/User/globalStorage",
+          "glob": "**/*usage*.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".cursor",
+          "glob": "**/*usage*.jsonl",
+          "format": "jsonl"
+        }
+      ]
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

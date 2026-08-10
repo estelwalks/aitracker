@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +16,12 @@ import { spawn } from "node:child_process";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const releaseDirectory = join(projectRoot, "release");
-const electronBuilder = join(projectRoot, "node_modules", ".bin", "electron-builder");
+const electronBuilder = join(
+  projectRoot,
+  "node_modules",
+  ".bin",
+  "electron-builder",
+);
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -51,15 +64,23 @@ async function findElectronCache(version) {
   const entries = await readdir(cacheRoot, { withFileTypes: true });
   const candidates = [
     cacheRoot,
-    ...entries.filter((entry) => entry.isDirectory()).map((entry) => join(cacheRoot, entry.name)),
+    ...entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(cacheRoot, entry.name)),
   ];
   const completeCaches = [];
 
   for (const candidate of candidates) {
-    if (!(await Promise.all(zipNames.map((name) => exists(join(candidate, name))))).every(Boolean)) {
+    if (
+      !(
+        await Promise.all(zipNames.map((name) => exists(join(candidate, name))))
+      ).every(Boolean)
+    ) {
       continue;
     }
-    const files = await Promise.all(zipNames.map((name) => stat(join(candidate, name))));
+    const files = await Promise.all(
+      zipNames.map((name) => stat(join(candidate, name))),
+    );
     completeCaches.push({
       path: candidate,
       modifiedAt: Math.min(...files.map((file) => file.mtimeMs)),
@@ -93,21 +114,30 @@ async function main() {
   await run("npm", ["run", "build:desktop"]);
 
   const electronPackage = JSON.parse(
-    await readFile(join(projectRoot, "node_modules", "electron", "package.json"), "utf8"),
+    await readFile(
+      join(projectRoot, "node_modules", "electron", "package.json"),
+      "utf8",
+    ),
   );
   const electronCache = await findElectronCache(electronPackage.version);
   const builderArgs = ["--mac", "--publish", "never"];
   if (electronCache) {
-    console.log(`Using local Electron ${electronPackage.version} cache: ${electronCache}`);
+    console.log(
+      `Using local Electron ${electronPackage.version} cache: ${electronCache}`,
+    );
     builderArgs.push(`--config.electronDist=${electronCache}`);
   } else {
-    console.log(`Local Electron ${electronPackage.version} dual-architecture cache not found; downloading.`);
+    console.log(
+      `Local Electron ${electronPackage.version} dual-architecture cache not found; downloading.`,
+    );
   }
 
   console.log("\n[3/4] Packaging Intel and Apple Silicon DMGs");
   await run(electronBuilder, builderArgs);
 
-  const version = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8")).version;
+  const version = JSON.parse(
+    await readFile(join(projectRoot, "package.json"), "utf8"),
+  ).version;
   const artifacts = [
     {
       arch: "x64",
@@ -124,7 +154,13 @@ async function main() {
   console.log("\n[4/4] Verifying architectures, signatures, and disk images");
   for (const artifact of artifacts) {
     await run("file", [join(artifact.app, "Contents", "MacOS", "TrustTools")]);
-    await run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", artifact.app]);
+    await run("codesign", [
+      "--verify",
+      "--deep",
+      "--strict",
+      "--verbose=2",
+      artifact.app,
+    ]);
     await run("hdiutil", ["verify", artifact.dmg]);
   }
 
@@ -145,6 +181,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`\nPackaging failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(
+    `\nPackaging failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
   process.exitCode = 1;
 });

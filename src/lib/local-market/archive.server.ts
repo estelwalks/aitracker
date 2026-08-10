@@ -1,10 +1,15 @@
 import { gunzipSync } from "node:zlib";
+import { AppError } from "../errors";
 
-import type { SkillDownloadInspection, StaticScanFinding, StaticScanReport } from "./types.ts";
+import type {
+  SkillDownloadInspection,
+  StaticScanFinding,
+  StaticScanReport,
+} from "./types.ts";
 import { buildDownloadUrl } from "./api.server.ts";
 
-const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
-const MAX_UNPACKED_BYTES = 40 * 1024 * 1024;
+export const MAX_COMPRESSED_BYTES = 20 * 1024 * 1024;
+export const MAX_UNPACKED_BYTES = 40 * 1024 * 1024;
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const MAX_ENTRIES = 1_000;
 const DOWNLOAD_TIMEOUT_MS = 15_000;
@@ -60,7 +65,8 @@ const SCAN_RULES: Array<{
     rule: "destructive-root-delete",
     severity: "critical",
     message: "发现高风险根目录递归删除命令",
-    pattern: /\brm\s+(?:-[a-z]*r[a-z]*f[a-z]*|-[a-z]*f[a-z]*r[a-z]*)\s+(?:\/|\$HOME|~)(?:\s|$)/i,
+    pattern:
+      /\brm\s+(?:-[a-z]*r[a-z]*f[a-z]*|-[a-z]*f[a-z]*r[a-z]*)\s+(?:\/|\$HOME|~)(?:\s|$)/i,
   },
   {
     rule: "dynamic-code-execution",
@@ -72,13 +78,15 @@ const SCAN_RULES: Array<{
     rule: "process-spawn",
     severity: "warning",
     message: "发现子进程或 shell 调用，请核对命令边界",
-    pattern: /\b(?:child_process|execSync|spawnSync|subprocess\.(?:run|Popen|call)|os\.system)\b/,
+    pattern:
+      /\b(?:child_process|execSync|spawnSync|subprocess\.(?:run|Popen|call)|os\.system)\b/,
   },
   {
     rule: "external-network",
     severity: "warning",
     message: "发现外部网络访问能力，请核对目标地址",
-    pattern: /\b(?:fetch|axios\.(?:get|post)|requests\.(?:get|post)|curl|wget)\b/,
+    pattern:
+      /\b(?:fetch|axios\.(?:get|post)|requests\.(?:get|post)|curl|wget)\b/,
   },
   {
     rule: "credential-access",
@@ -92,14 +100,18 @@ const SCAN_RULES: Array<{
 function readTarString(block: Buffer, start: number, length: number): string {
   const end = block.indexOf(0, start);
   return block
-    .subarray(start, end >= start && end < start + length ? end : start + length)
+    .subarray(
+      start,
+      end >= start && end < start + length ? end : start + length,
+    )
     .toString("utf8")
     .trim();
 }
 
 function readTarOctal(block: Buffer, start: number, length: number): number {
   const raw = readTarString(block, start, length).replace(/\0/g, "").trim();
-  if (!/^[0-7]*$/.test(raw)) throw new Error("下载包包含无效的 tar 数字字段");
+  if (!/^[0-7]*$/.test(raw))
+    throw new AppError("errors.market.archive.tarNumericField");
   return raw === "" ? 0 : Number.parseInt(raw, 8);
 }
 
@@ -109,20 +121,21 @@ function validateTarChecksum(block: Buffer): void {
   for (let index = 0; index < 512; index += 1) {
     actual += index >= 148 && index < 156 ? 32 : (block[index] ?? 0);
   }
-  if (expected !== actual) throw new Error("下载包 tar 校验和无效");
+  if (expected !== actual)
+    throw new AppError("errors.market.archive.tarChecksum");
 }
 
 export function validateArchivePath(input: string): string {
   if (!input || input.includes("\0") || input.includes("\\")) {
-    throw new Error("下载包包含无效路径");
+    throw new AppError("errors.market.archive.invalidPath");
   }
   if (input.startsWith("/") || /^[a-zA-Z]:/.test(input)) {
-    throw new Error(`下载包包含绝对路径：${input}`);
+    throw new AppError("errors.market.archive.absolutePath", { path: input });
   }
 
   const parts = input.split("/").filter((part) => part !== "" && part !== ".");
   if (parts.length === 0 || parts.some((part) => part === "..")) {
-    throw new Error(`下载包包含路径穿越：${input}`);
+    throw new AppError("errors.market.archive.pathTraversal", { path: input });
   }
   return parts.join("/");
 }
@@ -135,7 +148,8 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
 
   while (offset + 512 <= buffer.length) {
     headersChecked += 1;
-    if (headersChecked > MAX_ENTRIES) throw new Error("下载包条目数量超过 1000 个限制");
+    if (headersChecked > MAX_ENTRIES)
+      throw new AppError("errors.market.archive.tooManyEntries");
     const header = buffer.subarray(offset, offset + 512);
     if (header.every((byte) => byte === 0)) break;
     validateTarChecksum(header);
@@ -145,42 +159,51 @@ export function parseTarArchive(buffer: Buffer): TarEntry[] {
     const path = validateArchivePath(prefix ? `${prefix}/${name}` : name);
     const size = readTarOctal(header, 124, 12);
     const typeFlag = readTarString(header, 156, 1) || "0";
-    if (size > MAX_FILE_BYTES) throw new Error(`下载包单文件过大：${path}`);
-    if (offset + 512 + size > buffer.length) throw new Error("下载包 tar 内容不完整");
+    if (size > MAX_FILE_BYTES)
+      throw new AppError("errors.market.archive.fileTooLarge", { path });
+    if (offset + 512 + size > buffer.length)
+      throw new AppError("errors.market.archive.tarTruncated");
     if (["x", "g"].includes(typeFlag)) {
-      const metadata = buffer.subarray(offset + 512, offset + 512 + size).toString("utf8");
+      const metadata = buffer
+        .subarray(offset + 512, offset + 512 + size)
+        .toString("utf8");
       for (const record of metadata.split("\n")) {
         const separator = record.indexOf(" ");
-        const assignment = separator === -1 ? record : record.slice(separator + 1);
+        const assignment =
+          separator === -1 ? record : record.slice(separator + 1);
         const equals = assignment.indexOf("=");
         if (equals === -1) continue;
         const key = assignment.slice(0, equals);
         const value = assignment.slice(equals + 1);
         if (key === "path") validateArchivePath(value);
         if (key === "linkpath") {
-          throw new Error("下载包 PAX 元数据包含不允许的链接目标");
+          throw new AppError("errors.market.archive.paxBadLink");
         }
       }
       offset += 512 + Math.ceil(size / 512) * 512;
       continue;
     }
     if (!["0", "5"].includes(typeFlag)) {
-      throw new Error(`下载包包含不允许的链接或特殊条目：${path}`);
+      throw new AppError("errors.market.archive.badLinkEntry", { path });
     }
 
     unpackedBytes += size;
-    if (unpackedBytes > MAX_UNPACKED_BYTES) throw new Error("下载包解压后体积超过 40 MB 限制");
+    if (unpackedBytes > MAX_UNPACKED_BYTES)
+      throw new AppError("errors.market.archive.unpackedTooLarge");
 
     entries.push({
       path,
       type: typeFlag === "5" ? "directory" : "file",
       content:
-        typeFlag === "5" ? Buffer.alloc(0) : buffer.subarray(offset + 512, offset + 512 + size),
+        typeFlag === "5"
+          ? Buffer.alloc(0)
+          : buffer.subarray(offset + 512, offset + 512 + size),
     });
     offset += 512 + Math.ceil(size / 512) * 512;
   }
 
-  if (entries.length === 0) throw new Error("下载包为空或不是有效的 tar 包");
+  if (entries.length === 0)
+    throw new AppError("errors.market.archive.emptyTar");
   return entries;
 }
 
@@ -238,9 +261,9 @@ export function scanTarEntries(entries: TarEntry[]): StaticScanReport {
 async function readLimitedBody(response: Response): Promise<Buffer> {
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_COMPRESSED_BYTES) {
-    throw new Error("下载包超过 20 MB 限制");
+    throw new AppError("errors.market.archive.tarTooLarge");
   }
-  if (!response.body) throw new Error("下载接口没有返回文件内容");
+  if (!response.body) throw new AppError("errors.market.archive.emptyDownload");
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -251,7 +274,7 @@ async function readLimitedBody(response: Response): Promise<Buffer> {
     size += value.byteLength;
     if (size > MAX_COMPRESSED_BYTES) {
       await reader.cancel();
-      throw new Error("下载包超过 20 MB 限制");
+      throw new AppError("errors.market.archive.tarTooLarge");
     }
     chunks.push(value);
   }
@@ -270,25 +293,40 @@ export async function downloadAndInspectSkill(
   options: { fetcher?: typeof fetch; timeoutMs?: number } = {},
 ): Promise<{ inspection: SkillDownloadInspection; entries: TarEntry[] }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? DOWNLOAD_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? DOWNLOAD_TIMEOUT_MS,
+  );
 
   try {
     const response = await (options.fetcher ?? fetch)(buildDownloadUrl(skill), {
-      headers: { accept: "application/gzip, application/x-gzip, application/octet-stream" },
+      headers: {
+        accept:
+          "application/gzip, application/x-gzip, application/octet-stream",
+      },
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Skill 下载失败（HTTP ${response.status}）`);
+    if (!response.ok)
+      throw new AppError("errors.market.archive.downloadHttp", {
+        status: response.status,
+      });
 
     const compressed = await readLimitedBody(response);
-    if (compressed.length < 2 || compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
-      throw new Error("下载内容不是有效的 gzip 压缩包");
+    if (
+      compressed.length < 2 ||
+      compressed[0] !== 0x1f ||
+      compressed[1] !== 0x8b
+    ) {
+      throw new AppError("errors.market.archive.notGzip");
     }
 
     let unpacked: Buffer;
     try {
-      unpacked = gunzipSync(compressed, { maxOutputLength: MAX_UNPACKED_BYTES });
+      unpacked = gunzipSync(compressed, {
+        maxOutputLength: MAX_UNPACKED_BYTES,
+      });
     } catch {
-      throw new Error("下载包解压失败或解压后体积超限");
+      throw new AppError("errors.market.archive.inflateFailed");
     }
 
     const entries = parseTarArchive(unpacked);
@@ -303,7 +341,7 @@ export async function downloadAndInspectSkill(
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Skill 下载超时，请检查网络后重试");
+      throw new AppError("errors.market.archive.downloadTimeout");
     }
     throw error;
   } finally {

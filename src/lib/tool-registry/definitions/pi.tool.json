@@ -1,0 +1,38 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "pi",
+  "display": {
+    "name": "pi",
+    "nameZh": "pi"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".pi"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

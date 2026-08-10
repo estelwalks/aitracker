@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "packId": "anthropic",
+  "revision": "2026-08-06",
+  "rates": [
+    {
+      "id": "anthropic/claude-opus-4/2026-07-27",
+      "canonicalModelId": "claude-opus-4",
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
+      "usdNanoPerMillion": {
+        "input": "15000000000",
+        "output": "75000000000",
+        "cacheRead": "1500000000",
+        "cacheWrite": "18750000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "Anthropic API pricing",
+        "verifiedAt": "2026-07-27"
+      },
+      "billingRouteId": "official-anthropic",
+      "region": "global"
+    },
+    {
+      "id": "anthropic/claude-sonnet-4/2026-07-27",
+      "canonicalModelId": "claude-sonnet-4",
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
+      "usdNanoPerMillion": {
+        "input": "3000000000",
+        "output": "15000000000",
+        "cacheRead": "300000000",
+        "cacheWrite": "3750000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "Anthropic API pricing",
+        "verifiedAt": "2026-07-27"
+      },
+      "billingRouteId": "official-anthropic",
+      "region": "global"
+    },
+    {
+      "id": "anthropic/claude-3-7-sonnet/2026-07-27",
+      "canonicalModelId": "claude-3-7-sonnet",
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
+      "usdNanoPerMillion": {
+        "input": "3000000000",
+        "output": "15000000000",
+        "cacheRead": "300000000",
+        "cacheWrite": "3750000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "Anthropic API pricing",
+        "verifiedAt": "2026-07-27"
+      },
+      "billingRouteId": "official-anthropic",
+      "region": "global"
+    },
+    {
+      "id": "anthropic/claude-3-5-haiku/2026-07-27",
+      "canonicalModelId": "claude-3-5-haiku",
+      "effective": {
+        "from": "2026-07-27",
+        "to": null
+      },
+      "usdNanoPerMillion": {
+        "input": "800000000",
+        "output": "4000000000",
+        "cacheRead": "80000000",
+        "cacheWrite": "1000000000"
+      },
+      "source": {
+        "kind": "official",
+        "label": "Anthropic API pricing",
+        "verifiedAt": "2026-07-27"
+      },
+      "billingRouteId": "official-anthropic",
+      "region": "global"
+    }
+  ],
+  "rules": [
+    {
+      "id": "anthropic-claude-opus-4-exact",
+      "scope": {},
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-opus-4"
+      },
+      "convertTo": "claude-opus-4",
+      "rateRef": "anthropic/claude-opus-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-opus-4-prefix",
+      "scope": {},
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-opus-4"
+      },
+      "convertTo": "claude-opus-4",
+      "rateRef": "anthropic/claude-opus-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-sonnet-4-exact",
+      "scope": {},
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-sonnet-4"
+      },
+      "convertTo": "claude-sonnet-4",
+      "rateRef": "anthropic/claude-sonnet-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-sonnet-4-prefix",
+      "scope": {},
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-sonnet-4"
+      },
+      "convertTo": "claude-sonnet-4",
+      "rateRef": "anthropic/claude-sonnet-4/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-7-sonnet-exact",
+      "scope": {},
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-3-7-sonnet"
+      },
+      "convertTo": "claude-3-7-sonnet",
+      "rateRef": "anthropic/claude-3-7-sonnet/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-7-sonnet-prefix",
+      "scope": {},
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-3-7-sonnet"
+      },
+      "convertTo": "claude-3-7-sonnet",
+      "rateRef": "anthropic/claude-3-7-sonnet/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-5-haiku-exact",
+      "scope": {},
+      "priority": 200,
+      "when": {
+        "kind": "exact",
+        "value": "claude-3-5-haiku"
+      },
+      "convertTo": "claude-3-5-haiku",
+      "rateRef": "anthropic/claude-3-5-haiku/2026-07-27"
+    },
+    {
+      "id": "anthropic-claude-3-5-haiku-prefix",
+      "scope": {},
+      "priority": 120,
+      "when": {
+        "kind": "prefix",
+        "value": "claude-3-5-haiku"
+      },
+      "convertTo": "claude-3-5-haiku",
+      "rateRef": "anthropic/claude-3-5-haiku/2026-07-27"
+    }
+  ]
+}

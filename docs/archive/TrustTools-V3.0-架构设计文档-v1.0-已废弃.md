@@ -1,19 +1,19 @@
 # TrustTools V3.0 架构设计文档
 
-| 属性   | 值                     |
-| ---- | --------------------- |
+| 属性     | 值                          |
+| -------- | --------------------------- |
 | 文档类型 | 架构设计文档 (ARCH)         |
 | 项目名称 | TrustTools V3.0（代号待定） |
-| 版本   | v1.0                  |
-| 创建日期 | 2026-07-24 14:08:36   |
-| 更新日期 | 2026-07-24 14:08:36   |
-| 生成工具 | architecture-design   |
-| 文档状态 | 草稿                    |
+| 版本     | v1.0                        |
+| 创建日期 | 2026-07-24 14:08:36         |
+| 更新日期 | 2026-07-24 14:08:36         |
+| 生成工具 | architecture-design         |
+| 文档状态 | 草稿                        |
 
 ## 修订记录
 
-| 版本   | 修改时间                | 修改内容 |
-| ---- | ------------------- | ---- |
+| 版本 | 修改时间            | 修改内容 |
+| ---- | ------------------- | -------- |
 | v1.0 | 2026-07-24 14:08:36 | 初始版本 |
 
 ---
@@ -245,32 +245,32 @@ sequenceDiagram
 
 ### 5.1 Token 事件
 
-| 字段                          | 类型       | 说明                            |
-| --------------------------- | -------- | ----------------------------- |
+| 字段                        | 类型     | 说明                              |
+| --------------------------- | -------- | --------------------------------- |
 | source                      | string   | 来源工具 (claude/cursor/codex...) |
-| model                       | string   | 模型名                           |
+| model                       | string   | 模型名                            |
 | hour_start                  | ISO 8601 | UTC 半小时桶                      |
-| input_tokens                | number   | 输入 token                      |
-| output_tokens               | number   | 输出 token                      |
+| input_tokens                | number   | 输入 token                        |
+| output_tokens               | number   | 输出 token                        |
 | cached_input_tokens         | number   | 缓存读取                          |
 | cache_creation_input_tokens | number   | 缓存写入                          |
-| reasoning_output_tokens     | number   | 推理 token                      |
-| billable_total_tokens       | number   | 计费 token                      |
+| reasoning_output_tokens     | number   | 推理 token                        |
+| billable_total_tokens       | number   | 计费 token                        |
 | conversation_count          | number   | 对话轮次                          |
-| project_key                 | string   | 项目标识 (可选)                     |
+| project_key                 | string   | 项目标识 (可选)                   |
 
 ### 5.2 Skill 注册表
 
-| 字段                    | 类型       | 说明              |
-| --------------------- | -------- | --------------- |
-| id                    | uuid     | 唯一标识            |
-| name                  | string   | Skill 名称        |
-| source_dir            | string   | 来源目录            |
-| install_date          | datetime | 安装时间            |
+| 字段                  | 类型     | 说明                  |
+| --------------------- | -------- | --------------------- |
+| id                    | uuid     | 唯一标识              |
+| name                  | string   | Skill 名称            |
+| source_dir            | string   | 来源目录              |
+| install_date          | datetime | 安装时间              |
 | last_active           | datetime | 最近调用时间          |
-| call_count_7d/30d/90d | number   | 各周期调用次数         |
-| health_status         | enum     | 活跃/低频/休眠/废弃     |
-| owner                 | enum     | 个人/团队           |
+| call_count_7d/30d/90d | number   | 各周期调用次数        |
+| health_status         | enum     | 活跃/低频/休眠/废弃   |
+| owner                 | enum     | 个人/团队             |
 | team_id               | uuid     | 归属团队 (团队 skill) |
 
 ---
@@ -306,12 +306,12 @@ sequenceDiagram
 
 ## 7. 风险清单
 
-| 风险                | 影响           | 缓解              |
-| ----------------- | ------------ | --------------- |
-| 技术栈未定             | 阻塞排期         | 尽快和老板对齐         |
-| 27 个 AI 工具日志格式差异大 | Token 引擎工作量大 | 好弄的先上，逐个覆盖      |
-| 本地 API 和浏览器插件通信   | 跨进程通信复杂度     | 统一 localhost 协议 |
-| 云端团队服务另增复杂度       | 运维成本         | 最小化云端——仅鉴权+团队数据 |
+| 风险                        | 影响               | 缓解                        |
+| --------------------------- | ------------------ | --------------------------- |
+| 技术栈未定                  | 阻塞排期           | 尽快和老板对齐              |
+| 27 个 AI 工具日志格式差异大 | Token 引擎工作量大 | 好弄的先上，逐个覆盖        |
+| 本地 API 和浏览器插件通信   | 跨进程通信复杂度   | 统一 localhost 协议         |
+| 云端团队服务另增复杂度      | 运维成本           | 最小化云端——仅鉴权+团队数据 |
 
 ---
 

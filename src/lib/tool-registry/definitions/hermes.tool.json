@@ -1,0 +1,50 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "hermes",
+  "display": {
+    "name": "Hermes Agent",
+    "nameZh": "Hermes Agent"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".hermes"
+      }
+    ]
+  },
+  "storage": {
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".hermes/skills"
+        }
+      ],
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 3
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

@@ -14,12 +14,10 @@ export function Panel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={`tt-panel flex flex-col overflow-hidden ${className}`}>
+    <section className={`tt-panel flex flex-col ${className}`}>
       {(title || action) && (
-        <header className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
-          <h2 className="dashboard-panel-title text-[12px] font-medium tracking-[0.04em]">
-            {title}
-          </h2>
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+          <h2 className="text-[13px] font-medium tracking-wide">{title}</h2>
           {action}
         </header>
       )}
@@ -31,25 +29,19 @@ export function Panel({
 export function PageHeader({
   title,
   desc,
-  eyebrow,
-  status,
   children,
 }: {
   title: string;
   desc?: string;
-  eyebrow?: string;
-  status?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border/70 pb-4">
-      <div className="min-w-0">
-        {eyebrow && <div className="tt-label mb-1 text-primary">{eyebrow}</div>}
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold tracking-[-0.025em]">{title}</h1>
-          {status}
-        </div>
-        {desc && <p className="mt-1 text-[12px] text-muted-foreground">{desc}</p>}
+    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        {desc && (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">{desc}</p>
+        )}
       </div>
       {children}
     </div>
@@ -99,8 +91,16 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-border-strong px-6 py-12 text-center">
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
-      {desc && <p className="mt-1 max-w-md text-[13px] text-muted-foreground">{desc}</p>}
-      {actions && <div className="mt-4 flex flex-wrap justify-center gap-2">{actions}</div>}
+      {desc && (
+        <p className="mt-1 max-w-md text-[13px] text-muted-foreground">
+          {desc}
+        </p>
+      )}
+      {actions && (
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {actions}
+        </div>
+      )}
     </div>
   );
 }
@@ -133,7 +133,7 @@ export function TTButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-[13px]"
       } ${variants[variant]} ${className}`}
     >
@@ -143,38 +143,52 @@ export function TTButton({
 }
 
 export function Dot({ className = "" }: { className?: string }) {
-  return <span className={`inline-block size-2 shrink-0 rounded-full ${className}`} />;
-}
-
-export function StatusBadge({
-  children,
-  tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: "neutral" | "primary" | "ok" | "warn" | "danger";
-}) {
-  const tones = {
-    neutral: "border-border bg-surface-2 text-muted-foreground",
-    primary: "border-primary/25 bg-primary/10 text-primary",
-    ok: "border-ok/25 bg-ok/10 text-ok",
-    warn: "border-warn/25 bg-warn/10 text-warn",
-    danger: "border-danger/25 bg-danger/10 text-danger",
-  };
   return (
     <span
-      className={`tt-num inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-[9px] tracking-[0.08em] ${tones[tone]}`}
-    >
-      {children}
-    </span>
+      className={`inline-block size-2 shrink-0 rounded-full ${className}`}
+    />
   );
 }
 
-export function Stat({ label, value, hint }: { label: string; value: string; hint?: ReactNode }) {
+export function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: ReactNode;
+}) {
   return (
     <div className="px-4 py-3">
       <div className="tt-label">{label}</div>
       <div className="tt-num mt-1 text-lg">{value}</div>
-      {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
+      {hint && (
+        <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
+      )}
     </div>
+  );
+}
+
+export function StatusBadge({
+  tone = "neutral",
+  children,
+}: {
+  tone?: "neutral" | "primary" | "ok" | "warn" | "danger";
+  children: ReactNode;
+}) {
+  const tones = {
+    neutral: "border-border text-muted-foreground",
+    primary: "border-primary/30 text-primary",
+    ok: "border-ok/30 text-ok",
+    warn: "border-warn/30 text-warn",
+    danger: "border-danger/30 text-danger",
+  } as const;
+  return (
+    <span
+      className={`inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-[9px] tracking-[0.08em] ${tones[tone]}`}
+    >
+      {children}
+    </span>
   );
 }

@@ -1,0 +1,43 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "omp",
+  "display": {
+    "name": "oh-my-pi",
+    "nameZh": "oh-my-pi"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".omp"
+      },
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".oh-my-pi"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

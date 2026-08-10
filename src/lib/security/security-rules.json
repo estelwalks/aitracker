@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "id": "builtin-01",
+      "name": "下载脚本管道执行",
+      "kind": "远程命令执行",
+      "severity": "高危",
+      "pattern": "\\b(?:curl|wget)\\b[^\\n|;&]*(?:\\||&&|;)\\s*(?:sudo\\s+)?(?:bash|sh|zsh|dash|ksh)\\b",
+      "message": "发现从网络下载并直接执行 shell 脚本的命令链"
+    },
+    {
+      "id": "builtin-02",
+      "name": "Base64 解码执行",
+      "kind": "远程命令执行",
+      "severity": "高危",
+      "pattern": "\\bbase64\\b[^\\n|;&]*(?:-d|--decode)[^\\n|;&]*(?:\\||&&|;)\\s*(?:sudo\\s+)?(?:bash|sh|zsh|eval)\\b",
+      "message": "发现 Base64 解码后直接执行的命令链"
+    },
+    {
+      "id": "builtin-03",
+      "name": "反向 Shell",
+      "kind": "远程命令执行",
+      "severity": "高危",
+      "pattern": "(?:bash|sh|zsh)\\s+-[il]\\b[^\\n]*?>\\s*&\\s*\\/dev\\/tcp\\/|\\bnc\\b[^\\n]*?\\s-[elk]\\b|\\bmkfifo\\b|\\bsh\\s+-i\\b",
+      "message": "发现疑似反向 Shell 命令"
+    },
+    {
+      "id": "builtin-04",
+      "name": "外发敏感数据",
+      "kind": "数据泄露",
+      "severity": "高危",
+      "pattern": "\\b(?:curl|wget)\\b[^\\n]*?-X\\s*POST\\b[^\\n]*?(?:\\/upload\\b|\\/log\\b|exfil)|\\brequests\\.post\\b|\\bfetch\\s*\\([^)]*?(?:upload|exfil|\\/log)",
+      "message": "发现向外部接口 POST 数据的疑似外发行为"
+    },
+    {
+      "id": "builtin-05",
+      "name": "环境变量或密钥外传",
+      "kind": "数据泄露",
+      "severity": "高危",
+      "pattern": "(?:os\\.environ|~\\/\\.ssh|~\\/\\.aws\\/credentials|id_rsa)[^\\n]{0,80}?\\b(?:curl|wget|requests\\.|socket|fetch)\\b",
+      "message": "发现疑似将环境变量、SSH 或云凭据发送到外网的行为"
+    },
+    {
+      "id": "builtin-06",
+      "name": "原始套接字外联上传",
+      "kind": "数据泄露",
+      "severity": "中危",
+      "pattern": "\\b(?:socket|net\\.connect)\\b[^\\n]{0,120}?\\b(?:send|write|connect)\\b[^\\n]{0,80}?(?:read_file|open\\(|readfile)",
+      "message": "发现通过原始套接字外发文件内容的可疑调用"
+    },
+    {
+      "id": "builtin-07",
+      "name": "访问密钥特征",
+      "kind": "密钥泄露",
+      "severity": "高危",
+      "pattern": "\\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})\\b",
+      "message": "发现疑似真实访问密钥（OpenAI / AWS / GitHub）"
+    },
+    {
+      "id": "builtin-08",
+      "name": "硬编码凭据",
+      "kind": "密钥泄露",
+      "severity": "中危",
+      "pattern": "\\b(?:api[_-]?key|secret|token|password|passwd)\\b\\s*[:=]\\s*[\"'][^\"'\\n]{8,}[\"']",
+      "message": "发现疑似硬编码凭据"
+    },
+    {
+      "id": "builtin-09",
+      "name": "计划任务写入",
+      "kind": "持久化",
+      "severity": "高危",
+      "pattern": "\\bcrontab\\s+(?:-e\\b|-l\\b[^\\n]*?\\|)|(?:echo|cat)\\b[^\\n]*?>>\\s*(?:\\/var\\/spool\\/cron|\\/etc\\/cron\\w*)",
+      "message": "发现修改 cron 计划任务的可疑操作"
+    },
+    {
+      "id": "builtin-10",
+      "name": "SSH authorized_keys 写入",
+      "kind": "持久化",
+      "severity": "高危",
+      "pattern": "authorized_keys\\b[^\\n]{0,60}?>>|>>\\s*~?\\/?\\.ssh\\/authorized_keys",
+      "message": "发现向 SSH authorized_keys 追加公钥的持久化操作"
+    },
+    {
+      "id": "builtin-11",
+      "name": "系统计划任务注册",
+      "kind": "持久化",
+      "severity": "中危",
+      "pattern": "\\b(?:launchctl|schtasks|at)\\b[^\\n]{0,60}?(?:create|register|load|add)\\b",
+      "message": "发现注册系统计划任务（launchctl/schtasks/at）的行为"
+    },
+    {
+      "id": "builtin-12",
+      "name": "递归删除系统目录",
+      "kind": "破坏性操作",
+      "severity": "高危",
+      "pattern": "\\brm\\s+-rf\\s+(?:\\/(?:\\s|$)|~|\\$HOME\\b)",
+      "message": "发现可能破坏系统或用户目录的递归删除命令"
+    },
+    {
+      "id": "builtin-13",
+      "name": "磁盘擦除",
+      "kind": "破坏性操作",
+      "severity": "高危",
+      "pattern": "\\bdd\\b[^\\n]*?\\bof=\\/dev\\/(?:disk|sd|nvme|hd)|\\bmkfs(?:\\.\\w+)?\\b[^\\n]*?\\/dev\\/",
+      "message": "发现 dd / mkfs 形式的磁盘擦除或格式化命令"
+    },
+    {
+      "id": "builtin-14",
+      "name": "Fork 炸弹",
+      "kind": "破坏性操作",
+      "severity": "高危",
+      "pattern": ":\\s*\\(\\s*\\)\\s*\\{\\s*:\\s*\\|\\s*:\\s*&\\s*\\}\\s*;",
+      "message": "发现 Fork 炸弹模式"
+    },
+    {
+      "id": "builtin-15",
+      "name": "十六进制执行链",
+      "kind": "代码混淆",
+      "severity": "中危",
+      "pattern": "(?:\\\\x[0-9a-f]{2}){4,32}\\s*[^\\n]{0,60}?(?:eval|exec|Function\\s*\\()",
+      "message": "发现十六进制字符串解码后立即执行的可疑代码"
+    },
+    {
+      "id": "builtin-16",
+      "name": "Base64/Hex 缓冲解码执行",
+      "kind": "代码混淆",
+      "severity": "中危",
+      "pattern": "Buffer\\.from\\s*\\([^)]*?[\"'](?:hex|base64)[\"']\\s*\\)[^\\n]{0,120}?(?:eval|exec|Function\\s*\\()",
+      "message": "发现 Base64/Hex 缓冲解码后用于动态执行的可疑代码"
+    },
+    {
+      "id": "builtin-17",
+      "name": "XOR 解码循环",
+      "kind": "代码混淆",
+      "severity": "中危",
+      "pattern": "String\\.fromCharCode\\s*\\([^)]*?\\^\\s*0x[0-9a-f]+\\b|for\\s*\\([^)]*?\\^\\s*0x[0-9a-f]+[^\\n]{0,80}?eval\\b",
+      "message": "发现 XOR 异或解码后用于动态执行的可疑代码"
+    },
+    {
+      "id": "builtin-18",
+      "name": "SQL 注入特征",
+      "kind": "注入攻击",
+      "severity": "高危",
+      "pattern": "['\"]\\s+(?:or|and)\\s+1\\s*=\\s*1\\b|;\\s*drop\\s+table\\b|--\\s*$|\\bunion\\s+select\\b",
+      "message": "发现 SQL 注入特征字符串"
+    },
+    {
+      "id": "builtin-19",
+      "name": "YAML/JSON 注入",
+      "kind": "注入攻击",
+      "severity": "中危",
+      "pattern": "\\b(?:yaml\\.load|JSON\\.parse)\\s*\\([^)]*?(?:\\+|`|\\$\\{)[^\\n]{0,80}?(?:input|req\\.|args|argv)",
+      "message": "发现将未清洗输入拼入 YAML/JSON 解析的注入风险"
+    },
+    {
+      "id": "builtin-20",
+      "name": "高危命令 sudo 提权",
+      "kind": "权限提升",
+      "severity": "中危",
+      "pattern": "\\bsudo\\s+(?:rm|dd|mkfs|chmod|chown|visudo|tee\\s+\\/etc\\/sudoers)\\b",
+      "message": "发现对高危命令使用 sudo 提权"
+    },
+    {
+      "id": "builtin-21",
+      "name": "宽松权限或 SUID 设置",
+      "kind": "权限提升",
+      "severity": "高危",
+      "pattern": "\\bchmod\\s+(?:777|u\\+s)\\b|\\bvisudo\\b|tee\\s+-a\\s+\\/etc\\/sudoers",
+      "message": "发现 chmod 777、SUID 设置或 sudoers 修改"
+    },
+    {
+      "id": "builtin-22",
+      "name": "读取敏感凭据文件",
+      "kind": "文件访问",
+      "severity": "中危",
+      "pattern": "\\b(?:cat|head|tail|less|more|open|read|readfile|read_file)\\b[^\\n]{0,40}?(?:\\.env\\b|\\.ssh\\/id_rsa|\\.gitconfig|\\.aws\\/credentials|\\.npmrc\\b)",
+      "message": "发现读取敏感凭据/配置文件的操作"
+    },
+    {
+      "id": "builtin-23",
+      "name": "非 HTTPS 外联",
+      "kind": "网络外联",
+      "severity": "中危",
+      "pattern": "\\b(?:http:\\/\\/|ftp:\\/\\/|ws:\\/\\/)[a-z0-9.-]+\\.[a-z]{2,}\\b",
+      "message": "发现使用明文协议（HTTP/FTP/WS）外联"
+    },
+    {
+      "id": "builtin-24",
+      "name": "原始 IP 外联",
+      "kind": "网络外联",
+      "severity": "低危",
+      "pattern": "\\b(?:curl|wget|nc|netcat)\\b[^\\n]{0,40}?\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b",
+      "message": "发现直接通过 IP 地址外联的可疑调用"
+    },
+    {
+      "id": "builtin-25",
+      "name": "指令覆盖提示注入",
+      "kind": "提示注入",
+      "severity": "中危",
+      "pattern": "ignore\\s+(?:all|previous|prior)\\s+instructions|disregard\\s+(?:the\\s+)?above|forget\\s+(?:your\\s+)?previous|you\\s+are\\s+now\\b",
+      "message": "发现疑似提示注入：覆盖既有指令的措辞"
+    },
+    {
+      "id": "builtin-26",
+      "name": "系统提示覆盖",
+      "kind": "提示注入",
+      "severity": "中危",
+      "pattern": "system\\s+prompt\\b[^\\n]{0,40}?(?:override|ignore|replace)|<\\/?system>",
+      "message": "发现疑似系统提示覆盖或系统标签注入"
+    }
+  ]
+}

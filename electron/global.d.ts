@@ -1,8 +1,8 @@
-import type { TrustToolsDesktopApi } from "./contracts.js";
+import type { DesktopApi } from "./contracts.js";
 
 declare global {
   interface Window {
-    trustToolsDesktop?: TrustToolsDesktopApi;
+    desktopApi?: DesktopApi;
   }
 }
 

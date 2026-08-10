@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-08-06",
+  "routes": [
+    {
+      "id": "official-openai",
+      "name": "openai official API",
+      "kind": "official-api",
+      "provider": "openai",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-anthropic",
+      "name": "anthropic official API",
+      "kind": "official-api",
+      "provider": "anthropic",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-google",
+      "name": "google official API",
+      "kind": "official-api",
+      "provider": "google",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-deepseek",
+      "name": "deepseek official API",
+      "kind": "official-api",
+      "provider": "deepseek",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-minimax",
+      "name": "minimax official API",
+      "kind": "official-api",
+      "provider": "minimax",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-zhipu",
+      "name": "zhipu official API",
+      "kind": "official-api",
+      "provider": "zhipu",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    },
+    {
+      "id": "official-volcengine",
+      "name": "volcengine official API",
+      "kind": "official-api",
+      "provider": "volcengine",
+      "endpointEvidence": [
+        "endpoint",
+        "baseUrl"
+      ],
+      "region": {
+        "default": "global"
+      },
+      "status": "active",
+      "reference": true
+    }
+  ]
+}

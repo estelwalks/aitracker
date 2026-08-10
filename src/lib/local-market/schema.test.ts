@@ -30,26 +30,90 @@ test("parseMarketApiResponse maps real API fields without inventing rating or ve
   assert.equal(parsed.skills[0]?.installCount, 42);
   assert.equal(parsed.skills[0]?.rating, null);
   assert.equal(parsed.skills[0]?.version, null);
-  assert.deepEqual(parsed.pagination, { page: 1, limit: 20, total: 1, pages: 1 });
+  assert.deepEqual(parsed.pagination, {
+    page: 1,
+    limit: 20,
+    total: 1,
+    pages: 1,
+  });
 });
 
 test("parseMarketApiResponse rejects malformed contracts", () => {
   assert.throws(
     () => parseMarketApiResponse({ success: true, data: [{}], pagination: {} }),
-    /字段/,
+    /errors\.market\.(pagingField|field)Invalid/,
   );
   assert.throws(
     () => parseMarketApiResponse({ success: false, data: [], pagination: {} }),
-    /格式无效/,
+    /errors\.market\.invalidFormat/,
   );
 });
 
-test("parseMarketQuery enforces pagination and search bounds", () => {
-  assert.deepEqual(parseMarketQuery({ page: 2, limit: 20, search: "  测试  " }), {
-    page: 2,
-    limit: 20,
-    search: "测试",
+test("parseMarketApiResponse extracts token_estimate.total_tokens and defaults size to null", () => {
+  const parsed = parseMarketApiResponse({
+    success: true,
+    data: [
+      {
+        id: 9,
+        name: "t",
+        slug: "t",
+        repo_owner: "o",
+        repo_name: "r",
+        repo_path: "p",
+        install_count: 1,
+        token_estimate: {
+          total_tokens: 414,
+          skill_md_tokens: 414,
+        },
+      },
+      {
+        id: 10,
+        name: "u",
+        slug: "u",
+        repo_owner: "o",
+        repo_name: "r",
+        repo_path: "p",
+        install_count: 0,
+        // 无 token_estimate
+      },
+    ],
+    pagination: { page: 1, limit: 20, total: 2, pages: 1 },
   });
-  assert.throws(() => parseMarketQuery({ page: 0, limit: 20, search: "" }), /页码/);
-  assert.throws(() => parseMarketQuery({ page: 1, limit: 100, search: "" }), /每页/);
+
+  assert.equal(parsed.skills[0]?.tokens, 414);
+  assert.equal(parsed.skills[0]?.size, null);
+  assert.equal(parsed.skills[1]?.tokens, null);
+});
+
+test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
+  assert.deepEqual(
+    parseMarketQuery({ page: 2, limit: 20, search: "  测试  " }),
+    {
+      page: 2,
+      limit: 20,
+      search: "测试",
+      sort: "downloads",
+    },
+  );
+  assert.deepEqual(
+    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "latest" }),
+    {
+      page: 1,
+      limit: 14,
+      search: "",
+      sort: "latest",
+    },
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 0, limit: 20, search: "" }),
+    /errors\.market\.pageNotPositive/,
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 1, limit: 100, search: "" }),
+    /errors\.market\.limitRange/,
+  );
+  assert.throws(
+    () => parseMarketQuery({ page: 1, limit: 20, search: "", sort: "invalid" }),
+    /errors\.market\.sortInvalid/,
+  );
 });

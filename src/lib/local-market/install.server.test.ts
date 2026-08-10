@@ -7,11 +7,26 @@ import { gzipSync } from "node:zlib";
 
 import { prepareSkillInstall } from "./install.server.ts";
 
-function writeTarString(block: Buffer, offset: number, length: number, value: string): void {
-  block.write(value, offset, Math.min(length, Buffer.byteLength(value)), "utf8");
+function writeTarString(
+  block: Buffer,
+  offset: number,
+  length: number,
+  value: string,
+): void {
+  block.write(
+    value,
+    offset,
+    Math.min(length, Buffer.byteLength(value)),
+    "utf8",
+  );
 }
 
-function writeTarOctal(block: Buffer, offset: number, length: number, value: number): void {
+function writeTarOctal(
+  block: Buffer,
+  offset: number,
+  length: number,
+  value: number,
+): void {
   const encoded = value.toString(8).padStart(length - 1, "0");
   block.write(`${encoded}\0`, offset, length, "ascii");
 }
@@ -45,7 +60,9 @@ function tarGzip(entries: Array<{ path: string; content: string }>): Buffer {
   return gzipSync(Buffer.concat(blocks));
 }
 
-function archiveResponse(entries: Array<{ path: string; content: string }>): Response {
+function archiveResponse(
+  entries: Array<{ path: string; content: string }>,
+): Response {
   const archive = tarGzip(entries);
   const body = new Uint8Array(archive.length);
   body.set(archive);
@@ -63,11 +80,11 @@ const request = {
     repoName: "repo",
     repoPath: "skills/example-skill/SKILL.md",
   },
-  agents: ["Claude Code", "Codex"] as const,
+  agents: ["Claude Code", "Codex CLI"] as const,
 };
 
 test("prepareSkillInstall extracts, installs per target, reports failures, and cleans temp files", async () => {
-  const tempRoot = await mkdtemp(join(tmpdir(), "trusttools-market-test-"));
+  const tempRoot = await mkdtemp(join(tmpdir(), "tt-market-test-"));
   const calls: string[] = [];
   try {
     const result = await prepareSkillInstall(
@@ -80,21 +97,25 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
             { path: "example-skill/reference.md", content: "Reference\n" },
           ]),
         installFn: async ({ sourcePath, targetAgent }) => {
-          assert.equal(await readFile(join(sourcePath, "SKILL.md"), "utf8"), "# Example Skill\n");
+          assert.equal(
+            await readFile(join(sourcePath, "SKILL.md"), "utf8"),
+            "# Example Skill\n",
+          );
           calls.push(targetAgent);
-          if (targetAgent === "Codex") throw new Error("目标位置已存在同名 Skill");
+          if (targetAgent === "Codex CLI")
+            throw new Error("目标位置已存在同名 Skill");
         },
       },
     );
 
     assert.equal(result.installed, false);
     assert.equal(result.reason, "partial");
-    assert.deepEqual(calls, ["Claude Code", "Codex"]);
+    assert.deepEqual(calls, ["Claude Code", "Codex CLI"]);
     assert.deepEqual(
       result.targets.map(({ agent, installed }) => ({ agent, installed })),
       [
         { agent: "Claude Code", installed: true },
-        { agent: "Codex", installed: false },
+        { agent: "Codex CLI", installed: false },
       ],
     );
     assert.deepEqual(await readdir(tempRoot), []);
@@ -104,7 +125,7 @@ test("prepareSkillInstall extracts, installs per target, reports failures, and c
 });
 
 test("prepareSkillInstall blocks dangerous content before extraction or installation", async () => {
-  const tempRoot = await mkdtemp(join(tmpdir(), "trusttools-market-test-"));
+  const tempRoot = await mkdtemp(join(tmpdir(), "tt-market-test-"));
   let installCalls = 0;
   try {
     const result = await prepareSkillInstall(

@@ -1,0 +1,52 @@
+/**
+ * Compatibility catalog. The single source of truth for tool facts is the
+ * tool-registry (`src/lib/tool-registry/`). This module derives the legacy
+ * `AI_TOOLS` / `AI_TOOL_IDS` projection from the registry so existing
+ * consumers (detection, usage sources, skills scanner, onboarding) keep working
+ * without per-file edits.
+ */
+import { getUsagePlan, listTools } from "../tool-registry/registry.ts";
+
+export interface AiTool {
+  /** Stable lowercase-kebab identifier (used as the usage `source` id). */
+  id: string;
+  /** PRD display name (also used as the Skill / Market agent label). */
+  nameZh: string;
+  /**
+   * HOME-relative probe paths (macOS first, Windows variant where known) used
+   * to detect whether the tool is installed. Empty array when no path is
+   * known - the tool then renders as "未安装".
+   */
+  detectRoots: readonly string[];
+}
+
+/**
+ * Parser coverage is intentionally modelled separately from installation.
+ * A supported parser may find no records, and an installed tool may have no
+ * parser yet; neither condition changes the filesystem installation fact.
+ */
+export type UsageLogParsing = "native" | "adapter" | "unsupported";
+
+/**
+ * Parser coverage derived from the registry's usage capability (P4-T1).
+ * Note: workbuddy moves adapter -> native (its declared mode is native
+ * `workbuddy-native`); the frozen baseline recorded the old catalog label.
+ */
+export function usageLogParsingFor(toolId: string): UsageLogParsing {
+  const plan = getUsagePlan(toolId);
+  if (!plan) return "unsupported";
+  return plan.mode;
+}
+
+const REGISTRY_TOOLS = listTools().filter(
+  (def) => def.catalogVisible !== false,
+);
+
+export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
+  id: def.id,
+  nameZh: def.display.nameZh,
+  detectRoots: def.detection.roots,
+}));
+
+/** Stable lowercase-kebab ids for the 27 visible catalog tools (legacy sources excluded). */
+export const AI_TOOL_IDS: readonly string[] = AI_TOOLS.map((tool) => tool.id);

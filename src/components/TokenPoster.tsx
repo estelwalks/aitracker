@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clipboard, Download, Image as ImageIcon, RefreshCw, X } from "lucide-react";
+import {
+  Clipboard,
+  Download,
+  Image as ImageIcon,
+  RefreshCw,
+  X,
+} from "lucide-react";
 
 import { Segmented, TTButton } from "./tt";
+import { useI18n } from "../lib/i18n/context";
+import { brandParams, POSTER_FILENAME_PREFIX } from "../lib/app-config";
+import type { BoundFormatters } from "../lib/i18n/format";
 
-export type PosterPeriod = "today" | "week" | "month" | "year" | "custom" | "7d" | "30d";
+export type PosterPeriod =
+  "today" | "week" | "month" | "year" | "custom" | "7d" | "30d";
 
 export type PosterData = {
   periodLabel: string;
@@ -20,14 +30,16 @@ export type PosterData = {
 
 type SkinKey = "dark" | "light";
 
+type TFunction = ReturnType<typeof useI18n>["t"];
+
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
-const SANS = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif';
+const SANS =
+  '"PingFang SC", "Hiragino Sans GB", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans KR", "Microsoft YaHei", system-ui, sans-serif';
 
 const skins = {
   dark: {
-    label: "暗色",
     background: ["#091019", "#152335"],
     foreground: "#edf4ff",
     muted: "#91a3b9",
@@ -37,7 +49,6 @@ const skins = {
     grid: "rgba(255,255,255,0.04)",
   },
   light: {
-    label: "亮色",
     background: ["#fbfaf6", "#e9edf4"],
     foreground: "#17202d",
     muted: "#657184",
@@ -48,15 +59,25 @@ const skins = {
   },
 } as const;
 
-function rank(tokens: number) {
-  if (tokens >= 20_000_000) return ["Token 焚烧炉", "算力在你手里没有明天"];
-  if (tokens >= 5_000_000) return ["重度炼丹师", "上下文管够，思路不停"];
-  if (tokens >= 1_000_000) return ["百万级玩家", "已进入 AI 深水区"];
-  if (tokens >= 200_000) return ["稳健通勤者", "该用的时候一点不含糊"];
-  return ["克制主义者", "每一个 Token 都花在刀刃上"];
+function rank(t: TFunction, tokens: number): [string, string] {
+  if (tokens >= 20_000_000)
+    return [t("dashboard.poster.rank1"), t("dashboard.poster.rank1Desc")];
+  if (tokens >= 5_000_000)
+    return [t("dashboard.poster.rank2"), t("dashboard.poster.rank2Desc")];
+  if (tokens >= 1_000_000)
+    return [t("dashboard.poster.rank3"), t("dashboard.poster.rank3Desc")];
+  if (tokens >= 200_000)
+    return [t("dashboard.poster.rank4"), t("dashboard.poster.rank4Desc")];
+  return [t("dashboard.poster.rank5"), t("dashboard.poster.rank5Desc")];
 }
 
-function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKey) {
+function drawPoster(
+  canvas: HTMLCanvasElement,
+  data: PosterData,
+  skinKey: SkinKey,
+  t: TFunction,
+  format: BoundFormatters,
+) {
   const context = canvas.getContext("2d");
   if (context == null) return;
   const skin = skins[skinKey];
@@ -85,15 +106,21 @@ function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKe
   }
 
   const margin = 84;
-  const [rankName, rankDescription] = rank(data.tokens);
+  const [rankName, rankDescription] = rank(t, data.tokens);
   context.textBaseline = "middle";
   context.textAlign = "left";
 
   context.fillStyle = skin.accent;
   context.fillRect(margin, 104, 10, 36);
   context.fillStyle = skin.foreground;
-  context.font = `600 31px ${SANS}`;
-  context.fillText("TrustTools Token 战报", margin + 28, 122);
+  const headline = t("dashboard.poster.headline", brandParams);
+  context.font = `600 ${fitFontSize(
+    context,
+    headline,
+    WIDTH - margin - 28 - 220,
+    31,
+  )}px ${SANS}`;
+  context.fillText(headline, margin + 28, 122);
   context.textAlign = "right";
   context.fillStyle = skin.muted;
   context.font = `400 22px ${MONO}`;
@@ -103,24 +130,29 @@ function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKe
   context.fillStyle = skin.muted;
   context.font = `400 24px ${SANS}`;
   context.fillText(data.rangeLabel, margin, 190);
-  context.fillText("本期称号", margin, 282);
+  context.fillText(t("dashboard.poster.rankLabel"), margin, 282);
   context.fillStyle = skin.foreground;
-  context.font = `700 88px ${SANS}`;
+  context.font = `700 ${fitFontSize(
+    context,
+    rankName,
+    WIDTH - margin * 2,
+    88,
+  )}px ${SANS}`;
   context.fillText(rankName, margin, 366);
   context.fillStyle = skin.muted;
   context.font = `400 27px ${SANS}`;
   context.fillText(rankDescription, margin, 430);
 
   context.font = `400 23px ${MONO}`;
-  context.fillText("总 Token", margin, 535);
+  context.fillText(t("dashboard.poster.totalTokens"), margin, 535);
   context.fillStyle = skin.accent;
   context.font = `700 112px ${MONO}`;
-  context.fillText(data.tokens.toLocaleString(), margin, 630);
+  context.fillText(format.formatNumber(data.tokens), margin, 630);
 
   const metrics = [
-    ["估算费用", data.costLabel],
-    ["缓存节省", data.savedLabel],
-    ["缓存命中", `${data.hitRate.toFixed(1)}%`],
+    [t("dashboard.poster.metricCost"), data.costLabel],
+    [t("dashboard.poster.metricSaved"), data.savedLabel],
+    [t("dashboard.poster.metricHit"), format.formatPercent(data.hitRate)],
   ];
   const metricY = 735;
   const metricWidth = (WIDTH - margin * 2) / metrics.length;
@@ -143,9 +175,9 @@ function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKe
     fitText(context, value, metricWidth - 56, x + 28, metricY + 111);
   });
 
-  drawTrend(context, data, skin, margin, 1035);
-  drawProviders(context, data, skin, margin, 1370);
-  drawModels(context, data, skin, margin, 1570);
+  drawTrend(context, data, skin, margin, 1035, t);
+  drawProviders(context, data, skin, margin, 1370, t);
+  drawModels(context, data, skin, margin, 1570, t);
 
   context.strokeStyle = skin.line;
   context.beginPath();
@@ -156,14 +188,20 @@ function drawPoster(canvas: HTMLCanvasElement, data: PosterData, skinKey: SkinKe
   context.font = `400 21px ${SANS}`;
   context.fillText(
     data.unknownPriceModels > 0
-      ? `其中 ${data.unknownPriceModels} 个模型价格未知 · 费用为已知小计`
-      : "全部模型价格可识别 · 费用为公开价估算",
+      ? t("dashboard.poster.unknownPrice", {
+          count: data.unknownPriceModels,
+        })
+      : t("dashboard.poster.allPriced"),
     margin,
     HEIGHT - 79,
   );
   context.textAlign = "right";
   context.fillStyle = skin.accent;
-  context.fillText("本地统计 · 数据不出机", WIDTH - margin, HEIGHT - 79);
+  context.fillText(
+    t("dashboard.poster.localOnly"),
+    WIDTH - margin,
+    HEIGHT - 79,
+  );
 }
 
 function drawTrend(
@@ -172,14 +210,16 @@ function drawTrend(
   skin: (typeof skins)[SkinKey],
   margin: number,
   y: number,
+  t: TFunction,
 ) {
   context.fillStyle = skin.muted;
   context.font = `400 23px ${SANS}`;
-  context.fillText("Token 趋势", margin, y - 38);
+  context.fillText(t("dashboard.poster.trend"), margin, y - 38);
   const values = data.trend.length > 0 ? data.trend : [0];
   const maximum = Math.max(...values, 1);
   const gap = 14;
-  const width = (WIDTH - margin * 2 - gap * (values.length - 1)) / values.length;
+  const width =
+    (WIDTH - margin * 2 - gap * (values.length - 1)) / values.length;
   const height = 220;
   values.forEach((value, index) => {
     const barHeight = Math.max(4, (value / maximum) * height);
@@ -197,10 +237,11 @@ function drawProviders(
   skin: (typeof skins)[SkinKey],
   margin: number,
   y: number,
+  t: TFunction,
 ) {
   context.fillStyle = skin.muted;
   context.font = `400 23px ${SANS}`;
-  context.fillText("来源占比", margin, y - 34);
+  context.fillText(t("dashboard.poster.providers"), margin, y - 34);
   const total = data.providers.reduce((sum, item) => sum + item.value, 0) || 1;
   let x = margin;
   const width = WIDTH - margin * 2;
@@ -228,10 +269,11 @@ function drawModels(
   skin: (typeof skins)[SkinKey],
   margin: number,
   y: number,
+  t: TFunction,
 ) {
   context.fillStyle = skin.muted;
   context.font = `400 23px ${SANS}`;
-  context.fillText("主要模型", margin, y - 30);
+  context.fillText(t("dashboard.poster.models"), margin, y - 30);
   data.models.slice(0, 3).forEach((model, index) => {
     const rowY = y + index * 62;
     context.fillStyle = skin.foreground;
@@ -240,7 +282,12 @@ function drawModels(
     context.fillStyle = skin.line;
     context.fillRect(margin + 350, rowY - 8, 390, 16);
     context.fillStyle = skin.palette[index % skin.palette.length];
-    context.fillRect(margin + 350, rowY - 8, (390 * Math.max(2, model.pct)) / 100, 16);
+    context.fillRect(
+      margin + 350,
+      rowY - 8,
+      (390 * Math.max(2, model.pct)) / 100,
+      16,
+    );
     context.textAlign = "right";
     context.fillStyle = skin.muted;
     context.fillText(model.tokens, WIDTH - margin, rowY);
@@ -260,14 +307,34 @@ function fitText(
     return;
   }
   let shortened = value;
-  while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) {
+  while (
+    shortened.length > 1 &&
+    context.measureText(`${shortened}…`).width > maxWidth
+  ) {
     shortened = shortened.slice(0, -1);
   }
   context.fillText(`${shortened}…`, x, y);
 }
 
+/**
+ * Shrink the font size until the text fits `maxWidth` (ja/ko titles are
+ * wider than zh; prefer scaling over truncation for headline/rank titles).
+ */
+function fitFontSize(
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  basePx: number,
+): number {
+  let px = basePx;
+  while (px > 12 && context.measureText(text).width > maxWidth) px -= 1;
+  return px;
+}
+
 function canvasBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
 }
 
 export function TokenPoster({
@@ -279,13 +346,15 @@ export function TokenPoster({
   filePeriod: PosterPeriod;
   onClose: () => void;
 }) {
+  const { t, format } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [skin, setSkin] = useState<SkinKey>("dark");
   const [message, setMessage] = useState("");
 
   const render = useCallback(() => {
-    if (canvasRef.current != null) drawPoster(canvasRef.current, data, skin);
-  }, [data, skin]);
+    if (canvasRef.current != null)
+      drawPoster(canvasRef.current, data, skin, t, format);
+  }, [data, skin, t, format]);
 
   useEffect(() => {
     render();
@@ -296,35 +365,40 @@ export function TokenPoster({
     if (canvas == null) return;
     const blob = await canvasBlob(canvas);
     if (blob == null) {
-      setMessage("当前浏览器无法生成 PNG，请更换浏览器后重试。");
+      setMessage(t("dashboard.poster.errNoPng"));
       return;
     }
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    anchor.download = `trusttools-token-${filePeriod}-${Date.now()}.png`;
+    anchor.download = `${POSTER_FILENAME_PREFIX}${filePeriod}-${Date.now()}.png`;
     anchor.href = url;
     anchor.click();
     URL.revokeObjectURL(url);
-    setMessage("PNG 已下载。");
+    setMessage(t("dashboard.poster.downloaded"));
   };
 
   const copy = async () => {
     const canvas = canvasRef.current;
     if (canvas == null) return;
-    if (typeof ClipboardItem === "undefined" || navigator.clipboard?.write == null) {
-      setMessage("当前浏览器不支持复制图片，请使用“下载 PNG”。");
+    if (
+      typeof ClipboardItem === "undefined" ||
+      navigator.clipboard?.write == null
+    ) {
+      setMessage(t("dashboard.poster.errNoCopy"));
       return;
     }
     const blob = await canvasBlob(canvas);
     if (blob == null) {
-      setMessage("当前浏览器无法生成图片，请使用“下载 PNG”。");
+      setMessage(t("dashboard.poster.errNoImage"));
       return;
     }
     try {
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setMessage("图片已复制到剪贴板。");
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": blob }),
+      ]);
+      setMessage(t("dashboard.poster.copied"));
     } catch {
-      setMessage("浏览器拒绝剪贴板访问，请授权后重试或下载 PNG。");
+      setMessage(t("dashboard.poster.errClipboard"));
     }
   };
 
@@ -339,13 +413,15 @@ export function TokenPoster({
       >
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2 text-[13px] font-medium">
-            <ImageIcon className="size-4" /> 生成 Token 海报
-            <span className="tt-num text-[10px] text-muted-foreground">1080 × 1920</span>
+            <ImageIcon className="size-4" /> {t("dashboard.poster.generate")}
+            <span className="tt-num text-[10px] text-muted-foreground">
+              1080 × 1920
+            </span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label={t("dashboard.poster.close")}
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="size-4" />
@@ -354,15 +430,15 @@ export function TokenPoster({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2">
           <div className="text-[12px] text-muted-foreground">
-            当前区间：<span className="tt-num">{data.periodLabel}</span>
+            {t("dashboard.poster.range", { period: data.periodLabel })}
             <span className="ml-2">{data.rangeLabel}</span>
           </div>
           <Segmented
             value={skin}
             onChange={setSkin}
             options={[
-              { value: "dark", label: "暗色" },
-              { value: "light", label: "亮色" },
+              { value: "dark", label: t("dashboard.poster.skinDark") },
+              { value: "light", label: t("dashboard.poster.skinLight") },
             ]}
           />
         </div>
@@ -376,17 +452,18 @@ export function TokenPoster({
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
           <span role="status" className="text-[11px] text-muted-foreground">
-            {message || "费用按公开模型价格估算，不等同于账单。"}
+            {message || t("dashboard.poster.disclaimer")}
           </span>
           <div className="flex items-center gap-2">
             <TTButton onClick={render}>
-              <RefreshCw className="size-3.5" /> 重新生成
+              <RefreshCw className="size-3.5" />{" "}
+              {t("dashboard.poster.regenerate")}
             </TTButton>
             <TTButton onClick={copy}>
-              <Clipboard className="size-3.5" /> 复制图片
+              <Clipboard className="size-3.5" /> {t("dashboard.poster.copy")}
             </TTButton>
             <TTButton variant="primary" onClick={download}>
-              <Download className="size-3.5" /> 下载 PNG
+              <Download className="size-3.5" /> {t("dashboard.poster.download")}
             </TTButton>
           </div>
         </footer>

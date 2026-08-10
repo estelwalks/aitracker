@@ -1,1 +1,12 @@
-{"source":"kimi-code","timestamp":"2026-07-27T09:02:00.000Z","model":"kimi-model","project":"/work/kimi","inputTokens":12,"cachedInputTokens":3,"cacheCreationInputTokens":0,"outputTokens":5,"reasoningOutputTokens":0,"totalTokens":20}
+{
+  "source": "kimi-code",
+  "timestamp": "2026-07-27T09:02:00.000Z",
+  "model": "kimi-model",
+  "project": "/work/kimi",
+  "inputTokens": 12,
+  "cachedInputTokens": 3,
+  "cacheCreationInputTokens": 0,
+  "outputTokens": 5,
+  "reasoningOutputTokens": 0,
+  "totalTokens": 20
+}

@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * TrustTools V3.0 设计系统
+ * 设计系统 (v3)
  * 终端美学：暗色为主、低饱和分隔线、等宽数字、小圆角、克制阴影。
  * 主题：默认暗色 / .theme-light / .theme-contrast / .theme-warm
  */
@@ -62,18 +62,24 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
+  /* 四语言字体回退栈:中文/日文/韩文依次回退,数字与代码继续 JetBrains Mono */
+  --font-sans:
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Yu Gothic UI",
+    "Yu Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans KR",
+    "Malgun Gothic", "Microsoft YaHei", "Apple SD Gothic Neo", system-ui,
+    sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
 }
 
 :root {
   --radius: 5px;
 
-  --background: oklch(0.148 0.012 262);
+  --background: oklch(0.178 0.014 262);
   --foreground: oklch(0.932 0.011 250);
-  --surface: oklch(0.194 0.014 260);
-  --surface-2: oklch(0.229 0.015 260);
-  --card: oklch(0.194 0.014 260);
+  --surface: oklch(0.214 0.015 260);
+  --surface-2: oklch(0.246 0.016 260);
+  --card: oklch(0.214 0.015 260);
   --card-foreground: oklch(0.932 0.011 250);
   --popover: oklch(0.225 0.016 260);
   --popover-foreground: oklch(0.932 0.011 250);
@@ -89,8 +95,8 @@
   --destructive: oklch(0.617 0.208 25);
   --destructive-foreground: oklch(0.97 0.01 250);
 
-  --border: oklch(0.272 0.014 259);
-  --border-strong: oklch(0.342 0.017 259);
+  --border: oklch(0.292 0.015 259);
+  --border-strong: oklch(0.362 0.018 259);
   --input: oklch(0.292 0.015 259);
   --ring: oklch(0.652 0.163 249);
 
@@ -105,7 +111,7 @@
   --chart-4: oklch(0.66 0.19 305);
   --chart-5: oklch(0.812 0.148 88);
 
-  --sidebar: oklch(0.169 0.012 261);
+  --sidebar: oklch(0.196 0.014 261);
   --sidebar-foreground: oklch(0.88 0.012 250);
   --sidebar-primary: oklch(0.652 0.163 249);
   --sidebar-primary-foreground: oklch(0.16 0.02 258);
@@ -225,31 +231,11 @@
   }
 
   body {
-    min-width: 320px;
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     line-height: 1.7;
     -webkit-font-smoothing: antialiased;
-  }
-
-  button,
-  [role="button"],
-  a {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible {
-    outline: 2px solid color-mix(in oklab, var(--color-ring) 70%, transparent);
-    outline-offset: 2px;
-  }
-
-  ::selection {
-    background: color-mix(in oklab, var(--color-primary) 28%, transparent);
   }
 
   /* 中文优先排版：数字等宽对齐 */
@@ -263,7 +249,6 @@
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 1px 0 color-mix(in oklab, var(--color-foreground) 2%, transparent);
 }
 
 @utility tt-num {
@@ -298,240 +283,209 @@
   max-width: 1720px;
 }
 
-@layer components {
-  .dashboard-intro {
-    display: flex;
-    min-height: 42px;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 12px;
-  }
+/* 科技感：网格底纹 / 边角标记 / 扫描线 */
+@utility tt-grid-bg {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--color-border) 60%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-border) 60%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+}
 
-  .dashboard-intro h1 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-  }
+@utility tt-metric {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 
-  .dashboard-intro p {
-    margin-top: 2px;
-    font-size: 10px;
-    color: var(--color-muted-foreground);
-  }
-
-  .dashboard-kpis {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .dashboard-kpi {
-    min-height: 118px;
-    padding: 15px 16px 13px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    transition:
-      border-color 150ms ease,
-      background-color 150ms ease;
-  }
-
-  .dashboard-kpi:hover {
-    border-color: var(--color-border-strong);
-    background: color-mix(in oklab, var(--color-surface) 90%, var(--color-primary) 10%);
-  }
-
-  .dashboard-kpi-accent {
-    border-color: color-mix(in oklab, var(--color-primary) 65%, var(--color-border));
-  }
-
-  .dashboard-kpi strong {
-    display: block;
-    margin-top: 7px;
-    overflow: hidden;
-    font-size: clamp(20px, 1.45vw, 27px);
-    font-weight: 500;
-    line-height: 1.18;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dashboard-kpi-hint {
-    display: block;
-    margin-top: 7px;
-    overflow: hidden;
-    color: var(--color-muted-foreground);
-    font-size: 10px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dashboard-health,
-  .dashboard-health > span {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .dashboard-health {
-    gap: 8px;
-  }
-
-  .dashboard-health > span {
-    gap: 3px;
-  }
-
-  .dashboard-grid-layout {
-    margin-top: 12px;
-  }
-
-  .dashboard-widget {
-    min-width: 0;
-  }
-
-  .dashboard-widget > .tt-panel {
-    height: 100%;
-  }
-
-  .dashboard-trend {
-    min-height: 0;
-  }
-
-  .dashboard-trend-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1px;
-    margin-bottom: 8px;
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    background: var(--color-border);
-  }
-
-  .dashboard-side-stack {
-    display: grid;
-    gap: 12px;
-  }
-
-  .dashboard-provider {
-    display: grid;
-    grid-template-columns: 158px minmax(0, 1fr);
-    gap: 14px;
-    align-items: center;
-    min-height: 160px;
-  }
-
-  .dashboard-donut {
-    position: relative;
-    height: 150px;
-  }
-
-  .dashboard-donut-label {
+  &::before {
+    content: "";
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
+    z-index: -1;
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--color-border) 45%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--color-border) 45%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 18px 18px;
+    opacity: 0.35;
+    mask-image: radial-gradient(120% 90% at 100% 0%, #000 0%, transparent 70%);
   }
-
-  .dashboard-donut-label strong {
-    font-family: var(--font-mono);
-    font-size: 17px;
-    font-weight: 500;
-  }
-
-  .dashboard-donut-label span {
-    color: var(--color-muted-foreground);
-    font-family: var(--font-mono);
-    font-size: 8px;
-    letter-spacing: 0.08em;
-  }
-
-  .dashboard-provider-list {
-    display: grid;
-  }
-
-  .dashboard-provider-row {
-    display: grid;
-    grid-template-columns: 20px 6px minmax(70px, auto) minmax(60px, 1fr) 44px;
-    align-items: center;
-    gap: 7px;
-    min-height: 30px;
-    border-bottom: 1px solid var(--color-border);
-    font-size: 10px;
-  }
-
-  .dashboard-provider-row:last-child {
-    border-bottom: 0;
-  }
-
-  .dashboard-heatmap {
-    min-height: 0;
-  }
-
-  .dashboard-settings {
-    position: relative;
-  }
-  .dashboard-settings-popover {
+  &::after {
+    content: "";
     position: absolute;
-    right: 0;
-    z-index: 10;
-    display: grid;
-    gap: 8px;
-    min-width: 150px;
-    margin-top: 6px;
-    padding: 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    background: var(--color-popover);
-    box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
-    font-size: 12px;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-primary) 70%, transparent),
+      transparent
+    );
+    opacity: 0;
+    transition: opacity 0.18s ease;
   }
-  .dashboard-settings-popover label,
-  .dashboard-settings-popover button {
-    display: flex;
-    gap: 7px;
-    align-items: center;
-    cursor: pointer;
+  &:hover {
+    border-color: color-mix(
+      in oklab,
+      var(--color-primary) 45%,
+      var(--color-border)
+    );
+    box-shadow: 0 10px 30px -18px
+      color-mix(in oklab, var(--color-primary) 80%, transparent);
   }
-  .dashboard-settings-popover button {
-    color: var(--color-primary);
+  &:hover::after {
+    opacity: 1;
   }
-  .dashboard-section-hidden {
-    display: none;
-  }
-  .dashboard-activity {
-    min-height: 0;
-  }
+}
 
-  @media (max-width: 899px) {
-    .dashboard-kpis {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .dashboard-provider {
-      grid-template-columns: 140px minmax(0, 1fr);
-    }
+@utility tt-corner {
+  position: relative;
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-color: color-mix(in oklab, var(--color-primary) 55%, transparent);
+    opacity: 0.7;
   }
-
-  @media (max-width: 599px) {
-    .dashboard-intro {
-      align-items: center;
-    }
-
-    .dashboard-kpis {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .dashboard-provider {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .dashboard-donut {
-      height: 170px;
-    }
+  &::before {
+    left: 6px;
+    top: 6px;
+    border-left: 1px solid;
+    border-top: 1px solid;
   }
+  &::after {
+    right: 6px;
+    bottom: 6px;
+    border-right: 1px solid;
+    border-bottom: 1px solid;
+  }
+}
+
+/* V4 workspace surfaces: a quieter foundation with focused blue accents. */
+.dashboard-overview-header {
+  isolation: isolate;
+  position: sticky;
+  padding: 1rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 24%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 88% 0%,
+      color-mix(in oklab, var(--color-primary) 18%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-surface) 94%, transparent),
+      var(--color-surface)
+    );
+  box-shadow: 0 16px 40px -34px
+    color-mix(in oklab, var(--color-primary) 80%, transparent);
+}
+
+.skills-filter-panel {
+  padding: 1rem;
+  border: 1px solid
+    color-mix(in oklab, var(--color-primary) 20%, var(--color-border));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-primary) 12%, transparent),
+      transparent 38%
+    ),
+    var(--color-surface);
+}
+
+.skill-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.skill-filter-chip:hover {
+  border-color: color-mix(
+    in oklab,
+    var(--color-primary) 50%,
+    var(--color-border)
+  );
+  color: var(--color-foreground);
+}
+
+.skill-filter-chip > span {
+  min-width: 1.15rem;
+  padding: 0.02rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-muted) 84%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.skill-filter-chip-active {
+  border-color: color-mix(
+    in oklab,
+    var(--color-primary) 64%,
+    var(--color-border)
+  );
+  background: color-mix(in oklab, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+}
+
+.skill-filter-chip-active > span {
+  background: color-mix(in oklab, var(--color-primary) 18%, transparent);
+  color: var(--color-primary);
+}
+
+/* Dashboard trend summary row */
+.dashboard-trend-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-border);
+}
+.dashboard-trend-summary > * {
+  background: color-mix(in oklab, var(--color-surface-2) 40%, transparent);
+  padding: 0.5rem 0.75rem;
 }

@@ -1,0 +1,81 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "codex",
+  "display": {
+    "name": "Codex CLI",
+    "nameZh": "Codex CLI"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "windows10", "windows11", "linux"],
+        "base": "home",
+        "path": ".codex"
+      }
+    ],
+    "executable": {
+      "shared": ["codex"]
+    }
+  },
+  "storage": {
+    "skills": {
+      "rootSpecs": [
+        {
+          "base": "home",
+          "path": ".codex/skills"
+        }
+      ],
+      "envHome": "CODEX_HOME",
+      "markers": ["SKILL.md", "skill.md"],
+      "maxDepth": 3
+    }
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "native",
+      "reader": "codex-rollout-v1",
+      "paths": [
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".codex/sessions",
+          "glob": "**/rollout-*.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": ["macos", "windows10", "windows11", "linux"],
+          "base": "home",
+          "path": ".codex/archived_sessions",
+          "glob": "**/rollout-*.jsonl",
+          "format": "jsonl"
+        }
+      ]
+    },
+    "context": {
+      "mode": "native",
+      "reader": "codex-context-v1",
+      "dimensions": ["tools", "skills", "commands", "mcp", "toolOutputs"]
+    },
+    "skills": "read-write",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "resume",
+      "reader": "codex-session-v1",
+      "command": ["codex", "resume", "{sessionId}"]
+    },
+    "market": "install-target",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model",
+    "evidence": {
+      "endpointField": "endpoint"
+    }
+  }
+}
