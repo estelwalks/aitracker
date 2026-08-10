@@ -25,8 +25,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
     },
     {
       "id": "codex",
-      "name": "Codex CLI",
-      "nameZh": "Codex CLI",
+      "name": "Codex",
+      "nameZh": "Codex",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
