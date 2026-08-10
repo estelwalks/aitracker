@@ -1,158 +1,184 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  BarChart3,
-  Blocks,
-  Brain,
   Home,
-  Menu,
+  MessagesSquare,
+  Database,
+  Blocks,
+  Store,
+  ShieldCheck,
+  Settings,
   PanelLeftClose,
   PanelLeftOpen,
-  Settings,
-  ShieldCheck,
-  Store,
+  Search,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-const nav = [
-  { to: "/", label: "首页", shortLabel: "首页", icon: Home },
-  { to: "/tokens", label: "Token 分析", shortLabel: "Token", icon: BarChart3 },
-  { to: "/skills", label: "Skill 管理", shortLabel: "Skill", icon: Blocks },
-  { to: "/market", label: "Skill 市场", shortLabel: "市场", icon: Store },
-  { to: "/security", label: "安全检测", shortLabel: "安全", icon: ShieldCheck },
-  { to: "/memory", label: "记忆", shortLabel: "记忆", icon: Brain },
-  { to: "/settings", label: "设置", shortLabel: "设置", icon: Settings },
-] as const;
+import { useI18n } from "../lib/i18n/context";
+import { APP_NAME, APP_VERSION } from "../lib/app-config";
+import type { MessageKey } from "../lib/i18n/messages";
 
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-bold text-primary-foreground shadow-[0_0_20px_color-mix(in_oklab,var(--color-primary)_20%,transparent)]">
-        T
-      </div>
-      {!compact && (
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-sm font-semibold tracking-tight">AITracker</div>
-          <div className="tt-num mt-0.5 text-[9px] tracking-[0.04em] text-muted-foreground">
-            V3.0.1
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+const nav: Array<{
+  to:
+    | "/"
+    | "/skills"
+    | "/market"
+    | "/security"
+    | "/sessions"
+    | "/sources"
+    | "/settings";
+  label: MessageKey;
+  icon: typeof Home;
+}> = [
+  { to: "/", label: "nav.dashboard", icon: Home },
+  { to: "/skills", label: "nav.skills", icon: Blocks },
+  { to: "/market", label: "nav.market", icon: Store },
+  { to: "/security", label: "nav.security", icon: ShieldCheck },
+  { to: "/sessions", label: "nav.sessions", icon: MessagesSquare },
+  { to: "/sources", label: "nav.sources", icon: Database },
+  { to: "/settings", label: "nav.settings", icon: Settings },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktop, setDesktop] = useState(false);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const sidebarWidth = collapsed ? 64 : 240;
+  const [sidebarWidth, setSidebarWidth] = useState(200);
+  const [navQuery, setNavQuery] = useState("");
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 768px)");
-    const sync = () => {
-      setDesktop(media.matches);
-      if (media.matches) setMobileOpen(false);
+    const onResize = () => {
+      const w = window.innerWidth;
+      if (w < 1024) setCollapsed(true);
+      // 侧边栏宽度随桌面视口平滑缩放，浏览器缩放时不挤压内容
+      setSidebarWidth(Math.round(Math.min(240, Math.max(168, w * 0.13))));
     };
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  const navItems = nav.map((item) => {
-    const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
-    const Icon = item.icon;
-    return (
-      <Link
-        key={item.to}
-        to={item.to}
-        title={collapsed ? item.label : undefined}
-        aria-current={active ? "page" : undefined}
-        className={`group relative flex h-10 items-center gap-3 rounded-sm px-3 text-[13px] transition-colors ${
-          active
-            ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-        }`}
-      >
-        {active && <span className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r bg-primary" />}
-        <Icon
-          className={`size-4 shrink-0 transition-colors ${active ? "text-primary" : "group-hover:text-foreground"}`}
-          strokeWidth={1.75}
-        />
-        {!collapsed && <span className="truncate">{item.label}</span>}
-      </Link>
-    );
-  });
+  const visibleNav = nav.filter((item) =>
+    t(item.label).toLocaleLowerCase().includes(navQuery.toLocaleLowerCase()),
+  );
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {mobileOpen && (
-        <button
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] md:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-label="关闭导航"
-        />
-      )}
-
+    <div className="flex min-h-screen bg-background text-foreground">
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200 md:z-30 md:translate-x-0 md:transition-[width] ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-        style={desktop ? { width: sidebarWidth } : undefined}
+        className="fixed inset-y-0 left-0 z-30 flex flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200"
+        style={{ width: collapsed ? 56 : sidebarWidth }}
       >
-        <div className="flex h-[64px] items-center justify-between px-4">
-          <Brand compact={desktop && collapsed} />
-          <button
-            className="text-muted-foreground hover:text-foreground md:hidden"
-            onClick={() => setMobileOpen(false)}
-            aria-label="关闭导航"
-          >
-            <X className="size-4" />
-          </button>
+        <div className="flex h-[72px] items-center gap-2 px-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20">
+            TT
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-semibold">{APP_NAME}</div>
+              <div className="tt-num text-[10px] text-muted-foreground">
+                v{APP_VERSION}
+              </div>
+            </div>
+          )}
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-2">{navItems}</nav>
+        {!collapsed && (
+          <div className="relative mx-3 mb-4">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={navQuery}
+              onChange={(event) => setNavQuery(event.target.value)}
+              placeholder={t("common.search")}
+              aria-label={t("common.search")}
+              className="h-9 w-full rounded-lg border border-sidebar-border bg-sidebar-accent/50 pr-8 pl-9 text-xs outline-none transition focus:border-primary/70 focus:bg-sidebar-accent"
+            />
+            {navQuery && (
+              <button
+                type="button"
+                onClick={() => setNavQuery("")}
+                aria-label={t("common.close")}
+                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        <nav className="flex-1 space-y-1 px-2">
+          {visibleNav.map((item) => {
+            const active =
+              item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const Icon = item.icon;
+            const label = t(item.label);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                title={label}
+                className={`relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm transition-colors ${
+                  active
+                    ? "bg-primary/12 font-medium text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                }`}
+              >
+                {active && (
+                  <span className="absolute top-2 bottom-2 -left-2 w-[3px] rounded-r bg-primary" />
+                )}
+                <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </Link>
+            );
+          })}
+        </nav>
 
         <div className="border-t border-sidebar-border p-2">
           <button
-            onClick={() => setCollapsed((value) => !value)}
-            className="hidden h-9 w-full items-center gap-3 rounded-sm px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground md:flex"
-            aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex h-9 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" strokeWidth={1.75} />
             ) : (
               <PanelLeftClose className="size-4" strokeWidth={1.75} />
             )}
-            {!collapsed && <span>收起</span>}
+            {!collapsed && <span>{t("common.collapse")}</span>}
           </button>
+          <div className="flex h-7 items-center gap-2 px-2.5">
+            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-ok" />
+            {!collapsed && (
+              <span className="text-[11px] text-muted-foreground">
+                {t("common.localServiceConnected")}
+              </span>
+            )}
+          </div>
         </div>
       </aside>
 
       <div
-        className="flex min-h-screen min-w-0 flex-col transition-[padding] duration-200"
-        style={{ paddingLeft: desktop ? sidebarWidth : 0 }}
+        className="flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-200"
+        style={{ paddingLeft: collapsed ? 56 : sidebarWidth }}
       >
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur-xl md:hidden">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="flex size-8 items-center justify-center rounded-sm border border-border bg-surface text-muted-foreground"
-            aria-label="打开导航"
-          >
-            <Menu className="size-4" />
-          </button>
-          <Brand />
-          <span className="size-2 rounded-full bg-ok" title="本地数据就绪" />
-        </header>
-
-        <main className="tt-scroll min-w-0 flex-1 px-3 py-4 sm:px-5 md:px-7 md:py-5 2xl:px-8">
+        <main className="tt-scroll min-w-0 flex-1 px-3 py-5 pb-14 sm:px-5 md:px-8 2xl:px-10">
           <div className="tt-container">{children}</div>
         </main>
+
+        <div
+          className="fixed right-0 bottom-0 z-20 flex h-8 items-center gap-3 overflow-hidden border-t border-border bg-sidebar px-3 text-[11px] whitespace-nowrap text-muted-foreground transition-[left] duration-200 md:gap-5 md:px-4"
+          style={{ left: collapsed ? 56 : sidebarWidth }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-ok" />{" "}
+            {t("common.localApiConnected")}
+          </span>
+          <span className="hidden items-center gap-1.5 md:flex">
+            <span className="size-1.5 rounded-full bg-primary" />{" "}
+            {t("common.dataCollectionLive")}
+          </span>
+          <span className="tt-num ml-auto shrink-0">
+            {t("common.lastUpdatedAt", { time: "2026-07-27 10:24:07" })}
+          </span>
+        </div>
       </div>
     </div>
   );

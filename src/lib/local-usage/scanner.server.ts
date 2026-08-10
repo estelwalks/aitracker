@@ -1,26 +1,46 @@
 import { createReadStream } from "node:fs";
 import { execFile } from "node:child_process";
-import { mkdir, opendir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  opendir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
+import { APP_DATA_DIR, ENV } from "../app-config";
+import {
+  getDefaultRegistry,
+  getScannerPolicy,
+} from "../tool-registry/registry.ts";
+import { computeToolRegistryVersion } from "../tool-registry/fingerprint.server.ts";
 import { buildLocalUsageSnapshot } from "./aggregate.ts";
 import {
   collectCodexContextRecord,
   consumeCodexPendingContext,
   createCodexPendingContext,
 } from "./codex-context.ts";
-import { BUILTIN_USAGE_ADAPTERS, GENERIC_BUILTIN_USAGE_ADAPTERS } from "./adapters/catalog.ts";
-import { loadExternalUsageAdapters } from "./adapters/config.server.ts";
+import { collectClaudeContext } from "./claude-context.ts";
+import {
+  BUILTIN_USAGE_ADAPTERS,
+  GENERIC_BUILTIN_USAGE_ADAPTERS,
+} from "./adapters/catalog.ts";
 import {
   eventFromMappedRecord,
   fieldMismatchDiagnostic,
   recordsFromJson,
 } from "./adapters/parser.ts";
-import type { UsageAdapterContract, UsageAdapterPath } from "./adapters/types.ts";
+import type {
+  UsageAdapterContract,
+  UsageAdapterPath,
+} from "./adapters/types.ts";
 import {
   isPrivateSessionId,
   sessionIdFromRelativeFile,
@@ -36,15 +56,28 @@ import type {
 import { KNOWN_LOCAL_USAGE_SOURCES } from "./types.ts";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1_000;
-// Keep enough history for the year/custom ranges exposed by the UI. A 30-day
-// discovery window made machines with valid older logs look completely empty.
-const DEFAULT_LOOKBACK_DAYS = 10 * 365;
-const MAX_FILES_PER_SOURCE = 1_200;
-const MAX_DISCOVERED_ENTRIES_PER_SOURCE = 30_000;
-const MAX_JSONL_LINE_LENGTH = 16 * 1024 * 1024;
-const FUTURE_TIMESTAMP_TOLERANCE_MS = DAY_IN_MS;
-const PERSISTENT_CACHE_VERSION = 10;
-const PERSISTENT_CACHE_FILE_NAME = "local-usage-index-v10.json";
+// Scanner budgets (P4-T3): moved to _shared/scanner-policy.json; the values
+// below are null-safe fallbacks when the policy getter has no packs.
+const SCANNER_POLICY = getScannerPolicy();
+const DEFAULT_LOOKBACK_DAYS = SCANNER_POLICY?.lookbackDays ?? 10 * 365;
+const MAX_FILES_PER_SOURCE = SCANNER_POLICY?.maxFilesPerSource ?? 1_200;
+const MAX_DISCOVERED_ENTRIES_PER_SOURCE =
+  SCANNER_POLICY?.maxDiscoveredEntriesPerSource ?? 30_000;
+const MAX_JSONL_LINE_LENGTH =
+  SCANNER_POLICY?.maxJsonlLineLength ?? 16 * 1024 * 1024;
+const FUTURE_TIMESTAMP_TOLERANCE_MS =
+  SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
+const PERSISTENT_CACHE_VERSION = 12;
+const PERSISTENT_CACHE_FILE_NAME =
+  SCANNER_POLICY?.cacheFileName ?? "local-usage-index-v10.json";
+/**
+ * Fingerprint of the tool-registry config that produced this cache. A config
+ * change (paths, reader, command, pricing-rule set, or any JSON definition)
+ * invalidates the cache so stale parse results are never served. Bumped with
+ * PERSISTENT_CACHE_VERSION (11 -> 12) to force a one-time rebuild on first run
+ * after the migration.
+ */
+const REGISTRY_FINGERPRINT = computeToolRegistryVersion(getDefaultRegistry());
 const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
   "local-usage-index-v1.json",
   "local-usage-index-v2.json",
@@ -84,10 +117,11 @@ export interface LocalUsageScanOptions {
   maxFilesPerSource?: number;
   cacheDirectory?: string;
   disablePersistentCache?: boolean;
-  adapterConfigPath?: string;
 }
 
-async function discoverWindowsWslHomes(providerDirectory: string): Promise<string[]> {
+async function discoverWindowsWslHomes(
+  providerDirectory: string,
+): Promise<string[]> {
   if (process.platform !== "win32") return [];
 
   let stdout: string | Buffer;
@@ -169,6 +203,7 @@ type PersistentFileEntry =
 
 interface PersistentUsageIndex {
   version: typeof PERSISTENT_CACHE_VERSION;
+  registryFingerprint: string;
   files: PersistentFileEntry[];
 }
 
@@ -183,7 +218,9 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function tokenValue(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : 0;
 }
 
 function nonNegativeNumber(value: unknown): value is number {
@@ -199,12 +236,19 @@ function timestampValue(value: unknown): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function isTimestampInRange(timestamp: Date, cutoffTime: number, nowTime: number): boolean {
+function isTimestampInRange(
+  timestamp: Date,
+  cutoffTime: number,
+  nowTime: number,
+): boolean {
   const time = timestamp.getTime();
   return time >= cutoffTime && time <= nowTime + FUTURE_TIMESTAMP_TOLERANCE_MS;
 }
 
-function isCachedEvent(value: unknown, source: LocalUsageSource): value is LocalUsageEvent {
+function isCachedEvent(
+  value: unknown,
+  source: LocalUsageSource,
+): value is LocalUsageEvent {
   const event = asObject(value);
   return (
     event?.source === source &&
@@ -261,7 +305,9 @@ function isCachedContext(value: unknown): boolean {
       !context.skills.every((skill) => {
         const item = asObject(skill);
         return (
-          typeof item?.name === "string" && item.name.length > 0 && nonNegativeNumber(item.calls)
+          typeof item?.name === "string" &&
+          item.name.length > 0 &&
+          nonNegativeNumber(item.calls)
         );
       }))
   ) {
@@ -282,7 +328,9 @@ function isCachedContext(value: unknown): boolean {
           ["empty", "under-1k", "1k-10k", "over-10k", "unknown"].includes(
             item.outputSize as string,
           ) &&
-          ["success", "failure", "interrupted", "unknown"].includes(item.exitStatus as string) &&
+          ["success", "failure", "interrupted", "unknown"].includes(
+            item.exitStatus as string,
+          ) &&
           nonNegativeNumber(item.calls)
         );
       }))
@@ -375,8 +423,7 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
 function isLocalUsageSource(value: unknown): value is LocalUsageSource {
   return (
     typeof value === "string" &&
-    (BUILTIN_USAGE_ADAPTERS.some((adapter) => adapter.source === value) ||
-      /^custom:[a-z0-9][a-z0-9-]{0,47}$/.test(value))
+    BUILTIN_USAGE_ADAPTERS.some((adapter) => adapter.source === value)
   );
 }
 
@@ -401,7 +448,11 @@ async function loadPersistentIndex(
   try {
     const raw = JSON.parse(await readFile(cacheFilePath, "utf8")) as unknown;
     const index = asObject(raw);
-    if (index?.version !== PERSISTENT_CACHE_VERSION || !Array.isArray(index.files)) {
+    if (
+      index?.version !== PERSISTENT_CACHE_VERSION ||
+      !Array.isArray(index.files) ||
+      index.registryFingerprint !== REGISTRY_FINGERPRINT
+    ) {
       return undefined;
     }
 
@@ -413,7 +464,11 @@ async function loadPersistentIndex(
       }
       files.push(entry);
     }
-    return { version: PERSISTENT_CACHE_VERSION, files };
+    return {
+      version: PERSISTENT_CACHE_VERSION,
+      registryFingerprint: REGISTRY_FINGERPRINT,
+      files,
+    };
   } catch {
     return undefined;
   }
@@ -431,6 +486,7 @@ async function writePersistentIndex(
   );
   const payload = JSON.stringify({
     version: PERSISTENT_CACHE_VERSION,
+    registryFingerprint: REGISTRY_FINGERPRINT,
     files,
   } satisfies PersistentUsageIndex);
 
@@ -477,7 +533,10 @@ async function collectRecentJsonlFiles(
     }
 
     const pendingDirectories = [root];
-    while (pendingDirectories.length > 0 && discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE) {
+    while (
+      pendingDirectories.length > 0 &&
+      discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE
+    ) {
       const directoryPath = pendingDirectories.pop();
       if (directoryPath == null) {
         break;
@@ -565,7 +624,10 @@ async function collectAdapterFiles(
   detected: boolean;
   files: Array<FileCandidate & { format: UsageAdapterPath["format"] }>;
 }> {
-  const candidates = new Map<string, FileCandidate & { format: UsageAdapterPath["format"] }>();
+  const candidates = new Map<
+    string,
+    FileCandidate & { format: UsageAdapterPath["format"] }
+  >();
   let discoveredEntries = 0;
   let detected = false;
 
@@ -582,7 +644,10 @@ async function collectAdapterFiles(
 
     const matcher = globExpression(pathConfig.glob);
     const pendingDirectories = [root];
-    while (pendingDirectories.length > 0 && discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE) {
+    while (
+      pendingDirectories.length > 0 &&
+      discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE
+    ) {
       const directoryPath = pendingDirectories.pop();
       if (directoryPath == null) break;
       let directory;
@@ -684,13 +749,20 @@ function claudeEventFromRecord(
 
   const inputTokens = tokenValue(usage.input_tokens);
   const cachedInputTokens = tokenValue(usage.cache_read_input_tokens);
-  const cacheCreationInputTokens = tokenValue(usage.cache_creation_input_tokens);
+  const cacheCreationInputTokens = tokenValue(
+    usage.cache_creation_input_tokens,
+  );
   const outputTokens = tokenValue(usage.output_tokens);
-  const totalTokens = inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+  const reasoningOutputTokens = tokenValue(usage.reasoning_output_tokens);
+  const totalTokens =
+    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
 
   if (totalTokens === 0) {
     return undefined;
   }
+
+  // 采集上下文（tools/skills/commands），仅结构元数据，clean-room 合规。
+  const context = collectClaudeContext(message);
 
   return {
     id,
@@ -709,7 +781,8 @@ function claudeEventFromRecord(
             message?.sessionId ??
             message?.session_id,
         ) ?? fallbackSessionId,
-      model: stringValue(message?.model) ?? stringValue(record.model) ?? "unknown",
+      model:
+        stringValue(message?.model) ?? stringValue(record.model) ?? "unknown",
       project: normalizeProjectPath(
         stringValue(record.cwd) ?? stringValue(record.project) ?? "unknown",
         homeDirectory,
@@ -718,8 +791,9 @@ function claudeEventFromRecord(
       cachedInputTokens,
       cacheCreationInputTokens,
       outputTokens,
-      reasoningOutputTokens: 0,
+      reasoningOutputTokens,
       totalTokens,
+      ...(context ? { context } : {}),
     },
   };
 }
@@ -732,8 +806,11 @@ async function scanClaude(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
 ): Promise<SourceScanResult> {
-  const selected = await collectRecentJsonlFiles(roots, cutoffTime, maxFiles, (name) =>
-    name.endsWith(".jsonl"),
+  const selected = await collectRecentJsonlFiles(
+    roots,
+    cutoffTime,
+    maxFiles,
+    (name) => name.endsWith(".jsonl"),
   );
   const byMessageId = new Map<string, LocalUsageEvent>();
   let filesRead = 0;
@@ -760,7 +837,11 @@ async function scanClaude(
         `${basename(root)}:${relative(root, file.path)}`,
       );
       const fileMalformedLines = await readJsonLines(file.path, (record) => {
-        const parsed = claudeEventFromRecord(record, fallbackSessionId, homeDirectory);
+        const parsed = claudeEventFromRecord(
+          record,
+          fallbackSessionId,
+          homeDirectory,
+        );
         if (parsed != null) {
           claudeEvents.push({ messageId: parsed.id, event: parsed.event });
         }
@@ -780,7 +861,13 @@ async function scanClaude(
     malformedLines += entry.malformedLines;
 
     for (const parsed of entry.claudeEvents) {
-      if (!isTimestampInRange(new Date(parsed.event.timestamp), cutoffTime, nowTime)) {
+      if (
+        !isTimestampInRange(
+          new Date(parsed.event.timestamp),
+          cutoffTime,
+          nowTime,
+        )
+      ) {
         continue;
       }
       const messageIdentity = `${parsed.event.sessionId}:${parsed.messageId}`;
@@ -827,7 +914,9 @@ function codexContextFromRecord(
   }
 
   const context =
-    payloadType === "turn_context" || recordType === "turn_context" ? payload : record;
+    payloadType === "turn_context" || recordType === "turn_context"
+      ? payload
+      : record;
   return {
     model: stringValue(context?.model),
     project: stringValue(context?.cwd) ?? stringValue(context?.project),
@@ -849,7 +938,10 @@ function codexSessionIdFromRecord(record: JsonObject): string | undefined {
     payload?.conversation_id ??
     payload?.threadId ??
     payload?.thread_id;
-  const explicitSessionId = sessionIdFromStructuredValue("codex", explicitIdentifier);
+  const explicitSessionId = sessionIdFromStructuredValue(
+    "codex",
+    explicitIdentifier,
+  );
   if (explicitSessionId != null) {
     return explicitSessionId;
   }
@@ -868,7 +960,11 @@ function normalizeProjectPath(project: string, homeDirectory: string): string {
   }
 
   const relativeProject = relative(homeDirectory, project);
-  if (isAbsolute(project) && relativeProject !== ".." && !relativeProject.startsWith(`..${sep}`)) {
+  if (
+    isAbsolute(project) &&
+    relativeProject !== ".." &&
+    !relativeProject.startsWith(`..${sep}`)
+  ) {
     return `~/${relativeProject.split(sep).join("/")}`;
   }
 
@@ -907,7 +1003,10 @@ function codexEventFromRecord(
       "output_tokens",
       "reasoning_output_tokens",
     ]) {
-      usage[key] = Math.max(0, tokenValue(totalUsage[key]) - tokenValue(previousTotalUsage[key]));
+      usage[key] = Math.max(
+        0,
+        tokenValue(totalUsage[key]) - tokenValue(previousTotalUsage[key]),
+      );
     }
   }
   const timestamp = timestampValue(record.timestamp ?? tokenPayload.timestamp);
@@ -919,10 +1018,12 @@ function codexEventFromRecord(
   const rawInputTokens = tokenValue(usage.input_tokens);
   const inputTokens = Math.max(0, rawInputTokens - cachedInputTokens);
   const cacheCreationInputTokens =
-    tokenValue(usage.cache_creation_input_tokens) + tokenValue(usage.cache_write_input_tokens);
+    tokenValue(usage.cache_creation_input_tokens) +
+    tokenValue(usage.cache_write_input_tokens);
   const outputTokens = tokenValue(usage.output_tokens);
   const reasoningOutputTokens = tokenValue(usage.reasoning_output_tokens);
-  const totalTokens = inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
+  const totalTokens =
+    inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
 
   if (totalTokens === 0) {
     return undefined;
@@ -952,8 +1053,11 @@ async function scanCodex(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
 ): Promise<SourceScanResult> {
-  const selected = await collectRecentJsonlFiles(roots, cutoffTime, maxFiles, (name) =>
-    name.endsWith(".jsonl"),
+  const selected = await collectRecentJsonlFiles(
+    roots,
+    cutoffTime,
+    maxFiles,
+    (name) => name.endsWith(".jsonl"),
   );
   const events: LocalUsageEvent[] = [];
   let filesRead = 0;
@@ -984,7 +1088,8 @@ async function scanCodex(
       let pendingContext = createCodexPendingContext();
       let previousTotalUsage: JsonObject | undefined;
       const fileMalformedLines = await readJsonLines(file.path, (record) => {
-        context.sessionId = codexSessionIdFromRecord(record) ?? context.sessionId;
+        context.sessionId =
+          codexSessionIdFromRecord(record) ?? context.sessionId;
         const nextContext = codexContextFromRecord(record);
         if (nextContext != null) {
           context.model = nextContext.model ?? context.model;
@@ -1009,7 +1114,9 @@ async function scanCodex(
             : stringValue(nestedMessage?.type) === "token_count"
               ? nestedMessage
               : undefined;
-        const totalUsage = asObject(asObject(tokenPayload?.info)?.total_token_usage);
+        const totalUsage = asObject(
+          asObject(tokenPayload?.info)?.total_token_usage,
+        );
         if (totalUsage != null) previousTotalUsage = totalUsage;
         if (event != null) {
           fileEvents.push(event);
@@ -1076,8 +1183,13 @@ function workbuddyEventFromRecord(
     tokenValue(promptDetails?.cached_tokens),
     tokenValue(rawUsage.prompt_cache_hit_tokens),
   );
-  const cacheCreationInputTokens = tokenValue(rawUsage.cache_creation_input_tokens);
-  const inputTokens = Math.max(0, promptTokens - cachedInputTokens - cacheCreationInputTokens);
+  const cacheCreationInputTokens = tokenValue(
+    rawUsage.cache_creation_input_tokens,
+  );
+  const inputTokens = Math.max(
+    0,
+    promptTokens - cachedInputTokens - cacheCreationInputTokens,
+  );
   const reasoningOutputTokens = Math.min(
     completionTokens,
     Math.max(
@@ -1098,13 +1210,17 @@ function workbuddyEventFromRecord(
     source: "workbuddy",
     timestamp: timestamp.toISOString(),
     sessionId:
-      sessionIdFromStructuredValue("workbuddy", record.sessionId) ?? fallbackSessionId,
+      sessionIdFromStructuredValue("workbuddy", record.sessionId) ??
+      fallbackSessionId,
     model:
       stringValue(providerData?.requestModelName) ??
       stringValue(providerData?.requestModelId) ??
       stringValue(providerData?.model) ??
       "auto",
-    project: normalizeProjectPath(stringValue(record.cwd) ?? "unknown", homeDirectory),
+    project: normalizeProjectPath(
+      stringValue(record.cwd) ?? "unknown",
+      homeDirectory,
+    ),
     inputTokens,
     cachedInputTokens,
     cacheCreationInputTokens,
@@ -1159,7 +1275,11 @@ async function scanWorkbuddy(
           stringValue(providerData?.messageId) ??
           `${stringValue(record.sessionId) ?? relative(projectsRoot, file.path)}:${String(record.timestamp)}`;
         if (seenResponseIds.has(responseId)) return;
-        const event = workbuddyEventFromRecord(record, fallbackSessionId, homeDirectory);
+        const event = workbuddyEventFromRecord(
+          record,
+          fallbackSessionId,
+          homeDirectory,
+        );
         if (event != null) {
           seenResponseIds.add(responseId);
           fileEvents.push(event);
@@ -1229,7 +1349,10 @@ async function scanWorkbuddy(
               sessionIdFromStructuredValue("workbuddy", row.sessionId) ??
               sessionIdFromRelativeFile("workbuddy", `sqlite:${events.length}`),
             model: stringValue(row.model) ?? "auto",
-            project: normalizeProjectPath(stringValue(row.project) ?? "unknown", homeDirectory),
+            project: normalizeProjectPath(
+              stringValue(row.project) ?? "unknown",
+              homeDirectory,
+            ),
             inputTokens,
             cachedInputTokens: 0,
             cacheCreationInputTokens: 0,
@@ -1268,7 +1391,8 @@ async function scanWorkbuddy(
       filesConsidered: selected.files.length + (databaseDetected ? 1 : 0),
       filesRead: filesRead + (databaseDetected ? 1 : 0),
       filesReused,
-      filesParsed: filesParsed + (databaseDetected && events.length > 0 ? 1 : 0),
+      filesParsed:
+        filesParsed + (databaseDetected && events.length > 0 ? 1 : 0),
       malformedLines,
       events: events.length,
       diagnostics,
@@ -1318,14 +1442,21 @@ async function parseGenericFile(
         events: [],
         malformedLines: 0,
         diagnostics: [
-          diagnostic(adapter, "query-failed", file.path, "SQLite 适配器缺少只读查询。"),
+          diagnostic(
+            adapter,
+            "query-failed",
+            file.path,
+            "SQLite 适配器缺少只读查询。",
+          ),
         ],
       };
     }
     let database: DatabaseSync | undefined;
     try {
       database = new DatabaseSync(file.path, { readOnly: true });
-      const records = database.prepare(adapter.query).all() as Array<Record<string, unknown>>;
+      const records = database.prepare(adapter.query).all() as Array<
+        Record<string, unknown>
+      >;
       for (const record of records) {
         const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
         if (event == null) mismatches += 1;
@@ -1336,7 +1467,13 @@ async function parseGenericFile(
         malformedLines: 0,
         diagnostics:
           events.length === 0
-            ? [fieldMismatchDiagnostic(adapter, file.path, Math.max(1, mismatches))]
+            ? [
+                fieldMismatchDiagnostic(
+                  adapter,
+                  file.path,
+                  Math.max(1, mismatches),
+                ),
+              ]
             : [],
       };
     } catch {
@@ -1344,7 +1481,12 @@ async function parseGenericFile(
         events: [],
         malformedLines: 0,
         diagnostics: [
-          diagnostic(adapter, "query-failed", file.path, "SQLite 只读查询执行失败，已跳过。"),
+          diagnostic(
+            adapter,
+            "query-failed",
+            file.path,
+            "SQLite 只读查询执行失败，已跳过。",
+          ),
         ],
       };
     } finally {
@@ -1360,7 +1502,12 @@ async function parseGenericFile(
     const diagnostics: LocalUsageDiagnostic[] = [];
     if (malformedLines > 0) {
       diagnostics.push(
-        diagnostic(adapter, "malformed-json", file.path, "JSONL 包含无法解析的记录。"),
+        diagnostic(
+          adapter,
+          "malformed-json",
+          file.path,
+          "JSONL 包含无法解析的记录。",
+        ),
       );
       diagnostics[diagnostics.length - 1].count = malformedLines;
     }
@@ -1383,7 +1530,13 @@ async function parseGenericFile(
       malformedLines: 0,
       diagnostics:
         events.length === 0
-          ? [fieldMismatchDiagnostic(adapter, file.path, Math.max(1, mismatches))]
+          ? [
+              fieldMismatchDiagnostic(
+                adapter,
+                file.path,
+                Math.max(1, mismatches),
+              ),
+            ]
           : [],
     };
   } catch {
@@ -1391,7 +1544,12 @@ async function parseGenericFile(
       events: [],
       malformedLines: 1,
       diagnostics: [
-        diagnostic(adapter, "malformed-json", file.path, "JSON 日志无法解析，已跳过。"),
+        diagnostic(
+          adapter,
+          "malformed-json",
+          file.path,
+          "JSON 日志无法解析，已跳过。",
+        ),
       ],
     };
   }
@@ -1405,7 +1563,12 @@ async function scanGenericAdapter(
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
 ): Promise<SourceScanResult> {
-  const selected = await collectAdapterFiles(homeDirectory, adapter.paths, cutoffTime, maxFiles);
+  const selected = await collectAdapterFiles(
+    homeDirectory,
+    adapter.paths,
+    cutoffTime,
+    maxFiles,
+  );
   const events: LocalUsageEvent[] = [];
   const cacheEntries: PersistentGenericFileEntry[] = [];
   const diagnostics: LocalUsageDiagnostic[] = [];
@@ -1424,7 +1587,10 @@ async function scanGenericAdapter(
       const parsed = await parseGenericFile(
         file,
         adapter,
-        sessionIdFromRelativeFile(adapter.source, relative(homeDirectory, file.path)),
+        sessionIdFromRelativeFile(
+          adapter.source,
+          relative(homeDirectory, file.path),
+        ),
       );
       parsed.events = parsed.events.map((event) => ({
         ...event,
@@ -1458,7 +1624,9 @@ async function scanGenericAdapter(
       source: adapter.source,
       available: events.length > 0,
       detected: selected.detected,
-      paths: adapter.paths.map((pathConfig) => join(homeDirectory, pathConfig.root)),
+      paths: adapter.paths.map((pathConfig) =>
+        join(homeDirectory, pathConfig.root),
+      ),
       filesConsidered: selected.files.length,
       filesRead,
       filesReused,
@@ -1471,7 +1639,10 @@ async function scanGenericAdapter(
   };
 }
 
-function sourceFailure(source: LocalUsageSource, error?: unknown): SourceScanResult {
+function sourceFailure(
+  source: LocalUsageSource,
+  error?: unknown,
+): SourceScanResult {
   return {
     events: [],
     summary: {
@@ -1505,19 +1676,32 @@ export async function scanLocalUsage(
 ): Promise<LocalUsageSnapshot> {
   const now = options.now ?? new Date();
   const nowTime = now.getTime();
-  const lookbackDays = Math.max(1, Math.trunc(options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS));
+  const lookbackDays = Math.max(
+    1,
+    Math.trunc(options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS),
+  );
   const maxFiles = Math.max(
     1,
-    Math.min(MAX_FILES_PER_SOURCE, Math.trunc(options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE)),
+    Math.min(
+      MAX_FILES_PER_SOURCE,
+      Math.trunc(options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE),
+    ),
   );
-  const isolatedUsageHome = process.env.TRUSTTOOLS_USAGE_HOME?.trim();
+  const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
     options.homeDirectory ??
-    (isolatedUsageHome && isAbsolute(isolatedUsageHome) ? isolatedUsageHome : homedir());
-  const configuredRoot = (value: string | undefined, fallback: string): string => {
+    (isolatedUsageHome && isAbsolute(isolatedUsageHome)
+      ? isolatedUsageHome
+      : homedir());
+  const configuredRoot = (
+    value: string | undefined,
+    fallback: string,
+  ): string => {
     const candidate = value?.trim();
     if (!candidate) return fallback;
-    return isAbsolute(candidate) ? candidate : resolve(homeDirectory, candidate);
+    return isAbsolute(candidate)
+      ? candidate
+      : resolve(homeDirectory, candidate);
   };
   const uniqueRoots = (roots: string[]): string[] => {
     const seen = new Set<string>();
@@ -1557,7 +1741,9 @@ export async function scanLocalUsage(
       ),
       "projects",
     ),
-    ...homeDirectories.map((directory) => join(directory, ".claude", "projects")),
+    ...homeDirectories.map((directory) =>
+      join(directory, ".claude", "projects"),
+    ),
     ...wslClaudeHomes.map((directory) => join(directory, "projects")),
   ]);
   const codexHomes = uniqueRoots([
@@ -1573,12 +1759,11 @@ export async function scanLocalUsage(
     join(root, "archived_sessions"),
   ]);
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
-  const cacheDirectory = options.cacheDirectory ?? join(homeDirectory, ".trusttools", "cache");
-  const adapterConfigPath =
-    options.adapterConfigPath ?? join(homeDirectory, ".trusttools", "usage-adapters.json");
+  const cacheDirectory =
+    options.cacheDirectory ?? join(homeDirectory, APP_DATA_DIR, "cache");
   const cacheFilePath = join(cacheDirectory, PERSISTENT_CACHE_FILE_NAME);
-  const legacyCacheFilePaths = LEGACY_PERSISTENT_CACHE_FILE_NAMES.map((fileName) =>
-    join(cacheDirectory, fileName),
+  const legacyCacheFilePaths = LEGACY_PERSISTENT_CACHE_FILE_NAMES.map(
+    (fileName) => join(cacheDirectory, fileName),
   );
   const persistentIndex = options.disablePersistentCache
     ? undefined
@@ -1587,38 +1772,49 @@ export async function scanLocalUsage(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );
 
-  const externalAdapters = await loadExternalUsageAdapters(adapterConfigPath);
-  const externalSourceIds = new Set(
-    externalAdapters.adapters
-      .filter((adapter) => adapter.source.startsWith("custom:"))
-      .map((adapter) => adapter.source.slice("custom:".length)),
+  // External usage adapters were removed (v1.5 M4-T1, TC-REG-005): tool facts
+  // are offline-only. Only built-in generic adapters run here; native readers
+  // (claude/codex/workbuddy) run below.
+  const genericAdapters = GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
+    (adapter) => adapter.source !== "workbuddy",
   );
-  const genericAdapters = [
-    ...GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
-      (adapter) => adapter.source !== "workbuddy" && !externalSourceIds.has(adapter.source),
-    ),
-    ...externalAdapters.adapters,
-  ];
   const [claude, codex, workbuddy, ...genericResults] = await Promise.all([
-    scanClaude(claudeRoots, homeDirectory, cutoffTime, nowTime, maxFiles, cachedFiles).catch(
-      (error) => sourceFailure("claude-code", error),
-    ),
-    scanCodex(codexRoots, homeDirectory, cutoffTime, nowTime, maxFiles, cachedFiles).catch(
-      (error) => sourceFailure("codex", error),
-    ),
-    scanWorkbuddy(homeDirectory, cutoffTime, nowTime, maxFiles, cachedFiles).catch((error) =>
-      sourceFailure("workbuddy", error),
-    ),
+    scanClaude(
+      claudeRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("claude-code", error)),
+    scanCodex(
+      codexRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("codex", error)),
+    scanWorkbuddy(
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("workbuddy", error)),
     ...genericAdapters.map((adapter) =>
-      scanGenericAdapter(adapter, homeDirectory, cutoffTime, nowTime, maxFiles, cachedFiles).catch(
-        (error) => sourceFailure(adapter.source, error),
-      ),
+      scanGenericAdapter(
+        adapter,
+        homeDirectory,
+        cutoffTime,
+        nowTime,
+        maxFiles,
+        cachedFiles,
+      ).catch((error) => sourceFailure(adapter.source, error)),
     ),
   ]);
-  const bridge = await import("./aitracker-bridge.server.ts")
-    .then(({ collectAITrackerUsage }) => collectAITrackerUsage({ homeDirectory }))
-    .catch(() => ({ events: [], summaries: [] }));
 
+  // The snapshot is built exclusively from the native adapters above.
   const currentCacheEntries = [
     ...claude.cacheEntries,
     ...codex.cacheEntries,
@@ -1634,57 +1830,50 @@ export async function scanLocalUsage(
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
-    await writePersistentIndex(cacheDirectory, cacheFilePath, currentCacheEntries)
+    await writePersistentIndex(
+      cacheDirectory,
+      cacheFilePath,
+      currentCacheEntries,
+    )
       .then(() =>
-        Promise.all(legacyCacheFilePaths.map((path) => unlink(path).catch(() => undefined))),
+        Promise.all(
+          legacyCacheFilePaths.map((path) =>
+            unlink(path).catch(() => undefined),
+          ),
+        ),
       )
       .catch(() => undefined);
   }
 
   const nativeEvents = [
-      ...claude.events,
-      ...codex.events,
-      ...workbuddy.events,
-      ...genericResults.flatMap((result) => result.events),
-    ];
-  const nativeSources = new Set(nativeEvents.map((event) => event.source));
-  const events = [
-    ...nativeEvents,
-    ...bridge.events.filter((event) => !nativeSources.has(event.source)),
-  ].map((event) => ({
-      ...event,
-      project: normalizeProjectPath(event.project, homeDirectory),
-    }));
-  const summaries = [
-      claude.summary,
-      codex.summary,
-      workbuddy.summary,
-      ...genericResults.map((result) => result.summary),
-      ...(externalAdapters.diagnostics.length > 0
-        ? [
-            {
-              ...sourceFailure("custom:config").summary,
-              diagnostics: externalAdapters.diagnostics,
-            },
-          ]
-        : []),
-    ];
+    ...claude.events,
+    ...codex.events,
+    ...workbuddy.events,
+    ...genericResults.flatMap((result) => result.events),
+  ];
+  const events = nativeEvents.map((event) => ({
+    ...event,
+    project: normalizeProjectPath(event.project, homeDirectory),
+  }));
   const summaryBySource = new Map<LocalUsageSource, LocalUsageSourceSummary>();
-  for (const summary of bridge.summaries) summaryBySource.set(summary.source, summary);
-  for (const summary of summaries) {
+  for (const summary of [
+    claude.summary,
+    codex.summary,
+    workbuddy.summary,
+    ...genericResults.map((result) => result.summary),
+  ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {
       summaryBySource.set(summary.source, summary);
     }
   }
   for (const supportedSource of KNOWN_LOCAL_USAGE_SOURCES) {
     if (!summaryBySource.has(supportedSource)) {
-      summaryBySource.set(supportedSource, sourceFailure(supportedSource).summary);
+      summaryBySource.set(
+        supportedSource,
+        sourceFailure(supportedSource).summary,
+      );
     }
   }
 
-  return buildLocalUsageSnapshot(
-    events,
-    [...summaryBySource.values()],
-    now,
-  );
+  return buildLocalUsageSnapshot(events, [...summaryBySource.values()], now);
 }

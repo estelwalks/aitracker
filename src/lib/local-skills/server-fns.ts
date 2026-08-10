@@ -2,49 +2,57 @@ import { createServerFn } from "@tanstack/react-start";
 
 import {
   SKILL_AGENTS,
-  type BatchTrashResult,
+  type BatchUninstallResult,
   type SkillAgent,
   type SkillSnapshot,
-  type TrashEntry,
+  type SkillSyncResult,
 } from "./types.ts";
+import { AppError } from "../errors";
 
 const stringInput = (value: unknown): string => {
-  if (typeof value !== "string" || value.length === 0) throw new Error("参数不能为空");
+  if (typeof value !== "string" || value.length === 0)
+    throw new AppError("errors.skills.emptyInput");
   return value;
 };
 
 const batchPathsInput = (value: unknown): string[] => {
   if (!Array.isArray(value) || value.length === 0 || value.length > 200) {
-    throw new Error("批量卸载路径数量不合法");
+    throw new AppError("errors.skills.batchPathsCount");
   }
-  if (value.some((path) => typeof path !== "string" || path.trim().length === 0)) {
-    throw new Error("批量卸载路径不合法");
+  if (
+    value.some((path) => typeof path !== "string" || path.trim().length === 0)
+  ) {
+    throw new AppError("errors.skills.batchPathsInvalid");
   }
   return [...new Set(value)];
 };
 
 export const getLocalSkills = createServerFn({ method: "GET" }).handler(
   async (): Promise<SkillSnapshot> => {
-    const [{ scanLocalSkills }, { getCachedLocalUsageSnapshot }] = await Promise.all([
-      import("./scanner.server.ts"),
-      import("../local-usage/snapshot.server.ts"),
-    ]);
+    const [{ scanLocalSkills }, { getCachedLocalUsageSnapshot }] =
+      await Promise.all([
+        import("./scanner.server.ts"),
+        import("../local-usage/snapshot.server.ts"),
+      ]);
     const usage = await getCachedLocalUsageSnapshot();
     return scanLocalSkills({ usageEvents: usage.details });
   },
 );
 
-export const refreshSkillMarketEvidence = createServerFn({ method: "POST" }).handler(
-  async (): Promise<boolean> => {
-    const { refreshMarketSkillEvidence } = await import("./scanner.server.ts");
-    return refreshMarketSkillEvidence();
-  },
-);
+export const refreshSkillMarketEvidence = createServerFn({
+  method: "POST",
+}).handler(async (): Promise<boolean> => {
+  const { refreshMarketSkillEvidence } = await import("./scanner.server.ts");
+  return refreshMarketSkillEvidence();
+});
 
 export const installSkill = createServerFn({ method: "POST" })
   .validator((input: { sourcePath: string; targetAgent: SkillAgent }) => {
-    if (typeof input?.sourcePath !== "string" || !SKILL_AGENTS.includes(input?.targetAgent)) {
-      throw new Error("安装参数不合法");
+    if (
+      typeof input?.sourcePath !== "string" ||
+      !SKILL_AGENTS.includes(input?.targetAgent)
+    ) {
+      throw new AppError("errors.skills.installInvalid");
     }
     return input;
   })
@@ -55,29 +63,53 @@ export const installSkill = createServerFn({ method: "POST" })
 
 export const uninstallSkill = createServerFn({ method: "POST" })
   .validator(stringInput)
-  .handler(async ({ data }): Promise<TrashEntry> => {
-    const { trashLocalSkill } = await import("./scanner.server.ts");
-    return trashLocalSkill(data);
+  .handler(async ({ data }): Promise<{ path: string }> => {
+    const { uninstallLocalSkill } = await import("./scanner.server.ts");
+    return uninstallLocalSkill(data);
   });
 
 export const batchUninstallSkills = createServerFn({ method: "POST" })
   .validator(batchPathsInput)
-  .handler(async ({ data }): Promise<BatchTrashResult> => {
-    const { trashLocalSkills } = await import("./scanner.server.ts");
-    return trashLocalSkills(data);
+  .handler(async ({ data }): Promise<BatchUninstallResult> => {
+    const { batchUninstallLocalSkills } = await import("./scanner.server.ts");
+    return batchUninstallLocalSkills(data);
   });
 
-export const restoreSkill = createServerFn({ method: "POST" })
-  .validator(stringInput)
-  .handler(async ({ data }): Promise<void> => {
-    const { restoreLocalSkill } = await import("./scanner.server.ts");
-    await restoreLocalSkill(data);
+export const syncLocalSkill = createServerFn({ method: "POST" })
+  .validator(
+    (input: {
+      sourcePath: string;
+      targetAgents: string[];
+      onConflict: "overwrite" | "skip";
+    }) => {
+      if (
+        typeof input?.sourcePath !== "string" ||
+        !Array.isArray(input?.targetAgents) ||
+        input.targetAgents.length === 0 ||
+        input.targetAgents.length > SKILL_AGENTS.length ||
+        input.targetAgents.some(
+          (agent) => typeof agent !== "string" || !SKILL_AGENTS.includes(agent),
+        ) ||
+        (input.onConflict !== "overwrite" && input.onConflict !== "skip")
+      ) {
+        throw new AppError("errors.skills.syncInvalid");
+      }
+      return input;
+    },
+  )
+  .handler(async ({ data }): Promise<SkillSyncResult> => {
+    const { syncLocalSkill: doSyncLocalSkill } =
+      await import("./scanner.server.ts");
+    return doSyncLocalSkill(data);
   });
 
 export const updateSkillBlacklist = createServerFn({ method: "POST" })
   .validator((input: { name: string; blocked: boolean }) => {
-    if (typeof input?.name !== "string" || typeof input?.blocked !== "boolean") {
-      throw new Error("黑名单参数不合法");
+    if (
+      typeof input?.name !== "string" ||
+      typeof input?.blocked !== "boolean"
+    ) {
+      throw new AppError("errors.skills.blacklistInvalid");
     }
     return input;
   })

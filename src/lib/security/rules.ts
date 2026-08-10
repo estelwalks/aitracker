@@ -1,7 +1,29 @@
-export const SECURITY_RULE_KINDS = ["恶意 URL", "危险命令", "敏感信息"] as const;
+/**
+ * 安全规则分类与用户规则持久化工具。
+ *
+ * PRD v3.0 v1.2 §11 FR-019：安全扫描覆盖 11 个维度，规则库带版本号。
+ */
 
-export type SecurityRuleKind = (typeof SECURITY_RULE_KINDS)[number];
+import { detectReDoS } from "./redos.ts";
 
+import {
+  SECURITY_RULE_KINDS,
+  type SecurityRuleKind,
+} from "./security-rule-kinds.ts";
+
+export { SECURITY_RULE_KINDS } from "./security-rule-kinds.ts";
+export type { SecurityRuleKind } from "./security-rule-kinds.ts";
+
+/**
+ * 规则库版本号。由 security-rules.json 内容哈希派生（scripts/
+ * generate-security-rules.mjs），任何规则增删/正则变更都会自动改变版本号，
+ * 用于报告回溯与版本审计。
+ */
+export { SECURITY_RULES_VERSION } from "./security-rules.generated.ts";
+
+/**
+ * 内置安全规则的 11 个维度分类（顺序固定，对应 PRD §11）。
+ */
 export interface UserSecurityRule {
   id: string;
   name: string;
@@ -15,7 +37,9 @@ export interface SecurityRuleValidation {
   message: string;
 }
 
-export function validateSecurityRulePattern(pattern: string): SecurityRuleValidation {
+export function validateSecurityRulePattern(
+  pattern: string,
+): SecurityRuleValidation {
   const normalized = pattern.trim();
   if (!normalized) {
     return { valid: false, message: "请输入正则表达式" };
@@ -25,19 +49,34 @@ export function validateSecurityRulePattern(pattern: string): SecurityRuleValida
   }
   try {
     new RegExp(normalized, "i");
-    return { valid: true, message: "" };
   } catch (error) {
     return {
       valid: false,
-      message: error instanceof Error ? `正则无效：${error.message}` : "正则表达式无效",
+      message:
+        error instanceof Error
+          ? `正则无效：${error.message}`
+          : "正则表达式无效",
     };
   }
+  // ReDoS 防护：与内建规则共用同一安全 gate（redos.ts），
+  // 拒绝嵌套/重叠量词等可能导致扫描卡死的危险回溯形态。
+  const danger = detectReDoS(normalized);
+  if (danger !== null) {
+    return { valid: false, message: danger };
+  }
+  return { valid: true, message: "" };
 }
 
 export function isSecurityRuleKind(value: unknown): value is SecurityRuleKind {
   return SECURITY_RULE_KINDS.includes(value as SecurityRuleKind);
 }
 
+/**
+ * 解析外部持久化（如设置文件、旧版本数据）中的用户规则。
+ *
+ * 注意：旧版本使用的 3 类（恶意 URL / 危险命令 / 敏感信息）在 11 维度下不再合法，
+ * 这里会沿用历史行为——静默丢弃分类不匹配的条目，避免老配置导致崩溃。
+ */
 export function parseUserSecurityRules(value: unknown): UserSecurityRule[] {
   if (!Array.isArray(value)) return [];
 

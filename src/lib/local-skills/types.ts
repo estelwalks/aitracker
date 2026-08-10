@@ -1,16 +1,9 @@
-export const SKILL_AGENTS = [
-  "Claude Code",
-  "Codex",
-  "Cursor",
-  "Windsurf",
-  "Cline",
-  "Roo Code",
-  "Gemini CLI",
-  "OpenCode",
-] as const;
+import { SKILL_AGENTS } from "./agent-rules.ts";
+import type { MessageKey } from "../i18n/messages";
+
+export { SKILL_AGENTS };
 
 export type SkillAgent = (typeof SKILL_AGENTS)[number];
-export type SkillHealth = "active" | "low" | "doze" | "dead" | "unknown";
 export type SkillUpdateStatus = "current" | "available" | "unknown";
 
 export interface SkillSource {
@@ -37,38 +30,43 @@ export interface SkillInstallation {
 export interface LocalSkill {
   id: string;
   name: string;
-  health: SkillHealth;
-  healthReason: string;
+  description: string | null;
   lastUsedAt: string | null;
-  usageCount: number;
   installations: SkillInstallation[];
 }
 
-export interface TrashEntry {
-  id: string;
-  skillName: string;
-  agent: SkillAgent;
-  originalPath: string;
-  trashedAt: string;
-  expiresAt: string;
-}
-
-export interface BatchTrashFailure {
+export interface BatchUninstallFailure {
   path: string;
-  error: string;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  errorCode: MessageKey | null;
+  errorParams?: Record<string, string | number>;
 }
 
-export interface BatchTrashResult {
-  succeeded: TrashEntry[];
-  failed: BatchTrashFailure[];
+export interface SyncFailure {
+  agent: string;
+  /** i18n message key rendered by the UI (null → generic fallback). */
+  errorCode: MessageKey | null;
+  errorParams?: Record<string, string | number>;
+}
+
+export interface BatchUninstallResult {
+  succeeded: string[];
+  failed: BatchUninstallFailure[];
+}
+
+export interface SkillSyncResult {
+  succeeded: { agent: string; path: string }[];
+  skipped: { agent: string; reason: "conflict" }[];
+  failed: SyncFailure[];
 }
 
 export interface SkillSnapshot {
   generatedAt: string;
   fingerprint: string;
-  healthBasis: string;
-  roots: Record<SkillAgent, string>;
+  /** Resolved skill roots per agent (multiple roots allowed). */
+  roots: Record<SkillAgent, string[]>;
+  /** Actual Agent installation probe results, independent of Skill contents. */
+  agents: Record<SkillAgent, { installed: boolean; detectedPaths: string[] }>;
   skills: LocalSkill[];
-  trash: TrashEntry[];
   blacklist: string[];
 }

@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "revision": "2026-08-06",
+  "models": [
+    {
+      "id": "claude-3-5-haiku",
+      "provider": "anthropic",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "claude-3-7-sonnet",
+      "provider": "anthropic",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "claude-opus-4",
+      "provider": "anthropic",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "claude-sonnet-4",
+      "provider": "anthropic",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "provider": "deepseek",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "doubao-seed-2-0-code",
+      "provider": "volcengine",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "glm-5",
+      "provider": "zhipu",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5-codex",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.1-codex",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.2",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.4",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.5",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "provider": "openai",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "minimax-m2-5",
+      "provider": "minimax",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    },
+    {
+      "id": "minimax-m2-7-highspeed",
+      "provider": "minimax",
+      "aliases": {
+        "profile": "generic-normalize-v1"
+      }
+    }
+  ]
+}

@@ -12,6 +12,13 @@ export interface LocalUsageContextBreakdownRow extends LocalTokenCounts {
   calls: number;
 }
 
+/** A call count observed directly in a privacy-preserving local context log. */
+export interface LocalUsageObservedContextRow {
+  key: string;
+  calls: number;
+  events: number;
+}
+
 export interface LocalUsageContextBreakdown {
   totals: LocalTokenCounts;
   messages: LocalUsageContextBreakdownRow[];
@@ -19,9 +26,33 @@ export interface LocalUsageContextBreakdown {
   tools: LocalUsageContextBreakdownRow[];
   skills: LocalUsageContextBreakdownRow[];
   commands: LocalUsageContextBreakdownRow[];
+  /**
+   * Per-message-role token view for the context source tree.
+   *
+   * Clean-room safe (docs/compliance/CLEAN_ROOM.md §隐私口径): this is a cache-proxy
+   * heuristic that only RELABELS the event's existing token fields — it reads no
+   * message role/content. Mapping:
+   *   cachedInputTokens        → conversation_history (cache hits = re-sent history)
+   *   cacheCreationInputTokens → system_prefix      (new cache write = new context prefix)
+   *   inputTokens              → user_input          (non-cached input)
+   *   outputTokens − reasoning → assistant_reply
+   *   reasoningOutputTokens    → reasoning
+   * These rows are an ALTERNATIVE grouping of the same event totals (like
+   * `messages`/`categories`), not an additional attribution — they do not double-count.
+   */
+  messageRoles: LocalUsageContextBreakdownRow[];
+  /**
+   * Directly observed context metadata. These rows intentionally carry no
+   * token attribution: local client logs record the request-level usage and
+   * the tool/skill calls independently, but do not expose per-call usage.
+   */
+  observedTools: LocalUsageObservedContextRow[];
+  observedMcp: LocalUsageObservedContextRow[];
+  observedSkills: LocalUsageObservedContextRow[];
 }
 
 type BreakdownMap = Map<string, LocalUsageContextBreakdownRow>;
+type ObservedContextMap = Map<string, LocalUsageObservedContextRow>;
 
 function emptyCounts(): LocalTokenCounts {
   return {
@@ -54,7 +85,10 @@ function combinedCounts(counts: LocalTokenCounts[]): LocalTokenCounts {
 }
 
 function distributableCounts(event: LocalUsageEvent): LocalTokenCounts {
-  const reasoningTokens = Math.min(event.reasoningOutputTokens, event.outputTokens);
+  const reasoningTokens = Math.min(
+    event.reasoningOutputTokens,
+    event.outputTokens,
+  );
   return {
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
@@ -70,8 +104,43 @@ function splitInteger(value: number, parts: number, index: number): number {
   return base + (index < value % parts ? 1 : 0);
 }
 
-function splitCounts(event: LocalUsageEvent, parts: number, index: number): LocalTokenCounts {
-  return splitTokenCounts(distributableCounts(event), parts, index);
+/**
+ * 按 calls 权重把一个数值分配给多个份额，返回每个份额的分得量（含取整余数兜底，
+ * 保证 sum === value）。weights 长度 = 份额数。
+ */
+function allocateByWeights(value: number, weights: number[]): number[] {
+  const sum = weights.reduce((s, w) => s + w, 0);
+  if (sum <= 0) return weights.map(() => 0);
+  const raw = weights.map((w) => (value * w) / sum);
+  const floor = raw.map((r) => Math.floor(r));
+  const remainder = value - floor.reduce((s, f) => s + f, 0);
+  const order = raw
+    .map((r, i) => ({ i, frac: r - Math.floor(r) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder; k++) floor[order[k]!.i]! += 1;
+  return floor;
+}
+
+/** 按 calls 权重把完整 LocalTokenCounts 分配给各工具，返回每工具的 counts。 */
+function allocateCountsByWeights(
+  counts: LocalTokenCounts,
+  weights: number[],
+): LocalTokenCounts[] {
+  const fields: (keyof LocalTokenCounts)[] = [
+    "inputTokens",
+    "cachedInputTokens",
+    "cacheCreationInputTokens",
+    "outputTokens",
+    "reasoningOutputTokens",
+    "totalTokens",
+  ];
+  const byField: Record<string, number[]> = {};
+  for (const f of fields) byField[f] = allocateByWeights(counts[f], weights);
+  return weights.map((_, i) => {
+    const c = emptyCounts();
+    for (const f of fields) c[f] = byField[f]![i]!;
+    return c;
+  });
 }
 
 function splitTokenCounts(
@@ -82,14 +151,27 @@ function splitTokenCounts(
   return {
     inputTokens: splitInteger(counts.inputTokens, parts, index),
     cachedInputTokens: splitInteger(counts.cachedInputTokens, parts, index),
-    cacheCreationInputTokens: splitInteger(counts.cacheCreationInputTokens, parts, index),
+    cacheCreationInputTokens: splitInteger(
+      counts.cacheCreationInputTokens,
+      parts,
+      index,
+    ),
     outputTokens: splitInteger(counts.outputTokens, parts, index),
-    reasoningOutputTokens: splitInteger(counts.reasoningOutputTokens, parts, index),
+    reasoningOutputTokens: splitInteger(
+      counts.reasoningOutputTokens,
+      parts,
+      index,
+    ),
     totalTokens: splitInteger(counts.totalTokens, parts, index),
   };
 }
 
-function addRow(map: BreakdownMap, key: string, counts: LocalTokenCounts, calls: number): void {
+function addRow(
+  map: BreakdownMap,
+  key: string,
+  counts: LocalTokenCounts,
+  calls: number,
+): void {
   const row = map.get(key) ?? emptyRow(key);
   addCounts(row, counts);
   row.calls += calls;
@@ -98,8 +180,86 @@ function addRow(map: BreakdownMap, key: string, counts: LocalTokenCounts, calls:
 
 function sortedRows(map: BreakdownMap): LocalUsageContextBreakdownRow[] {
   return [...map.values()].sort(
-    (left, right) => right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+    (left, right) =>
+      right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
   );
+}
+
+function addObservedRow(
+  map: ObservedContextMap,
+  key: string,
+  calls: number,
+): void {
+  if (key.length === 0 || calls <= 0) return;
+  const row = map.get(key) ?? { key, calls: 0, events: 0 };
+  row.calls += calls;
+  row.events += 1;
+  map.set(key, row);
+}
+
+function sortedObservedRows(
+  map: ObservedContextMap,
+): LocalUsageObservedContextRow[] {
+  return [...map.values()].sort(
+    (left, right) =>
+      right.calls - left.calls || left.key.localeCompare(right.key),
+  );
+}
+
+/**
+ * Cache-proxy message-role attribution: relabels the event's existing token
+ * fields into conversation_history / system_prefix / user_input /
+ * assistant_reply / reasoning rows. Each role carries only the slice it owns
+ * (e.g. `assistant_reply` holds output-minus-reasoning via the count objects
+ * below, with reasoning cleared so the per-field totals stay consistent).
+ */
+function roleCounts(
+  value: number,
+  field: keyof LocalTokenCounts,
+): LocalTokenCounts {
+  const counts = emptyCounts();
+  if (value > 0) counts[field] = value;
+  counts.totalTokens = value;
+  return counts;
+}
+
+function addMessageRoleRows(map: BreakdownMap, event: LocalUsageEvent): void {
+  const distributable = distributableCounts(event);
+  if (event.cachedInputTokens > 0) {
+    addRow(
+      map,
+      "conversation_history",
+      roleCounts(event.cachedInputTokens, "cachedInputTokens"),
+      0,
+    );
+  }
+  if (event.cacheCreationInputTokens > 0) {
+    addRow(
+      map,
+      "system_prefix",
+      roleCounts(event.cacheCreationInputTokens, "cacheCreationInputTokens"),
+      0,
+    );
+  }
+  if (event.inputTokens > 0) {
+    addRow(map, "user_input", roleCounts(event.inputTokens, "inputTokens"), 0);
+  }
+  if (distributable.outputTokens > 0) {
+    addRow(
+      map,
+      "assistant_reply",
+      roleCounts(distributable.outputTokens, "outputTokens"),
+      0,
+    );
+  }
+  if (event.reasoningOutputTokens > 0) {
+    addRow(
+      map,
+      "reasoning",
+      roleCounts(event.reasoningOutputTokens, "reasoningOutputTokens"),
+      0,
+    );
+  }
 }
 
 function uniqueTools(event: LocalUsageEvent): LocalUsageToolCall[] {
@@ -111,7 +271,9 @@ function uniqueTools(event: LocalUsageEvent): LocalUsageToolCall[] {
     if (existing == null) byName.set(key, { ...tool });
     else existing.calls += tool.calls;
   }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
+  return [...byName.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
 }
 
 function commandKey(command: LocalUsageCommandStat): string {
@@ -132,27 +294,60 @@ function skillCalls(event: LocalUsageEvent): LocalUsageSkillCall[] {
  * Attributes one event's tokens only once across its distinct tools. Skills and command rows are
  * filtered views of those tool allocations, so category/tool totals never exceed event totals.
  */
-export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageContextBreakdown {
+export function buildContextBreakdown(
+  events: LocalUsageEvent[],
+): LocalUsageContextBreakdown {
   const totals = emptyCounts();
   const messages: BreakdownMap = new Map();
   const categories: BreakdownMap = new Map();
   const tools: BreakdownMap = new Map();
   const skills: BreakdownMap = new Map();
   const commands: BreakdownMap = new Map();
+  const messageRoles: BreakdownMap = new Map();
+  const observedTools: ObservedContextMap = new Map();
+  const observedMcp: ObservedContextMap = new Map();
+  const observedSkills: ObservedContextMap = new Map();
 
   for (const event of events) {
     addCounts(totals, distributableCounts(event));
+    addMessageRoleRows(messageRoles, event);
     const eventTools = uniqueTools(event);
+
+    // Preserve call-level provenance exactly as parsed. The surrounding usage
+    // event does not contain a per-call token value, so no token split is
+    // applied to these rows.
+    for (const tool of eventTools) {
+      if (tool.category === "mcp") {
+        addObservedRow(observedMcp, tool.name, tool.calls);
+      } else {
+        addObservedRow(observedTools, tool.name, tool.calls);
+      }
+    }
+    for (const skill of skillCalls(event)) {
+      addObservedRow(observedSkills, skill.name, skill.calls);
+    }
+
+    // 归因模型 A：
+    // - input 系列（input/cached/cacheCreation）归 messageRoles（对话历史/
+    //   用户输入/系统提示词），按角色互斥。
+    // - 工具调用分摊**完整事件 token**（input+cache+output），作为独立归因
+    //   视角——即「为调用这些工具而消耗的全部上下文」。与 Messages 不互斥
+    //   （Messages 与 Tool calls 的视图可并存）。
+    //   故 SourceDetail 对工具/MCP 维度不显示「合计=100%」式的百分比。
+    const fullCounts = distributableCounts(event);
+
     if (eventTools.length === 0) {
-      addRow(messages, "text_response", distributableCounts(event), 1);
-      addRow(categories, "messages", distributableCounts(event), 1);
-      addRow(tools, "text_response", distributableCounts(event), 1);
+      addRow(messages, "text_response", fullCounts, 1);
+      addRow(categories, "messages", fullCounts, 1);
       continue;
     }
 
+    // 按 calls 权重分摊完整 token 给各工具（模型 A：工具分摊完整事件 token）
+    const weights = eventTools.map((t) => t.calls);
+    const toolCounts = allocateCountsByWeights(fullCounts, weights);
     const allocations = new Map<string, LocalTokenCounts>();
     for (const [index, tool] of eventTools.entries()) {
-      const counts = splitCounts(event, eventTools.length, index);
+      const counts = toolCounts[index]!;
       allocations.set(`${tool.category}:${tool.name}`, counts);
       addRow(categories, tool.category, counts, tool.calls);
       addRow(tools, tool.name, counts, tool.calls);
@@ -161,7 +356,10 @@ export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageCont
     const skillCounts = combinedCounts(
       eventTools
         .filter((tool) => tool.category === "skills")
-        .map((tool) => allocations.get(`${tool.category}:${tool.name}`) ?? emptyCounts()),
+        .map(
+          (tool) =>
+            allocations.get(`${tool.category}:${tool.name}`) ?? emptyCounts(),
+        ),
     );
     const eventSkills = skillCalls(event);
     if (eventSkills.length > 0) {
@@ -178,8 +376,11 @@ export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageCont
     const commandTool = eventTools.find((tool) => tool.name === "exec_command");
     if (commandTool != null) {
       const counts =
-        allocations.get(`${commandTool.category}:${commandTool.name}`) ?? emptyCounts();
-      const eventCommands = (event.context?.commands ?? []).filter((command) => command.calls > 0);
+        allocations.get(`${commandTool.category}:${commandTool.name}`) ??
+        emptyCounts();
+      const eventCommands = (event.context?.commands ?? []).filter(
+        (command) => command.calls > 0,
+      );
       for (const [index, command] of eventCommands.entries()) {
         addRow(
           commands,
@@ -198,6 +399,10 @@ export function buildContextBreakdown(events: LocalUsageEvent[]): LocalUsageCont
     tools: sortedRows(tools),
     skills: sortedRows(skills),
     commands: sortedRows(commands),
+    messageRoles: sortedRows(messageRoles),
+    observedTools: sortedObservedRows(observedTools),
+    observedMcp: sortedObservedRows(observedMcp),
+    observedSkills: sortedObservedRows(observedSkills),
   };
 }
 

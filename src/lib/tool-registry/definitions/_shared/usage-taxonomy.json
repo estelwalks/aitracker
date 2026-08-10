@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "description": "Behavior classification hints and context dimensions (moved from DEBUG_COMMAND_HINTS in local-usage/behavior-classify.ts). Display labels live in the i18n dictionaries.",
+  "debugCommandHints": ["diff", "grep", "log", "status", "test", "lint"],
+  "behaviorPriority": ["debug-command", "execution", "browser", "agent", "planning", "text-qa"],
+  "contextDimensions": {
+    "tools": { "i18nKey": "dashboard.context.dimTool" },
+    "skills": { "i18nKey": "dashboard.context.dimSkill" },
+    "commands": { "i18nKey": "dashboard.context.dimMessages" },
+    "mcp": { "i18nKey": "dashboard.context.dimMcp" },
+    "toolOutputs": { "i18nKey": "dashboard.context.dimTool" }
+  }
+}

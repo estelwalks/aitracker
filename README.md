@@ -17,6 +17,8 @@ http://127.0.0.1:8080
 
 端口由现有 Vite 配置决定。
 
+> **国内网络：** 项目已配置 `ELECTRON_MIRROR` 环境变量使用 npmmirror.com 镜像，首次 `npm install` 后自动通过 `postinstall` 脚本下载 Electron 二进制文件。
+
 ## Electron 桌面运行
 
 ```bash
@@ -76,7 +78,19 @@ npm run format         # Prettier 格式化
 npx tsc --noEmit
 npm run build
 npm run build:electron
+npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifest 漂移检查
 ```
+
+## 工具注册表（tool-registry）
+
+每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格策略）收敛为 `src/lib/tool-registry/definitions/<id>.tool.json`（v1.5 JSON，29 个：27 个产品目录工具 + aipy/cline 遗留采集源）；业务模块只消费注册表的派生结果，不维护自己的工具名单。
+
+- 注册表内核（contracts/schema/loader/validate/registry/manifest）见 `src/lib/tool-registry/`：JSON 仅在构建期由 `scripts/generate-tool-imports.mjs` 读取并嵌入 `definitions.generated.ts`，**运行时不扫描目录、不加载外部 JSON**。
+- 平台模型：`macos/windows10/windows11/linux` targets + `windows` group（`_shared/platform-profiles.json`）；`resolvePlatformPlan()` 按 OS 解析探测/扫描路径；Linux 首期仅 `planned` 状态，不触发扫描。
+- 共享策略包（`definitions/_shared/`）：generic-reader 默认、scanner 预算、skill-market 顺序、usage taxonomy、platform profiles；定价 rule packs 在 `src/lib/pricing/rules/`。
+- 浏览器只导入生成的 `public-manifest.generated.ts`（display + 能力状态 + skillAgentOrder，无路径/Reader Key/命令/价格）；配置变更后执行 `npm run generate:*` 重新生成并提交（`verify:tool-registry` 会做漂移检查）。
+- 新增工具：新建 `definitions/<id>.tool.json` → 在 `definitions/manifest.json` 登记 → `npm run generate:tool-imports` → `npm run verify:tool-registry` + 相关单测通过后提交。
+- 用量缓存（`local-usage-index-v10.json`）携带 `toolRegistryVersion`（sha256 全量 canonical JSON），任何定义/策略变更自动失效重建。
 
 ## 数据接入
 
@@ -95,7 +109,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 
 首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会在 `~/.trusttools/cache/local-usage-index-v10.json` 建立仅包含结构化 Token 事件的文件级索引。后续按增量游标和文件变化刷新，缓存使用临时文件加原子重命名写入。
 
-采集范围与 Token Tracker 的 27 个 AI 工具保持兼容，并额外支持 AiPy。项目原有的 Cline 读取仍然保留。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置兼容采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 AITracker 原生 reader 作为校验与降级路径。
+采集范围覆盖 27 个产品目录工具，并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 AITracker 原生 reader 作为校验与降级路径。
 
 真实采集实现位于：
 
@@ -138,3 +152,15 @@ Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可�
 - `/security`：安全检测
 - `/memory`：记忆聚合
 - `/settings`：本地设置
+
+# AITracker
+
+AITracker is a local-first, cross-platform dashboard for AI development assets.
+
+## Open-source hygiene
+
+Before opening a pull request, run `npm run check:opensource-hygiene`. The
+check scans source and build configuration for machine-specific absolute paths,
+AITracker remnants, credential-shaped values, and undeclared private imports.
+Documentation, tests, fixtures, generated build output, and dependency folders
+are excluded because they may contain deliberate examples or snapshots.

@@ -1,0 +1,62 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "roo-code",
+  "display": {
+    "name": "Roo Code",
+    "nameZh": "Roo Code"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter",
+      "reader": "generic",
+      "paths": [
+        {
+          "targets": ["macos"],
+          "base": "appData",
+          "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          "glob": "**/*.json",
+          "format": "json"
+        },
+        {
+          "targets": ["macos", "linux"],
+          "base": "configHome",
+          "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          "glob": "**/*.json",
+          "format": "json"
+        },
+        {
+          "targets": ["windows10", "windows11"],
+          "base": "appDataRoaming",
+          "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
+          "glob": "**/*.json",
+          "format": "json"
+        }
+      ]
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

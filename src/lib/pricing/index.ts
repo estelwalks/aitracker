@@ -1,3 +1,5 @@
+import { formatMoney as i18nFormatMoney } from "../i18n/format";
+import type { Locale } from "../i18n/locale";
 import type {
   LocalTokenCounts,
   LocalUsageEvent,
@@ -5,18 +7,45 @@ import type {
   LocalUsageTotals,
 } from "../local-usage";
 import type { UsagePeriod } from "../local-usage/presentation";
-import { MODEL_PRICES, type ModelPrice } from "./catalog";
 import type { PricingSnapshot } from "./types";
 
-export type { PricingSnapshot, RuntimeModelPrice } from "./types";
+export type { PricingSnapshot } from "./types";
+export type { PricingConfidence, PricingResolution } from "./contracts";
+export { PRICING_RULES_VERSION } from "./registry.ts";
 
-export type Currency = "USD" | "CNY";
+import type { Currency } from "../i18n/locale";
+export type { Currency } from "../i18n/locale";
 export type UsageDimension = "source" | "model" | "project" | "tokenType";
-export type TokenTypeKey = "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
+export type TokenTypeKey =
+  "input" | "output" | "cacheRead" | "cacheWrite" | "reasoning";
 
-export const DEFAULT_USD_TO_CNY = 7.2;
+import { resolvePrice } from "./resolve.ts";
+import { getDefaultPricingRegistry } from "./registry.ts";
+import {
+  getTool,
+  getToolDisplay,
+  getUsagePlan,
+} from "../tool-registry/registry.ts";
+
+/**
+ * Built-in baseline exchange rates (offline fallback). These are static
+ * approximations — the UI labels their source as "fallback" and never presents
+ * them as live prices (docs/plan v1.2 汇率与离线).
+ */
+export const BUILTIN_RATES: Record<Currency, number> = {
+  CNY: 7.2,
+  JPY: 145,
+  KRW: 1350,
+  USD: 1,
+};
+
+export const DEFAULT_USD_TO_CNY = BUILTIN_RATES.CNY;
 let activePricingSnapshot: PricingSnapshot | null = null;
-
+/**
+ * Apply a pricing snapshot. Model prices now come from the offline rule-pack
+ * registry (resolve.ts); the snapshot only carries exchange rates for display
+ * currency conversion.
+ */
 export function applyPricingSnapshot(snapshot: PricingSnapshot | null): void {
   activePricingSnapshot = snapshot;
 }
@@ -25,10 +54,36 @@ export function currentUsdToCny(): number {
   return activePricingSnapshot?.usdToCny ?? DEFAULT_USD_TO_CNY;
 }
 
+/**
+ * The exchange rate for a display currency. Prefers the latest pricing
+ * snapshot's rates (single shared snapshot per session), then the built-in
+ * baseline. USD is always 1.
+ */
+export function currentRate(currency: Currency): number {
+  if (currency === "USD") return 1;
+  const fromSnapshot = activePricingSnapshot?.exchangeRates?.[currency];
+  return typeof fromSnapshot === "number" && Number.isFinite(fromSnapshot)
+    ? fromSnapshot
+    : BUILTIN_RATES[currency];
+}
+
+/**
+ * Aggregated cost estimate preserving the four pricing states (audit P1-1):
+ * - `knownUsd`/`pricedEvents`: `exact` resolutions (route evidence + rate).
+ * - `estimatedUsd`/`estimatedEvents`: `estimated` resolutions (reference-route
+ *   prices without route evidence, or the packaged generic estimate). Kept as
+ *   a separate subtotal - never disguised as an exact/official bill.
+ * - `unknownEvents`/`unknownModels`: `unpriced` resolutions (price genuinely
+ *   unknown). Unknown models are never shown as $0.
+ * - `not-billable` events contribute nothing to either subtotal and are not
+ *   counted as unknown (explicitly not charged); `complete` stays true.
+ */
 export interface CostEstimate {
   knownUsd: number;
+  estimatedUsd: number;
   cacheSavingsUsd: number;
   pricedEvents: number;
+  estimatedEvents: number;
   unknownEvents: number;
   unknownModels: string[];
   complete: boolean;
@@ -48,59 +103,96 @@ const EMPTY_COUNTS: LocalTokenCounts = {
   totalTokens: 0,
 };
 
-export function findModelPrice(model: string): ModelPrice | undefined {
-  const normalized = model.trim().toLowerCase().replaceAll("_", "-").replaceAll(".", "-");
-  const runtime = activePricingSnapshot?.prices[normalized];
-  if (runtime) {
-    return {
-      id: normalized,
-      label: model,
-      effectiveDate: activePricingSnapshot?.generatedAt.slice(0, 10) ?? "",
-      inputUsdPerMillion: runtime.inputUsdPerMillion,
-      outputUsdPerMillion: runtime.outputUsdPerMillion,
-      cacheReadUsdPerMillion: runtime.cacheReadUsdPerMillion,
-      cacheWriteUsdPerMillion: runtime.cacheWriteUsdPerMillion,
-      tiers: runtime.tiers,
-      matches: (candidate) => candidate === normalized,
-    };
-  }
-  return MODEL_PRICES.find((price) => price.matches(normalized));
+const NANO_PER_USD = 1_000_000_000n;
+
+/** Convert nanoUSD (bigint) to a USD `number` for the display-layer CostEstimate. */
+function nanoToUsd(nano: bigint): number {
+  return Number(nano) / Number(NANO_PER_USD);
 }
 
+/**
+ * Estimate the cost of a single usage event via the offline route-first pricing
+ * registry (docs §5, audit P1-1). Model prices come from the built-in rule
+ * packs; the exchange-rate snapshot only affects display currency, not the USD
+ * amount. The four resolution states have distinct aggregates:
+ * - `exact` -> `knownUsd` + `pricedEvents` (complete).
+ * - `estimated` -> `estimatedUsd` + `estimatedEvents` (reference-route prices
+ *   without route evidence, or the packaged generic estimate). Never disguised
+ *   as an official cost.
+ * - `unpriced` -> `unknownEvents` + `unknownModels` (price unknown; never $0).
+ * - `not-billable` -> counted nowhere (explicitly not charged; complete).
+ *
+ * Evidence: `LocalUsageEvent` carries no endpoint/provider fields today, so
+ * local events always resolve via the reference-route path (estimated).
+ */
 export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
-  const price = findModelPrice(event.model);
-  if (price == null) {
-    return unknownCost(event.model);
-  }
-  if (event.cacheCreationInputTokens > 0 && price.cacheWriteUsdPerMillion == null) {
-    return unknownCost(event.model);
-  }
-
-  const tier =
-    price.tiers?.find(
-      (candidate) =>
-        candidate.maxInputTokens == null ||
-        event.inputTokens + event.cachedInputTokens + event.cacheCreationInputTokens <=
-          candidate.maxInputTokens,
-    ) ?? price;
-  const knownUsd =
-    perMillion(event.inputTokens, tier.inputUsdPerMillion) +
-    perMillion(event.outputTokens, tier.outputUsdPerMillion) +
-    perMillion(event.cachedInputTokens, tier.cacheReadUsdPerMillion) +
-    perMillion(event.cacheCreationInputTokens, price.cacheWriteUsdPerMillion ?? 0);
-  const cacheSavingsUsd = Math.max(
-    0,
-    perMillion(event.cachedInputTokens, tier.inputUsdPerMillion - tier.cacheReadUsdPerMillion),
+  const registry = getDefaultPricingRegistry();
+  const observation = getTool(event.source)?.modelObservation ?? null;
+  const usagePlan = getUsagePlan(event.source);
+  const resolution = resolvePrice(
+    registry,
+    {
+      toolId: event.source,
+      rawModel: event.model,
+      occurredAt: event.timestamp,
+      tokens: {
+        input: BigInt(event.inputTokens),
+        output: BigInt(event.outputTokens),
+        cacheRead: BigInt(event.cachedInputTokens),
+        cacheWrite: BigInt(event.cacheCreationInputTokens),
+        reasoningOutput: BigInt(event.reasoningOutputTokens),
+      },
+    },
+    {
+      // Usage-capable tools fall back to the packaged generic estimate
+      // (api-generic-v1, confidence "estimated"); tools without a usage plan
+      // are never billed. Fallback behavior is JSON-only - no env override.
+      notBillable: usagePlan === null,
+      fallbackProfileId: "api-generic-v1",
+      reasoningIncludedInOutput:
+        observation?.tokenSemantics?.reasoningIncludedInOutput ?? true,
+    },
   );
 
-  return {
-    knownUsd,
-    cacheSavingsUsd,
-    pricedEvents: 1,
-    unknownEvents: 0,
-    unknownModels: [],
-    complete: true,
-  };
+  switch (resolution.confidence) {
+    case "exact": {
+      const known = resolution.knownUsdNano ?? 0n;
+      return {
+        knownUsd: nanoToUsd(known),
+        estimatedUsd: 0,
+        cacheSavingsUsd:
+          resolution.cacheSavingsUsdNano !== undefined
+            ? nanoToUsd(resolution.cacheSavingsUsdNano)
+            : 0,
+        pricedEvents: 1,
+        estimatedEvents: 0,
+        unknownEvents: 0,
+        unknownModels: [],
+        complete: true,
+      };
+    }
+    case "estimated": {
+      const estimated = resolution.knownUsdNano ?? 0n;
+      return {
+        knownUsd: 0,
+        estimatedUsd: nanoToUsd(estimated),
+        cacheSavingsUsd:
+          resolution.cacheSavingsUsdNano !== undefined
+            ? nanoToUsd(resolution.cacheSavingsUsdNano)
+            : 0,
+        pricedEvents: 0,
+        estimatedEvents: 1,
+        unknownEvents: 0,
+        unknownModels: [],
+        complete: true,
+      };
+    }
+    case "not-billable":
+      // Explicitly not charged: no cost, no unknown (complete answer).
+      return emptyCost();
+    case "unpriced":
+      return unknownCost(event.model);
+  }
 }
 
 export function estimateUsageCost(events: LocalUsageEvent[]): CostEstimate {
@@ -114,7 +206,10 @@ export function aggregatePricedUsage(
   events: LocalUsageEvent[],
   dimension: UsageDimension,
 ): PricedUsageRow[] {
-  const rows = new Map<string, { events: LocalUsageEvent[]; totals: LocalUsageTotals }>();
+  const rows = new Map<
+    string,
+    { events: LocalUsageEvent[]; totals: LocalUsageTotals }
+  >();
 
   for (const event of events) {
     if (dimension === "tokenType") {
@@ -122,14 +217,24 @@ export function aggregatePricedUsage(
       continue;
     }
     const key =
-      dimension === "source" ? event.source : dimension === "model" ? event.model : event.project;
+      dimension === "source"
+        ? event.source
+        : dimension === "model"
+          ? event.model
+          : event.project;
     addEventToRow(rows, key, event);
   }
 
   return [...rows.entries()]
-    .map(([key, row]) => ({ key, ...row.totals, cost: estimateUsageCost(row.events) }))
+    .map(([key, row]) => ({
+      key,
+      ...row.totals,
+      cost: estimateUsageCost(row.events),
+    }))
     .sort(
-      (left, right) => right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        left.key.localeCompare(right.key),
     );
 }
 
@@ -170,37 +275,72 @@ export function totalsFromEvents(events: LocalUsageEvent[]): LocalUsageTotals {
       events: totals.events + 1,
       inputTokens: totals.inputTokens + event.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + event.cachedInputTokens,
-      cacheCreationInputTokens: totals.cacheCreationInputTokens + event.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        totals.cacheCreationInputTokens + event.cacheCreationInputTokens,
       outputTokens: totals.outputTokens + event.outputTokens,
-      reasoningOutputTokens: totals.reasoningOutputTokens + event.reasoningOutputTokens,
+      reasoningOutputTokens:
+        totals.reasoningOutputTokens + event.reasoningOutputTokens,
       totalTokens: totals.totalTokens + event.totalTokens,
     }),
     { events: 0, ...EMPTY_COUNTS },
   );
 }
 
-export function convertUsd(value: number, currency: Currency, usdToCny?: number) {
-  return currency === "USD" ? value : value * (usdToCny ?? currentUsdToCny());
+/** Convert a USD amount to a display currency. USD passes through unchanged. */
+export function convertUsd(value: number, currency: Currency, rate?: number) {
+  return currency === "USD" ? value : value * (rate ?? currentRate(currency));
 }
 
-export function formatMoney(valueUsd: number, currency: Currency, usdToCny?: number): string {
-  const value = convertUsd(valueUsd, currency, usdToCny);
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
+/**
+ * Format a cost in its display currency (converting USD first). The currency
+ * never changes with the UI language; `locale` only affects number grouping
+ * and the currency symbol presentation. `rate` overrides the snapshot/built-in
+ * rate (callers pass an explicit rate to pin a single snapshot).
+ */
+export function formatMoney(
+  locale: Locale,
+  valueUsd: number,
+  currency: Currency,
+  rate?: number,
+): string {
+  return i18nFormatMoney(
+    locale,
+    convertUsd(valueUsd, currency, rate),
     currency,
-    minimumFractionDigits: value >= 100 ? 0 : 2,
-    maximumFractionDigits: value >= 100 ? 0 : 4,
-  }).format(value);
+  );
 }
 
-export function formatCost(cost: CostEstimate, currency: Currency, usdToCny?: number): string {
-  if (cost.pricedEvents === 0 && cost.unknownEvents > 0) return "价格未知";
-  const amount = formatMoney(cost.knownUsd, currency, usdToCny);
-  return cost.unknownEvents > 0 ? `${amount}（部分未知）` : amount;
+/**
+ * Format a cost estimate as a bare amount (exact + estimated subtotal), or
+ * null when nothing is priced and something is unknown. The "price unknown" /
+ * "(partially unknown)" / "estimated" wording lives in the message catalogs
+ * (pricing.*) and is composed with `t()` at the display boundary — never
+ * concatenated in lib code.
+ */
+export function formatCostAmount(
+  locale: Locale,
+  cost: CostEstimate,
+  currency: Currency,
+  rate?: number,
+): string | null {
+  if (
+    cost.pricedEvents === 0 &&
+    cost.estimatedEvents === 0 &&
+    cost.unknownEvents > 0
+  ) {
+    return null;
+  }
+  return formatMoney(locale, cost.knownUsd + cost.estimatedUsd, currency, rate);
 }
 
+/**
+ * Display name for a usage source (F6-T3): projected from the tool registry's
+ * canonical `name` via `getToolDisplay`. Unknown ids (not in the registry)
+ * fall back to the raw id. This module already depends on the registry
+ * (usage-plan / model-observation lookups), so no new bundle surface is added.
+ */
 export function sourceName(source: LocalUsageSource | string) {
-  return source === "claude-code" ? "Claude Code" : source === "codex" ? "Codex" : source;
+  return getToolDisplay(source)?.name ?? source;
 }
 
 function perMillion(tokens: number, rate: number) {
@@ -210,8 +350,10 @@ function perMillion(tokens: number, rate: number) {
 function emptyCost(): CostEstimate {
   return {
     knownUsd: 0,
+    estimatedUsd: 0,
     cacheSavingsUsd: 0,
     pricedEvents: 0,
+    estimatedEvents: 0,
     unknownEvents: 0,
     unknownModels: [],
     complete: true,
@@ -230,10 +372,14 @@ function unknownCost(model: string): CostEstimate {
 function mergeCosts(left: CostEstimate, right: CostEstimate): CostEstimate {
   return {
     knownUsd: left.knownUsd + right.knownUsd,
+    estimatedUsd: left.estimatedUsd + right.estimatedUsd,
     cacheSavingsUsd: left.cacheSavingsUsd + right.cacheSavingsUsd,
     pricedEvents: left.pricedEvents + right.pricedEvents,
+    estimatedEvents: left.estimatedEvents + right.estimatedEvents,
     unknownEvents: left.unknownEvents + right.unknownEvents,
-    unknownModels: [...new Set([...left.unknownModels, ...right.unknownModels])].sort(),
+    unknownModels: [
+      ...new Set([...left.unknownModels, ...right.unknownModels]),
+    ].sort(),
     complete: left.complete && right.complete,
   };
 }

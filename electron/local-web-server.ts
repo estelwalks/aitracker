@@ -1,7 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { createReadStream, promises as fs } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { extname, join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { COOKIE_TOKEN_NAME } from "./app-config.js";
 
 interface NitroExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -23,6 +30,7 @@ type NitroNodeMiddleware = (
 
 export interface LocalWebServer {
   origin: string;
+  capabilityToken: string;
   close(): Promise<void>;
 }
 
@@ -45,7 +53,10 @@ const mimeTypes: Record<string, string> = {
 
 function isInside(basePath: string, candidatePath: string): boolean {
   const pathFromBase = relative(basePath, candidatePath);
-  return pathFromBase === "" || (!pathFromBase.startsWith("..") && !pathFromBase.startsWith("/"));
+  return (
+    pathFromBase === "" ||
+    (!pathFromBase.startsWith("..") && !pathFromBase.startsWith("/"))
+  );
 }
 
 async function servePublicAsset(
@@ -79,7 +90,9 @@ async function servePublicAsset(
   response.setHeader("Content-Length", stats.size);
   response.setHeader(
     "Cache-Control",
-    pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    pathname.startsWith("/assets/")
+      ? "public, max-age=31536000, immutable"
+      : "no-cache",
   );
 
   if (request.method === "HEAD") {
@@ -91,7 +104,9 @@ async function servePublicAsset(
   return true;
 }
 
-async function readRequestBody(request: IncomingMessage): Promise<Buffer | undefined> {
+async function readRequestBody(
+  request: IncomingMessage,
+): Promise<Buffer | undefined> {
   if (request.method === "GET" || request.method === "HEAD") {
     return undefined;
   }
@@ -103,33 +118,104 @@ async function readRequestBody(request: IncomingMessage): Promise<Buffer | undef
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
 }
 
+/**
+ * Capability-token cookie name. The renderer's SPA requests (TanStack Start
+ * server-fn RPC, the 5-second usage poll) use same-origin fetch with relative
+ * paths — they cannot carry `?token=` — so the token is mirrored into an
+ * HttpOnly SameSite=Strict cookie on the first authenticated response and the
+ * browser attaches it to every same-origin request automatically.
+ */
+const TOKEN_COOKIE_NAME = COOKIE_TOKEN_NAME;
+
+type TokenStatus = "none" | "cookie" | "challenge";
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!header) return cookies;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const name = part.slice(0, eq).trim();
+    if (name.length > 0) cookies[name] = part.slice(eq + 1).trim();
+  }
+  return cookies;
+}
+
+/**
+ * Validate the capability token. Returns:
+ *  - "cookie":    the HttpOnly cookie already matches (no Set-Cookie needed);
+ *  - "challenge": token valid via query/header — response should set the
+ *    cookie so subsequent same-origin requests carry it automatically;
+ *  - "none":      unauthorized.
+ */
+function validateToken(
+  request: IncomingMessage,
+  capabilityToken: string,
+): TokenStatus {
+  if (
+    parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME] === capabilityToken
+  ) {
+    return "cookie";
+  }
+
+  const authHeader = request.headers.authorization;
+  if (authHeader && authHeader === `Bearer ${capabilityToken}`) {
+    return "challenge";
+  }
+
+  const customToken = request.headers["x-capability-token"];
+  if (typeof customToken === "string" && customToken === capabilityToken) {
+    return "challenge";
+  }
+
+  const url = new URL(request.url ?? "/", "http://localhost");
+  const queryToken = url.searchParams.get("token");
+  if (queryToken === capabilityToken) {
+    return "challenge";
+  }
+
+  return "none";
+}
+
+function tokenCookieHeader(capabilityToken: string): string {
+  return `${TOKEN_COOKIE_NAME}=${capabilityToken}; Path=/; HttpOnly; SameSite=Strict`;
+}
+
 async function sendFetchResponse(
   fetchResponse: Response,
   nodeResponse: ServerResponse,
+  extraSetCookies: string[],
 ): Promise<void> {
   nodeResponse.statusCode = fetchResponse.status;
   nodeResponse.statusMessage = fetchResponse.statusText;
 
   fetchResponse.headers.forEach((value, name) => {
-    nodeResponse.setHeader(name, value);
+    if (name.toLowerCase() !== "set-cookie") {
+      nodeResponse.setHeader(name, value);
+    }
   });
 
-  const getSetCookie = (fetchResponse.headers as Headers & { getSetCookie?: () => string[] })
-    .getSetCookie;
-  if (getSetCookie) {
-    const cookies = getSetCookie.call(fetchResponse.headers);
-    if (cookies.length > 0) {
-      nodeResponse.setHeader("set-cookie", cookies);
-    }
+  const getSetCookie = (
+    fetchResponse.headers as Headers & { getSetCookie?: () => string[] }
+  ).getSetCookie;
+  const cookies = [
+    ...extraSetCookies,
+    ...(getSetCookie ? getSetCookie.call(fetchResponse.headers) : []),
+  ];
+  if (cookies.length > 0) {
+    nodeResponse.setHeader("set-cookie", cookies);
   }
 
   const responseBody = await fetchResponse.arrayBuffer();
   nodeResponse.end(Buffer.from(responseBody));
 }
 
-export async function startLocalWebServer(webRoot: string): Promise<LocalWebServer> {
+export async function startLocalWebServer(
+  webRoot: string,
+): Promise<LocalWebServer> {
   const serverEntry = join(webRoot, "server", "index.mjs");
   const publicDirectory = join(webRoot, "public");
+  const capabilityToken = randomUUID();
   const module = (await import(pathToFileURL(serverEntry).href)) as {
     default?: NitroHandler;
     middleware?: NitroNodeMiddleware;
@@ -137,17 +223,56 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
   const handler = module.default;
   const middleware = module.middleware;
   if (!handler?.fetch && !middleware) {
-    throw new Error("AITracker server build does not expose a fetch handler or Node middleware");
+    throw new Error(
+      "Server build does not expose a fetch handler or Node middleware",
+    );
   }
 
   const server = createServer(async (request, response) => {
     try {
       const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
       const requestUrl = new URL(request.url ?? "/", origin);
-      if (await servePublicAsset(request, response, publicDirectory, requestUrl.pathname)) {
+      if (
+        await servePublicAsset(
+          request,
+          response,
+          publicDirectory,
+          requestUrl.pathname,
+        )
+      ) {
         return;
       }
+
+      // Reject oversized request bodies before reading them into memory.
+      const contentLengthHeader = request.headers["content-length"];
+      if (contentLengthHeader) {
+        const contentLength = parseInt(contentLengthHeader, 10);
+        if (!Number.isNaN(contentLength) && contentLength > 10 * 1024 * 1024) {
+          response.statusCode = 413;
+          response.setHeader("Content-Type", "text/plain; charset=utf-8");
+          response.end("Request body too large");
+          return;
+        }
+      }
+
+      // All non-static routes require the capability token. A token supplied
+      // via query/header additionally establishes the HttpOnly cookie so the
+      // SPA's same-origin fetches (server-fn RPC, usage poll) authenticate
+      // automatically.
+      const tokenStatus = validateToken(request, capabilityToken);
+      if (tokenStatus === "none") {
+        response.statusCode = 401;
+        response.setHeader("Content-Type", "text/plain; charset=utf-8");
+        response.end("Unauthorized");
+        return;
+      }
+      const challengeCookies =
+        tokenStatus === "challenge" ? [tokenCookieHeader(capabilityToken)] : [];
+
       if (middleware) {
+        if (challengeCookies.length > 0) {
+          response.setHeader("set-cookie", challengeCookies);
+        }
         await middleware(request, response);
         return;
       }
@@ -172,7 +297,7 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
         },
       );
 
-      await sendFetchResponse(fetchResponse, response);
+      await sendFetchResponse(fetchResponse, response, challengeCookies);
       void Promise.allSettled(pendingTasks);
     } catch (error) {
       console.error("Local web server request failed", error);
@@ -180,7 +305,7 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
         response.statusCode = 500;
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
       }
-      response.end("AITracker local server error");
+      response.end("Local server error");
     }
   });
 
@@ -194,11 +319,12 @@ export async function startLocalWebServer(webRoot: string): Promise<LocalWebServ
 
   const address = server.address();
   if (!address || typeof address === "string") {
-    throw new Error("Unable to resolve AITracker local server address");
+    throw new Error("Unable to resolve local server address");
   }
 
   return {
     origin: `http://127.0.0.1:${address.port}`,
+    capabilityToken,
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {
         server.close((error) => {

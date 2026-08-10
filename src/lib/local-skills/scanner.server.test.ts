@@ -1,23 +1,36 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { APP_DATA_DIR } from "../app-config";
 
 import {
+  batchUninstallLocalSkills,
   installMarketSkill,
   refreshMarketSkillEvidence,
   scanLocalSkills,
   SKILL_ROOT_SUFFIXES,
-  trashLocalSkills,
+  syncLocalSkill,
+  uninstallLocalSkill,
 } from "./scanner.server.ts";
 
 test("scans common agent roots without treating mtime as usage evidence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
-  const trusttoolsDirectory = join(root, ".trusttools");
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
   const claudeSkill = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "example");
-  const codexSkill = join(root, SKILL_ROOT_SUFFIXES.Codex, "example");
+  const codexSkill = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "example");
   await mkdir(claudeSkill, { recursive: true });
   await mkdir(codexSkill, { recursive: true });
   await writeFile(join(claudeSkill, "SKILL.md"), "# Example");
@@ -25,27 +38,48 @@ test("scans common agent roots without treating mtime as usage evidence", async 
 
   const snapshot = await scanLocalSkills({
     homeDirectory: root,
-    trusttoolsDirectory,
+    dataDirectory,
     now: new Date(),
   });
 
-  assert.equal(Object.keys(snapshot.roots).length, 8);
+  // All nine verified Skill installation targets are exposed.
+  assert.equal(Object.keys(snapshot.roots).length, 9);
   assert.equal(snapshot.skills.length, 1);
   assert.equal(snapshot.skills[0].installations.length, 2);
-  assert.equal(snapshot.skills[0].health, "unknown");
-  assert.match(snapshot.skills[0].healthReason, /文件修改时间不作为调用证据/);
+  // No structured call evidence: mtime is not treated as usage evidence.
+  assert.equal(snapshot.skills[0].lastUsedAt, null);
+});
+
+test("detects an installed Agent even when its skill directory is empty", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-agent-"));
+  try {
+    // .codex is the installation probe root; .codex/skills intentionally does
+    // not exist, proving the market target is not inferred from Skill rows.
+    await mkdir(join(root, ".codex"), { recursive: true });
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory: join(root, APP_DATA_DIR),
+    });
+    assert.equal(snapshot.skills.length, 0);
+    assert.equal(snapshot.agents["Codex CLI"].installed, true);
+    assert.deepEqual(snapshot.agents["Codex CLI"].detectedPaths, [
+      join(root, ".codex"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("uses structured Skill calls as the only activity evidence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-usage-"));
-  const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "example");
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-usage-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "example");
   await mkdir(skillPath, { recursive: true });
   await writeFile(join(skillPath, "SKILL.md"), "# Example");
 
   const snapshot = await scanLocalSkills({
     homeDirectory: root,
-    trusttoolsDirectory,
+    dataDirectory,
     now: new Date("2026-07-28T12:00:00.000Z"),
     usageEvents: [
       {
@@ -59,35 +93,46 @@ test("uses structured Skill calls as the only activity evidence", async () => {
         outputTokens: 5,
         reasoningOutputTokens: 0,
         totalTokens: 15,
-        context: { skills: [{ name: "example", calls: 2 }] },
+        context: { skills: [{ name: "example", calls: 5 }] },
       },
     ],
   });
 
-  assert.equal(snapshot.skills[0]?.health, "active");
-  assert.match(snapshot.skills[0]?.healthReason ?? "", /真实调用 2 次/);
+  assert.equal(snapshot.skills[0]?.lastUsedAt, "2026-07-28T10:00:00.000Z");
 });
 
 test("reads real version and source from SKILL.md frontmatter and changes fingerprint", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
-  const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "versioned");
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], "versioned");
   try {
     await mkdir(skillPath, { recursive: true });
     await writeFile(
       join(skillPath, "SKILL.md"),
       "---\nversion: 1.2.3\nsource: https://example.com/versioned\n---\n# Versioned\n",
     );
-    const first = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const first = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
     assert.equal(first.skills[0]?.installations[0]?.version, "1.2.3");
-    assert.equal(first.skills[0]?.installations[0]?.source?.kind, "frontmatter");
-    assert.equal(first.skills[0]?.installations[0]?.source?.url, "https://example.com/versioned");
+    assert.equal(
+      first.skills[0]?.installations[0]?.source?.kind,
+      "frontmatter",
+    );
+    assert.equal(
+      first.skills[0]?.installations[0]?.source?.url,
+      "https://example.com/versioned",
+    );
 
     await writeFile(
       join(skillPath, "SKILL.md"),
       "---\nversion: 1.2.4\nsource: https://example.com/versioned\n---\n# Versioned\n",
     );
-    const second = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const second = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
     assert.equal(second.skills[0]?.installations[0]?.version, "1.2.4");
     assert.notEqual(second.fingerprint, first.fingerprint);
   } finally {
@@ -96,15 +141,22 @@ test("reads real version and source from SKILL.md frontmatter and changes finger
 });
 
 test("marks an update only when persisted market evidence is truly newer", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
-  const trusttoolsDirectory = join(root, ".trusttools");
-  const skillPath = join(root, SKILL_ROOT_SUFFIXES.Codex, "market-skill");
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Codex CLI"],
+    "market-skill",
+  );
   try {
     await mkdir(skillPath, { recursive: true });
-    await mkdir(trusttoolsDirectory, { recursive: true });
-    await writeFile(join(skillPath, "SKILL.md"), "---\nversion: 1.0.0\n---\n# Market\n");
+    await mkdir(dataDirectory, { recursive: true });
     await writeFile(
-      join(trusttoolsDirectory, "skill-origins.json"),
+      join(skillPath, "SKILL.md"),
+      "---\nversion: 1.0.0\n---\n# Market\n",
+    );
+    await writeFile(
+      join(dataDirectory, "skill-origins.json"),
       JSON.stringify({
         version: 1,
         installations: {
@@ -130,7 +182,10 @@ test("marks an update only when persisted market evidence is truly newer", async
       }),
     );
 
-    const snapshot = await scanLocalSkills({ homeDirectory: root, trusttoolsDirectory });
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
     const installation = snapshot.skills[0]?.installations[0];
     assert.equal(installation?.source?.kind, "market");
     assert.equal(installation?.updateStatus, "available");
@@ -141,10 +196,10 @@ test("marks an update only when persisted market evidence is truly newer", async
 });
 
 test("refreshes matching market evidence without inventing missing fields", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skills-"));
-  const trusttoolsDirectory = join(root, ".trusttools");
-  const originsPath = join(trusttoolsDirectory, "skill-origins.json");
-  await mkdir(trusttoolsDirectory, { recursive: true });
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const originsPath = join(dataDirectory, "skill-origins.json");
+  await mkdir(dataDirectory, { recursive: true });
   await writeFile(
     originsPath,
     JSON.stringify({
@@ -173,7 +228,7 @@ test("refreshes matching market evidence without inventing missing fields", asyn
   );
   try {
     const changed = await refreshMarketSkillEvidence({
-      trusttoolsDirectory,
+      dataDirectory,
       force: true,
       now: new Date("2026-03-01T00:00:00.000Z"),
       fetcher: async () =>
@@ -192,10 +247,16 @@ test("refreshes matching market evidence without inventing missing fields", asyn
     const persisted = JSON.parse(await readFile(originsPath, "utf8")) as {
       installations: Record<
         string,
-        { latestRemoteVersion: string | null; latestRemoteUpdatedAt: string | null }
+        {
+          latestRemoteVersion: string | null;
+          latestRemoteUpdatedAt: string | null;
+        }
       >;
     };
-    assert.equal(persisted.installations["/tmp/example"].latestRemoteVersion, null);
+    assert.equal(
+      persisted.installations["/tmp/example"].latestRemoteVersion,
+      null,
+    );
     assert.equal(
       persisted.installations["/tmp/example"].latestRemoteUpdatedAt,
       "2026-02-01T00:00:00.000Z",
@@ -207,17 +268,21 @@ test("refreshes matching market evidence without inventing missing fields", asyn
 
 test("installs a validated market skill from the controlled temporary directory", async () => {
   const name = `contract-${randomUUID()}`;
-  const sourcePath = join(homedir(), ".trusttools", "tmp", `market-${randomUUID()}`, name);
-  const targetPath = join(homedir(), SKILL_ROOT_SUFFIXES.Codex, name);
-  const trusttoolsDirectory = await mkdtemp(join(tmpdir(), "trusttools-origin-"));
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const sourcePath = join(dataDirectory, "tmp", `market-${randomUUID()}`, name);
+  const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
   try {
     await mkdir(sourcePath, { recursive: true });
-    await writeFile(join(sourcePath, "SKILL.md"), "---\nversion: 2.3.4\n---\n# Contract");
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      "---\nversion: 2.3.4\n---\n# Contract",
+    );
 
     await installMarketSkill(
       {
         sourcePath,
-        targetAgent: "Codex",
+        targetAgent: "Codex CLI",
         origin: {
           name,
           slug: name,
@@ -227,7 +292,7 @@ test("installs a validated market skill from the controlled temporary directory"
           updatedAt: "2026-01-02T00:00:00.000Z",
         },
       },
-      { trusttoolsDirectory },
+      { homeDirectory: root, dataDirectory },
     );
 
     const installed = await import("node:fs/promises").then(({ readFile }) =>
@@ -235,34 +300,44 @@ test("installs a validated market skill from the controlled temporary directory"
     );
     assert.match(installed, /version: 2.3.4/);
     const origins = JSON.parse(
-      await readFile(join(trusttoolsDirectory, "skill-origins.json"), "utf8"),
+      await readFile(join(dataDirectory, "skill-origins.json"), "utf8"),
     ) as {
-      installations: Record<string, { localVersion: string; source: { slug: string } }>;
+      installations: Record<
+        string,
+        { localVersion: string; source: { slug: string } }
+      >;
     };
     assert.equal(origins.installations[targetPath].localVersion, "2.3.4");
     assert.equal(origins.installations[targetPath].source.slug, name);
   } finally {
-    await rm(join(sourcePath, ".."), { recursive: true, force: true });
-    await rm(targetPath, { recursive: true, force: true });
-    await rm(trusttoolsDirectory, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
 });
 
 test("rejects a market source outside the controlled temporary directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  await mkdir(join(dataDirectory, "tmp"), { recursive: true });
   const sourcePath = await mkdtemp(join(tmpdir(), "market-outside-"));
   try {
     await writeFile(join(sourcePath, "SKILL.md"), "# Outside");
     await assert.rejects(
-      installMarketSkill({ sourcePath, targetAgent: "Codex" }),
-      /不属于受控临时目录/,
+      installMarketSkill(
+        { sourcePath, targetAgent: "Codex CLI" },
+        { homeDirectory: root, dataDirectory },
+      ),
+      /errors\.skills\.sourceOutsideTemp/,
     );
   } finally {
+    await rm(root, { recursive: true, force: true });
     await rm(sourcePath, { recursive: true, force: true });
   }
 });
 
 test("rejects symbolic links anywhere in a market skill source", async () => {
-  const marketRoot = join(homedir(), ".trusttools", "tmp", `market-${randomUUID()}`);
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const marketRoot = join(dataDirectory, "tmp", `market-${randomUUID()}`);
   const sourcePath = join(marketRoot, `symlink-${randomUUID()}`);
   const linkedFile = join(marketRoot, "linked.md");
   try {
@@ -272,52 +347,617 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
     await symlink(linkedFile, join(sourcePath, "reference.md"));
 
     await assert.rejects(
-      installMarketSkill({ sourcePath, targetAgent: "Codex" }),
-      /不允许包含符号链接/,
+      installMarketSkill(
+        { sourcePath, targetAgent: "Codex CLI" },
+        { homeDirectory: root, dataDirectory },
+      ),
+      /errors\.skills\.marketSourceSymlink/,
     );
   } finally {
-    await rm(marketRoot, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true });
   }
 });
 
-test("rejects an empty batch trash operation", async () => {
-  await assert.rejects(trashLocalSkills([]), /至少选择一个 Skill/);
-});
-
-test("deduplicates batch paths and keeps successful trash results when another item fails", async () => {
-  const calls: string[] = [];
-  const result = await trashLocalSkills(["/skill/ok", "/skill/fail", "/skill/ok"], async (path) => {
-    calls.push(path);
-    if (path === "/skill/fail") throw new Error("模拟失败");
-    return {
-      id: randomUUID(),
-      skillName: "ok",
-      agent: "Codex",
-      originalPath: path,
-      trashedAt: "2026-07-28T00:00:00.000Z",
-      expiresAt: "2026-07-28T00:05:00.000Z",
-    };
-  });
-
-  assert.deepEqual(calls, ["/skill/ok", "/skill/fail"]);
-  assert.equal(result.succeeded.length, 1);
-  assert.equal(result.succeeded[0].originalPath, "/skill/ok");
-  assert.deepEqual(result.failed, [{ path: "/skill/fail", error: "模拟失败" }]);
-});
-
-test("returns every successful batch trash result", async () => {
-  const result = await trashLocalSkills(["/skill/one", "/skill/two"], async (path) => ({
-    id: randomUUID(),
-    skillName: path.split("/").at(-1) ?? "skill",
-    agent: "Codex",
-    originalPath: path,
-    trashedAt: "2026-07-28T00:00:00.000Z",
-    expiresAt: "2026-07-28T00:05:00.000Z",
-  }));
-
-  assert.deepEqual(
-    result.succeeded.map((entry) => entry.originalPath),
-    ["/skill/one", "/skill/two"],
+test("reads description from SKILL.md frontmatter block scalars", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-desc-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const foldedPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Codex CLI"],
+    "folded-skill",
   );
-  assert.deepEqual(result.failed, []);
+  const literalPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Claude Code"],
+    "literal-skill",
+  );
+  try {
+    await mkdir(foldedPath, { recursive: true });
+    await mkdir(literalPath, { recursive: true });
+    await writeFile(
+      join(foldedPath, "SKILL.md"),
+      "---\nversion: 1.0.0\ndescription: >\n  This is a\n  folded description.\n---\n# Folded\n",
+    );
+    await writeFile(
+      join(literalPath, "SKILL.md"),
+      "---\nversion: 1.0.0\ndescription: |\n  This is a\n  literal description.\n---\n# Literal\n",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const folded = snapshot.skills.find((s) => s.name === "folded-skill");
+    const literal = snapshot.skills.find((s) => s.name === "literal-skill");
+    assert.equal(folded?.description, "This is a folded description.");
+    assert.equal(literal?.description, "This is a\nliteral description.");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects an empty batch uninstall operation", async () => {
+  await assert.rejects(
+    batchUninstallLocalSkills([]),
+    /errors.skills.noSkillSelected/,
+  );
+});
+
+test("uninstalls a skill via batch uninstall (moved to trash) and collects failures", async () => {
+  const name = `uninstall-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(join(skillPath, "SKILL.md"), "# Test");
+
+    const result = await batchUninstallLocalSkills(
+      [skillPath, "/tmp/nonexistent-tt-skill"],
+      { homeDirectory: root, dataDirectory },
+    );
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.failed.length, 1);
+    assert.equal(
+      result.failed[0].errorCode,
+      "errors.skills.pathOutsideManaged",
+    );
+
+    // Original location is gone, and the skill now lives in the trash with a
+    // manifest record (recoverable instead of permanently deleted).
+    await assert.rejects(lstat(skillPath));
+    const trashDir = join(dataDirectory, "trash", "skills");
+    const entries = await readdir(trashDir);
+    assert.ok(entries.some((entry) => entry.startsWith(`${name}-`)));
+    const manifest = await readFile(join(trashDir, "manifest.jsonl"), "utf8");
+    assert.match(manifest, /"action":"uninstall"/);
+    assert.match(manifest, new RegExp(name));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects uninstall of a collection directory without a marker", async () => {
+  const name = `collection-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const collectionPath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const childPath = join(collectionPath, "child-skill");
+  try {
+    await mkdir(childPath, { recursive: true });
+    await writeFile(join(childPath, "SKILL.md"), "# Child");
+
+    // A marker-less collection directory (like `~/.claude/skills/development`)
+    // must never be treated as a single skill to uninstall.
+    await assert.rejects(
+      uninstallLocalSkill(collectionPath, { homeDirectory: root }),
+      /errors\.skills\.notManagedDir/,
+    );
+    // Its children are untouched.
+    await stat(join(childPath, "SKILL.md"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill refuses to overwrite its own source path", async () => {
+  const name = `selfsync-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(join(sourcePath, "SKILL.md"), "# Self");
+
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Claude Code"],
+        onConflict: "overwrite",
+      },
+      { homeDirectory: root },
+    );
+    assert.equal(result.succeeded.length, 0);
+    assert.equal(result.failed.length, 1);
+    assert.equal(result.failed[0].errorCode, "errors.skills.overlappingPaths");
+    // The source survives.
+    await stat(join(sourcePath, "SKILL.md"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill copies a skill to a target agent with no conflict", async () => {
+  const name = `sync-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 1.0.0\ndescription: A sync test skill\n---\n# ${name}\n`,
+    );
+
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Codex CLI"],
+        onConflict: "skip",
+      },
+      { homeDirectory: root },
+    );
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.succeeded[0].agent, "Codex CLI");
+    assert.equal(result.succeeded[0].path, targetPath);
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.failed.length, 0);
+
+    // Verify the file was copied.
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 1\.0\.0/);
+    assert.match(content, /A sync test skill/);
+
+    // Verify description is read from frontmatter after sync.
+    const snapshot = await scanLocalSkills({ homeDirectory: root });
+    const synced = snapshot.skills.find((s) => s.name === name);
+    assert.equal(synced?.description, "A sync test skill");
+    // Claude Code source + Codex CLI target.
+    assert.equal(synced?.installations.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill skips on conflict when onConflict is skip", async () => {
+  const name = `sync-skip-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 2.0.0\n---\n# Source\n`,
+    );
+    await mkdir(targetPath, { recursive: true });
+    await writeFile(
+      join(targetPath, "SKILL.md"),
+      `---\nversion: 1.0.0\n---\n# Original\n`,
+    );
+
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Codex CLI"],
+        onConflict: "skip",
+      },
+      { homeDirectory: root },
+    );
+    assert.equal(result.succeeded.length, 0);
+    assert.equal(result.skipped.length, 1);
+    assert.equal(result.skipped[0].agent, "Codex CLI");
+    assert.equal(result.skipped[0].reason, "conflict");
+    assert.equal(result.failed.length, 0);
+
+    // Verify the target still has the original content.
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 1\.0\.0/);
+    assert.match(content, /Original/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill overwrites on conflict when onConflict is overwrite", async () => {
+  const name = `sync-overwrite-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
+  const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      `---\nversion: 2.0.0\ndescription: Overwritten by sync\n---\n# Source\n`,
+    );
+    await mkdir(targetPath, { recursive: true });
+    await writeFile(
+      join(targetPath, "SKILL.md"),
+      `---\nversion: 1.0.0\ndescription: Original target\n---\n# Original\n`,
+    );
+
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Codex CLI"],
+        onConflict: "overwrite",
+      },
+      { homeDirectory: root, dataDirectory },
+    );
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.succeeded[0].agent, "Codex CLI");
+    assert.equal(result.succeeded[0].path, targetPath);
+    assert.equal(result.skipped.length, 0);
+    assert.equal(result.failed.length, 0);
+
+    // Verify the target now has the source content (replaced).
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 2\.0\.0/);
+    assert.match(content, /Overwritten by sync/);
+
+    // The replaced version went to the trash instead of being destroyed.
+    const trashDir = join(dataDirectory, "trash", "skills");
+    const entries = await readdir(trashDir);
+    assert.ok(entries.some((entry) => entry.startsWith(`${name}-`)));
+    const manifest = await readFile(join(trashDir, "manifest.jsonl"), "utf8");
+    assert.match(manifest, /"action":"overwrite"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("discovers nested skills two levels deep without treating containers as skills", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-nested-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Claude Code"],
+    "development",
+    "agile-feature-dev",
+  );
+  try {
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(
+      join(skillPath, "SKILL.md"),
+      "---\nname: agile-feature-dev\n---\n# Agile\n",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    assert.equal(snapshot.skills.length, 1);
+    assert.equal(snapshot.skills[0]?.name, "agile-feature-dev");
+    // The installation path keeps the nested `development/` segment.
+    assert.equal(snapshot.skills[0]?.installations[0]?.path, skillPath);
+    // The marker-less container directory itself is not a skill.
+    assert.ok(snapshot.skills.every((skill) => skill.name !== "development"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("ignores bare markdown files as skills", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-readme-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  try {
+    await mkdir(join(claudeRoot, "development"), { recursive: true });
+    // Root-level README.md and a README.md inside a marker-less nested dir.
+    await writeFile(join(claudeRoot, "README.md"), "# readme");
+    await writeFile(join(claudeRoot, "development", "README.md"), "# nested");
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    assert.equal(snapshot.skills.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("recognizes the lowercase skill.md marker and reads its frontmatter", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-lower-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillPath = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Claude Code"],
+    "lowercase-marker",
+  );
+  try {
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(
+      join(skillPath, "skill.md"),
+      "---\nname: lower-skill\ndescription: lowercase marker works\n---\n# Lower\n",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    assert.equal(snapshot.skills.length, 1);
+    assert.equal(snapshot.skills[0]?.name, "lower-skill");
+    assert.equal(snapshot.skills[0]?.description, "lowercase marker works");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("stops descending at maxDepth 3", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-depth-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  try {
+    // a/b/c/SKILL.md sits at depth 3 and must be found.
+    await mkdir(join(claudeRoot, "a", "b", "c"), { recursive: true });
+    await writeFile(join(claudeRoot, "a", "b", "c", "SKILL.md"), "# depth3");
+    // x/y/z/w/SKILL.md sits at depth 4 and must not be found.
+    await mkdir(join(claudeRoot, "x", "y", "z", "w"), { recursive: true });
+    await writeFile(
+      join(claudeRoot, "x", "y", "z", "w", "SKILL.md"),
+      "# depth4",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const names = snapshot.skills.map((skill) => skill.name);
+    assert.ok(names.includes("c"), "depth-3 skill must be discovered");
+    assert.ok(!names.includes("w"), "depth-4 skill must not be discovered");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("prefers frontmatter name over the directory name", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-name-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  try {
+    await mkdir(join(claudeRoot, "foo"), { recursive: true });
+    await writeFile(
+      join(claudeRoot, "foo", "SKILL.md"),
+      "---\nname: renamed\n---\n# Foo\n",
+    );
+    await mkdir(join(claudeRoot, "bar"), { recursive: true });
+    await writeFile(join(claudeRoot, "bar", "SKILL.md"), "# Bar\n");
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const names = snapshot.skills.map((skill) => skill.name);
+    assert.ok(names.includes("renamed"), "frontmatter name wins over dir name");
+    assert.ok(
+      names.includes("bar"),
+      "dir name is used without frontmatter name",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("skips dot-prefixed and symlinked skill directories", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-hidden-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  try {
+    await mkdir(join(claudeRoot, ".system"), { recursive: true });
+    await writeFile(join(claudeRoot, ".system", "SKILL.md"), "# hidden");
+    const realSkill = join(claudeRoot, "real");
+    await mkdir(realSkill, { recursive: true });
+    await writeFile(join(realSkill, "SKILL.md"), "# real");
+    await symlink(realSkill, join(claudeRoot, "linked"));
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const names = snapshot.skills.map((skill) => skill.name);
+    assert.ok(names.includes("real"));
+    assert.ok(!names.includes(".system"), "dot-prefixed dirs must be skipped");
+    assert.ok(!names.includes("linked"), "symlinked dirs must be skipped");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scans the newly verified agent roots", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-newagents-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  try {
+    // hermes / openclaw / cursor roots are HOME-relative.
+    const hermes = join(root, ".hermes", "skills", "h1");
+    const openclaw = join(root, ".openclaw", "workspace", "skills", "o1");
+    const cursor = join(root, ".cursor", "skills", "c1");
+    // grok's base is overridable via GROK_HOME: join(GROK_HOME, "skills").
+    const grok = join(root, ".grok", "skills", "g1");
+    for (const skillPath of [hermes, openclaw, cursor, grok]) {
+      await mkdir(skillPath, { recursive: true });
+      await writeFile(join(skillPath, "SKILL.md"), "# Skill");
+    }
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+      env: { GROK_HOME: join(root, ".grok") },
+    });
+    const names = snapshot.skills.map((skill) => skill.name);
+    for (const expected of ["h1", "o1", "c1", "g1"]) {
+      assert.ok(names.includes(expected), `${expected} must be discovered`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scans both antigravity skill roots as one agent with two installations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-antigravity-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  try {
+    const first = join(root, ".gemini", "antigravity", "skills", "agi-skill");
+    const second = join(
+      root,
+      ".gemini",
+      "antigravity-ide",
+      "skills",
+      "agi-skill",
+    );
+    for (const skillPath of [first, second]) {
+      await mkdir(skillPath, { recursive: true });
+      await writeFile(
+        join(skillPath, "SKILL.md"),
+        "---\nname: agi-skill\n---\n# A\n",
+      );
+    }
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const skill = snapshot.skills.find(
+      (candidate) => candidate.name === "agi-skill",
+    );
+    assert.equal(skill?.installations.length, 2);
+    assert.ok(
+      skill?.installations.every(
+        (installation) => installation.agent === "Antigravity",
+      ),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("env overrides redirect codex and grok roots; empty values fall back to HOME", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-envhome-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const envRoot = await mkdtemp(join(tmpdir(), "tt-skills-env-"));
+  try {
+    await mkdir(join(envRoot, "skills", "codex-skill"), { recursive: true });
+    await writeFile(join(envRoot, "skills", "codex-skill", "SKILL.md"), "# c");
+    await mkdir(join(envRoot, "skills", "grok-skill"), { recursive: true });
+    await writeFile(join(envRoot, "skills", "grok-skill", "SKILL.md"), "# g");
+
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+      env: { CODEX_HOME: envRoot, GROK_HOME: envRoot },
+    });
+    assert.deepEqual(snapshot.roots["Codex CLI"], [join(envRoot, "skills")]);
+    assert.deepEqual(snapshot.roots["Grok Build"], [join(envRoot, "skills")]);
+    const names = snapshot.skills.map((skill) => skill.name);
+    assert.ok(names.includes("codex-skill"));
+    assert.ok(names.includes("grok-skill"));
+
+    // Empty-string env values are treated as unset and fall back to HOME.
+    const fallback = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+      env: { CODEX_HOME: "", GROK_HOME: "" },
+    });
+    assert.deepEqual(fallback.roots["Codex CLI"], [
+      join(root, ".codex", "skills"),
+    ]);
+    assert.deepEqual(fallback.roots["Grok Build"], [
+      join(root, ".grok", "skills"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(envRoot, { recursive: true, force: true });
+  }
+});
+
+test("resolves default codex and grok roots under HOME without env overrides", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-defaultroots-"));
+  try {
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory: join(root, APP_DATA_DIR),
+    });
+    assert.deepEqual(snapshot.roots["Codex CLI"], [
+      join(root, ".codex", "skills"),
+    ]);
+    assert.deepEqual(snapshot.roots["Grok Build"], [
+      join(root, ".grok", "skills"),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("uninstall accepts nested managed paths and rejects traversal escapes", async () => {
+  const name = `nested-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  const nestedPath = join(claudeRoot, "development", name);
+  try {
+    await mkdir(nestedPath, { recursive: true });
+    await writeFile(join(nestedPath, "SKILL.md"), "# Nested");
+
+    const result = await uninstallLocalSkill(nestedPath, {
+      homeDirectory: root,
+    });
+    assert.equal(result.path, nestedPath);
+    await assert.rejects(lstat(nestedPath));
+
+    // `development/../escape` traverses outside the nested dir: rejected.
+    const traversalPath = `${join(claudeRoot, "development")}/../escape`;
+    await assert.rejects(
+      uninstallLocalSkill(traversalPath, { homeDirectory: root }),
+      /errors\.skills\.pathOutsideManaged/,
+    );
+
+    // A symlink inside the root pointing outside is rejected by realpath.
+    const linked = join(claudeRoot, `escape-${randomUUID().slice(0, 8)}`);
+    const outside = await mkdtemp(join(tmpdir(), "tt-outside-"));
+    try {
+      await symlink(outside, linked);
+      await assert.rejects(
+        uninstallLocalSkill(linked, { homeDirectory: root }),
+        /errors\.skills\.symlinkEscape/,
+      );
+    } finally {
+      await rm(linked, { force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("syncLocalSkill flattens a nested source skill into the codex root", async () => {
+  const name = `sync-nested-${randomUUID().slice(0, 8)}`;
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
+  const sourcePath = join(claudeRoot, "development", name);
+  const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex CLI"], name);
+  try {
+    await mkdir(sourcePath, { recursive: true });
+    await writeFile(
+      join(sourcePath, "SKILL.md"),
+      "---\nversion: 1.0.0\ndescription: Nested sync source\n---\n# Nested\n",
+    );
+
+    const result = await syncLocalSkill(
+      {
+        sourcePath,
+        targetAgents: ["Codex CLI"],
+        onConflict: "skip",
+      },
+      { homeDirectory: root },
+    );
+    assert.equal(result.succeeded.length, 1);
+    assert.equal(result.succeeded[0].agent, "Codex CLI");
+    // The nested path is flattened to <root>/<name> at the target agent.
+    assert.equal(result.succeeded[0].path, targetPath);
+
+    const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
+    assert.match(content, /version: 1\.0\.0/);
+    assert.match(content, /Nested/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

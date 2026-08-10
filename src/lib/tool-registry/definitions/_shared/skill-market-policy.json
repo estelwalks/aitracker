@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "description": "Skill-agent UI order, default discovery settings and market install conditions (moved from SKILL_AGENT_ORDER / DEFAULT_MARKERS in local-skills/agent-rules.ts).",
+  "skillAgentOrder": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini-cli",
+    "opencode",
+    "grok",
+    "hermes",
+    "openclaw",
+    "antigravity"
+  ],
+  "defaultMarkers": ["SKILL.md", "skill.md"],
+  "defaultMaxDepth": 3,
+  "marketInstallCondition": {
+    "requires": ["skills.mode=read-write", "storage.skills.rootSpecs"],
+    "note": "A tool without skill roots must not auto-become a market install target (docs §6)."
+  }
+}

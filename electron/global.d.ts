@@ -1,8 +1,8 @@
-import type { AITrackerDesktopApi } from "./contracts.js";
+import type { DesktopApi } from "./contracts.js";
 
 declare global {
   interface Window {
-    desktopBridge?: AITrackerDesktopApi;
+    desktopApi?: DesktopApi;
   }
 }
 

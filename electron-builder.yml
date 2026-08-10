@@ -1,3 +1,6 @@
+# Packaging identity (appId/productName) mirrors src/lib/app-config.ts —
+# change APP_NAME/APP_ID there first, then update this file and
+# scripts/package-mac.mjs artifact names together.
 appId: com.trusttools.desktop
 productName: AITracker
 asar: true
@@ -15,18 +18,6 @@ extraResources:
       - "**/*"
   - from: build/tray-icon.png
     to: tray-icon.png
-  - from: vendor/aitracker-cli
-    to: aitracker-cli
-    filter:
-      - "bin/**/*"
-      - "src/**/*"
-      - "LICENSE"
-      - "package.json"
-      - "package-lock.json"
-  - from: vendor/aitracker-cli/node_modules
-    to: aitracker-cli/node_modules
-    filter:
-      - "**/*"
 afterPack: electron/after-pack.cjs
 mac:
   target:
@@ -38,6 +29,11 @@ mac:
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
+  # 最小权限 entitlements:仅 hardened runtime 必需(Chromium JIT),不含
+  # App Sandbox 与任何 files.* 目录权限 —— 应用只读写 ~/.trusttools 与
+  # Application Support,不请求文稿/桌面/下载等 TCC 目录(见 build/entitlements.mac.plist)。
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
 dmg:
   artifactName: "${productName}-${version}-${arch}.${ext}"
 win:

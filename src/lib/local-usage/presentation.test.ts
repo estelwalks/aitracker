@@ -7,7 +7,9 @@ import {
   filterDailyUsage,
   filterUsageEvents,
   resolveUsageRange,
+  sourceLabel,
 } from "./presentation";
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 import type { LocalUsageDaily, LocalUsageEvent } from "./types";
 
 function makeEvent(
@@ -26,6 +28,16 @@ function makeEvent(
     ...input,
   };
 }
+
+test("sourceLabel projects the manifest nameZh for every catalog source (F6-T2)", () => {
+  for (const tool of PUBLIC_TOOL_MANIFEST.tools) {
+    assert.equal(sourceLabel(tool.id), tool.nameZh);
+  }
+});
+
+test("sourceLabel falls back to the raw id for unknown sources", () => {
+  assert.equal(sourceLabel("not-a-tool"), "not-a-tool");
+});
 
 test("resolveUsageRange 支持本年范围", () => {
   const now = new Date(2026, 6, 28, 9, 30, 0);
@@ -51,7 +63,10 @@ test("filterDailyUsage 处理自定义边界缺失与反转", () => {
   ];
 
   assert.deepEqual(filterDailyUsage(daily, "custom", "2026-07-27", ""), []);
-  assert.deepEqual(filterDailyUsage(daily, "custom", "2026-07-28", "2026-07-27"), []);
+  assert.deepEqual(
+    filterDailyUsage(daily, "custom", "2026-07-28", "2026-07-27"),
+    [],
+  );
 });
 
 test("filterDailyUsage 按本年筛选", () => {
@@ -91,7 +106,13 @@ test("filterDailyUsage 按本年筛选", () => {
     },
   ];
 
-  const filtered = filterDailyUsage(daily, "year", undefined, undefined, new Date(2026, 6, 28));
+  const filtered = filterDailyUsage(
+    daily,
+    "year",
+    undefined,
+    undefined,
+    new Date(2026, 6, 28),
+  );
   assert.deepEqual(
     filtered.map((row) => row.date),
     ["2026-01-01", "2026-07-28"],
@@ -101,20 +122,39 @@ test("filterDailyUsage 按本年筛选", () => {
 test("filterUsageEvents 使用时间戳并包含自定义日期完整边界", () => {
   const events = [
     makeEvent({ timestamp: new Date(2026, 6, 27, 0, 0, 0).toISOString() }),
-    makeEvent({ timestamp: new Date(2026, 6, 27, 23, 59, 59, 999).toISOString() }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 27, 23, 59, 59, 999).toISOString(),
+    }),
     makeEvent({ timestamp: new Date(2026, 6, 28, 0, 0, 0).toISOString() }),
   ];
 
-  const filtered = filterUsageEvents(events, "custom", "2026-07-27", "2026-07-27");
+  const filtered = filterUsageEvents(
+    events,
+    "custom",
+    "2026-07-27",
+    "2026-07-27",
+  );
   assert.equal(filtered.length, 2);
-  assert.deepEqual(filterUsageEvents(events, "custom", "2026-07-28", "2026-07-27"), []);
+  assert.deepEqual(
+    filterUsageEvents(events, "custom", "2026-07-28", "2026-07-27"),
+    [],
+  );
 });
 
 test("aggregateEventsByTime 支持按日和按小时聚合", () => {
   const events = [
-    makeEvent({ timestamp: new Date(2026, 6, 28, 9, 15).toISOString(), totalTokens: 15 }),
-    makeEvent({ timestamp: new Date(2026, 6, 28, 9, 45).toISOString(), totalTokens: 20 }),
-    makeEvent({ timestamp: new Date(2026, 6, 28, 10, 5).toISOString(), totalTokens: 25 }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 9, 15).toISOString(),
+      totalTokens: 15,
+    }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 9, 45).toISOString(),
+      totalTokens: 20,
+    }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 10, 5).toISOString(),
+      totalTokens: 25,
+    }),
   ];
 
   const byDay = aggregateEventsByTime(events, "day");
@@ -134,14 +174,23 @@ test("aggregateEventsByTime 支持按日和按小时聚合", () => {
 test("aggregateUsageBySession 仅聚合真实 sessionId，并在缺失时标记不可用", () => {
   const unavailable = aggregateUsageBySession([
     makeEvent({ timestamp: new Date(2026, 6, 28, 9, 0).toISOString() }),
-    makeEvent({ timestamp: new Date(2026, 6, 28, 10, 0).toISOString(), sessionId: "   " }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 10, 0).toISOString(),
+      sessionId: "   ",
+    }),
   ]);
   assert.equal(unavailable.available, false);
   assert.equal(unavailable.eventsWithoutSession, 2);
 
   const available = aggregateUsageBySession([
-    makeEvent({ timestamp: new Date(2026, 6, 28, 9, 0).toISOString(), sessionId: "s-1" }),
-    makeEvent({ timestamp: new Date(2026, 6, 28, 10, 0).toISOString(), sessionId: "s-1" }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 9, 0).toISOString(),
+      sessionId: "s-1",
+    }),
+    makeEvent({
+      timestamp: new Date(2026, 6, 28, 10, 0).toISOString(),
+      sessionId: "s-1",
+    }),
     makeEvent({ timestamp: new Date(2026, 6, 28, 11, 0).toISOString() }),
   ]);
   assert.equal(available.available, true);

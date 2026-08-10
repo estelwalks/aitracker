@@ -1,1 +1,12 @@
-{"source":"opencode","timestamp":"2026-07-27T09:03:00.000Z","model":"opencode-model","project":"/work/opencode","inputTokens":13,"cachedInputTokens":0,"cacheCreationInputTokens":2,"outputTokens":6,"reasoningOutputTokens":0,"totalTokens":21}
+{
+  "source": "opencode",
+  "timestamp": "2026-07-27T09:03:00.000Z",
+  "model": "opencode-model",
+  "project": "/work/opencode",
+  "inputTokens": 13,
+  "cachedInputTokens": 0,
+  "cacheCreationInputTokens": 2,
+  "outputTokens": 6,
+  "reasoningOutputTokens": 0,
+  "totalTokens": 21
+}

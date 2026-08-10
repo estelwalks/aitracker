@@ -4,8 +4,16 @@ import test from "node:test";
 
 import { aggregatePricedUsage, estimateUsageCost } from "../pricing";
 import { buildLocalUsageSnapshot } from "./aggregate";
-import { aggregateEventsByTime, aggregateUsageBySession, filterUsageEvents } from "./presentation";
-import { KNOWN_LOCAL_USAGE_SOURCES, type LocalUsageEvent, type LocalUsageTotals } from "./types";
+import {
+  aggregateEventsByTime,
+  aggregateUsageBySession,
+  filterUsageEvents,
+} from "./presentation";
+import {
+  KNOWN_LOCAL_USAGE_SOURCES,
+  type LocalUsageEvent,
+  type LocalUsageTotals,
+} from "./types";
 
 const EVENT_COUNT = 100_000;
 const QUERY_BUDGET_MS = 3_000;
@@ -39,46 +47,61 @@ function createPerformanceFixture(): PerformanceFixture {
     totalTokens: 0,
   };
 
-  const events = Array.from({ length: EVENT_COUNT }, (_, index): LocalUsageEvent => {
-    const inputTokens = 100 + (index % 1_000);
-    const cachedInputTokens = index % 200;
-    const cacheCreationInputTokens = index % 50;
-    const outputTokens = 50 + (index % 300);
-    const reasoningOutputTokens = index % 80;
-    const totalTokens =
-      inputTokens +
-      cachedInputTokens +
-      cacheCreationInputTokens +
-      outputTokens +
-      reasoningOutputTokens;
+  const events = Array.from(
+    { length: EVENT_COUNT },
+    (_, index): LocalUsageEvent => {
+      const inputTokens = 100 + (index % 1_000);
+      const cachedInputTokens = index % 200;
+      const cacheCreationInputTokens = index % 50;
+      const outputTokens = 50 + (index % 300);
+      const reasoningOutputTokens = index % 80;
+      const totalTokens =
+        inputTokens +
+        cachedInputTokens +
+        cacheCreationInputTokens +
+        outputTokens +
+        reasoningOutputTokens;
 
-    expectedTotals.events += 1;
-    expectedTotals.inputTokens += inputTokens;
-    expectedTotals.cachedInputTokens += cachedInputTokens;
-    expectedTotals.cacheCreationInputTokens += cacheCreationInputTokens;
-    expectedTotals.outputTokens += outputTokens;
-    expectedTotals.reasoningOutputTokens += reasoningOutputTokens;
-    expectedTotals.totalTokens += totalTokens;
+      expectedTotals.events += 1;
+      expectedTotals.inputTokens += inputTokens;
+      expectedTotals.cachedInputTokens += cachedInputTokens;
+      expectedTotals.cacheCreationInputTokens += cacheCreationInputTokens;
+      expectedTotals.outputTokens += outputTokens;
+      expectedTotals.reasoningOutputTokens += reasoningOutputTokens;
+      expectedTotals.totalTokens += totalTokens;
 
-    return {
-      source: KNOWN_LOCAL_USAGE_SOURCES[index % KNOWN_LOCAL_USAGE_SOURCES.length],
-      timestamp: new Date(2026, 6, 1, 0, index % (30 * 24 * 60)).toISOString(),
-      model: MODELS[index % MODELS.length],
-      project: `project-${String(index % PROJECT_COUNT).padStart(2, "0")}`,
-      sessionId: index % 17 === 0 ? undefined : `session-${index % SESSION_COUNT}`,
-      inputTokens,
-      cachedInputTokens,
-      cacheCreationInputTokens,
-      outputTokens,
-      reasoningOutputTokens,
-      totalTokens,
-    };
-  });
+      return {
+        source:
+          KNOWN_LOCAL_USAGE_SOURCES[index % KNOWN_LOCAL_USAGE_SOURCES.length],
+        timestamp: new Date(
+          2026,
+          6,
+          1,
+          0,
+          index % (30 * 24 * 60),
+        ).toISOString(),
+        model: MODELS[index % MODELS.length],
+        project: `project-${String(index % PROJECT_COUNT).padStart(2, "0")}`,
+        sessionId:
+          index % 17 === 0 ? undefined : `session-${index % SESSION_COUNT}`,
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+      };
+    },
+  );
 
   return { events, expectedTotals };
 }
 
-function measure<T>(measurements: Measurement[], name: string, query: () => T): T {
+function measure<T>(
+  measurements: Measurement[],
+  name: string,
+  query: () => T,
+): T {
   const startedAt = performance.now();
   const result = query();
   measurements.push({ name, durationMs: performance.now() - startedAt });
@@ -100,8 +123,11 @@ test("NFR-001: 10 万条、30 天核心查询总耗时低于 3000ms", () => {
       new Date(2026, 6, 30, 23, 59, 59),
     ),
   );
-  const snapshot = measure(measurements, "snapshot/day/provider/model/project/token totals", () =>
-    buildLocalUsageSnapshot(filtered, [], new Date(2026, 6, 30, 23, 59, 59)),
+  const snapshot = measure(
+    measurements,
+    "snapshot/day/provider/model/project/token totals",
+    () =>
+      buildLocalUsageSnapshot(filtered, [], new Date(2026, 6, 30, 23, 59, 59)),
   );
   const daily = measure(measurements, "daily aggregation", () =>
     aggregateEventsByTime(filtered, "day"),
@@ -124,7 +150,9 @@ test("NFR-001: 10 万条、30 天核心查询总耗时低于 3000ms", () => {
   const sessions = measure(measurements, "session aggregation", () =>
     aggregateUsageBySession(filtered),
   );
-  const cost = measure(measurements, "cost estimation", () => estimateUsageCost(filtered));
+  const cost = measure(measurements, "cost estimation", () =>
+    estimateUsageCost(filtered),
+  );
 
   const totalDurationMs = performance.now() - startedAt;
 
@@ -139,7 +167,10 @@ test("NFR-001: 10 万条、30 天核心查询总耗时低于 3000ms", () => {
   assert.equal(tokenTypes.length, 5);
   assert.equal(sessions.available, true);
   assert.equal(sessions.rows.length, SESSION_COUNT);
-  assert.equal(sessions.eventsWithSession + sessions.eventsWithoutSession, EVENT_COUNT);
+  assert.equal(
+    sessions.eventsWithSession + sessions.eventsWithoutSession,
+    EVENT_COUNT,
+  );
   assert.equal(cost.pricedEvents, EVENT_COUNT);
   assert.equal(cost.unknownEvents, 0);
   assert.ok(cost.knownUsd > 0);
@@ -147,7 +178,9 @@ test("NFR-001: 10 万条、30 天核心查询总耗时低于 3000ms", () => {
   console.info(
     [
       `[NFR-001] events=${EVENT_COUNT.toLocaleString("en-US")}`,
-      ...measurements.map(({ name, durationMs }) => `${name}=${durationMs.toFixed(2)}ms`),
+      ...measurements.map(
+        ({ name, durationMs }) => `${name}=${durationMs.toFixed(2)}ms`,
+      ),
       `core query total=${totalDurationMs.toFixed(2)}ms`,
       `budget=${QUERY_BUDGET_MS}ms`,
     ].join(" | "),
