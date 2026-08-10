@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "description": "Per-platform path bases and availability defaults (docs §6.1). Resolution priority: shared default < platform group < platform target < tool definition.",
+  "targets": ["macos", "windows10", "windows11", "linux"],
+  "groups": {
+    "windows": ["windows10", "windows11"]
+  },
+  "basePlatforms": {
+    "home": ["macos", "windows10", "windows11", "linux"],
+    "userProfile": ["windows10", "windows11"],
+    "appData": ["macos"],
+    "appDataRoaming": ["windows10", "windows11"],
+    "configHome": ["macos", "linux"],
+    "dataHome": ["macos", "linux"]
+  },
+  "xdgFallback": {
+    "configHome": "~/.config",
+    "dataHome": "~/.local/share"
+  },
+  "defaultStatus": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  }
+}

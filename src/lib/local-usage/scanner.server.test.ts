@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
-import { appendFile, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rm,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { APP_DATA_DIR } from "../app-config";
 
 import { scanLocalUsage } from "./scanner.server.ts";
 import type { LocalUsageEvent } from "./types.ts";
@@ -13,21 +21,36 @@ function sourceSummary(
   snapshot: Awaited<ReturnType<typeof scanLocalUsage>>,
   source: "claude-code" | "codex",
 ) {
-  const summary = snapshot.sources.find((candidate) => candidate.source === source);
+  const summary = snapshot.sources.find(
+    (candidate) => candidate.source === source,
+  );
   assert.ok(summary);
   return summary;
 }
 
 test("persistent cache reuses, reparses, prunes, and rebuilds files safely", async () => {
-  const root = join(tmpdir(), `trusttools-scanner-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
-  const claudeFile = join(homeDirectory, ".claude", "projects", "demo", "session.jsonl");
-  const codexFile = join(homeDirectory, ".codex", "sessions", "rollout-demo.jsonl");
+  const claudeFile = join(
+    homeDirectory,
+    ".claude",
+    "projects",
+    "demo",
+    "session.jsonl",
+  );
+  const codexFile = join(
+    homeDirectory,
+    ".codex",
+    "sessions",
+    "rollout-demo.jsonl",
+  );
   const cacheFile = join(cacheDirectory, "local-usage-index-v10.json");
   const legacyCacheFile = join(cacheDirectory, "local-usage-index-v2.json");
 
-  await mkdir(join(homeDirectory, ".claude", "projects", "demo"), { recursive: true });
+  await mkdir(join(homeDirectory, ".claude", "projects", "demo"), {
+    recursive: true,
+  });
   await mkdir(join(homeDirectory, ".codex", "sessions"), { recursive: true });
   await mkdir(cacheDirectory, { recursive: true });
   await writeFile(
@@ -71,7 +94,11 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
       JSON.stringify({
         timestamp: "2026-07-27T10:00:00.000Z",
         type: "turn_context",
-        payload: { type: "turn_context", model: "codex-test", cwd: "/demo/codex" },
+        payload: {
+          type: "turn_context",
+          model: "codex-test",
+          cwd: "/demo/codex",
+        },
       }),
       JSON.stringify({
         timestamp: "2026-07-27T10:01:00.000Z",
@@ -92,14 +119,22 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
   );
 
   try {
-    const cold = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const cold = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     assert.equal(sourceSummary(cold, "claude-code").filesParsed, 1);
     assert.equal(sourceSummary(cold, "codex").filesParsed, 1);
     assert.equal(
-      cold.details.find((event) => event.source === "claude-code")?.sessionId?.length,
+      cold.details.find((event) => event.source === "claude-code")?.sessionId
+        ?.length,
       28,
     );
-    assert.equal(cold.details.find((event) => event.source === "codex")?.sessionId?.length, 28);
+    assert.equal(
+      cold.details.find((event) => event.source === "codex")?.sessionId?.length,
+      28,
+    );
     assert.ok(cold.details.every((event) => event.project !== "/demo/claude"));
     assert.ok(cold.details.every((event) => event.project !== "/demo/codex"));
 
@@ -110,7 +145,11 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
     );
     await assert.rejects(readFile(legacyCacheFile, "utf8"));
 
-    const warm = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const warm = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     assert.equal(sourceSummary(warm, "claude-code").filesReused, 1);
     assert.equal(sourceSummary(warm, "codex").filesReused, 1);
     assert.deepEqual(warm.totals, cold.totals);
@@ -132,28 +171,137 @@ test("persistent cache reuses, reparses, prunes, and rebuilds files safely", asy
         },
       })}\n`,
     );
-    const changed = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const changed = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     assert.equal(sourceSummary(changed, "claude-code").filesReused, 1);
     assert.equal(sourceSummary(changed, "codex").filesParsed, 1);
     assert.equal(changed.events, cold.events + 1);
 
     await unlink(claudeFile);
     await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
-    const prunedIndex = JSON.parse(await readFile(cacheFile, "utf8")) as { files: unknown[] };
+    const prunedIndex = JSON.parse(await readFile(cacheFile, "utf8")) as {
+      files: unknown[];
+    };
     assert.equal(prunedIndex.files.length, 1);
 
     await writeFile(cacheFile, "{not-json");
-    const rebuilt = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const rebuilt = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     assert.equal(sourceSummary(rebuilt, "codex").filesParsed, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("WorkBuddy reads historical rawUsage with correct cache and reasoning token math", async () => {
-  const root = join(tmpdir(), `trusttools-workbuddy-${process.pid}-${Date.now()}`);
+test("cache embeds registryFingerprint and invalidates on mismatch", async () => {
+  const root = join(tmpdir(), `tt-fp-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
-  const sessionDirectory = join(homeDirectory, ".workbuddy", "projects", "demo");
+  const cacheDirectory = join(root, "cache");
+  const cacheFile = join(cacheDirectory, "local-usage-index-v10.json");
+  const sessionDir = join(homeDirectory, ".codex", "sessions");
+  await mkdir(sessionDir, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDir, "rollout-fp.jsonl"),
+    [
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        type: "session_meta",
+        payload: { type: "session_meta", id: "fp-session" },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        type: "turn_context",
+        payload: { type: "turn_context", model: "gpt-5-codex", cwd: "/demo" },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:02.000Z",
+        type: "token_count",
+        payload: {
+          type: "token_count",
+          timestamp: "2026-07-27T10:00:02.000Z",
+          info: {
+            total_token_usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_tokens: 150,
+            },
+            last_token_usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cached_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+              reasoning_output_tokens: 0,
+              total_tokens: 150,
+            },
+          },
+        },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(first, "codex").filesParsed, 1);
+
+    const index = JSON.parse(await readFile(cacheFile, "utf8")) as {
+      version: number;
+      registryFingerprint: string;
+      files: unknown[];
+    };
+    assert.equal(index.version, 12);
+    assert.ok(
+      typeof index.registryFingerprint === "string" &&
+        index.registryFingerprint.length > 0,
+    );
+
+    // Re-scan: cache hits (file reused, not reparsed).
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "codex").filesReused, 1);
+
+    // Corrupt the fingerprint -> cache must be invalidated and rebuilt.
+    await writeFile(
+      cacheFile,
+      JSON.stringify({ ...index, registryFingerprint: "stale-fingerprint" }),
+    );
+    const third = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(third, "codex").filesParsed, 1);
+    assert.equal(sourceSummary(third, "codex").filesReused, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("WorkBuddy reads historical rawUsage with correct cache and reasoning token math", async () => {
+  const root = join(tmpdir(), `tt-workbuddy-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const sessionDirectory = join(
+    homeDirectory,
+    ".workbuddy",
+    "projects",
+    "demo",
+  );
   await mkdir(sessionDirectory, { recursive: true });
   await writeFile(
     join(sessionDirectory, "session.jsonl"),
@@ -191,7 +339,9 @@ test("WorkBuddy reads historical rawUsage with correct cache and reasoning token
       cacheDirectory: join(root, "cache"),
       now: NOW,
     });
-    const events = snapshot.details.filter((event) => event.source === "workbuddy");
+    const events = snapshot.details.filter(
+      (event) => event.source === "workbuddy",
+    );
     assert.equal(events.length, 1);
     assert.equal(events[0]?.inputTokens, 600);
     assert.equal(events[0]?.cachedInputTokens, 300);
@@ -207,10 +357,16 @@ test("WorkBuddy reads historical rawUsage with correct cache and reasoning token
 });
 
 test("discovers Codex sessions from an explicitly configured home", async () => {
-  const root = join(tmpdir(), `trusttools-codex-home-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `tt-codex-home-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const codexHomeDirectory = join(root, "custom-codex-home");
-  const sessionDirectory = join(codexHomeDirectory, "sessions", "2026", "07", "28");
+  const sessionDirectory = join(
+    codexHomeDirectory,
+    "sessions",
+    "2026",
+    "07",
+    "28",
+  );
   await mkdir(sessionDirectory, { recursive: true });
   await writeFile(
     join(sessionDirectory, "rollout-windows.jsonl"),
@@ -218,7 +374,11 @@ test("discovers Codex sessions from an explicitly configured home", async () => 
       JSON.stringify({
         timestamp: "2026-07-28T10:00:00.000Z",
         type: "turn_context",
-        payload: { type: "turn_context", model: "windows-codex", cwd: homeDirectory },
+        payload: {
+          type: "turn_context",
+          model: "windows-codex",
+          cwd: homeDirectory,
+        },
       }),
       JSON.stringify({
         timestamp: "2026-07-28T10:00:01.000Z",
@@ -243,8 +403,12 @@ test("discovers Codex sessions from an explicitly configured home", async () => 
       cacheDirectory: join(root, "cache"),
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
-    const summary = snapshot.sources.find((source) => source.source === "codex");
-    const event = snapshot.details.find((candidate) => candidate.source === "codex");
+    const summary = snapshot.sources.find(
+      (source) => source.source === "codex",
+    );
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "codex",
+    );
     assert.equal(summary?.available, true);
     assert.ok(summary?.paths?.includes(join(codexHomeDirectory, "sessions")));
     assert.equal(event?.model, "windows-codex");
@@ -255,10 +419,20 @@ test("discovers Codex sessions from an explicitly configured home", async () => 
 });
 
 test("discovers Windows-style alternate homes and nested cumulative Codex events", async () => {
-  const root = join(tmpdir(), `trusttools-codex-alternate-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `tt-codex-alternate-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "electron-home");
   const windowsUserHome = join(root, "windows-user");
-  const sessionDirectory = join(windowsUserHome, ".codex", "sessions", "2026", "07", "28");
+  const sessionDirectory = join(
+    windowsUserHome,
+    ".codex",
+    "sessions",
+    "2026",
+    "07",
+    "28",
+  );
   await mkdir(sessionDirectory, { recursive: true });
   await writeFile(
     join(sessionDirectory, "session.jsonl"),
@@ -266,7 +440,11 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
       JSON.stringify({
         timestamp: "2026-07-28T10:00:00.000Z",
         type: "turn_context",
-        payload: { type: "turn_context", model: "windows-new-codex", cwd: windowsUserHome },
+        payload: {
+          type: "turn_context",
+          model: "windows-new-codex",
+          cwd: windowsUserHome,
+        },
       }),
       JSON.stringify({
         timestamp: "2026-07-28T10:00:01.000Z",
@@ -310,7 +488,9 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
       cacheDirectory: join(root, "cache"),
       now: new Date("2026-07-28T12:00:00.000Z"),
     });
-    const event = snapshot.details.find((candidate) => candidate.source === "codex");
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "codex",
+    );
     assert.equal(event?.model, "windows-new-codex");
     assert.equal(event?.inputTokens, 20);
     assert.equal(event?.cachedInputTokens, 10);
@@ -322,7 +502,10 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
 });
 
 test("generic adapters prefer structured sessions and distinguish file fallbacks", async () => {
-  const root = join(tmpdir(), `trusttools-generic-session-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `tt-generic-session-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const sessionDirectory = join(homeDirectory, ".kimi", "sessions");
   const structuredSecret = "structured-session-must-not-leak";
@@ -345,8 +528,14 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
     join(sessionDirectory, "same-b.jsonl"),
     `${JSON.stringify(usageRecord(structuredSecret))}\n`,
   );
-  await writeFile(join(sessionDirectory, "fallback-a.jsonl"), `${JSON.stringify(usageRecord())}\n`);
-  await writeFile(join(sessionDirectory, "fallback-b.jsonl"), `${JSON.stringify(usageRecord())}\n`);
+  await writeFile(
+    join(sessionDirectory, "fallback-a.jsonl"),
+    `${JSON.stringify(usageRecord())}\n`,
+  );
+  await writeFile(
+    join(sessionDirectory, "fallback-b.jsonl"),
+    `${JSON.stringify(usageRecord())}\n`,
+  );
 
   try {
     const snapshot = await scanLocalUsage({
@@ -354,27 +543,42 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
       now: NOW,
       disablePersistentCache: true,
     });
-    const events = snapshot.details.filter((event) => event.source === "kimi-code");
+    const events = snapshot.details.filter(
+      (event) => event.source === "kimi-code",
+    );
     assert.equal(events.length, 4);
-    assert.ok(events.every((event) => /^session_[a-f0-9]{20}$/.test(event.sessionId ?? "")));
+    assert.ok(
+      events.every((event) =>
+        /^session_[a-f0-9]{20}$/.test(event.sessionId ?? ""),
+      ),
+    );
 
     const counts = new Map<string, number>();
     for (const event of events) {
-      counts.set(event.sessionId ?? "", (counts.get(event.sessionId ?? "") ?? 0) + 1);
+      counts.set(
+        event.sessionId ?? "",
+        (counts.get(event.sessionId ?? "") ?? 0) + 1,
+      );
     }
     assert.deepEqual(
       [...counts.values()].sort((left, right) => right - left),
       [2, 1, 1],
     );
-    assert.doesNotMatch(JSON.stringify(snapshot), /structured-session-must-not-leak|PROMPT_BODY/);
-    assert.doesNotMatch(JSON.stringify(snapshot), /same-a\.jsonl|fallback-a\.jsonl/);
+    assert.doesNotMatch(
+      JSON.stringify(snapshot),
+      /structured-session-must-not-leak|PROMPT_BODY/,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(snapshot),
+      /same-a\.jsonl|fallback-a\.jsonl/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
 test("Codex rollout context is attributed, bucketed, and never caches raw commands or outputs", async () => {
-  const root = join(tmpdir(), `trusttools-codex-context-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `tt-codex-context-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(homeDirectory, ".codex", "sessions");
@@ -394,7 +598,11 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
       JSON.stringify({
         timestamp: "2026-07-27T10:00:01.000Z",
         type: "turn_context",
-        payload: { type: "turn_context", model: "codex-test", cwd: "/demo/context" },
+        payload: {
+          type: "turn_context",
+          model: "codex-test",
+          cwd: "/demo/context",
+        },
       }),
       JSON.stringify({
         timestamp: "2026-07-27T10:00:02.000Z",
@@ -464,7 +672,11 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
         payload: {
           type: "token_count",
           info: {
-            last_token_usage: { input_tokens: 20, output_tokens: 10, reasoning_output_tokens: 3 },
+            last_token_usage: {
+              input_tokens: 20,
+              output_tokens: 10,
+              reasoning_output_tokens: 3,
+            },
           },
         },
       }),
@@ -473,7 +685,11 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
         payload: {
           type: "token_count",
           info: {
-            last_token_usage: { input_tokens: 5, output_tokens: 2, reasoning_output_tokens: 1 },
+            last_token_usage: {
+              input_tokens: 5,
+              output_tokens: 2,
+              reasoning_output_tokens: 1,
+            },
           },
         },
       }),
@@ -481,18 +697,27 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
   );
 
   try {
-    const snapshot = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     const [attributed, textResponse] = snapshot.details
       .filter((candidate) => candidate.source === "codex")
       .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
-    assert.deepEqual(attributed?.context?.tools?.map((tool) => tool.name).sort(), [
-      "apply_patch",
-      "exec_command",
-      "mcp_github_get_issue",
-      "tool_search",
-      "web_search",
+    assert.deepEqual(
+      attributed?.context?.tools?.map((tool) => tool.name).sort(),
+      [
+        "apply_patch",
+        "exec_command",
+        "mcp_github_get_issue",
+        "tool_search",
+        "web_search",
+      ],
+    );
+    assert.deepEqual(attributed?.context?.skills, [
+      { name: "release-check", calls: 3 },
     ]);
-    assert.deepEqual(attributed?.context?.skills, [{ name: "release-check", calls: 3 }]);
     assert.deepEqual(attributed?.context?.commands, [
       {
         kind: "exec_command",
@@ -518,7 +743,9 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
     const cached = await readFile(cacheFile, "utf8");
     assert.doesNotMatch(cached, /DO_NOT_CACHE|private\/skills|token=/i);
 
-    const invalidCache = JSON.parse(cached) as { files: Array<{ events: LocalUsageEvent[] }> };
+    const invalidCache = JSON.parse(cached) as {
+      files: Array<{ events: LocalUsageEvent[] }>;
+    };
     invalidCache.files[0]!.events[0]!.context = {
       commands: [
         {
@@ -533,8 +760,55 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
       ],
     };
     await writeFile(cacheFile, JSON.stringify(invalidCache));
-    const rebuilt = await scanLocalUsage({ homeDirectory, cacheDirectory, now: NOW });
+    const rebuilt = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
     assert.equal(sourceSummary(rebuilt, "codex").filesParsed, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("TC-REG-005: external adapter/override files are never read", async () => {
+  const root = join(tmpdir(), `tt-reg005-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  await mkdir(homeDirectory, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+  try {
+    // Plant the deleted runtime extension files in the user home; a scanner
+    // that still reads them would fabricate a `custom:` source.
+    const ttDir = join(homeDirectory, APP_DATA_DIR);
+    await mkdir(ttDir, { recursive: true });
+    await writeFile(
+      join(ttDir, "usage-adapters.json"),
+      JSON.stringify({
+        adapters: [
+          {
+            id: "custom:evil",
+            paths: [{ root: ".evil", glob: "**/*.jsonl", format: "jsonl" }],
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      join(ttDir, "tool-overrides.json"),
+      JSON.stringify({ "claude-code": { paths: [".evil"] } }),
+    );
+
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: new Date(2026, 6, 30, 12, 0, 0),
+    });
+    const sources = snapshot.sources ?? snapshot.bySource ?? {};
+    const sourceIds = Object.keys(sources);
+    assert.ok(
+      !sourceIds.some((id) => id.startsWith("custom:")),
+      `custom: sources must not appear, got: ${sourceIds.join(", ")}`,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

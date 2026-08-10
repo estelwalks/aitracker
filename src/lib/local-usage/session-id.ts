@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { LocalUsageSource } from "./types.ts";
+import { SESSION_HMAC_DOMAIN } from "../app-config";
 
 const SESSION_ID_PATTERN = /^session_[a-f0-9]{20}$/;
 
@@ -15,9 +16,14 @@ function identifierValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function opaqueIdentifier(source: LocalUsageSource, kind: string, value: string): string {
+function opaqueIdentifier(
+  source: LocalUsageSource,
+  kind: string,
+  value: string,
+): string {
   const digest = createHash("sha256")
-    .update("trusttools-local-usage-session-v1\0")
+    .update(SESSION_HMAC_DOMAIN)
+    .update("\0")
     .update(source)
     .update("\0")
     .update(kind)
@@ -33,14 +39,20 @@ export function sessionIdFromStructuredValue(
   value: unknown,
 ): string | undefined {
   const identifier = identifierValue(value);
-  return identifier == null ? undefined : opaqueIdentifier(source, "structured", identifier);
+  return identifier == null
+    ? undefined
+    : opaqueIdentifier(source, "structured", identifier);
 }
 
 export function sessionIdFromRelativeFile(
   source: LocalUsageSource,
   relativeFileIdentity: string,
 ): string {
-  return opaqueIdentifier(source, "file", relativeFileIdentity.replaceAll("\\", "/"));
+  return opaqueIdentifier(
+    source,
+    "file",
+    relativeFileIdentity.replaceAll("\\", "/"),
+  );
 }
 
 export function isPrivateSessionId(value: unknown): value is string {

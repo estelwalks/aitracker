@@ -1,3 +1,4 @@
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
 import type {
   LocalTokenCounts,
   LocalUsageBreakdown,
@@ -8,7 +9,8 @@ import type {
   LocalUsageTotals,
 } from "./types.ts";
 
-export type UsagePeriod = "today" | "week" | "7d" | "30d" | "month" | "year" | "custom";
+export type UsagePeriod =
+  "today" | "week" | "7d" | "30d" | "month" | "year" | "all" | "custom";
 export type UsageTimeGrain = "day" | "hour";
 
 export interface UsageRange {
@@ -82,46 +84,23 @@ export function createEmptyUsageSnapshot(): LocalUsageSnapshot {
   };
 }
 
+/**
+ * Browser-facing source label (F6-T2): projected from the public manifest's
+ * `nameZh` — the UI display-name convention used by the sources page and the
+ * skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
+ * left the registry) fall back to the raw id.
+ */
+const MANIFEST_SOURCE_LABELS: ReadonlyMap<string, string> = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.nameZh]),
+);
+
 export function sourceLabel(source: LocalUsageSource | string): string {
-  if (source === "claude-code") return "Claude Code";
-  if (source === "codex") return "Codex";
-  if (source === "aipy" || source === "custom:aipy") return "Aipy";
-  if (source === "workbuddy" || source === "custom:workbuddy") return "WorkBuddy";
-  if (source.startsWith("custom:")) return source.slice("custom:".length);
-  return source;
+  return MANIFEST_SOURCE_LABELS.get(source) ?? source;
 }
 
-export function formatTokens(value: number): string {
-  if (value >= 1_000_000_000) return `${trimFixed(value / 1_000_000_000)}B`;
-  if (value >= 1_000_000) return `${trimFixed(value / 1_000_000)}M`;
-  if (value >= 1_000) return `${trimFixed(value / 1_000)}K`;
-  return Math.round(value).toLocaleString();
-}
-
-export function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
-}
-
-export function formatEventTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-}
+// NOTE: 展示格式化统一走 src/lib/i18n/format.ts (locale 参数化)。
+// 本模块只保留纯数据逻辑;formatTokens/formatDateTime/formatEventTime
+// 的调用方改用 useI18n().format.*。
 
 export function filterDailyUsage(
   daily: LocalUsageDaily[],
@@ -161,9 +140,11 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
       events: totals.events + row.events,
       inputTokens: totals.inputTokens + row.inputTokens,
       cachedInputTokens: totals.cachedInputTokens + row.cachedInputTokens,
-      cacheCreationInputTokens: totals.cacheCreationInputTokens + row.cacheCreationInputTokens,
+      cacheCreationInputTokens:
+        totals.cacheCreationInputTokens + row.cacheCreationInputTokens,
       outputTokens: totals.outputTokens + row.outputTokens,
-      reasoningOutputTokens: totals.reasoningOutputTokens + row.reasoningOutputTokens,
+      reasoningOutputTokens:
+        totals.reasoningOutputTokens + row.reasoningOutputTokens,
       totalTokens: totals.totalTokens + row.totalTokens,
     }),
     { events: 0, ...EMPTY_COUNTS },
@@ -172,7 +153,9 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
 
 export function cacheRate(counts: LocalTokenCounts): number {
   const inputTotal =
-    counts.inputTokens + counts.cachedInputTokens + counts.cacheCreationInputTokens;
+    counts.inputTokens +
+    counts.cachedInputTokens +
+    counts.cacheCreationInputTokens;
   return inputTotal ? (counts.cachedInputTokens / inputTotal) * 100 : 0;
 }
 
@@ -180,18 +163,108 @@ export function shareOf(value: number, total: number): number {
   return total ? (value / total) * 100 : 0;
 }
 
+/**
+ * Compute the period-over-period (环比) percentage for a metric.
+ *
+ * 环比 = (current − previous) / previous × 100%. For the "all"/"year" ranges
+ * there is no well-defined previous equal-length window, so this returns null
+ * (the UI renders "−−"). Returns null whenever previous is 0 or non-finite to
+ * avoid division-by-zero or misleading infinity deltas.
+ */
+export function computeMoM(current: number, previous: number): number | null {
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+/**
+ * Resolve the previous equal-length window for a range, used to feed
+ * `computeMoM`. Returns null for ranges with no well-defined previous window
+ * ("all", "year", and "custom" — custom spans are arbitrary so the previous
+ * window is ambiguous).
+ */
+export function resolvePreviousRange(
+  period: UsagePeriod,
+  customFrom?: string,
+  customTo?: string,
+  now = new Date(),
+): UsageRange | null {
+  if (period === "all" || period === "year" || period === "custom") return null;
+  const range = resolveUsageRange(period, customFrom, customTo, now);
+  if (!range.valid || range.from == null || range.to == null) return null;
+  const fromStart = startOfLocalDay(range.from);
+  const toEnd = endOfLocalDay(range.to);
+  if (fromStart == null || toEnd == null) return null;
+  const spanMs = toEnd.getTime() - fromStart.getTime();
+  const prevTo = new Date(fromStart.getTime() - 1);
+  const prevFrom = new Date(prevTo.getTime() - spanMs);
+  const prevFromKey = localDateKey(prevFrom);
+  const prevToKey = localDateKey(prevTo);
+  return {
+    from: prevFromKey,
+    to: prevToKey,
+    fromDate: prevFrom,
+    toDate: prevTo,
+    valid: true,
+  };
+}
+
+/**
+ * Sum a numeric metric over the events that fall in the given period's
+ * previous window. Returns null when there is no previous window ("all"/"year"
+ * /"custom") so callers can render "−−".
+ */
+export function previousPeriodTotal(
+  events: LocalUsageEvent[],
+  metric: keyof LocalTokenCounts | "events",
+  period: UsagePeriod,
+  customFrom?: string,
+  customTo?: string,
+  now = new Date(),
+): number | null {
+  const prev = resolvePreviousRange(period, customFrom, customTo, now);
+  if (prev == null || prev.fromDate == null || prev.toDate == null) return null;
+  const isEvents = metric === "events";
+  const tokenMetric = metric as keyof LocalTokenCounts;
+  let total = 0;
+  for (const event of events) {
+    const timestamp = new Date(event.timestamp);
+    if (Number.isNaN(timestamp.getTime())) continue;
+    if (timestamp >= prev.fromDate && timestamp <= prev.toDate) {
+      total += isEvents ? 1 : event[tokenMetric];
+    }
+  }
+  return total;
+}
+
+/**
+ * Compose the token breakdown for a row. `label` is a stable i18n message key
+ * (dashboard.tokens.*) — components translate it at the display boundary.
+ */
 export function breakdownComposition(row: LocalUsageBreakdown) {
   return [
-    { label: "输入", value: row.inputTokens, color: "var(--color-chart-1)" },
-    { label: "输出", value: row.outputTokens, color: "var(--color-chart-2)" },
-    { label: "缓存读取", value: row.cachedInputTokens, color: "var(--color-chart-3)" },
     {
-      label: "缓存写入",
+      label: "dashboard.tokens.input",
+      value: row.inputTokens,
+      color: "var(--color-chart-1)",
+    },
+    {
+      label: "dashboard.tokens.output",
+      value: row.outputTokens,
+      color: "var(--color-chart-2)",
+    },
+    {
+      label: "dashboard.tokens.cacheRead",
+      value: row.cachedInputTokens,
+      color: "var(--color-chart-3)",
+    },
+    {
+      label: "dashboard.tokens.cacheWrite",
       value: row.cacheCreationInputTokens,
       color: "var(--color-chart-5)",
     },
     {
-      label: "推理",
+      label: "dashboard.tokens.reasoning",
       value: row.reasoningOutputTokens,
       color: "var(--color-chart-4)",
     },
@@ -207,7 +280,8 @@ export function aggregateEventsByTime(
   for (const event of events) {
     const timestamp = new Date(event.timestamp);
     if (Number.isNaN(timestamp.getTime())) continue;
-    const key = grain === "hour" ? localHourKey(timestamp) : localDateKey(timestamp);
+    const key =
+      grain === "hour" ? localHourKey(timestamp) : localDateKey(timestamp);
     const totals = buckets.get(key) ?? { events: 0, ...EMPTY_COUNTS };
     totals.events += 1;
     totals.inputTokens += event.inputTokens;
@@ -223,12 +297,15 @@ export function aggregateEventsByTime(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, totals]) => ({
       key,
-      label: grain === "hour" ? key.slice(5, 13).replace("T", " ") : key.slice(5),
+      label:
+        grain === "hour" ? key.slice(5, 13).replace("T", " ") : key.slice(5),
       ...totals,
     }));
 }
 
-export function aggregateUsageBySession(events: LocalUsageEvent[]): SessionUsageSummary {
+export function aggregateUsageBySession(
+  events: LocalUsageEvent[],
+): SessionUsageSummary {
   const rows = new Map<string, LocalUsageTotals>();
   let eventsWithSession = 0;
   let eventsWithoutSession = 0;
@@ -257,7 +334,8 @@ export function aggregateUsageBySession(events: LocalUsageEvent[]): SessionUsage
       .map(([sessionId, totals]) => ({ sessionId, ...totals }))
       .sort(
         (left, right) =>
-          right.totalTokens - left.totalTokens || left.sessionId.localeCompare(right.sessionId),
+          right.totalTokens - left.totalTokens ||
+          left.sessionId.localeCompare(right.sessionId),
       ),
     eventsWithSession,
     eventsWithoutSession,
@@ -286,8 +364,20 @@ export function resolveUsageRange(
   if (period === "year") {
     from = `${now.getFullYear()}-01-01`;
   }
+  if (period === "all") {
+    // "All" covers every recorded event from the dawn of time to today. The
+    // exact lower bound comes from the data; here we use an early sentinel so
+    // every real timestamp falls inside the range.
+    from = "1970-01-01";
+    to = today;
+  }
   if (period === "custom") {
-    if (customFrom == null || customTo == null || customFrom === "" || customTo === "") {
+    if (
+      customFrom == null ||
+      customTo == null ||
+      customFrom === "" ||
+      customTo === ""
+    ) {
       return {
         from: customFrom ?? null,
         to: customTo ?? null,
@@ -325,10 +415,6 @@ export function resolveUsageRange(
   }
 
   return { from, to, fromDate, toDate, valid: true };
-}
-
-function trimFixed(value: number): string {
-  return value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2).replace(/\.?0+$/, "");
 }
 
 function addDays(value: Date, days: number): Date {

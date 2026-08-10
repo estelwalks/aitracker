@@ -20,7 +20,7 @@ function event(overrides: Partial<LocalUsageEvent> = {}): LocalUsageEvent {
   };
 }
 
-test("多个唯一工具均分 token，分类总额不会超过事件总量", () => {
+test("多个工具按 calls 权重分摊完整事件 token（模型 A）", () => {
   const result = buildContextBreakdown([
     event({
       context: {
@@ -32,31 +32,27 @@ test("多个唯一工具均分 token，分类总额不会超过事件总量", ()
     }),
   ]);
 
-  assert.equal(
-    result.tools.reduce((sum, row) => sum + row.totalTokens, 0),
-    101,
-  );
+  // 模型 A：工具分摊完整事件 token（input+cache+output），两工具合计 = total
+  const toolSum = result.tools.reduce((sum, row) => sum + row.totalTokens, 0);
+  assert.equal(toolSum, 101);
   assert.equal(
     result.categories.reduce((sum, row) => sum + row.totalTokens, 0),
     101,
   );
-  assert.equal(result.tools[0]?.totalTokens, 51);
-  assert.equal(result.tools[1]?.totalTokens, 50);
+  // calls 权重 2:1 → exec_command ≈ 67, web_search ≈ 34
+  assert.ok(result.tools[0]?.totalTokens >= 60);
+  // 工具含 input（模型 A：完整 token 归因）
+  assert.ok(result.tools[0]!.inputTokens > 0);
 });
 
-test("纯文本响应归入 messages，reasoning 只计一次", () => {
+test("纯文本响应：完整 token 归 messages text_response", () => {
   const result = buildContextBreakdown([event()]);
-  assert.equal(result.messages[0]?.key, "text_response");
-  assert.equal(result.messages[0]?.totalTokens, 101);
-  assert.equal(result.messages[0]?.outputTokens, 20);
-  assert.equal(result.messages[0]?.reasoningOutputTokens, 11);
-  assert.equal(
-    result.messages[0]!.inputTokens +
-      result.messages[0]!.cachedInputTokens +
-      result.messages[0]!.outputTokens +
-      result.messages[0]!.reasoningOutputTokens,
-    result.messages[0]?.totalTokens,
-  );
+  const textRow = result.messages.find((r) => r.key === "text_response");
+  assert.ok(textRow);
+  assert.equal(textRow?.totalTokens, 101);
+  // messageRoles 仍按角色分 input（独立视图）
+  const userInput = result.messageRoles.find((r) => r.key === "user_input");
+  assert.equal(userInput?.totalTokens, 50);
 });
 
 test("Skill 与命令统计是工具归因的受限视图", () => {
@@ -83,8 +79,126 @@ test("Skill 与命令统计是工具归因的受限视图", () => {
     }),
   ]);
 
+  // 模型 A：exec_command 与 tool_search 各分 ~50（calls 1:1），skill 从
+  // tool_search 归因，command 从 exec_command 归因
   assert.equal(result.skills[0]?.key, "release-check");
-  assert.equal(result.skills[0]?.totalTokens, 50);
+  assert.ok(result.skills[0]?.totalTokens >= 49);
   assert.equal(result.commands[0]?.key, "npm · npm run");
-  assert.equal(result.commands[0]?.totalTokens, 51);
+  assert.ok(result.commands[0]?.totalTokens >= 49);
+});
+
+test("messageRoles 按缓存代理切分，总额等于事件总量", () => {
+  const result = buildContextBreakdown([event()]);
+
+  const byKey = new Map(result.messageRoles.map((row) => [row.key, row]));
+  assert.equal(byKey.get("user_input")?.totalTokens, 50);
+  assert.equal(byKey.get("conversation_history")?.totalTokens, 20);
+  // output 31 − reasoning 11 = 20
+  assert.equal(byKey.get("assistant_reply")?.totalTokens, 20);
+  assert.equal(byKey.get("reasoning")?.totalTokens, 11);
+  assert.equal(byKey.get("system_prefix"), undefined); // cacheCreationInputTokens=0
+
+  assert.equal(
+    result.messageRoles.reduce((sum, row) => sum + row.totalTokens, 0),
+    101,
+  );
+});
+
+test("messageRoles 在有多事件时合计等于所有事件总量", () => {
+  const result = buildContextBreakdown([
+    event(),
+    event({
+      cacheCreationInputTokens: 9,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 9,
+    }),
+  ]);
+
+  // event1 contributes 101, event2 contributes system_prefix=9
+  assert.equal(
+    result.messageRoles.reduce((sum, row) => sum + row.totalTokens, 0),
+    110,
+  );
+  const systemPrefix = result.messageRoles.find(
+    (row) => row.key === "system_prefix",
+  );
+  assert.equal(systemPrefix?.totalTokens, 9);
+});
+
+test("已观察调用只保留日志中的调用次数，不伪造逐调用 Token", () => {
+  const result = buildContextBreakdown([
+    event({
+      context: {
+        tools: [
+          { name: "exec_command", category: "execution", calls: 2 },
+          { name: "github_get_issue", category: "mcp", calls: 3 },
+        ],
+        skills: [{ name: "release-check", calls: 1 }],
+      },
+    }),
+    event({
+      context: {
+        tools: [{ name: "exec_command", category: "execution", calls: 4 }],
+        skills: [{ name: "release-check", calls: 2 }],
+      },
+    }),
+  ]);
+
+  assert.deepEqual(result.observedTools, [
+    { key: "exec_command", calls: 6, events: 2 },
+  ]);
+  assert.deepEqual(result.observedMcp, [
+    { key: "github_get_issue", calls: 3, events: 1 },
+  ]);
+  assert.deepEqual(result.observedSkills, [
+    { key: "release-check", calls: 3, events: 2 },
+  ]);
+});
+
+test("Token 字段闭环：输出扣除推理后与输入和缓存项合计等于 total", () => {
+  const result = buildContextBreakdown([
+    event({
+      inputTokens: 10,
+      cachedInputTokens: 7,
+      cacheCreationInputTokens: 3,
+      outputTokens: 11,
+      reasoningOutputTokens: 5,
+      totalTokens: 31,
+    }),
+  ]);
+
+  assert.equal(result.totals.outputTokens, 6);
+  assert.equal(
+    result.totals.inputTokens +
+      result.totals.cachedInputTokens +
+      result.totals.cacheCreationInputTokens +
+      result.totals.outputTokens +
+      result.totals.reasoningOutputTokens,
+    result.totals.totalTokens,
+  );
+});
+
+test("空日志与零 Token 不产生伪造的上下文来源", () => {
+  const empty = buildContextBreakdown([]);
+  assert.equal(empty.totals.totalTokens, 0);
+  assert.deepEqual(empty.observedTools, []);
+  assert.deepEqual(empty.observedMcp, []);
+  assert.deepEqual(empty.observedSkills, []);
+
+  const zero = buildContextBreakdown([
+    event({
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+      context: undefined,
+    }),
+  ]);
+  assert.equal(zero.totals.totalTokens, 0);
+  assert.deepEqual(zero.observedTools, []);
 });

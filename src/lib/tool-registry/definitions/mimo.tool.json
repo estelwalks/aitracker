@@ -1,0 +1,38 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "mimo",
+  "display": {
+    "name": "Mimo Code",
+    "nameZh": "Mimo Code"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos", "linux"],
+        "base": "dataHome",
+        "path": "mimocode"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

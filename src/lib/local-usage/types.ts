@@ -1,37 +1,29 @@
+import { PUBLIC_TOOL_MANIFEST } from "../tool-registry/public-manifest.generated.ts";
+
+/**
+ * The known usage source ids (F6-T2).
+ *
+ * Projected from the browser-safe public manifest — the single authority for
+ * the source universe: every catalog tool id, plus the ids of legacy-marked
+ * tools (`legacy: true`, stamped by `generatePublicManifest` from
+ * `LEGACY_TOOL_IDS` in the tool-registry). Deduped because legacy sources
+ * (aipy/cline) are also catalog-visible today. No source ids are hardcoded in
+ * this module; a tool that leaves the catalog but keeps `legacy` stays
+ * scannable, and one that fully disappears from the registry drops out.
+ */
+const MANIFEST_TOOL_IDS: readonly string[] = PUBLIC_TOOL_MANIFEST.tools.map(
+  (tool) => tool.id,
+);
+const LEGACY_TOOL_IDS: readonly string[] = PUBLIC_TOOL_MANIFEST.tools
+  .filter((tool) => tool.legacy === true)
+  .map((tool) => tool.id);
+
 export const KNOWN_LOCAL_USAGE_SOURCES = [
-  "claude-code",
-  "codex",
-  "cursor",
-  "gemini-cli",
-  "antigravity",
-  "kiro",
-  "kimi-code",
-  "opencode",
-  "openclaw",
-  "every-code",
-  "hermes",
-  "grok",
-  "codebuddy",
-  "github-copilot",
-  "omp",
-  "pi",
-  "craft",
-  "kilo-cli",
-  "kilocode",
-  "cline",
-  "roo-code",
-  "zed",
-  "goose",
-  "droid",
-  "mimo",
-  "zcode",
-  "anythingllm",
-  "aipy",
-  "workbuddy",
+  ...new Set([...MANIFEST_TOOL_IDS, ...LEGACY_TOOL_IDS]),
 ] as const;
 
 export type KnownLocalUsageSource = (typeof KNOWN_LOCAL_USAGE_SOURCES)[number];
-export type LocalUsageSource = KnownLocalUsageSource | `custom:${string}`;
+export type LocalUsageSource = KnownLocalUsageSource;
 
 export type LocalUsageDiagnosticCode =
   | "config-invalid"
@@ -69,7 +61,8 @@ export const LOCAL_USAGE_TOOL_CATEGORIES = [
   "other",
 ] as const;
 
-export type LocalUsageToolCategory = (typeof LOCAL_USAGE_TOOL_CATEGORIES)[number];
+export type LocalUsageToolCategory =
+  (typeof LOCAL_USAGE_TOOL_CATEGORIES)[number];
 
 export interface LocalUsageToolCall {
   name: string;
@@ -83,20 +76,13 @@ export interface LocalUsageSkillCall {
 }
 
 export type LocalUsageCommandDurationBucket =
-  | "under-1s"
-  | "1s-10s"
-  | "10s-60s"
-  | "over-60s"
-  | "unknown";
+  "under-1s" | "1s-10s" | "10s-60s" | "over-60s" | "unknown";
 
 export type LocalUsageCommandOutputSizeBucket =
-  | "empty"
-  | "under-1k"
-  | "1k-10k"
-  | "over-10k"
-  | "unknown";
+  "empty" | "under-1k" | "1k-10k" | "over-10k" | "unknown";
 
-export type LocalUsageCommandExitStatus = "success" | "failure" | "interrupted" | "unknown";
+export type LocalUsageCommandExitStatus =
+  "success" | "failure" | "interrupted" | "unknown";
 
 export interface LocalUsageCommandStat {
   kind: "exec_command";

@@ -1,0 +1,38 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "anythingllm",
+  "display": {
+    "name": "AnythingLLM Desktop",
+    "nameZh": "AnythingLLM Desktop"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": ["macos"],
+        "base": "appData",
+        "path": "anythingllm-desktop"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "unsupported"
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

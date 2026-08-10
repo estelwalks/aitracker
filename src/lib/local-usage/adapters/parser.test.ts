@@ -8,7 +8,11 @@ import { GENERIC_BUILTIN_USAGE_ADAPTERS } from "./catalog.ts";
 import { eventFromMappedRecord, recordsFromJson } from "./parser.ts";
 
 const FIXTURE_DIRECTORY = join(import.meta.dirname, "__fixtures__");
-const CASES: Array<{ source: LocalUsageSource; file: string; format: "json" | "jsonl" }> = [
+const CASES: Array<{
+  source: LocalUsageSource;
+  file: string;
+  format: "json" | "jsonl";
+}> = [
   { source: "cursor", file: "cursor.json", format: "json" },
   { source: "gemini-cli", file: "gemini-cli.json", format: "json" },
   { source: "kimi-code", file: "kimi-code.jsonl", format: "jsonl" },
@@ -25,7 +29,10 @@ for (const fixture of CASES) {
       (candidate) => candidate.source === fixture.source,
     );
     assert.ok(adapter);
-    const content = await readFile(join(FIXTURE_DIRECTORY, fixture.file), "utf8");
+    const content = await readFile(
+      join(FIXTURE_DIRECTORY, fixture.file),
+      "utf8",
+    );
     const values =
       fixture.format === "jsonl"
         ? content
@@ -45,7 +52,10 @@ for (const fixture of CASES) {
       }
     }
     const golden = JSON.parse(
-      await readFile(join(FIXTURE_DIRECTORY, "golden", `${fixture.source}.json`), "utf8"),
+      await readFile(
+        join(FIXTURE_DIRECTORY, "golden", `${fixture.source}.json`),
+        "utf8",
+      ),
     ) as LocalUsageEvent;
     assert.deepEqual(events, [golden]);
   });
@@ -70,5 +80,8 @@ test("mapped structured session id is opaque and preferred over file fallback", 
   assert.ok(event);
   assert.match(event.sessionId ?? "", /^session_[a-f0-9]{20}$/);
   assert.notEqual(event.sessionId, "session_00000000000000000000");
-  assert.doesNotMatch(JSON.stringify(event), /private-structured-session|private prompt body/);
+  assert.doesNotMatch(
+    JSON.stringify(event),
+    /private-structured-session|private prompt body/,
+  );
 });

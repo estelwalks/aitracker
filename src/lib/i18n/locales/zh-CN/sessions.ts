@@ -1,0 +1,56 @@
+export const sessions = {
+  metaDescription: "浏览本地历史会话并一键复制恢复命令。",
+  pageHeader: "会话恢复",
+  pageHeaderDesc: "浏览本地历史会话并一键复制恢复命令",
+  range: {
+    d7: "近 7 天",
+    d30: "近 30 天",
+    d90: "近 90 天",
+  },
+  status: {
+    all: "全部状态",
+    available: "可恢复",
+    interrupted: "异常中断",
+    lost: "已标记丢失",
+    unavailable: "命令不可用",
+  },
+  source: {
+    all: "全部工具",
+  },
+  project: {
+    all: "全部项目",
+  },
+  panelTitle: "本地会话",
+  hint: "当前仅支持恢复 Claude Code、Codex 与 Grok；费用按本地模型定价表估算，未知价格会明确标注。",
+  searchPlaceholder: "搜索标题 / 项目 / 模型 / sessionId",
+  summary: {
+    count: "会话条数",
+    tokens: "Token 合计",
+    cost: "费用合计",
+    turns: "轮次合计",
+  },
+  empty: {
+    title: "没有匹配的会话",
+    desc: "调整筛选条件或搜索关键词后重试。",
+  },
+  refreshing: "刷新中",
+  row: {
+    untitled: "(未命名会话)",
+    copy: "复制恢复命令",
+    copied: "已复制",
+    copyUnsafe: "该会话 ID 不安全，无法生成恢复命令",
+    project: "项目",
+    model: "模型",
+    time: "时间",
+    duration: "时长",
+    cost: "费用",
+    turns: "轮次",
+    edits: "改动",
+    resumeDirHint: "需在该目录下执行恢复命令：",
+    statusReason: "状态说明：",
+  },
+  toast: {
+    refreshed: "会话列表已刷新",
+    copied: "已复制恢复命令",
+  },
+} as const;

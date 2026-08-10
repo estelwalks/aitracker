@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  最小权限 entitlements(仅 hardened runtime 必需,不含 App Sandbox):
+
+	  - com.apple.security.cs.allow-jit: Chromium V8 JIT,Electron 渲染进程必需,
+	    缺失会导致渲染进程崩溃。
+	  - com.apple.security.cs.allow-unsigned-executable-memory: Electron GPU/
+	    渲染进程 JIT 内存必需。
+
+	  刻意不包含:
+	  - com.apple.security.app-sandbox(应用非沙盒:数据只读写 ~/.trusttools 与
+	    Application Support,无需沙盒容器;沙盒反而会引入文件访问 entitlement)
+	  - 任何 com.apple.security.files.* 权限(不请求文稿/桌面/下载/网络卷访问,
+	    用户主动选择 TCC 目录中的文件时由 macOS 按需询问,不做预授权)
+	  - 任何 NS*UsageDescription(不使用相机/麦克风/AppleEvents 等 TCC 保护 API)
+	-->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>
