@@ -69,7 +69,7 @@ test("task definitions are public projections without executor keys", async () =
   const f = fixtures();
   const result = await createTaskApi(f).listDefinitions();
   assert.equal(result.ok, true);
-  assert.equal(result.value.length, JOB_DEFINITIONS.length - 1);
+  assert.equal(result.value.length, JOB_DEFINITIONS.length);
   assert.equal("executorKey" in result.value[0]!, false);
 });
 
