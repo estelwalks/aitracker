@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createDashboardV2HeroView, createDashboardV2View } from "./v2.ts";
 import type { DashboardV2Snapshot } from "../contracts.ts";
+import { APP_ID } from "../../../lib/app-config.ts";
 
 const snapshot: DashboardV2Snapshot = {
   generatedAt: "2026-08-10T12:00:00.000Z",
@@ -13,7 +14,7 @@ const snapshot: DashboardV2Snapshot = {
     generatedAt: null,
     byProjectDay: [
       {
-        project: "trusttools_webapp",
+        project: `${APP_ID}_webapp`,
         source: "codex",
         date: "2026-08-10",
         count: 1,
@@ -27,7 +28,7 @@ const snapshot: DashboardV2Snapshot = {
       source: "codex",
       timestamp: "2026-08-10T10:00:00.000Z",
       model: "gpt-test",
-      project: "trusttools_webapp",
+      project: `${APP_ID}_webapp`,
       inputTokens: 80,
       cachedInputTokens: 20,
       cacheCreationInputTokens: 0,
