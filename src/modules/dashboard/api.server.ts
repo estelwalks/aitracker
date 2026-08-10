@@ -23,6 +23,7 @@ import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { AI_TOOLS } from "../../lib/tools/catalog.ts";
 import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
 import { homedir } from "node:os";
+import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -399,6 +400,16 @@ export async function loadDashboardReadModel(
             .map((installation) => installation.id),
         )
       : undefined;
+  const v2 = toDashboardV2Snapshot({
+    snapshot,
+    skills,
+    sessions,
+    pricingAvailable: pricing != null,
+    installedToolIds,
+  });
+  // Reading this service is strictly cache-only. No provider call can occur
+  // during route loading; the POST insight action is the only refresh path.
+  const aiInsight = getDashboardAIInsightService().read();
   return createDashboardApplication().read({
     snapshot,
     error:
@@ -421,12 +432,7 @@ export async function loadDashboardReadModel(
     activeInsightCount: insightSnapshot.insights.filter(
       (insight) => insight.status === "active",
     ).length,
-    v2: toDashboardV2Snapshot({
-      snapshot,
-      skills,
-      sessions,
-      pricingAvailable: pricing != null,
-      installedToolIds,
-    }),
+    aiInsight,
+    v2,
   });
 }
