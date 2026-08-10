@@ -174,6 +174,8 @@ export const dashboard = {
     pendingItems: "{count} 件の保留項目",
     realtimeAnalysis: "リアルタイム分析中",
     rotateInsight: "次のインサイト",
+    generateAIInsight: "AI 洞察を生成",
+    generatingAIInsight: "生成中…",
     insightDotsAria: "インサイトの切り替え",
     insightDot: "インサイト {index}",
     monitoringAria: "ローカルリスナーの状態",

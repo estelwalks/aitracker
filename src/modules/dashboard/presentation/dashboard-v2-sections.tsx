@@ -6,9 +6,11 @@ import {
   ChevronDown,
   CircleDollarSign,
   Coins,
+  FileText,
   ShieldCheck,
   Sparkles,
   Wrench,
+  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -95,23 +97,50 @@ function insightMessage(
 export function DashboardJarvisInsight({
   hero,
   aiInsight,
+  onGenerateAIInsight,
+  generatingAIInsight = false,
 }: {
   hero: DashboardV2HeroView;
   aiInsight?: DashboardAIInsightView;
+  onGenerateAIInsight?: () => void;
+  generatingAIInsight?: boolean;
 }) {
   const { t, format } = useI18n();
   const [index, setIndex] = useState(0);
   const insight = hero.insights[index % Math.max(1, hero.insights.length)];
   const serverInsight =
     aiInsight?.status === "ready" ? aiInsight.insight : null;
+  const completeMessage =
+    serverInsight?.headline ??
+    (insight
+      ? insightMessage(insight, t, format)
+      : t("dashboard.v2.insights.empty"));
+  const [typedMessage, setTypedMessage] = useState(completeMessage);
   useEffect(() => setIndex(0), [hero.insights]);
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setTypedMessage(completeMessage);
+      return;
+    }
+    setTypedMessage("");
+    let cursor = 0;
+    const timer = window.setInterval(() => {
+      cursor += 1;
+      setTypedMessage(completeMessage.slice(0, cursor));
+      if (cursor >= completeMessage.length) window.clearInterval(timer);
+    }, 18);
+    return () => window.clearInterval(timer);
+  }, [completeMessage]);
   return (
     <section
       className="dashboard-insight-hero"
       aria-label={t("dashboard.v2.heroTitle")}
     >
       <div className="relative flex min-w-0 gap-5">
-        <span className="dashboard-insight-orb">
+        <span className="dashboard-insight-orb tt-breathe">
           <Sparkles className="size-6" />
         </span>
         <div className="min-w-0 flex-1">
@@ -132,11 +161,11 @@ export function DashboardJarvisInsight({
                 : t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
             </span>
           </div>
-          <p className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]">
-            {serverInsight?.headline ??
-              (insight
-                ? insightMessage(insight, t, format)
-                : t("dashboard.v2.insights.empty"))}
+          <p
+            className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]"
+            aria-label={completeMessage}
+          >
+            {typedMessage}
           </p>
           {serverInsight?.insights[0]?.detail ? (
             <p className="max-w-4xl font-mono text-[11px] leading-5 text-muted-foreground">
@@ -167,17 +196,31 @@ export function DashboardJarvisInsight({
             ))}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            setIndex((current) =>
-              hero.insights.length ? (current + 1) % hero.insights.length : 0,
-            )
-          }
-          className="dashboard-hero-refresh"
-        >
-          {t("dashboard.v2.rotateInsight")}
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {aiInsight?.configured && onGenerateAIInsight ? (
+            <button
+              type="button"
+              onClick={onGenerateAIInsight}
+              disabled={generatingAIInsight}
+              className="dashboard-hero-refresh"
+            >
+              {generatingAIInsight
+                ? t("dashboard.v2.generatingAIInsight")
+                : t("dashboard.v2.generateAIInsight")}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              setIndex((current) =>
+                hero.insights.length ? (current + 1) % hero.insights.length : 0,
+              )
+            }
+            className="dashboard-hero-refresh"
+          >
+            {t("dashboard.v2.rotateInsight")}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -277,6 +320,150 @@ export function DashboardTrustHero({
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * The reference dashboard keeps these eight period-scoped signals directly
+ * below the hero. Every value comes from the same DashboardV2View; where the
+ * local service has no real history source, the card remains explicitly
+ * unavailable instead of manufacturing a count.
+ */
+export function DashboardMetricGrid({
+  view,
+  monitoring,
+}: {
+  view: DashboardV2View;
+  monitoring: DashboardV2HeroView["monitoring"];
+}) {
+  const { t, format } = useI18n();
+  const unavailable = t("dashboard.kpi.unavailable");
+  const availabilityValue = (value: {
+    available: boolean;
+    count: number | null;
+  }) =>
+    value.available && value.count != null
+      ? format.formatNumber(value.count)
+      : unavailable;
+  const availabilityHint = (value: { available: boolean }) =>
+    value.available
+      ? t("dashboard.v2.selectedRange")
+      : t("dashboard.v2.outputUnavailableHint");
+  const cards = [
+    {
+      icon: Coins,
+      label: t("dashboard.kpi.tokens"),
+      value: format.formatTokens(view.totals.totalTokens),
+      hint: t("dashboard.v2.eventCount", { count: view.totals.events }),
+      delta: view.comparison.tokens.deltaPercent,
+    },
+    {
+      icon: CircleDollarSign,
+      label: t("dashboard.kpi.cost"),
+      value:
+        view.estimatedCostUsd == null
+          ? unavailable
+          : format.formatUsd(view.estimatedCostUsd),
+      hint:
+        view.estimatedCostUsd == null
+          ? t("dashboard.kpi.costUnknownHint")
+          : t(
+              view.estimatedCostIsPartial
+                ? "dashboard.kpi.costUnknownHint"
+                : "dashboard.v2.estimatedCost",
+            ),
+      delta: view.comparison.cost.deltaPercent,
+    },
+    {
+      icon: Activity,
+      label: t("dashboard.kpi.sessions"),
+      value:
+        view.sessions == null
+          ? unavailable
+          : format.formatNumber(view.sessions),
+      hint:
+        view.sessions == null
+          ? t("dashboard.kpi.sessionUnavailableHint")
+          : t("dashboard.v2.selectedRange"),
+      delta: null,
+    },
+    {
+      icon: Zap,
+      label: t("dashboard.v2.cacheLabel"),
+      value:
+        view.cacheRate == null
+          ? unavailable
+          : format.formatPercent(Math.round(view.cacheRate)),
+      hint: t("dashboard.v2.cacheHint"),
+      delta: view.comparison.cacheRate.deltaPoints,
+      deltaPoints: true,
+    },
+    {
+      icon: Wrench,
+      label: t("dashboard.v2.agentActivityLabel"),
+      value: format.formatNumber(view.activeTools),
+      hint: t("dashboard.v2.agentsLive", {
+        live: monitoring.liveTools,
+        detected: monitoring.detectedTools,
+      }),
+      delta: null,
+    },
+    {
+      icon: ShieldCheck,
+      label: t("dashboard.v2.securityRunsLabel"),
+      value: availabilityValue(view.outputAvailability.securityRuns),
+      hint: availabilityHint(view.outputAvailability.securityRuns),
+      delta: null,
+    },
+    {
+      icon: Brain,
+      label: t("dashboard.v2.distillationOutputsLabel"),
+      value: availabilityValue(view.outputAvailability.distillationOutputs),
+      hint: availabilityHint(view.outputAvailability.distillationOutputs),
+      delta: null,
+    },
+    {
+      icon: FileText,
+      label: t("dashboard.v2.dailyReportsLabel"),
+      value: availabilityValue(view.outputAvailability.dailyReports),
+      hint: availabilityHint(view.outputAvailability.dailyReports),
+      delta: null,
+    },
+  ] as const;
+  return (
+    <section
+      className="dashboard-metric-grid"
+      aria-label={t("dashboard.v2.overviewLabel")}
+    >
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <article key={card.label} className="dashboard-metric-card">
+            <div className="flex items-center justify-between gap-2 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Icon className="size-3 shrink-0" />
+                <span className="truncate">{card.label}</span>
+              </span>
+              {card.delta != null ? (
+                <DashboardDeltaChip
+                  value={card.delta}
+                  points={card.deltaPoints}
+                />
+              ) : null}
+            </div>
+            <strong className="tt-num mt-2 block truncate text-[25px] leading-none font-black tracking-tight">
+              {card.value}
+            </strong>
+            <p
+              className="mt-2 truncate font-mono text-[10px] text-muted-foreground"
+              title={card.hint}
+            >
+              {card.hint}
+            </p>
+          </article>
+        );
+      })}
     </section>
   );
 }

@@ -429,6 +429,15 @@ test("Dashboard V2 Hero derives live listener state and insights from safe obser
     hero.insights.map((insight) => insight.kind),
     ["usage", "cache", "security", "monitoring"],
   );
+  const usageInsight = hero.insights.find(
+    (insight) => insight.kind === "usage",
+  );
+  assert.equal(usageInsight?.toolName, "Codex CLI");
+  assert.equal(
+    usageInsight?.tokens,
+    createDashboardV2View(snapshot, "all").tools[0]?.tokens,
+    "a named top-tool insight must not show all tools' combined token total",
+  );
 });
 
 test("Dashboard V2 Hero never presents a missing monitoring read as live", () => {

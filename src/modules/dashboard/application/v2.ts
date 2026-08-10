@@ -438,7 +438,9 @@ export function createDashboardV2HeroView(input: {
       id: "usage",
       kind: "usage",
       toolName: topTool?.name,
-      tokens: allTime.totals.totalTokens,
+      // The insight names one tool, so it shows that tool's own observed
+      // usage rather than the aggregate for every tool.
+      tokens: topTool?.tokens ?? 0,
     });
   }
   const inputTokens =

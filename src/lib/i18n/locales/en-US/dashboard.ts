@@ -172,6 +172,8 @@ export const dashboard = {
     pendingItems: "{count} items pending",
     realtimeAnalysis: "Real-time analysis",
     rotateInsight: "Next insight",
+    generateAIInsight: "Generate AI insight",
+    generatingAIInsight: "Generating…",
     insightDotsAria: "Insight selector",
     insightDot: "Insight {index}",
     monitoringAria: "Local listener status",
