@@ -4,18 +4,20 @@
 | -------- | ------------------- |
 | 文档类型 | 架构设计文档 (ARCH) |
 | 项目名称 | trusttools_webapp   |
-| 版本     | v1.1                |
+| 版本     | v1.3                |
 | 创建日期 | 2026-08-10 15:16:44 |
-| 更新日期 | 2026-08-10 18:19:30 |
+| 更新日期 | 2026-08-10 19:24:53 |
 | 生成工具 | agile-feature-dev   |
 | 文档状态 | 草稿                |
 
 ## 修订记录
 
-| 版本 | 修改时间            | 修改内容                                    |
-| ---- | ------------------- | ------------------------------------------- |
-| v1.0 | 2026-08-10 15:16:44 | 初始版本                                    |
-| v1.1 | 2026-08-10 18:19:30 | 增补 reader 修复、字段证据与 Token 对账架构 |
+| 版本 | 修改时间            | 修改内容                                                       |
+| ---- | ------------------- | -------------------------------------------------------------- |
+| v1.0 | 2026-08-10 15:16:44 | 初始版本                                                       |
+| v1.1 | 2026-08-10 18:19:30 | 增补 reader 修复、字段证据与 Token 对账架构                    |
+| v1.2 | 2026-08-10 19:01:25 | 增补 TokenTracker 对照后的三类原生 Usage reader 与估算隔离决策 |
+| v1.3 | 2026-08-10 19:24:53 | 三类原生 reader 落地并通过缓存幂等、跨副本去重与 registry 校验 |
 
 ## 1. 模块边界
 
@@ -56,9 +58,13 @@ skill-catalog application/tool-overview ─→ 工具概览
 
 - Claude：Session reader 使用消息级去重，输出会话、turn、subagent 与一致 Token 汇总。
 - Codex：统一 envelope 解包；支持当前 `exec`、`patch_apply_end` / custom tool 事件。
-- Grok：新增遍历 `turn_completed.usage.modelUsage[]` 的专用 Usage reader，通用 reader 不再宣称已支持真实日志。
+- Gemini：从 `~/.gemini/tmp/*/chats/session-*.json` 读取累计 Token 快照，按同文件相邻快照作非负差分；快照重置时重新建立基线，`tool` 归入 output，`thoughts` 作为 reasoning 细分。
+- Grok：只累计 `params.update.sessionUpdate=turn_completed` 下 `usage.modelUsage` 的逐轮真实用量；`inputTokens` 先扣除 cache-read。`signals` 中的 context-window 水位不进入真实总计。
+- OpenClaw：只读 `agents/*/{sessions,session-sqlite-import-archive}` 的 assistant usage；使用稳定事件 ID 或隐私安全字段指纹跨 active/archive/reset 副本去重。
+- Antigravity：当前日志未提供真实 Token 字段。禁止读取正文进行字符估算，保持 Usage unsupported；未来若产品明确启用估算，必须新增独立 provenance/quality 类型且不得混入真实总计。
 - 通用 reader：保留 Token/模型/项目能力，但为 context、tool、Skill、message、真实 SID 标记 unsupported/unavailable。
 - Detection：组合候选目录与 executable 证据，分别输出 installed、dataDetected、usageSupported、sessionSupported。
+- Registry 支持口径：29 个工具中 6 个 native、7 个 adapter、16 个 unsupported；Gemini/Grok 为 adapter→native 质量升级，OpenClaw 为新增 native，因此支持总数由 12 增至 13。
 
 ## 5. 验证边界
 
