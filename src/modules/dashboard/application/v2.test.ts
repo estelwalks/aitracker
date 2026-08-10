@@ -58,6 +58,31 @@ test("Dashboard V2 uses one period for metrics, trend, cards and context", () =>
   assert.equal(view.context.toolCalls, 2);
   assert.equal(view.sessions, 1);
   assert.equal(view.estimatedCostUsd, null);
+  assert.equal(view.models[0]?.share, 100);
+  assert.equal(view.calendarSummary.activeDays, 1);
+});
+
+test("Dashboard V2 zero-fills calendar days and calculates a local-day streak", () => {
+  const view = createDashboardV2View(
+    snapshot,
+    "custom",
+    "2026-08-09",
+    "2026-08-11",
+  );
+
+  assert.deepEqual(
+    view.calendar.map((point) => [point.date, point.active, point.tokens]),
+    [
+      ["2026-08-09", false, 0],
+      ["2026-08-10", true, 100],
+      ["2026-08-11", false, 0],
+    ],
+  );
+  assert.deepEqual(view.calendarSummary, {
+    days: 3,
+    activeDays: 1,
+    longestStreak: 1,
+  });
 });
 
 test("Dashboard V2 does not invent unavailable session or pricing values", () => {

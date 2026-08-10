@@ -489,6 +489,284 @@
   );
 }
 
+/* Dashboard V3 mirrors the reference hierarchy while remaining data agnostic. */
+.dashboard-v3 {
+  max-width: 1720px;
+}
+
+.dashboard-insight-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.75rem;
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-ok) 18%, transparent),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      color-mix(in oklab, var(--color-foreground) 8%, transparent),
+      transparent 38%
+    ),
+    var(--color-card);
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.dashboard-insight-orb {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-ok) 14%, var(--color-surface));
+  color: var(--color-ok);
+  box-shadow: 0 0 28px color-mix(in oklab, var(--color-ok) 30%, transparent);
+}
+
+.dashboard-hero-pill,
+.dashboard-hero-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+
+.dashboard-hero-refresh {
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.dashboard-hero-refresh:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.dashboard-spotlight-grid,
+.dashboard-metric-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-spotlight-card,
+.dashboard-metric-card,
+.dashboard-panel {
+  min-width: 0;
+  border-radius: 1rem;
+  background: var(--color-card);
+  box-shadow: var(--elev-1), var(--hairline);
+}
+
+.dashboard-spotlight-card {
+  display: flex;
+  min-height: 11.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1.25rem;
+  color: var(--color-muted-foreground);
+}
+
+.dashboard-spotlight-card > strong {
+  margin-top: 0.9rem;
+  color: var(--color-foreground);
+  font-size: clamp(1.65rem, 2.1vw, 2.35rem);
+  line-height: 1;
+}
+
+.dashboard-spotlight-card > p {
+  margin-top: 0.65rem;
+  font-size: 0.75rem;
+}
+.dashboard-spotlight-card > small {
+  margin-top: 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+}
+.dashboard-spotlight-card > a,
+.dashboard-spotlight-card > button {
+  margin-top: auto;
+  border-radius: 999px;
+  background: var(--color-foreground);
+  padding: 0.38rem 0.7rem;
+  color: var(--color-background);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.dashboard-range-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-inline: -0.25rem;
+  padding: 0.65rem 0.25rem;
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--color-background) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.dashboard-range-bar button,
+.dashboard-range-bar input {
+  min-height: 2rem;
+  border-radius: 0.6rem;
+  padding-inline: 0.65rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+}
+
+.dashboard-range-bar button:hover {
+  color: var(--color-foreground);
+}
+.dashboard-range-bar .dashboard-range-active {
+  background: var(--color-surface-2);
+  color: var(--color-foreground);
+}
+.dashboard-range-bar input {
+  background: var(--color-surface-2);
+}
+
+.dashboard-metric-grid {
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--color-foreground) 7%, transparent);
+}
+.dashboard-metric-card {
+  min-height: 6.1rem;
+  padding: 1rem;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dashboard-tool-rail {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: thin;
+}
+
+.dashboard-tool-rail > button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.dashboard-tool-rail > button:hover,
+.dashboard-tool-rail > .dashboard-tool-active {
+  background: var(--color-foreground);
+  color: var(--color-background);
+}
+
+.dashboard-panel {
+  padding: 1.15rem;
+}
+.dashboard-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.dashboard-panel-head h2 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.dashboard-panel-head p {
+  margin-top: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--color-muted-foreground);
+}
+
+.dashboard-breakdown-table {
+  width: 100%;
+  min-width: 28rem;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.dashboard-breakdown-table th {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 400;
+  text-align: left;
+}
+.dashboard-breakdown-table td {
+  padding: 0.72rem 0.65rem;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--color-foreground) 6%, transparent);
+}
+.dashboard-breakdown-table tr:last-child td {
+  border-bottom: 0;
+}
+.dashboard-breakdown-table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-foreground) 4%, transparent);
+}
+
+.dashboard-calendar-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+  overflow-x: auto;
+}
+.dashboard-calendar-cell {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 0.18rem;
+  background: var(--color-primary);
+}
+
+@media (max-width: 1040px) {
+  .dashboard-spotlight-grid,
+  .dashboard-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .dashboard-insight-hero {
+    padding: 1.25rem;
+  }
+  .dashboard-insight-orb {
+    display: none;
+  }
+  .dashboard-range-bar {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-range-bar > div:last-child {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.2rem;
+  }
+  .dashboard-spotlight-card {
+    min-height: 10rem;
+  }
+}
+
 .tt-page-header h1 {
   text-wrap: balance;
 }
@@ -838,6 +1116,244 @@
 .skill-workspace-card-actions > :first-child {
   min-width: 5.4rem;
   margin-right: 0.25rem;
+}
+
+/* /skills mirrors the operational hierarchy of the live tool overview. */
+.tool-overview-reference {
+  width: min(100%, 59.45rem);
+  margin-inline: auto;
+}
+
+.tool-overview-insight {
+  min-height: 8.25rem;
+  padding: 1.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in oklab, var(--color-primary) 15%, transparent),
+      transparent 30%
+    ),
+    var(--color-surface);
+}
+
+.tool-overview-orb,
+.tool-overview-card-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: color-mix(in oklab, var(--color-primary) 13%, transparent);
+  color: var(--color-primary);
+}
+
+.tool-overview-orb {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.tool-overview-card-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 20.125rem));
+  justify-content: start;
+  gap: 0.8rem;
+}
+
+.tool-overview-agent-card {
+  min-height: 12.75rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  text-align: left;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.tool-overview-agent-card:hover,
+.tool-overview-agent-card-selected {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.tool-overview-card-mark {
+  width: 1.55rem;
+  height: 1.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.tool-overview-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.67rem;
+}
+
+.tool-overview-state::before {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--color-muted-foreground);
+  content: "";
+}
+
+.tool-overview-state-active {
+  color: var(--color-ok);
+}
+
+.tool-overview-state-active::before {
+  background: var(--color-ok);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 12%, transparent);
+}
+
+.tool-overview-card-rule {
+  height: 0.28rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-card-rule > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.tool-overview-periods,
+.tool-overview-detail-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 0.55rem;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-period,
+.tool-overview-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.36rem 0.58rem;
+  border-radius: 0.38rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.tool-overview-period:hover,
+.tool-overview-detail-tabs button:hover {
+  color: var(--color-foreground);
+}
+
+.tool-overview-period-active,
+.tool-overview-detail-tab-active {
+  background: var(--color-background);
+  color: var(--color-foreground) !important;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+
+.tool-overview-trend {
+  display: flex;
+  align-items: end;
+  gap: 0.35rem;
+  min-height: 11rem;
+  padding: 0.75rem 0.25rem 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tool-overview-trend-point {
+  display: grid;
+  flex: 1 1 1.5rem;
+  min-width: 1.2rem;
+  height: 10.25rem;
+  grid-template-rows: 1fr auto;
+  align-items: end;
+  gap: 0.45rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.tool-overview-trend-bar {
+  display: block;
+  width: 100%;
+  min-height: 0.35rem;
+  border-radius: 0.22rem 0.22rem 0 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-primary) 78%, white),
+    var(--color-primary)
+  );
+}
+
+.tool-overview-context-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto 2.5rem minmax(5rem, 11rem);
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+}
+
+.tool-overview-context-track,
+.tool-overview-breakdown-track {
+  display: block;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-context-track > span,
+.tool-overview-breakdown-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 78%,
+    var(--color-foreground)
+  );
+}
+
+.tool-overview-breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 12rem) minmax(5rem, 1fr) 6.5rem 2.5rem;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+@media (max-width: 680px) {
+  .tool-overview-reference {
+    width: 100%;
+  }
+
+  .tool-overview-card-wall {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tool-overview-context-row {
+    grid-template-columns: minmax(0, 1fr) auto 2.5rem;
+  }
+
+  .tool-overview-context-track {
+    display: none;
+  }
+
+  .tool-overview-breakdown-row {
+    grid-template-columns: minmax(0, 1fr) 5.5rem 2.2rem;
+  }
+
+  .tool-overview-breakdown-track {
+    display: none;
+  }
 }
 
 /* Shared V3 chrome: softer workspace depth from the latest prototype. These
