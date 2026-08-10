@@ -712,6 +712,7 @@ export function DashboardPage({ data }: { data: DashboardReadModel }) {
                 onChange={(v) => setTrendMode(v as TrendChartMode)}
                 options={[
                   { value: "area", label: t("dashboard.trend.area") },
+                  { value: "bar", label: t("dashboard.trend.bar") },
                   { value: "line", label: t("dashboard.trend.line") },
                 ]}
               />

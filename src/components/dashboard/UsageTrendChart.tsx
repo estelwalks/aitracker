@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Area,
+  Bar,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -19,7 +20,7 @@ import {
 } from "../../lib/local-usage/presentation";
 import type { LocalUsageEvent, LocalUsageSource } from "../../lib/local-usage";
 
-export type TrendChartMode = "area" | "line";
+export type TrendChartMode = "area" | "bar" | "line";
 
 const chartColors = [
   "var(--color-chart-1)",
@@ -279,6 +280,17 @@ export function UsageTrendChart({
                   stroke={item.color}
                   fill={item.color}
                   fillOpacity={0.18}
+                  isAnimationActive={false}
+                />
+              ) : mode === "bar" ? (
+                <Bar
+                  key={item.key}
+                  dataKey={item.key}
+                  name={item.name}
+                  stackId="usage"
+                  fill={item.color}
+                  fillOpacity={0.78}
+                  maxBarSize={22}
                   isAnimationActive={false}
                 />
               ) : (

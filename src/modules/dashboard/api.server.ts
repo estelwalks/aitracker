@@ -6,6 +6,7 @@ import type {
 } from "./contracts";
 import { createEmptyUsageSnapshot } from "../../lib/local-usage/presentation.ts";
 import { getLocalUsageSnapshot } from "../../lib/local-usage/get-local-usage.ts";
+import { getLocalSessions } from "../../lib/local-sessions/server-fns.ts";
 import { getLocalSkills } from "../../lib/local-skills/server-fns.ts";
 import { getPricingSnapshot } from "../../lib/pricing/server-fns.ts";
 import { catalogs, getMessage } from "../../lib/i18n/messages.ts";
@@ -131,9 +132,7 @@ export async function loadDashboardReadModel(
       getPricingSnapshot({
         data: [...new Set(snapshot.details.map((event) => event.model))],
       }),
-      import("../sessions/query/api.server.ts").then(({ getSessionsQuery }) =>
-        getSessionsQuery(),
-      ),
+      getLocalSessions({ data: {} }),
     ]);
   const projectModel = createProjectUsageReadModel(
     { events: snapshot.details },
