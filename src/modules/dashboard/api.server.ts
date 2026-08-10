@@ -20,6 +20,9 @@ import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
 import type { DashboardV2Snapshot } from "./contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
+import { AI_TOOLS } from "../../lib/tools/catalog.ts";
+import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
+import { homedir } from "node:os";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -183,6 +186,8 @@ export function toDashboardV2Snapshot(input: {
   readonly skills: import("./contracts.ts").DashboardSkillSummary;
   readonly sessions: import("./contracts.ts").DashboardSessionsSummary;
   readonly pricingAvailable: boolean;
+  /** Server-only installation probing is reduced to ids before this DTO. */
+  readonly installedToolIds?: ReadonlySet<string>;
 }): DashboardV2Snapshot {
   const sourceStatus = new Map(
     input.snapshot.sources.map((source) => [source.source, source]),
@@ -193,7 +198,13 @@ export function toDashboardV2Snapshot(input: {
       id: tool.id,
       name: tool.nameZh,
       available: source?.available ?? false,
-      detected: source?.detected ?? source?.available ?? false,
+      // Usage-log roots and installation roots are intentionally separate:
+      // `~/.claude` can be present while `.claude/projects` has no recent
+      // usage records. Only this aggregate boolean crosses into the browser;
+      // no detected path is exposed.
+      detected:
+        (source?.detected ?? source?.available ?? false) ||
+        input.installedToolIds?.has(tool.id) === true,
     };
   });
   return {
@@ -247,15 +258,23 @@ export async function loadDashboardReadModel(
       ? usageResult.value
       : createEmptyUsageSnapshot();
   const snapshot = toDashboardSnapshot(rawSnapshot);
-  const [skillsResult, pricingResult, sessionsResult, monitoringResult] =
-    await Promise.allSettled([
-      getLocalSkills(),
-      getPricingSnapshot({
-        data: [...new Set(snapshot.details.map((event) => event.model))],
-      }),
-      getLocalSessions({ data: {} }),
-      getMonitoringStatus(),
-    ]);
+  const [
+    skillsResult,
+    pricingResult,
+    sessionsResult,
+    monitoringResult,
+    installationsResult,
+  ] = await Promise.allSettled([
+    getLocalSkills(),
+    getPricingSnapshot({
+      data: [...new Set(snapshot.details.map((event) => event.model))],
+    }),
+    getLocalSessions({ data: {} }),
+    getMonitoringStatus(),
+    // This probes declared installation roots only; it neither reads usage
+    // logs nor allows concrete filesystem paths past this server adapter.
+    detectToolInstallations(AI_TOOLS, homedir()),
+  ]);
   const projectModel = createProjectUsageReadModel(
     { events: snapshot.details },
     { estimateEventCost },
@@ -295,6 +314,14 @@ export async function loadDashboardReadModel(
         };
   const pricing =
     pricingResult.status === "fulfilled" ? pricingResult.value : null;
+  const installedToolIds =
+    installationsResult.status === "fulfilled"
+      ? new Set(
+          installationsResult.value
+            .filter((installation) => installation.installed)
+            .map((installation) => installation.id),
+        )
+      : undefined;
   return createDashboardApplication().read({
     snapshot,
     error:
@@ -322,6 +349,7 @@ export async function loadDashboardReadModel(
       skills,
       sessions,
       pricingAvailable: pricing != null,
+      installedToolIds,
     }),
   });
 }

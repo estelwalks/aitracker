@@ -118,3 +118,46 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   assert.equal(JSON.stringify(result).includes("/Users/example"), false);
   assert.equal(JSON.stringify(result).includes("exec_command"), false);
 });
+
+test("dashboard V2 keeps installation detection when Claude has no usage events", () => {
+  const result = toDashboardV2Snapshot({
+    snapshot: toDashboardSnapshot({
+      ...rawSnapshot,
+      sources: [
+        {
+          source: "claude-code",
+          available: false,
+          detected: false,
+          paths: ["/Users/example/.claude/projects"],
+          filesConsidered: 0,
+          filesRead: 0,
+          filesReused: 0,
+          filesParsed: 0,
+          malformedLines: 0,
+          events: 0,
+        },
+      ],
+      events: 0,
+      details: [],
+      recent: [],
+    }),
+    skills: { available: true, count: 0, generatedAt: null },
+    sessions: {
+      available: true,
+      generatedAt: null,
+      byProjectDay: [],
+      bySourceDay: [],
+    },
+    pricingAvailable: false,
+    installedToolIds: new Set(["claude-code"]),
+  });
+
+  const claude = result.tools.find((tool) => tool.id === "claude-code");
+  assert.deepEqual(claude, {
+    id: "claude-code",
+    name: "Claude Code",
+    available: false,
+    detected: true,
+  });
+  assert.equal(JSON.stringify(result).includes("/Users/example"), false);
+});
