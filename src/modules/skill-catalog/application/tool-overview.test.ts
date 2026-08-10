@@ -128,6 +128,31 @@ test("skill evidence preserves observed zero and unavailable sessions", () => {
   assert.equal(absent.projects[0]?.sessions, null);
 });
 
+test("tool card names use the server-projected registry display name", () => {
+  const view = buildToolOverview(
+    {
+      ...input,
+      tools: input.tools.map((tool) =>
+        tool.id === "codex" ? { ...tool, name: "Configured Codex" } : tool,
+      ),
+    },
+    "codex",
+    "today",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.selected?.name, "Configured Codex");
+  assert.equal(
+    view.cards.find((card) => card.id === "codex")?.name,
+    "Configured Codex",
+  );
+  assert.equal(
+    view.cards.find((card) => card.id === "claude-code")?.name,
+    "Claude Code",
+  );
+});
+
 test("tool overview selection and all details use the same custom range", () => {
   const view = buildToolOverview(
     {
