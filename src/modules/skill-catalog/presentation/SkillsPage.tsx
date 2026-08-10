@@ -4,13 +4,17 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Bot,
+  ChartNoAxesCombined,
   ChevronFirst,
   ChevronLast,
   ChevronLeft,
   ChevronRight,
   Copy,
   Download,
+  FolderKanban,
   Layers3,
+  MessagesSquare,
   RefreshCw,
   Search,
   ShieldBan,
@@ -56,7 +60,9 @@ import { Checkbox } from "../../../components/ui/checkbox";
 import { Badge } from "../../../components/ui/badge";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
+import type { UsagePeriod } from "../../../lib/local-usage/presentation";
 import { cn } from "../../../lib/utils";
+import type { DashboardReadModel } from "../../dashboard/contracts";
 import {
   getLocalSkills,
   requestApprovedBatchUninstall,
@@ -73,13 +79,17 @@ import {
 import {
   availableAssetSorts,
   buildSkillWorkspace,
+  buildToolOverview,
   querySkillAssets,
   type AssetSortKey,
   type AssetSourceFilter,
   type AssetUpdateFilter,
 } from "../application";
 
-export type SkillsPageProps = { initial: SkillWorkspaceSnapshot };
+export type SkillsPageProps = {
+  initial: SkillWorkspaceSnapshot;
+  usage: DashboardReadModel;
+};
 
 const PAGE_SIZE = 25;
 
@@ -108,7 +118,7 @@ type UninstallTarget =
   | { type: "single"; skill: LocalSkill }
   | { type: "batch"; skills: LocalSkill[] };
 
-export function SkillsPage({ initial }: SkillsPageProps) {
+export function SkillsPage({ initial, usage }: SkillsPageProps) {
   const { t, format } = useI18n();
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial.snapshot);
   const [workspace, setWorkspace] = useState(initial.workspace);
@@ -118,6 +128,9 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   const [updateStatus, setUpdateStatus] = useState<AssetUpdateFilter>("all");
   const [sort, setSort] = useState<AssetSortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
+  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
+  const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
   const [page, setPage] = useState(1);
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
@@ -227,6 +240,15 @@ export function SkillsPage({ initial }: SkillsPageProps) {
         direction: sortDir,
       }),
     [agent, query, snapshot, sort, sortDir, source, updateStatus],
+  );
+  const toolOverview = useMemo(
+    () =>
+      buildToolOverview(
+        { tools: usage.v2.tools, events: usage.snapshot.details },
+        selectedToolId,
+        toolPeriod,
+      ),
+    [selectedToolId, toolPeriod, usage.snapshot.details, usage.v2.tools],
   );
 
   // Paginated list
@@ -570,15 +592,287 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   const updateStatusLabel = (value: AssetUpdateFilter) =>
     t(`skills.update.${value}`);
   const sortLabel = (value: AssetSortKey) => t(`skills.sort.${value}`);
+  const contextLabels = {
+    textResponses: t("skills.agentOverview.textResponses"),
+    toolCalls: t("skills.agentOverview.toolCalls"),
+    skillCalls: t("skills.agentOverview.skillCalls"),
+    toolOutputCalls: t("skills.agentOverview.toolOutputCalls"),
+  } as const;
+  const detailRows =
+    detailMode === "models" ? toolOverview.models : toolOverview.projects;
+  const maxTrendTokens = Math.max(
+    ...toolOverview.trend.map((item) => item.tokens),
+    1,
+  );
+  const maxDetailTokens = Math.max(...detailRows.map((item) => item.tokens), 1);
 
   return (
     <>
+      <section className="tool-overview-reference mb-7 space-y-5">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {t("skills.agentOverview.title")}
+          </h1>
+        </div>
+
+        <section className="tool-overview-insight">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="tool-overview-orb">
+              <Bot className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">
+                {toolOverview.selected?.name ??
+                  t("skills.agentOverview.insightTitle")}
+              </h2>
+              <p className="mt-2 max-w-4xl text-[13px] leading-6 text-muted-foreground">
+                {toolOverview.selected == null
+                  ? t("skills.agentOverview.noActivity")
+                  : t("skills.agentOverview.insightDescription")}
+              </p>
+              {toolOverview.selected && (
+                <p className="mt-3 font-mono text-[11px] text-muted-foreground">
+                  {t("skills.agentOverview.observedEvents", {
+                    count: format.formatNumber(toolOverview.totalEvents),
+                  })}
+                  {" · "}
+                  {toolOverview.skillUsage.observed
+                    ? t("skills.agentOverview.skillEvidenceObserved", {
+                        count: format.formatNumber(
+                          toolOverview.skillUsage.calls,
+                        ),
+                      })
+                    : t("skills.agentOverview.skillEvidenceUnavailable")}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <div className="tool-overview-card-wall">
+          {toolOverview.cards.map((tool) => (
+            <button
+              key={tool.id}
+              type="button"
+              onClick={() => setSelectedToolId(tool.id)}
+              className={cn(
+                "tool-overview-agent-card",
+                toolOverview.selected?.id === tool.id &&
+                  "tool-overview-agent-card-selected",
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 font-medium">
+                  <span className="tool-overview-card-mark">
+                    {tool.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  {tool.name}
+                </span>
+                <span
+                  className={cn(
+                    "tool-overview-state",
+                    tool.active && "tool-overview-state-active",
+                  )}
+                >
+                  {tool.active
+                    ? t("skills.agentOverview.active")
+                    : t("skills.agentOverview.inactive")}
+                </span>
+              </div>
+              <div className="mt-5 flex items-end justify-between gap-3">
+                <span className="tt-num text-2xl">
+                  {format.formatTokens(tool.tokens)}
+                </span>
+                <span className="tt-label">
+                  {t("skills.agentOverview.totalTokens")}
+                </span>
+              </div>
+              <div className="tool-overview-card-rule mt-2">
+                <span style={{ width: `${tool.active ? 100 : 10}%` }} />
+              </div>
+              <div className="mt-3 space-y-1 text-left font-mono text-[10px] text-muted-foreground">
+                <p>
+                  {t("skills.agentOverview.observedEvents", {
+                    count: format.formatNumber(tool.events),
+                  })}
+                </p>
+                <p>
+                  {tool.skillUsage.observed
+                    ? t("skills.agentOverview.skillEvidenceObserved", {
+                        count: format.formatNumber(tool.skillUsage.calls),
+                      })
+                    : t("skills.agentOverview.skillEvidenceUnavailable")}
+                </p>
+                <p>
+                  {tool.lastActiveAt
+                    ? t("skills.agentOverview.lastActive", {
+                        time: format.formatDateTime(tool.lastActiveAt, false),
+                      })
+                    : t("skills.agentOverview.noActivity")}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <Panel
+          title={`${toolOverview.selected?.name ?? "—"} · ${t("skills.agentOverview.trend")}`}
+          action={
+            <div className="tool-overview-periods">
+              {(
+                [
+                  ["today", t("dashboard.period.today")],
+                  ["7d", t("dashboard.period.lastNDays", { count: 7 })],
+                  ["30d", t("dashboard.period.lastNDays", { count: 30 })],
+                  ["all", t("dashboard.period.all")],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setToolPeriod(value)}
+                  className={cn(
+                    "tool-overview-period",
+                    toolPeriod === value && "tool-overview-period-active",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          <p className="mb-4 text-[11px] text-muted-foreground">
+            {t("skills.agentOverview.trendSummary", {
+              tokens: format.formatTokens(toolOverview.totalTokens),
+              events: format.formatNumber(toolOverview.totalEvents),
+            })}
+          </p>
+          {toolOverview.trend.length === 0 ? (
+            <p className="py-10 text-sm text-muted-foreground">
+              {t("skills.agentOverview.noActivity")}
+            </p>
+          ) : (
+            <div
+              className="tool-overview-trend"
+              role="img"
+              aria-label={t("skills.agentOverview.trend")}
+            >
+              {toolOverview.trend.map((point) => (
+                <div key={point.date} className="tool-overview-trend-point">
+                  <span
+                    className="tool-overview-trend-bar"
+                    style={{
+                      height: `${Math.max(7, (point.tokens / maxTrendTokens) * 100)}%`,
+                    }}
+                    title={`${point.date}: ${format.formatTokens(point.tokens)}`}
+                  />
+                  <span>{point.date.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel
+          title={`${toolOverview.selected?.name ?? "—"} · ${t("skills.agentOverview.composition")}`}
+          action={<MessagesSquare className="size-4 text-muted-foreground" />}
+        >
+          <p className="mb-4 text-[11px] text-muted-foreground">
+            {t("skills.agentOverview.compositionHint")}
+          </p>
+          <div className="space-y-3">
+            {toolOverview.context.map((row) => {
+              const total = toolOverview.context.reduce(
+                (sum, item) => sum + item.count,
+                0,
+              );
+              const percent = total > 0 ? (row.count / total) * 100 : 0;
+              return (
+                <div key={row.key} className="tool-overview-context-row">
+                  <span className="min-w-0 flex-1">
+                    {contextLabels[row.key]}
+                  </span>
+                  <span className="tt-num text-xs">
+                    {format.formatNumber(row.count)}
+                  </span>
+                  <span className="w-10 text-right font-mono text-[10px] text-muted-foreground">
+                    {format.formatNumber(Math.round(percent))}%
+                  </span>
+                  <span className="tool-overview-context-track">
+                    <span style={{ width: `${percent}%` }} />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+
+        <Panel
+          title={`${toolOverview.selected?.name ?? "—"} · ${t("skills.agentOverview.details")}`}
+          action={
+            <div className="tool-overview-detail-tabs">
+              <button
+                type="button"
+                onClick={() => setDetailMode("models")}
+                className={cn(
+                  detailMode === "models" && "tool-overview-detail-tab-active",
+                )}
+              >
+                <ChartNoAxesCombined className="size-3" />{" "}
+                {t("skills.agentOverview.byModel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailMode("projects")}
+                className={cn(
+                  detailMode === "projects" &&
+                    "tool-overview-detail-tab-active",
+                )}
+              >
+                <FolderKanban className="size-3" />{" "}
+                {t("skills.agentOverview.byProject")}
+              </button>
+            </div>
+          }
+        >
+          {detailRows.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">
+              {t("skills.agentOverview.noDetail")}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {detailRows.slice(0, 6).map((row) => (
+                <div key={row.key} className="tool-overview-breakdown-row">
+                  <span
+                    className="min-w-0 truncate font-mono text-xs"
+                    title={row.key}
+                  >
+                    {row.key}
+                  </span>
+                  <span className="tool-overview-breakdown-track">
+                    <span
+                      style={{
+                        width: `${(row.tokens / maxDetailTokens) * 100}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="tt-num text-right text-xs">
+                    {format.formatTokens(row.tokens)}
+                  </span>
+                  <span className="text-right font-mono text-[10px] text-muted-foreground">
+                    {format.formatNumber(row.events)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </section>
+
       <PageHeader
-        title={t("skills.pageHeader")}
-        desc={t("skills.pageHeaderDesc", {
-          count: format.formatNumber(summary.skillCount),
-          time: format.formatDateTime(summary.lastScannedAt, false),
-        })}
+        title={t("skills.agentOverview.workspaceTitle")}
+        desc={t("skills.agentOverview.workspaceDesc")}
       >
         <TTButton disabled={busy} onClick={() => void rescan()}>
           <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />

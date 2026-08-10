@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { SkillsPage } from "../modules/skill-catalog/presentation";
+import { getDashboardReadModel } from "../modules/dashboard/query";
 import { brandParams } from "../lib/app-config";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
@@ -10,8 +11,12 @@ import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 // filesystem paths remain confined to server-side adapters.
 export const Route = createFileRoute("/skills")({
   loader: async ({ location }) => {
-    const data = await getSkillWorkspace();
-    return { ...data, locale: resolveLocaleFromSearch(location.search) };
+    const locale = resolveLocaleFromSearch(location.search);
+    const [data, usage] = await Promise.all([
+      getSkillWorkspace(),
+      getDashboardReadModel({ data: locale }),
+    ]);
+    return { ...data, usage, locale };
   },
   head: ({ loaderData }) => ({
     meta: [
@@ -35,5 +40,6 @@ export const Route = createFileRoute("/skills")({
 });
 
 function SkillsRoute() {
-  return <SkillsPage initial={Route.useLoaderData()} />;
+  const { usage, ...initial } = Route.useLoaderData();
+  return <SkillsPage initial={initial} usage={usage} />;
 }

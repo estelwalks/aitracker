@@ -36,6 +36,15 @@ export type {
   SkillWorkspaceFacets,
   SkillWorkspaceSummary,
 } from "./asset-view.ts";
+export { buildToolOverview } from "./tool-overview.ts";
+export type {
+  ToolOverviewBreakdownRow,
+  ToolOverviewCard,
+  ToolOverviewContextRow,
+  ToolOverviewSkillUsage,
+  ToolOverviewTrendPoint,
+  ToolOverviewView,
+} from "./tool-overview.ts";
 
 export interface SkillCatalogApplication {
   readonly contract: SkillCatalogModuleContract;

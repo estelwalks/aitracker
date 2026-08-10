@@ -31,6 +31,7 @@ export {
   availableAssetSorts,
   buildSkillAssetSummary,
   buildSkillWorkspace,
+  buildToolOverview,
   evaluateInstallability,
   parseSkillPackageMetadata,
   projectSkillPackage,
@@ -50,6 +51,12 @@ export type {
   SkillWorkspaceFacet,
   SkillWorkspaceFacets,
   SkillWorkspaceSummary,
+  ToolOverviewBreakdownRow,
+  ToolOverviewCard,
+  ToolOverviewContextRow,
+  ToolOverviewSkillUsage,
+  ToolOverviewTrendPoint,
+  ToolOverviewView,
 } from "./application/index.ts";
 export {
   getLocalSkills,
