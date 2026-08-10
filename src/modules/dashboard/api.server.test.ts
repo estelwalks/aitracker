@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { APP_ID } from "../../lib/app-config.ts";
-import { toDashboardSnapshot } from "./api.server.ts";
+import { toDashboardSnapshot, toDashboardV2Snapshot } from "./api.server.ts";
 
 const rawSnapshot: LocalUsageSnapshot = {
   generatedAt: "2026-08-10T00:00:00.000Z",
@@ -91,4 +91,25 @@ test("dashboard snapshot projects scanner data without paths or command summarie
   assert.equal(result.details[0]?.project, APP_ID);
   assert.equal("commands" in (result.details[0]?.context ?? {}), false);
   assert.equal(JSON.stringify(result).includes("/Users/example"), false);
+  assert.equal(JSON.stringify(result).includes("opaque-session"), false);
+});
+
+test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
+  const snapshot = toDashboardSnapshot(rawSnapshot);
+  const result = toDashboardV2Snapshot({
+    snapshot,
+    skills: { available: true, count: 3, generatedAt: "2026-08-10T00:00:00Z" },
+    sessions: { available: true, generatedAt: null, records: [] },
+    pricingAvailable: true,
+  });
+
+  assert.deepEqual(result.events[0]?.context, {
+    textResponses: 0,
+    toolCalls: 0,
+    skillCalls: 0,
+    toolOutputCalls: 0,
+  });
+  assert.equal(JSON.stringify(result).includes("opaque-session"), false);
+  assert.equal(JSON.stringify(result).includes("/Users/example"), false);
+  assert.equal(JSON.stringify(result).includes("exec_command"), false);
 });

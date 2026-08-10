@@ -17,6 +17,8 @@ import { createProjectUsageReadModel } from "../projects/index.ts";
 import { createInsightsApplication } from "../insights/index.ts";
 import { estimateEventCost } from "../../lib/pricing/index.ts";
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
+import type { DashboardV2Snapshot } from "./contracts.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -30,7 +32,6 @@ function toDashboardEvent(event: {
   timestamp: string;
   model: string;
   project: string;
-  sessionId?: string;
   inputTokens: number;
   cachedInputTokens: number;
   cacheCreationInputTokens: number;
@@ -44,7 +45,6 @@ function toDashboardEvent(event: {
     timestamp: event.timestamp,
     model: event.model,
     project: projectKey(event.project),
-    ...(event.sessionId ? { sessionId: event.sessionId } : {}),
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
     cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -111,6 +111,65 @@ export function toDashboardSnapshot(
   };
 }
 
+/**
+ * Reduce the scanner result to the V2 browser contract. This is intentionally
+ * separate from the compatibility snapshot: V2 has no raw session identifier,
+ * command, path, diagnostics or nested context value/name payload.
+ */
+export function toDashboardV2Snapshot(input: {
+  readonly snapshot: DashboardUsageSnapshot;
+  readonly skills: import("./contracts.ts").DashboardSkillSummary;
+  readonly sessions: import("./contracts.ts").DashboardSessionsSummary;
+  readonly pricingAvailable: boolean;
+}): DashboardV2Snapshot {
+  const sourceStatus = new Map(
+    input.snapshot.sources.map((source) => [source.source, source]),
+  );
+  const tools = PUBLIC_TOOL_MANIFEST.tools.map((tool) => {
+    const source = sourceStatus.get(tool.id as DashboardUsageEvent["source"]);
+    return {
+      id: tool.id,
+      name: tool.nameZh,
+      available: source?.available ?? false,
+      detected: source?.detected ?? source?.available ?? false,
+    };
+  });
+  return {
+    generatedAt: input.snapshot.generatedAt,
+    mode: input.snapshot.mode,
+    tools,
+    skills: input.skills,
+    sessions: input.sessions,
+    pricingAvailable: input.pricingAvailable,
+    events: input.snapshot.details.map((event) => ({
+      source: event.source,
+      timestamp: event.timestamp,
+      model: event.model,
+      project: event.project,
+      inputTokens: event.inputTokens,
+      cachedInputTokens: event.cachedInputTokens,
+      cacheCreationInputTokens: event.cacheCreationInputTokens,
+      outputTokens: event.outputTokens,
+      reasoningOutputTokens: event.reasoningOutputTokens,
+      totalTokens: event.totalTokens,
+      context: {
+        textResponses: event.context?.textResponse ? 1 : 0,
+        toolCalls:
+          event.context?.tools?.reduce(
+            (total, item) => total + item.calls,
+            0,
+          ) ?? 0,
+        skillCalls:
+          event.context?.skills?.reduce(
+            (total, item) => total + item.calls,
+            0,
+          ) ?? 0,
+        toolOutputCalls: event.context?.toolOutputs?.calls ?? 0,
+      },
+    })),
+  };
+}
+
 export type DashboardApiResponse = DashboardModuleContract;
 
 /** Server-only query adapter. No scanner, pricing rules, or filesystem details cross this boundary. */
@@ -145,6 +204,30 @@ export async function loadDashboardReadModel(
       totalTokens: snapshot.totals.totalTokens,
     },
   });
+  const skills =
+    skillsResult.status === "fulfilled"
+      ? {
+          available: true,
+          count: skillsResult.value.skills.length,
+          generatedAt: skillsResult.value.generatedAt,
+        }
+      : { available: false, count: 0, generatedAt: null };
+  const sessions =
+    sessionsResult.status === "fulfilled"
+      ? {
+          available: true,
+          generatedAt: sessionsResult.value.generatedAt,
+          records: sessionsResult.value.sessions.map((session) => ({
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            durationMs: session.durationMs,
+            turns: session.turns,
+            editTurns: session.editTurns,
+          })),
+        }
+      : { available: false, generatedAt: null, records: [] };
+  const pricing =
+    pricingResult.status === "fulfilled" ? pricingResult.value : null;
   return createDashboardApplication().read({
     snapshot,
     error:
@@ -157,33 +240,19 @@ export async function loadDashboardReadModel(
               brandParams,
             )
         : null,
-    skills:
-      skillsResult.status === "fulfilled"
-        ? {
-            available: true,
-            count: skillsResult.value.skills.length,
-            generatedAt: skillsResult.value.generatedAt,
-          }
-        : { available: false, count: 0, generatedAt: null },
-    sessions:
-      sessionsResult.status === "fulfilled"
-        ? {
-            available: true,
-            generatedAt: sessionsResult.value.generatedAt,
-            records: sessionsResult.value.sessions.map((session) => ({
-              startedAt: session.startedAt,
-              endedAt: session.endedAt,
-              durationMs: session.durationMs,
-              turns: session.turns,
-              editTurns: session.editTurns,
-            })),
-          }
-        : { available: false, generatedAt: null, records: [] },
-    pricing: pricingResult.status === "fulfilled" ? pricingResult.value : null,
+    skills,
+    sessions,
+    pricing,
     locale,
     projectCount: projectModel.projects.length,
     activeInsightCount: insightSnapshot.insights.filter(
       (insight) => insight.status === "active",
     ).length,
+    v2: toDashboardV2Snapshot({
+      snapshot,
+      skills,
+      sessions,
+      pricingAvailable: pricing != null,
+    }),
   });
 }
