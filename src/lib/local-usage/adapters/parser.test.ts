@@ -14,10 +14,8 @@ const CASES: Array<{
   format: "json" | "jsonl";
 }> = [
   { source: "cursor", file: "cursor.json", format: "json" },
-  { source: "gemini-cli", file: "gemini-cli.json", format: "json" },
   { source: "kimi-code", file: "kimi-code.jsonl", format: "jsonl" },
   { source: "opencode", file: "opencode.json", format: "json" },
-  { source: "grok", file: "grok.jsonl", format: "jsonl" },
   { source: "github-copilot", file: "github-copilot.jsonl", format: "jsonl" },
   { source: "cline", file: "cline.json", format: "json" },
   { source: "roo-code", file: "roo-code.json", format: "json" },

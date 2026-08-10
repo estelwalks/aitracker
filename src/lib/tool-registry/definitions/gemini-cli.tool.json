@@ -16,9 +16,12 @@
       {
         "targets": ["macos", "windows10", "windows11", "linux"],
         "base": "home",
-        "path": ".gemini"
+        "path": ".gemini/tmp"
       }
-    ]
+    ],
+    "executable": {
+      "shared": ["gemini"]
+    }
   },
   "storage": {
     "skills": {
@@ -34,22 +37,15 @@
   },
   "capabilities": {
     "usage": {
-      "mode": "adapter",
-      "reader": "generic",
+      "mode": "native",
+      "reader": "gemini-session-v1",
       "paths": [
         {
           "targets": ["macos", "windows10", "windows11", "linux"],
           "base": "home",
           "path": ".gemini/tmp",
-          "glob": "**/chats/*.json",
+          "glob": "**/chats/session-*.json",
           "format": "json"
-        },
-        {
-          "targets": ["macos", "windows10", "windows11", "linux"],
-          "base": "home",
-          "path": ".gemini",
-          "glob": "**/*usage*.jsonl",
-          "format": "jsonl"
         }
       ]
     },

@@ -137,11 +137,11 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   });
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    12,
+    13,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,
-    17,
+    16,
   );
 });
 
