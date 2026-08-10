@@ -4,9 +4,9 @@
 |------|-----|
 | 文档类型 | 敏捷任务清单 (AGILE-TASK) |
 | 项目名称 | TrustTools |
-| 版本 | v1.0 |
+| 版本 | v2.0 |
 | 创建日期 | 2026-08-10 10:55:00 |
-| 更新日期 | 2026-08-10 10:55:00 |
+| 更新日期 | 2026-08-10 12:38:37 |
 | 生成工具 | agile-feature-dev |
 | 文档状态 | 草稿 |
 
@@ -14,46 +14,47 @@
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v2.0 | 2026-08-10 12:38:37 | 依据新原型改为工具视角总览与资产运营台实施顺序。 |
 | v1.0 | 2026-08-10 10:55:00 | 将 UI、首页与工具概览重构拆为可验证任务。 |
 
 ---
 
 ## Epic: 模块化 UI 与核心概览重构
 
-### Story UI-01: 全局设计系统与应用壳
+### Story UI-02: 全局设计系统与应用壳
 
 **工作量**: 3 人日  
 **验收标准**: 统一原型视觉语言，保留 i18n、主题、有效导航与响应式侧栏。
 
-- [ ] T-UI-01：重构设计令牌、通用 panel/metric/toolbar 视觉规范。
-- [ ] T-UI-02：升级 AppShell，消除硬编码状态并保持现有路由。
+- [ ] T-UI-03：按新原型重构设计令牌、Hero、卡片墙、panel/metric/toolbar 和响应式表面。
+- [ ] T-UI-04：升级 AppShell，保留 i18n、主题、有效路由和导航搜索。
 
-### Story DASH-01: 首页总览的真实数据与交互
+### Story DASH-02: 首页总览的真实数据与工具视角交互
 
 **工作量**: 5 人日  
 **验收标准**: 统一统计区间驱动 KPI、趋势、拆分、明细和导出；不使用 Mock 指标。
 
-- [ ] T-DASH-01：实现 dashboard renderer-safe read model 与数据可用性投影。
-- [ ] T-DASH-02：重构首页工具栏、KPI rail、趋势/拆分/热力图/明细布局。
-- [ ] T-DASH-03：补充真实会话指标与空/降级状态。
+- [ ] T-DASH-04：实现 Dashboard V2 renderer-safe read model、统一 period 过滤和数据可用性投影。
+- [ ] T-DASH-05：实现工具/来源卡、趋势、上下文统计、模型/项目和贡献日历的纯聚合与单元测试。
+- [ ] T-DASH-06：重构首页 Hero、sticky range、KPI、工具选择联动和空/降级状态。
 
-### Story TOOLS-01: 工具概览与资产治理
+### Story TOOLS-02: 工具概览与资产治理
 
 **工作量**: 5 人日  
 **验收标准**: 工具页从真实扫描 DTO 构建概览、筛选、排序与分页，所有治理操作保留明确确认。
 
-- [ ] T-TOOLS-01：建立 skill-catalog renderer-safe summary/facet/item view model。
-- [ ] T-TOOLS-02：重构工具页页头、筛选器、列表与详情展示。
-- [ ] T-TOOLS-03：接入真实刷新与保留安装、同步、卸载、黑名单交互。
+- [ ] T-TOOLS-04：建立 skill-catalog workspace summary、coverage、facet/item read model，保持 path/source 信息隔离。
+- [ ] T-TOOLS-05：重构工具页页头、状态摘要、覆盖卡片、筛选器、资产列表与详情展示。
+- [ ] T-TOOLS-06：接入真实刷新与保留安装、同步、卸载、黑名单交互。
 
 ## 依赖关系
 
 | Task | 依赖 | 阻塞 |
 |------|------|------|
-| T-DASH-02 | T-UI-01、T-DASH-01 | 是 |
-| T-DASH-03 | T-DASH-01 | 否 |
-| T-TOOLS-02 | T-UI-01、T-TOOLS-01 | 是 |
-| T-TOOLS-03 | T-TOOLS-02 | 否 |
+| T-DASH-05 | T-DASH-04 | 是 |
+| T-DASH-06 | T-UI-03、T-DASH-04、T-DASH-05 | 是 |
+| T-TOOLS-05 | T-UI-03、T-TOOLS-04 | 是 |
+| T-TOOLS-06 | T-TOOLS-05 | 否 |
 
 ## 质量门禁
 
