@@ -573,7 +573,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
               total: data.v2.tools.length,
             })}
           </small>
-          <Link to="/skills">{t("dashboard.v2.openSkills")}</Link>
+          <Link to="/agents">{t("dashboard.v2.openSkills")}</Link>
         </article>
         <article className="dashboard-spotlight-card">
           <ShieldCheck className="size-4" />
@@ -595,7 +595,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
               ? t("dashboard.v2.skillUnavailable")
               : t("dashboard.kpi.skillScanNote")}
           </small>
-          <Link to="/skills">{t("dashboard.v2.openSkills")}</Link>
+          <Link to="/agents">{t("dashboard.v2.openSkills")}</Link>
         </article>
         <article className="dashboard-spotlight-card">
           <Activity className="size-4" />

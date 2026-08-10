@@ -4,6 +4,7 @@ build/
 release/
 out/
 .output/
+.tanstack/
 test-results/
 .env
 .env.local

@@ -9,7 +9,7 @@ import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
 // The route forwards opaque installationRef values from the public query facade;
 // filesystem paths remain confined to server-side adapters.
-export const Route = createFileRoute("/skills")({
+export const Route = createFileRoute("/agents")({
   loader: async ({ location }) => {
     const locale = resolveLocaleFromSearch(location.search);
     const [data, usage] = await Promise.all([
@@ -36,10 +36,10 @@ export const Route = createFileRoute("/skills")({
       },
     ],
   }),
-  component: SkillsRoute,
+  component: AgentsRoute,
 });
 
-function SkillsRoute() {
+function AgentsRoute() {
   const { usage, ...initial } = Route.useLoaderData();
   return <SkillsPage initial={initial} usage={usage} />;
 }
