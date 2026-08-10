@@ -2,18 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildToolOverview } from "./tool-overview.ts";
-import type {
-  DashboardUsageEvent,
-  DashboardV2Tool,
-} from "../../dashboard/contracts.ts";
+import type { DashboardV2Snapshot } from "../../dashboard/contracts.ts";
 
-const input: {
-  readonly tools: readonly DashboardV2Tool[];
-  readonly events: readonly DashboardUsageEvent[];
-} = {
+const input: DashboardV2Snapshot = {
+  generatedAt: "2026-08-10T12:00:00.000Z",
+  mode: "real",
+  pricingAvailable: false,
+  skills: { available: true, count: 2, generatedAt: null },
+  sessions: {
+    available: true,
+    generatedAt: null,
+    byProjectDay: [
+      {
+        source: "codex",
+        project: "trusttools",
+        date: "2026-08-10",
+        count: 2,
+      },
+    ],
+    bySourceDay: [{ source: "codex", date: "2026-08-10", count: 2 }],
+  },
   tools: [
     { id: "codex", name: "Codex CLI", available: true, detected: true },
     { id: "cursor", name: "Cursor", available: true, detected: false },
+    { id: "other", name: "Other", available: false, detected: false },
   ],
   events: [
     {
@@ -28,9 +40,10 @@ const input: {
       reasoningOutputTokens: 0,
       totalTokens: 100,
       context: {
-        textResponse: true,
-        tools: [{ name: "exec", category: "execution", calls: 2 }],
-        skills: [],
+        textResponses: 1,
+        toolCalls: 2,
+        skillCalls: 0,
+        toolOutputCalls: 0,
       },
     },
     {
@@ -44,6 +57,12 @@ const input: {
       outputTokens: 10,
       reasoningOutputTokens: 0,
       totalTokens: 50,
+      context: {
+        textResponses: 1,
+        toolCalls: 0,
+        skillCalls: 0,
+        toolOutputCalls: 0,
+      },
     },
   ],
 };
@@ -60,14 +79,21 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   assert.equal(view.cards[0]?.tokens, 150);
   assert.equal(view.cards[0]?.events, 2);
   assert.equal(
-    view.cards.some((card) => card.id === "cursor"),
-    false,
+    view.cards.find((card) => card.id === "cursor")?.state,
+    "available",
   );
+  assert.equal(
+    view.cards.find((card) => card.id === "other")?.state,
+    "unavailable",
+  );
+  assert.equal(view.cards.find((card) => card.id === "codex")?.sessions, 2);
+  assert.equal(view.cards.find((card) => card.id === "codex")?.cacheRate, 0);
+  assert.equal(view.projects[0]?.sessions, 2);
   assert.equal(view.models[0]?.key, "gpt-test");
   assert.equal(view.projects[0]?.key, "trusttools");
 });
 
-test("skill evidence distinguishes observed zero from absent context evidence", () => {
+test("skill evidence preserves observed zero and unavailable sessions", () => {
   const observed = buildToolOverview(
     input,
     "codex",
@@ -78,11 +104,26 @@ test("skill evidence distinguishes observed zero from absent context evidence", 
   assert.deepEqual(observed.skillUsage, { observed: true, calls: 0 });
 
   const absent = buildToolOverview(
-    { ...input, events: [input.events[1]] },
+    { ...input, sessions: { ...input.sessions, available: false } },
+    "codex",
+    "all",
+    "2026-08-10",
+    "2026-08-10",
+  );
+  assert.equal(absent.sessions, null);
+  assert.equal(absent.projects[0]?.sessions, null);
+});
+
+test("tool overview stays within renderer-safe aggregate fields", () => {
+  const view = buildToolOverview(
+    input,
     "codex",
     "today",
     "2026-08-10",
     "2026-08-10",
   );
-  assert.deepEqual(absent.skillUsage, { observed: false, calls: 0 });
+  const serialized = JSON.stringify(view);
+  assert.equal(serialized.includes("sessionId"), false);
+  assert.equal(serialized.includes("/Users/"), false);
+  assert.equal(serialized.includes("raw context"), false);
 });
