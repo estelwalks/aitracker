@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createDashboardV2View } from "./v2.ts";
+import { createDashboardV2HeroView, createDashboardV2View } from "./v2.ts";
 import type { DashboardV2Snapshot } from "../contracts.ts";
 
 const snapshot: DashboardV2Snapshot = {
@@ -99,4 +99,60 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
 
   assert.equal(view.sessions, null);
   assert.equal(view.estimatedCostUsd, null);
+});
+
+test("Dashboard V2 Hero derives live listener state and insights from safe observations", () => {
+  const hero = createDashboardV2HeroView({
+    snapshot,
+    activeInsightCount: 2,
+    now: new Date("2026-08-10T10:10:00.000Z"),
+    monitoring: {
+      module: "monitoring",
+      running: true,
+      startedAt: "2026-08-10T10:00:00.000Z",
+      heartbeatAt: "2026-08-10T10:09:00.000Z",
+      pendingCount: 1,
+      collectors: [
+        { id: "usage", state: "healthy", pending: false },
+        { id: "skills", state: "healthy", pending: false },
+        { id: "sessions", state: "healthy", pending: false },
+        { id: "security", state: "healthy", pending: false },
+      ],
+      security: {
+        assessedAt: "2026-08-10T10:09:00.000Z",
+        discoveredAssetCount: 3,
+        assessedAssetCount: 3,
+        failedAssetCount: 0,
+        cleanCount: 3,
+        suspiciousCount: 0,
+        dangerousCount: 0,
+        unknownCount: 0,
+      },
+    },
+  });
+
+  assert.deepEqual(hero.monitoring, {
+    health: "listening",
+    isLive: true,
+    liveTools: 1,
+    detectedTools: 1,
+    pendingCount: 3,
+  });
+  assert.deepEqual(
+    hero.insights.map((insight) => insight.kind),
+    ["usage", "cache", "security", "monitoring"],
+  );
+});
+
+test("Dashboard V2 Hero never presents a missing monitoring read as live", () => {
+  const hero = createDashboardV2HeroView({
+    snapshot,
+    activeInsightCount: 0,
+    monitoring: null,
+    now: new Date("2026-08-10T10:10:00.000Z"),
+  });
+
+  assert.equal(hero.monitoring.health, "unavailable");
+  assert.equal(hero.monitoring.isLive, false);
+  assert.equal(hero.monitoring.liveTools, 1);
 });

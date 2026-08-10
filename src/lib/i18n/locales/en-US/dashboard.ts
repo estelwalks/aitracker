@@ -169,6 +169,34 @@ export const dashboard = {
   v2: {
     heroTitle: "Today's insight",
     localOnly: "Local analysis",
+    pendingItems: "{count} items pending",
+    realtimeAnalysis: "Real-time analysis",
+    rotateInsight: "Next insight",
+    insightDotsAria: "Insight selector",
+    insightDot: "Insight {index}",
+    monitoringAria: "Local listener status",
+    monitoring: {
+      listening: "System continuously listening",
+      available: "Listener currently stopped",
+      degraded: "Listener needs attention",
+      unavailable: "Listener status unavailable",
+    },
+    agentsLive: "{live} / {detected} agents live",
+    liveBadge: "LIVE",
+    insights: {
+      usage: "{tool} has the highest observed usage, totaling {tokens}.",
+      cache:
+        "The observed cache-hit rate is {rate}, calculated only from local request usage.",
+      cost: "The local cost estimate for recognized models totals {cost}.",
+      securityRisk:
+        "Background security scanning found {count} aggregate items that need attention.",
+      securityClean:
+        "Background security scanning completed with no aggregate risk items.",
+      monitoring:
+        "The listener state comes from the latest persisted heartbeat of the local background service.",
+      empty:
+        "Waiting for local usage, cache, cost, or security aggregate data to analyze.",
+    },
     spotlightTitle: "System snapshot",
     overviewLabel: "Overview",
     cacheLabel: "Cache hit",
@@ -176,6 +204,9 @@ export const dashboard = {
     toolCountHint: "{detected} detected · {total} supported",
     securityLabel: "Security posture",
     securityHint: "No safe aggregate is available here",
+    securityAttention: "{count} attention items",
+    securityClean: "Normal",
+    securityScanSummary: "Scanned {assessed} / {discovered} local assets",
     assetsLabel: "Skill assets",
     todayUsage: "Today's usage",
     viewUsage: "View usage",

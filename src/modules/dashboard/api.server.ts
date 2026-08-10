@@ -19,6 +19,7 @@ import { estimateEventCost } from "../../lib/pricing/index.ts";
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
 import type { DashboardV2Snapshot } from "./contracts.ts";
+import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -185,13 +186,14 @@ export async function loadDashboardReadModel(
       ? usageResult.value
       : createEmptyUsageSnapshot();
   const snapshot = toDashboardSnapshot(rawSnapshot);
-  const [skillsResult, pricingResult, sessionsResult] =
+  const [skillsResult, pricingResult, sessionsResult, monitoringResult] =
     await Promise.allSettled([
       getLocalSkills(),
       getPricingSnapshot({
         data: [...new Set(snapshot.details.map((event) => event.model))],
       }),
       getLocalSessions({ data: {} }),
+      getMonitoringStatus(),
     ]);
   const projectModel = createProjectUsageReadModel(
     { events: snapshot.details },
@@ -242,6 +244,8 @@ export async function loadDashboardReadModel(
         : null,
     skills,
     sessions,
+    monitoring:
+      monitoringResult.status === "fulfilled" ? monitoringResult.value : null,
     pricing,
     locale,
     projectCount: projectModel.projects.length,
