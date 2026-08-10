@@ -165,6 +165,38 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
   });
 });
 
+test("the first active tool is selected when there is no explicit selection", () => {
+  const view = buildToolOverview(
+    input,
+    null,
+    "today",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.selected?.id, "codex");
+});
+
+test("detail rows retain real priced cost semantics when pricing is available", () => {
+  const view = buildToolOverview(
+    { ...input, pricingAvailable: true },
+    "codex",
+    "today",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(typeof view.models[0]?.estimatedCostUsd, "number");
+  assert.equal(view.models[0]?.estimatedCostIsPartial, false);
+  assert.deepEqual(view.tokenComposition, {
+    inputTokens: 120,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 30,
+    reasoningOutputTokens: 0,
+  });
+});
+
 test("tool card names use the server-projected registry display name", () => {
   const view = buildToolOverview(
     {

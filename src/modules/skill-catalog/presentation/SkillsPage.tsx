@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Activity,
   ArrowDown,
   ArrowUp,
   Bot,
@@ -19,7 +18,6 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   ShieldBan,
   Sparkles,
   Trash2,
@@ -606,12 +604,6 @@ export function SkillsPage({
   const updateStatusLabel = (value: AssetUpdateFilter) =>
     t(`skills.update.${value}`);
   const sortLabel = (value: AssetSortKey) => t(`skills.sort.${value}`);
-  const contextLabels = {
-    textResponses: t("skills.agentOverview.textResponses"),
-    toolCalls: t("skills.agentOverview.toolCalls"),
-    skillCalls: t("skills.agentOverview.skillCalls"),
-    toolOutputCalls: t("skills.agentOverview.toolOutputCalls"),
-  } as const;
   const detailRows =
     detailMode === "models" ? toolOverview.models : toolOverview.projects;
   const maxTrendTokens = Math.max(
@@ -619,7 +611,68 @@ export function SkillsPage({
     1,
   );
   const maxDetailTokens = Math.max(...detailRows.map((item) => item.tokens), 1);
-  const security = usage.monitoring?.security;
+  const averageTrendTokens =
+    toolOverview.trend.length === 0
+      ? 0
+      : toolOverview.totalTokens / toolOverview.trend.length;
+  const peakTrendTokens = Math.max(
+    ...toolOverview.trend.map((item) => item.tokens),
+    0,
+  );
+  const compositionRows = [
+    {
+      id: "cache",
+      label: t("skills.agentOverview.cacheTokens"),
+      value: toolOverview.tokenComposition.cachedInputTokens,
+      detail:
+        toolOverview.cacheRate == null
+          ? t("skills.agentOverview.cacheUnavailable")
+          : t("skills.agentOverview.cacheRate", {
+              rate: format.formatPercent(toolOverview.cacheRate),
+            }),
+    },
+    {
+      id: "messages",
+      label: t("skills.agentOverview.messageTokens"),
+      value:
+        toolOverview.tokenComposition.inputTokens +
+        toolOverview.tokenComposition.outputTokens,
+      detail: format.formatTokens(
+        toolOverview.tokenComposition.inputTokens +
+          toolOverview.tokenComposition.outputTokens,
+      ),
+    },
+    {
+      id: "reasoning",
+      label: t("skills.agentOverview.reasoningTokens"),
+      value: toolOverview.tokenComposition.reasoningOutputTokens,
+      detail: format.formatTokens(
+        toolOverview.tokenComposition.reasoningOutputTokens,
+      ),
+    },
+    {
+      id: "system",
+      label: t("skills.agentOverview.systemPrompt"),
+      value: 0,
+      detail: t("skills.agentOverview.notSeparatelyObserved"),
+    },
+    {
+      id: "tools",
+      label: t("skills.agentOverview.toolCalls"),
+      value:
+        toolOverview.context.find((row) => row.key === "toolCalls")?.count ?? 0,
+      detail: t("skills.agentOverview.observedCalls", {
+        count: format.formatNumber(
+          toolOverview.context.find((row) => row.key === "toolCalls")?.count ??
+            0,
+        ),
+      }),
+    },
+  ];
+  const maxCompositionValue = Math.max(
+    ...compositionRows.map((row) => row.value),
+    1,
+  );
   const insights = [
     ...(toolOverview.selected == null
       ? [
@@ -627,7 +680,6 @@ export function SkillsPage({
             id: "empty",
             title: t("skills.agentOverview.insightTitle"),
             description: t("skills.agentOverview.noActivity"),
-            detail: t("skills.agentOverview.noActivity"),
           },
         ]
       : [
@@ -640,14 +692,6 @@ export function SkillsPage({
               events: format.formatNumber(toolOverview.totalEvents),
               tokens: format.formatTokens(toolOverview.totalTokens),
             }),
-            detail: toolOverview.selected.lastActiveAt
-              ? t("skills.agentOverview.lastActive", {
-                  time: format.formatDateTime(
-                    toolOverview.selected.lastActiveAt,
-                    false,
-                  ),
-                })
-              : t("skills.agentOverview.noActivity"),
           },
         ]),
     ...(toolOverview.cacheRate == null
@@ -659,7 +703,6 @@ export function SkillsPage({
             description: t("skills.agentOverview.insightCacheDescription", {
               rate: format.formatPercent(toolOverview.cacheRate),
             }),
-            detail: t("skills.agentOverview.cacheEvidence"),
           },
         ]),
     ...(toolOverview.skillUsage.observed
@@ -668,9 +711,6 @@ export function SkillsPage({
             id: "skill",
             title: t("skills.agentOverview.insightSkillTitle"),
             description: t("skills.agentOverview.insightSkillDescription", {
-              count: format.formatNumber(toolOverview.skillUsage.calls),
-            }),
-            detail: t("skills.agentOverview.skillEvidenceObserved", {
               count: format.formatNumber(toolOverview.skillUsage.calls),
             }),
           },
@@ -684,23 +724,6 @@ export function SkillsPage({
             title: t("skills.agentOverview.insightSessionTitle"),
             description: t("skills.agentOverview.insightSessionDescription", {
               count: format.formatNumber(toolOverview.sessions),
-            }),
-            detail: t("skills.agentOverview.sessionAggregateHint"),
-          },
-        ]),
-    ...(security == null
-      ? []
-      : [
-          {
-            id: "security",
-            title: t("skills.agentOverview.insightSecurityTitle"),
-            description: t("skills.agentOverview.insightSecurityDescription", {
-              count: format.formatNumber(
-                security.suspiciousCount + security.dangerousCount,
-              ),
-            }),
-            detail: t("skills.agentOverview.securityAssessed", {
-              count: format.formatNumber(security.assessedAssetCount),
             }),
           },
         ]),
@@ -724,13 +747,11 @@ export function SkillsPage({
               </span>
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold">
-                  {currentInsight.title}
+                  {toolOverview.selected?.name ?? "—"} ·{" "}
+                  {t("skills.agentOverview.dedicatedInsight")}
                 </h2>
                 <p className="mt-2 max-w-3xl text-[13px] leading-6 text-muted-foreground">
                   {currentInsight.description}
-                </p>
-                <p className="mt-3 font-mono text-[11px] text-muted-foreground">
-                  {currentInsight.detail}
                 </p>
                 {insights.length > 1 && (
                   <div
@@ -775,28 +796,6 @@ export function SkillsPage({
           </div>
         </section>
 
-        <section className="tool-overview-status-strip">
-          <span>
-            <Activity className="size-3.5" />
-            {t("skills.agentOverview.toolCoverage", {
-              detected: format.formatNumber(toolOverview.detectedToolCount),
-              available: format.formatNumber(toolOverview.availableToolCount),
-            })}
-          </span>
-          <span>
-            {t("skills.agentOverview.activeTools", {
-              count: format.formatNumber(toolOverview.activeToolCount),
-            })}
-          </span>
-          <span>
-            {toolOverview.sessions == null
-              ? t("skills.agentOverview.sessionsUnavailable")
-              : t("skills.agentOverview.sessionsObserved", {
-                  count: format.formatNumber(toolOverview.sessions),
-                })}
-          </span>
-        </section>
-
         <div className="tool-overview-card-wall">
           {toolOverview.cards.map((tool) => (
             <button
@@ -829,13 +828,13 @@ export function SkillsPage({
                   {tool.active
                     ? t("skills.agentOverview.active")
                     : tool.state === "detected"
-                      ? t("skills.agentOverview.state.detected")
+                      ? t("skills.agentOverview.dormant")
                       : tool.state === "available"
                         ? t("skills.agentOverview.state.available")
                         : t("skills.agentOverview.state.unavailable")}
                 </span>
               </div>
-              <div className="mt-5 flex items-end justify-between gap-3">
+              <div className="mt-4 flex items-end justify-between gap-3">
                 <span className="tt-num text-2xl">
                   {format.formatTokens(tool.tokens)}
                 </span>
@@ -850,24 +849,7 @@ export function SkillsPage({
                   }}
                 />
               </div>
-              <div className="mt-3 space-y-1 text-left font-mono text-[10px] text-muted-foreground">
-                <p>
-                  {t("skills.agentOverview.observedEvents", {
-                    count: format.formatNumber(tool.events),
-                  })}
-                </p>
-                <p>
-                  {tool.skillUsage.observed
-                    ? t("skills.agentOverview.skillEvidenceObserved", {
-                        count: format.formatNumber(tool.skillUsage.calls),
-                      })
-                    : t("skills.agentOverview.skillEvidenceUnavailable")}
-                </p>
-                <p>
-                  {t("skills.agentOverview.tokenShare", {
-                    percent: format.formatPercent(tool.share),
-                  })}
-                </p>
+              <div className="tool-overview-card-facts">
                 <p>
                   {tool.sessions == null
                     ? t("skills.agentOverview.sessionsUnavailable")
@@ -887,7 +869,9 @@ export function SkillsPage({
                     ? t("skills.agentOverview.lastActive", {
                         time: format.formatDateTime(tool.lastActiveAt, false),
                       })
-                    : t("skills.agentOverview.noActivity")}
+                    : tool.state === "detected"
+                      ? t("skills.agentOverview.dormant")
+                      : t("skills.agentOverview.noActivity")}
                 </p>
               </div>
             </button>
@@ -947,11 +931,12 @@ export function SkillsPage({
           <p className="mb-4 text-[11px] text-muted-foreground">
             {t("skills.agentOverview.trendSummary", {
               tokens: format.formatTokens(toolOverview.totalTokens),
-              events: format.formatNumber(toolOverview.totalEvents),
+              average: format.formatTokens(averageTrendTokens),
+              peak: format.formatTokens(peakTrendTokens),
             })}
           </p>
           {toolOverview.trend.length === 0 ? (
-            <p className="py-10 text-sm text-muted-foreground">
+            <p className="tool-overview-compact-empty text-sm text-muted-foreground">
               {t("skills.agentOverview.noActivity")}
             </p>
           ) : (
@@ -984,22 +969,18 @@ export function SkillsPage({
             {t("skills.agentOverview.compositionHint")}
           </p>
           <div className="space-y-3">
-            {toolOverview.context.map((row) => {
-              const total = toolOverview.context.reduce(
-                (sum, item) => sum + item.count,
-                0,
-              );
-              const percent = total > 0 ? (row.count / total) * 100 : 0;
+            {compositionRows.map((row) => {
+              const percent = (row.value / maxCompositionValue) * 100;
               return (
-                <div key={row.key} className="tool-overview-context-row">
-                  <span className="min-w-0 flex-1">
-                    {contextLabels[row.key]}
-                  </span>
+                <div key={row.id} className="tool-overview-context-row">
+                  <span className="min-w-0 flex-1">{row.label}</span>
                   <span className="tt-num text-xs">
-                    {format.formatNumber(row.count)}
+                    {row.id === "tools"
+                      ? format.formatNumber(row.value)
+                      : format.formatTokens(row.value)}
                   </span>
-                  <span className="w-10 text-right font-mono text-[10px] text-muted-foreground">
-                    {format.formatNumber(Math.round(percent))}%
+                  <span className="w-28 truncate text-right font-mono text-[10px] text-muted-foreground">
+                    {row.detail}
                   </span>
                   <span className="tool-overview-context-track">
                     <span style={{ width: `${percent}%` }} />
@@ -1038,8 +1019,17 @@ export function SkillsPage({
             </div>
           }
         >
+          <p className="mb-4 text-[11px] text-muted-foreground">
+            {detailMode === "models"
+              ? t("skills.agentOverview.modelCount", {
+                  count: format.formatNumber(toolOverview.models.length),
+                })
+              : t("skills.agentOverview.projectSessions", {
+                  count: format.formatNumber(toolOverview.projects.length),
+                })}
+          </p>
           {detailRows.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">
+            <p className="tool-overview-compact-empty text-sm text-muted-foreground">
               {t("skills.agentOverview.noDetail")}
             </p>
           ) : (
@@ -1063,68 +1053,18 @@ export function SkillsPage({
                     {format.formatTokens(row.tokens)}
                   </span>
                   <span className="text-right font-mono text-[10px] text-muted-foreground">
-                    {detailMode === "projects"
-                      ? row.sessions == null
-                        ? t("skills.agentOverview.sessionsUnavailable")
-                        : t("skills.agentOverview.projectSessions", {
-                            count: format.formatNumber(row.sessions),
-                          })
-                      : t("skills.agentOverview.observedEvents", {
-                          count: format.formatNumber(row.events),
-                        })}
+                    {t("skills.agentOverview.observedCalls", {
+                      count: format.formatNumber(row.events),
+                    })}
+                  </span>
+                  <span className="text-right font-mono text-[10px] text-muted-foreground">
+                    {row.estimatedCostUsd == null
+                      ? "—"
+                      : `${row.estimatedCostIsPartial ? "~" : ""}${format.formatUsd(row.estimatedCostUsd)}`}
                   </span>
                 </div>
               ))}
             </div>
-          )}
-        </Panel>
-
-        <Panel
-          title={t("skills.agentOverview.securityTitle")}
-          action={<ShieldCheck className="size-4 text-muted-foreground" />}
-        >
-          {security == null ? (
-            <p className="py-4 text-sm text-muted-foreground">
-              {t("skills.agentOverview.securityUnavailable")}
-            </p>
-          ) : (
-            <>
-              <p className="mb-4 text-[11px] text-muted-foreground">
-                {t("skills.agentOverview.securityHint", {
-                  time: format.formatDateTime(security.assessedAt, false),
-                })}
-              </p>
-              <div className="tool-overview-security-grid">
-                <div>
-                  <span>{t("skills.agentOverview.securityAssessedLabel")}</span>
-                  <strong className="tt-num">
-                    {format.formatNumber(security.assessedAssetCount)}
-                  </strong>
-                </div>
-                <div>
-                  <span>
-                    {t("skills.agentOverview.securityAttentionLabel")}
-                  </span>
-                  <strong className="tt-num">
-                    {format.formatNumber(
-                      security.suspiciousCount + security.dangerousCount,
-                    )}
-                  </strong>
-                </div>
-                <div>
-                  <span>{t("skills.agentOverview.securityUnknownLabel")}</span>
-                  <strong className="tt-num">
-                    {format.formatNumber(security.unknownCount)}
-                  </strong>
-                </div>
-                <div>
-                  <span>{t("skills.agentOverview.securityFailedLabel")}</span>
-                  <strong className="tt-num">
-                    {format.formatNumber(security.failedAssetCount)}
-                  </strong>
-                </div>
-              </div>
-            </>
           )}
         </Panel>
       </section>
