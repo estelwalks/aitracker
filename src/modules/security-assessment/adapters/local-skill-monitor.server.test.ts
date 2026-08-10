@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { findDtoDisclosureViolations } from "../../../test-support/privacy-contract.ts";
 import { createLocalSkillSecurityMonitor } from "./local-skill-monitor.server.ts";
+import { APP_ID } from "../../../lib/app-config.ts";
 import type {
   AssetAssessment,
   SecurityAssessmentHistoryStore,
@@ -56,7 +57,7 @@ function discoveryFor(paths: readonly string[]) {
 }
 
 test("background monitor scans discovered skills, persists opaque hashes, and returns safe summaries", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skill-scan-"));
+  const root = await mkdtemp(join(tmpdir(), `${APP_ID}-skill-scan-`));
   const safe = join(root, "safe-skill");
   const dangerous = join(root, "dangerous-skill");
   await Promise.all([mkdir(safe), mkdir(dangerous)]);
@@ -107,7 +108,7 @@ test("background monitor scans discovered skills, persists opaque hashes, and re
 
 test("incomplete local reads persist an unknown, fail-closed assessment without exposing the cause", async () => {
   const root = await mkdtemp(
-    join(tmpdir(), "trusttools-skill-scan-incomplete-"),
+    join(tmpdir(), `${APP_ID}-skill-scan-incomplete-`),
   );
   const skill = join(root, "skill");
   await mkdir(skill);
