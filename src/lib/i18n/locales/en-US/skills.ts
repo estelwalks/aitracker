@@ -109,6 +109,38 @@ export const skills = {
     insightTitle: "Local tool insight",
     insightDescription:
       "Built from verifiable local activity only; prompts, commands, and file contents are not read.",
+    insightActivityTitle: "Local activity for {tool}",
+    insightActivityDescription:
+      "{events} events observed, totaling {tokens} tokens.",
+    insightCacheTitle: "Observed cache hit rate",
+    insightCacheDescription: "The selected tool's cache hit rate is {rate}.",
+    insightSkillTitle: "Observed Skill usage",
+    insightSkillDescription:
+      "The selected tool has {count} verifiable Skill calls.",
+    insightSessionTitle: "Aggregated sessions",
+    insightSessionDescription:
+      "The selected tool has {count} server-aggregated sessions in this range.",
+    insightSecurityTitle: "Background security scan summary",
+    insightSecurityDescription:
+      "The background scan aggregates {count} items needing attention.",
+    insightDot: "View insight {index}",
+    rotateInsight: "Another insight",
+    cacheEvidence: "Calculated only from recorded cache tokens.",
+    sessionAggregateHint:
+      "Sessions are shown only as server-aggregated counts.",
+    toolCoverage: "{detected} detected / {available} available tools",
+    activeTools: "{count} tools with activity",
+    tokenShare: "Token share {percent}",
+    cacheRate: "Cache hit {rate}",
+    cacheUnavailable: "Cache data unavailable",
+    sessionsObserved: "{count} aggregated sessions",
+    sessionsUnavailable: "Session data unavailable",
+    projectSessions: "{count} sessions",
+    state: {
+      detected: "Detected",
+      available: "Available",
+      unavailable: "Not detected",
+    },
     noActivity: "No verifiable tool activity in the selected range.",
     active: "Active",
     inactive: "No activity",
@@ -130,6 +162,15 @@ export const skills = {
     byModel: "By model",
     byProject: "By project",
     noDetail: "No detail is available to show.",
+    securityTitle: "Background security scans",
+    securityUnavailable: "No background security scan summary is available.",
+    securityHint:
+      "Latest background scan: {time}. Only aggregate counts are shown; paths, content, and scan evidence remain private.",
+    securityAssessed: "{count} assets assessed",
+    securityAssessedLabel: "Assessed assets",
+    securityAttentionLabel: "Needs attention",
+    securityUnknownLabel: "Undetermined",
+    securityFailedLabel: "Read failures",
     workspaceTitle: "Skill asset management",
     workspaceDesc:
       "The operation area below keeps using real local scans and confirmed safe changes.",

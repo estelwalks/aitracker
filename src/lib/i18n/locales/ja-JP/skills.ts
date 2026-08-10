@@ -106,6 +106,37 @@ export const skills = {
     insightTitle: "ローカルツールのインサイト",
     insightDescription:
       "検証可能なローカル活動のみを使用し、プロンプト、コマンド、ファイル内容は読み取りません。",
+    insightActivityTitle: "{tool} のローカル活動",
+    insightActivityDescription:
+      "{events} 件のイベントを観測、合計 {tokens} Token。",
+    insightCacheTitle: "観測済みキャッシュヒット率",
+    insightCacheDescription: "選択中ツールのキャッシュヒット率は {rate} です。",
+    insightSkillTitle: "観測済み Skill 利用",
+    insightSkillDescription:
+      "選択中ツールには検証可能な Skill 呼び出しが {count} 件あります。",
+    insightSessionTitle: "集計済みセッション",
+    insightSessionDescription:
+      "選択中ツールにはこの期間でサーバー集計済みセッションが {count} 件あります。",
+    insightSecurityTitle: "バックグラウンド安全スキャンの要約",
+    insightSecurityDescription:
+      "バックグラウンドスキャンは要確認項目を {count} 件集計しました。",
+    insightDot: "インサイト {index} を表示",
+    rotateInsight: "別のインサイト",
+    cacheEvidence: "記録されたキャッシュ Token だけで計算します。",
+    sessionAggregateHint: "セッションはサーバー集計件数のみ表示します。",
+    toolCoverage: "検出 {detected} / 利用可能 {available} ツール",
+    activeTools: "{count} ツールが活動中",
+    tokenShare: "Token 比率 {percent}",
+    cacheRate: "キャッシュヒット {rate}",
+    cacheUnavailable: "キャッシュデータを利用できません",
+    sessionsObserved: "集計済みセッション {count} 件",
+    sessionsUnavailable: "セッションデータを利用できません",
+    projectSessions: "{count} セッション",
+    state: {
+      detected: "検出済み",
+      available: "利用可能",
+      unavailable: "未検出",
+    },
     noActivity: "選択した期間に検証可能なツール活動はありません。",
     active: "アクティブ",
     inactive: "活動なし",
@@ -127,6 +158,16 @@ export const skills = {
     byModel: "モデル別",
     byProject: "プロジェクト別",
     noDetail: "表示できる詳細はありません。",
+    securityTitle: "バックグラウンド安全スキャン",
+    securityUnavailable:
+      "利用できるバックグラウンド安全スキャン要約はありません。",
+    securityHint:
+      "最新のバックグラウンドスキャン: {time}。パス、内容、スキャン根拠ではなく集計数だけを表示します。",
+    securityAssessed: "{count} 件の資産を評価済み",
+    securityAssessedLabel: "評価済み資産",
+    securityAttentionLabel: "要確認",
+    securityUnknownLabel: "判定不能",
+    securityFailedLabel: "読み取り失敗",
     workspaceTitle: "Skill 資産管理",
     workspaceDesc:
       "以下の操作エリアでは、実際のローカルスキャンと確認済みの安全な変更を維持します。",

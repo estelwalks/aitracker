@@ -106,6 +106,37 @@ export const skills = {
     insightTitle: "로컬 도구 인사이트",
     insightDescription:
       "검증 가능한 로컬 활동만 사용하며 프롬프트, 명령 및 파일 내용은 읽지 않습니다.",
+    insightActivityTitle: "{tool}의 로컬 활동",
+    insightActivityDescription:
+      "{events}개 이벤트 관측, 총 {tokens} Token입니다.",
+    insightCacheTitle: "관측된 캐시 적중률",
+    insightCacheDescription: "선택한 도구의 캐시 적중률은 {rate}입니다.",
+    insightSkillTitle: "관측된 Skill 사용",
+    insightSkillDescription:
+      "선택한 도구에 검증 가능한 Skill 호출이 {count}회 있습니다.",
+    insightSessionTitle: "집계된 세션",
+    insightSessionDescription:
+      "선택한 도구에 이 범위에서 서버 집계 세션이 {count}개 있습니다.",
+    insightSecurityTitle: "백그라운드 보안 검사 요약",
+    insightSecurityDescription:
+      "백그라운드 검사는 확인이 필요한 항목 {count}개를 집계했습니다.",
+    insightDot: "인사이트 {index} 보기",
+    rotateInsight: "다른 인사이트",
+    cacheEvidence: "기록된 캐시 Token만으로 계산합니다.",
+    sessionAggregateHint: "세션은 서버 집계 수로만 표시합니다.",
+    toolCoverage: "감지 {detected} / 사용 가능 {available}개 도구",
+    activeTools: "활동 있는 도구 {count}개",
+    tokenShare: "Token 비율 {percent}",
+    cacheRate: "캐시 적중 {rate}",
+    cacheUnavailable: "캐시 데이터를 사용할 수 없음",
+    sessionsObserved: "집계된 세션 {count}개",
+    sessionsUnavailable: "세션 데이터를 사용할 수 없음",
+    projectSessions: "세션 {count}개",
+    state: {
+      detected: "감지됨",
+      available: "사용 가능",
+      unavailable: "감지되지 않음",
+    },
     noActivity: "선택한 범위에 검증 가능한 도구 활동이 없습니다.",
     active: "활성",
     inactive: "활동 없음",
@@ -127,6 +158,15 @@ export const skills = {
     byModel: "모델별",
     byProject: "프로젝트별",
     noDetail: "표시할 세부 정보가 없습니다.",
+    securityTitle: "백그라운드 보안 검사",
+    securityUnavailable: "사용 가능한 백그라운드 보안 검사 요약이 없습니다.",
+    securityHint:
+      "가장 최근 백그라운드 검사: {time}. 경로, 콘텐츠, 검사 근거 대신 집계 수만 표시합니다.",
+    securityAssessed: "자산 {count}개 평가됨",
+    securityAssessedLabel: "평가된 자산",
+    securityAttentionLabel: "확인 필요",
+    securityUnknownLabel: "판단 불가",
+    securityFailedLabel: "읽기 실패",
     workspaceTitle: "Skill 자산 관리",
     workspaceDesc:
       "아래 작업 영역은 실제 로컬 스캔과 확인된 안전한 변경을 계속 사용합니다.",

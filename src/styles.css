@@ -1286,6 +1286,72 @@
     var(--color-surface);
 }
 
+.tool-overview-insight-refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.62rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.48rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.tool-overview-insight-refresh:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  color: var(--color-foreground);
+}
+
+.tool-overview-insight-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.tool-overview-insight-dots {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+}
+
+.tool-overview-insight-dot {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  opacity: 0.45;
+}
+
+.tool-overview-insight-dot-active {
+  width: 1rem;
+  background: var(--color-primary);
+  opacity: 1;
+}
+
+.tool-overview-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1.25rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.7rem;
+  background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+
+.tool-overview-status-strip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
 .tool-overview-orb,
 .tool-overview-card-mark {
   display: grid;
@@ -1327,6 +1393,11 @@
   background: var(--color-surface);
 }
 
+.tool-overview-agent-card[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--color-primary) 65%, transparent);
+}
+
 .tool-overview-card-mark {
   width: 1.55rem;
   height: 1.55rem;
@@ -1358,6 +1429,16 @@
 .tool-overview-state-active::before {
   background: var(--color-ok);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 12%, transparent);
+}
+
+.tool-overview-agent-card:has(
+  .tool-overview-state:not(.tool-overview-state-active)
+) {
+  background: color-mix(
+    in oklab,
+    var(--color-surface) 92%,
+    var(--color-background)
+  );
 }
 
 .tool-overview-card-rule {
@@ -1478,6 +1559,31 @@
   gap: 0.8rem;
 }
 
+.tool-overview-security-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.tool-overview-security-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 4.5rem;
+  padding: 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6rem;
+  background: var(--color-surface-2);
+}
+
+.tool-overview-security-grid span {
+  color: var(--color-muted-foreground);
+  font-size: 0.68rem;
+}
+
+.tool-overview-security-grid strong {
+  font-size: 1.1rem;
+}
+
 @media (max-width: 680px) {
   .tool-overview-reference {
     width: 100%;
@@ -1501,6 +1607,10 @@
 
   .tool-overview-breakdown-track {
     display: none;
+  }
+
+  .tool-overview-security-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1554,10 +1664,25 @@
 
 .tt-sidebar {
   width: var(--tt-sidebar-width);
+  z-index: 40;
+  pointer-events: auto;
 }
 
 .tt-shell-content {
+  position: relative;
+  z-index: 0;
   padding-left: var(--tt-sidebar-width);
+}
+
+/* The content column is full-width and only offset with padding. Keep its
+   stacking context behind the fixed navigation rail so it can never intercept
+   navigation or collapse-control clicks. */
+.tt-sidebar nav,
+.tt-sidebar a,
+.tt-sidebar-collapse-control {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .tt-sidebar-collapse-open {
