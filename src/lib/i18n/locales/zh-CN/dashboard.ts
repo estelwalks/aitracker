@@ -92,6 +92,7 @@ export const dashboard = {
   trend: {
     title: "Token 消耗趋势 · 按模型（单位：K Tokens）",
     area: "堆叠面积",
+    bar: "堆叠柱状",
     line: "多序列折线",
     total: "区间合计",
     average: "均值",

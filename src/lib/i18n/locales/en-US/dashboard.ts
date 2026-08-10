@@ -94,6 +94,7 @@ export const dashboard = {
   trend: {
     title: "Token Usage Trend · by Model (unit: K Tokens)",
     area: "Stacked area",
+    bar: "Stacked bars",
     line: "Multi-line",
     total: "Range total",
     average: "Average",

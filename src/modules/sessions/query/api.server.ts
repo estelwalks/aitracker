@@ -2,7 +2,7 @@ import {
   getLocalSessions,
   refreshLocalSessions,
 } from "../../../lib/local-sessions/server-fns";
-import { toPublicSession } from "../infrastructure/legacy-session-adapter.server";
+import { toPublicSession } from "../application/public-projection.ts";
 import type { SessionFilter, SessionPage } from "../contracts";
 
 type LegacySessionSummary = Awaited<ReturnType<typeof getLocalSessions>>;
