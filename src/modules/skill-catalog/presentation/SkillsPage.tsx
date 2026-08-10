@@ -8,7 +8,6 @@ import {
   ChevronLast,
   ChevronLeft,
   ChevronRight,
-  ChevronsUpDown,
   Copy,
   Download,
   RefreshCw,
@@ -23,6 +22,7 @@ import {
   PageHeader,
   Panel,
   StatusBadge,
+  Stat,
   TTButton,
 } from "../../../components/tt";
 import {
@@ -75,6 +75,14 @@ import {
   type SkillAgent,
   type SkillSnapshot,
 } from "../query";
+import {
+  availableAssetSorts,
+  buildSkillAssetSummary,
+  querySkillAssets,
+  type AssetSortKey,
+  type AssetSourceFilter,
+  type AssetUpdateFilter,
+} from "../application";
 
 export type SkillsPageProps = { initial: SkillSnapshot };
 
@@ -110,7 +118,10 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial);
   const [query, setQuery] = useState("");
   const [agent, setAgent] = useState<"all" | SkillAgent>("all");
-  const [sortDir, setSortDir] = useState<"asc" | "desc" | null>(null);
+  const [source, setSource] = useState<AssetSourceFilter>("all");
+  const [updateStatus, setUpdateStatus] = useState<AssetUpdateFilter>("all");
+  const [sort, setSort] = useState<AssetSortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
@@ -132,9 +143,6 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   }, [snapshot]);
 
   const refresh = useCallback(async (message?: string) => {
-    // Refresh is invoked only after an explicit user mutation (install,
-    // uninstall, sync, or blacklist update). Background market-evidence scans
-    // belong to the Tasks/Job runtime and must not be started by this route.
     const next = await getLocalSkills();
     if (next.fingerprint !== snapshotRef.current.fingerprint) {
       snapshotRef.current = next;
@@ -146,10 +154,29 @@ export function SkillsPage({ initial }: SkillsPageProps) {
     if (message) toast.success(message);
   }, []);
 
+  const rescan = async () => {
+    setBusy(true);
+    busyRef.current = true;
+    try {
+      // getLocalSkills runs the local scanner server-side. It is deliberately
+      // not a client-side placeholder or a toast-only refresh.
+      const next = await getLocalSkills();
+      snapshotRef.current = next;
+      setSnapshot(next);
+      toast.success(t("skills.toast.rescanned"));
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
+    }
+  };
+
   // Reset to first page when filters or sort change
   useEffect(() => {
     setPage(1);
-  }, [query, agent, sortDir]);
+  }, [query, agent, source, updateStatus, sort, sortDir]);
 
   const run = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true);
@@ -196,39 +223,27 @@ export function SkillsPage({ initial }: SkillsPageProps) {
     [snapshot.skills],
   );
 
-  // Filtered list (search by name OR description + agent filter)
-  const filtered = useMemo(
+  const summary = useMemo(() => buildSkillAssetSummary(snapshot), [snapshot]);
+  const sortOptions = useMemo(() => availableAssetSorts(snapshot), [snapshot]);
+  const assets = useMemo(
     () =>
-      snapshot.skills.filter((skill) => {
-        const q = query.toLowerCase();
-        const nameMatch = skill.name.toLowerCase().includes(q);
-        const descMatch = skill.description?.toLowerCase().includes(q) ?? false;
-        return (
-          (nameMatch || descMatch) &&
-          (agent === "all" ||
-            skill.installations.some((i) => i.agent === agent))
-        );
+      querySkillAssets(snapshot, {
+        text: query,
+        agent,
+        source,
+        updateStatus,
+        sort,
+        direction: sortDir,
       }),
-    [agent, query, snapshot.skills],
+    [agent, query, snapshot, sort, sortDir, source, updateStatus],
   );
 
-  // Sorted list
-  const sorted = useMemo(() => {
-    if (!sortDir) return filtered;
-    const arr = [...filtered];
-    arr.sort((a, b) => {
-      const cmp = a.name.localeCompare(b.name, "zh-CN");
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return arr;
-  }, [filtered, sortDir]);
-
   // Paginated list
-  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(assets.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paged = useMemo(
-    () => sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [sorted, currentPage],
+    () => assets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [assets, currentPage],
   );
 
   // Detail skill
@@ -558,26 +573,56 @@ export function SkillsPage({ initial }: SkillsPageProps) {
   // --- Pagination helpers ---
 
   const rangeStart =
-    sorted.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(currentPage * PAGE_SIZE, sorted.length);
+    assets.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, assets.length);
 
-  const toggleSort = () => {
-    setSortDir((current) => {
-      if (current === null) return "asc";
-      if (current === "asc") return "desc";
-      return null;
-    });
-  };
+  const updateStatusLabel = (value: AssetUpdateFilter) =>
+    t(`skills.update.${value}`);
+  const sourceLabel = (value: Exclude<AssetSourceFilter, "all">) =>
+    t(`skills.source.${value}`);
+  const sortLabel = (value: AssetSortKey) => t(`skills.sort.${value}`);
 
   return (
     <>
       <PageHeader
         title={t("skills.pageHeader")}
         desc={t("skills.pageHeaderDesc", {
-          count: format.formatNumber(snapshot.skills.length),
-          time: format.formatDateTime(snapshot.generatedAt, false),
+          count: format.formatNumber(summary.skillCount),
+          time: format.formatDateTime(summary.lastScannedAt, false),
         })}
-      />
+      >
+        <TTButton disabled={busy} onClick={() => void rescan()}>
+          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
+          {t("skills.actions.rescan")}
+        </TTButton>
+      </PageHeader>
+
+      <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label={t("skills.summary.assets")}
+          value={format.formatNumber(summary.skillCount)}
+          hint={t("skills.summary.installations", {
+            count: format.formatNumber(summary.installationCount),
+          })}
+        />
+        <Stat
+          label={t("skills.summary.agentCoverage")}
+          value={`${format.formatNumber(summary.detectedAgentCount)} / ${format.formatNumber(SKILL_AGENTS.length)}`}
+          hint={t("skills.summary.detectedAgents")}
+        />
+        <Stat
+          label={t("skills.summary.updates")}
+          value={format.formatNumber(
+            assets.filter((skill) => skill.updateStatus === "available").length,
+          )}
+          hint={t("skills.summary.updatesHint")}
+        />
+        <Stat
+          label={t("skills.summary.lastScan")}
+          value={format.formatDateTime(summary.lastScannedAt, false)}
+          hint={t("skills.summary.localScanOnly")}
+        />
+      </div>
 
       {/* Filter bar */}
       <div className="skills-filter-panel mb-4">
@@ -597,15 +642,6 @@ export function SkillsPage({ initial }: SkillsPageProps) {
               className="h-10 w-full rounded-lg border border-border bg-background/70 pl-9 text-[13px] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
           </div>
-          <TTButton
-            disabled={busy}
-            onClick={() =>
-              run(() => Promise.resolve(), t("skills.toast.rescanned"))
-            }
-          >
-            <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />{" "}
-            {t("skills.actions.rescan")}
-          </TTButton>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -630,16 +666,73 @@ export function SkillsPage({ initial }: SkillsPageProps) {
             ),
           )}
         </div>
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-border/70 pt-3">
+          <select
+            aria-label={t("skills.filter.source")}
+            value={source}
+            onChange={(event) =>
+              setSource(event.target.value as AssetSourceFilter)
+            }
+            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+          >
+            <option value="all">{t("skills.filter.sourceAll")}</option>
+            <option value="frontmatter">{sourceLabel("frontmatter")}</option>
+            <option value="market">{sourceLabel("market")}</option>
+            <option value="unknown">{sourceLabel("unknown")}</option>
+          </select>
+          <select
+            aria-label={t("skills.filter.updateStatus")}
+            value={updateStatus}
+            onChange={(event) =>
+              setUpdateStatus(event.target.value as AssetUpdateFilter)
+            }
+            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+          >
+            <option value="all">{t("skills.filter.updateAll")}</option>
+            <option value="available">{updateStatusLabel("available")}</option>
+            <option value="current">{updateStatusLabel("current")}</option>
+            <option value="unknown">{updateStatusLabel("unknown")}</option>
+          </select>
+          <select
+            aria-label={t("skills.filter.sort")}
+            value={sort}
+            onChange={(event) => setSort(event.target.value as AssetSortKey)}
+            className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
+          >
+            {sortOptions.map((option) => (
+              <option key={option} value={option}>
+                {sortLabel(option)}
+              </option>
+            ))}
+          </select>
+          <TTButton
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              setSortDir((direction) => (direction === "asc" ? "desc" : "asc"))
+            }
+            title={t("skills.filter.sortDirection")}
+          >
+            {sortDir === "asc" ? (
+              <ArrowUp className="size-3" />
+            ) : (
+              <ArrowDown className="size-3" />
+            )}
+            {sortDir === "asc"
+              ? t("skills.sort.ascending")
+              : t("skills.sort.descending")}
+          </TTButton>
+        </div>
       </div>
 
       {/* Skill table */}
       <Panel
         title={t("skills.table.title", {
-          count: format.formatNumber(sorted.length),
+          count: format.formatNumber(assets.length),
         })}
         bodyClassName="p-0"
       >
-        {sorted.length === 0 ? (
+        {assets.length === 0 ? (
           <div className="p-4">
             <EmptyState
               title={t("skills.empty.title")}
@@ -712,32 +805,29 @@ export function SkillsPage({ initial }: SkillsPageProps) {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[40px] pl-4" />
-                  <TableHead
-                    onClick={toggleSort}
-                    className={cn(
-                      "cursor-pointer select-none whitespace-nowrap",
-                      sortDir !== null && "text-primary",
-                    )}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {t("skills.table.name")}
-                      {sortDir === "asc" ? (
-                        <ArrowUp className="size-3" />
-                      ) : sortDir === "desc" ? (
-                        <ArrowDown className="size-3" />
-                      ) : (
-                        <ChevronsUpDown className="size-3 opacity-50" />
-                      )}
-                    </span>
+                  <TableHead className="whitespace-nowrap">
+                    {t("skills.table.name")}
                   </TableHead>
                   <TableHead className="min-w-[100px]">
                     {t("skills.table.desc")}
                   </TableHead>
                   <TableHead className="w-[200px]">
-                    {t("skills.table.agent")}
+                    {t("skills.table.agentCoverage")}
+                  </TableHead>
+                  <TableHead className="w-[120px] whitespace-nowrap">
+                    {t("skills.table.source")}
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap">
+                    {t("skills.table.version")}
+                  </TableHead>
+                  <TableHead className="w-[140px] whitespace-nowrap">
+                    {t("skills.table.modifiedAt")}
                   </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap">
                     {t("skills.table.lastUsed")}
+                  </TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap">
+                    {t("skills.table.updateStatus")}
                   </TableHead>
                   <TableHead className="w-[130px] pr-4">
                     {t("skills.table.actions")}
@@ -830,10 +920,42 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                             )}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {skill.sourceKinds.map((kind) => (
+                            <StatusBadge key={kind} tone="neutral">
+                              {sourceLabel(kind)}
+                            </StatusBadge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[130px] truncate text-[12px] text-muted-foreground">
+                        {skill.versions.length > 0
+                          ? skill.versions.join(", ")
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
+                        {skill.latestModifiedAt
+                          ? format.formatDateTime(skill.latestModifiedAt, false)
+                          : "—"}
+                      </TableCell>
                       <TableCell className="whitespace-nowrap text-[12px] text-muted-foreground">
                         {skill.lastUsedAt
                           ? format.formatDateTime(skill.lastUsedAt, false)
                           : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          tone={
+                            skill.updateStatus === "available"
+                              ? "warn"
+                              : skill.updateStatus === "current"
+                                ? "ok"
+                                : "neutral"
+                          }
+                        >
+                          {updateStatusLabel(skill.updateStatus)}
+                        </StatusBadge>
                       </TableCell>
                       <TableCell className="pr-4">
                         <div className="flex items-center gap-1">
@@ -870,7 +992,7 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                 {t("skills.pagination.range", {
                   start: format.formatNumber(rangeStart),
                   end: format.formatNumber(rangeEnd),
-                  total: format.formatNumber(sorted.length),
+                  total: format.formatNumber(assets.length),
                 })}
               </span>
               <div className="flex items-center gap-1">
@@ -1028,8 +1150,9 @@ export function SkillsPage({ initial }: SkillsPageProps) {
                                   {" · "}
                                   {t("skills.detail.source", {
                                     source:
-                                      installation.source?.label ??
-                                      t("skills.detail.notProvided"),
+                                      installation.source == null
+                                        ? t("skills.detail.notProvided")
+                                        : sourceLabel(installation.source.kind),
                                   })}
                                 </div>
                                 <div

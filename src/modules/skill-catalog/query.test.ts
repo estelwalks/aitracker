@@ -12,4 +12,5 @@ test("skills route consumes opaque installation refs only", () => {
     /installation\.path|sourcePath\s*:|detectedPaths/,
   );
   assert.match(source, /installationRef/);
+  assert.doesNotMatch(source, /source:\s*\{[^}]*label/);
 });
