@@ -106,6 +106,32 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
   assert.equal(view.estimatedCostUsd, null);
 });
 
+test("Dashboard V2 preserves catalog detection while keeping activity range-specific", () => {
+  const view = createDashboardV2View(
+    {
+      ...snapshot,
+      tools: [
+        ...snapshot.tools,
+        { id: "cursor", name: "Cursor", available: true, detected: true },
+        { id: "hidden", name: "Hidden", available: true, detected: false },
+      ],
+    },
+    "custom",
+    "2026-08-09",
+    "2026-08-09",
+  );
+
+  assert.equal(view.hasData, false);
+  assert.equal(view.activeTools, 0);
+  assert.deepEqual(
+    view.tools.map((tool) => [tool.id, tool.events, tool.tokens]),
+    [
+      ["codex", 0, 0],
+      ["cursor", 0, 0],
+    ],
+  );
+});
+
 test("Dashboard V2 derives safe previous-window, model and project aggregates", () => {
   const event = (
     timestamp: string,

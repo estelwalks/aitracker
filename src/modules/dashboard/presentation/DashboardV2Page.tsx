@@ -19,6 +19,7 @@ import {
 import type {
   DashboardReadModel,
   DashboardV2BreakdownRow,
+  DashboardV2CalendarPoint,
   DashboardV2Insight,
   DashboardV2TrendPoint,
 } from "../contracts.ts";
@@ -231,7 +232,7 @@ function BreakdownTable({
 function CalendarHeatmap({
   points,
 }: {
-  points: readonly DashboardV2TrendPoint[];
+  points: readonly DashboardV2CalendarPoint[];
 }) {
   const { t, format } = useI18n();
   const cells = points.slice(-364);
@@ -249,12 +250,21 @@ function CalendarHeatmap({
         aria-label={t("dashboard.v2.calendarTitle")}
       >
         {cells.map((point) => {
-          const intensity = Math.max(0.12, point.tokens / max);
+          // Calendar zero-fill represents coverage of the selected range, not
+          // observed usage. Keep those cells visually distinct so an empty
+          // day can never look like a low-volume active day.
+          const intensity = point.active
+            ? Math.max(0.12, point.tokens / max)
+            : 0.12;
           return (
             <span
               key={point.date}
               title={`${point.date} · ${format.formatTokens(point.tokens)}`}
-              className="dashboard-calendar-cell"
+              className={
+                point.active
+                  ? "dashboard-calendar-cell"
+                  : "dashboard-calendar-cell dashboard-calendar-cell-inactive"
+              }
               style={{ opacity: intensity }}
             />
           );
@@ -578,8 +588,8 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         <article className="dashboard-spotlight-card">
           <ShieldCheck className="size-4" />
           <p>{t("dashboard.v2.securityLabel")}</p>
-          <strong>{t("dashboard.kpi.unavailable")}</strong>
-          <small>{t("dashboard.v2.securityHint")}</small>
+          <strong>{security.value}</strong>
+          <small>{security.hint}</small>
           <Link to="/security">{t("nav.security")}</Link>
         </article>
         <article className="dashboard-spotlight-card">
