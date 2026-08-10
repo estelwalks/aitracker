@@ -2,8 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import { getSessionsQuery } from "../modules/sessions/query/api.server";
-import { SessionsPage } from "../modules/sessions/query/presentation";
+import { getSessionsQuery, SessionsPage } from "../modules/sessions/query";
 
 export const Route = createFileRoute("/sessions")({
   loader: ({ location }) =>
