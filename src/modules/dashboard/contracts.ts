@@ -6,26 +6,90 @@ export interface DashboardModuleContract {
 }
 
 import type {
+  LocalTokenCounts,
+  LocalUsageContext,
+  LocalUsageBreakdown,
+  LocalUsageDaily,
   LocalUsageEvent,
   LocalUsageSnapshot,
+  LocalUsageSourceSummary,
+  LocalUsageTotals,
 } from "../../lib/local-usage/types.ts";
-import type { LocalUsageTotals } from "../../lib/local-usage/types.ts";
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
-import type { SkillSnapshot } from "../../lib/local-skills/types";
+
+/** Browser-safe usage event. Raw commands and filesystem references are omitted. */
+export interface DashboardUsageEvent extends LocalTokenCounts {
+  readonly source: LocalUsageEvent["source"];
+  readonly timestamp: string;
+  readonly model: string;
+  /** Display-only project key, never a local path. */
+  readonly project: string;
+  /** Opaque id used only for distinct session counting. */
+  readonly sessionId?: string;
+  readonly context?: Pick<
+    LocalUsageContext,
+    "textResponse" | "tools" | "skills" | "toolOutputs"
+  >;
+}
+
+/** Scanner status with roots, file paths and diagnostic payloads removed. */
+export type DashboardUsageSource = Pick<
+  LocalUsageSourceSummary,
+  | "source"
+  | "available"
+  | "detected"
+  | "filesConsidered"
+  | "filesRead"
+  | "filesReused"
+  | "filesParsed"
+  | "malformedLines"
+  | "events"
+>;
+
+export interface DashboardUsageSnapshot {
+  readonly generatedAt: string;
+  readonly mode: LocalUsageSnapshot["mode"];
+  readonly sources: DashboardUsageSource[];
+  readonly events: number;
+  readonly totals: LocalUsageTotals;
+  readonly bySource: LocalUsageBreakdown[];
+  readonly byModel: LocalUsageBreakdown[];
+  readonly byProject: LocalUsageBreakdown[];
+  readonly daily: LocalUsageDaily[];
+  readonly details: DashboardUsageEvent[];
+  readonly recent: DashboardUsageEvent[];
+}
+
+/** The dashboard needs availability/count only; detailed skill data stays in its module. */
+export interface DashboardSkillSummary {
+  readonly available: boolean;
+  readonly count: number;
+  readonly generatedAt: string | null;
+}
+
+/** Session metrics use the existing public sessions DTO, pared to dashboard needs. */
+export interface DashboardSessionRecord {
+  readonly startedAt: string;
+  readonly endedAt: string;
+  readonly durationMs: number;
+  readonly turns: number;
+  readonly editTurns: number;
+}
+
+export interface DashboardSessionsSummary {
+  readonly available: boolean;
+  readonly generatedAt: string | null;
+  readonly records: DashboardSessionRecord[];
+}
 
 /** Inputs accepted by the dashboard query. Infrastructure stays behind the API adapter. */
 export interface DashboardQuery {
   readonly locale: Locale;
-  readonly snapshot: LocalUsageSnapshot;
+  readonly snapshot: DashboardUsageSnapshot;
   readonly pricing: PricingSnapshot | null;
-  /**
-   * The scanner result is already a plain-data DTO (no class instances,
-   * functions, or opaque values), so it can safely cross the ServerFn
-   * boundary. Keep the concrete type here instead of `unknown[]`; TanStack's
-   * serializability validator must be able to inspect every nested field.
-   */
-  readonly skills: SkillSnapshot | null;
+  readonly skills: DashboardSkillSummary;
+  readonly sessions: DashboardSessionsSummary;
   readonly error: string | null;
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
