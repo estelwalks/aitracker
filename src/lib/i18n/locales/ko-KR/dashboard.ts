@@ -170,6 +170,8 @@ export const dashboard = {
     pendingItems: "대기 항목 {count}개",
     realtimeAnalysis: "실시간 분석 중",
     rotateInsight: "다음 인사이트",
+    generateAIInsight: "AI 인사이트 생성",
+    generatingAIInsight: "생성 중…",
     insightDotsAria: "인사이트 전환",
     insightDot: "인사이트 {index}",
     monitoringAria: "로컬 리스너 상태",

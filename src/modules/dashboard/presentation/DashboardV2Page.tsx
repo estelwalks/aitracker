@@ -6,11 +6,13 @@ import {
   createDashboardV2HeroView,
   createDashboardV2View,
 } from "../application/v2.ts";
+import { refreshDashboardAIInsight } from "../ai-insight.query.ts";
 import type { DashboardReadModel } from "../contracts.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
   DashboardJarvisInsight,
+  DashboardMetricGrid,
   DashboardModelDonut,
   DashboardProjectOverview,
   DashboardRangePicker,
@@ -31,17 +33,20 @@ function daysAgo(days: number): string {
  * usage estimate can enter the dashboard from this presentation boundary.
  */
 export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
-  const { format, t } = useI18n();
+  const { format, locale, t } = useI18n();
   const router = useRouter();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   const [from, setFrom] = useState(daysAgo(29));
   const [to, setTo] = useState(daysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
+  const [aiInsight, setAiInsight] = useState(data.aiInsight);
+  const [generatingAIInsight, setGeneratingAIInsight] = useState(false);
 
   useEffect(() => {
     const refresh = window.setInterval(() => void router.invalidate(), 30_000);
     return () => window.clearInterval(refresh);
   }, [router]);
+  useEffect(() => setAiInsight(data.aiInsight), [data.aiInsight]);
 
   const scopedSnapshot = useMemo(
     () =>
@@ -85,10 +90,24 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       }),
     [data.activeInsightCount, data.monitoring, data.v2],
   );
+  async function generateAIInsight() {
+    if (!aiInsight?.configured || generatingAIInsight) return;
+    setGeneratingAIInsight(true);
+    try {
+      setAiInsight(await refreshDashboardAIInsight({ data: locale }));
+    } finally {
+      setGeneratingAIInsight(false);
+    }
+  }
 
   return (
     <div className="dashboard-v3 space-y-6 pb-12">
-      <DashboardJarvisInsight hero={hero} aiInsight={data.aiInsight} />
+      <DashboardJarvisInsight
+        hero={hero}
+        aiInsight={aiInsight}
+        onGenerateAIInsight={generateAIInsight}
+        generatingAIInsight={generatingAIInsight}
+      />
       <DashboardTrustHero view={allToolsView} today={today} hero={hero} />
       <div className="dashboard-range-bar sticky top-14 z-20">
         <div className="min-w-0">
@@ -117,6 +136,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
           }}
         />
       </div>
+      <DashboardMetricGrid view={allToolsView} monitoring={hero.monitoring} />
       <DashboardToolSwitcher
         tools={allToolsView.tools}
         selected={selectedTool}

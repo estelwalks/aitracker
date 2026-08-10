@@ -167,6 +167,8 @@ export const dashboard = {
     pendingItems: "{count} 项待处理",
     realtimeAnalysis: "实时分析中",
     rotateInsight: "换一条",
+    generateAIInsight: "生成 AI 洞察",
+    generatingAIInsight: "生成中…",
     insightDotsAria: "洞察切换",
     insightDot: "第 {index} 条洞察",
     monitoringAria: "本地监听状态",
