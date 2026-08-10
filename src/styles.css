@@ -1266,7 +1266,7 @@
   margin-right: 0.25rem;
 }
 
-/* /skills mirrors the operational hierarchy of the live tool overview. */
+/* /agents mirrors the operational hierarchy of the live tool overview. */
 .tool-overview-reference {
   width: min(100%, 59.45rem);
   margin-inline: auto;

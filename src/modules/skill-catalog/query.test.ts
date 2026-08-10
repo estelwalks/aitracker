@@ -4,7 +4,7 @@ import test from "node:test";
 
 test("skills route consumes opaque installation refs only", () => {
   const source = readFileSync(
-    new URL("../../routes/skills.tsx", import.meta.url),
+    new URL("../../routes/agents.tsx", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(
