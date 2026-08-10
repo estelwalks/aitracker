@@ -25,8 +25,6 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project key, never a local path. */
   readonly project: string;
-  /** Opaque id used only for distinct session counting. */
-  readonly sessionId?: string;
   readonly context?: Pick<
     LocalUsageContext,
     "textResponse" | "tools" | "skills" | "toolOutputs"
@@ -83,6 +81,85 @@ export interface DashboardSessionsSummary {
   readonly records: DashboardSessionRecord[];
 }
 
+/**
+ * Dashboard V2 deliberately uses a narrower renderer contract than the legacy
+ * snapshot above. It is composed from local data on the server, but never
+ * carries a session id, a filesystem location, a command, or raw context
+ * payload into the browser.
+ */
+export interface DashboardV2Event extends LocalTokenCounts {
+  readonly source: LocalUsageEvent["source"];
+  readonly timestamp: string;
+  readonly model: string;
+  /** Display-only project label, derived from the final project segment. */
+  readonly project: string;
+  readonly context: {
+    readonly textResponses: number;
+    readonly toolCalls: number;
+    readonly skillCalls: number;
+    readonly toolOutputCalls: number;
+  };
+}
+
+export interface DashboardV2Tool {
+  readonly id: string;
+  readonly name: string;
+  readonly available: boolean;
+  readonly detected: boolean;
+}
+
+export interface DashboardV2Snapshot {
+  readonly generatedAt: string;
+  readonly mode: LocalUsageSnapshot["mode"];
+  readonly events: readonly DashboardV2Event[];
+  readonly tools: readonly DashboardV2Tool[];
+  readonly skills: DashboardSkillSummary;
+  readonly sessions: DashboardSessionsSummary;
+  readonly pricingAvailable: boolean;
+}
+
+export interface DashboardV2TrendPoint {
+  readonly date: string;
+  readonly tokens: number;
+  readonly events: number;
+}
+
+export interface DashboardV2BreakdownRow {
+  readonly key: string;
+  readonly tokens: number;
+  readonly events: number;
+}
+
+export interface DashboardV2ContextCounts {
+  readonly textResponses: number;
+  readonly toolCalls: number;
+  readonly skillCalls: number;
+  readonly toolOutputCalls: number;
+}
+
+/** Complete, period-specific and renderer-safe V2 view model. */
+export interface DashboardV2View {
+  readonly period: import("../../lib/local-usage/presentation.ts").UsagePeriod;
+  readonly from: string | null;
+  readonly to: string | null;
+  readonly hasData: boolean;
+  readonly totals: LocalUsageTotals;
+  readonly estimatedCostUsd: number | null;
+  readonly estimatedCostIsPartial: boolean;
+  readonly sessions: number | null;
+  readonly skills: number | null;
+  readonly activeTools: number;
+  readonly tools: readonly (DashboardV2Tool & {
+    readonly tokens: number;
+    readonly events: number;
+  })[];
+  readonly trend: readonly DashboardV2TrendPoint[];
+  readonly models: readonly DashboardV2BreakdownRow[];
+  readonly projects: readonly DashboardV2BreakdownRow[];
+  readonly calendar: readonly DashboardV2TrendPoint[];
+  readonly context: DashboardV2ContextCounts;
+}
+
 /** Inputs accepted by the dashboard query. Infrastructure stays behind the API adapter. */
 export interface DashboardQuery {
   readonly locale: Locale;
@@ -94,6 +171,7 @@ export interface DashboardQuery {
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
   readonly activeInsightCount?: number;
+  readonly v2: DashboardV2Snapshot;
 }
 
 /** Server loader result shared by the route and desktop adapters. */

@@ -26,7 +26,7 @@ export function SearchInput({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-8 w-full rounded-sm border border-border bg-surface-2/70 pr-3 pl-8 text-[13px] outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/15"
+        className="h-9 w-full rounded-lg bg-surface-2/70 pr-3 pl-8 text-[13px] outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
       />
     </div>
   );
@@ -59,14 +59,14 @@ export function Panel({
   return (
     <section className={`tt-panel flex flex-col ${className}`}>
       {(title || action) && (
-        <header className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
+        <header className="flex min-h-12 shrink-0 items-center justify-between gap-3 px-5 py-2.5">
           <h2 className="text-[13px] font-medium tracking-[0.025em]">
             {title}
           </h2>
           {action}
         </header>
       )}
-      <div className={`flex-1 p-4 ${bodyClassName}`}>{children}</div>
+      <div className={`flex-1 p-5 ${bodyClassName}`}>{children}</div>
     </section>
   );
 }
@@ -103,15 +103,16 @@ export function Segmented<T extends string>({
   options: { value: T; label: string }[];
 }) {
   return (
-    <div className="inline-flex rounded-sm border border-border bg-surface-2/80 p-0.5">
+    <div className="inline-flex rounded-lg bg-surface-2/80 p-1 shadow-inner shadow-black/10">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
-          className={`rounded-[3px] px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          aria-pressed={value === o.value}
+          className={`rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
             value === o.value
-              ? "bg-primary/15 font-medium text-primary"
+              ? "bg-card font-medium text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -134,7 +135,7 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <div className="tt-empty-state flex flex-col items-center justify-center rounded-sm border border-dashed border-border-strong px-6 py-12 text-center">
+    <div className="tt-empty-state flex flex-col items-center justify-center rounded-xl px-6 py-12 text-center">
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
       {desc && (
@@ -169,10 +170,10 @@ export function TTButton({
   title?: string;
 }) {
   const variants = {
-    default: "border border-border bg-surface-2 hover:border-border-strong",
+    default: "bg-surface-2 hover:bg-accent",
     primary: "bg-primary text-primary-foreground hover:opacity-90",
     ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
-    danger: "border border-danger/40 text-danger hover:bg-danger/10",
+    danger: "bg-danger/10 text-danger hover:bg-danger/15",
   } as const;
   return (
     <button
@@ -180,7 +181,7 @@ export function TTButton({
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40 ${
         size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-[13px]"
       } ${variants[variant]} ${className}`}
     >
@@ -233,7 +234,7 @@ export function StatusBadge({
   } as const;
   return (
     <span
-      className={`inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-[9px] tracking-[0.08em] ${tones[tone]}`}
+      className={`inline-flex h-5 items-center gap-1 rounded-full px-2 text-[9px] tracking-[0.08em] ${tones[tone]}`}
     >
       {children}
     </span>
