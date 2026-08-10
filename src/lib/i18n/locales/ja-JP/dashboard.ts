@@ -95,6 +95,7 @@ export const dashboard = {
   trend: {
     title: "Token 消費トレンド · モデル別（単位：K Tokens）",
     area: "積み上げ面",
+    bar: "積み上げ棒",
     line: "複数系列ライン",
     total: "期間合計",
     average: "平均",

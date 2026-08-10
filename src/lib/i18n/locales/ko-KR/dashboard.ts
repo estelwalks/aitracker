@@ -94,6 +94,7 @@ export const dashboard = {
   trend: {
     title: "Token 소비 추이 · 모델별 (단위: K Tokens)",
     area: "누적 영역",
+    bar: "누적 막대",
     line: "다중 선 그래프",
     total: "기간 합계",
     average: "평균",
