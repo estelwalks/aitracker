@@ -10,7 +10,17 @@ import type {
 } from "./types.ts";
 
 export type UsagePeriod =
-  "today" | "week" | "7d" | "30d" | "month" | "year" | "all" | "custom";
+  | "today"
+  | "week"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "180d"
+  | "1y"
+  | "month"
+  | "year"
+  | "all"
+  | "custom";
 export type UsageTimeGrain = "day" | "hour";
 
 export interface UsageRange {
@@ -354,6 +364,9 @@ export function resolveUsageRange(
 
   if (period === "7d") from = localDateKey(addDays(now, -6));
   if (period === "30d") from = localDateKey(addDays(now, -29));
+  if (period === "90d") from = localDateKey(addDays(now, -89));
+  if (period === "180d") from = localDateKey(addDays(now, -179));
+  if (period === "1y") from = localDateKey(addDays(now, -364));
   if (period === "week") {
     const day = now.getDay();
     from = localDateKey(addDays(now, -(day === 0 ? 6 : day - 1)));

@@ -103,6 +103,44 @@ test("Dashboard V2 uses one period for metrics, trend, cards and context", () =>
   assert.equal(view.outputAvailability.distillationOutputs.count, null);
   assert.equal(view.outputAvailability.dailyReports.count, null);
   assert.equal(view.calendarSummary.activeDays, 1);
+  assert.deepEqual(view.trend[0], {
+    date: "2026-08-10",
+    tokens: 100,
+    events: 1,
+    cacheTokens: 20,
+    netInputTokens: 80,
+    outputTokens: 20,
+    sessions: 1,
+    previousTokens: 0,
+  });
+});
+
+test("Dashboard V2 aligns a real previous window for the composed trend", () => {
+  const event = (timestamp: string, totalTokens: number) => ({
+    ...snapshot.events[0]!,
+    timestamp,
+    inputTokens: totalTokens - 20,
+    cachedInputTokens: 20,
+    outputTokens: 0,
+    totalTokens,
+  });
+  const view = createDashboardV2View(
+    {
+      ...snapshot,
+      events: [
+        event("2026-08-09T10:00:00.000Z", 40),
+        event("2026-08-10T10:00:00.000Z", 100),
+      ],
+    },
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.trend[0]?.tokens, 100);
+  assert.equal(view.trend[0]?.previousTokens, 40);
+  assert.equal(view.trend[0]?.cacheTokens, 20);
+  assert.equal(view.trend[0]?.netInputTokens, 80);
 });
 
 test("Dashboard V2 zero-fills calendar days and calculates a local-day streak", () => {
