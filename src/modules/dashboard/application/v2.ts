@@ -107,14 +107,36 @@ function localDateKey(date: Date): string {
 function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
   const rows = new Map<
     string,
-    { date: string; tokens: number; events: number }
+    {
+      date: string;
+      tokens: number;
+      events: number;
+      cacheTokens: number;
+      netInputTokens: number;
+      outputTokens: number;
+      sessions: number | null;
+      previousTokens: number | null;
+    }
   >();
   for (const event of events) {
     const date = dateKey(event.timestamp);
     if (date == null) continue;
-    const current = rows.get(date) ?? { date, tokens: 0, events: 0 };
+    const current = rows.get(date) ?? {
+      date,
+      tokens: 0,
+      events: 0,
+      cacheTokens: 0,
+      netInputTokens: 0,
+      outputTokens: 0,
+      sessions: null,
+      previousTokens: null,
+    };
     current.tokens += event.totalTokens;
     current.events += 1;
+    current.cacheTokens += event.cachedInputTokens;
+    current.netInputTokens +=
+      event.inputTokens + event.cacheCreationInputTokens;
+    current.outputTokens += event.outputTokens;
     rows.set(date, current);
   }
   return [...rows.values()].sort((left, right) =>
@@ -142,7 +164,18 @@ function completeDailyRange(
     cursor = addLocalDays(cursor, 1)
   ) {
     const date = localDateKey(cursor);
-    points.push(byDate.get(date) ?? { date, tokens: 0, events: 0 });
+    points.push(
+      byDate.get(date) ?? {
+        date,
+        tokens: 0,
+        events: 0,
+        cacheTokens: 0,
+        netInputTokens: 0,
+        outputTokens: 0,
+        sessions: null,
+        previousTokens: null,
+      },
+    );
   }
   return points;
 }
@@ -181,6 +214,11 @@ function calendarFor(
       date: key,
       tokens: observed?.tokens ?? 0,
       events: observed?.events ?? 0,
+      cacheTokens: observed?.cacheTokens ?? 0,
+      netInputTokens: observed?.netInputTokens ?? 0,
+      outputTokens: observed?.outputTokens ?? 0,
+      sessions: null,
+      previousTokens: null,
       active: (observed?.events ?? 0) > 0,
     });
   }
@@ -511,6 +549,21 @@ function projectSessionCounts(
   return counts;
 }
 
+function trendSessionCounts(
+  snapshot: DashboardV2Snapshot,
+  fromDate: Date | null,
+  toDate: Date | null,
+): ReadonlyMap<string, number> | null {
+  if (!snapshot.sessions.available || !fromDate || !toDate) return null;
+  const counts = new Map<string, number>();
+  for (const row of snapshot.sessions.bySourceDay) {
+    const date = new Date(`${row.date}T00:00:00`);
+    if (date < fromDate || date > toDate) continue;
+    counts.set(row.date, (counts.get(row.date) ?? 0) + row.count);
+  }
+  return counts;
+}
+
 /**
  * The only period transformation used by Dashboard V2. All panels receive
  * this same projection, so it is impossible for a card and its related chart
@@ -565,6 +618,25 @@ export function createDashboardV2View(
   const activeTools = tools.filter((tool) => tool.events > 0).length;
   const observedTrend = daily(events);
   const trend = completeDailyRange(observedTrend, range);
+  const previousTrend = previousRange
+    ? completeDailyRange(daily(previousEvents), {
+        ...range,
+        from: localDateKey(previousRange.fromDate),
+        to: localDateKey(previousRange.toDate),
+        fromDate: previousRange.fromDate,
+        toDate: previousRange.toDate,
+      })
+    : [];
+  const sessionsByDate = trendSessionCounts(
+    snapshot,
+    range.fromDate,
+    range.toDate,
+  );
+  const chartTrend = trend.map((point, index) => ({
+    ...point,
+    sessions: sessionsByDate?.get(point.date) ?? (sessionsByDate ? 0 : null),
+    previousTokens: previousTrend[index]?.tokens ?? null,
+  }));
   const currentProjectSessions = projectSessionCounts(
     snapshot,
     range.fromDate,
@@ -672,7 +744,7 @@ export function createDashboardV2View(
     projectCount: allProjectRows.length,
     outputAvailability: snapshot.outputAvailability,
     tools,
-    trend,
+    trend: chartTrend,
     models,
     projects,
     calendar: calendar.points,

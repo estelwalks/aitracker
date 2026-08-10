@@ -255,6 +255,9 @@ export function filterEventsByPeriod(
   }
   if (period === "7d") from = localDateKey(addDays(now, -6));
   if (period === "30d") from = localDateKey(addDays(now, -29));
+  if (period === "90d") from = localDateKey(addDays(now, -89));
+  if (period === "180d") from = localDateKey(addDays(now, -179));
+  if (period === "1y") from = localDateKey(addDays(now, -364));
   if (period === "month") {
     from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   }
