@@ -30,6 +30,7 @@ export {
 export {
   availableAssetSorts,
   buildSkillAssetSummary,
+  buildSkillWorkspace,
   evaluateInstallability,
   parseSkillPackageMetadata,
   projectSkillPackage,
@@ -44,9 +45,15 @@ export type {
   SkillAssetFilters,
   SkillAssetSummary,
   SkillAssetView,
+  SkillAgentCoverage,
+  SkillWorkspace,
+  SkillWorkspaceFacet,
+  SkillWorkspaceFacets,
+  SkillWorkspaceSummary,
 } from "./application/index.ts";
 export {
   getLocalSkills,
+  getSkillWorkspace,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
   requestApprovedSkillSync,
@@ -60,4 +67,5 @@ export type {
   SkillInstallation,
   SkillSnapshot,
   SkillSyncResult,
+  SkillWorkspaceSnapshot,
 } from "./query.ts";

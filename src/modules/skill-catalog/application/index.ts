@@ -18,6 +18,7 @@ import type {
 export {
   availableAssetSorts,
   buildSkillAssetSummary,
+  buildSkillWorkspace,
   querySkillAssets,
   toSkillAssetView,
 } from "./asset-view.ts";
@@ -29,6 +30,11 @@ export type {
   SkillAssetFilters,
   SkillAssetSummary,
   SkillAssetView,
+  SkillAgentCoverage,
+  SkillWorkspace,
+  SkillWorkspaceFacet,
+  SkillWorkspaceFacets,
+  SkillWorkspaceSummary,
 } from "./asset-view.ts";
 
 export interface SkillCatalogApplication {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   availableAssetSorts,
   buildSkillAssetSummary,
+  buildSkillWorkspace,
   querySkillAssets,
 } from "./asset-view.ts";
 import type { SkillSnapshot } from "../query.ts";
@@ -85,4 +86,30 @@ test("asset summary is derived from the scan snapshot without invented metrics",
     detectedAgentCount: 1,
     lastScannedAt: "2026-08-10T08:00:00.000Z",
   });
+});
+
+test("workspace exposes only aggregate coverage, facets, and safe asset views", () => {
+  const workspace = buildSkillWorkspace(snapshot);
+
+  assert.deepEqual(workspace.summary, {
+    skillCount: 2,
+    installationCount: 2,
+    availableAgentCount: 1,
+    detectedAgentCount: 1,
+    lastScannedAt: "2026-08-10T08:00:00.000Z",
+    activeAgentCount: 1,
+    coveragePercent: 100,
+    updateAvailableCount: 1,
+    unassignedSkillCount: 0,
+  });
+  assert.deepEqual(workspace.coverage, [
+    { agent: "Codex", installed: true, skillCount: 1, state: "covered" },
+    { agent: "Claude", installed: false, skillCount: 1, state: "unavailable" },
+  ]);
+  assert.deepEqual(workspace.facets.sources, [
+    { value: "market", count: 1 },
+    { value: "frontmatter", count: 1 },
+  ]);
+  assert.equal("path" in workspace.items[0]!, false);
+  assert.equal("roots" in workspace, false);
 });

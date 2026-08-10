@@ -1,4 +1,8 @@
-import type { LocalSkill, SkillAgent, SkillSnapshot } from "../query.ts";
+import type {
+  LocalSkill,
+  SkillAgent,
+  SkillSnapshot,
+} from "../query/contracts.ts";
 
 export type AssetSourceFilter = "all" | "frontmatter" | "market" | "unknown";
 export type AssetUpdateFilter = "all" | "available" | "current" | "unknown";
@@ -19,6 +23,53 @@ export interface SkillAssetSummary {
   readonly availableAgentCount: number;
   readonly detectedAgentCount: number;
   readonly lastScannedAt: string;
+}
+
+/**
+ * A renderer-safe description of where a Skill is currently available.  This
+ * deliberately reports product-level state only: it contains no roots,
+ * filesystem locations, repository names, or source URLs.
+ */
+export interface SkillAgentCoverage {
+  readonly agent: SkillAgent;
+  readonly installed: boolean;
+  readonly skillCount: number;
+  readonly state: "covered" | "available" | "unavailable";
+}
+
+export interface SkillWorkspaceFacet<T extends string> {
+  readonly value: T;
+  readonly count: number;
+}
+
+/** Compact, browser-safe counters used by the Skill operations workspace. */
+export interface SkillWorkspaceSummary extends SkillAssetSummary {
+  readonly activeAgentCount: number;
+  readonly coveragePercent: number;
+  readonly updateAvailableCount: number;
+  readonly unassignedSkillCount: number;
+}
+
+export interface SkillWorkspaceFacets {
+  readonly agents: readonly SkillWorkspaceFacet<SkillAgent>[];
+  readonly sources: readonly SkillWorkspaceFacet<
+    Exclude<AssetSourceFilter, "all">
+  >[];
+  readonly updates: readonly SkillWorkspaceFacet<
+    Exclude<AssetUpdateFilter, "all">
+  >[];
+}
+
+/**
+ * The complete public data contract for the operations workspace.  Keep this
+ * projection separate from scanner records so presentation cannot accidentally
+ * grow a dependency on paths or raw source metadata.
+ */
+export interface SkillWorkspace {
+  readonly summary: SkillWorkspaceSummary;
+  readonly coverage: readonly SkillAgentCoverage[];
+  readonly facets: SkillWorkspaceFacets;
+  readonly items: readonly SkillAssetView[];
 }
 
 export interface SkillAssetFilters {
@@ -101,6 +152,74 @@ export function buildSkillAssetSummary(
       (agent) => agent.installed,
     ).length,
     lastScannedAt: snapshot.generatedAt,
+  };
+}
+
+function countFacet<T extends string>(
+  values: readonly T[],
+): readonly SkillWorkspaceFacet<T>[] {
+  return [...new Map(values.map((value) => [value, 0] as const))].map(
+    ([value]) => ({
+      value,
+      count: values.filter((candidate) => candidate === value).length,
+    }),
+  );
+}
+
+/**
+ * Builds every value rendered in the workspace from the public scan DTO.  Do
+ * not add scanner roots, paths, or raw source labels to this return value.
+ */
+export function buildSkillWorkspace(snapshot: SkillSnapshot): SkillWorkspace {
+  const items = snapshot.skills.map(toSkillAssetView);
+  const coverage: SkillAgentCoverage[] = Object.entries(snapshot.agents).map(
+    ([agent, probe]) => {
+      const skillCount = items.filter((item) =>
+        item.installedAgents.includes(agent as SkillAgent),
+      ).length;
+      return {
+        agent: agent as SkillAgent,
+        installed: probe.installed,
+        skillCount,
+        state: !probe.installed
+          ? "unavailable"
+          : skillCount > 0
+            ? "covered"
+            : "available",
+      };
+    },
+  );
+  const availableAgentCount = coverage.filter((item) => item.installed).length;
+  const activeAgentCount = coverage.filter(
+    (item) => item.installed && item.skillCount > 0,
+  ).length;
+  const base = buildSkillAssetSummary(snapshot);
+
+  return {
+    summary: {
+      ...base,
+      activeAgentCount,
+      coveragePercent:
+        availableAgentCount === 0
+          ? 0
+          : Math.round((activeAgentCount / availableAgentCount) * 100),
+      updateAvailableCount: items.filter(
+        (item) => item.updateStatus === "available",
+      ).length,
+      unassignedSkillCount: items.filter(
+        (item) => item.installations.length === 0,
+      ).length,
+    },
+    coverage,
+    facets: {
+      agents: coverage.map(({ agent, skillCount }) => ({
+        value: agent,
+        count: skillCount,
+      })),
+      sources: countFacet(items.flatMap((item) => item.sourceKinds)),
+      updates: countFacet(items.map((item) => item.updateStatus)),
+    },
+    items,
   };
 }
 
