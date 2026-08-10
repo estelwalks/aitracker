@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { SkillsPage } from "../modules/skill-catalog/presentation";
 import { getDashboardReadModel } from "../modules/dashboard/query";
-import { brandParams } from "../lib/app-config";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
@@ -20,13 +19,7 @@ export const Route = createFileRoute("/agents")({
   },
   head: ({ loaderData }) => ({
     meta: [
-      {
-        title: getMessage(
-          catalogs[loaderData?.locale ?? "zh-CN"],
-          "meta.titles.skills",
-          brandParams,
-        ),
-      },
+      { title: "工具概览" },
       {
         name: "description",
         content: getMessage(

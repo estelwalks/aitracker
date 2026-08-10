@@ -1,12 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
   Bot,
   ChartNoAxesCombined,
   ChevronFirst,
+  ChevronDown,
   ChevronLast,
   ChevronLeft,
   ChevronRight,
@@ -144,8 +155,14 @@ export function SkillsPage({
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
   const [toolFrom, setToolFrom] = useState(daysAgo(29));
   const [toolTo, setToolTo] = useState(daysAgo(0));
+  const [detailPeriod, setDetailPeriod] = useState<UsagePeriod>("30d");
+  const [detailFrom, setDetailFrom] = useState(daysAgo(29));
+  const [detailTo, setDetailTo] = useState(daysAgo(0));
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
+  const [expandedContextIds, setExpandedContextIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [insightIndex, setInsightIndex] = useState(0);
   const [page, setPage] = useState(1);
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
@@ -261,6 +278,24 @@ export function SkillsPage({
     () =>
       buildToolOverview(usage.v2, selectedToolId, toolPeriod, toolFrom, toolTo),
     [selectedToolId, toolFrom, toolPeriod, toolTo, usage.v2],
+  );
+  const detailOverview = useMemo(
+    () =>
+      buildToolOverview(
+        usage.v2,
+        selectedToolId ?? toolOverview.selected?.id ?? null,
+        detailPeriod,
+        detailFrom,
+        detailTo,
+      ),
+    [
+      detailFrom,
+      detailPeriod,
+      detailTo,
+      selectedToolId,
+      toolOverview.selected?.id,
+      usage.v2,
+    ],
   );
 
   // Paginated list
@@ -605,11 +640,7 @@ export function SkillsPage({
     t(`skills.update.${value}`);
   const sortLabel = (value: AssetSortKey) => t(`skills.sort.${value}`);
   const detailRows =
-    detailMode === "models" ? toolOverview.models : toolOverview.projects;
-  const maxTrendTokens = Math.max(
-    ...toolOverview.trend.map((item) => item.tokens),
-    1,
-  );
+    detailMode === "models" ? detailOverview.models : detailOverview.projects;
   const maxDetailTokens = Math.max(...detailRows.map((item) => item.tokens), 1);
   const averageTrendTokens =
     toolOverview.trend.length === 0
@@ -630,6 +661,10 @@ export function SkillsPage({
           : t("skills.agentOverview.cacheRate", {
               rate: format.formatPercent(toolOverview.cacheRate),
             }),
+      explanation:
+        toolOverview.cacheRate == null
+          ? t("skills.agentOverview.cacheUnavailable")
+          : t("skills.agentOverview.cacheEvidence"),
     },
     {
       id: "messages",
@@ -641,6 +676,7 @@ export function SkillsPage({
         toolOverview.tokenComposition.inputTokens +
           toolOverview.tokenComposition.outputTokens,
       ),
+      explanation: t("skills.agentOverview.compositionHint"),
     },
     {
       id: "reasoning",
@@ -649,12 +685,14 @@ export function SkillsPage({
       detail: format.formatTokens(
         toolOverview.tokenComposition.reasoningOutputTokens,
       ),
+      explanation: t("skills.agentOverview.compositionHint"),
     },
     {
       id: "system",
       label: t("skills.agentOverview.systemPrompt"),
       value: 0,
       detail: t("skills.agentOverview.notSeparatelyObserved"),
+      explanation: t("skills.agentOverview.notSeparatelyObserved"),
     },
     {
       id: "tools",
@@ -667,6 +705,14 @@ export function SkillsPage({
             0,
         ),
       }),
+      explanation: `${t("skills.agentOverview.observedCalls", {
+        count: format.formatNumber(
+          toolOverview.context.find((row) => row.key === "toolCalls")?.count ??
+            0,
+        ),
+      })} · ${t("skills.agentOverview.skillEvidenceObserved", {
+        count: format.formatNumber(toolOverview.skillUsage.calls),
+      })}`,
     },
   ];
   const maxCompositionValue = Math.max(
@@ -823,15 +869,16 @@ export function SkillsPage({
                   className={cn(
                     "tool-overview-state",
                     tool.active && "tool-overview-state-active",
+                    !tool.active &&
+                      tool.detected &&
+                      "tool-overview-state-dormant",
                   )}
                 >
                   {tool.active
                     ? t("skills.agentOverview.active")
-                    : tool.state === "detected"
-                      ? t("skills.agentOverview.dormant")
-                      : tool.state === "available"
-                        ? t("skills.agentOverview.state.available")
-                        : t("skills.agentOverview.state.unavailable")}
+                    : tool.detected
+                      ? t("skills.agentOverview.inactiveCard")
+                      : t("skills.agentOverview.notInstalled")}
                 </span>
               </div>
               <div className="mt-4 flex items-end justify-between gap-3">
@@ -853,7 +900,7 @@ export function SkillsPage({
                 <p>
                   {tool.sessions == null
                     ? t("skills.agentOverview.sessionsUnavailable")
-                    : t("skills.agentOverview.sessionsObserved", {
+                    : t("skills.agentOverview.sessionsShort", {
                         count: format.formatNumber(tool.sessions),
                       })}
                 </p>
@@ -863,14 +910,20 @@ export function SkillsPage({
                     : t("skills.agentOverview.cacheRate", {
                         rate: format.formatPercent(tool.cacheRate),
                       })}
+                  {" · "}
+                  {tool.messages == null
+                    ? "—"
+                    : t("skills.agentOverview.messagesShort", {
+                        count: format.formatNumber(tool.messages),
+                      })}
                 </p>
                 <p>
                   {tool.lastActiveAt
                     ? t("skills.agentOverview.lastActive", {
                         time: format.formatDateTime(tool.lastActiveAt, false),
                       })
-                    : tool.state === "detected"
-                      ? t("skills.agentOverview.dormant")
+                    : tool.detected
+                      ? t("skills.agentOverview.inactiveCard")
                       : t("skills.agentOverview.noActivity")}
                 </p>
               </div>
@@ -940,23 +993,61 @@ export function SkillsPage({
               {t("skills.agentOverview.noActivity")}
             </p>
           ) : (
-            <div
-              className="tool-overview-trend"
-              role="img"
-              aria-label={t("skills.agentOverview.trend")}
-            >
-              {toolOverview.trend.map((point) => (
-                <div key={point.date} className="tool-overview-trend-point">
-                  <span
-                    className="tool-overview-trend-bar"
-                    style={{
-                      height: `${Math.max(7, (point.tokens / maxTrendTokens) * 100)}%`,
-                    }}
-                    title={`${point.date}: ${format.formatTokens(point.tokens)}`}
+            <div className="tool-overview-composed-trend">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={[...toolOverview.trend]}
+                  margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+                >
+                  <CartesianGrid
+                    stroke="var(--color-border)"
+                    strokeDasharray="2 4"
+                    vertical={false}
                   />
-                  <span>{point.date.slice(5)}</span>
-                </div>
-              ))}
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value: string) => value.slice(5)}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{
+                      fontSize: 10,
+                      fill: "var(--color-muted-foreground)",
+                    }}
+                  />
+                  <YAxis
+                    width={44}
+                    tickFormatter={(value: number) =>
+                      format.formatTokens(value)
+                    }
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{
+                      fontSize: 10,
+                      fill: "var(--color-muted-foreground)",
+                    }}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [
+                      format.formatTokens(value),
+                      t("skills.agentOverview.totalTokens"),
+                    ]}
+                    labelFormatter={(value: string) => value}
+                  />
+                  <Bar
+                    dataKey="tokens"
+                    fill="var(--color-primary)"
+                    fillOpacity={0.32}
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="tokens"
+                    stroke="var(--color-primary)"
+                    strokeWidth={1.7}
+                    dot={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
             </div>
           )}
         </Panel>
@@ -971,20 +1062,46 @@ export function SkillsPage({
           <div className="space-y-3">
             {compositionRows.map((row) => {
               const percent = (row.value / maxCompositionValue) * 100;
+              const expanded = expandedContextIds.has(row.id);
               return (
-                <div key={row.id} className="tool-overview-context-row">
-                  <span className="min-w-0 flex-1">{row.label}</span>
-                  <span className="tt-num text-xs">
-                    {row.id === "tools"
-                      ? format.formatNumber(row.value)
-                      : format.formatTokens(row.value)}
-                  </span>
-                  <span className="w-28 truncate text-right font-mono text-[10px] text-muted-foreground">
-                    {row.detail}
-                  </span>
-                  <span className="tool-overview-context-track">
-                    <span style={{ width: `${percent}%` }} />
-                  </span>
+                <div key={row.id} className="tool-overview-context-item">
+                  <button
+                    type="button"
+                    className="tool-overview-context-row"
+                    aria-expanded={expanded}
+                    aria-label={`${t("skills.agentOverview.compositionDetails")}: ${row.label}`}
+                    onClick={() =>
+                      setExpandedContextIds((current) => {
+                        const next = new Set(current);
+                        if (next.has(row.id)) next.delete(row.id);
+                        else next.add(row.id);
+                        return next;
+                      })
+                    }
+                  >
+                    {expanded ? (
+                      <ChevronDown className="size-3.5" />
+                    ) : (
+                      <ChevronRight className="size-3.5" />
+                    )}
+                    <span className="min-w-0 flex-1">{row.label}</span>
+                    <span className="tt-num text-xs">
+                      {row.id === "tools"
+                        ? format.formatNumber(row.value)
+                        : format.formatTokens(row.value)}
+                    </span>
+                    <span className="w-28 truncate text-right font-mono text-[10px] text-muted-foreground">
+                      {row.detail}
+                    </span>
+                    <span className="tool-overview-context-track">
+                      <span style={{ width: `${percent}%` }} />
+                    </span>
+                  </button>
+                  {expanded ? (
+                    <p className="tool-overview-context-explanation">
+                      {row.explanation}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
@@ -994,38 +1111,82 @@ export function SkillsPage({
         <Panel
           title={`${toolOverview.selected?.name ?? "—"} · ${t("skills.agentOverview.details")}`}
           action={
-            <div className="tool-overview-detail-tabs">
-              <button
-                type="button"
-                onClick={() => setDetailMode("models")}
-                className={cn(
-                  detailMode === "models" && "tool-overview-detail-tab-active",
-                )}
-              >
-                <ChartNoAxesCombined className="size-3" />{" "}
-                {t("skills.agentOverview.byModel")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetailMode("projects")}
-                className={cn(
-                  detailMode === "projects" &&
-                    "tool-overview-detail-tab-active",
-                )}
-              >
-                <FolderKanban className="size-3" />{" "}
-                {t("skills.agentOverview.byProject")}
-              </button>
+            <div className="tool-overview-detail-actions">
+              <div className="tool-overview-detail-tabs">
+                <button
+                  type="button"
+                  onClick={() => setDetailMode("models")}
+                  className={cn(
+                    detailMode === "models" &&
+                      "tool-overview-detail-tab-active",
+                  )}
+                >
+                  <ChartNoAxesCombined className="size-3" />{" "}
+                  {t("skills.agentOverview.byModel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailMode("projects")}
+                  className={cn(
+                    detailMode === "projects" &&
+                      "tool-overview-detail-tab-active",
+                  )}
+                >
+                  <FolderKanban className="size-3" />{" "}
+                  {t("skills.agentOverview.byProject")}
+                </button>
+              </div>
+              <div className="tool-overview-periods tool-overview-detail-periods">
+                {(
+                  [
+                    ["today", t("dashboard.period.today")],
+                    ["7d", t("dashboard.period.lastNDays", { count: 7 })],
+                    ["30d", t("dashboard.period.lastNDays", { count: 30 })],
+                    ["all", t("dashboard.period.all")],
+                    ["custom", t("dashboard.period.custom")],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setDetailPeriod(value)}
+                    className={cn(
+                      "tool-overview-period",
+                      detailPeriod === value && "tool-overview-period-active",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {detailPeriod === "custom" ? (
+                  <>
+                    <input
+                      type="date"
+                      aria-label={`${t("dashboard.header.customFrom")} (${t("skills.agentOverview.details")})`}
+                      value={detailFrom}
+                      max={detailTo}
+                      onChange={(event) => setDetailFrom(event.target.value)}
+                    />
+                    <input
+                      type="date"
+                      aria-label={`${t("dashboard.header.customTo")} (${t("skills.agentOverview.details")})`}
+                      value={detailTo}
+                      min={detailFrom}
+                      onChange={(event) => setDetailTo(event.target.value)}
+                    />
+                  </>
+                ) : null}
+              </div>
             </div>
           }
         >
           <p className="mb-4 text-[11px] text-muted-foreground">
             {detailMode === "models"
               ? t("skills.agentOverview.modelCount", {
-                  count: format.formatNumber(toolOverview.models.length),
+                  count: format.formatNumber(detailOverview.models.length),
                 })
               : t("skills.agentOverview.projectSessions", {
-                  count: format.formatNumber(toolOverview.projects.length),
+                  count: format.formatNumber(detailOverview.projects.length),
                 })}
           </p>
           {detailRows.length === 0 ? (
