@@ -45,6 +45,8 @@ export interface ToolOverviewCard {
   readonly sessions: number | null;
   /** Null means the source did not expose a cacheable input denominator. */
   readonly cacheRate: number | null;
+  /** Null is no event evidence; zero is an observed range with no responses. */
+  readonly messages: number | null;
   readonly lastActiveAt: string | null;
   readonly skillUsage: ToolOverviewSkillUsage;
 }
@@ -365,6 +367,13 @@ export function buildToolOverview(
       share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
       sessions: sessionsForSource(snapshot, tool.id, period, from, to),
       cacheRate: cacheRate(events),
+      messages:
+        events.length === 0
+          ? null
+          : events.reduce(
+              (total, event) => total + event.context.textResponses,
+              0,
+            ),
       lastActiveAt,
       skillUsage: skillUsage(events),
     };

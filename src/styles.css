@@ -1434,6 +1434,14 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ok) 12%, transparent);
 }
 
+.tool-overview-state-dormant {
+  color: var(--color-warn);
+}
+
+.tool-overview-state-dormant::before {
+  background: var(--color-warn);
+}
+
 .tool-overview-agent-card:has(
   .tool-overview-state:not(.tool-overview-state-active)
 ) {
@@ -1483,6 +1491,18 @@
   background: var(--color-surface-2);
 }
 
+.tool-overview-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.tool-overview-detail-periods {
+  justify-content: flex-end;
+}
+
 .tool-overview-period,
 .tool-overview-periods input,
 .tool-overview-detail-tabs button {
@@ -1521,6 +1541,11 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.tool-overview-composed-trend {
+  height: 13.75rem;
+  margin-top: 0.75rem;
+}
+
 .tool-overview-trend-point {
   display: grid;
   flex: 1 1 1.5rem;
@@ -1549,10 +1574,27 @@
 
 .tool-overview-context-row {
   display: grid;
-  grid-template-columns: minmax(8rem, 1fr) auto 2.5rem minmax(5rem, 11rem);
+  width: 100%;
+  grid-template-columns: auto minmax(8rem, 1fr) auto minmax(5rem, 8rem) minmax(
+      5rem,
+      11rem
+    );
   align-items: center;
   gap: 0.65rem;
   font-size: 0.78rem;
+  text-align: left;
+}
+
+.tool-overview-context-row:hover {
+  color: var(--color-foreground);
+}
+
+.tool-overview-context-explanation {
+  margin: 0.2rem 0 0.45rem 1.45rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  line-height: 1.5;
 }
 
 .tool-overview-context-track,
@@ -1626,12 +1668,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .tool-overview-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .tool-overview-detail-periods {
+    justify-content: flex-start;
+  }
+
   .tool-overview-context-row {
-    grid-template-columns: minmax(0, 1fr) auto 2.5rem;
+    grid-template-columns: auto minmax(0, 1fr) auto 5.75rem;
   }
 
   .tool-overview-context-track {
     display: none;
+  }
+
+  .tool-overview-card-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-overview-card-facts p:last-child {
+    grid-column: auto;
   }
 
   .tool-overview-breakdown-row {
