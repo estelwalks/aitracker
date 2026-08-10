@@ -128,6 +128,43 @@ test("skill evidence preserves observed zero and unavailable sessions", () => {
   assert.equal(absent.projects[0]?.sessions, null);
 });
 
+test("installed Claude with zero events is detected, not an unavailable tool", () => {
+  const view = buildToolOverview(
+    {
+      ...input,
+      tools: [
+        {
+          id: "claude-code",
+          name: "Claude Code",
+          available: false,
+          detected: true,
+        },
+        ...input.tools,
+      ],
+    },
+    "claude-code",
+    "today",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.deepEqual(view.selected, {
+    id: "claude-code",
+    name: "Claude Code",
+    available: false,
+    detected: true,
+    active: false,
+    state: "detected",
+    tokens: 0,
+    events: 0,
+    share: 0,
+    sessions: 0,
+    cacheRate: null,
+    lastActiveAt: null,
+    skillUsage: { observed: false, calls: 0 },
+  });
+});
+
 test("tool card names use the server-projected registry display name", () => {
   const view = buildToolOverview(
     {

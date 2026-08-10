@@ -109,8 +109,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "configVersion": 1,
     "id": "codex",
     "display": {
-      "name": "Codex CLI",
-      "nameZh": "Codex CLI"
+      "name": "Codex",
+      "nameZh": "Codex"
     },
     "platforms": {
       "macos": "supported",
@@ -2204,4 +2204,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "d35f6170e0174ab0";
+export const TOOL_REGISTRY_VERSION: string = "edb4c93d0125f103";
