@@ -11,6 +11,23 @@ import type {
 export type ToolOverviewState =
   "active" | "detected" | "available" | "unavailable";
 
+/**
+ * `/agents` is intentionally the compact view for the two locally supported
+ * first-party CLI integrations. This is product metadata, not a usage
+ * fallback: every metric below is still calculated exclusively from the
+ * renderer-safe dashboard snapshot.
+ */
+const overviewTools = [
+  { id: "claude-code", name: "Claude Code" },
+  { id: "codex", name: "Codex CLI" },
+] as const;
+
+type OverviewToolId = (typeof overviewTools)[number]["id"];
+
+function isOverviewToolId(id: string): id is OverviewToolId {
+  return overviewTools.some((tool) => tool.id === id);
+}
+
 export interface ToolOverviewCard {
   readonly id: string;
   readonly name: string;
@@ -236,63 +253,56 @@ export function buildToolOverview(
   from?: string,
   to?: string,
 ): ToolOverviewView {
-  const periodEvents = inRange(snapshot.events, period, from, to);
+  // Sources outside the two installed CLI integrations never contribute a
+  // card, trend, share, or selected-tool detail on this prototype-aligned
+  // page. Their raw records remain owned by the dashboard module.
+  const periodEvents = inRange(snapshot.events, period, from, to).filter(
+    (event) => isOverviewToolId(event.source),
+  );
   const totalPeriodTokens = periodEvents.reduce(
     (total, event) => total + event.totalTokens,
     0,
   );
-  const cards = snapshot.tools
-    .map((tool) => {
-      const events = periodEvents.filter((event) => event.source === tool.id);
-      const lastActiveAt = events.reduce<string | null>(
-        (latest, event) =>
-          latest == null || event.timestamp > latest ? event.timestamp : latest,
-        null,
-      );
-      const tokens = events.reduce(
-        (total, event) => total + event.totalTokens,
-        0,
-      );
-      const active = events.length > 0;
-      const state: ToolOverviewState = active
-        ? "active"
-        : tool.detected
-          ? "detected"
-          : tool.available
-            ? "available"
-            : "unavailable";
-      return {
-        ...tool,
-        active,
-        state,
-        tokens,
-        events: events.length,
-        share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
-        sessions: sessionsForSource(snapshot, tool.id, period, from, to),
-        cacheRate: cacheRate(events),
-        lastActiveAt,
-        skillUsage: skillUsage(events),
-      };
-    })
-    .sort(
-      (left, right) =>
-        (right.state === "active"
-          ? 3
-          : right.state === "detected"
-            ? 2
-            : right.state === "available"
-              ? 1
-              : 0) -
-          (left.state === "active"
-            ? 3
-            : left.state === "detected"
-              ? 2
-              : left.state === "available"
-                ? 1
-                : 0) ||
-        right.tokens - left.tokens ||
-        left.name.localeCompare(right.name),
+  const sourceTools = new Map(snapshot.tools.map((tool) => [tool.id, tool]));
+  const cards = overviewTools.map((configuredTool) => {
+    const scannedTool = sourceTools.get(configuredTool.id);
+    const tool = {
+      id: configuredTool.id,
+      name: configuredTool.name,
+      available: scannedTool?.available ?? false,
+      detected: scannedTool?.detected ?? false,
+    };
+    const events = periodEvents.filter((event) => event.source === tool.id);
+    const lastActiveAt = events.reduce<string | null>(
+      (latest, event) =>
+        latest == null || event.timestamp > latest ? event.timestamp : latest,
+      null,
     );
+    const tokens = events.reduce(
+      (total, event) => total + event.totalTokens,
+      0,
+    );
+    const active = events.length > 0;
+    const state: ToolOverviewState = active
+      ? "active"
+      : tool.detected
+        ? "detected"
+        : tool.available
+          ? "available"
+          : "unavailable";
+    return {
+      ...tool,
+      active,
+      state,
+      tokens,
+      events: events.length,
+      share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
+      sessions: sessionsForSource(snapshot, tool.id, period, from, to),
+      cacheRate: cacheRate(events),
+      lastActiveAt,
+      skillUsage: skillUsage(events),
+    };
+  });
   const selected =
     cards.find((card) => card.id === selectedToolId) ?? cards[0] ?? null;
   const selectedEvents = selected

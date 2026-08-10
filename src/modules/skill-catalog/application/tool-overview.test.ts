@@ -75,17 +75,31 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
     "2026-08-10",
     "2026-08-10",
   );
-  assert.equal(view.cards[0]?.id, "codex");
-  assert.equal(view.cards[0]?.tokens, 150);
-  assert.equal(view.cards[0]?.events, 2);
-  assert.equal(
-    view.cards.find((card) => card.id === "cursor")?.state,
-    "available",
+  assert.deepEqual(
+    view.cards.map((card) => card.id),
+    ["claude-code", "codex"],
   );
-  assert.equal(
-    view.cards.find((card) => card.id === "other")?.state,
-    "unavailable",
+  const claude = view.cards[0]!;
+  assert.deepEqual(
+    {
+      state: claude.state,
+      tokens: claude.tokens,
+      events: claude.events,
+      sessions: claude.sessions,
+      cacheRate: claude.cacheRate,
+      skillUsage: claude.skillUsage,
+    },
+    {
+      state: "unavailable",
+      tokens: 0,
+      events: 0,
+      sessions: 0,
+      cacheRate: null,
+      skillUsage: { observed: false, calls: 0 },
+    },
   );
+  assert.equal(view.cards[1]?.tokens, 150);
+  assert.equal(view.cards[1]?.events, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.sessions, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.cacheRate, 0);
   assert.equal(view.projects[0]?.sessions, 2);
@@ -136,7 +150,7 @@ test("tool overview selection and all details use the same custom range", () => 
         ],
       },
     },
-    "missing-tool",
+    "codex",
     "custom",
     "2026-08-10",
     "2026-08-10",
@@ -149,10 +163,7 @@ test("tool overview selection and all details use the same custom range", () => 
   assert.equal(view.models[0]?.key, "gpt-test");
   assert.equal(view.projects[0]?.key, "trusttools");
   assert.equal(view.sessions, 2);
-  assert.equal(
-    view.cards.find((card) => card.id === "cursor")?.state,
-    "available",
-  );
+  assert.equal(view.cards.length, 2);
 });
 
 test("tool overview stays within renderer-safe aggregate fields", () => {

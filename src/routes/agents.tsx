@@ -41,5 +41,5 @@ export const Route = createFileRoute("/agents")({
 
 function AgentsRoute() {
   const { usage, ...initial } = Route.useLoaderData();
-  return <SkillsPage initial={initial} usage={usage} />;
+  return <SkillsPage initial={initial} usage={usage} showWorkspace={false} />;
 }
