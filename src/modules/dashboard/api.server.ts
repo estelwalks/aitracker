@@ -42,25 +42,45 @@ function localDateKey(timestamp: string): string | null {
  * rows only need a count by local day; session identifiers, source paths and
  * session metadata never leave this server adapter.
  */
-function aggregateDashboardProjectSessions(
+export function aggregateDashboardProjectSessions(
   sessions: readonly {
     projectKey: string;
+    projectRef?: string | null;
     source: string;
     startedAt: string;
+    turns: number;
+    editTurns: number;
+    subagentCalls: number;
   }[],
 ) {
-  const counts = new Map<string, number>();
+  const counts = new Map<
+    string,
+    { count: number; turns: number; editTurns: number; subagentCalls: number }
+  >();
   for (const session of sessions) {
     const date = localDateKey(session.startedAt);
     if (date == null) continue;
-    const project = projectKey(session.projectKey);
+    // Use the same final-segment projection as usage events. Codex session
+    // projectKey can be a display fallback while projectRef carries the
+    // authoritative cwd; neither raw value crosses this adapter.
+    const project = projectKey(session.projectRef ?? session.projectKey);
     const key = `${project}\u0000${session.source}\u0000${date}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? {
+      count: 0,
+      turns: 0,
+      editTurns: 0,
+      subagentCalls: 0,
+    };
+    current.count += 1;
+    current.turns += session.turns;
+    current.editTurns += session.editTurns;
+    current.subagentCalls += session.subagentCalls;
+    counts.set(key, current);
   }
   return [...counts.entries()]
-    .map(([key, count]) => {
+    .map(([key, aggregate]) => {
       const [project, source, date] = key.split("\u0000");
-      return { project: project!, source: source!, date: date!, count };
+      return { project: project!, source: source!, date: date!, ...aggregate };
     })
     .sort(
       (left, right) =>
@@ -70,20 +90,39 @@ function aggregateDashboardProjectSessions(
     );
 }
 
-function aggregateDashboardSourceSessions(
-  sessions: readonly { source: string; startedAt: string }[],
+export function aggregateDashboardSourceSessions(
+  sessions: readonly {
+    source: string;
+    startedAt: string;
+    turns: number;
+    editTurns: number;
+    subagentCalls: number;
+  }[],
 ) {
-  const counts = new Map<string, number>();
+  const counts = new Map<
+    string,
+    { count: number; turns: number; editTurns: number; subagentCalls: number }
+  >();
   for (const session of sessions) {
     const date = localDateKey(session.startedAt);
     if (date == null) continue;
     const key = `${session.source}\u0000${date}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? {
+      count: 0,
+      turns: 0,
+      editTurns: 0,
+      subagentCalls: 0,
+    };
+    current.count += 1;
+    current.turns += session.turns;
+    current.editTurns += session.editTurns;
+    current.subagentCalls += session.subagentCalls;
+    counts.set(key, current);
   }
   return [...counts.entries()]
-    .map(([key, count]) => {
+    .map(([key, aggregate]) => {
       const [source, date] = key.split("\u0000");
-      return { source: source!, date: date!, count };
+      return { source: source!, date: date!, ...aggregate };
     })
     .sort(
       (left, right) =>
@@ -176,6 +215,37 @@ export function toDashboardSnapshot(
   };
 }
 
+function sourceEvidence(event: DashboardUsageEvent) {
+  if (event.source === "claude-code") {
+    return {
+      textResponses: true,
+      toolCalls: true,
+      skillCalls: true,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    };
+  }
+  if (event.source === "codex") {
+    return {
+      textResponses: true,
+      toolCalls: true,
+      skillCalls: true,
+      toolOutputCalls: true,
+      reasoningTokens: true,
+      systemPromptTokens: false,
+    };
+  }
+  return {
+    textResponses: event.context?.textResponse !== undefined,
+    toolCalls: event.context?.tools !== undefined,
+    skillCalls: event.context?.skills !== undefined,
+    toolOutputCalls: event.context?.toolOutputs !== undefined,
+    reasoningTokens: event.reasoningOutputTokens > 0,
+    systemPromptTokens: false,
+  };
+}
+
 /**
  * Reduce the scanner result to the V2 browser contract. This is intentionally
  * separate from the compatibility snapshot: V2 has no raw session identifier,
@@ -198,6 +268,7 @@ export function toDashboardV2Snapshot(input: {
       id: tool.id,
       name: tool.nameZh,
       available: source?.available ?? false,
+      usageSupport: tool.capabilities.usage,
       // Usage-log roots and installation roots are intentionally separate:
       // `~/.claude` can be present while `.claude/projects` has no recent
       // usage records. Only this aggregate boolean crosses into the browser;
@@ -214,6 +285,11 @@ export function toDashboardV2Snapshot(input: {
     skills: input.skills,
     sessions: input.sessions,
     pricingAvailable: input.pricingAvailable,
+    outputAvailability: {
+      securityRuns: { count: null, available: false },
+      distillationOutputs: { count: null, available: false },
+      dailyReports: { count: null, available: false },
+    },
     events: input.snapshot.details.map((event) => ({
       source: event.source,
       timestamp: event.timestamp,
@@ -239,6 +315,7 @@ export function toDashboardV2Snapshot(input: {
           ) ?? 0,
         toolOutputCalls: event.context?.toolOutputs?.calls ?? 0,
       },
+      evidence: sourceEvidence(event),
     })),
   };
 }
