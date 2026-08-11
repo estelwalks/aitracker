@@ -143,6 +143,7 @@ export const skills = {
       unavailable: "Not detected",
     },
     noActivity: "No verifiable tool activity in the selected range.",
+    noReadableUsage: "No readable usage log was found in this range.",
     active: "Active",
     inactive: "No activity",
     dormant: "Installed · dormant",
@@ -164,6 +165,11 @@ export const skills = {
       "Uses verifiable event counts from logs; it never guesses token allocation.",
     toolTokenAttributionHint:
       "Attributes event tokens by tool-call count within that event; this is not provider per-tool billing.",
+    estimatedModelOnly:
+      "Model-level estimate only: the log does not provide verifiable attribution for messages, reasoning, tools, outputs, or Skills.",
+    contextUnavailable:
+      "This tool's local logs do not provide a verifiable context breakdown.",
+    estimatedObservations: "{count} estimated samples",
     textResponses: "Text responses",
     toolCalls: "Tool calls",
     skillCalls: "Skill calls",

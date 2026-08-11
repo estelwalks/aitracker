@@ -160,6 +160,7 @@ function toDashboardEvent(
     outputTokens: number;
     reasoningOutputTokens: number;
     totalTokens: number;
+    measurement?: DashboardUsageEvent["measurement"];
     context?: DashboardUsageEvent["context"] & { commands?: unknown };
   },
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
@@ -177,6 +178,7 @@ function toDashboardEvent(
     outputTokens: event.outputTokens,
     reasoningOutputTokens: event.reasoningOutputTokens,
     totalTokens: event.totalTokens,
+    ...(event.measurement == null ? {} : { measurement: event.measurement }),
     ...(event.context
       ? {
           context: {
@@ -252,12 +254,25 @@ export function toDashboardSnapshot(
 }
 
 function sourceEvidence(event: DashboardUsageEvent) {
+  // Antigravity-style transcript estimates are intentionally model-level only.
+  // Their numeric total cannot establish a message, tool, output, skill, or
+  // reasoning attribution.
+  if (event.measurement === "estimated") {
+    return {
+      textResponses: false,
+      toolCalls: false,
+      skillCalls: false,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    };
+  }
   if (event.source === "claude-code") {
     return {
       textResponses: true,
       toolCalls: true,
       skillCalls: true,
-      toolOutputCalls: false,
+      toolOutputCalls: event.context?.toolOutputs !== undefined,
       reasoningTokens: false,
       systemPromptTokens: false,
     };
@@ -338,6 +353,7 @@ export function toDashboardV2Snapshot(input: {
       outputTokens: event.outputTokens,
       reasoningOutputTokens: event.reasoningOutputTokens,
       totalTokens: event.totalTokens,
+      ...(event.measurement == null ? {} : { measurement: event.measurement }),
       context: {
         textResponses: event.context?.textResponse ? 1 : 0,
         toolCalls:

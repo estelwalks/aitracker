@@ -12,6 +12,7 @@ import type {
   LocalUsageBreakdown,
   LocalUsageDaily,
   LocalUsageEvent,
+  LocalUsageMeasurement,
   LocalUsageSnapshot,
   LocalUsageSourceSummary,
   LocalUsageTotals,
@@ -30,6 +31,8 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly project: string;
   /** Server-derived category; omitted only by legacy test/compatibility DTOs. */
   readonly projectKind?: DashboardProjectKind;
+  /** An estimate is model-level only and must never imply context evidence. */
+  readonly measurement?: LocalUsageMeasurement;
   readonly context?: Pick<
     LocalUsageContext,
     "textResponse" | "tools" | "skills" | "toolOutputs"
@@ -118,6 +121,8 @@ export interface DashboardV2Event extends LocalTokenCounts {
   /** Display-only project label, derived from the final project segment. */
   readonly project: string;
   readonly projectKind?: DashboardProjectKind;
+  /** Omitted means a directly observed provider/local usage record. */
+  readonly measurement?: LocalUsageMeasurement;
   readonly context: {
     readonly textResponses: number;
     readonly toolCalls: number;

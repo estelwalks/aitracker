@@ -28,7 +28,11 @@ import {
   consumeCodexPendingContext,
   createCodexPendingContext,
 } from "./codex-context.ts";
-import { collectClaudeContext } from "./claude-context.ts";
+import {
+  collectClaudeContext,
+  collectClaudeToolResults,
+  collectClaudeToolUseIds,
+} from "./claude-context.ts";
 import {
   BUILTIN_USAGE_ADAPTERS,
   GENERIC_BUILTIN_USAGE_ADAPTERS,
@@ -69,15 +73,16 @@ const MAX_JSONL_LINE_LENGTH =
   SCANNER_POLICY?.maxJsonlLineLength ?? 16 * 1024 * 1024;
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
-const PERSISTENT_CACHE_VERSION = 12;
+// Claude tool-result metadata was added in v13. Rebuild once so cached Claude
+// events gain the new privacy-safe output aggregate instead of retaining a
+// stale "unobserved" capability.
+const PERSISTENT_CACHE_VERSION = 13;
 const PERSISTENT_CACHE_FILE_NAME =
   SCANNER_POLICY?.cacheFileName ?? "local-usage-index-v10.json";
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
- * invalidates the cache so stale parse results are never served. Bumped with
- * PERSISTENT_CACHE_VERSION (11 -> 12) to force a one-time rebuild on first run
- * after the migration.
+ * invalidates the cache so stale parse results are never served.
  */
 const REGISTRY_FINGERPRINT = computeToolRegistryVersion(getDefaultRegistry());
 const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
@@ -884,6 +889,7 @@ async function scanClaude(
       filesReused += 1;
     } else {
       const claudeEvents: CachedClaudeEvent[] = [];
+      const toolUseEventById = new Map<string, LocalUsageEvent>();
       const root =
         roots.find((candidate) => {
           const relativePath = relative(candidate, file.path);
@@ -901,6 +907,25 @@ async function scanClaude(
         );
         if (parsed != null) {
           claudeEvents.push({ messageId: parsed.id, event: parsed.event });
+          for (const toolUseId of collectClaudeToolUseIds(record.message)) {
+            toolUseEventById.set(toolUseId, parsed.event);
+          }
+        }
+        for (const result of collectClaudeToolResults(record.message)) {
+          const event = toolUseEventById.get(result.toolUseId);
+          if (event == null) continue;
+          const previous = event.context?.toolOutputs;
+          event.context = {
+            ...event.context,
+            toolOutputs: {
+              characters:
+                (previous?.characters ?? 0) + result.summary.characters,
+              lines: (previous?.lines ?? 0) + result.summary.lines,
+              completed:
+                (previous?.completed ?? true) && result.summary.completed,
+              calls: (previous?.calls ?? 0) + result.summary.calls,
+            },
+          };
         }
       });
       entry = {

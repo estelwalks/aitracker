@@ -62,7 +62,7 @@ const input: DashboardV2Snapshot = {
     {
       id: "cursor",
       name: "Cursor",
-      available: true,
+      available: false,
       detected: false,
       usageSupport: "adapter",
     },
@@ -127,31 +127,10 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   );
   assert.deepEqual(
     view.cards.map((card) => card.id),
-    ["claude-code", "codex"],
+    ["codex"],
   );
-  const claude = view.cards[0]!;
-  assert.deepEqual(
-    {
-      state: claude.state,
-      tokens: claude.tokens,
-      events: claude.events,
-      sessions: claude.sessions,
-      subagentCalls: claude.subagentCalls,
-      cacheRate: claude.cacheRate,
-      skillUsage: claude.skillUsage,
-    },
-    {
-      state: "unavailable",
-      tokens: 0,
-      events: 0,
-      sessions: 0,
-      subagentCalls: 0,
-      cacheRate: null,
-      skillUsage: { observed: false, calls: 0 },
-    },
-  );
-  assert.equal(view.cards[1]?.tokens, 150);
-  assert.equal(view.cards[1]?.events, 2);
+  assert.equal(view.cards[0]?.tokens, 150);
+  assert.equal(view.cards[0]?.events, 2);
   assert.equal(view.cards.find((card) => card.id === "codex")?.sessions, 2);
   assert.equal(
     view.cards.find((card) => card.id === "codex")?.subagentCalls,
@@ -231,6 +210,7 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
     messages: null,
     lastActiveAt: null,
     skillUsage: { observed: false, calls: 0 },
+    measurement: "unavailable",
   });
 });
 
@@ -285,10 +265,6 @@ test("tool card names retain the canonical product labels", () => {
     view.cards.find((card) => card.id === "codex")?.name,
     "Configured Codex",
   );
-  assert.equal(
-    view.cards.find((card) => card.id === "claude-code")?.name,
-    "Claude Code",
-  );
 });
 
 test("tool overview selection and all details use the same custom range", () => {
@@ -331,7 +307,7 @@ test("tool overview selection and all details use the same custom range", () => 
   assert.equal(view.models[0]?.key, "gpt-test");
   assert.equal(view.projects[0]?.key, APP_ID);
   assert.equal(view.sessions, 2);
-  assert.equal(view.cards.length, 2);
+  assert.equal(view.cards.length, 1);
 });
 
 test("tool overview fills natural days and keeps token composition mutually exclusive", () => {
@@ -387,7 +363,20 @@ test("Claude tool outputs remain unavailable instead of becoming an observed zer
     },
   };
   const view = buildToolOverview(
-    { ...input, events: [claudeEvent] },
+    {
+      ...input,
+      tools: [
+        ...input.tools,
+        {
+          id: "claude-code",
+          name: "Claude Code",
+          available: true,
+          detected: true,
+          usageSupport: "native",
+        },
+      ],
+      events: [claudeEvent],
+    },
     "claude-code",
     "custom",
     "2026-08-10",
@@ -399,6 +388,56 @@ test("Claude tool outputs remain unavailable instead of becoming an observed zer
   assert.equal(outputs?.count, null);
   assert.equal(view.reasoningAvailable, false);
   assert.deepEqual(view.skillUsage, { observed: true, calls: 0 });
+});
+
+test("estimated model-only usage never invents a context breakdown", () => {
+  const estimatedEvent: DashboardV2Snapshot["events"][number] = {
+    ...input.events[0]!,
+    source: "antigravity",
+    model: "gemini-2.5-pro",
+    measurement: "estimated",
+    context: {
+      textResponses: 0,
+      toolCalls: 0,
+      skillCalls: 0,
+      toolOutputCalls: 0,
+    },
+    evidence: {
+      textResponses: false,
+      toolCalls: false,
+      skillCalls: false,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    },
+  };
+  const view = buildToolOverview(
+    {
+      ...input,
+      tools: [
+        ...input.tools,
+        {
+          id: "antigravity",
+          name: "Antigravity",
+          available: true,
+          detected: true,
+          usageSupport: "unsupported",
+        },
+      ],
+      events: [estimatedEvent],
+    },
+    "antigravity",
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.selected?.measurement, "estimated");
+  assert.equal(view.measurement, "estimated");
+  assert.equal(view.cacheRate, null);
+  assert.equal(view.hasContextBreakdown, false);
+  assert.equal(view.toolCallDetailsAvailable, false);
+  assert.equal(view.models[0]?.key, "gemini-2.5-pro");
 });
 
 test("tool overview stays within renderer-safe aggregate fields", () => {

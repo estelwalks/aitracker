@@ -95,7 +95,7 @@ function ToolBadgeWall({
 
             <div className="mt-4 flex items-end justify-between gap-2">
               <span className="tt-num font-mono text-2xl font-black tracking-tight">
-                {format.formatTokens(card.tokens)}
+                {card.active ? format.formatTokens(card.tokens) : DASH}
               </span>
               <span className="font-mono text-[10.5px] text-muted-foreground">
                 {t("skills.agentOverview.totalTokens")}
@@ -106,48 +106,57 @@ function ToolBadgeWall({
               <span
                 className="block h-full rounded-full"
                 style={{
-                  width: `${Math.max(card.share, 3)}%`,
+                  width: card.active ? `${Math.max(card.share, 3)}%` : "0%",
                   background: color,
                 }}
               />
             </span>
 
             <div className="mt-3 space-y-1 font-mono text-[10.5px] text-muted-foreground">
-              <p className="tt-num">
-                {card.sessions == null
-                  ? t("skills.agentOverview.sessionsUnavailable")
-                  : t("skills.agentOverview.sessionsShort", {
-                      count: format.formatNumber(card.sessions),
-                    })}
-                {" · "}
-                {card.subagentCalls == null
-                  ? DASH
-                  : t("skills.agentOverview.subagentsShort", {
-                      count: format.formatNumber(card.subagentCalls),
-                    })}
-              </p>
-              <p className="tt-num">
-                {card.cacheRate == null
-                  ? t("skills.agentOverview.cacheUnavailable")
-                  : t("skills.agentOverview.cacheRate", {
-                      rate: format.formatPercent(card.cacheRate),
-                    })}
-                {" · "}
-                {card.messages == null
-                  ? DASH
-                  : t("skills.agentOverview.messagesShort", {
-                      count: format.formatNumber(card.messages),
-                    })}
-              </p>
-              <p className="tt-num">
-                {card.lastActiveAt
-                  ? t("skills.agentOverview.lastActive", {
-                      time: format.formatDateTime(card.lastActiveAt, false),
-                    })
-                  : card.detected
-                    ? t("skills.agentOverview.inactiveCard")
-                    : t("skills.agentOverview.noActivity")}
-              </p>
+              {card.active ? (
+                <>
+                  <p className="tt-num">
+                    {card.sessions == null
+                      ? t("skills.agentOverview.sessionsUnavailable")
+                      : t("skills.agentOverview.sessionsShort", {
+                          count: format.formatNumber(card.sessions),
+                        })}
+                    {" · "}
+                    {card.subagentCalls == null
+                      ? DASH
+                      : t("skills.agentOverview.subagentsShort", {
+                          count: format.formatNumber(card.subagentCalls),
+                        })}
+                  </p>
+                  <p className="tt-num">
+                    {card.cacheRate == null
+                      ? t("skills.agentOverview.cacheUnavailable")
+                      : t("skills.agentOverview.cacheRate", {
+                          rate: format.formatPercent(card.cacheRate),
+                        })}
+                    {" · "}
+                    {card.messages == null
+                      ? DASH
+                      : t("skills.agentOverview.messagesShort", {
+                          count: format.formatNumber(card.messages),
+                        })}
+                  </p>
+                  <p className="tt-num">
+                    {card.lastActiveAt
+                      ? t("skills.agentOverview.lastActive", {
+                          time: format.formatDateTime(card.lastActiveAt, false),
+                        })
+                      : t("skills.agentOverview.noActivity")}
+                  </p>
+                </>
+              ) : (
+                <p>{t("skills.agentOverview.noReadableUsage")}</p>
+              )}
+              {card.active && card.measurement === "estimated" && (
+                <p className="pt-0.5 text-[10px] text-amber-600 dark:text-amber-300">
+                  {t("skills.agentOverview.estimatedModelOnly")}
+                </p>
+              )}
             </div>
           </button>
         );
@@ -399,8 +408,16 @@ function ContextTreePanel({
   );
   const skillCalls = view.skillUsage.observed ? view.skillUsage.calls : null;
 
-  const tree: ContextNode[] = [
-    {
+  const hasMessages =
+    view.context.find((row) => row.key === "textResponses")?.available === true;
+  const hasToolCalls =
+    view.context.find((row) => row.key === "toolCalls")?.available === true;
+  const hasToolOutputs =
+    view.context.find((row) => row.key === "toolOutputCalls")?.available ===
+    true;
+  const tree: ContextNode[] = [];
+  if (hasMessages) {
+    tree.push({
       id: "messages",
       label: t("skills.agentOverview.messageTokens"),
       tokens: messagesTokens,
@@ -424,8 +441,10 @@ function ContextTreePanel({
           children: [],
         },
       ],
-    },
-    {
+    });
+  }
+  if (view.reasoningAvailable) {
+    tree.push({
       id: "reasoning",
       label: t("skills.agentOverview.reasoningTokens"),
       tokens: reasoningTokens,
@@ -441,29 +460,20 @@ function ContextTreePanel({
           children: [],
         },
       ],
-    },
-    {
-      id: "system",
-      label: t("skills.agentOverview.systemPrompt"),
-      tokens: null,
-      calls: null,
-      pct: null,
-      note: t("skills.agentOverview.notSeparatelyObserved"),
-      children: [],
-    },
-    {
+    });
+  }
+  if (hasToolOutputs) {
+    tree.push({
       id: "tool-outputs",
       label: t("skills.agentOverview.toolOutputCalls"),
       tokens: null,
       calls: toolOutputCalls,
       pct: null,
-      note:
-        toolOutputCalls == null
-          ? t("skills.agentOverview.notSeparatelyObserved")
-          : undefined,
       children: [],
-    },
-    {
+    });
+  }
+  if (hasToolCalls) {
+    tree.push({
       id: "tools",
       label: t("skills.agentOverview.toolCalls"),
       tokens: view.toolCallDetailsAvailable ? attributedToolTokens : null,
@@ -471,7 +481,7 @@ function ContextTreePanel({
       pct: null,
       note: view.toolCallDetailsAvailable
         ? t("skills.agentOverview.toolTokenAttributionHint")
-        : t("skills.agentOverview.notSeparatelyObserved"),
+        : undefined,
       children: view.toolCallDetails.map((tool) => ({
         id: `tool:${tool.category}:${tool.name}`,
         label: `${tool.name} · ${tool.category}`,
@@ -480,20 +490,18 @@ function ContextTreePanel({
         pct: null,
         children: [],
       })),
-    },
-    {
+    });
+  }
+  if (view.skillUsage.observed) {
+    tree.push({
       id: "skills",
       label: t("skills.agentOverview.contextSkillCalls"),
       tokens: null,
       calls: skillCalls,
       pct: null,
-      note:
-        skillCalls == null
-          ? t("skills.agentOverview.notSeparatelyObserved")
-          : undefined,
       children: [],
-    },
-  ];
+    });
+  }
 
   return (
     <section className="rounded-xl bg-card p-4">
@@ -512,29 +520,41 @@ function ContextTreePanel({
         </span>
       </header>
 
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
-          {t("skills.agentOverview.cacheHitLabel")}
-        </span>
-        <span
-          className="tt-num font-mono text-[15px] font-black"
-          style={{ color }}
-        >
-          {view.cacheRate == null ? DASH : format.formatPercent(view.cacheRate)}
-        </span>
-        <span className="tt-num font-mono text-[11px] text-muted-foreground">
-          {t("skills.agentOverview.contextCacheReused", {
-            reused: format.formatTokens(reused),
-            total: format.formatTokens(total),
-          })}
-        </span>
-      </div>
+      {view.cacheRate != null && (
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg bg-surface-2 px-3 py-2.5">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
+            {t("skills.agentOverview.cacheHitLabel")}
+          </span>
+          <span
+            className="tt-num font-mono text-[15px] font-black"
+            style={{ color }}
+          >
+            {view.cacheRate == null
+              ? DASH
+              : format.formatPercent(view.cacheRate)}
+          </span>
+          <span className="tt-num font-mono text-[11px] text-muted-foreground">
+            {t("skills.agentOverview.contextCacheReused", {
+              reused: format.formatTokens(reused),
+              total: format.formatTokens(total),
+            })}
+          </span>
+        </div>
+      )}
 
-      <ul className="mt-2 space-y-0.5">
-        {tree.map((node) => (
-          <ContextRow key={node.id} node={node} depth={0} color={color} />
-        ))}
-      </ul>
+      {view.hasContextBreakdown ? (
+        <ul className="mt-2 space-y-0.5">
+          {tree.map((node) => (
+            <ContextRow key={node.id} node={node} depth={0} color={color} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          {view.measurement === "estimated"
+            ? t("skills.agentOverview.estimatedModelOnly")
+            : t("skills.agentOverview.contextUnavailable")}
+        </p>
+      )}
     </section>
   );
 }
@@ -546,6 +566,7 @@ function ToolModelPanel({
   onModeChange,
   rows,
   totalTokens,
+  measurement,
   rangeValue,
   onRangeChange,
 }: {
@@ -554,6 +575,7 @@ function ToolModelPanel({
   onModeChange: (mode: "models" | "projects") => void;
   rows: readonly ToolOverviewBreakdownRow[];
   totalTokens: number;
+  measurement: ToolOverviewView["measurement"];
   rangeValue: RangeValue;
   onRangeChange: (value: RangeValue) => void;
 }) {
@@ -622,9 +644,14 @@ function ToolModelPanel({
         {rows.map((row) => {
           const isModels = mode === "models";
           const metaA = isModels
-            ? t("skills.agentOverview.observedCalls", {
-                count: format.formatNumber(row.events),
-              })
+            ? t(
+                measurement === "estimated"
+                  ? "skills.agentOverview.estimatedObservations"
+                  : "skills.agentOverview.observedCalls",
+                {
+                  count: format.formatNumber(row.events),
+                },
+              )
             : row.sessions == null
               ? DASH
               : t("skills.agentOverview.sessionsShort", {
@@ -937,6 +964,7 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
         onModeChange={setDetailMode}
         rows={detailRows}
         totalTokens={detailOverview.totalTokens}
+        measurement={detailOverview.measurement}
         rangeValue={toRangeValue(detailPeriod, detailFrom, detailTo)}
         onRangeChange={(value) => applyRange(value, true)}
       />
