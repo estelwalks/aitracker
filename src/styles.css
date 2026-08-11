@@ -737,7 +737,8 @@
 .dashboard-spotlight-card > a,
 .dashboard-spotlight-card > button {
   margin-top: auto;
-  border-radius: 0.125rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
   background: var(--color-foreground);
   padding: 0.25rem 0.75rem;
   color: var(--color-background);
