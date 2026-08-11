@@ -12,6 +12,7 @@ import {
 import { useI18n } from "../../../../lib/i18n/context";
 import { toUiError } from "../../../../lib/errors";
 import { formatCostLabel } from "../../../../lib/pricing/cost-label";
+import { sourceLabel } from "../../../../lib/local-usage/presentation";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import { refreshSessionsQuery } from "../api.server";
 import type {
@@ -22,13 +23,10 @@ import type {
   SessionStatus,
 } from "../../contracts";
 
-const SOURCE_META: Record<
-  string,
-  { label: string; dot: string; color: string }
-> = {
-  "claude-code": { label: "Claude Code", dot: "bg-ok", color: "text-ok" },
-  codex: { label: "Codex", dot: "bg-sky-500", color: "text-sky-500" },
-  grok: { label: "Grok", dot: "bg-violet-500", color: "text-violet-500" },
+const SOURCE_META: Record<string, { dot: string; color: string }> = {
+  "claude-code": { dot: "bg-ok", color: "text-ok" },
+  codex: { dot: "bg-sky-500", color: "text-sky-500" },
+  grok: { dot: "bg-violet-500", color: "text-violet-500" },
 };
 const RANGE_OPTIONS: Array<{
   key: NonNullable<SessionFilter["range"]>;
@@ -268,9 +266,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             className="tt-input h-8 text-[13px]"
           >
             <option value="all">{t("sessions.source.all")}</option>
-            <option value="claude-code">Claude Code</option>
-            <option value="codex">Codex</option>
-            <option value="grok">Grok</option>
+            <option value="claude-code">{sourceLabel("claude-code")}</option>
+            <option value="codex">{sourceLabel("codex")}</option>
+            <option value="grok">{sourceLabel("grok")}</option>
           </select>
           <select
             value={status}
@@ -329,7 +327,6 @@ function SummaryCard({
 function SessionRow({ session }: { session: SessionSummary }) {
   const { t, format } = useI18n();
   const meta = SOURCE_META[session.source] ?? {
-    label: session.source,
     dot: "bg-muted-foreground",
     color: "text-muted-foreground",
   };
@@ -339,7 +336,7 @@ function SessionRow({ session }: { session: SessionSummary }) {
       <div className="flex w-full items-center gap-2">
         <Dot className={meta.dot} />
         <span className={`text-[12px] font-medium ${meta.color}`}>
-          {meta.label}
+          {sourceLabel(session.source)}
         </span>
         <span className="truncate font-medium text-foreground">
           {session.title || t("sessions.row.untitled")}

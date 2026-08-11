@@ -18,7 +18,10 @@ export type { ToolSurface } from "../tool-registry/registry.ts";
 export interface AiTool {
   /** Stable lowercase-kebab identifier (used as the usage `source` id). */
   id: string;
-  /** PRD display name (also used as the Skill / Market agent label). */
+  /**
+   * Legacy field name retained for compatibility. Its value is always the
+   * registry's primary `display.name`, never a hand-authored UI alias.
+   */
   nameZh: string;
   /**
    * HOME-relative probe paths (macOS first, Windows variant where known) used
@@ -56,7 +59,7 @@ const REGISTRY_TOOLS = listTools().filter(
 
 export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   id: def.id,
-  nameZh: def.display.nameZh,
+  nameZh: def.display.name,
   detectRoots: def.detection.roots,
   toolSurface: toolSurfaceFor(def.id),
   officialDownloadUrl: officialDownloadUrlFor(def.id),

@@ -6,7 +6,7 @@ import type {
 export type SourcesQueryStatus = "has-data" | "no-logs" | "not-installed";
 export interface SourcesQueryEntry {
   readonly id: string;
-  readonly nameZh: string;
+  readonly name: string;
   readonly status: SourcesQueryStatus;
   readonly events: number;
   readonly malformedLines: number;

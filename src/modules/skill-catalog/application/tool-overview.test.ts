@@ -54,7 +54,7 @@ const input: DashboardV2Snapshot = {
   tools: [
     {
       id: "codex",
-      name: "Codex CLI",
+      name: "Codex",
       available: true,
       detected: true,
       usageSupport: "native",
@@ -265,15 +265,15 @@ test("tool card names retain the canonical product labels", () => {
       ),
     },
     "codex",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
 
-  assert.equal(view.selected?.name, "Codex CLI");
+  assert.equal(view.selected?.name, "Configured Codex");
   assert.equal(
     view.cards.find((card) => card.id === "codex")?.name,
-    "Codex CLI",
+    "Configured Codex",
   );
   assert.equal(
     view.cards.find((card) => card.id === "claude-code")?.name,

@@ -7,7 +7,7 @@ import { SKILL_AGENTS } from "../local-skills/agent-rules.ts";
 
 const EXPECTED_SKILL_LABELS = [
   "Claude Code",
-  "Codex CLI",
+  "Codex",
   "Cursor",
   "Gemini CLI",
   "OpenCode",
