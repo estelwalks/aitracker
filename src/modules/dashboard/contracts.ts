@@ -8,6 +8,7 @@ export interface DashboardModuleContract {
 import type {
   LocalTokenCounts,
   LocalUsageContext,
+  LocalUsageToolCall,
   LocalUsageBreakdown,
   LocalUsageDaily,
   LocalUsageEvent,
@@ -120,6 +121,11 @@ export interface DashboardV2Event extends LocalTokenCounts {
   readonly context: {
     readonly textResponses: number;
     readonly toolCalls: number;
+    /** Sanitized tool names/categories/calls; arguments and outputs stay server-only. */
+    readonly tools?: readonly Pick<
+      LocalUsageToolCall,
+      "name" | "category" | "calls"
+    >[];
     readonly skillCalls: number;
     readonly toolOutputCalls: number;
   };

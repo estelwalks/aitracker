@@ -151,6 +151,8 @@ export const skills = {
     trendSummary: "区间合计 {tokens} · 自然日均 {average} · 峰值 {peak}",
     composition: "上下文构成",
     compositionHint: "按日志中可验证的调用计数，不对 Token 做推测分配。",
+    toolTokenAttributionHint:
+      "按同一用量事件内的工具调用次数归因 Token；不是供应商逐工具计费。",
     textResponses: "文本响应",
     toolCalls: "工具调用",
     skillCalls: "Skill 调用",

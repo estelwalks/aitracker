@@ -116,6 +116,7 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   assert.deepEqual(result.events[0]?.context, {
     textResponses: 0,
     toolCalls: 0,
+    tools: [],
     skillCalls: 0,
     toolOutputCalls: 0,
   });

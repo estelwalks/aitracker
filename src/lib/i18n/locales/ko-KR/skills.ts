@@ -158,6 +158,8 @@ export const skills = {
     composition: "컨텍스트 구성",
     compositionHint:
       "로그에서 검증 가능한 이벤트 수를 사용하며 Token 배분을 추정하지 않습니다.",
+    toolTokenAttributionHint:
+      "동일 사용 이벤트 안의 도구 호출 수로 Token을 귀속합니다. 공급자별 도구 청구 금액은 아닙니다.",
     textResponses: "텍스트 응답",
     toolCalls: "도구 호출",
     skillCalls: "Skill 호출",

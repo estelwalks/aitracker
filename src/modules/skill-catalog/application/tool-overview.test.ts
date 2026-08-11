@@ -89,6 +89,7 @@ const input: DashboardV2Snapshot = {
       context: {
         textResponses: 1,
         toolCalls: 2,
+        tools: [{ name: "apply_patch", category: "execution", calls: 2 }],
         skillCalls: 0,
         toolOutputCalls: 0,
       },
@@ -120,7 +121,7 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   const view = buildToolOverview(
     input,
     "codex",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -161,13 +162,22 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   assert.equal(view.projects[0]?.sessions, 2);
   assert.equal(view.models[0]?.key, "gpt-test");
   assert.equal(view.projects[0]?.key, APP_ID);
+  assert.equal(view.toolCallDetailsAvailable, true);
+  assert.deepEqual(view.toolCallDetails, [
+    {
+      name: "apply_patch",
+      category: "execution",
+      calls: 2,
+      attributedTokens: 100,
+    },
+  ]);
 });
 
 test("skill evidence preserves observed zero and unavailable sessions", () => {
   const observed = buildToolOverview(
     input,
     "codex",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -200,7 +210,7 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
       ],
     },
     "claude-code",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -228,7 +238,7 @@ test("the first active tool is selected when there is no explicit selection", ()
   const view = buildToolOverview(
     input,
     null,
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -240,7 +250,7 @@ test("detail rows retain real priced cost semantics when pricing is available", 
   const view = buildToolOverview(
     { ...input, pricingAvailable: true },
     "codex",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -379,7 +389,7 @@ test("Claude tool outputs remain unavailable instead of becoming an observed zer
   const view = buildToolOverview(
     { ...input, events: [claudeEvent] },
     "claude-code",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -395,7 +405,7 @@ test("tool overview stays within renderer-safe aggregate fields", () => {
   const view = buildToolOverview(
     input,
     "codex",
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );

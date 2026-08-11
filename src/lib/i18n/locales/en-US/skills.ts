@@ -162,6 +162,8 @@ export const skills = {
     composition: "Context composition",
     compositionHint:
       "Uses verifiable event counts from logs; it never guesses token allocation.",
+    toolTokenAttributionHint:
+      "Attributes event tokens by tool-call count within that event; this is not provider per-tool billing.",
     textResponses: "Text responses",
     toolCalls: "Tool calls",
     skillCalls: "Skill calls",
