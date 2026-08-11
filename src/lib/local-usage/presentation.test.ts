@@ -29,9 +29,9 @@ function makeEvent(
   };
 }
 
-test("sourceLabel projects the manifest nameZh for every catalog source (F6-T2)", () => {
+test("sourceLabel projects the manifest primary display name for every catalog source (F6-T2)", () => {
   for (const tool of PUBLIC_TOOL_MANIFEST.tools) {
-    assert.equal(sourceLabel(tool.id), tool.nameZh);
+    assert.equal(sourceLabel(tool.id), tool.name);
   }
 });
 

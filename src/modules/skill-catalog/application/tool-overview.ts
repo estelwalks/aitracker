@@ -3,6 +3,7 @@ import {
   type UsagePeriod,
 } from "../../../lib/local-usage/presentation.ts";
 import { estimateUsageCost } from "../../../lib/pricing/index.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
 import type {
   DashboardV2ContextCounts,
   DashboardV2Event,
@@ -18,15 +19,15 @@ export type ToolOverviewState =
  * fallback: every metric below is still calculated exclusively from the
  * renderer-safe dashboard snapshot.
  */
-const overviewTools = [
-  { id: "claude-code", name: "Claude Code" },
-  { id: "codex", name: "Codex CLI" },
-] as const;
+const overviewToolIds = ["claude-code", "codex"] as const;
+const registryNameById = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
+);
 
-type OverviewToolId = (typeof overviewTools)[number]["id"];
+type OverviewToolId = (typeof overviewToolIds)[number];
 
 function isOverviewToolId(id: string): id is OverviewToolId {
-  return overviewTools.some((tool) => tool.id === id);
+  return overviewToolIds.includes(id as OverviewToolId);
 }
 
 export interface ToolOverviewCard {
@@ -397,15 +398,15 @@ export function buildToolOverview(
     0,
   );
   const sourceTools = new Map(snapshot.tools.map((tool) => [tool.id, tool]));
-  const cards = overviewTools.map((configuredTool) => {
-    const scannedTool = sourceTools.get(configuredTool.id);
+  const cards = overviewToolIds.map((toolId) => {
+    const scannedTool = sourceTools.get(toolId);
     const tool = {
-      id: configuredTool.id,
+      id: toolId,
       // The dashboard snapshot is built server-side from the public tool
       // manifest, whose name is the registry definition's `display.name`.
-      // Keep the fixed text only for a missing source projection so the
-      // two-card layout remains usable while a scanner is unavailable.
-      name: configuredTool.name,
+      // The generated manifest is a browser-safe projection of `display.name`.
+      // It remains the fallback while scanner data is unavailable.
+      name: scannedTool?.name ?? registryNameById.get(toolId) ?? toolId,
       available: scannedTool?.available ?? false,
       detected: scannedTool?.detected ?? false,
     };

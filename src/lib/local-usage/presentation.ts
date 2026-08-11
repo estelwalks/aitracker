@@ -96,12 +96,12 @@ export function createEmptyUsageSnapshot(): LocalUsageSnapshot {
 
 /**
  * Browser-facing source label (F6-T2): projected from the public manifest's
- * `nameZh` — the UI display-name convention used by the sources page and the
- * skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
+ * `name` — the registry-owned primary display name used by the sources page
+ * and the skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
  * left the registry) fall back to the raw id.
  */
 const MANIFEST_SOURCE_LABELS: ReadonlyMap<string, string> = new Map(
-  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.nameZh]),
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
 );
 
 export function sourceLabel(source: LocalUsageSource | string): string {

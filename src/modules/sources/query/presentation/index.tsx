@@ -97,7 +97,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
       (entry) =>
         (statusFilter === "all" || entry.status === statusFilter) &&
         (!kw ||
-          entry.nameZh.toLocaleLowerCase().includes(kw) ||
+          entry.name.toLocaleLowerCase().includes(kw) ||
           entry.paths.some((path) => path.toLocaleLowerCase().includes(kw))),
     );
   }, [summary.entries, keyword, statusFilter]);
@@ -267,8 +267,8 @@ function SourceCard({ entry }: { entry: SourcesQueryEntry }) {
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`size-1.5 shrink-0 rounded-sm ${meta.dot}`} />
-          <BrandIcon name={entry.nameZh} className="size-4 shrink-0" />
-          <h2 className="truncate text-[13px] font-medium">{entry.nameZh}</h2>
+          <BrandIcon name={entry.name} className="size-4 shrink-0" />
+          <h2 className="truncate text-[13px] font-medium">{entry.name}</h2>
           <span className="shrink-0 rounded-sm border border-border px-1.5 py-px text-[10px] text-muted-foreground">
             {t(SURFACE_LABEL[entry.toolSurface])}
           </span>

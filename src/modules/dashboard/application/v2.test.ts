@@ -49,7 +49,7 @@ const snapshot: DashboardV2Snapshot = {
   tools: [
     {
       id: "codex",
-      name: "Codex CLI",
+      name: "Codex",
       available: true,
       detected: true,
       usageSupport: "native",
@@ -455,7 +455,7 @@ test("Dashboard V2 Hero derives live listener state and insights from safe obser
   const usageInsight = hero.insights.find(
     (insight) => insight.kind === "usage",
   );
-  assert.equal(usageInsight?.toolName, "Codex CLI");
+  assert.equal(usageInsight?.toolName, "Codex");
   assert.equal(
     usageInsight?.tokens,
     createDashboardV2View(snapshot, "all").tools[0]?.tokens,

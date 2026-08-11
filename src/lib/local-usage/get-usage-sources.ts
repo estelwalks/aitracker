@@ -18,7 +18,8 @@ export type UsageSourceStatus = "has-data" | "no-logs" | "not-installed";
 
 export interface UsageSourceEntry {
   id: string;
-  nameZh: string;
+  /** Registry-owned primary display name. */
+  name: string;
   status: UsageSourceStatus;
   events: number;
   malformedLines: number;
@@ -131,7 +132,7 @@ export function deriveUsageSources(
 
     return {
       id: tool.id,
-      nameZh: tool.nameZh,
+      name: tool.nameZh,
       status,
       events,
       malformedLines,
