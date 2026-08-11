@@ -242,6 +242,73 @@ test("OpenClaw native reader merges active/archive/reset copies as a multiset an
   }
 });
 
+test("Claude attaches tool-result metadata to the matching tool-use event without retaining output text", async () => {
+  const root = join(tmpdir(), `tt-claude-output-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionDirectory = join(homeDirectory, ".claude", "projects", "demo");
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDirectory, "session.jsonl"),
+    [
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        message: {
+          id: "assistant-private-id",
+          model: "claude-test",
+          usage: { input_tokens: 12, output_tokens: 8 },
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-private-id",
+              name: "Bash",
+              input: { command: "echo DO_NOT_CACHE" },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-private-id",
+              content: `PRIVATE_TOOL_RESULT${String.fromCharCode(10)}line-two`,
+              is_error: false,
+            },
+          ],
+        },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "claude-code",
+    );
+    assert.deepEqual(event?.context?.toolOutputs, {
+      characters: 28,
+      lines: 2,
+      completed: true,
+      calls: 1,
+    });
+    const cache = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(cache, /PRIVATE_TOOL_RESULT|tool-private-id/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("persistent cache reuses, reparses, prunes, and rebuilds files safely", async () => {
   const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
@@ -476,7 +543,7 @@ test("cache embeds registryFingerprint and invalidates on mismatch", async () =>
       registryFingerprint: string;
       files: unknown[];
     };
-    assert.equal(index.version, 12);
+    assert.equal(index.version, 13);
     assert.ok(
       typeof index.registryFingerprint === "string" &&
         index.registryFingerprint.length > 0,

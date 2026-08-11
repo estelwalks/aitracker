@@ -14,22 +14,13 @@ import type {
 export type ToolOverviewState =
   "active" | "detected" | "available" | "unavailable";
 
-/**
- * `/agents` is intentionally the compact view for the two locally supported
- * first-party CLI integrations. This is product metadata, not a usage
- * fallback: every metric below is still calculated exclusively from the
- * renderer-safe dashboard snapshot.
- */
-const overviewToolIds = ["claude-code", "codex"] as const;
 const registryNameById = new Map(
   PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
 );
 
-type OverviewToolId = (typeof overviewToolIds)[number];
-
-function isOverviewToolId(id: string): id is OverviewToolId {
-  return overviewToolIds.includes(id as OverviewToolId);
-}
+/** The aggregate can be mixed only when the source itself has mixed records. */
+export type ToolOverviewMeasurement =
+  "observed" | "estimated" | "mixed" | "unavailable";
 
 export interface ToolOverviewCard {
   readonly id: string;
@@ -53,6 +44,8 @@ export interface ToolOverviewCard {
   readonly messages: number | null;
   readonly lastActiveAt: string | null;
   readonly skillUsage: ToolOverviewSkillUsage;
+  /** Estimate-only sources expose model totals but no context attribution. */
+  readonly measurement: ToolOverviewMeasurement;
 }
 
 /** `observed: false` is intentionally different from an observed zero call count. */
@@ -132,6 +125,10 @@ export interface ToolOverviewView {
   readonly reasoningAvailable: boolean;
   readonly systemPromptAvailable: boolean;
   readonly skillUsage: ToolOverviewSkillUsage;
+  /** Whether the selected source has any safely attributable context field. */
+  readonly hasContextBreakdown: boolean;
+  /** Directly observed, estimated-only, mixed, or no usage event in range. */
+  readonly measurement: ToolOverviewMeasurement;
 }
 
 function inRange(
@@ -399,7 +396,31 @@ function skillUsage(
   };
 }
 
+function measurementFor(
+  events: readonly DashboardV2Event[],
+): ToolOverviewMeasurement {
+  if (events.length === 0) return "unavailable";
+  const observed = events.some((event) => event.measurement !== "estimated");
+  const estimated = events.some((event) => event.measurement === "estimated");
+  if (observed && estimated) return "mixed";
+  return estimated ? "estimated" : "observed";
+}
+
+function hasContextBreakdown(events: readonly DashboardV2Event[]): boolean {
+  return events.some((event) =>
+    Object.values(event.evidence).some((available) => available),
+  );
+}
+
 function cacheRate(events: readonly DashboardV2Event[]): number | null {
+  // Transcript-size estimates cannot establish cache usage. Do not turn an
+  // omitted cache field into a misleading observed 0%.
+  if (
+    events.length === 0 ||
+    events.every((event) => event.measurement === "estimated")
+  ) {
+    return null;
+  }
   const input = events.reduce(
     (total, event) =>
       total +
@@ -490,18 +511,24 @@ export function buildToolOverview(
   from?: string,
   to?: string,
 ): ToolOverviewView {
-  // Sources outside the two installed CLI integrations never contribute a
-  // card, trend, share, or selected-tool detail on this prototype-aligned
-  // page. Their raw records remain owned by the dashboard module.
-  const periodEvents = inRange(snapshot.events, period, from, to).filter(
-    (event) => isOverviewToolId(event.source),
-  );
+  const periodEvents = inRange(snapshot.events, period, from, to);
   const totalPeriodTokens = periodEvents.reduce(
     (total, event) => total + event.totalTokens,
     0,
   );
   const sourceTools = new Map(snapshot.tools.map((tool) => [tool.id, tool]));
-  const cards = overviewToolIds.map((toolId) => {
+  // Only show a tool when local installation/data evidence exists. This keeps
+  // the overview focused while allowing every actually used/detected tool
+  // (rather than a fixed pair) to select its own supported detail dimensions.
+  const cardToolIds = snapshot.tools
+    .filter(
+      (tool) =>
+        tool.detected ||
+        tool.available ||
+        periodEvents.some((event) => event.source === tool.id),
+    )
+    .map((tool) => tool.id);
+  const cards = cardToolIds.map((toolId) => {
     const scannedTool = sourceTools.get(toolId);
     const tool = {
       id: toolId,
@@ -549,6 +576,7 @@ export function buildToolOverview(
           ),
       lastActiveAt,
       skillUsage: skillUsage(events),
+      measurement: measurementFor(events),
     };
   });
   // A persisted/manual selection wins. On first load, prefer actual activity
@@ -607,5 +635,7 @@ export function buildToolOverview(
       (event) => event.evidence.systemPromptTokens,
     ),
     skillUsage: skillUsage(selectedEvents),
+    hasContextBreakdown: hasContextBreakdown(selectedEvents),
+    measurement: measurementFor(selectedEvents),
   };
 }

@@ -133,6 +133,7 @@ export const skills = {
       unavailable: "未检测",
     },
     noActivity: "当前所选范围内没有可验证的工具活动。",
+    noReadableUsage: "未发现当前范围内可读取的用量日志。",
     active: "活跃",
     inactive: "无活动",
     dormant: "已安装 · 休眠",
@@ -153,6 +154,10 @@ export const skills = {
     compositionHint: "按日志中可验证的调用计数，不对 Token 做推测分配。",
     toolTokenAttributionHint:
       "按同一用量事件内的工具调用次数归因 Token；不是供应商逐工具计费。",
+    estimatedModelOnly:
+      "模型级估算：日志未提供对话、推理、工具、输出或 Skill 的可验证归因。",
+    contextUnavailable: "该工具的本地日志未提供可验证的上下文构成明细。",
+    estimatedObservations: "{count} 个估算采样",
     textResponses: "文本响应",
     toolCalls: "工具调用",
     skillCalls: "Skill 调用",

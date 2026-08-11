@@ -139,6 +139,7 @@ export const skills = {
       unavailable: "未検出",
     },
     noActivity: "選択した期間に検証可能なツール活動はありません。",
+    noReadableUsage: "この期間に読み取り可能な使用ログは見つかりません。",
     active: "アクティブ",
     inactive: "活動なし",
     dormant: "インストール済み・休止中",
@@ -160,6 +161,11 @@ export const skills = {
       "ログで検証可能な呼び出し数を使用し、Token 配分を推測しません。",
     toolTokenAttributionHint:
       "同一使用イベント内のツール呼び出し数で Token を帰属します。プロバイダーのツール別課金ではありません。",
+    estimatedModelOnly:
+      "モデル単位の推定のみです。ログにはメッセージ、推論、ツール、出力、Skill の検証可能な帰属情報がありません。",
+    contextUnavailable:
+      "このツールのローカルログには、検証可能なコンテキスト内訳がありません。",
+    estimatedObservations: "推定サンプル {count} 件",
     textResponses: "テキスト応答",
     toolCalls: "ツール呼び出し",
     skillCalls: "Skill 呼び出し",

@@ -139,6 +139,7 @@ export const skills = {
       unavailable: "감지되지 않음",
     },
     noActivity: "선택한 범위에 검증 가능한 도구 활동이 없습니다.",
+    noReadableUsage: "이 범위에서 읽을 수 있는 사용 로그를 찾지 못했습니다.",
     active: "활성",
     inactive: "활동 없음",
     dormant: "설치됨 · 유휴",
@@ -160,6 +161,11 @@ export const skills = {
       "로그에서 검증 가능한 이벤트 수를 사용하며 Token 배분을 추정하지 않습니다.",
     toolTokenAttributionHint:
       "동일 사용 이벤트 안의 도구 호출 수로 Token을 귀속합니다. 공급자별 도구 청구 금액은 아닙니다.",
+    estimatedModelOnly:
+      "모델 수준 추정치만 제공합니다. 로그에 메시지, 추론, 도구, 출력 또는 Skill의 검증 가능한 귀속 정보가 없습니다.",
+    contextUnavailable:
+      "이 도구의 로컬 로그에는 검증 가능한 컨텍스트 구성 세부 정보가 없습니다.",
+    estimatedObservations: "추정 샘플 {count}개",
     textResponses: "텍스트 응답",
     toolCalls: "도구 호출",
     skillCalls: "Skill 호출",
