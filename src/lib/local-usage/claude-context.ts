@@ -20,6 +20,7 @@ import type {
   LocalUsageSkillCall,
   LocalUsageToolCall,
   LocalUsageToolCategory,
+  LocalUsageToolOutputSummary,
 } from "./types.ts";
 
 interface JsonObject {
@@ -87,6 +88,52 @@ function isObject(value: unknown): value is JsonObject {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Private tool-use ids are used only while streaming one JSONL file so a
+ * `tool_result` can be attached to the preceding attributed usage event.
+ * They are never returned to, persisted by, or exposed outside the scanner.
+ */
+export function collectClaudeToolUseIds(message: unknown): string[] {
+  const content =
+    isObject(message) && Array.isArray(message.content) ? message.content : [];
+  return content.flatMap((block) => {
+    if (!isObject(block) || block.type !== "tool_use") return [];
+    const id = asString(block.id);
+    return id == null ? [] : [id];
+  });
+}
+
+export interface ClaudeToolResult {
+  readonly toolUseId: string;
+  readonly summary: LocalUsageToolOutputSummary;
+}
+
+/**
+ * Extract only tool-result metadata. The result body is read transiently to
+ * measure size and is never retained in the usage snapshot or browser DTO.
+ */
+export function collectClaudeToolResults(message: unknown): ClaudeToolResult[] {
+  const content =
+    isObject(message) && Array.isArray(message.content) ? message.content : [];
+  const results: ClaudeToolResult[] = [];
+  for (const block of content) {
+    if (!isObject(block) || block.type !== "tool_result") continue;
+    const toolUseId = asString(block.tool_use_id);
+    if (toolUseId == null) continue;
+    const raw = typeof block.content === "string" ? block.content : "";
+    results.push({
+      toolUseId,
+      summary: {
+        characters: raw.length,
+        lines: raw.length === 0 ? 0 : raw.split(/\r?\n/u).length,
+        completed: true,
+        calls: 1,
+      },
+    });
+  }
+  return results;
 }
 
 /**
