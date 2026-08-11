@@ -73,10 +73,10 @@ const MAX_JSONL_LINE_LENGTH =
   SCANNER_POLICY?.maxJsonlLineLength ?? 16 * 1024 * 1024;
 const FUTURE_TIMESTAMP_TOLERANCE_MS =
   SCANNER_POLICY?.futureTimestampToleranceMs ?? DAY_IN_MS;
-// Claude tool-result metadata was added in v13. Rebuild once so cached Claude
+// Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
 // events gain the new privacy-safe output aggregate instead of retaining a
 // stale "unobserved" capability.
-const PERSISTENT_CACHE_VERSION = 13;
+const PERSISTENT_CACHE_VERSION = 14;
 const PERSISTENT_CACHE_FILE_NAME =
   SCANNER_POLICY?.cacheFileName ?? "local-usage-index-v10.json";
 /**
@@ -204,7 +204,7 @@ interface PersistentCodexFileEntry extends PersistentFileEntryBase {
 }
 
 interface PersistentStructuredFileEntry extends PersistentFileEntryBase {
-  source: "gemini-cli" | "grok" | "openclaw";
+  source: "gemini-cli" | "grok" | "openclaw" | "antigravity";
   identifiedEvents: CachedIdentifiedEvent[];
   diagnostics: LocalUsageDiagnostic[];
 }
@@ -300,6 +300,9 @@ function isCachedEvent(
     nonNegativeNumber(event.outputTokens) &&
     nonNegativeNumber(event.reasoningOutputTokens) &&
     nonNegativeNumber(event.totalTokens) &&
+    (event.measurement == null ||
+      event.measurement === "observed" ||
+      event.measurement === "estimated") &&
     isCachedContext(event.context)
   );
 }
@@ -428,7 +431,12 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     };
   }
 
-  if (source === "gemini-cli" || source === "grok" || source === "openclaw") {
+  if (
+    source === "gemini-cli" ||
+    source === "grok" ||
+    source === "openclaw" ||
+    source === "antigravity"
+  ) {
     if (!Array.isArray(entry.identifiedEvents)) return undefined;
     const identifiedEvents: CachedIdentifiedEvent[] = [];
     for (const value of entry.identifiedEvents) {
@@ -1766,6 +1774,129 @@ async function parseOpenclawUsageFile(
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
+/** AITracker-compatible local estimate: CJK chars count one each, other text one per four chars. */
+function estimateAntigravityTokens(value: unknown): number {
+  const text =
+    typeof value === "string"
+      ? value
+      : value == null
+        ? ""
+        : JSON.stringify(value);
+  let cjk = 0;
+  let other = 0;
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    const isCjk =
+      (code >= 0x3400 && code <= 0x4dbf) ||
+      (code >= 0x4e00 && code <= 0x9fff) ||
+      (code >= 0x3040 && code <= 0x30ff);
+    if (isCjk) cjk += 1;
+    else other += 1;
+  }
+  return cjk + Math.ceil(other / 4);
+}
+
+function antigravityModelFromSelection(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = value.match(
+    /changed setting `Model Selection` from .*? to ([^`\n]+?)(?:\s*\([^)]*\))?\.(?:\s+|$)/iu,
+  );
+  if (match == null) return undefined;
+  let model = match[1]!
+    .trim()
+    .replace(/\([^)]*\)/gu, " ")
+    .replace(/\b(thinking|xhigh|high|medium|low|fast)\b/giu, " ")
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .replace(/-{2,}/gu, "-");
+  if (!model) return undefined;
+  for (const marker of ["gemini", "claude", "gpt"]) {
+    const index = model.indexOf(marker);
+    if (index >= 0) {
+      model = model.slice(index);
+      break;
+    }
+  }
+  return /^(gemini|claude|gpt)-/u.test(model) ? model : `antigravity-${model}`;
+}
+
+function antigravityContextTokens(record: JsonObject): number {
+  let tokens = estimateAntigravityTokens(record.content);
+  if (record.type === "PLANNER_RESPONSE") {
+    tokens += estimateAntigravityTokens(record.tool_calls);
+  }
+  return tokens;
+}
+
+/**
+ * Antigravity stores no provider token usage. This reader intentionally emits
+ * a labelled model-level estimate and does not expose any context breakdown.
+ * Raw transcript content is used only during this scan and is never cached.
+ */
+async function parseAntigravityUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  let model = "antigravity-unknown";
+  let contextTokens = 0;
+  let previousContextTokens = 0;
+  let index = 0;
+  const malformedLines = await readJsonLines(file.path, (record) => {
+    index += 1;
+    if (
+      record.type === "USER_INPUT" ||
+      record.type === "USER_SETTINGS_CHANGE"
+    ) {
+      model = antigravityModelFromSelection(record.content) ?? model;
+    }
+    const eventContextTokens = antigravityContextTokens(record);
+    if (record.type !== "PLANNER_RESPONSE") {
+      contextTokens += eventContextTokens;
+      return;
+    }
+    const timestamp = timestampValue(record.created_at);
+    const inputTokens = Math.max(0, contextTokens - previousContextTokens);
+    const outputTokens =
+      estimateAntigravityTokens(record.content) +
+      estimateAntigravityTokens(record.tool_calls);
+    const reasoningOutputTokens = estimateAntigravityTokens(record.thinking);
+    const totalTokens = inputTokens + outputTokens + reasoningOutputTokens;
+    previousContextTokens = contextTokens;
+    contextTokens += eventContextTokens;
+    if (timestamp == null || totalTokens === 0) return;
+    identifiedEvents.push({
+      identity: privacyFingerprint("antigravity", [
+        fallbackSessionId,
+        index,
+        timestamp.toISOString(),
+        model,
+        totalTokens,
+      ]),
+      event: {
+        source: "antigravity",
+        timestamp: timestamp.toISOString(),
+        sessionId: fallbackSessionId,
+        model,
+        project: "unknown",
+        inputTokens,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+        measurement: "estimated",
+      },
+    });
+  });
+  return { identifiedEvents, malformedLines, diagnostics: [] };
+}
+
 type StructuredParser = typeof parseGeminiUsageFile;
 
 async function scanStructuredAdapter(
@@ -2294,7 +2425,11 @@ export async function scanLocalUsage(
     (adapter) => adapter.source !== "workbuddy",
   );
   const structuredReader = (
-    reader: "gemini-session-v1" | "grok-turn-v1" | "openclaw-session-v1",
+    reader:
+      | "gemini-session-v1"
+      | "grok-turn-v1"
+      | "openclaw-session-v1"
+      | "antigravity-transcript-v1",
     parser: StructuredParser,
     mergeMode: "unique" | "multiset",
   ) => {
@@ -2315,55 +2450,66 @@ export async function scanLocalUsage(
       cachedFiles,
     );
   };
-  const [claude, codex, workbuddy, gemini, grok, openclaw, ...genericResults] =
-    await Promise.all([
-      scanClaude(
-        claudeRoots,
+  const [
+    claude,
+    codex,
+    workbuddy,
+    gemini,
+    grok,
+    openclaw,
+    antigravity,
+    ...genericResults
+  ] = await Promise.all([
+    scanClaude(
+      claudeRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("claude-code", error)),
+    scanCodex(
+      codexRoots,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("codex", error)),
+    scanWorkbuddy(
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+    ).catch((error) => sourceFailure("workbuddy", error)),
+    structuredReader("gemini-session-v1", parseGeminiUsageFile, "unique").catch(
+      (error) => sourceFailure("gemini-cli", error),
+    ),
+    structuredReader("grok-turn-v1", parseGrokUsageFile, "unique").catch(
+      (error) => sourceFailure("grok", error),
+    ),
+    structuredReader(
+      "openclaw-session-v1",
+      parseOpenclawUsageFile,
+      "multiset",
+    ).catch((error) => sourceFailure("openclaw", error)),
+    structuredReader(
+      "antigravity-transcript-v1",
+      parseAntigravityUsageFile,
+      "unique",
+    ).catch((error) => sourceFailure("antigravity", error)),
+    ...genericAdapters.map((adapter) =>
+      scanGenericAdapter(
+        adapter,
         homeDirectory,
         cutoffTime,
         nowTime,
         maxFiles,
         cachedFiles,
-      ).catch((error) => sourceFailure("claude-code", error)),
-      scanCodex(
-        codexRoots,
-        homeDirectory,
-        cutoffTime,
-        nowTime,
-        maxFiles,
-        cachedFiles,
-      ).catch((error) => sourceFailure("codex", error)),
-      scanWorkbuddy(
-        homeDirectory,
-        cutoffTime,
-        nowTime,
-        maxFiles,
-        cachedFiles,
-      ).catch((error) => sourceFailure("workbuddy", error)),
-      structuredReader(
-        "gemini-session-v1",
-        parseGeminiUsageFile,
-        "unique",
-      ).catch((error) => sourceFailure("gemini-cli", error)),
-      structuredReader("grok-turn-v1", parseGrokUsageFile, "unique").catch(
-        (error) => sourceFailure("grok", error),
-      ),
-      structuredReader(
-        "openclaw-session-v1",
-        parseOpenclawUsageFile,
-        "multiset",
-      ).catch((error) => sourceFailure("openclaw", error)),
-      ...genericAdapters.map((adapter) =>
-        scanGenericAdapter(
-          adapter,
-          homeDirectory,
-          cutoffTime,
-          nowTime,
-          maxFiles,
-          cachedFiles,
-        ).catch((error) => sourceFailure(adapter.source, error)),
-      ),
-    ]);
+      ).catch((error) => sourceFailure(adapter.source, error)),
+    ),
+  ]);
 
   // The snapshot is built exclusively from the native adapters above.
   const currentCacheEntries = [
@@ -2373,6 +2519,7 @@ export async function scanLocalUsage(
     ...gemini.cacheEntries,
     ...grok.cacheEntries,
     ...openclaw.cacheEntries,
+    ...antigravity.cacheEntries,
     ...genericResults.flatMap((result) => result.cacheEntries),
   ].sort((left, right) => left.path.localeCompare(right.path));
   const shouldWritePersistentIndex =
@@ -2384,6 +2531,7 @@ export async function scanLocalUsage(
       gemini.summary.filesParsed > 0 ||
       grok.summary.filesParsed > 0 ||
       openclaw.summary.filesParsed > 0 ||
+      antigravity.summary.filesParsed > 0 ||
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
@@ -2409,6 +2557,7 @@ export async function scanLocalUsage(
     ...gemini.events,
     ...grok.events,
     ...openclaw.events,
+    ...antigravity.events,
     ...genericResults.flatMap((result) => result.events),
   ];
   const events = nativeEvents.map((event) => ({
@@ -2423,6 +2572,7 @@ export async function scanLocalUsage(
     gemini.summary,
     grok.summary,
     openclaw.summary,
+    antigravity.summary,
     ...genericResults.map((result) => result.summary),
   ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {

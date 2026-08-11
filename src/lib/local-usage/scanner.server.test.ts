@@ -309,6 +309,76 @@ test("Claude attaches tool-result metadata to the matching tool-use event withou
   }
 });
 
+test("Antigravity emits labelled model-only transcript estimates without context evidence", async () => {
+  const root = join(tmpdir(), `tt-antigravity-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const logDirectory = join(
+    homeDirectory,
+    ".gemini",
+    "antigravity",
+    "brain",
+    "session-private",
+    ".system_generated",
+    "logs",
+  );
+  await mkdir(logDirectory, { recursive: true });
+  await writeFile(
+    join(logDirectory, "transcript.jsonl"),
+    [
+      JSON.stringify({
+        type: "USER_SETTINGS_CHANGE",
+        content:
+          "changed setting `Model Selection` from Default to Gemini 2.5 Pro (thinking). ",
+      }),
+      JSON.stringify({
+        type: "USER_INPUT",
+        content: "PRIVATE_PROMPT_INPUT",
+        created_at: "2026-07-27T10:00:00.000Z",
+      }),
+      JSON.stringify({
+        type: "PLANNER_RESPONSE",
+        content: "PRIVATE_PLANNER_OUTPUT",
+        thinking: "PRIVATE_REASONING",
+        tool_calls: [{ name: "PRIVATE_TOOL" }],
+        created_at: "2026-07-27T10:00:01.000Z",
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const event = first.details.find(
+      (candidate) => candidate.source === "antigravity",
+    );
+    assert.equal(event?.measurement, "estimated");
+    assert.equal(event?.model, "gemini-2.5-pro");
+    assert.ok((event?.totalTokens ?? 0) > 0);
+    assert.equal(event?.context, undefined);
+    const cache = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      cache,
+      /PRIVATE_PROMPT|PRIVATE_PLANNER|PRIVATE_REASONING|PRIVATE_TOOL/i,
+    );
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "antigravity").filesReused, 1);
+    assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("persistent cache reuses, reparses, prunes, and rebuilds files safely", async () => {
   const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
@@ -543,7 +613,7 @@ test("cache embeds registryFingerprint and invalidates on mismatch", async () =>
       registryFingerprint: string;
       files: unknown[];
     };
-    assert.equal(index.version, 13);
+    assert.equal(index.version, 14);
     assert.ok(
       typeof index.registryFingerprint === "string" &&
         index.registryFingerprint.length > 0,
