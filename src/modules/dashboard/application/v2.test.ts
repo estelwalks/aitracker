@@ -61,6 +61,7 @@ const snapshot: DashboardV2Snapshot = {
       timestamp: "2026-08-10T10:00:00.000Z",
       model: "gpt-test",
       project: `${APP_ID}_webapp`,
+      projectKind: "workspace",
       inputTokens: 80,
       cachedInputTokens: 20,
       cacheCreationInputTokens: 0,
@@ -113,6 +114,28 @@ test("Dashboard V2 uses one period for metrics, trend, cards and context", () =>
     sessions: 1,
     previousTokens: 0,
   });
+});
+
+test("Dashboard V2 excludes quick conversations from project statistics", () => {
+  const quickConversation = {
+    ...snapshot.events[0]!,
+    project: "quick-conversation",
+    projectKind: "quick-conversation" as const,
+    totalTokens: 200,
+  };
+  const view = createDashboardV2View(
+    { ...snapshot, events: [...snapshot.events, quickConversation] },
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.totals.events, 2);
+  assert.equal(view.projectCount, 1);
+  assert.deepEqual(
+    view.projects.map((project) => project.key),
+    [`${APP_ID}_webapp`],
+  );
 });
 
 test("Dashboard V2 aligns a real previous window for the composed trend", () => {

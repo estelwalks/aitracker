@@ -18,6 +18,7 @@ import type {
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
 import type { MonitoringStatus } from "../monitoring/index.ts";
+import type { DashboardProjectKind } from "./project-classification.server.ts";
 
 /** Browser-safe usage event. Raw commands and filesystem references are omitted. */
 export interface DashboardUsageEvent extends LocalTokenCounts {
@@ -26,6 +27,8 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project key, never a local path. */
   readonly project: string;
+  /** Server-derived category; omitted only by legacy test/compatibility DTOs. */
+  readonly projectKind?: DashboardProjectKind;
   readonly context?: Pick<
     LocalUsageContext,
     "textResponse" | "tools" | "skills" | "toolOutputs"
@@ -113,6 +116,7 @@ export interface DashboardV2Event extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project label, derived from the final project segment. */
   readonly project: string;
+  readonly projectKind?: DashboardProjectKind;
   readonly context: {
     readonly textResponses: number;
     readonly toolCalls: number;

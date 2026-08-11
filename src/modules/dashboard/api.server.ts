@@ -24,6 +24,10 @@ import { AI_TOOLS } from "../../lib/tools/catalog.ts";
 import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
 import { homedir } from "node:os";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
+import {
+  classifyDashboardProjectRefs,
+  type DashboardProjectClassification,
+} from "./project-classification.server.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -53,6 +57,10 @@ export function aggregateDashboardProjectSessions(
     editTurns: number;
     subagentCalls: number;
   }[],
+  classifications: ReadonlyMap<
+    string,
+    DashboardProjectClassification
+  > = new Map(),
 ) {
   const counts = new Map<
     string,
@@ -64,7 +72,15 @@ export function aggregateDashboardProjectSessions(
     // Use the same final-segment projection as usage events. Codex session
     // projectKey can be a display fallback while projectRef carries the
     // authoritative cwd; neither raw value crosses this adapter.
-    const project = projectKey(session.projectRef ?? session.projectKey);
+    const projectRef = session.projectRef ?? session.projectKey;
+    const classification = classifications.get(projectRef);
+    if (
+      classification?.kind !== undefined &&
+      classification.kind !== "workspace"
+    ) {
+      continue;
+    }
+    const project = classification?.label ?? projectKey(projectRef);
     const key = `${project}\u0000${session.source}\u0000${date}`;
     const current = counts.get(key) ?? {
       count: 0,
@@ -132,24 +148,29 @@ export function aggregateDashboardSourceSessions(
     );
 }
 
-function toDashboardEvent(event: {
-  source: DashboardUsageEvent["source"];
-  timestamp: string;
-  model: string;
-  project: string;
-  inputTokens: number;
-  cachedInputTokens: number;
-  cacheCreationInputTokens: number;
-  outputTokens: number;
-  reasoningOutputTokens: number;
-  totalTokens: number;
-  context?: DashboardUsageEvent["context"] & { commands?: unknown };
-}): DashboardUsageEvent {
+function toDashboardEvent(
+  event: {
+    source: DashboardUsageEvent["source"];
+    timestamp: string;
+    model: string;
+    project: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheCreationInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    context?: DashboardUsageEvent["context"] & { commands?: unknown };
+  },
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+): DashboardUsageEvent {
+  const classification = classifications.get(event.project);
   return {
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
-    project: projectKey(event.project),
+    project: classification?.label ?? projectKey(event.project),
+    projectKind: classification?.kind ?? "workspace",
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
     cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -175,6 +196,10 @@ function toDashboardEvent(event: {
 
 export function toDashboardSnapshot(
   snapshot: LocalUsageSnapshot,
+  classifications: ReadonlyMap<
+    string,
+    DashboardProjectClassification
+  > = new Map(),
 ): DashboardUsageSnapshot {
   return {
     generatedAt: snapshot.generatedAt,
@@ -206,13 +231,23 @@ export function toDashboardSnapshot(
     totals: snapshot.totals,
     bySource: snapshot.bySource,
     byModel: snapshot.byModel,
-    byProject: snapshot.byProject.map((row) => ({
-      ...row,
-      key: projectKey(row.key),
-    })),
+    byProject: snapshot.byProject.flatMap((row) => {
+      const classification = classifications.get(row.key);
+      if (
+        classification?.kind !== undefined &&
+        classification.kind !== "workspace"
+      ) {
+        return [];
+      }
+      return [{ ...row, key: classification?.label ?? projectKey(row.key) }];
+    }),
     daily: snapshot.daily,
-    details: snapshot.details.map(toDashboardEvent),
-    recent: snapshot.recent.map(toDashboardEvent),
+    details: snapshot.details.map((event) =>
+      toDashboardEvent(event, classifications),
+    ),
+    recent: snapshot.recent.map((event) =>
+      toDashboardEvent(event, classifications),
+    ),
   };
 }
 
@@ -296,6 +331,7 @@ export function toDashboardV2Snapshot(input: {
       timestamp: event.timestamp,
       model: event.model,
       project: event.project,
+      projectKind: event.projectKind,
       inputTokens: event.inputTokens,
       cachedInputTokens: event.cachedInputTokens,
       cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -335,7 +371,6 @@ export async function loadDashboardReadModel(
     usageResult.status === "fulfilled"
       ? usageResult.value
       : createEmptyUsageSnapshot();
-  const snapshot = toDashboardSnapshot(rawSnapshot);
   const [
     skillsResult,
     pricingResult,
@@ -345,7 +380,7 @@ export async function loadDashboardReadModel(
   ] = await Promise.allSettled([
     getLocalSkills(),
     getPricingSnapshot({
-      data: [...new Set(snapshot.details.map((event) => event.model))],
+      data: [...new Set(rawSnapshot.details.map((event) => event.model))],
     }),
     getLocalSessions({ data: {} }),
     getMonitoringStatus(),
@@ -353,8 +388,25 @@ export async function loadDashboardReadModel(
     // logs nor allows concrete filesystem paths past this server adapter.
     detectToolInstallations(AI_TOOLS, homedir()),
   ]);
+  const projectRefs = [
+    ...rawSnapshot.details.map((event) => event.project),
+    ...(sessionsResult.status === "fulfilled"
+      ? sessionsResult.value.sessions.map(
+          (session) => session.projectRef ?? session.projectKey,
+        )
+      : []),
+  ];
+  const projectClassifications =
+    await classifyDashboardProjectRefs(projectRefs);
+  const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
   const projectModel = createProjectUsageReadModel(
-    { events: snapshot.details },
+    {
+      events: snapshot.details.filter(
+        (event) =>
+          event.projectKind !== "quick-conversation" &&
+          event.projectKind !== "unknown",
+      ),
+    },
     { estimateEventCost },
   );
   const insightSnapshot = createInsightsApplication().buildSnapshot({
@@ -379,6 +431,7 @@ export async function loadDashboardReadModel(
           generatedAt: sessionsResult.value.generatedAt,
           byProjectDay: aggregateDashboardProjectSessions(
             sessionsResult.value.sessions,
+            projectClassifications,
           ),
           bySourceDay: aggregateDashboardSourceSessions(
             sessionsResult.value.sessions,
