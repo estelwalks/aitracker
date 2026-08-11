@@ -345,6 +345,12 @@ export function toDashboardV2Snapshot(input: {
             (total, item) => total + item.calls,
             0,
           ) ?? 0,
+        tools:
+          event.context?.tools?.map((tool) => ({
+            name: tool.name,
+            category: tool.category,
+            calls: tool.calls,
+          })) ?? [],
         skillCalls:
           event.context?.skills?.reduce(
             (total, item) => total + item.calls,

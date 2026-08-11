@@ -393,6 +393,10 @@ function ContextTreePanel({
     view.context.find((row) => row.key === "toolCalls")?.count ?? null;
   const toolOutputCalls =
     view.context.find((row) => row.key === "toolOutputCalls")?.count ?? null;
+  const attributedToolTokens = view.toolCallDetails.reduce(
+    (total, tool) => total + tool.attributedTokens,
+    0,
+  );
   const skillCalls = view.skillUsage.observed ? view.skillUsage.calls : null;
 
   const tree: ContextNode[] = [
@@ -462,11 +466,20 @@ function ContextTreePanel({
     {
       id: "tools",
       label: t("skills.agentOverview.toolCalls"),
-      tokens: null,
+      tokens: view.toolCallDetailsAvailable ? attributedToolTokens : null,
       calls: toolCalls,
       pct: null,
-      note: t("skills.agentOverview.compositionHint"),
-      children: [],
+      note: view.toolCallDetailsAvailable
+        ? t("skills.agentOverview.toolTokenAttributionHint")
+        : t("skills.agentOverview.notSeparatelyObserved"),
+      children: view.toolCallDetails.map((tool) => ({
+        id: `tool:${tool.category}:${tool.name}`,
+        label: `${tool.name} · ${tool.category}`,
+        tokens: tool.attributedTokens,
+        calls: tool.calls,
+        pct: null,
+        children: [],
+      })),
     },
     {
       id: "skills",
