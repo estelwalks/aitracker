@@ -302,7 +302,7 @@ export function toDashboardV2Snapshot(input: {
     const source = sourceStatus.get(tool.id as DashboardUsageEvent["source"]);
     return {
       id: tool.id,
-      name: tool.nameZh,
+      name: tool.name,
       available: source?.available ?? false,
       usageSupport: tool.capabilities.usage,
       // Usage-log roots and installation roots are intentionally separate:

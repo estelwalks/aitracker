@@ -9,7 +9,7 @@ test("sources query projection keeps only HOME-relative display paths", () => {
     entries: [
       {
         id: "codex",
-        nameZh: "Codex",
+        name: "Codex",
         status: "has-data",
         events: 2,
         malformedLines: 0,
