@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Activity,
   Brain,
+  Boxes,
   CalendarRange,
   ChevronDown,
   CircleDollarSign,
@@ -35,6 +36,7 @@ import type {
   DashboardV2Tool,
   DashboardV2View,
 } from "../contracts.ts";
+import type { MonitoringStatus } from "../../monitoring/contracts.ts";
 
 export function DashboardDeltaChip({
   value,
@@ -230,43 +232,55 @@ export function DashboardTrustHero({
   view,
   today,
   hero,
+  security,
 }: {
   view: DashboardV2View;
   today: DashboardV2View;
   hero: DashboardV2HeroView;
+  security?: MonitoringStatus["security"];
 }) {
   const { t, format } = useI18n();
-  const security = view.outputAvailability.securityRuns;
   const distill = view.outputAvailability.distillationOutputs;
+  const securityValue =
+    security == null
+      ? t("dashboard.kpi.unavailable")
+      : `${format.formatNumber(security.cleanCount)}/${format.formatNumber(security.assessedAssetCount)}`;
+  const securitySub =
+    security == null
+      ? t("dashboard.v2.outputUnavailableHint")
+      : t("dashboard.v2.securityScanSummary", {
+          assessed: security.assessedAssetCount,
+          discovered: security.discoveredAssetCount,
+        });
+  const todaySub =
+    today.estimatedCostUsd == null
+      ? t("dashboard.kpi.unavailable")
+      : `${format.formatUsd(today.estimatedCostUsd)} · ${t("dashboard.v2.cacheLabel")} ${today.cacheRate == null ? t("dashboard.kpi.unavailable") : format.formatPercent(Math.round(today.cacheRate))}`;
   const cards = [
     {
-      icon: Wrench,
-      label: t("dashboard.v2.agentActivityLabel"),
-      value: format.formatNumber(view.activeTools),
+      icon: Boxes,
+      label: t("dashboard.v2.toolCoverageLabel"),
+      value: format.formatNumber(hero.monitoring.detectedTools),
       sub: t("dashboard.v2.toolCountHint", {
         detected: hero.monitoring.detectedTools,
         supported: view.usageSupportedToolCount,
         total: view.tools.length,
       }),
       to: "/sources" as const,
-      action: t("dashboard.v2.openSkills"),
+      action: t("dashboard.v2.viewTools"),
     },
     {
       icon: ShieldCheck,
-      label: t("dashboard.v2.securityRunsLabel"),
-      value:
-        security.available && security.count != null
-          ? format.formatNumber(security.count)
-          : t("dashboard.kpi.unavailable"),
-      sub: security.available
-        ? t("dashboard.v2.securityLabel")
-        : t("dashboard.v2.outputUnavailableHint"),
+      label: t("dashboard.v2.securityLabel"),
+      value: securityValue,
+      sub: securitySub,
       to: "/security" as const,
-      action: t("nav.security"),
+      action: t("dashboard.v2.viewScan"),
+      accent: true,
     },
     {
       icon: Brain,
-      label: t("dashboard.v2.distillationOutputsLabel"),
+      label: t("dashboard.v2.distillationAssetsLabel"),
       value:
         distill.available && distill.count != null
           ? format.formatNumber(distill.count)
@@ -275,18 +289,15 @@ export function DashboardTrustHero({
         ? t("dashboard.v2.distillationAssetsLabel")
         : t("dashboard.v2.outputUnavailableHint"),
       to: "/distill" as const,
-      action: t("nav.distill"),
+      action: t("dashboard.v2.viewAssets"),
     },
     {
       icon: Coins,
       label: t("dashboard.v2.todayUsage"),
       value: format.formatTokens(today.totals.totalTokens),
-      sub:
-        today.estimatedCostUsd == null
-          ? t("dashboard.kpi.unavailable")
-          : format.formatUsd(today.estimatedCostUsd),
-      to: "/sessions" as const,
-      action: t("dashboard.v2.viewUsage"),
+      sub: todaySub,
+      to: "/tracker" as const,
+      action: t("dashboard.v2.viewTokens"),
     },
   ];
   return (
@@ -296,7 +307,10 @@ export function DashboardTrustHero({
         aria-label={t("dashboard.v2.monitoringAria")}
       >
         <span className="dashboard-monitoring-status">
-          <span className="dashboard-monitoring-indicator" />
+          <span className="dashboard-monitoring-pulse" aria-hidden="true">
+            <span />
+            <span />
+          </span>
           {t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
         </span>
         <span>
@@ -310,10 +324,15 @@ export function DashboardTrustHero({
         ) : null}
       </div>
       <div className="dashboard-spotlight-grid">
-        {cards.map(({ icon: Icon, label, value, sub, to, action }) => (
+        {cards.map(({ icon: Icon, label, value, sub, to, action, accent }) => (
           <article key={label} className="dashboard-spotlight-card">
-            <Icon className="size-4" />
-            <p>{label}</p>
+            <div className="dashboard-spotlight-card-heading">
+              <p>{label}</p>
+              <Icon
+                className={accent ? "size-4 text-[var(--color-ok)]" : "size-4"}
+                strokeWidth={1.8}
+              />
+            </div>
             <strong className="tt-num">{value}</strong>
             <small>{sub}</small>
             <Link to={to}>{action}</Link>
@@ -448,7 +467,7 @@ export function DashboardMetricGrid({
               {card.delta != null ? (
                 <DashboardDeltaChip
                   value={card.delta}
-                  points={card.deltaPoints}
+                  points={"deltaPoints" in card && card.deltaPoints === true}
                 />
               ) : null}
             </div>

@@ -203,6 +203,7 @@ export const dashboard = {
     cacheHint: "요청 사용량에서 직접 관측",
     toolCountHint:
       "{detected}개 감지 · {supported}개 사용량 지원 · 총 {total}개 도구",
+    toolCoverageLabel: "도구 범위",
     securityLabel: "보안 상태",
     securityHint: "여기에 안전하게 표시할 집계 데이터가 없습니다",
     securityAttention: "확인 항목 {count}개",
@@ -218,6 +219,10 @@ export const dashboard = {
       "로컬 서비스에서 집계 가능한 실제 수를 제공하지 않습니다",
     todayUsage: "오늘 사용량",
     viewUsage: "사용량 보기",
+    viewTools: "도구 보기",
+    viewScan: "스캔 보기",
+    viewAssets: "자산 보기",
+    viewTokens: "Token 보기",
     eventShort: "사용량 이벤트",
     dailyAverage: "달력 일 평균 {tokens}",
     modelHint: "{count}개 모델 · 사용량순",
