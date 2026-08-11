@@ -301,7 +301,7 @@ export function DashboardTrustHero({
     },
   ];
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       <div
         className={`dashboard-monitoring-strip dashboard-monitoring-${hero.monitoring.health}`}
         aria-label={t("dashboard.v2.monitoringAria")}
