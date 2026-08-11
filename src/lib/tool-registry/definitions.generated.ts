@@ -1238,7 +1238,46 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "antigravity-transcript-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity-ide",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity-cli",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          }
+        ]
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -2212,4 +2251,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "5246daf19054fd2f";
+export const TOOL_REGISTRY_VERSION: string = "72debb1d528006d6";
