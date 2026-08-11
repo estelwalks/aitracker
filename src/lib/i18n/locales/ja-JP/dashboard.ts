@@ -207,6 +207,7 @@ export const dashboard = {
     cacheHint: "リクエスト使用量から直接観測",
     toolCountHint:
       "{detected} 件検出 · {supported} 件用量対応 · 全 {total} ツール",
+    toolCoverageLabel: "ツールカバレッジ",
     securityLabel: "セキュリティ状況",
     securityHint: "ここで安全に表示できる集計はありません",
     securityAttention: "要確認 {count} 件",
@@ -222,6 +223,10 @@ export const dashboard = {
     outputUnavailableHint: "ローカルサービスは集計可能な実数を提供していません",
     todayUsage: "今日の使用量",
     viewUsage: "使用量を見る",
+    viewTools: "ツールを見る",
+    viewScan: "スキャンを見る",
+    viewAssets: "資産を見る",
+    viewTokens: "Token を見る",
     eventShort: "使用イベント",
     dailyAverage: "暦日平均 {tokens}",
     modelHint: "{count} モデル · 使用量順",

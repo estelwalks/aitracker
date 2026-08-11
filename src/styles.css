@@ -603,15 +603,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem;
-  min-height: 2.5rem;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
-  border-radius: 0.8rem;
-  background: color-mix(in oklab, var(--color-card) 88%, var(--color-surface));
+  gap: 0.625rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-card);
   color: var(--color-muted-foreground);
   font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-size: 0.71875rem;
 }
 
 .dashboard-monitoring-strip > span + span::before {
@@ -623,40 +622,61 @@
 .dashboard-monitoring-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.625rem;
   color: var(--color-foreground);
 }
 
-.dashboard-monitoring-indicator {
+.dashboard-monitoring-pulse {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
   width: 0.42rem;
   height: 0.42rem;
-  border-radius: 999px;
+}
+
+.dashboard-monitoring-pulse > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
   background: var(--color-muted-foreground);
 }
 
-.dashboard-monitoring-listening .dashboard-monitoring-indicator {
+.dashboard-monitoring-listening .dashboard-monitoring-pulse > span {
   background: var(--color-ok);
-  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--color-ok) 16%, transparent);
 }
 
-.dashboard-monitoring-degraded .dashboard-monitoring-indicator {
+.dashboard-monitoring-listening .dashboard-monitoring-pulse > span:first-child {
+  animation: dashboard-monitoring-ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  opacity: 0.7;
+}
+
+.dashboard-monitoring-degraded .dashboard-monitoring-pulse > span {
   background: var(--color-warning);
+}
+
+@keyframes dashboard-monitoring-ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .dashboard-monitoring-strip > strong {
   margin-left: auto;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--color-ok) 16%, transparent);
-  padding: 0.15rem 0.42rem;
-  color: var(--color-ok);
-  font-size: 0.56rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.125rem 0.5rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.625rem;
   letter-spacing: 0.08em;
 }
 
 .dashboard-spotlight-grid,
 .dashboard-metric-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -671,36 +691,57 @@
 
 .dashboard-spotlight-card {
   display: flex;
-  min-height: 11.5rem;
   flex-direction: column;
   align-items: flex-start;
+  border: 1px solid var(--color-border);
+  border-radius: 0.125rem;
+  padding: 1.25rem;
+  box-shadow: none;
   padding: 1.25rem;
   color: var(--color-muted-foreground);
+  transition: border-color 0.2s ease;
+}
+
+.dashboard-spotlight-card:hover {
+  border-color: color-mix(
+    in oklab,
+    var(--color-foreground) 35%,
+    var(--color-border)
+  );
+}
+
+.dashboard-spotlight-card-heading {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--color-muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.025em;
 }
 
 .dashboard-spotlight-card > strong {
-  margin-top: 0.9rem;
+  margin-top: 1rem;
   color: var(--color-foreground);
-  font-size: clamp(1.65rem, 2.1vw, 2.35rem);
+  font-size: clamp(2.25rem, 3.1vw, 3rem);
   line-height: 1;
 }
 
-.dashboard-spotlight-card > p {
-  margin-top: 0.65rem;
-  font-size: 0.75rem;
-}
 .dashboard-spotlight-card > small {
-  margin-top: 0.65rem;
+  margin-top: 0.625rem;
   font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-size: 0.75rem;
 }
 .dashboard-spotlight-card > a,
 .dashboard-spotlight-card > button {
   margin-top: auto;
-  border-radius: 999px;
+  border-radius: 0.125rem;
   background: var(--color-foreground);
-  padding: 0.38rem 0.7rem;
+  padding: 0.25rem 0.75rem;
   color: var(--color-background);
+  font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 600;
 }

@@ -81,7 +81,7 @@ const snapshot: DashboardV2Snapshot = {
 test("Dashboard V2 uses one period for metrics, trend, cards and context", () => {
   const view = createDashboardV2View(
     snapshot,
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -209,7 +209,7 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
         bySourceDay: [],
       },
     },
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -353,7 +353,7 @@ test("Dashboard V2 keeps unavailable context distinct from an observed zero", ()
         evidence: { ...event.evidence, toolOutputCalls: false },
       })),
     },
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
@@ -373,7 +373,7 @@ test("Dashboard V2 retains Top 10 projects plus a real aggregated rest row", () 
   }));
   const view = createDashboardV2View(
     { ...snapshot, events },
-    "today",
+    "custom",
     "2026-08-10",
     "2026-08-10",
   );
