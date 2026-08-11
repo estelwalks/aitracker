@@ -241,6 +241,10 @@ export function DashboardTrustHero({
 }) {
   const { t, format } = useI18n();
   const distill = view.outputAvailability.distillationOutputs;
+  const dormantTools = Math.max(
+    0,
+    hero.monitoring.detectedTools - view.activeTools,
+  );
   const securityValue =
     security == null
       ? t("dashboard.kpi.unavailable")
@@ -263,8 +267,8 @@ export function DashboardTrustHero({
       value: format.formatNumber(hero.monitoring.detectedTools),
       sub: t("dashboard.v2.toolCountHint", {
         detected: hero.monitoring.detectedTools,
-        supported: view.usageSupportedToolCount,
-        total: view.tools.length,
+        active: view.activeTools,
+        dormant: dormantTools,
       }),
       to: "/sources" as const,
       action: t("dashboard.v2.viewTools"),
