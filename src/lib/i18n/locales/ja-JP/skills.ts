@@ -158,6 +158,8 @@ export const skills = {
     composition: "コンテキスト構成",
     compositionHint:
       "ログで検証可能な呼び出し数を使用し、Token 配分を推測しません。",
+    toolTokenAttributionHint:
+      "同一使用イベント内のツール呼び出し数で Token を帰属します。プロバイダーのツール別課金ではありません。",
     textResponses: "テキスト応答",
     toolCalls: "ツール呼び出し",
     skillCalls: "Skill 呼び出し",

@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { APP_ID } from "../../lib/app-config.ts";
 import {
   classifyDashboardProjectRef,
   classifyDashboardProjectRefs,
 } from "./project-classification.server.ts";
 
 test("dashboard project classification keeps only locally evidenced workspaces", async (t) => {
-  const home = await mkdtemp(join(tmpdir(), "trusttools-dashboard-project-"));
+  const home = await mkdtemp(join(tmpdir(), `${APP_ID}-dashboard-project-`));
   t.after(async () => rm(home, { recursive: true, force: true }));
   const workspace = join(home, "real-project");
   const nestedWorkspace = join(workspace, "src", "feature");

@@ -4,6 +4,7 @@ import {
 } from "../../../lib/local-usage/presentation.ts";
 import { estimateUsageCost } from "../../../lib/pricing/index.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
+import type { LocalUsageToolCategory } from "../../../lib/local-usage/types.ts";
 import type {
   DashboardV2ContextCounts,
   DashboardV2Event,
@@ -82,6 +83,18 @@ export interface ToolOverviewContextRow {
   readonly available: boolean;
 }
 
+/** A named, privacy-safe tool-call aggregate from local usage logs. */
+export interface ToolOverviewToolCallDetail {
+  readonly name: string;
+  readonly category: LocalUsageToolCategory;
+  readonly calls: number;
+  /**
+   * Token attribution across calls in the same observed usage event. This is
+   * not provider-supplied per-tool billing and is labelled as such in the UI.
+   */
+  readonly attributedTokens: number;
+}
+
 export interface ToolOverviewTokenComposition {
   readonly inputTokens: number;
   readonly cachedInputTokens: number;
@@ -111,6 +124,10 @@ export interface ToolOverviewView {
   readonly models: readonly ToolOverviewBreakdownRow[];
   readonly projects: readonly ToolOverviewBreakdownRow[];
   readonly context: readonly ToolOverviewContextRow[];
+  /** Detailed, sanitized tool-call evidence for the selected source/range. */
+  readonly toolCallDetails: readonly ToolOverviewToolCallDetail[];
+  /** False only when the source did not expose tool-call context at all. */
+  readonly toolCallDetailsAvailable: boolean;
   readonly tokenComposition: ToolOverviewTokenComposition;
   readonly reasoningAvailable: boolean;
   readonly systemPromptAvailable: boolean;
@@ -255,6 +272,92 @@ function context(
       available: evidence[key],
     }),
   );
+}
+
+function uniqueEventTools(event: DashboardV2Event) {
+  const rows = new Map<
+    string,
+    { name: string; category: LocalUsageToolCategory; calls: number }
+  >();
+  for (const tool of event.context.tools ?? []) {
+    if (tool.calls <= 0 || tool.name.length === 0) continue;
+    const key = `${tool.category}\u0000${tool.name}`;
+    const current = rows.get(key);
+    if (current == null) rows.set(key, { ...tool });
+    else current.calls += tool.calls;
+  }
+  return [...rows.values()].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.category.localeCompare(right.category),
+  );
+}
+
+/** Integer, call-weighted allocation that preserves each event's total exactly. */
+function allocateTokens(total: number, calls: readonly number[]): number[] {
+  const sum = calls.reduce((value, count) => value + count, 0);
+  if (sum <= 0) return calls.map(() => 0);
+  const raw = calls.map((count) => (total * count) / sum);
+  const allocated = raw.map((value) => Math.floor(value));
+  let remaining =
+    total - allocated.reduce((value, tokens) => value + tokens, 0);
+  const order = raw
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort(
+      (left, right) =>
+        right.fraction - left.fraction || left.index - right.index,
+    );
+  for (const item of order) {
+    if (remaining <= 0) break;
+    allocated[item.index]! += 1;
+    remaining -= 1;
+  }
+  return allocated;
+}
+
+function toolCallDetails(events: readonly DashboardV2Event[]): {
+  available: boolean;
+  rows: readonly ToolOverviewToolCallDetail[];
+} {
+  const rows = new Map<
+    string,
+    {
+      name: string;
+      category: LocalUsageToolCategory;
+      calls: number;
+      attributedTokens: number;
+    }
+  >();
+  let available = false;
+  for (const event of events) {
+    if (!event.evidence.toolCalls) continue;
+    available = true;
+    const tools = uniqueEventTools(event);
+    const allocations = allocateTokens(
+      event.totalTokens,
+      tools.map((tool) => tool.calls),
+    );
+    for (const [index, tool] of tools.entries()) {
+      const key = `${tool.category}\u0000${tool.name}`;
+      const current = rows.get(key) ?? {
+        name: tool.name,
+        category: tool.category,
+        calls: 0,
+        attributedTokens: 0,
+      };
+      current.calls += tool.calls;
+      current.attributedTokens += allocations[index] ?? 0;
+      rows.set(key, current);
+    }
+  }
+  return {
+    available,
+    rows: [...rows.values()].sort(
+      (left, right) =>
+        right.attributedTokens - left.attributedTokens ||
+        left.name.localeCompare(right.name),
+    ),
+  };
 }
 
 function tokenComposition(
@@ -462,6 +565,7 @@ export function buildToolOverview(
   const selectedProjectSessions = selected
     ? projectSessionsForSource(snapshot, selected.id, period, from, to)
     : null;
+  const detailedToolCalls = toolCallDetails(selectedEvents);
 
   return {
     period,
@@ -493,6 +597,8 @@ export function buildToolOverview(
       selectedProjectSessions,
     ),
     context: context(selectedEvents),
+    toolCallDetails: detailedToolCalls.rows,
+    toolCallDetailsAvailable: detailedToolCalls.available,
     tokenComposition: tokenComposition(selectedEvents),
     reasoningAvailable: selectedEvents.some(
       (event) => event.evidence.reasoningTokens,
