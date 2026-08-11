@@ -645,7 +645,20 @@ export function createDashboardV2View(
     range.toDate,
   );
   const allModelRows = ranked(events, (event) => event.model);
-  const allProjectRows = ranked(events, (event) => event.project);
+  // Provider logs can contain an arbitrary cwd for a quick chat. These events
+  // remain part of all usage totals, but only server-verified workspaces are
+  // allowed to contribute to the project view.
+  const projectEvents = events.filter(
+    (event) =>
+      event.projectKind !== "quick-conversation" &&
+      event.projectKind !== "unknown",
+  );
+  const previousProjectEvents = previousEvents.filter(
+    (event) =>
+      event.projectKind !== "quick-conversation" &&
+      event.projectKind !== "unknown",
+  );
+  const allProjectRows = ranked(projectEvents, (event) => event.project);
   const models = enrichRows(
     allModelRows.slice(0, 8),
     events,
@@ -658,8 +671,8 @@ export function createDashboardV2View(
   const projects = topWithRest(
     enrichRows(
       allProjectRows,
-      events,
-      previousEvents,
+      projectEvents,
+      previousProjectEvents,
       (event) => event.project,
       snapshot.pricingAvailable,
       totals.totalTokens,
