@@ -108,7 +108,12 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         onGenerateAIInsight={generateAIInsight}
         generatingAIInsight={generatingAIInsight}
       />
-      <DashboardTrustHero view={allToolsView} today={today} hero={hero} />
+      <DashboardTrustHero
+        view={allToolsView}
+        today={today}
+        hero={hero}
+        security={data.monitoring?.security}
+      />
       <div className="dashboard-range-bar sticky top-14 z-20">
         <div className="min-w-0">
           <span className="font-semibold text-[13px]">

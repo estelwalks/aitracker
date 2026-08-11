@@ -205,6 +205,7 @@ export const dashboard = {
     cacheHint: "Observed from request usage",
     toolCountHint:
       "{detected} detected · {supported} usage readers · {total} tools",
+    toolCoverageLabel: "Tool coverage",
     securityLabel: "Security posture",
     securityHint: "No safe aggregate is available here",
     securityAttention: "{count} attention items",
@@ -219,6 +220,10 @@ export const dashboard = {
     outputUnavailableHint: "No aggregate count is exposed by the local service",
     todayUsage: "Today's usage",
     viewUsage: "View usage",
+    viewTools: "View tools",
+    viewScan: "View scan",
+    viewAssets: "View assets",
+    viewTokens: "View tokens",
     eventShort: "Usage events",
     dailyAverage: "Calendar-day avg {tokens}",
     modelHint: "{count} models · sorted by usage",
