@@ -338,7 +338,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "linux": "planned"
       },
       "capabilities": {
-        "usage": "unsupported",
+        "usage": "native",
         "skills": "read-write",
         "agents": "unsupported",
         "sessions": "unsupported",

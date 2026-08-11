@@ -72,6 +72,7 @@ export type UsageReaderKey =
   | "gemini-session-v1"
   | "grok-turn-v1"
   | "openclaw-session-v1"
+  | "antigravity-transcript-v1"
   | (string & {});
 
 export type SessionReaderKey =
