@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Columns2,
@@ -77,7 +77,13 @@ export function DistillationPage({
   );
   const [promptPreset, setPromptPreset] = useState("summary");
   const [promptText, setPromptText] = useState("");
-  const [showGuide, setShowGuide] = useState(() => !readGuideSeen());
+  // Guide visibility is deferred to a client-only effect: SSR has no
+  // localStorage, so reading it in the useState initializer makes the server
+  // and first client render disagree and triggers a React hydration mismatch.
+  const [showGuide, setShowGuide] = useState(false);
+  useEffect(() => {
+    setShowGuide(!readGuideSeen());
+  }, []);
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
   const selectionCount = selected.size;
