@@ -16,6 +16,12 @@ export const SECURITY_RISK_KINDS = [
 
 export type SecurityRiskKind = (typeof SECURITY_RISK_KINDS)[number];
 export type SecurityScanMode = "quick" | "full";
+export type SecurityScanCycle = "hourly" | "daily" | "weekly";
+
+export interface SecurityScanScheduleView {
+  readonly enabled: boolean;
+  readonly cycle: SecurityScanCycle;
+}
 export type SecurityScanPhase =
   | "idle"
   | "running"

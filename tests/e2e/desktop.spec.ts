@@ -135,7 +135,7 @@ test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
   });
 });
 
-test("安全页浏览器开发模式连接检测服务", async ({ page }) => {
+test("安全页浏览器下检测服务已连接", async ({ page }) => {
   // 浏览器 e2e 运行在 http://127.0.0.1:41737，满足 companion client 的
   // isCompanionOrigin 检查；Vite/Nitro dev server 提供 /api/security/*，
   // 因此 /security 页以「companion」transport 连接检测服务，而非旧的不可
@@ -147,14 +147,6 @@ test("安全页浏览器开发模式连接检测服务", async ({ page }) => {
 
   await expect(
     page.getByRole("heading", { name: "安全与防御", exact: true }),
-  ).toBeVisible();
-
-  // dev 模式信号：横幅「开发模式 · 检测服务已连接」或徽标「仅开发模式」
-  await expect(
-    page
-      .getByText("开发模式 · 检测服务已连接")
-      .or(page.getByText("仅开发模式"))
-      .first(),
   ).toBeVisible();
 
   // 主 CTA 可见（但不点击）
@@ -176,11 +168,26 @@ test("安全页浏览器开发模式连接检测服务", async ({ page }) => {
   expect(pageErrors, "/security 不应触发未捕获页面错误").toEqual([]);
 });
 
-test("安全页开发模式不执行真实扫描（避免本机 Skill I/O）", async ({ page }) => {
-  // 浏览器 dev 模式连接检测服务（companion transport），但页面加载时绝
-  // 不自动触发扫描：不点击任何扫描按钮，扫描状态应保持 idle，不出现扫描
-  // 中的 vortex 覆盖层（「检测进度：…」标记）。
+test("安全页连接检测服务且不自动触发扫描", async ({ page }) => {
+  // 浏览器连接检测服务（companion transport），但页面加载时绝不自动触发
+  // 扫描：不点击任何扫描按钮，扫描状态应保持 idle，不出现扫描中的 vortex
+  // 覆盖层（「检测进度：…」标记）。
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
   await page.goto("/security", { waitUntil: "domcontentloaded" });
+
+  await expect(
+    page.getByRole("heading", { name: "安全与防御", exact: true }),
+  ).toBeVisible();
+
+  // 主 CTA 可见（但不点击）
+  await expect(
+    page.getByRole("button", { name: "开始全局检测" }),
+  ).toBeVisible();
+
+  // 播报摘要（健康度）可见
+  await expect(page.getByText("健康度", { exact: true }).first()).toBeVisible();
 
   // 页面已连接（不展示旧的不可用引导态）
   await expect(
@@ -191,6 +198,9 @@ test("安全页开发模式不执行真实扫描（避免本机 Skill I/O）", a
   await page.waitForTimeout(600);
   await expect(page.getByText(/检测进度：/)).toHaveCount(0);
   await expect(page.getByText("扫描中", { exact: true })).toHaveCount(0);
+
+  // 短暂 settle 后不应有未捕获页面错误
+  expect(pageErrors, "/security 不应触发未捕获页面错误").toEqual([]);
 });
 
 test("设置加载完成", async ({ page }) => {

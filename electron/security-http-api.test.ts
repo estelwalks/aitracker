@@ -21,6 +21,8 @@ function service(
     cancel: () => ({ cancelled: false }),
     getModelConfig: async () => ({ configured: false }),
     setModelConfig: async () => ({ configured: true, apiKeyConfigured: true }),
+    getScanSchedule: async () => ({ enabled: true, cycle: "daily" }),
+    setScanSchedule: async () => ({ enabled: false, cycle: "hourly" }),
     start: async (input: unknown) => ({ status: "running", input }),
     ...overrides,
   } as unknown as SecurityScannerService;
@@ -178,5 +180,53 @@ test("browser directory picker endpoint never accepts a path", async () => {
   assert.equal(response?.status, 501);
   assert.deepEqual(await response?.json(), {
     error: { code: "security.http.native_picker_unavailable" },
+  });
+});
+
+test("scan schedule supports authenticated GET and CSRF-gated POST", async () => {
+  let captured: unknown;
+  const scanner = service({
+    setScanSchedule: async (input: unknown) => {
+      captured = input;
+      return { enabled: false, cycle: "hourly" };
+    },
+  });
+  const getResponse = await handleSecurityHttpApi(
+    new Request(`${origin}/api/security/scan-schedule`),
+    origin,
+    scanner,
+  );
+  assert.equal(getResponse?.status, 200);
+  assert.deepEqual(await getResponse?.json(), {
+    enabled: true,
+    cycle: "daily",
+  });
+
+  const postResponse = await handleSecurityHttpApi(
+    post("/scan-schedule", { enabled: false, cycle: "hourly" }),
+    origin,
+    scanner,
+  );
+  assert.equal(postResponse?.status, 200);
+  assert.deepEqual(captured, { enabled: false, cycle: "hourly" });
+  assert.deepEqual(await postResponse?.json(), {
+    enabled: false,
+    cycle: "hourly",
+  });
+});
+
+test("scan schedule POST rejects without the CSRF header", async () => {
+  const response = await handleSecurityHttpApi(
+    post(
+      "/scan-schedule",
+      { enabled: true, cycle: "weekly" },
+      { [SECURITY_CSRF_HEADER]: "wrong" },
+    ),
+    origin,
+    service(),
+  );
+  assert.equal(response?.status, 403);
+  assert.deepEqual(await response?.json(), {
+    error: { code: "security.http.csrf_required" },
   });
 });

@@ -129,9 +129,11 @@ export const security = {
       partialLine:
         "The latest scan completed partially. Static results are preserved; review model branches, failures, and skipped files.",
       passed: "Passed {count}",
+      highRisk: "High risk {count}",
+      suspicious: "Suspicious {count}",
       warned: "Warned {count}",
       blocked: "Blocked {count}",
-      lastScan: "{dimensions} dimensions · Latest {time}",
+      lastScan: "{dimensions} dimensions · Previous {time}",
       health: "Health",
       quickScan: "Start quick scan",
       fullScan: "Deep scan",
@@ -141,6 +143,29 @@ export const security = {
     },
     autoScan: {
       title: "Automatic scan",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      enable: "Enable automatic scan",
+      pause: "Pause automatic scan",
+      loading: "Loading scan schedule…",
+      scheduleDesc: "{cycle} · Scope: {scope} · {modelNote}",
+      modelFull: "Model configured → deep scan",
+      modelQuick: "No model configured → quick scan",
+      offDesc:
+        "Once enabled, local Skills are checked automatically on the schedule — no manual scans needed.",
+      scopeAll: "All local Skills",
+      settings: "Configure cycle",
+      stepSchedule: "① Enable schedule",
+      stepScheduleDesc: "Enable it under Settings · Scan config",
+      stepCycle: "② Choose a cycle",
+      stepCycleDesc: "Current: {cycle}",
+      stepAlert: "③ Risk alerts",
+      stepAlertDesc: "Notify immediately when risks are found",
+      cycle: {
+        hourly: "Every hour",
+        daily: "Every day",
+        weekly: "Every week",
+      },
       unavailable: "Disabled / unavailable",
       unavailableDesc:
         "The current runtime provides no evidence of automatic security scanning. Use the controls above to run a quick or full scan manually.",
@@ -152,7 +177,6 @@ export const security = {
       stepModeDesc: "No content is sent to a model endpoint",
       stepReview: "③ Review results",
       stepReviewDesc: "Failures and skipped items remain in history",
-      settings: "Scanner settings",
     },
     mode: {
       label: "Scan mode",
@@ -197,6 +221,7 @@ export const security = {
     },
     metrics: {
       scannedSkills: "Skills scanned",
+      unit: "Skills",
       safe: "Safe",
       unsafe: "Needs review",
       dimensions: "Dimensions",

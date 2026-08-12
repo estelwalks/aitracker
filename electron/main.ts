@@ -20,6 +20,8 @@ import {
   desktopIpc,
   type AutoLaunchState,
   type RuntimeInfo,
+  type SecurityScanCycle,
+  type SecurityScanSchedule,
 } from "./contracts.js";
 import {
   createTrayTemplate,
@@ -156,17 +158,56 @@ function openBrowserCompanion(): void {
   void shell.openExternal(url);
 }
 
-async function runAutomaticQuickSecurityScan(): Promise<void> {
+const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
+  hourly: 60 * 60 * 1_000,
+  daily: 24 * 60 * 60 * 1_000,
+  weekly: 7 * 24 * 60 * 60 * 1_000,
+};
+
+async function runAutomaticSecurityScan(): Promise<void> {
   const scanner = securityScanner;
   if (!scanner) return;
   const status = scanner.getStatus().status;
   if (status === "running" || status === "cancelling") return;
   try {
-    await scanner.startAutomaticQuickScan();
+    await scanner.startAutomaticScan();
   } catch {
     // No discovered Skills (or a concurrent manual scan) is a recoverable
     // automatic pass. The next interval retries through the same safe service.
   }
+}
+
+function clearAutomaticSecurityScanTimer(): void {
+  if (automaticSecurityScanTimer) {
+    clearInterval(automaticSecurityScanTimer);
+    automaticSecurityScanTimer = null;
+  }
+}
+
+/**
+ * Schedule the automatic security scan from the persisted schedule: an
+ * immediate first pass on launch when enabled, then a repeating timer on the
+ * configured cycle. A disabled schedule clears the timer entirely.
+ */
+async function scheduleAutomaticSecurityScan(): Promise<void> {
+  clearAutomaticSecurityScanTimer();
+  const scanner = securityScanner;
+  if (!scanner) return;
+  let schedule: SecurityScanSchedule;
+  try {
+    schedule = await scanner.getScanSchedule();
+  } catch {
+    // Corrupt/missing schedule already falls back to the default inside the
+    // service; any unexpected failure simply leaves auto-scan unscheduled.
+    return;
+  }
+  if (!schedule.enabled) return;
+  // Initial run shortly after launch when enabled, then repeat on the cycle.
+  void runAutomaticSecurityScan();
+  automaticSecurityScanTimer = setInterval(
+    () => void runAutomaticSecurityScan(),
+    SECURITY_SCAN_CYCLE_MS[schedule.cycle],
+  );
 }
 
 function registerIpcHandlers(): void {
@@ -345,6 +386,21 @@ function registerIpcHandlers(): void {
       assertTrustedSender(event);
       if (!securityScanner) throw new Error("Security scanner is unavailable");
       return securityScanner.setModelConfig(config);
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityScanSchedule, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getScanSchedule();
+  });
+  ipcMain.handle(
+    desktopIpc.setSecurityScanSchedule,
+    async (event, schedule: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      const result = await securityScanner.setScanSchedule(schedule);
+      await scheduleAutomaticSecurityScan();
+      return result;
     },
   );
   ipcMain.handle(desktopIpc.getSecurityRuntimeCapability, (event) => {
@@ -585,10 +641,7 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
-    if (automaticSecurityScanTimer) {
-      clearInterval(automaticSecurityScanTimer);
-      automaticSecurityScanTimer = null;
-    }
+    clearAutomaticSecurityScanTimer();
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -609,6 +662,8 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
     ipcMain.removeHandler(desktopIpc.getSecurityModelConfig);
     ipcMain.removeHandler(desktopIpc.setSecurityModelConfig);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanSchedule);
+    ipcMain.removeHandler(desktopIpc.setSecurityScanSchedule);
     ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);
     void localWebServer?.close();
   });
@@ -681,10 +736,6 @@ if (!hasSingleInstanceLock) {
     registerIpcHandlers();
     rebuildTray();
     await createMainWindow();
-    void runAutomaticQuickSecurityScan();
-    automaticSecurityScanTimer = setInterval(
-      () => void runAutomaticQuickSecurityScan(),
-      24 * 60 * 60 * 1_000,
-    );
+    await scheduleAutomaticSecurityScan();
   });
 }

@@ -128,9 +128,11 @@ export const security = {
       partialLine:
         "최근 검사는 일부 완료 상태입니다. 정적 결과는 보존되며 모델 분기, 실패 및 건너뛴 파일을 확인해야 합니다.",
       passed: "통과 {count}",
+      highRisk: "고위험 {count}",
+      suspicious: "의심 {count}",
       warned: "경고 {count}",
       blocked: "차단 {count}",
-      lastScan: "{dimensions}개 차원 · 최근 {time}",
+      lastScan: "{dimensions}개 차원 · 지난번 {time}",
       health: "건강도",
       quickScan: "빠른 검사 시작",
       fullScan: "심층 검사",
@@ -140,6 +142,29 @@ export const security = {
     },
     autoScan: {
       title: "자동 검사",
+      enabled: "활성화됨",
+      disabled: "비활성화됨",
+      enable: "자동 검사 활성화",
+      pause: "자동 검사 일시중지",
+      loading: "검사 일정을 불러오는 중…",
+      scheduleDesc: "{cycle} · 범위: {scope} · {modelNote}",
+      modelFull: "모델 설정됨 → 심층 검사",
+      modelQuick: "모델 미설정 → 빠른 검사",
+      offDesc:
+        "활성화하면 설정한 주기로 로컬 Skill을 자동 검사하므로 매번 수동으로 실행할 필요가 없습니다.",
+      scopeAll: "모든 로컬 Skill",
+      settings: "주기 설정",
+      stepSchedule: "① 일정 활성화",
+      stepScheduleDesc: "「설정 · 스캔 구성」에서 활성화",
+      stepCycle: "② 주기 선택",
+      stepCycleDesc: "현재: {cycle}",
+      stepAlert: "③ 리스크 알림",
+      stepAlertDesc: "리스크 발견 시 즉시 알림",
+      cycle: {
+        hourly: "매시간",
+        daily: "매일",
+        weekly: "매주",
+      },
       unavailable: "비활성 / 사용 불가",
       unavailableDesc:
         "현재 런타임에는 자동 보안 검사가 동작한다는 근거가 없습니다. 위 컨트롤에서 quick 또는 full 검사를 수동 실행하세요.",
@@ -151,7 +176,6 @@ export const security = {
       stepModeDesc: "모델 Endpoint로 콘텐츠를 보내지 않음",
       stepReview: "③ 결과 확인",
       stepReviewDesc: "실패 및 건너뜀 항목은 기록에 보존",
-      settings: "스캐너 설정",
     },
     mode: {
       label: "검사 모드",
@@ -195,6 +219,7 @@ export const security = {
     },
     metrics: {
       scannedSkills: "검사한 Skill",
+      unit: "개",
       safe: "안전",
       unsafe: "확인 필요",
       dimensions: "검사 차원",

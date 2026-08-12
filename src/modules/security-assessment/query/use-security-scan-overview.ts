@@ -18,6 +18,8 @@ const REFRESH_INTERVAL_MS = 30_000;
 export interface SecurityScanOverview {
   readonly summary: MonitoringSecuritySummary | null;
   readonly runCount: number;
+  /** Deduplicated count of unique scanned Skills across ALL scan history. */
+  readonly coverage: number;
   readonly loading: boolean;
 }
 
@@ -29,8 +31,8 @@ export interface SecurityScanOverview {
  * placeholder). Returns `summary: null` when no real scan exists yet so the
  * dashboard keeps its existing unavailable/fallback state — never invents
  * data. The fetch runs only in `useEffect`, so server render and the first
- * client paint both see the initial `{ summary: null, runCount: 0, loading:
- * true }` state, avoiding a hydration mismatch.
+ * client paint both see the initial `{ summary: null, runCount: 0, coverage:
+ * 0, loading: true }` state, avoiding a hydration mismatch.
  */
 export function useSecurityScanOverview(): SecurityScanOverview {
   const clientRef = useRef<SecurityClient | null>(null);
@@ -38,6 +40,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
     null,
   );
   const [runCount, setRunCount] = useState(0);
+  const [coverage, setCoverage] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         if (client == null) {
           setSummary(null);
           setRunCount(0);
+          setCoverage(0);
           setLoading(false);
           return;
         }
@@ -70,6 +74,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         const totals = summarizeReports(entries);
         const latest = latestHistory(history);
         setRunCount(history.length);
+        setCoverage(new Set(history.map((entry) => entry.skillRef)).size);
         setSummary(
           totals.total === 0
             ? null
@@ -103,5 +108,5 @@ export function useSecurityScanOverview(): SecurityScanOverview {
     };
   }, []);
 
-  return { summary, runCount, loading };
+  return { summary, runCount, coverage, loading };
 }

@@ -46,8 +46,11 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const [selectedTool, setSelectedTool] = useState("all");
   const [aiInsight, setAiInsight] = useState(data.aiInsight);
   const [generatingAIInsight, setGeneratingAIInsight] = useState(false);
-  const { summary: securitySummary, runCount: securityRunCount } =
-    useSecurityScanOverview();
+  const {
+    summary: securitySummary,
+    runCount: securityRunCount,
+    coverage: securityCoverage,
+  } = useSecurityScanOverview();
 
   useEffect(() => {
     const refresh = window.setInterval(() => void router.invalidate(), 30_000);
@@ -152,6 +155,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view={allToolsView}
         monitoring={hero.monitoring}
         securityRunsCount={securityRunCount > 0 ? securityRunCount : null}
+        securityCoverage={securityCoverage > 0 ? securityCoverage : null}
       />
       <DashboardToolSwitcher
         tools={allToolsView.tools}

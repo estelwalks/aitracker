@@ -35,7 +35,7 @@ export function ScanStatus({
   totals: SecurityTotals;
   lastScan: string;
 }) {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const danger = state.status === "failed" || state.status === "model-required";
   const warning = state.status === "partial" || state.status === "cancelled";
   const color = danger
@@ -98,18 +98,22 @@ export function ScanStatus({
         <StatusCell
           icon={Boxes}
           label={t("security.center.metrics.scannedSkills")}
-          value={state.progress.completed || totals.total}
+          value={`${format.formatNumber(
+            state.progress.completed || totals.total,
+          )} ${t("security.center.metrics.unit")}`}
         />
         <StatusCell
           icon={ShieldCheck}
           label={t("security.center.metrics.safe")}
-          value={totals.safe}
+          value={format.formatNumber(totals.safe)}
           color="var(--ok)"
         />
         <StatusCell
           icon={ShieldX}
           label={t("security.center.metrics.unsafe")}
-          value={totals.warn + totals.danger + totals.unknown}
+          value={format.formatNumber(
+            totals.warn + totals.danger + totals.unknown,
+          )}
           color={
             totals.warn + totals.danger + totals.unknown
               ? "var(--danger)"
@@ -129,7 +133,7 @@ function StatusCell({
 }: {
   icon: typeof Boxes;
   label: string;
-  value: number;
+  value: string;
   color?: string;
 }) {
   return (

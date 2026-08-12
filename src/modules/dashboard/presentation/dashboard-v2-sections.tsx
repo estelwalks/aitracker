@@ -370,10 +370,12 @@ export function DashboardMetricGrid({
   view,
   monitoring,
   securityRunsCount = null,
+  securityCoverage = null,
 }: {
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
   securityRunsCount?: number | null;
+  securityCoverage?: number | null;
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
@@ -453,10 +455,14 @@ export function DashboardMetricGrid({
       icon: ShieldCheck,
       label: t("dashboard.v2.securityRunsLabel"),
       value: hasRealSecurityRuns
-        ? format.formatNumber(securityRunsCount as number)
+        ? t("dashboard.v2.securityScanTimes", {
+            count: securityRunsCount as number,
+          })
         : availabilityValue(view.outputAvailability.securityRuns),
       hint: hasRealSecurityRuns
-        ? t("dashboard.v2.selectedRange")
+        ? t("dashboard.v2.securityCoverage", {
+            count: securityCoverage ?? 0,
+          })
         : availabilityHint(view.outputAvailability.securityRuns),
       delta: null,
     },
