@@ -27,7 +27,14 @@ function matches(
   }
   if (filter.keyword) {
     const needle = filter.keyword.toLocaleLowerCase();
-    const haystack = [session.title, session.model ?? "", session.projectKey]
+    // The id is a validated opaque public identifier, so including it enables
+    // a direct detail lookup without giving the transport access to raw files.
+    const haystack = [
+      session.sessionId,
+      session.title,
+      session.model ?? "",
+      session.projectKey,
+    ]
       .join(" ")
       .toLocaleLowerCase();
     if (!haystack.includes(needle)) return false;

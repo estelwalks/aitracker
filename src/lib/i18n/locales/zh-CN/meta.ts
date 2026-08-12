@@ -8,7 +8,7 @@ export const meta = {
     market: "Skill 市场 · {appName} V3.0",
     tracker: "燃烧榜 · {appName} V3.0",
     security: "安全检测 · {appName} V3.0",
-    sessions: "会话恢复 · {appName} V3.0",
+    sessions: "会话管理 · {appName} V3.0",
     sources: "数据来源 · {appName} V3.0",
     reports: "简报与记忆 · {appName} V3.0",
     distill: "蒸馏工作台 · {appName} V3.0",

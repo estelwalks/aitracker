@@ -64,6 +64,24 @@ test("filters, sorts and paginates sessions", async () => {
   }
 });
 
+test("finds a session by its opaque public id when no display field matches", async () => {
+  const result = await createSessionQueryService({
+    list: async () => [
+      session("safe-session-id", new Date().toISOString(), {
+        title: "Untitled work",
+        projectKey: "project-a",
+        model: null,
+      }),
+    ],
+  }).query({ filter: { keyword: "safe-session-id" } });
+
+  assert.equal(isOk(result), true);
+  if (isOk(result)) {
+    assert.equal(result.value.total, 1);
+    assert.equal(result.value.sessions[0]?.sessionId, "safe-session-id");
+  }
+});
+
 test("cancelled query returns a stable error code", async () => {
   const controller = new AbortController();
   controller.abort();

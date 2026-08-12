@@ -55,6 +55,7 @@ test("getCompositionRoot exposes the scheduler, repositories and resolved data r
     assert.ok(root.scheduler, "scheduler must be assembled");
     assert.ok(root.preferences, "preferences repository must be assembled");
     assert.ok(root.runs, "runs repository must be assembled");
+    assert.ok(root.resumeSession, "session recovery port must be assembled");
     assert.equal(root.dataRoot, dir);
   });
 });

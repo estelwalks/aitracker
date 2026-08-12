@@ -3,6 +3,10 @@ import { FolderOpen, Play, X } from "lucide-react";
 import { Panel, Segmented, TTButton } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { DistillationSessionItem } from "../index.ts";
+import type {
+  DistillationMaterialGranularity,
+  DistillationTimeRange,
+} from "./materials.ts";
 
 const PRESETS = [
   { id: "summary", key: "distill.presetSummary" },
@@ -43,10 +47,10 @@ export function DistillConfig({
   busy,
 }: {
   mode: "quick" | "pro";
-  timeRange: string;
-  onTimeRange: (value: string) => void;
-  granularity: string;
-  onGranularity: (value: string) => void;
+  timeRange: DistillationTimeRange;
+  onTimeRange: (value: DistillationTimeRange) => void;
+  granularity: DistillationMaterialGranularity;
+  onGranularity: (value: DistillationMaterialGranularity) => void;
   modelId: string;
   onModelId: (value: string) => void;
   modelOptions: readonly DistillConfigModelOption[];
@@ -82,9 +86,10 @@ export function DistillConfig({
                 value={timeRange}
                 onChange={onTimeRange}
                 options={[
-                  { value: "all", label: t("distill.rangeAll") },
+                  { value: "today", label: t("distill.rangeToday") },
                   { value: "7", label: t("distill.range7") },
                   { value: "30", label: t("distill.range30") },
+                  { value: "all", label: t("distill.rangeAll") },
                 ]}
               />
             </div>

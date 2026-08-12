@@ -36,6 +36,12 @@ export const errors = {
   },
   sessions: {
     filterInvalid: "会话过滤参数不合法",
+    queryFailed: "本地会话查询失败，请重试",
+    sessionNotFound: "所选会话不存在或不可用",
+    resumeUnavailable: "该会话当前无法恢复",
+    resumeInvalid: "会话恢复请求无效",
+    resumeCancelled: "会话恢复已取消",
+    resumeFailed: "无法启动本地会话恢复",
   },
   distillation: {
     invalidSelection: "请选择 1 至 8 个不重复的会话",

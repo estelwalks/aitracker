@@ -142,7 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={item.to}
                       to={item.to}
                       title={label}
-                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-primary font-medium text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-medium transition-colors ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
                       aria-current={active ? "page" : undefined}
                     >
                       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
@@ -161,7 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/settings"
             title={t("nav.settings")}
-            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-primary font-medium text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"} ${collapsed ? "justify-center" : ""}`}
+            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] font-medium transition-colors ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"} ${collapsed ? "justify-center" : ""}`}
           >
             <Settings className="size-4 shrink-0" strokeWidth={1.75} />
             {!collapsed && <span>{t("nav.settings")}</span>}
@@ -170,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setCollapsed((value) => !value)}
             title={t("nav.collapse")}
-            className={`flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center" : ""}`}
+            className={`flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground ${collapsed ? "justify-center" : ""}`}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4" strokeWidth={1.75} />
@@ -194,7 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               onChange={(event) => setNavQuery(event.target.value)}
               placeholder={t("nav.search")}
               aria-label={t("nav.search")}
-              className="h-9 w-full rounded-lg bg-foreground/[0.05] pr-8 pl-9 font-mono text-xs outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+              className="h-9 w-full rounded-md bg-foreground/[0.05] pr-8 pl-9 font-mono text-xs outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
             />
             {navQuery && (
               <button

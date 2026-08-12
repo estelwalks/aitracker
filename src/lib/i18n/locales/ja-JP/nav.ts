@@ -3,7 +3,7 @@ export const nav = {
   tier1: "ワークベンチ",
   tier2: "インサイトとセキュリティ",
   tier3: "スキルライブラリ",
-  home: "ホーム",
+  home: "ホーム概要",
   agents: "ツール概覧",
   distill: "蒸留ワークベンチ",
   memory: "レポートと記憶",

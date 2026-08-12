@@ -1,3 +1,5 @@
+import type { SessionPage, SessionsModuleContract } from "./contracts.ts";
+
 export { sessionsModuleId } from "./contracts.ts";
 export type {
   ResumeSessionErrorCode,
@@ -20,4 +22,6 @@ export type {
   SessionSource,
 } from "./contracts.ts";
 export { createSessionQueryService } from "./application/index.ts";
-export type { SessionsViewModel } from "./presentation/index.ts";
+// Keep the public module entry free of presentation/server transport imports.
+// The UI implementation intentionally reaches a server function facade.
+export type SessionsViewModel = SessionsModuleContract | SessionPage;

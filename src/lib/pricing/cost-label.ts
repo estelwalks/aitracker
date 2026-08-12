@@ -3,6 +3,21 @@ import type { MessageKey, MessageParams } from "../i18n/messages";
 import type { CostEstimate } from "./index";
 
 /**
+ * The label uses aggregate pricing state only. Accept readonly data so public
+ * projections do not need to weaken their immutable `unknownModels` field.
+ */
+type CostLabelInput = Readonly<
+  Pick<
+    CostEstimate,
+    | "knownUsd"
+    | "estimatedUsd"
+    | "pricedEvents"
+    | "estimatedEvents"
+    | "unknownEvents"
+  >
+>;
+
+/**
  * Compose a display cost label at the UI boundary: bare amount in the shared
  * display currency/rate snapshot, or translated wording from the catalogs
  * ("price unknown", "(partially unknown)", "(estimated)", ...). Estimated
@@ -20,7 +35,7 @@ import type { CostEstimate } from "./index";
 export function formatCostLabel(
   t: <K extends MessageKey>(key: K, params?: MessageParams<K>) => string,
   format: BoundFormatters & { formatUsd: (amountUsd: number) => string },
-  cost: CostEstimate,
+  cost: CostLabelInput,
 ): string {
   if (
     cost.pricedEvents === 0 &&

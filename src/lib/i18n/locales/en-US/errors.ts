@@ -38,6 +38,12 @@ export const errors = {
   },
   sessions: {
     filterInvalid: "Invalid session filter",
+    queryFailed: "Local session query failed; try again",
+    sessionNotFound: "The selected session does not exist or is unavailable",
+    resumeUnavailable: "This session cannot currently be resumed",
+    resumeInvalid: "Invalid session resume request",
+    resumeCancelled: "Session resume was cancelled",
+    resumeFailed: "Could not start local session recovery",
   },
   distillation: {
     invalidSelection: "Select 1 to 8 distinct sessions",

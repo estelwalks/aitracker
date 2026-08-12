@@ -3,7 +3,7 @@ export const nav = {
   tier1: "작업대",
   tier2: "인사이트 및 보안",
   tier3: "스킬 라이브러리",
-  home: "홈",
+  home: "홈 개요",
   agents: "도구 개요",
   distill: "증류 작업대",
   memory: "보고서 및 메모리",

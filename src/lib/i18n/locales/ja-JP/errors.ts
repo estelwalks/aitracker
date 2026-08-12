@@ -45,6 +45,12 @@ export const errors = {
   },
   sessions: {
     filterInvalid: "セッションフィルターが不正です",
+    queryFailed: "ローカルセッションの照会に失敗しました。再試行してください",
+    sessionNotFound: "選択したセッションが存在しないか利用できません",
+    resumeUnavailable: "このセッションは現在復元できません",
+    resumeInvalid: "セッション復元リクエストが無効です",
+    resumeCancelled: "セッション復元はキャンセルされました",
+    resumeFailed: "ローカルセッション復元を開始できませんでした",
   },
   distillation: {
     invalidSelection: "1〜8 個の重複しないセッションを選択してください",
