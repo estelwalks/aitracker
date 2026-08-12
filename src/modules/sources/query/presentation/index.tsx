@@ -152,6 +152,21 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-2/60 px-3 py-2 text-[12px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-ok" />
+          {t("sources.status.hasData")} · {statusCounts["has-data"]}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-warn" />
+          {t("sources.status.noLogs")} · {statusCounts["no-logs"]}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-muted-foreground/40" />
+          {t("sources.status.notInstalled")} · {statusCounts["not-installed"]}
+        </span>
+      </div>
+
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <SummaryCard
           icon={<Boxes className="size-4" />}

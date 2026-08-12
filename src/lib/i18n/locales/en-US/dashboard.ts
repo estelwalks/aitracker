@@ -174,6 +174,8 @@ export const dashboard = {
     rotateInsight: "Next insight",
     generateAIInsight: "Generate AI insight",
     generatingAIInsight: "Generating…",
+    aiNotConfigured: "LLM not configured",
+    aiNotConfiguredDesc: "Configure a model in Settings to enable AI insights",
     insightDotsAria: "Insight selector",
     insightDot: "Insight {index}",
     monitoringAria: "Local listener status",

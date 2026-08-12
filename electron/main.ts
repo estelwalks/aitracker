@@ -10,6 +10,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  safeStorage,
   shell,
   Tray,
   type IpcMainInvokeEvent,
@@ -51,6 +52,8 @@ import {
   ENV,
   STORAGE_KEY_PREFIX,
 } from "./app-config.js";
+import { SecurityScannerService } from "./security-scanner-service.js";
+import { isTrustedIpcSender } from "./ipc-security.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -60,8 +63,9 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
-let capabilityToken = "";
 let isQuitting = false;
+let securityScanner: SecurityScannerService | null = null;
+let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -87,11 +91,22 @@ function markCloseHintShown(): void {
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  if (!event.senderFrame || event.senderFrame.url === "about:blank") {
-    throw new Error("Untrusted IPC sender");
-  }
-
-  if (new URL(event.senderFrame.url).origin !== allowedOrigin) {
+  const mainFrame = event.sender.mainFrame;
+  if (
+    !event.senderFrame ||
+    !mainFrame ||
+    !isTrustedIpcSender({
+      senderWebContentsId: event.sender.id,
+      expectedWebContentsId:
+        mainWindow == null || mainWindow.isDestroyed()
+          ? null
+          : mainWindow.webContents.id,
+      senderFrameRoutingId: event.senderFrame.routingId,
+      mainFrameRoutingId: mainFrame.routingId,
+      senderFrameUrl: event.senderFrame.url,
+      allowedOrigin,
+    })
+  ) {
     throw new Error("Untrusted IPC sender");
   }
 }
@@ -131,6 +146,27 @@ function showMainWindow(): void {
   }
   mainWindow.show();
   mainWindow.focus();
+}
+
+function openBrowserCompanion(): void {
+  if (!localWebServer) return;
+  const url = localWebServer.createBrowserBootstrapUrl(
+    `/security?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+  );
+  void shell.openExternal(url);
+}
+
+async function runAutomaticQuickSecurityScan(): Promise<void> {
+  const scanner = securityScanner;
+  if (!scanner) return;
+  const status = scanner.getStatus().status;
+  if (status === "running" || status === "cancelling") return;
+  try {
+    await scanner.startAutomaticQuickScan();
+  } catch {
+    // No discovered Skills (or a concurrent manual scan) is a recoverable
+    // automatic pass. The next interval retries through the same safe service.
+  }
 }
 
 function registerIpcHandlers(): void {
@@ -182,7 +218,7 @@ function registerIpcHandlers(): void {
   );
   ipcMain.handle(
     desktopIpc.resetPreferences,
-    (event): { removedKeys: number } => {
+    async (event): Promise<{ removedKeys: number }> => {
       assertTrustedSender(event);
       const current = readPrefs(prefsPath());
       const keys = Object.keys(current).filter(
@@ -190,6 +226,7 @@ function registerIpcHandlers(): void {
       );
       for (const key of keys) delete current[key];
       writePrefs(prefsPath(), current);
+      await securityScanner?.clear();
       return { removedKeys: keys.length };
     },
   );
@@ -256,6 +293,65 @@ function registerIpcHandlers(): void {
       applyPreferences(prefs);
     },
   );
+
+  ipcMain.handle(desktopIpc.listSecuritySkills, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.listSkills();
+  });
+  ipcMain.handle(desktopIpc.selectSecuritySkillDirectory, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: ["openDirectory"],
+        })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    const selected = result.filePaths[0];
+    if (result.canceled || !selected) return null;
+    return securityScanner.registerSelectedDirectory(selected);
+  });
+  ipcMain.handle(
+    desktopIpc.startSecurityScan,
+    async (event, request: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      return securityScanner.start(request);
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityScanStatus, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getStatus();
+  });
+  ipcMain.handle(desktopIpc.getSecurityScanHistory, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.history();
+  });
+  ipcMain.handle(desktopIpc.cancelSecurityScan, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.cancel();
+  });
+  ipcMain.handle(desktopIpc.getSecurityModelConfig, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getModelConfig();
+  });
+  ipcMain.handle(
+    desktopIpc.setSecurityModelConfig,
+    async (event, config: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      return securityScanner.setModelConfig(config);
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityRuntimeCapability, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getRuntimeCapability();
+  });
 }
 
 /**
@@ -294,9 +390,11 @@ function rebuildTray(): void {
     {
       autoLaunchEnabled: autoLaunch.enabled,
       autoLaunchSupported: autoLaunch.supported,
+      browserCompanionSupported: localWebServer != null,
     },
     {
       onOpen: showMainWindow,
+      onOpenBrowser: openBrowserCompanion,
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -366,8 +464,10 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
-  const appUrl = capabilityToken
-    ? `${allowedOrigin}?token=${capabilityToken}&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`
+  const appUrl = localWebServer
+    ? localWebServer.createBrowserBootstrapUrl(
+        `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+      )
     : `${allowedOrigin}?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
   await mainWindow.loadURL(appUrl);
 }
@@ -380,8 +480,9 @@ async function resolveApplicationOrigin(): Promise<string> {
   const webRoot = app.isPackaged
     ? join(process.resourcesPath, "web")
     : join(app.getAppPath(), ".output");
-  localWebServer = await startLocalWebServer(webRoot);
-  capabilityToken = localWebServer.capabilityToken;
+  localWebServer = await startLocalWebServer(webRoot, {
+    securityScanner: securityScanner ?? undefined,
+  });
   return localWebServer.origin;
 }
 
@@ -394,13 +495,37 @@ async function prewarmLocalData(origin: string): Promise<void> {
     // installation opens with its historical usage instead of briefly
     // rendering an empty dashboard. Later loads reuse the scanner's
     // file-signature index and in-memory snapshot.
-    const prewarmUrl = capabilityToken
-      ? `${origin}/?token=${capabilityToken}&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`
+    const prewarmUrl = localWebServer
+      ? localWebServer.createBrowserBootstrapUrl(
+          `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+        )
       : `${origin}/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
-    const response = await fetch(prewarmUrl, {
-      headers: { Accept: "text/html" },
-      signal: controller.signal,
-    });
+    let response: Response;
+    if (localWebServer) {
+      // Node fetch follows redirects but does not persist Set-Cookie. Complete
+      // the same one-time bootstrap handshake as a browser explicitly so the
+      // authenticated prewarm request reaches the route loaders.
+      const bootstrap = await fetch(prewarmUrl, {
+        headers: { Accept: "text/html" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      const location = bootstrap.headers.get("location");
+      const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0];
+      await bootstrap.body?.cancel();
+      if (bootstrap.status !== 303 || location == null || cookie == null) {
+        throw new Error("Local prewarm bootstrap handshake failed");
+      }
+      response = await fetch(new URL(location, origin), {
+        headers: { Accept: "text/html", Cookie: cookie },
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(prewarmUrl, {
+        headers: { Accept: "text/html" },
+        signal: controller.signal,
+      });
+    }
     if (!response.ok) {
       console.warn(`Initial data scan returned HTTP ${response.status}`);
     }
@@ -460,6 +585,10 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
+    if (automaticSecurityScanTimer) {
+      clearInterval(automaticSecurityScanTimer);
+      automaticSecurityScanTimer = null;
+    }
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -472,6 +601,15 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getLocalePreferences);
     ipcMain.removeHandler(desktopIpc.setLocaleMode);
     ipcMain.removeHandler(desktopIpc.setCurrencyMode);
+    ipcMain.removeHandler(desktopIpc.listSecuritySkills);
+    ipcMain.removeHandler(desktopIpc.selectSecuritySkillDirectory);
+    ipcMain.removeHandler(desktopIpc.startSecurityScan);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanStatus);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);
+    ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
+    ipcMain.removeHandler(desktopIpc.getSecurityModelConfig);
+    ipcMain.removeHandler(desktopIpc.setSecurityModelConfig);
+    ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);
     void localWebServer?.close();
   });
 
@@ -484,6 +622,21 @@ if (!hasSingleInstanceLock) {
 
     const prefs = readPrefs(prefsPath());
     currentPreferences = resolveDesktopPreferences(prefs, app.getLocale());
+    securityScanner = new SecurityScannerService({
+      homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
+      dataDirectory: join(
+        process.env[ENV.USAGE_HOME] || app.getPath("home"),
+        APP_DATA_DIR,
+      ),
+      locale: () => currentPreferences.locale,
+      env: process.env,
+      secretStorage: {
+        isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+        encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
+        decrypt: (value) =>
+          safeStorage.decryptString(Buffer.from(value, "base64")),
+      },
+    });
 
     const compat = await checkDataCompatibility();
     if (!compat.compatible) {
@@ -528,5 +681,10 @@ if (!hasSingleInstanceLock) {
     registerIpcHandlers();
     rebuildTray();
     await createMainWindow();
+    void runAutomaticQuickSecurityScan();
+    automaticSecurityScanTimer = setInterval(
+      () => void runAutomaticQuickSecurityScan(),
+      24 * 60 * 60 * 1_000,
+    );
   });
 }

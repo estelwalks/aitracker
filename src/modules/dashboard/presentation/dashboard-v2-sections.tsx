@@ -222,6 +222,18 @@ export function DashboardJarvisInsight({
           >
             {t("dashboard.v2.rotateInsight")}
           </button>
+          {aiInsight?.status === "not-configured" ? (
+            <span className="dashboard-hero-pill dashboard-hero-pending">
+              {t("dashboard.v2.aiNotConfigured")}
+              <Link
+                to="/settings"
+                title={t("dashboard.v2.aiNotConfiguredDesc")}
+                className="underline decoration-dotted underline-offset-2"
+              >
+                {t("dashboard.v2.aiNotConfiguredDesc")}
+              </Link>
+            </span>
+          ) : null}
         </div>
       </div>
     </section>

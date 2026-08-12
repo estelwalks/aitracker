@@ -1,18 +1,16 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  Bot,
   BookHeart,
   Flame,
   FlaskConical,
-  History,
   IdCard,
   LayoutDashboard,
-  LogIn,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
   ShieldCheck,
+  Store,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -25,55 +23,57 @@ type NavItem = {
   to:
     | "/"
     | "/agents"
-    | "/tracker"
-    | "/security"
-    | "/chats"
-    | "/sources"
     | "/distill"
-    | "/reports";
+    | "/reports"
+    | "/security"
+    | "/tracker"
+    | "/skills";
   label: MessageKey;
   icon: typeof LayoutDashboard;
   hero?: boolean;
 };
 
-const navGroups: ReadonlyArray<{
+/**
+ * Sidebar mirrors the V3.0 prototype tiering: Workspace (home/tools/distill/
+ * reports), Insights & Security (guard/tracker) and Skill Library (skill hub).
+ * Session management and agent orchestration stay reachable via in-page links,
+ * not the sidebar.
+ */
+const navTiers: ReadonlyArray<{
   label: MessageKey;
   items: readonly NavItem[];
 }> = [
   {
-    label: "nav.groupCore",
+    label: "nav.tier1",
     items: [
-      { to: "/", label: "nav.dashboard", icon: LayoutDashboard },
-      { to: "/agents", label: "nav.skills", icon: IdCard },
-      { to: "/chats", label: "nav.sessions", icon: History },
+      { to: "/", label: "nav.home", icon: LayoutDashboard },
+      { to: "/agents", label: "nav.agents", icon: IdCard },
       {
         to: "/distill",
         label: "nav.distill",
         icon: FlaskConical,
         hero: true,
       },
-      { to: "/reports", label: "nav.reports", icon: BookHeart },
+      { to: "/reports", label: "nav.memory", icon: BookHeart },
     ],
   },
   {
-    label: "nav.groupGuard",
+    label: "nav.tier2",
     items: [
-      { to: "/security", label: "nav.security", icon: ShieldCheck },
-      { to: "/tracker", label: "nav.market", icon: Flame },
+      { to: "/security", label: "nav.guard", icon: ShieldCheck },
+      { to: "/tracker", label: "nav.tracker", icon: Flame },
     ],
   },
   {
-    label: "nav.groupInfrastructure",
-    items: [{ to: "/sources", label: "nav.sources", icon: Bot }],
+    label: "nav.tier3",
+    items: [{ to: "/skills", label: "nav.skillHub", icon: Store }],
   },
 ];
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
   if (to === "/") return pathname === "/";
-  if (to === "/chats")
-    return pathname.startsWith("/chats") || pathname.startsWith("/sessions");
-  if (to === "/tracker")
-    return pathname.startsWith("/tracker") || pathname.startsWith("/market");
+  if (to === "/skills")
+    return pathname.startsWith("/skills") || pathname.startsWith("/market");
   return pathname.startsWith(to);
 }
 
@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const visibleGroups = navGroups
+  const visibleTiers = navTiers
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label={APP_NAME}
           className="tt-scroll flex-1 overflow-y-auto px-2 pb-2"
         >
-          {visibleGroups.map((group) => (
+          {visibleTiers.map((group) => (
             <div key={group.label} className="mb-3">
               {!collapsed && (
                 <p className="px-3 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.18em] text-muted-foreground uppercase">
@@ -165,22 +165,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="space-y-1 px-2 pb-3">
-          <button
-            type="button"
-            disabled
-            title={t("nav.loginUnavailable")}
-            className={`flex h-9 w-full items-center gap-3 rounded-md px-3 text-[13px] text-muted-foreground opacity-60 ${collapsed ? "justify-center" : ""}`}
-          >
-            <LogIn className="size-4 shrink-0" strokeWidth={1.75} />
-            {!collapsed && (
-              <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
-                {t("nav.login")}
-                <span className="ml-auto rounded-sm bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[9px] tracking-[0.1em] uppercase">
-                  {t("nav.soon")}
-                </span>
-              </span>
-            )}
-          </button>
           <Link
             to="/settings"
             title={t("nav.settings")}
@@ -231,8 +215,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
           <span className="ml-auto inline-flex items-center gap-2 rounded-md bg-foreground/[0.05] px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-muted-foreground/60" />
-            {t("nav.agentStatusUnavailable")}
+            <span className="size-1.5 rounded-full bg-ok tt-breathe" />
+            {t("nav.agentActive")}
           </span>
         </header>
         <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 py-6 pb-10 md:px-8 2xl:px-10">

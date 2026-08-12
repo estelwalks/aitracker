@@ -100,6 +100,10 @@ export interface ReportStore {
   saveDocument(document: ReportDocument): Promise<void>;
   getDocument(reportId: string): Promise<ReportDocument | undefined>;
   latest(definitionId: string): Promise<ReportDocument | undefined>;
+  /** Enumerate persisted report documents (newest first). */
+  listDocuments(): Promise<readonly ReportDocument[]>;
+  /** Enumerate persisted runs (newest first). */
+  listRuns(): Promise<readonly ReportRun[]>;
 }
 
 export interface ReportContext {
@@ -141,6 +145,12 @@ export interface ReportsApplication {
   get(reportId: string): Promise<Result<ReportSummary>>;
   approve(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   archive(reportId: string, actor: string): Promise<Result<ReportSummary>>;
+  /** Enumerate persisted reports (newest first). */
+  list(): Promise<Result<readonly ReportSummary[]>>;
+  /** Enumerate persisted runs (newest first). */
+  listRuns(): Promise<Result<readonly ReportRun[]>>;
+  /** Number of persisted reports, or null when the store is unavailable. */
+  count(): Promise<number | null>;
 }
 
 export interface GenerateReportInput {

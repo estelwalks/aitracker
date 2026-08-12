@@ -14,6 +14,7 @@ import { sessions } from "./sessions";
 import { sources } from "./sources";
 import { settings } from "./settings";
 import { theme } from "./theme";
+import { tracker } from "./tracker";
 
 export const en = {
   common,
@@ -27,6 +28,7 @@ export const en = {
   sources,
   settings,
   market,
+  tracker,
   meta,
   errors,
   export: exportMessages,

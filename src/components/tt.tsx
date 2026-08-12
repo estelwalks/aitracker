@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 /** Shared compact input for module toolbars and data views. */
 export function SearchInput({
@@ -238,5 +238,177 @@ export function StatusBadge({
     >
       {children}
     </span>
+  );
+}
+
+/** 页面级指标项（与原型首页总览一致的排版）。 */
+export type Metric = {
+  icon?: ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  v: ReactNode;
+  sub?: ReactNode;
+  hint?: string;
+  color?: string;
+  right?: ReactNode;
+};
+
+/** 页面吸顶标题条：左侧标题 + 概要数字，右侧操作区。 */
+export function PageBar({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="sticky top-14 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/60 bg-background px-4 py-2.5 md:-mx-8 md:px-8">
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-[13px] font-semibold tracking-tight">
+          {title}
+        </span>
+        {summary && (
+          <span className="tt-num truncate font-mono text-[11px] text-muted-foreground">
+            {summary}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+/** 原型首页同款指标网格。 */
+export function MetricGrid({
+  items,
+  className = "",
+}: {
+  items: Metric[];
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 ${className}`}
+    >
+      {items.map((m) => (
+        <div
+          key={m.label}
+          className="group rounded-xl bg-card px-4 py-3.5 ring-1 ring-border/50 transition-colors hover:bg-surface-2"
+        >
+          <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+            {m.icon && <m.icon className="size-3" strokeWidth={1.8} />}
+            <span className="truncate">{m.label}</span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span
+              className="tt-num min-w-0 flex-1 truncate font-mono text-[22px] leading-none font-black tracking-tight"
+              style={m.color ? { color: m.color } : undefined}
+            >
+              {m.v}
+            </span>
+            {m.right}
+          </div>
+          {m.sub && (
+            <div
+              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+              title={m.hint ?? undefined}
+            >
+              {m.sub}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 原型首页同款 pill 切换器（可带图标与品牌色）。 */
+export function ChipTabs<T extends string>({
+  value,
+  onChange,
+  options,
+  className = "",
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: {
+    value: T;
+    label: ReactNode;
+    icon?: ComponentType<{ className?: string; strokeWidth?: number }>;
+    color?: string;
+  }[];
+  className?: string;
+}) {
+  return (
+    <div
+      className={`tt-xscroll flex items-center gap-2 overflow-x-auto pb-1 ${className}`}
+    >
+      {options.map((o) => {
+        const active = value === o.value;
+        const color = o.color;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
+              active && !color
+                ? "bg-foreground text-background"
+                : "bg-card hover:bg-surface-2"
+            }`}
+            style={
+              active && color
+                ? {
+                    background: `${color}22`,
+                    color,
+                    boxShadow: `inset 0 0 0 1.5px ${color}`,
+                  }
+                : undefined
+            }
+          >
+            {o.icon && <o.icon className="size-4" strokeWidth={1.8} />}
+            <span className="truncate">{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 原型首页同款内容卡片（无线框、圆角、卡片底色）。 */
+export function Card({
+  title,
+  desc,
+  action,
+  children,
+  className = "",
+  bodyClassName = "",
+}: {
+  title?: ReactNode;
+  desc?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <section className={`overflow-hidden rounded-xl bg-card ${className}`}>
+      {(title || action) && (
+        <header className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+          <div className="min-w-0">
+            <h2 className="truncate text-[13px] font-semibold tracking-tight">
+              {title}
+            </h2>
+            {desc && (
+              <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
+                {desc}
+              </p>
+            )}
+          </div>
+          {action}
+        </header>
+      )}
+      <div className={bodyClassName}>{children}</div>
+    </section>
   );
 }

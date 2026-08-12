@@ -1,4 +1,5 @@
 import type { SecurityReport } from "../../../lib/security/scanner.ts";
+import type { ScanSkillReport } from "skill-scanner";
 import { createAssetAssessment } from "../application/index.ts";
 import type { AssetAssessment, AssetKind, AssetRef } from "../contracts.ts";
 
@@ -37,5 +38,39 @@ export function assessmentFromSecurityReport(input: {
     ruleProvenance: "builtin",
     rulePackRef: `rule-pack:${input.report.rulesVersion}`,
     assessedAt: input.report.scannedAt,
+  });
+}
+
+/** Privacy-safe projection for the Node security-engine report. */
+export function assessmentFromSkillScannerReport(input: {
+  readonly assetRef: AssetRef;
+  readonly assetKind: AssetKind;
+  readonly report: ScanSkillReport;
+  readonly assessedAt: string;
+}): AssetAssessment {
+  const verdict: AssetAssessment["verdict"] =
+    input.report.status === "partial" || input.report.verdict === "unknown"
+      ? "unknown"
+      : input.report.verdict === "allow"
+        ? "clean"
+        : input.report.verdict === "warn"
+          ? "suspicious"
+          : "dangerous";
+  return createAssetAssessment({
+    assetRef: input.assetRef,
+    assetKind: input.assetKind,
+    verdict,
+    findingCount: input.report.findings.length,
+    findingSeverities: input.report.findings.map((finding) =>
+      finding.severity === "critical" || finding.severity === "high"
+        ? "high"
+        : finding.severity === "medium"
+          ? "medium"
+          : "low",
+    ),
+    ruleVersion: input.report.rulesVersion,
+    ruleProvenance: "builtin",
+    rulePackRef: `rule-pack:${input.report.rulesVersion}`,
+    assessedAt: input.assessedAt,
   });
 }

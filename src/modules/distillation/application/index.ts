@@ -188,5 +188,11 @@ export function createDistillationApplication(
         execution: current.execution,
       });
     },
+
+    async count(): Promise<number | null> {
+      if (!ports.knowledge) return null;
+      const result = await ports.knowledge.list();
+      return isOk(result) ? result.value.length : null;
+    },
   };
 }

@@ -202,6 +202,39 @@ export function createReportsApplication(
       : err("errors.reports.notFound");
   };
 
+  const list = async (): Promise<Result<readonly ReportSummary[]>> => {
+    try {
+      const documents = await options.store.listDocuments();
+      return ok(
+        documents.flatMap((document) => {
+          const definition = definitions.find(
+            (item) => item.definitionId === document.definitionId,
+          );
+          return definition ? [toReportSummary(document, definition)] : [];
+        }),
+      );
+    } catch {
+      return err("errors.reports.queryFailed");
+    }
+  };
+
+  const listRuns = async (): Promise<Result<readonly ReportRun[]>> => {
+    try {
+      return ok(await options.store.listRuns());
+    } catch {
+      return err("errors.reports.queryFailed");
+    }
+  };
+
+  const count = async (): Promise<number | null> => {
+    try {
+      const documents = await options.store.listDocuments();
+      return documents.length;
+    } catch {
+      return null;
+    }
+  };
+
   return {
     definitions: definitions.map(toDefinitionSummary),
     createDraft,
@@ -209,5 +242,8 @@ export function createReportsApplication(
     get,
     approve: (id, actor) => transition(id, actor, "approved"),
     archive: (id, actor) => transition(id, actor, "archived"),
+    list,
+    listRuns,
+    count,
   };
 }

@@ -4,14 +4,12 @@
  * never cross this boundary; only renderer-safe `ReportListItem` /
  * `ReportDefinitionSummary` rows are returned.
  *
- * Wiring note (W3.1b): the reports application exposes `definitions` and
- * `createDraft`/`generate`, but neither it nor the AtomicJsonStore currently
- * expose a public `list()` of persisted documents/runs. Until that lands
- * (W3.1c will widen the store + wire the TaskApi-backed run source), the
- * query source returns empty report/run lists so the page renders the
- * definition catalog and an honest "no reports yet" empty state. Generation
- * is surfaced as a disabled action — calling it is a deliberate no-op so the
- * UI contract is stable when the list source is connected.
+ * The store now exposes `listDocuments`/`listRuns` (see the ReportStore
+ * contract), so the query source reads real persisted documents/runs instead
+ * of returning an empty list. Generation is gated on an actual LLM being
+ * configured (see ai-orchestration/config); without one the transport reports
+ * "not triggered" so the UI shows the honest disabled state rather than a fake
+ * success.
  */
 import type { Locale } from "../../lib/i18n/locale";
 import type {
@@ -25,14 +23,18 @@ import type {
   ReportsApplication,
 } from "./contracts.ts";
 
-/** Empty list source used until the store exposes a public list port. */
-function emptyReportsSource(): ReportsQuerySource {
+/** Reads persisted reports/runs from the composition root's application. */
+function compositionReportsSource(
+  reports: ReportsApplication,
+): ReportsQuerySource {
   return {
     async listReports(): Promise<readonly ReportSummary[]> {
-      return [];
+      const result = await reports.list();
+      return result.ok ? result.value : [];
     },
     async listRuns(): Promise<readonly ReportRun[]> {
-      return [];
+      const result = await reports.listRuns();
+      return result.ok ? result.value : [];
     },
   };
 }
@@ -53,11 +55,15 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const { createReportsPresentation } = await import("./presentation/index.ts");
+  const { isLLMConfigured } = await import("../ai-orchestration/config.ts");
   const root = await getCompositionRoot();
   const reports: ReportsApplication = root.reports;
   const presentation = createReportsPresentation({
     reports,
-    source: emptyReportsSource(),
+    source: compositionReportsSource(reports),
+    // Without a configured LLM the generation pipeline cannot run; surface the
+    // honest offline state so the page disables generation instead of faking it.
+    offline: !isLLMConfigured(),
   });
   const result = await presentation.query();
   if (!result.ok) {
@@ -84,14 +90,21 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
 }
 
 /**
- * Trigger a draft report generation. Currently a no-op placeholder: the
- * generate button in the UI is disabled, and wiring the real
- * `reports.createDraft`/`reports.generate` (plus a list-capable source so the
- * new row appears) is W3.1c. Exposed now so the query/page transport boundary
- * is stable.
+ * Trigger a draft report generation. Honest gate: without a configured LLM the
+ * transport reports `{ triggered: false }` (the UI keeps the button disabled);
+ * with one it runs the real generation pipeline and reports success.
  */
 export async function generateReport(
-  _definitionId: string,
-): Promise<{ triggered: false }> {
-  return { triggered: false };
+  definitionId: string,
+): Promise<{ triggered: boolean }> {
+  const { isLLMConfigured } = await import("../ai-orchestration/config.ts");
+  if (!isLLMConfigured()) return { triggered: false };
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const result = await root.reports.generate({
+    definitionId,
+    trigger: "manual",
+  });
+  return { triggered: result.ok };
 }

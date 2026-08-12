@@ -11,8 +11,25 @@ export const settings = {
   themeDesc: "选择界面主题",
   sections: {
     general: "通用",
+    scan: "扫描配置",
+    model: "模型配置",
     appearance: "外观",
     about: "关于",
+  },
+  scan: {
+    onDemand: "扫描方式",
+    onDemandDesc: "扫描按需触发，读取本机受支持 AI 工具日志并建立增量索引。",
+    retentionNote: "以下保留期同样作用于用量与扫描缓存：",
+  },
+  model: {
+    notConfigured: "未配置 LLM",
+    notConfiguredDesc:
+      "AI 生成类功能（蒸馏、报告、AI 洞察）暂不可用。请配置 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 环境变量。",
+    configured: "已配置 LLM",
+    baseUrl: "服务地址",
+    model: "模型",
+    apiKeyMasked: "API Key 已配置（掩码显示）",
+    loading: "读取中…",
   },
   pageHeader: "设置",
   pageHeaderDesc: "一般配置保存在当前设备；系统级选项仅在桌面客户端生效",

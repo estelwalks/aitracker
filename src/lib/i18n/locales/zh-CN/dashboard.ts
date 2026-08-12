@@ -169,6 +169,8 @@ export const dashboard = {
     rotateInsight: "换一条",
     generateAIInsight: "生成 AI 洞察",
     generatingAIInsight: "生成中…",
+    aiNotConfigured: "未配置 LLM",
+    aiNotConfiguredDesc: "前往设置配置模型后即可生成 AI 洞察",
     insightDotsAria: "洞察切换",
     insightDot: "第 {index} 条洞察",
     monitoringAria: "本地监听状态",

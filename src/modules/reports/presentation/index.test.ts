@@ -58,6 +58,13 @@ const app = (): ReportsApplication => ({
   archive: async () => {
     throw new Error("unused");
   },
+  list: async () => {
+    throw new Error("unused");
+  },
+  listRuns: async () => {
+    throw new Error("unused");
+  },
+  count: async () => null,
 });
 
 const run = (overrides: Partial<ReportRun> = {}): ReportRun => ({

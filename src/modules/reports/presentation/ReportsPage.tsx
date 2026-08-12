@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { FileText, CalendarDays, CalendarRange } from "lucide-react";
 
 import {
@@ -17,6 +17,7 @@ import type {
   ReportQueryViewModel,
   ReportUiStatus,
 } from "./index";
+import { ReportEditor } from "./ReportEditor.tsx";
 
 /**
  * Status → common.status.* label key. `ReportUiStatus` maps cleanly onto the
@@ -62,6 +63,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const generateBlocked = offline || disabled;
   const reports = useMemo(() => feed.reports, [feed.reports]);
   const definitions = useMemo(() => feed.definitions, [feed.definitions]);
+  const [editing, setEditing] = useState<ReportListItem | null>(null);
 
   return (
     <>
@@ -147,20 +149,39 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
               <ReportRow
                 key={report.reportId ?? report.runId ?? report.definitionId}
                 report={report}
+                onEdit={() => setEditing(report)}
               />
             ))}
           </ul>
         )}
       </Panel>
+
+      {editing && (
+        <ReportEditor
+          reportId={editing.reportId ?? editing.runId ?? editing.definitionId}
+          title={editing.title}
+          kindLabel={t(KIND_LABEL_KEY[editing.kind])}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </>
   );
 }
 
-function ReportRow({ report }: { report: ReportListItem }) {
+function ReportRow({
+  report,
+  onEdit,
+}: {
+  report: ReportListItem;
+  onEdit: () => void;
+}) {
   const { t, format } = useI18n();
   const tone = STATUS_TONE[report.status];
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px]">
+    <li
+      className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px] transition-colors hover:bg-surface-2/50"
+      onClick={onEdit}
+    >
       <div className="flex w-full items-center gap-2">
         <Dot className="bg-primary" />
         <span className="truncate font-medium text-foreground">

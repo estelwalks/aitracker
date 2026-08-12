@@ -1,14 +1,12 @@
 import type { TaskApi } from "../tasks/index.ts";
-import {
-  scanSecurityFiles,
-  type SecurityInputFile,
-  type SecurityReport,
-} from "../../lib/security/scanner.ts";
+import type { ScanSkillReport } from "skill-scanner";
+import type { SecurityInputFile } from "../../lib/security/scanner.ts";
 import {
   assessmentHistorySummary,
   parseScanRequest,
 } from "./application/index.ts";
-import { assessmentFromSecurityReport } from "./adapters/scanner.ts";
+import { assessmentFromSkillScannerReport } from "./adapters/scanner.ts";
+import { runQuickNodeSecurityEngine } from "./adapters/node-security-engine.server.ts";
 import type {
   AssetAssessment,
   AssetRef,
@@ -43,7 +41,9 @@ export interface CreateSecurityAssessmentServerApiOptions {
   readonly selection: SecuritySelectionResolver;
   readonly history: SecurityAssessmentHistoryStore;
   readonly scanTaskId?: string;
-  readonly scanner?: (files: readonly SecurityInputFile[]) => SecurityReport;
+  readonly scanner?: (
+    files: readonly SecurityInputFile[],
+  ) => ScanSkillReport | Promise<ScanSkillReport>;
   readonly now?: () => Date;
 }
 
@@ -70,7 +70,16 @@ function failed(
 export function createSecurityAssessmentServerApi(
   options: CreateSecurityAssessmentServerApiOptions,
 ): SecurityAssessmentServerApi {
-  const scanner = options.scanner ?? ((files) => scanSecurityFiles([...files]));
+  const scanner =
+    options.scanner ??
+    ((files) =>
+      runQuickNodeSecurityEngine(
+        files.map((file, index) => ({
+          path: `file-${index + 1}`,
+          content: file.content,
+        })),
+        "zh-CN",
+      ));
   const now = options.now ?? (() => new Date());
   const taskId = options.scanTaskId ?? "security.assessment.scan";
 
@@ -98,11 +107,12 @@ export function createSecurityAssessmentServerApi(
       if (!queued.ok) return failed(job, queued.error.code);
       try {
         const files = await options.selection.resolve(request.selectionRef);
-        const report = scanner(files);
-        const assessment = assessmentFromSecurityReport({
+        const report = await scanner(files);
+        const assessment = assessmentFromSkillScannerReport({
           assetRef: request.assetRef,
           assetKind: request.assetKind,
           report,
+          assessedAt: now().toISOString(),
         });
         await options.history.save(assessment);
         return {

@@ -18,7 +18,11 @@ import { createInsightsApplication } from "../insights/index.ts";
 import { estimateEventCost } from "../../lib/pricing/index.ts";
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
-import type { DashboardV2Snapshot } from "./contracts.ts";
+import type {
+  DashboardV2OutputAvailability,
+  DashboardV2Snapshot,
+} from "./contracts.ts";
+import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { AI_TOOLS } from "../../lib/tools/catalog.ts";
 import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
@@ -309,6 +313,12 @@ export function toDashboardV2Snapshot(input: {
   readonly pricingAvailable: boolean;
   /** Server-only installation probing is reduced to ids before this DTO. */
   readonly installedToolIds?: ReadonlySet<string>;
+  /**
+   * Real counts for the three "output" KPI cards. Each metric is either
+   * available (with a real count) or honestly unavailable — never a fabricated
+   * number.
+   */
+  readonly outputAvailability: DashboardV2OutputAvailability;
 }): DashboardV2Snapshot {
   const sourceStatus = new Map(
     input.snapshot.sources.map((source) => [source.source, source]),
@@ -336,11 +346,7 @@ export function toDashboardV2Snapshot(input: {
     skills: input.skills,
     sessions: input.sessions,
     pricingAvailable: input.pricingAvailable,
-    outputAvailability: {
-      securityRuns: { count: null, available: false },
-      distillationOutputs: { count: null, available: false },
-      dailyReports: { count: null, available: false },
-    },
+    outputAvailability: input.outputAvailability,
     events: input.snapshot.details.map((event) => ({
       source: event.source,
       timestamp: event.timestamp,
@@ -380,6 +386,46 @@ export function toDashboardV2Snapshot(input: {
 }
 
 export type DashboardApiResponse = DashboardModuleContract;
+
+/**
+ * Resolve the three "output" KPI counts from real sources. Security runs come
+ * from the monitoring heartbeat's security summary; distillation and daily
+ * reports come from the composition root's persisted knowledge/report stores.
+ * A metric without a persistent source is honestly unavailable (never a
+ * fabricated number).
+ */
+async function resolveOutputAvailability(
+  monitoringValue: MonitoringStatus | undefined,
+): Promise<DashboardV2OutputAvailability> {
+  const securitySummary = monitoringValue?.security;
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const [distillationCount, reportsCount] = await Promise.allSettled([
+    root.distillation.count(),
+    root.reports.count(),
+  ]);
+  return {
+    securityRuns: {
+      count: securitySummary?.assessedAssetCount ?? null,
+      available: securitySummary != null,
+    },
+    distillationOutputs: {
+      count:
+        distillationCount.status === "fulfilled"
+          ? distillationCount.value
+          : null,
+      available:
+        distillationCount.status === "fulfilled" &&
+        distillationCount.value != null,
+    },
+    dailyReports: {
+      count: reportsCount.status === "fulfilled" ? reportsCount.value : null,
+      available:
+        reportsCount.status === "fulfilled" && reportsCount.value != null,
+    },
+  };
+}
 
 /** Server-only query adapter. No scanner, pricing rules, or filesystem details cross this boundary. */
 export async function loadDashboardReadModel(
@@ -481,6 +527,11 @@ export async function loadDashboardReadModel(
     sessions,
     pricingAvailable: pricing != null,
     installedToolIds,
+    outputAvailability: await resolveOutputAvailability(
+      monitoringResult.status === "fulfilled"
+        ? monitoringResult.value
+        : undefined,
+    ),
   });
   // Reading this service is strictly cache-only. No provider call can occur
   // during route loading; the POST insight action is the only refresh path.
