@@ -23,16 +23,19 @@ import {
   type ScanSkillReport,
 } from "skill-scanner";
 
-import type {
-  DesktopLocale,
-  SecurityModelConfigInput,
-  SecurityModelConfigView,
-  SecurityRuntimeCapability,
-  SecurityScanHistoryEntry,
-  SecurityScanReportDto,
-  SecurityScanStartRequest,
-  SecurityScanState,
-  SecuritySkillTarget,
+import {
+  SECURITY_SCAN_CYCLES,
+  type DesktopLocale,
+  type SecurityModelConfigInput,
+  type SecurityModelConfigView,
+  type SecurityRuntimeCapability,
+  type SecurityScanCycle,
+  type SecurityScanHistoryEntry,
+  type SecurityScanReportDto,
+  type SecurityScanSchedule,
+  type SecurityScanStartRequest,
+  type SecurityScanState,
+  type SecuritySkillTarget,
 } from "./contracts.js";
 
 const MAX_FILES = 500;
@@ -175,6 +178,24 @@ function parseConfig(input: unknown): SecurityModelConfigInput {
   numeric("contextWindowTokens", 1, 10_000_000);
   numeric("maxAgentTurns", 1, 100);
   return result;
+}
+
+function parseSchedule(input: unknown): SecurityScanSchedule {
+  if (input == null || typeof input !== "object" || Array.isArray(input))
+    throw new TypeError("Scan schedule is required");
+  const value = input as Record<string, unknown>;
+  const allowed = new Set(["enabled", "cycle"]);
+  if (Object.keys(value).some((key) => !allowed.has(key)))
+    throw new TypeError("Scan schedule contains unsupported fields");
+  if (typeof value.enabled !== "boolean")
+    throw new TypeError("Scan schedule enabled must be a boolean");
+  const cycle = value.cycle;
+  if (
+    typeof cycle !== "string" ||
+    !(SECURITY_SCAN_CYCLES as readonly string[]).includes(cycle)
+  )
+    throw new TypeError("Unsupported scan cycle");
+  return { enabled: value.enabled, cycle: cycle as SecurityScanCycle };
 }
 
 function skillRef(path: string): SecuritySkillTarget["skillRef"] {
@@ -492,12 +513,14 @@ export class SecurityScannerService {
   readonly #options: SecurityScannerServiceOptions;
   readonly #historyPath: string;
   readonly #configPath: string;
+  readonly #schedulePath: string;
   readonly #trusted = new Map<string, TrustedSkill>();
   #state = emptyState();
   #cancelRequested = false;
   #epoch = 0;
   #historyQueue: Promise<void> = Promise.resolve();
   #configQueue: Promise<void> = Promise.resolve();
+  #scheduleQueue: Promise<void> = Promise.resolve();
   #activeRun: Promise<void> | null = null;
   #clearing = false;
 
@@ -510,6 +533,10 @@ export class SecurityScannerService {
     this.#configPath = join(
       options.dataDirectory,
       "security-model-config.json",
+    );
+    this.#schedulePath = join(
+      options.dataDirectory,
+      "security-scan-schedule.json",
     );
   }
 
@@ -581,8 +608,6 @@ export class SecurityScannerService {
       throw new Error("A security scan is already running");
     const request = this.#parseStartRequest(input);
     const startingEpoch = this.#epoch;
-    if (request.trigger === "automatic" && request.mode !== "quick")
-      throw new Error("Automatic security scans must use quick mode");
     if (request.mode === "full" && !(await this.#modelConfig())) {
       if (startingEpoch !== this.#epoch)
         throw new Error("Security scan was cleared");
@@ -654,9 +679,10 @@ export class SecurityScannerService {
     return this.getStatus();
   }
 
-  /** Fixed scheduler boundary: quick/files-only and never model-backed. */
-  async startAutomaticQuickScan(): Promise<SecurityScanState> {
-    return this.start({ scope: "all", mode: "quick", trigger: "automatic" });
+  /** Model-aware scheduler boundary: full when a model is configured, else quick. */
+  async startAutomaticScan(): Promise<SecurityScanState> {
+    const mode = (await this.#modelConfig()) ? "full" : "quick";
+    return this.start({ scope: "all", mode, trigger: "automatic" });
   }
 
   async history(): Promise<SecurityScanHistoryEntry[]> {
@@ -736,6 +762,19 @@ export class SecurityScannerService {
       };
       await atomicWrite(this.#configPath, document);
       return this.#configView(document);
+    });
+  }
+
+  async getScanSchedule(): Promise<SecurityScanSchedule> {
+    return structuredClone(await this.#readSchedule());
+  }
+
+  async setScanSchedule(input: unknown): Promise<SecurityScanSchedule> {
+    if (this.#clearing) throw new Error("Security scanner is being cleared");
+    return this.#withScheduleLock(async () => {
+      const parsed = parseSchedule(input);
+      await atomicWrite(this.#schedulePath, parsed);
+      return structuredClone(parsed);
     });
   }
 
@@ -1162,6 +1201,25 @@ export class SecurityScannerService {
       () => undefined,
     );
     return result;
+  }
+
+  #withScheduleLock<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#scheduleQueue.then(operation, operation);
+    this.#scheduleQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  async #readSchedule(): Promise<SecurityScanSchedule> {
+    try {
+      return parseSchedule(
+        JSON.parse(await readFile(this.#schedulePath, "utf8")),
+      );
+    } catch {
+      return { enabled: true, cycle: "daily" };
+    }
   }
 
   async #readConfig(): Promise<EncryptedConfigDocument | null> {

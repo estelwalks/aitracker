@@ -36,14 +36,12 @@ export function ModelConfigDialog({
   open,
   config,
   saving,
-  devMode,
   onClose,
   onSave,
 }: {
   open: boolean;
   config: SecurityModelConfigView | null;
   saving: boolean;
-  devMode?: boolean;
   onClose: () => void;
   onSave: (config: SecurityModelConfigUpdate) => void;
 }) {
@@ -109,13 +107,6 @@ export function ModelConfigDialog({
             <X className="size-4" />
           </button>
         </header>
-
-        {devMode && (
-          <div className="mt-4 flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-[12px] text-warn">
-            <LockKeyhole className="mt-0.5 size-4 shrink-0" />
-            {t("security.center.model.devModeNote")}
-          </div>
-        )}
 
         {config && (
           <div

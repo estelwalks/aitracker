@@ -168,7 +168,7 @@ test("rejects renderer paths and unknown opaque references", async () => {
   );
 });
 
-test("requires a model for full scans and prevents automatic full scans", async () => {
+test("requires a model for full scans and automatic full scans report model-required", async () => {
   const { home, data } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
@@ -185,16 +185,42 @@ test("requires a model for full scans and prevents automatic full scans", async 
   });
   assert.equal(state.status, "model-required");
   assert.equal(state.locale, "en-US");
-  await assert.rejects(
-    service.start({ scope: "all", mode: "full", trigger: "automatic" }),
-    /must use quick/u,
-  );
+  const automatic = await service.start({
+    scope: "all",
+    mode: "full",
+    trigger: "automatic",
+  });
+  assert.equal(automatic.status, "model-required");
 });
 
-test("automatic entry is single-boundary quick, current-locale and model-free", async () => {
+test("automatic scans default to quick when no model is configured", async () => {
   const { home, data } = await fixture();
   let captured: Record<string, unknown> | undefined;
-  let decryptions = 0;
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "ko-KR",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async (request: unknown) => {
+      captured = request as Record<string, unknown>;
+      return report({ locale: "ko-KR" as never });
+    }) as never,
+  });
+  await service.startAutomaticScan();
+  await waitForTerminal(service);
+  assert.equal(captured?.mode, "quick");
+  assert.equal(captured?.locale, "ko-KR");
+  assert.equal("model" in (captured ?? {}), false);
+  const persisted = JSON.parse(
+    await readFile(join(data, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ trigger: string }> };
+  assert.equal(persisted.entries[0]?.trigger, "automatic");
+});
+
+test("automatic scans use full model-aware analysis when a model is configured", async () => {
+  const { home, data } = await fixture();
+  let captured: Record<string, unknown> | undefined;
   const service = new SecurityScannerService({
     homeDirectory: home,
     dataDirectory: data,
@@ -203,34 +229,80 @@ test("automatic entry is single-boundary quick, current-locale and model-free", 
     secretStorage: {
       isEncryptionAvailable: () => true,
       encrypt: (value) => Buffer.from(value).toString("base64"),
-      decrypt: (value) => {
-        decryptions += 1;
-        return Buffer.from(value, "base64").toString("utf8");
-      },
+      decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
     },
     scanner: (async (request: unknown) => {
       captured = request as Record<string, unknown>;
-      return report({ locale: "ko-KR" as never });
+      return report({ locale: "ko-KR" as never, mode: "full" });
     }) as never,
   });
   await service.setModelConfig({
     provider: "openai",
     endpoint: "https://example.invalid/v1",
-    apiKey: "automatic-must-not-decrypt",
+    apiKey: "automatic-full-key",
     liteModel: "lite",
     proModel: "pro",
   });
-  await service.startAutomaticQuickScan();
+  await service.startAutomaticScan();
   await waitForTerminal(service);
-  assert.equal(captured?.mode, "quick");
+  assert.equal(captured?.mode, "full");
   assert.equal(captured?.locale, "ko-KR");
-  assert.equal("model" in (captured ?? {}), false);
-  assert.equal(decryptions, 0);
+  assert.equal(
+    (captured?.model as { apiKey?: string } | undefined)?.apiKey,
+    "automatic-full-key",
+  );
   const persisted = JSON.parse(
     await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ trigger: string }> };
+  ) as { entries: Array<{ trigger: string; mode: string }> };
   assert.equal(persisted.entries[0]?.trigger, "automatic");
-  assert.equal(decryptions, 0);
+  assert.equal(persisted.entries[0]?.mode, "full");
+});
+
+test("scan schedule round-trips, persists, and falls back on corrupt files", async () => {
+  const { home, data } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  assert.deepEqual(await service.getScanSchedule(), {
+    enabled: true,
+    cycle: "daily",
+  });
+  const saved = await service.setScanSchedule({
+    enabled: false,
+    cycle: "weekly",
+  });
+  assert.deepEqual(saved, { enabled: false, cycle: "weekly" });
+  assert.deepEqual(await service.getScanSchedule(), {
+    enabled: false,
+    cycle: "weekly",
+  });
+  assert.deepEqual(
+    JSON.parse(
+      await readFile(join(data, "security-scan-schedule.json"), "utf8"),
+    ),
+    { enabled: false, cycle: "weekly" },
+  );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "monthly" }),
+    /Unsupported scan cycle/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "daily", extra: true }),
+    /unsupported fields/u,
+  );
+  await writeFile(
+    join(data, "security-scan-schedule.json"),
+    "not json",
+    "utf8",
+  );
+  assert.deepEqual(await service.getScanSchedule(), {
+    enabled: true,
+    cycle: "daily",
+  });
 });
 
 test("stores API keys only through encryption and never returns plaintext", async () => {
@@ -380,7 +452,7 @@ test("real quick history never projects path assignment or Slack webhook canarie
     env: {},
     secretStorage: unavailableStorage,
   });
-  await service.startAutomaticQuickScan();
+  await service.startAutomaticScan();
   await waitForTerminal(service);
   const history = await service.history();
   assert.ok((history[0]?.report?.findings.length ?? 0) > 0);

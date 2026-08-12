@@ -220,6 +220,8 @@ export const dashboard = {
     distillationAssetsLabel: "蒸留アセット",
     agentActivityLabel: "Agent アクティブ",
     securityRunsLabel: "セキュリティスキャン",
+    securityScanTimes: "スキャン {count} 回",
+    securityCoverage: "{count} 個の Skill をカバー",
     distillationOutputsLabel: "蒸留出力",
     dailyReportsLabel: "日次レポート生成",
     outputUnavailableHint: "ローカルサービスは集計可能な実数を提供していません",
