@@ -11,12 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
-import { Route as ChatsRouteImport } from './routes/chats'
 import { Route as DistillRouteImport } from './routes/distill'
-import { Route as MarketRouteImport } from './routes/market'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
-import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
@@ -33,19 +30,9 @@ const AgentsRoute = AgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatsRoute = ChatsRouteImport.update({
-  id: '/chats',
-  path: '/chats',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DistillRoute = DistillRouteImport.update({
   id: '/distill',
   path: '/distill',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MarketRoute = MarketRouteImport.update({
-  id: '/market',
-  path: '/market',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -56,11 +43,6 @@ const ReportsRoute = ReportsRouteImport.update({
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SessionsRoute = SessionsRouteImport.update({
-  id: '/sessions',
-  path: '/sessions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -92,12 +74,9 @@ const TrackerRoute = TrackerRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
-  '/chats': typeof ChatsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
@@ -107,12 +86,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
-  '/chats': typeof ChatsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
@@ -123,12 +99,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
-  '/chats': typeof ChatsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
@@ -140,12 +113,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/agents'
-    | '/chats'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
@@ -155,12 +125,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/agents'
-    | '/chats'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
@@ -170,12 +137,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/agents'
-    | '/chats'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
     | '/skills'
@@ -186,12 +150,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
-  ChatsRoute: typeof ChatsRoute
   DistillRoute: typeof DistillRoute
-  MarketRoute: typeof MarketRoute
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
-  SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkillsRoute: typeof SkillsRoute
@@ -215,25 +176,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chats': {
-      id: '/chats'
-      path: '/chats'
-      fullPath: '/chats'
-      preLoaderRoute: typeof ChatsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/distill': {
       id: '/distill'
       path: '/distill'
       fullPath: '/distill'
       preLoaderRoute: typeof DistillRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/market': {
-      id: '/market'
-      path: '/market'
-      fullPath: '/market'
-      preLoaderRoute: typeof MarketRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -248,13 +195,6 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/security'
       preLoaderRoute: typeof SecurityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sessions': {
-      id: '/sessions'
-      path: '/sessions'
-      fullPath: '/sessions'
-      preLoaderRoute: typeof SessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -298,12 +238,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
-  ChatsRoute: ChatsRoute,
   DistillRoute: DistillRoute,
-  MarketRoute: MarketRoute,
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
-  SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkillsRoute: SkillsRoute,
