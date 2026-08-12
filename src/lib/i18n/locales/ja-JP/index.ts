@@ -5,6 +5,7 @@ import { common } from "./common";
 import { dashboard } from "./dashboard";
 import { errors } from "./errors";
 import { exportMessages } from "./export";
+import { insights } from "./insights";
 import { market } from "./market";
 import { meta } from "./meta";
 import { nav } from "./nav";
@@ -20,6 +21,7 @@ import { theme } from "./theme";
 export const ja = {
   common,
   dashboard,
+  insights,
   pricing,
 
   nav,
