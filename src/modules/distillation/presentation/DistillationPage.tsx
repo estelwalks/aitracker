@@ -46,7 +46,7 @@ function readGuideSeen(): boolean {
 /**
  * Distillation workbench aligned with the V3.0 prototype: shared Jarvis
  * insight card, first-run guide overlay, quick/pro config card, session-level
- * material picker and an experiment card list backed by the persisted
+ * material picker and a complete experiment history backed by the persisted
  * candidate store. All figures come from real server fns — sessions, model
  * options, persisted candidates and the workbench counters.
  */

@@ -8,8 +8,8 @@
  *
  * Candidates are persisted by the application through an injected
  * `CandidatePersistence` store (`~/.trusttools/tasks/distill-candidates.v1.json`)
- * and hydrated on construction, so `loadDistillation` can enumerate the
- * waiting candidates after a navigation/refresh. Persisted candidates contain
+ * and hydrated on construction, so `loadDistillation` can enumerate the full
+ * experiment history after a navigation/refresh. Persisted candidates contain
  * only session metadata and the safety-filtered knowledge note — never raw
  * conversation content.
  *
@@ -60,9 +60,10 @@ function toItem(session: SessionSummary): DistillationSessionItem {
 
 /**
  * Load the distillation workbench read model. Resolves the selectable sessions
- * from the composition root's shared session port, the persisted waiting
- * candidates (via `listWaiting`), the workbench counters (`listAll`) and the
- * real model options from the LLM configuration probe. `locale` is accepted
+ * from the composition root's shared session port, the complete persisted
+ * candidate history and the real model options from the LLM configuration
+ * probe. The same `listAll` snapshot powers both candidate cards and counters,
+ * avoiding inconsistent or duplicate persistence reads. `locale` is accepted
  * for transport parity; the projection is locale-neutral.
  */
 export async function loadDistillation(
@@ -71,9 +72,8 @@ export async function loadDistillation(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const [page, candidates, all] = await Promise.all([
+  const [page, candidates] = await Promise.all([
     root.sessions.query({ page: 1, pageSize: 100 }),
-    root.distillation.listWaiting(),
     root.distillation.listAll(),
   ]);
   const sessions = page.ok ? page.value.sessions.map(toItem) : [];
@@ -87,8 +87,9 @@ export async function loadDistillation(
     sessions,
     candidates,
     stats: {
-      runs: all.length,
-      approved: all.filter((item) => item.approvalState === "approved").length,
+      runs: candidates.length,
+      approved: candidates.filter((item) => item.approvalState === "approved")
+        .length,
     },
     modelOptions,
   };

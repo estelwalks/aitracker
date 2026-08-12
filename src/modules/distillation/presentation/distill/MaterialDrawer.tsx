@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, FolderOpen, Search, X } from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
@@ -67,9 +68,11 @@ export function MaterialDrawer({
     filtered[0] ??
     null;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label={t("common.distillation.materialDrawerTitle")}
@@ -287,7 +290,8 @@ export function MaterialDrawer({
           </TTButton>
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
