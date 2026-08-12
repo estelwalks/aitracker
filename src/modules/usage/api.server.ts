@@ -13,7 +13,7 @@ export async function loadTrackerReadModel(): Promise<TrackerReadModel> {
     await import("../../lib/local-usage/get-local-usage.ts");
   const { createEmptyUsageSnapshot } =
     await import("../../lib/local-usage/presentation.ts");
-  const { buildBoard, aggregateBoards } =
+  const { buildBoard, trackerTotalsFromEvents } =
     await import("./application/tracker.ts");
   const snapshot = await getLocalUsageSnapshot().then(
     (value) => value,
@@ -25,13 +25,15 @@ export async function loadTrackerReadModel(): Promise<TrackerReadModel> {
     project: buildBoard(events, "project"),
     session: buildBoard(events, "session"),
   };
-  const totals = aggregateBoards([
+  const totals = trackerTotalsFromEvents(events, [
     boards.skill,
     boards.project,
     boards.session,
   ]);
   return {
-    generatedAt: snapshot.generatedAt ?? new Date().toISOString(),
+    // `createEmptyUsageSnapshot` has a construction timestamp, not a scan
+    // timestamp. Only expose the generated time for an actual local scan.
+    generatedAt: snapshot.mode === "real" ? snapshot.generatedAt : null,
     boards,
     totals,
   };

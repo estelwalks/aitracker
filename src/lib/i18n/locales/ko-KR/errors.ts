@@ -39,6 +39,12 @@ export const errors = {
   },
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",
+    queryFailed: "로컬 세션 조회에 실패했습니다. 다시 시도하세요",
+    sessionNotFound: "선택한 세션이 존재하지 않거나 사용할 수 없습니다",
+    resumeUnavailable: "이 세션은 현재 복원할 수 없습니다",
+    resumeInvalid: "세션 복원 요청이 올바르지 않습니다",
+    resumeCancelled: "세션 복원이 취소되었습니다",
+    resumeFailed: "로컬 세션 복원을 시작할 수 없습니다",
   },
   distillation: {
     invalidSelection: "1~8개의 중복 없는 세션을 선택하세요",

@@ -74,10 +74,10 @@ test("四语言无空字符串/纯空格值", () => {
 });
 
 test("getMessage: 无参数消息按当前语言解析", () => {
-  assert.equal(getMessage(catalogs["zh-CN"], "nav.home"), "首页");
-  assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Home");
-  assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "ホーム");
-  assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "홈");
+  assert.equal(getMessage(catalogs["zh-CN"], "nav.home"), "首页总览");
+  assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Home Overview");
+  assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "ホーム概要");
+  assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "홈 개요");
 });
 
 test("getMessage: {var} 插值(合成带参消息)", () => {
@@ -101,7 +101,7 @@ test("getMessage: 当前语言缺失回退 zh-CN, zh 也缺失返回 key 路径"
   delete (stripped.nav as Record<string, unknown>).home;
   assert.equal(
     getMessage(stripped as unknown as Translations, "nav.home"),
-    "首页",
+    "首页总览",
   );
 
   // zh 也没有 → 返回 key 路径
@@ -132,7 +132,10 @@ test("getMessage: 复数 {one, other} 按 count 选择(en-US)", () => {
 });
 
 test("getMessage: 无参数 key 传参不影响结果", () => {
-  assert.equal(getMessage(catalogs["zh-CN"], "nav.home", { count: 5 }), "首页");
+  assert.equal(
+    getMessage(catalogs["zh-CN"], "nav.home", { count: 5 }),
+    "首页总览",
+  );
 });
 
 test("catalogs: 覆盖四种语言", () => {

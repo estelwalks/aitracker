@@ -7,6 +7,7 @@ import {
   buildBoard,
   computeMoM,
   suggestionFor,
+  trackerTotalsFromEvents,
   wasteIndex,
 } from "./tracker.ts";
 
@@ -163,4 +164,35 @@ test("aggregateBoards: sums unique entries, tokens and events", () => {
   assert.equal(totals.tokens, 150);
   assert.equal(totals.events, 1);
   assert.equal(totals.entries, 1);
+});
+
+test("trackerTotalsFromEvents keeps consumption totals independent from ranking projections", () => {
+  const events = [
+    event({
+      timestamp: "2026-08-01T00:00:00Z",
+      totalTokens: 300,
+      context: {
+        skills: [
+          { name: "skill-a", calls: 1 },
+          { name: "skill-b", calls: 1 },
+        ],
+      },
+      sessionId: "session-1",
+    }),
+    event({
+      timestamp: "2026-08-02T00:00:00Z",
+      totalTokens: 200,
+      sessionId: "session-2",
+    }),
+  ];
+  const boards = [
+    buildBoard(events, "skill"),
+    buildBoard(events, "project"),
+    buildBoard(events, "session"),
+  ];
+
+  const totals = trackerTotalsFromEvents(events, boards);
+  assert.equal(totals.tokens, 500);
+  assert.equal(totals.events, 2);
+  assert.equal(totals.entries, 5);
 });

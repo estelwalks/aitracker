@@ -19,6 +19,8 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as TrackerRouteImport } from './routes/tracker'
+import { Route as ChatsIndexRouteImport } from './routes/chats.index'
+import { Route as ChatsIdRouteImport } from './routes/chats.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -70,6 +72,16 @@ const TrackerRoute = TrackerRouteImport.update({
   path: '/tracker',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChatsIndexRoute = ChatsIndexRouteImport.update({
+  id: '/chats/',
+  path: '/chats/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatsIdRoute = ChatsIdRouteImport.update({
+  id: '/chats/$id',
+  path: '/chats/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +94,8 @@ export interface FileRoutesByFullPath {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats/': typeof ChatsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +108,8 @@ export interface FileRoutesByTo {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats': typeof ChatsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +123,8 @@ export interface FileRoutesById {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats/': typeof ChatsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +139,8 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/chats/$id'
+    | '/chats/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +153,8 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/chats/$id'
+    | '/chats'
   id:
     | '__root__'
     | '/'
@@ -145,6 +167,8 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/chats/$id'
+    | '/chats/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,6 +182,8 @@ export interface RootRouteChildren {
   SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
   TrackerRoute: typeof TrackerRoute
+  ChatsIdRoute: typeof ChatsIdRoute
+  ChatsIndexRoute: typeof ChatsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -232,6 +258,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chats/': {
+      id: '/chats/'
+      path: '/chats'
+      fullPath: '/chats/'
+      preLoaderRoute: typeof ChatsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chats/$id': {
+      id: '/chats/$id'
+      path: '/chats/$id'
+      fullPath: '/chats/$id'
+      preLoaderRoute: typeof ChatsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -246,6 +286,8 @@ const rootRouteChildren: RootRouteChildren = {
   SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
   TrackerRoute: TrackerRoute,
+  ChatsIdRoute: ChatsIdRoute,
+  ChatsIndexRoute: ChatsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

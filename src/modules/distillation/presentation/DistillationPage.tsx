@@ -23,15 +23,21 @@ import type { CandidateOutput, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
-import { MaterialDrawer } from "./distill/MaterialDrawer";
+import { MaterialDrawer, MaterialPicker } from "./distill/MaterialDrawer";
 import { ExpCard } from "./distill/ExpCard";
 import { DistillConfig } from "./distill/DistillConfig";
 import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
+import {
+  filterDistillationSessions,
+  materialKeyOf,
+  type DistillationMaterialGranularity,
+  type DistillationTimeRange,
+} from "./distill/materials";
 
 const MAX_SELECTION = 8;
 
 function keyOf(item: { source: string; sessionId: string }): string {
-  return `${item.source}:${item.sessionId}`;
+  return materialKeyOf(item);
 }
 
 function toRef(item: { source: string; sessionId: string }): SessionRef {
@@ -59,7 +65,7 @@ export function DistillationPage({
 }: {
   initial: DistillationViewModel;
 }) {
-  const { t, format } = useI18n();
+  const { t } = useI18n();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
@@ -69,8 +75,9 @@ export function DistillationPage({
   ]);
   const [runs, setRuns] = useState(initial.stats.runs);
   const [approved, setApproved] = useState(initial.stats.approved);
-  const [timeRange, setTimeRange] = useState("all");
-  const [granularity, setGranularity] = useState("session");
+  const [timeRange, setTimeRange] = useState<DistillationTimeRange>("all");
+  const [granularity, setGranularity] =
+    useState<DistillationMaterialGranularity>("session");
   const [modelId, setModelId] = useState(
     () =>
       initial.modelOptions.find((option) => !option.offline)?.id ?? "offline",
@@ -86,6 +93,22 @@ export function DistillationPage({
   }, []);
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
+  const materialSessions = useMemo(
+    () => filterDistillationSessions(sessions, timeRange),
+    [sessions, timeRange],
+  );
+  // A range is a selection boundary, not merely a visual filter. If it moves,
+  // remove refs outside the now-visible real session set so a run cannot
+  // silently include stale material.
+  useEffect(() => {
+    const available = new Set(materialSessions.map(keyOf));
+    setSelected((current) => {
+      const next = new Set(
+        [...current].filter((sessionKey) => available.has(sessionKey)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [materialSessions]);
   const selectionCount = selected.size;
   const canStart =
     !busy && selectionCount > 0 && selectionCount <= MAX_SELECTION;
@@ -145,6 +168,25 @@ export function DistillationPage({
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(keyOf(item));
+      return next;
+    });
+  }
+
+  function toggleProject(items: readonly DistillationSessionItem[]) {
+    setSelected((prev) => {
+      const keys = items.map(keyOf);
+      const selectedEverySession = keys.every((key) => prev.has(key));
+      const next = new Set(prev);
+      if (selectedEverySession) {
+        for (const key of keys) next.delete(key);
+        return next;
+      }
+      const missing = keys.filter((key) => !next.has(key));
+      // The server-side distillation contract accepts at most eight opaque
+      // refs. Preserve the current selection when the real project group does
+      // not fit instead of silently dropping sessions.
+      if (next.size + missing.length > MAX_SELECTION) return prev;
+      for (const key of missing) next.add(key);
       return next;
     });
   }
@@ -385,37 +427,15 @@ export function DistillationPage({
             </TTButton>
           </div>
         }
+        bodyClassName="pt-0"
       >
-        {selectedItems.length === 0 ? (
-          <EmptyState
-            title={t("common.distillation.candidate")}
-            desc={t("common.distillation.candidateNote")}
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {selectedItems.map((item) => (
-              <li
-                key={keyOf(item)}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px]"
-              >
-                <span className="min-w-[180px] flex-1 truncate font-medium text-foreground">
-                  {item.title}
-                </span>
-                <span className="tt-num text-[11px] text-muted-foreground">
-                  {item.source}:{item.sessionId}
-                </span>
-                <span className="tt-num text-[11px] text-muted-foreground">
-                  {t("common.distillation.selectedTurns", {
-                    count: item.turns,
-                  })}
-                </span>
-                <span className="tt-num text-[11px] text-muted-foreground">
-                  {format.formatDateTime(item.startedAt, false)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <MaterialPicker
+          sessions={materialSessions}
+          selected={selected}
+          granularity={granularity}
+          onToggle={toggle}
+          onToggleProject={toggleProject}
+        />
       </Panel>
 
       <section className="mb-3">
@@ -448,9 +468,11 @@ export function DistillationPage({
 
       {drawerOpen && (
         <MaterialDrawer
-          sessions={sessions}
+          sessions={materialSessions}
           selected={selected}
+          granularity={granularity}
           onToggle={toggle}
+          onToggleProject={toggleProject}
           onClose={() => setDrawerOpen(false)}
         />
       )}

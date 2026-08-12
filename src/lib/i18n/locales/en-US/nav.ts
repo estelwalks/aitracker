@@ -2,7 +2,7 @@ export const nav = {
   tier1: "Workspace",
   tier2: "Insights & Security",
   tier3: "Skill Library",
-  home: "Home",
+  home: "Home Overview",
   agents: "Tools Overview",
   distill: "Distill Studio",
   memory: "Reports & Memory",
