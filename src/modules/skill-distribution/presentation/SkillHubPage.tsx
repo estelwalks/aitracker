@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Segmented } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
@@ -26,6 +26,12 @@ export function SkillHubPage({
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<SkillHubTab>(initialTab);
+
+  // Keep the active tab in sync when the route's `?tab=` search param changes
+  // (e.g. the local empty-state "去市场" link navigates to /skills?tab=market).
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   return (
     <div>

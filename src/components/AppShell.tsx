@@ -66,8 +66,7 @@ const navTiers: ReadonlyArray<{
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
   if (to === "/") return pathname === "/";
-  if (to === "/skills")
-    return pathname.startsWith("/skills") || pathname.startsWith("/market");
+  if (to === "/skills") return pathname.startsWith("/skills");
   return pathname.startsWith(to);
 }
 

@@ -814,7 +814,7 @@ export function SkillsPage({
                       <Link to="/settings">
                         <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
                       </Link>
-                      <Link to="/market">
+                      <Link to="/skills" search={{ tab: "market" }}>
                         <TTButton>{t("skills.actions.goMarket")}</TTButton>
                       </Link>
                     </>
