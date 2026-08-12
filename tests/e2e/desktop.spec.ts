@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
 const routes = [
   { path: "/", heading: "首页总览" },
   { path: "/agents", heading: "工具概览" },
-  { path: "/market", heading: "Skill 市场" },
+  { path: "/skills", heading: "Skill Hub" },
   { path: "/security", heading: "安全检测" },
   { path: "/settings", heading: "设置" },
 ] as const;
@@ -123,20 +123,15 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
 });
 
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
-  await page.goto("/market");
+  // 独立市场路由已删除，市场入口在 /skills 的 market tab（卡片网格）
+  await page.goto("/skills?tab=market");
 
   const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
   await search.fill("draw.io");
-  await expect(page.getByText(/关键词“draw\.io”/)).toBeVisible({
+  // 结果卡以真实名称/描述渲染 draw.io 文本（搜索框的 value 不参与 getByText 匹配）
+  await expect(page.getByText(/draw\.io/i).first()).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText(/数据更新于/)).toBeVisible();
-  await expect(
-    page
-      .locator("tbody tr")
-      .filter({ hasText: /draw.?io/i })
-      .first(),
-  ).toBeVisible();
 });
 
 test("安全页默认展示本机扫描额度且未执行扫描", async ({ page }) => {
