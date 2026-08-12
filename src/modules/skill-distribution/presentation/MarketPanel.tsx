@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Download, Search, ShieldAlert, ShieldCheck, Star } from "lucide-react";
 import { toast } from "sonner";
 
-import { EmptyState, Segmented, TTButton } from "../../../components/tt";
+import { EmptyState, Segmented, Stat, TTButton } from "../../../components/tt";
 import {
   Sheet,
   SheetContent,
@@ -52,6 +52,11 @@ const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
   { value: "stars", labelKey: "market.sort.stars" },
   { value: "tokens", labelKey: "market.sort.tokens" },
 ];
+
+function formatBytes(format: BoundFormatters, bytes: number | null): string {
+  if (bytes == null || bytes <= 0) return "-";
+  return format.formatBytes(bytes);
+}
 
 /** Card-grid market catalog used by the Skill Hub market tab. */
 export function MarketPanel({ initial }: { initial: MarketListResult }) {
@@ -111,8 +116,50 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
     [localSnapshot],
   );
 
+  // Page-level real aggregates for the 5-cell stats strip.
+  const pageStats = useMemo(() => {
+    const safeCount = result.skills.filter(
+      (skill) => securityOf(skill, t, format).safe,
+    ).length;
+    const total = result.skills.length;
+    const maxInstall = Math.max(
+      1,
+      ...result.skills.map((skill) => skill.installCount ?? 0),
+    );
+    return {
+      passRate: total > 0 ? (safeCount / total) * 100 : 0,
+      maxInstall,
+    };
+  }, [result.skills, t, format]);
+
   return (
     <div>
+      {/* 5-cell stats strip (V3.0 prototype) — real server fn aggregates only. */}
+      <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
+        <Stat
+          label={t("market.stats.totalSkills")}
+          value={format.formatNumber(result.stats?.totalSkills ?? 0)}
+        />
+        <Stat
+          label={t("market.stats.officialCount")}
+          value={format.formatNumber(result.stats?.officialCount ?? 0)}
+        />
+        <Stat
+          label={t("market.stats.passRate")}
+          value={format.formatPercent(pageStats.passRate)}
+          hint={t("market.stats.passRatePage")}
+        />
+        <Stat
+          label={t("market.stats.installedCount")}
+          value={format.formatNumber(result.stats?.installedCount ?? 0)}
+          hint={t("market.stats.hintLocalInstalled")}
+        />
+        <Stat
+          label={t("market.stats.totalDownloads")}
+          value={format.formatNumber(result.stats?.totalDownloads ?? 0)}
+        />
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[200px] flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -144,56 +191,115 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
           {result.skills.map((skill) => {
             const security = securityOf(skill, t, format);
             const installed = installedNames.has(skill.name);
+            const downloads = skill.installCount ?? 0;
+            const downloadPercent = Math.max(
+              2,
+              Math.round((downloads / pageStats.maxInstall) * 100),
+            );
             return (
-              <button
+              <div
                 key={skill.id}
-                type="button"
-                onClick={() => setDetail(skill)}
-                className="flex flex-col rounded-xl bg-card p-4 text-left ring-1 ring-border/50 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
+                className="flex flex-col rounded-xl bg-card p-4 ring-1 ring-border/50 transition-all hover:-translate-y-0.5 hover:bg-surface-2"
               >
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      {security.safe ? (
-                        <ShieldCheck className="size-3.5 shrink-0 text-ok" />
-                      ) : (
-                        <ShieldAlert className="size-3.5 shrink-0 text-warn" />
-                      )}
-                      <span className="truncate text-[13px] font-medium">
-                        {skill.name}
-                      </span>
-                      {installed && (
-                        <Badge
-                          variant="secondary"
-                          className="bg-ok/15 text-[10px] font-normal text-ok"
-                        >
-                          {t("market.installed")}
-                        </Badge>
-                      )}
+                <button
+                  type="button"
+                  onClick={() => setDetail(skill)}
+                  className="text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {skill.isOfficial === true && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-primary/10 text-[10px] font-normal text-primary"
+                          >
+                            {t("market.official")}
+                          </Badge>
+                        )}
+                        <span className="truncate text-[13px] font-medium">
+                          {skill.name}
+                        </span>
+                        {installed && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-ok/15 text-[10px] font-normal text-ok"
+                          >
+                            {t("market.installed")}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-muted-foreground">
+                        {skill.descriptionZh ??
+                          skill.description ??
+                          t("market.noDescription")}
+                      </p>
                     </div>
-                    <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-muted-foreground">
-                      {skill.descriptionZh ??
-                        skill.description ??
-                        t("market.noDescription")}
-                    </p>
                   </div>
-                </div>
-                <div className="mt-3 flex items-center gap-3 font-mono text-[10.5px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Download className="size-3" />
-                    {skill.installCount != null
-                      ? format.formatNumber(skill.installCount)
-                      : "-"}
+
+                  {/* Downloads bar (relative to the page's max, real numbers). */}
+                  <div className="mt-3">
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-primary/70"
+                        style={{ width: `${downloadPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Download className="size-3" />
+                      {skill.installCount != null
+                        ? format.formatNumber(skill.installCount)
+                        : "-"}
+                    </span>
+                    <span>
+                      {skill.tokens != null
+                        ? format.formatNumber(skill.tokens)
+                        : "-"}{" "}
+                      {t("market.table.tokenUsage")}
+                    </span>
+                    <span>{formatBytes(format, skill.size)}</span>
+                    {skill.stars != null && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Star className="size-3 fill-amber-400 text-amber-400" />
+                        {format.formatNumber(skill.stars)}
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                  <span
+                    className={`inline-flex items-center gap-1 text-[11px] ${
+                      security.safe ? "text-ok" : "text-warn"
+                    }`}
+                  >
+                    {security.safe ? (
+                      <ShieldCheck className="size-3.5" />
+                    ) : (
+                      <ShieldAlert className="size-3.5" />
+                    )}
+                    {security.label}
                   </span>
-                  <span>
-                    {skill.tokens != null
-                      ? format.formatNumber(skill.tokens)
-                      : "-"}{" "}
-                    {t("market.table.tokenUsage")}
-                  </span>
-                  <span className="ml-auto text-ok">{security.label}</span>
+                  <TTButton
+                    size="sm"
+                    variant={installed ? "ghost" : "primary"}
+                    disabled={installed}
+                    onClick={() => setDetail(skill)}
+                  >
+                    {installed ? (
+                      t("market.installed")
+                    ) : (
+                      <>
+                        <Download className="size-3" />{" "}
+                        {t("market.install.button")}
+                      </>
+                    )}
+                  </TTButton>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -259,7 +365,17 @@ function MarketInstallSheet({
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>{skill.name}</SheetTitle>
+          <SheetTitle className="flex items-center gap-2">
+            {skill.isOfficial === true && (
+              <Badge
+                variant="secondary"
+                className="bg-primary/10 text-[10px] font-normal text-primary"
+              >
+                {t("market.official")}
+              </Badge>
+            )}
+            {skill.name}
+          </SheetTitle>
           <SheetDescription>
             {skill.descriptionZh ??
               skill.description ??

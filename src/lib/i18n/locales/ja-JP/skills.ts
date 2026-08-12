@@ -68,6 +68,7 @@ export const skills = {
   },
   table: {
     title: "Skill リスト（{count}）",
+    rank: "順位",
     name: "名前",
     desc: "説明",
     agent: "インストール先",
@@ -217,6 +218,43 @@ export const skills = {
     workspaceTitle: "Skill 資産管理",
     workspaceDesc:
       "以下の操作エリアでは、実際のローカルスキャンと確認済みの安全な変更を維持します。",
+  },
+  hub: {
+    title: "Skill Hub",
+    summary: "ローカル Skill {count} 個",
+    desc: "ローカルの Skill 資産を一元管理し、セキュリティチェック済みの Skill をマーケットからインストールします。",
+  },
+  jarvis: {
+    localSkills:
+      "ローカルに {count} 個の Skill、{agents} 個の Agent に {installs} 個のインストールコピーがあります。",
+    securityDetected:
+      "{count} 個のローカル Skill のセキュリティチェックが完了し、リスクは {risk} 件です。",
+    securityClean:
+      "すべてのローカル Skill のセキュリティチェックに合格しました。",
+    marketAvailable:
+      "マーケットには {total} 個の Skill があり、そのうち {official} 個が公式リリースです。",
+    marketInstalled:
+      "このマシンにはマーケット製 Skill が {count} 個インストールされています。",
+  },
+  kpi: {
+    localSkills: "ローカル Skill",
+    distilled: "ローカル蒸留",
+    detected: "検査済み",
+    risks: "リスク項目",
+    localSkillsHint: "{count} 個のインストールコピー",
+    distilledHint: "承認済みの蒸留成果物",
+    detectedHint: "セキュリティチェック結果あり",
+    risksHint: "セキュリティチェックで検出されたリスク",
+  },
+  banner: {
+    distillActive:
+      "ローカル蒸留により承認 {approved} 件・待機 {waiting} 件の知識ノートが生成されました。蒸留ワークベンチで管理できます。",
+    goDistill: "蒸留ワークベンチへ",
+  },
+  security: {
+    detected: "セキュリティチェック済み",
+    attention: "要確認",
+    clean: "安全",
   },
   pagination: {
     range: "{start}-{end} 件目 / 全 {total} 件",

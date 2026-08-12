@@ -66,6 +66,7 @@ export const skills = {
   },
   table: {
     title: "Skill 列表（{count}）",
+    rank: "排名",
     name: "名称",
     desc: "描述",
     agent: "安装位置",
@@ -206,6 +207,41 @@ export const skills = {
     securityFailedLabel: "读取失败",
     workspaceTitle: "Skill 资产管理",
     workspaceDesc: "以下操作区继续使用真实本地扫描与确认后的安全变更。",
+  },
+  hub: {
+    title: "Skill Hub",
+    summary: "{count} 个本地 Skill",
+    desc: "统一管理本地 Skill 资产，并从市场安装经安全扫描的 Skill。",
+  },
+  jarvis: {
+    localSkills:
+      "本机共 {count} 个本地 Skill，跨 {agents} 个 Agent 共 {installs} 个安装副本。",
+    securityDetected:
+      "已对 {count} 个本地 Skill 完成安全检测，累计 {risk} 项风险。",
+    securityClean: "全部本地 Skill 安全检测通过，未发现风险项。",
+    marketAvailable:
+      "市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
+    marketInstalled: "本机已从市场安装 {count} 个 Skill。",
+  },
+  kpi: {
+    localSkills: "本地 Skill",
+    distilled: "本地蒸馏",
+    detected: "已检测",
+    risks: "风险项",
+    localSkillsHint: "{count} 个安装副本",
+    distilledHint: "已批准的蒸馏产物",
+    detectedHint: "有安全检测结果",
+    risksHint: "安全检测发现的风险项",
+  },
+  banner: {
+    distillActive:
+      "本地蒸馏已产生 {approved} 条已批准知识、{waiting} 条待审批，可前往蒸馏工作台管理。",
+    goDistill: "前往蒸馏工作台",
+  },
+  security: {
+    detected: "已安全检测",
+    attention: "需关注",
+    clean: "安全通过",
   },
   pagination: {
     range: "第 {start}-{end} 条 / 共 {total} 条",

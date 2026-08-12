@@ -23,6 +23,7 @@ import {
   EmptyState,
   PageHeader,
   Panel,
+  Segmented,
   StatusBadge,
   Stat,
   TTButton,
@@ -86,7 +87,31 @@ export type SkillsPageProps = {
   usage: DashboardReadModel;
   /** The prototype-aligned `/agents` route only renders the tool dashboard. */
   showWorkspace?: boolean;
+  /**
+   * The tool dashboard (ToolOverview) belongs to `/agents`; the Skill Hub local
+   * tab renders the prototype SkillsPanel without it.
+   */
+  showToolOverview?: boolean;
+  /**
+   * Real security-detection summary derived from the security history
+   * (`skill name → risk-finding count`). Drives the KPI row and per-row
+   * security badges on the Skill Hub local tab.
+   */
+  security?: SkillsSecurityView;
+  /** Real distillation activity for the KPI row + in-progress banner. */
+  distillation?: SkillsDistillationView;
 };
+
+/** Skill name → number of risk findings recorded in the security history. */
+export interface SkillsSecurityView {
+  readonly byName: ReadonlyMap<string, number>;
+}
+
+/** Real distillation counters surfaced by the composition root. */
+export interface SkillsDistillationView {
+  readonly approved: number;
+  readonly waiting: number;
+}
 
 const PAGE_SIZE = 25;
 
@@ -119,6 +144,9 @@ export function SkillsPage({
   initial,
   usage,
   showWorkspace = true,
+  showToolOverview = true,
+  security,
+  distillation,
 }: SkillsPageProps) {
   const { t, format } = useI18n();
   const [snapshot, setSnapshot] = useState<SkillSnapshot>(initial.snapshot);
@@ -226,6 +254,22 @@ export function SkillsPage({
   );
 
   const summary = workspace.summary;
+
+  // Real KPI inputs: security history + distillation activity are derived
+  // client-side by the Skill Hub and passed in; nothing here is mocked.
+  const securitySummary = security
+    ? {
+        scannedCount: security.byName.size,
+        riskCount: [...security.byName.values()].reduce(
+          (total, count) => total + count,
+          0,
+        ),
+      }
+    : null;
+  const hasDistillActivity =
+    distillation != null &&
+    (distillation.approved > 0 || distillation.waiting > 0);
+
   const sortOptions = useMemo(() => availableAssetSorts(snapshot), [snapshot]);
   const assets = useMemo(
     () =>
@@ -584,7 +628,7 @@ export function SkillsPage({
 
   return (
     <>
-      <ToolOverview usage={usage} />
+      {showToolOverview ? <ToolOverview usage={usage} /> : null}
 
       {showWorkspace ? (
         <>
@@ -624,30 +668,58 @@ export function SkillsPage({
             </div>
           </section>
 
+          {/* KPI row (V3.0 prototype SkillsPanel) — real snapshot + security/distillation data. */}
           <div className="mb-4 grid gap-px overflow-x-auto rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
             <Stat
-              label={t("skills.summary.assets")}
+              label={t("skills.kpi.localSkills")}
               value={format.formatNumber(summary.skillCount)}
-              hint={t("skills.summary.installations", {
+              hint={t("skills.kpi.localSkillsHint", {
                 count: format.formatNumber(summary.installationCount),
               })}
             />
             <Stat
-              label={t("skills.summary.agentCoverage")}
-              value={`${format.formatNumber(summary.activeAgentCount)} / ${format.formatNumber(summary.availableAgentCount)}`}
-              hint={t("skills.summary.coverageHint")}
+              label={t("skills.kpi.distilled")}
+              value={
+                distillation == null
+                  ? "—"
+                  : format.formatNumber(distillation.approved)
+              }
+              hint={t("skills.kpi.distilledHint")}
             />
             <Stat
-              label={t("skills.summary.updates")}
-              value={format.formatNumber(summary.updateAvailableCount)}
-              hint={t("skills.summary.updatesHint")}
+              label={t("skills.kpi.detected")}
+              value={
+                securitySummary == null
+                  ? "—"
+                  : format.formatNumber(securitySummary.scannedCount)
+              }
+              hint={t("skills.kpi.detectedHint")}
             />
             <Stat
-              label={t("skills.summary.unassigned")}
-              value={format.formatNumber(summary.unassignedSkillCount)}
-              hint={t("skills.summary.unassignedHint")}
+              label={t("skills.kpi.risks")}
+              value={
+                securitySummary == null
+                  ? "—"
+                  : format.formatNumber(securitySummary.riskCount)
+              }
+              hint={t("skills.kpi.risksHint")}
             />
           </div>
+
+          {/* Distillation activity banner — real counters only, never mocked. */}
+          {distillation != null && hasDistillActivity ? (
+            <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
+              <div className="min-w-0 flex-1 text-[13px] text-foreground">
+                {t("skills.banner.distillActive", {
+                  approved: format.formatNumber(distillation.approved),
+                  waiting: format.formatNumber(distillation.waiting),
+                })}
+              </div>
+              <Link to="/distill">
+                <TTButton size="sm">{t("skills.banner.goDistill")}</TTButton>
+              </Link>
+            </div>
+          ) : null}
 
           <Panel
             className="mb-4"
@@ -727,25 +799,22 @@ export function SkillsPage({
               ))}
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-border/70 pt-3">
-              <select
-                aria-label={t("skills.filter.source")}
-                value={source}
-                onChange={(event) =>
-                  setSource(event.target.value as AssetSourceFilter)
-                }
-                className="h-8 rounded-sm border border-border bg-background px-2 text-xs"
-              >
-                <option value="all">{t("skills.filter.sourceAll")}</option>
-                <option value="frontmatter">
-                  {t("skills.filter.sourceRecorded")}
-                </option>
-                <option value="market">
-                  {t("skills.filter.sourceManaged")}
-                </option>
-                <option value="unknown">
-                  {t("skills.filter.sourceUnclassified")}
-                </option>
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="tt-label">{t("skills.filter.source")}</span>
+                <Segmented<AssetSourceFilter>
+                  value={source}
+                  onChange={setSource}
+                  options={[
+                    { value: "all", label: t("skills.filter.sourceAll") },
+                    {
+                      value: "frontmatter",
+                      label: t("skills.source.frontmatter"),
+                    },
+                    { value: "market", label: t("skills.source.market") },
+                    { value: "unknown", label: t("skills.source.unknown") },
+                  ]}
+                />
+              </div>
               <select
                 aria-label={t("skills.filter.updateStatus")}
                 value={updateStatus}
@@ -873,14 +942,26 @@ export function SkillsPage({
                   </div>
                 </div>
 
+                {/* List header (V3.0 prototype): # / name / actions */}
+                <div className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-surface-2/50 px-4 py-1.5 text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+                  <span aria-hidden="true" />
+                  <span>{t("skills.table.rank")}</span>
+                  <span>{t("skills.table.name")}</span>
+                  <span className="text-right">
+                    {t("skills.table.actions")}
+                  </span>
+                </div>
+
                 <div className="skill-workspace-list">
-                  {paged.map((skill) => {
+                  {paged.map((skill, index) => {
                     const agents = skill.installedAgents;
                     const visibleAgents = expandedAgents.has(skill.id)
                       ? agents
                       : agents.slice(0, 3);
                     const hiddenCount = agents.length - visibleAgents.length;
                     const isSelected = checkedIds.has(skill.id);
+                    const skillRiskCount =
+                      security?.byName.get(skill.name) ?? 0;
                     const statusTone =
                       skill.updateStatus === "available"
                         ? "warn"
@@ -912,8 +993,11 @@ export function SkillsPage({
                           })}
                           onClick={() => setDetailSkillId(skill.id)}
                           className="skill-workspace-mark"
+                          title={t("skills.table.rank")}
                         >
-                          {skill.name.slice(0, 2).toUpperCase()}
+                          {format.formatNumber(
+                            (currentPage - 1) * PAGE_SIZE + index + 1,
+                          )}
                         </button>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -927,6 +1011,18 @@ export function SkillsPage({
                             <StatusBadge tone={statusTone}>
                               {updateStatusLabel(skill.updateStatus)}
                             </StatusBadge>
+                            {security != null && skillRiskCount > 0 && (
+                              <StatusBadge tone="warn">
+                                {t("skills.security.attention")}
+                              </StatusBadge>
+                            )}
+                            {security != null &&
+                              skillRiskCount === 0 &&
+                              security.byName.has(skill.name) && (
+                                <StatusBadge tone="ok">
+                                  {t("skills.security.detected")}
+                                </StatusBadge>
+                              )}
                             {snapshot.blacklist.includes(skill.name) && (
                               <StatusBadge tone="danger">
                                 {t("skills.badge.blacklisted")}
