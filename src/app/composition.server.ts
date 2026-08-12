@@ -47,6 +47,11 @@ import {
 import { createSha256HashPort } from "../modules/knowledge/infrastructure/hash-port.server.ts";
 import { createDistillationApplication } from "../modules/distillation/application/index.ts";
 import type { DistillationApplication } from "../modules/distillation/index.ts";
+import {
+  DEFAULT_DISTILL_CANDIDATE_FILE,
+  createAtomicCandidateStore,
+  distillCandidateStoreSchema,
+} from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
 import type { SessionQueryPort } from "../modules/sessions/contracts.ts";
 import { createLegacySessionRepository } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
@@ -103,9 +108,11 @@ export interface CompositionRoot {
   readonly reports: ReportsApplication;
   /**
    * Distillation application. Backed by the legacy local-sessions repository
-   * (wrapped as a `SessionQueryPort`), `aiExecutor` and an AtomicJsonStore-backed
-   * knowledge repository. Candidates live in-memory until approved; approval is
-   * the only path that writes to the knowledge repository.
+   * (wrapped as a `SessionQueryPort`), `aiExecutor`, an AtomicJsonStore-backed
+   * knowledge repository and an AtomicJsonStore-backed candidate store.
+   * Candidates are hydrated from `distill-candidates.v1.json` on construction
+   * and every start/approve/cancel writes through; approval is the only path
+   * that writes to the knowledge repository.
    */
   readonly distillation: DistillationApplication;
   /**
@@ -276,10 +283,21 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     hash: createSha256HashPort(),
   });
   const sessions = createSessionQueryService(createLegacySessionRepository());
+
+  // Candidate store lives next to the reports/knowledge state under the same
+  // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
+  // projections (session refs, generated knowledge note, execution summary).
+  const candidateStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "distill-candidates.v1.json"),
+    defaultValue: DEFAULT_DISTILL_CANDIDATE_FILE,
+    schema: distillCandidateStoreSchema(),
+    clock,
+  });
   const distillation = createDistillationApplication({
     sessions,
     ai: aiExecutor,
     knowledge,
+    persistence: createAtomicCandidateStore({ store: candidateStore }),
     now: () => new Date(),
     createCandidateId: () => `candidate:${randomUUID()}`,
   });

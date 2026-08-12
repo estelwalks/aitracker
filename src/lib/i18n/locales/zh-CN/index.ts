@@ -1,4 +1,5 @@
 import { common } from "./common";
+import { distill } from "./distill";
 import { dashboard } from "./dashboard";
 import { errors } from "./errors";
 import { exportMessages } from "./export";
@@ -21,6 +22,7 @@ import { tracker } from "./tracker";
  */
 export const zh = {
   common,
+  distill,
   dashboard,
   insights,
   pricing,

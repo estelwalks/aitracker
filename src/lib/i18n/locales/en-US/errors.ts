@@ -47,6 +47,10 @@ export const errors = {
     notWaiting: "Candidate is not awaiting approval",
     knowledgeUnavailable: "Knowledge store is unavailable",
     knowledgeFailed: "Knowledge entry could not be written",
+    notApproved: "Approve the candidate first before saving it as a Skill",
+    invalidName: "Skill name is invalid",
+    invalidAgent: "Target tool is unavailable",
+    skillExists: "A Skill with this name already exists; choose another",
   },
   pricing: {
     modelListInvalid: "Invalid model list",

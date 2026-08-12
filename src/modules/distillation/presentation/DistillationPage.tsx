@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, FolderOpen, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  Columns2,
+  FolderOpen,
+  HelpCircle,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,15 +15,18 @@ import {
   Segmented,
   TTButton,
 } from "../../../components/tt";
+import { JarvisInsight } from "../../../components/JarvisInsight";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import type { CandidateOutput } from "../contracts";
+import type { CandidateOutput, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { ExpCard } from "./distill/ExpCard";
+import { DistillConfig } from "./distill/DistillConfig";
+import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
 
 const MAX_SELECTION = 8;
 
@@ -25,11 +34,25 @@ function keyOf(item: { source: string; sessionId: string }): string {
   return `${item.source}:${item.sessionId}`;
 }
 
+function toRef(item: { source: string; sessionId: string }): SessionRef {
+  return { source: item.source, sessionId: item.sessionId };
+}
+
+function readGuideSeen(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(DISTILL_GUIDE_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
 /**
- * Distillation workbench aligned with the prototype: quick/advanced mode,
- * session-level material picker, one-click run and an experiment card. All
- * data is real (existing server fns); without a configured LLM the candidate
- * is honestly marked as an offline fallback.
+ * Distillation workbench aligned with the V3.0 prototype: shared Jarvis
+ * insight card, first-run guide overlay, quick/pro config card, session-level
+ * material picker and an experiment card list backed by the persisted
+ * candidate store. All figures come from real server fns — sessions, model
+ * options, persisted candidates and the workbench counters.
  */
 export function DistillationPage({
   initial,
@@ -41,13 +64,29 @@ export function DistillationPage({
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [active, setActive] = useState<CandidateOutput | undefined>(undefined);
-  const [runs, setRuns] = useState(0);
+  const [candidates, setCandidates] = useState<CandidateOutput[]>(() => [
+    ...initial.candidates,
+  ]);
+  const [runs, setRuns] = useState(initial.stats.runs);
+  const [approved, setApproved] = useState(initial.stats.approved);
+  const [timeRange, setTimeRange] = useState("all");
+  const [granularity, setGranularity] = useState("session");
+  const [modelId, setModelId] = useState(
+    () =>
+      initial.modelOptions.find((option) => !option.offline)?.id ?? "offline",
+  );
+  const [promptPreset, setPromptPreset] = useState("summary");
+  const [promptText, setPromptText] = useState("");
+  const [showGuide, setShowGuide] = useState(() => !readGuideSeen());
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
   const selectionCount = selected.size;
   const canStart =
     !busy && selectionCount > 0 && selectionCount <= MAX_SELECTION;
+  const waitingCount = candidates.filter(
+    (item) => item.approvalState === "waiting-approval",
+  ).length;
+
   const selectedItems = useMemo(
     () => sessions.filter((item) => selected.has(keyOf(item))),
     [sessions, selected],
@@ -56,6 +95,31 @@ export function DistillationPage({
     () => selectedItems.reduce((sum, item) => sum + item.turns, 0),
     [selectedItems],
   );
+
+  const jarvisLines = useMemo(() => {
+    const lines: string[] = [];
+    if (selectionCount > 0) {
+      lines.push(
+        t("distill.insightSelected", {
+          count: selectionCount,
+          turns: selectedTurns,
+        }),
+      );
+    }
+    if (waitingCount > 0) {
+      lines.push(t("distill.insightWaiting", { count: waitingCount }));
+    }
+    if (runs > 0) {
+      lines.push(t("distill.insightRuns", { count: runs }));
+    }
+    if (approved > 0) {
+      lines.push(t("distill.insightApproved", { count: approved }));
+    }
+    if (lines.length === 0) {
+      lines.push(t("distill.insightEmpty"));
+    }
+    return lines;
+  }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
 
   function toggle(item: DistillationSessionItem) {
     setSelected((prev) => {
@@ -71,14 +135,39 @@ export function DistillationPage({
     });
   }
 
-  async function handleStart() {
-    const refs = selectedItems.map((item) => ({
-      source: item.source,
-      sessionId: item.sessionId,
-    }));
+  function removeItem(item: DistillationSessionItem) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.delete(keyOf(item));
+      return next;
+    });
+  }
+
+  function dismissGuide() {
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(DISTILL_GUIDE_KEY, "1");
+      } catch {
+        // localStorage unavailable (private mode) — the guide simply re-appears.
+      }
+    }
+    setShowGuide(false);
+  }
+
+  async function runDistillation(
+    refs: readonly SessionRef[],
+    options?: { modelId?: string; promptText?: string },
+  ) {
+    if (refs.length === 0) return;
     setBusy(true);
     try {
-      const result = await startDistillation({ data: { sessionRefs: refs } });
+      const result = await startDistillation({
+        data: {
+          sessionRefs: refs.map((ref) => ({ ...ref })),
+          ...(options?.modelId ? { modelId: options.modelId } : {}),
+          ...(options?.promptText ? { promptText: options.promptText } : {}),
+        },
+      });
       if (!result.ok) {
         toast.error(
           result.errorCode
@@ -87,7 +176,9 @@ export function DistillationPage({
         );
         return;
       }
-      setActive(result.candidate);
+      if (result.candidate) {
+        setCandidates((prev) => [result.candidate!, ...prev]);
+      }
       setRuns((current) => current + 1);
       toast.success(t("common.success"));
     } catch (error) {
@@ -98,12 +189,25 @@ export function DistillationPage({
     }
   }
 
-  async function handleApprove() {
-    if (!active) return;
+  function handleStart() {
+    void runDistillation(selectedItems.map(toRef), {
+      modelId: mode === "pro" ? modelId : undefined,
+      promptText: mode === "pro" ? promptText : undefined,
+    });
+  }
+
+  function handleRegenerate(candidate: CandidateOutput) {
+    void runDistillation(candidate.selectedSessionRefs, {
+      modelId: mode === "pro" ? modelId : undefined,
+      promptText: mode === "pro" ? promptText : undefined,
+    });
+  }
+
+  async function handleApprove(candidateId: string) {
     setBusy(true);
     try {
       const result = await approveCandidate({
-        data: { candidateId: active.candidateId },
+        data: { candidateId },
       });
       if (!result.ok) {
         toast.error(
@@ -113,7 +217,16 @@ export function DistillationPage({
         );
         return;
       }
-      setActive(result.candidate);
+      if (result.candidate) {
+        setCandidates((prev) =>
+          prev.map((item) =>
+            item.candidateId === candidateId && result.candidate
+              ? result.candidate
+              : item,
+          ),
+        );
+        setApproved((current) => current + 1);
+      }
       toast.success(t("common.success"));
     } catch (error) {
       const ui = toUiError(error);
@@ -123,12 +236,11 @@ export function DistillationPage({
     }
   }
 
-  async function handleCancel() {
-    if (!active) return;
+  async function handleCancel(candidateId: string) {
     setBusy(true);
     try {
       const result = await cancelCandidate({
-        data: { candidateId: active.candidateId },
+        data: { candidateId },
       });
       if (!result.ok) {
         toast.error(
@@ -138,7 +250,15 @@ export function DistillationPage({
         );
         return;
       }
-      setActive(result.candidate);
+      if (result.candidate) {
+        setCandidates((prev) =>
+          prev.map((item) =>
+            item.candidateId === candidateId && result.candidate
+              ? result.candidate
+              : item,
+          ),
+        );
+      }
       toast.success(t("common.success"));
     } catch (error) {
       const ui = toUiError(error);
@@ -148,17 +268,19 @@ export function DistillationPage({
     }
   }
 
-  const offlineResult =
-    active?.mode === "offline" || active?.execution.status === "offline";
+  // No real model is configured, so any run today uses the offline fallback.
+  const offlineResult = !initial.modelOptions.some((option) => !option.offline);
 
   return (
     <>
+      {showGuide && <DistillGuide onClose={dismissGuide} />}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
           title={t("common.distillation.pageTitle")}
           desc={t("common.distillation.pageDesc")}
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Segmented
             value={mode}
             onChange={setMode}
@@ -167,6 +289,18 @@ export function DistillationPage({
               { value: "pro", label: t("common.distillation.modePro") },
             ]}
           />
+          <TTButton variant="ghost" onClick={() => setShowGuide(true)}>
+            <HelpCircle className="size-3.5" />
+            {t("distill.help")}
+          </TTButton>
+          <TTButton
+            variant="ghost"
+            title={t("distill.compareUnavailable")}
+            onClick={() => toast.info(t("distill.compareUnavailable"))}
+          >
+            <Columns2 className="size-3.5" />
+            {t("distill.compare")}
+          </TTButton>
           <TTButton
             variant="primary"
             disabled={!canStart}
@@ -183,6 +317,15 @@ export function DistillationPage({
         </div>
       </div>
 
+      <div className="mb-3">
+        <JarvisInsight
+          title={t("distill.jarvisTitle")}
+          lines={jarvisLines}
+          rotateLabel={t("distill.insightRotate")}
+          dotsLabel={t("distill.insightDots")}
+        />
+      </div>
+
       {offlineResult && (
         <div className="mb-3 flex items-center gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
           <AlertTriangle className="size-3.5 shrink-0" />
@@ -194,7 +337,28 @@ export function DistillationPage({
         selectedCount={selectionCount}
         selectedTurns={selectedTurns}
         runs={runs}
-        approved={active?.approvalState === "approved" ? 1 : 0}
+        approved={approved}
+      />
+
+      <DistillConfig
+        mode={mode}
+        timeRange={timeRange}
+        onTimeRange={setTimeRange}
+        granularity={granularity}
+        onGranularity={setGranularity}
+        modelId={modelId}
+        onModelId={setModelId}
+        modelOptions={initial.modelOptions}
+        promptPreset={promptPreset}
+        onPromptPreset={setPromptPreset}
+        promptText={promptText}
+        onPromptText={setPromptText}
+        selectedItems={selectedItems}
+        onOpenMaterial={() => setDrawerOpen(true)}
+        onRemoveItem={removeItem}
+        onRun={handleStart}
+        canRun={canStart}
+        busy={busy}
       />
 
       <Panel
@@ -248,21 +412,33 @@ export function DistillationPage({
         )}
       </Panel>
 
-      {active ? (
-        <ExpCard
-          candidate={active}
-          busy={busy}
-          onApprove={handleApprove}
-          onCancel={handleCancel}
-        />
-      ) : (
-        <Panel title={t("common.distillation.candidate")}>
-          <EmptyState
-            title={t("common.distillation.candidate")}
-            desc={t("common.distillation.candidateNote")}
-          />
-        </Panel>
-      )}
+      <section className="mb-3">
+        <h2 className="mb-2 text-[13px] font-medium tracking-[0.025em]">
+          {t("distill.resultsTitle")}
+        </h2>
+        {candidates.length === 0 ? (
+          <Panel>
+            <EmptyState
+              title={t("distill.noCandidates")}
+              desc={t("distill.noCandidatesDesc")}
+            />
+          </Panel>
+        ) : (
+          <ul className="space-y-3">
+            {candidates.map((candidate) => (
+              <li key={candidate.candidateId}>
+                <ExpCard
+                  candidate={candidate}
+                  busy={busy}
+                  onApprove={() => void handleApprove(candidate.candidateId)}
+                  onCancel={() => void handleCancel(candidate.candidateId)}
+                  onRegenerate={() => handleRegenerate(candidate)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {drawerOpen && (
         <MaterialDrawer
