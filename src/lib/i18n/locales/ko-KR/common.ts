@@ -92,6 +92,7 @@ export const common = {
     metricApproved: "승인됨",
     openMaterial: "소재 라이브러리 열기",
     materialDrawerTitle: "증류 소재 선택",
+    materialSearch: "세션 / 프로젝트 검색…",
     materialSegmentUnavailable:
       "현재 버전은 세션 단위 소재 선택만 지원합니다. 단일 메시지 내용은 읽지 않습니다(개인정보 경계).",
     modelOffline: "오프라인 폴백",
