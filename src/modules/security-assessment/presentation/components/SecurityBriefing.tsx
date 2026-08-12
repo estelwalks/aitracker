@@ -25,7 +25,8 @@ export function SecurityBriefing({
   runtime,
   scanning,
   canSelectDirectory,
-  onQuickScan,
+  devMode,
+  onScan,
   onFullScan,
   onSelectDirectory,
 }: {
@@ -36,7 +37,8 @@ export function SecurityBriefing({
   runtime: SecurityRuntimeCapabilityView | null;
   scanning: boolean;
   canSelectDirectory: boolean;
-  onQuickScan: () => void;
+  devMode: boolean;
+  onScan: () => void;
   onFullScan: () => void;
   onSelectDirectory: () => void;
 }) {
@@ -135,6 +137,12 @@ export function SecurityBriefing({
                   ? t("security.center.briefing.detectionOnly")
                   : t("security.center.briefing.monitorUnavailable")}
               </span>
+              {devMode && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-warn">
+                  <span className="size-1.5 rounded-full bg-warn" />
+                  {t("security.center.briefing.devOnly")}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setLineIndex((value) => value + 1)}
@@ -230,12 +238,12 @@ export function SecurityBriefing({
           <div className="grid w-full grid-cols-2 gap-1.5">
             <button
               type="button"
-              onClick={onQuickScan}
+              onClick={onScan}
               disabled={scanning}
               className="group col-span-2 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ScanLine className="size-4" strokeWidth={2} />
-              {t("security.center.briefing.quickScan")}
+              {t("security.center.briefing.startGlobalScan")}
             </button>
             <button
               type="button"

@@ -4,6 +4,9 @@ import { ensureBackgroundRuntimeStarted } from "./app/bootstrap.server.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
+// SECURITY_API_PREFIX must stay in sync with electron/security-http-api.ts.
+const SECURITY_API_PREFIX = "/api/security";
+
 type ServerEntry = {
   fetch: (
     request: Request,
@@ -57,12 +60,35 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+/**
+ * Lazily serves the browser-dev security backend (`/api/security/*`).
+ *
+ * The dev backend pulls in `skill-scanner` through `electron/security-scanner-service.ts`,
+ * which reads its `dist/prompts/*.md` resources at module load. Importing it
+ * statically here would put that whole module graph in the SSR entry, so every
+ * route (including `/`) would evaluate the scanner and depend on its built
+ * resources being present. A dynamic import scoped to the security prefix keeps
+ * the scanner out of the module graph for all other requests — it only loads
+ * when an actual `/api/security/*` request arrives.
+ */
+async function maybeHandleSecurityDevRequest(
+  request: Request,
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith(`${SECURITY_API_PREFIX}/`)) return null;
+  const { handleSecurityDevRequest } =
+    await import("./modules/security-assessment/adapters/security-dev-server.server.ts");
+  return handleSecurityDevRequest(request);
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       // The bootstrap is a no-op for web development by policy, while desktop
       // composition may inject the scheduler before the first SSR request.
       await ensureBackgroundRuntimeStarted();
+      const security = await maybeHandleSecurityDevRequest(request);
+      if (security) return security;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(request, response);

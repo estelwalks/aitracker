@@ -94,6 +94,10 @@ export const security = {
   center: {
     summary:
       "{skills} Skills · {dimensions} scan dimensions · {health}% health",
+    devBanner: {
+      title: "Dev mode · scan service connected",
+      desc: "Scans use the real local Skill root; history and model config are stored in isolation under ~/.trusttools/security-dev/.",
+    },
     unavailable: {
       title: "Local companion service unavailable",
       desc: "This browser page is not connected to the {appName} local companion, so it will not read local Skills. Open the browser entry from the desktop app and try again.",
@@ -103,6 +107,8 @@ export const security = {
     },
     briefing: {
       title: "Security briefing",
+      devOnly: "Dev-only",
+      startGlobalScan: "Start global scan",
       allPassed: "All passed",
       needsAttention: "{count} need attention",
       findingsDetected: "{count} findings",
@@ -201,6 +207,10 @@ export const security = {
     result: {
       title: "Results · Risk items",
       description: "{skills} Skills · {findings} findings",
+      rescan: "Rescan",
+      hitDimensions: "Hit dimensions",
+      unsafe: "Unsafe",
+      multipleAnomalies: "Multiple anomalies",
       noReportTitle: "No scan results",
       noReportDesc:
         "Choose a quick or deep scan. Every statistic will come from a real scanner report.",
@@ -262,6 +272,8 @@ export const security = {
     model: {
       title: "Deep-scan model configuration",
       desc: "Electron safeStorage encrypts the API key in the main process. It is never returned to this page or written to ordinary preferences.",
+      devModeNote:
+        "Dev-only: the API key is stored in plaintext in the isolated dev directory ~/.trusttools/security-dev/ (0600, local dev only).",
       provider: "API protocol",
       openai: "OpenAI compatible",
       anthropic: "Anthropic Messages",
