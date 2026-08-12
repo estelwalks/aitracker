@@ -4,6 +4,7 @@ import {
   Brain,
   Boxes,
   CalendarRange,
+  Check,
   ChevronDown,
   CircleDollarSign,
   Coins,
@@ -13,7 +14,7 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -368,9 +369,11 @@ export function DashboardTrustHero({
 export function DashboardMetricGrid({
   view,
   monitoring,
+  securityRunsCount = null,
 }: {
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
+  securityRunsCount?: number | null;
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
@@ -385,6 +388,8 @@ export function DashboardMetricGrid({
     value.available
       ? t("dashboard.v2.selectedRange")
       : t("dashboard.v2.outputUnavailableHint");
+  const hasRealSecurityRuns =
+    securityRunsCount != null && securityRunsCount > 0;
   const cards = [
     {
       icon: Coins,
@@ -447,8 +452,12 @@ export function DashboardMetricGrid({
     {
       icon: ShieldCheck,
       label: t("dashboard.v2.securityRunsLabel"),
-      value: availabilityValue(view.outputAvailability.securityRuns),
-      hint: availabilityHint(view.outputAvailability.securityRuns),
+      value: hasRealSecurityRuns
+        ? format.formatNumber(securityRunsCount as number)
+        : availabilityValue(view.outputAvailability.securityRuns),
+      hint: hasRealSecurityRuns
+        ? t("dashboard.v2.selectedRange")
+        : availabilityHint(view.outputAvailability.securityRuns),
       delta: null,
     },
     {
@@ -515,13 +524,18 @@ export function DashboardRangePicker({
   onChange: (next: { period: UsagePeriod; from?: string; to?: string }) => void;
 }) {
   const { t } = useI18n();
+  const customPopoverId = useId();
   const [open, setOpen] = useState(false);
-  const presets: readonly { period: UsagePeriod; days: number }[] = [
+  const [draftFrom, setDraftFrom] = useState(from);
+  const [draftTo, setDraftTo] = useState(to);
+  const presets: readonly (
+    | { period: "today" | "all"; label: string }
+    | { period: "7d" | "30d"; days: 7 | 30 }
+  )[] = [
+    { period: "today", label: t("dashboard.period.today") },
     { period: "7d", days: 7 },
     { period: "30d", days: 30 },
-    { period: "90d", days: 90 },
-    { period: "180d", days: 180 },
-    { period: "1y", days: 365 },
+    { period: "all", label: t("dashboard.period.all") },
   ];
   return (
     <div
@@ -540,15 +554,21 @@ export function DashboardRangePicker({
           aria-pressed={period === preset.period}
           className={period === preset.period ? "dashboard-range-active" : ""}
         >
-          {t("dashboard.period.lastNDays", { count: preset.days })}
+          {"label" in preset
+            ? preset.label
+            : t("dashboard.period.lastNDays", { count: preset.days })}
         </button>
       ))}
       <button
         type="button"
         onClick={() => {
+          setDraftFrom(from);
+          setDraftTo(to);
           setOpen((value) => !value);
-          onChange({ period: "custom" });
         }}
+        aria-controls={customPopoverId}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         aria-pressed={period === "custom"}
         className={
           period === "custom"
@@ -557,33 +577,65 @@ export function DashboardRangePicker({
         }
       >
         <CalendarRange className="size-3" />
-        {t("dashboard.period.custom")}
+        {period === "custom"
+          ? `${from.slice(5)} → ${to.slice(5)}`
+          : t("dashboard.period.custom")}
       </button>
       {open && (
-        <div className="dashboard-range-popover">
+        <form
+          id={customPopoverId}
+          className="dashboard-range-popover"
+          role="dialog"
+          aria-label={t("dashboard.period.customRange")}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const values = new FormData(event.currentTarget);
+            const nextFrom = values.get("from");
+            const nextTo = values.get("to");
+            if (
+              typeof nextFrom !== "string" ||
+              typeof nextTo !== "string" ||
+              !nextFrom ||
+              !nextTo ||
+              nextFrom > nextTo
+            ) {
+              return;
+            }
+            onChange({ period: "custom", from: nextFrom, to: nextTo });
+            setOpen(false);
+          }}
+        >
           <label>
             {t("dashboard.header.customFrom")}
             <input
               type="date"
-              value={from}
-              max={to}
-              onChange={(event) =>
-                onChange({ period: "custom", from: event.target.value, to })
-              }
+              name="from"
+              aria-label={t("dashboard.header.customFrom")}
+              value={draftFrom}
+              max={draftTo}
+              onChange={(event) => setDraftFrom(event.target.value)}
             />
           </label>
           <label>
             {t("dashboard.header.customTo")}
             <input
               type="date"
-              value={to}
-              min={from}
-              onChange={(event) =>
-                onChange({ period: "custom", from, to: event.target.value })
-              }
+              name="to"
+              aria-label={t("dashboard.header.customTo")}
+              value={draftTo}
+              min={draftFrom}
+              onChange={(event) => setDraftTo(event.target.value)}
             />
           </label>
-        </div>
+          <button
+            type="submit"
+            disabled={!draftFrom || !draftTo || draftFrom > draftTo}
+            className="col-span-2 mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Check className="size-3.5" strokeWidth={2.2} />
+            {t("common.confirm")}
+          </button>
+        </form>
       )}
     </div>
   );

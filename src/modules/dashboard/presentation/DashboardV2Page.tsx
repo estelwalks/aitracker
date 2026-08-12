@@ -8,6 +8,7 @@ import {
 } from "../application/v2.ts";
 import { refreshDashboardAIInsight } from "../ai-insight.query.ts";
 import type { DashboardReadModel } from "../contracts.ts";
+import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -21,10 +22,10 @@ import {
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
 
-function daysAgo(days: number): string {
+function localDateDaysAgo(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -36,11 +37,17 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const { format, locale, t } = useI18n();
   const router = useRouter();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
-  const [from, setFrom] = useState(daysAgo(29));
-  const [to, setTo] = useState(daysAgo(0));
+  // Date-only range inputs must use the same local calendar convention as
+  // resolveUsageRange. Serialising with toISOString() would move the default
+  // day around UTC midnight and make the visible range disagree with the
+  // server-composed read model.
+  const [from, setFrom] = useState(localDateDaysAgo(29));
+  const [to, setTo] = useState(localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
   const [aiInsight, setAiInsight] = useState(data.aiInsight);
   const [generatingAIInsight, setGeneratingAIInsight] = useState(false);
+  const { summary: securitySummary, runCount: securityRunCount } =
+    useSecurityScanOverview();
 
   useEffect(() => {
     const refresh = window.setInterval(() => void router.invalidate(), 30_000);
@@ -112,7 +119,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         view={allToolsView}
         today={today}
         hero={hero}
-        security={data.monitoring?.security}
+        security={securitySummary ?? data.monitoring?.security}
       />
       <div className="dashboard-range-bar sticky top-14 z-20">
         <div className="min-w-0">
@@ -141,7 +148,11 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
           }}
         />
       </div>
-      <DashboardMetricGrid view={allToolsView} monitoring={hero.monitoring} />
+      <DashboardMetricGrid
+        view={allToolsView}
+        monitoring={hero.monitoring}
+        securityRunsCount={securityRunCount > 0 ? securityRunCount : null}
+      />
       <DashboardToolSwitcher
         tools={allToolsView.tools}
         selected={selectedTool}
