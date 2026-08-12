@@ -11,10 +11,15 @@ import {
 import { toast } from "sonner";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
+import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { EmptyState, TTButton } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import { toUiError } from "../../../../lib/errors";
 import type { MessageKey } from "../../../../lib/i18n/messages";
+import {
+  composeSourcesInsights,
+  resolveInsightLines,
+} from "../../../../lib/page-insights";
 import type { UsageLogParsing } from "../../../../lib/tools/catalog";
 import { refreshSourcesQuery } from "../api.server";
 import type {
@@ -75,7 +80,7 @@ const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
 };
 
 export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   const [summary, setSummary] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -101,6 +106,10 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           entry.paths.some((path) => path.toLocaleLowerCase().includes(kw))),
     );
   }, [summary.entries, keyword, statusFilter]);
+  const insightLines = useMemo(
+    () => resolveInsightLines(t, composeSourcesInsights(summary, locale)),
+    [t, summary, locale],
+  );
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -151,6 +160,13 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           </TTButton>
         </div>
       </header>
+
+      <JarvisInsight
+        title={t("insights.title")}
+        lines={insightLines}
+        rotateLabel={t("insights.rotate")}
+        dotsLabel={t("insights.dots")}
+      />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-2/60 px-3 py-2 text-[12px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
