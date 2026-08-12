@@ -30,7 +30,6 @@ type NavItem = {
     | "/skills";
   label: MessageKey;
   icon: typeof LayoutDashboard;
-  hero?: boolean;
 };
 
 /**
@@ -48,12 +47,7 @@ const navTiers: ReadonlyArray<{
     items: [
       { to: "/", label: "nav.home", icon: LayoutDashboard },
       { to: "/agents", label: "nav.agents", icon: IdCard },
-      {
-        to: "/distill",
-        label: "nav.distill",
-        icon: FlaskConical,
-        hero: true,
-      },
+      { to: "/distill", label: "nav.distill", icon: FlaskConical },
       { to: "/reports", label: "nav.memory", icon: BookHeart },
     ],
   },
@@ -149,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={item.to}
                       to={item.to}
                       title={label}
-                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-primary font-medium text-primary-foreground shadow-sm" : item.hero ? "border border-primary/25 bg-primary/10 font-medium text-primary hover:bg-primary/15" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-primary font-medium text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                       aria-current={active ? "page" : undefined}
                     >
                       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
