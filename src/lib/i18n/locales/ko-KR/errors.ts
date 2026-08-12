@@ -48,6 +48,10 @@ export const errors = {
     notWaiting: "후보가 승인 대기 상태가 아닙니다",
     knowledgeUnavailable: "지식 저장소를 사용할 수 없습니다",
     knowledgeFailed: "지식 항목을 기록하지 못했습니다",
+    notApproved: "Skill로 저장하려면 먼저 후보를 승인하세요",
+    invalidName: "Skill 이름이 올바르지 않습니다",
+    invalidAgent: "대상 도구를 사용할 수 없습니다",
+    skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",

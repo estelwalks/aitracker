@@ -54,6 +54,10 @@ export const errors = {
     notWaiting: "候補は承認待ちではありません",
     knowledgeUnavailable: "ナレッジストアが利用できません",
     knowledgeFailed: "ナレッジエントリの書き込みに失敗しました",
+    notApproved: "Skill として保存する前に候補を承認してください",
+    invalidName: "Skill 名が無効です",
+    invalidAgent: "対象ツールが利用できません",
+    skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
   },
   pricing: {
     modelListInvalid: "モデルリストが不正です",

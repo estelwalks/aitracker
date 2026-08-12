@@ -23,7 +23,11 @@ export type DistillationErrorCode =
   | "errors.distillation.notFound"
   | "errors.distillation.notWaiting"
   | "errors.distillation.knowledgeUnavailable"
-  | "errors.distillation.knowledgeFailed";
+  | "errors.distillation.knowledgeFailed"
+  | "errors.distillation.notApproved"
+  | "errors.distillation.invalidName"
+  | "errors.distillation.invalidAgent"
+  | "errors.distillation.skillExists";
 
 export type ApprovalState = "waiting-approval" | "approved" | "cancelled";
 export type DistillationMode =
@@ -68,7 +72,11 @@ export interface CandidateOutput {
   readonly candidateId: string;
   readonly kind: "memory" | "brief" | "prompt" | "persona" | "skill";
   readonly title: string;
-  /** Ephemeral, safety-filtered candidate text. It is not persisted by this module. */
+  /**
+   * Safety-filtered knowledge note produced by the AI execution. It is the
+   * only textual payload that may be persisted with the candidate — it is
+   * generated from sanitised session metadata, never raw conversation content.
+   */
   readonly summary: string;
   readonly mode: DistillationMode;
   readonly approvalState: ApprovalState;
@@ -89,11 +97,26 @@ export interface AIOrchestrationPort {
   execute(request: AIRequest): Promise<AIExecutionResult>;
 }
 
+/**
+ * Durable store for distillation candidates. When injected, candidates are
+ * hydrated on application construction and every start/approve/cancel writes
+ * through. When absent the application degrades to the previous in-memory
+ * behaviour.
+ */
+export interface CandidatePersistence {
+  /** Enumerate all persisted candidates (newest first). */
+  list(): Promise<readonly CandidateOutput[]>;
+  /** Upsert a candidate by id. */
+  save(candidate: CandidateOutput): Promise<void>;
+}
+
 export interface DistillationPorts {
   readonly sessions: SessionQueryPort;
   readonly ai: AIOrchestrationPort;
   /** Only used after explicit approval; never during candidate generation. */
   readonly knowledge?: KnowledgeRepository;
+  /** Optional durable candidate store; degrades to in-memory when absent. */
+  readonly persistence?: CandidatePersistence;
   readonly now?: () => Date;
   readonly createCandidateId?: () => string;
 }
@@ -114,6 +137,16 @@ export interface DistillationApplication {
    * candidates), or null when the knowledge repository is unavailable.
    */
   count(): Promise<number | null>;
+  /** Enumerate candidates awaiting approval (newest first). */
+  listWaiting(): Promise<CandidateOutput[]>;
+  /** Enumerate all persisted candidates across approval states (newest first). */
+  listAll(): Promise<CandidateOutput[]>;
+  /**
+   * Fetch a single candidate by id regardless of approval state. Used by the
+   * save-as-skill flow to verify a candidate is genuinely approved before
+   * writing it as a local Skill.
+   */
+  get(candidateId: string): Promise<CandidateOutput | undefined>;
 }
 
 export interface DistillationModuleContract {
