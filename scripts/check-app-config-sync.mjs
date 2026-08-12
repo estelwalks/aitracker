@@ -141,7 +141,7 @@ for (const file of codeFiles) {
     //   - HMAC domain separator used for privacy fingerprints
     //   - repository/project fixture labels in tests
     const functional =
-      /\bTRUSTTOOLS_LLM_[A-Z0-9_]+|trusttools-local-usage-event|trusttools_webapp/g;
+      /\bTRUSTTOOLS_LLM_[A-Z0-9_]+|trusttools-local-usage-event|trusttools_webapp|trusttools\/security-dev|TRUSTTOOLS_SECURITY_DEV_SERVICE/g;
     const remaining = line.replace(functional, "");
     if (!BRAND_RE.test(remaining)) return;
     failures.push(

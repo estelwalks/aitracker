@@ -27,7 +27,8 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return Response.json(payload, { status });
 }
 
-test("companion probing is limited to the packaged loopback origin", async () => {
+test("companion probing is limited to the loopback origin", async () => {
+  // Non-loopback and non-http origins are never companion-eligible.
   assert.equal(
     isCompanionOrigin({
       protocol: "https:",
@@ -39,10 +40,28 @@ test("companion probing is limited to the packaged loopback origin", async () =>
   assert.equal(
     isCompanionOrigin({
       protocol: "http:",
+      hostname: "192.168.1.10",
+      origin: "http://192.168.1.10",
+    }),
+    false,
+  );
+  // Both `127.0.0.1` and `localhost` are loopback and accepted (the browser
+  // dev server often binds/prints `localhost`).
+  assert.equal(
+    isCompanionOrigin({
+      protocol: "http:",
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:49152",
+    }),
+    true,
+  );
+  assert.equal(
+    isCompanionOrigin({
+      protocol: "http:",
       hostname: "localhost",
       origin: "http://localhost:4173",
     }),
-    false,
+    true,
   );
   let calls = 0;
   const client = await connectBrowserSecurityClient({
@@ -56,8 +75,9 @@ test("companion probing is limited to the packaged loopback origin", async () =>
       return jsonResponse(capability);
     },
   });
-  assert.equal(client, null);
-  assert.equal(calls, 0);
+  assert.ok(client);
+  assert.equal(client.transport, "companion");
+  assert.equal(calls, 1);
 });
 
 test("probe uses only the same-origin authenticated companion endpoint", async () => {

@@ -94,47 +94,27 @@ export function ScanStatus({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-3 gap-3 px-5 pb-5">
         <StatusCell
           icon={Boxes}
-          label={t("security.center.status.discovered")}
-          value={state.progress.discovered || totals.total}
+          label={t("security.center.metrics.scannedSkills")}
+          value={state.progress.completed || totals.total}
         />
         <StatusCell
           icon={ShieldCheck}
-          label={t("security.center.status.scanned")}
-          value={
-            state.progress.completed ||
-            totals.safe + totals.warn + totals.danger + totals.unknown
-          }
-        />
-        <StatusCell
-          icon={ShieldCheck}
-          label={t("security.center.status.safe")}
+          label={t("security.center.metrics.safe")}
           value={totals.safe}
           color="var(--ok)"
         />
         <StatusCell
           icon={ShieldX}
-          label={t("security.center.status.unsafe")}
+          label={t("security.center.metrics.unsafe")}
           value={totals.warn + totals.danger + totals.unknown}
           color={
             totals.warn + totals.danger + totals.unknown
               ? "var(--danger)"
               : undefined
           }
-        />
-        <StatusCell
-          icon={TriangleAlert}
-          label={t("security.center.status.failed")}
-          value={Math.max(totals.failed, state.progress.failed)}
-          color={state.progress.failed ? "var(--danger)" : undefined}
-        />
-        <StatusCell
-          icon={CircleDashed}
-          label={t("security.center.status.skipped")}
-          value={Math.max(totals.skipped, state.progress.skipped)}
-          color={state.progress.skipped ? "var(--warn)" : undefined}
         />
       </div>
     </section>

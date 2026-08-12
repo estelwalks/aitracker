@@ -93,6 +93,10 @@ export const security = {
   },
   center: {
     summary: "Skill {skills}개 · 검사 차원 {dimensions}개 · 건강도 {health}%",
+    devBanner: {
+      title: "개발 모드 · 검사 서비스 연결됨",
+      desc: "스캔은 실제 로컬 Skill 루트를 사용하며, 검사 기록과 모델 설정은 ~/.trusttools/security-dev/에 격리 저장됩니다.",
+    },
     unavailable: {
       title: "로컬 컴패니언 서비스를 사용할 수 없습니다",
       desc: "이 브라우저 페이지는 {appName} 로컬 컴패니언에 연결되지 않아 로컬 Skill을 읽지 않습니다. 데스크톱 앱에서 브라우저 진입점을 연 뒤 다시 시도하세요.",
@@ -102,6 +106,8 @@ export const security = {
     },
     briefing: {
       title: "보안 브리핑",
+      devOnly: "개발 모드 전용",
+      startGlobalScan: "전체 검사 시작",
       allPassed: "모두 통과",
       needsAttention: "{count}개 확인 필요",
       findingsDetected: "{count}건 탐지",
@@ -199,6 +205,10 @@ export const security = {
     result: {
       title: "검사 결과 · 리스크 항목",
       description: "Skill {skills}개 · 적중 {findings}건",
+      rescan: "다시 검사",
+      hitDimensions: "적중 차원",
+      unsafe: "안전하지 않음",
+      multipleAnomalies: "여러 이상 항목",
       noReportTitle: "검사 결과 없음",
       noReportDesc:
         "빠른 검사 또는 심층 검사를 선택하세요. 모든 통계는 실제 스캐너 보고서에서 제공됩니다.",
@@ -261,6 +271,8 @@ export const security = {
     model: {
       title: "심층 검사 모델 설정",
       desc: "API Key는 Electron safeStorage로 메인 프로세스에 암호화 저장되며 이 페이지나 일반 환경설정으로 반환되지 않습니다.",
+      devModeNote:
+        "개발 모드 전용: API Key는 격리 개발 디렉터리 ~/.trusttools/security-dev/에 일반 텍스트로 저장됩니다(0600, 로컬 개발 전용).",
       provider: "API 프로토콜",
       openai: "OpenAI 호환",
       anthropic: "Anthropic Messages",
