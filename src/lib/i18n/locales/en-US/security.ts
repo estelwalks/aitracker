@@ -250,6 +250,15 @@ export const security = {
       covered: "{skills} Skills · {safe} safe / {unsafe} need review",
       generatedLocale: "Report language: {locale}",
     },
+    runtimeBlock: {
+      title: "Runtime defense · Block log",
+      desc: "Desktop runtime block events are recorded here · currently off",
+      statusOff: "Off",
+      emptyTitle: "No block records",
+      emptyDesc:
+        "There are no real interception events yet. Runtime defense is off by default; it only starts recording after you enable it in the desktop app. No simulated or placeholder data is shown before that.",
+      settings: "Open scan settings",
+    },
     model: {
       title: "Deep-scan model configuration",
       desc: "Electron safeStorage encrypts the API key in the main process. It is never returned to this page or written to ordinary preferences.",
