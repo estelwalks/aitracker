@@ -58,7 +58,8 @@ export interface UsageCollector {
 
 /** Renderer-safe read model for the Token burn leaderboard. */
 export interface TrackerReadModel {
-  readonly generatedAt: string;
+  /** Null when the usage scanner has no real snapshot to report. */
+  readonly generatedAt: string | null;
   readonly boards: Readonly<
     Record<
       import("./application/tracker.ts").RoastDimension,

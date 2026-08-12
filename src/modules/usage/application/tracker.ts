@@ -256,3 +256,21 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
   }
   return { tokens, events, entries };
 }
+
+/**
+ * Page totals must come from each source event exactly once. The ranking
+ * boards intentionally project the same events into skill/project/session
+ * dimensions, so summing their token or event columns would triple-count the
+ * user's consumption. `entries` is the number of visible leaderboard rows,
+ * while tokens/events remain source-of-truth totals.
+ */
+export function trackerTotalsFromEvents(
+  events: readonly LocalUsageEvent[],
+  boards: readonly TrackerBoard[],
+): { tokens: number; events: number; entries: number } {
+  return {
+    tokens: events.reduce((total, event) => total + event.totalTokens, 0),
+    events: events.length,
+    entries: boards.reduce((total, board) => total + board.rows.length, 0),
+  };
+}

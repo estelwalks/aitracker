@@ -2,7 +2,7 @@ export const nav = {
   tier1: "工作台",
   tier2: "洞察与安全",
   tier3: "技能库",
-  home: "首页",
+  home: "首页总览",
   agents: "工具概览",
   distill: "蒸馏工作台",
   memory: "简报与记忆",

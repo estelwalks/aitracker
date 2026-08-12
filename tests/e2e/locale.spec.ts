@@ -10,6 +10,7 @@ import { expect, test } from "playwright/test";
 test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("tt-locale", "en-US");
+    window.localStorage.setItem("tt-locale-mode", "manual");
   });
 
   await page.goto("/");
@@ -18,10 +19,17 @@ test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page 
     page.getByRole("heading", { name: "Today's insight", exact: true }),
   ).toBeVisible();
   // 导航已英文化
-  await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Settings", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Security & Defense" }),
   ).toBeVisible();
+  // localStorage preference also becomes the canonical browser URL, so a
+  // subsequent SSR request starts from the same language.
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("locale"))
+    .toBe("en-US");
   // html lang 同步
   await expect
     .poll(() => page.evaluate(() => document.documentElement.lang))
@@ -74,6 +82,7 @@ test("设置页切换 ja-JP 即时生效并跨刷新保持", async ({ page }) =>
 test("切回中文并校验 ?locale 同步", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("tt-locale", "en-US");
+    window.localStorage.setItem("tt-locale-mode", "manual");
   });
   await page.goto("/settings");
   await expect(

@@ -53,8 +53,15 @@ import {
   distillCandidateStoreSchema,
 } from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
-import type { SessionQueryPort } from "../modules/sessions/contracts.ts";
-import { createLegacySessionRepository } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import type {
+  ResumeSessionPort,
+  SessionQueryPort,
+} from "../modules/sessions/contracts.ts";
+import {
+  createLegacyResumeSessionPort,
+  createLegacySessionRepository,
+} from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
 import {
   createUsageApplication,
   type UsageApplication,
@@ -122,6 +129,11 @@ export interface CompositionRoot {
    * into the application's private ports.
    */
   readonly sessions: SessionQueryPort;
+  /**
+   * Server-only session recovery port. It revalidates the scanned record and
+   * launches only a registry-owned tokenized command without a shell.
+   */
+  readonly resumeSession: ResumeSessionPort;
   /** Local-only usage application used by the collector scheduler. */
   readonly usage: UsageApplication;
   /** Renderer-safe heartbeat for the desktop background listener. */
@@ -283,6 +295,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     hash: createSha256HashPort(),
   });
   const sessions = createSessionQueryService(createLegacySessionRepository());
+  const resumeSession = createLegacyResumeSessionPort(
+    createNodeResumeExecutor(),
+  );
 
   // Candidate store lives next to the reports/knowledge state under the same
   // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
@@ -345,6 +360,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     reports,
     distillation,
     sessions,
+    resumeSession,
     usage,
     monitoring,
     dataRoot,

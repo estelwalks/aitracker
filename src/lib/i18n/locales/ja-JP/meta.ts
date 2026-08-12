@@ -9,7 +9,7 @@ export const meta = {
     market: "Skill マーケット · {appName} V3.0",
     tracker: "バーンランキング · {appName} V3.0",
     security: "セキュリティ検査 · {appName} V3.0",
-    sessions: "セッション復元 · {appName} V3.0",
+    sessions: "セッション管理 · {appName} V3.0",
     sources: "データソース · {appName} V3.0",
     reports: "ブリーフィングとメモリ · {appName} V3.0",
     distill: "蒸留ワークベンチ · {appName} V3.0",
