@@ -1,15 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Boxes,
-  BrainCircuit,
-  FileScan,
-  Layers,
-  MonitorX,
-  RefreshCw,
-  ShieldCheck,
-  ShieldX,
-} from "lucide-react";
+import { MonitorX, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "../../../components/tt";
@@ -29,7 +19,7 @@ import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus } from "./components/ScanStatus";
 import { ScanVortex } from "./components/ScanVortex";
 import { SecurityBriefing } from "./components/SecurityBriefing";
-import { SecurityResults } from "./components/SecurityResults";
+import { SecurityResultsSummary } from "./components/SecurityResultsSummary";
 import {
   EMPTY_SECURITY_PROGRESS,
   EMPTY_SECURITY_TOTALS,
@@ -190,6 +180,7 @@ export function SecurityAssessmentPage() {
       toast.error(t("security.center.toast.failed"));
   }, [scanState.status, t]);
 
+  const devMode = clientRef.current?.transport === "companion";
   const latest = latestHistory(history);
   const riskKinds = runtime?.riskKinds ?? SECURITY_RISK_KINDS;
   const latestEntries = useMemo(() => latestScanEntries(history), [history]);
@@ -343,10 +334,17 @@ export function SecurityAssessmentPage() {
         </div>
       ) : (
         <>
-          {clientRef.current?.transport === "companion" && (
-            <div className="flex items-center gap-2 rounded-xl bg-ok/10 px-3.5 py-2 text-[11px] text-ok ring-1 ring-ok/15">
-              <span className="size-1.5 rounded-full bg-ok" />
-              {t("security.center.unavailable.connected")}
+          {devMode && (
+            <div className="flex items-start gap-2 rounded-xl bg-ok/10 px-3.5 py-2 text-[11px] text-ok ring-1 ring-ok/15">
+              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ok" />
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {t("security.center.devBanner.title")}
+                </p>
+                <p className="text-ok/80">
+                  {t("security.center.devBanner.desc")}
+                </p>
+              </div>
             </div>
           )}
           <SecurityBriefing
@@ -366,61 +364,13 @@ export function SecurityAssessmentPage() {
             canSelectDirectory={
               clientRef.current?.supportsDirectorySelection === true
             }
-            onQuickScan={() => void startScan("quick")}
+            devMode={devMode}
+            onScan={() => void startScan("quick")}
             onFullScan={() => void startScan("full")}
             onSelectDirectory={() => void selectDirectory()}
           />
 
           <AutoScanGuide runtime={runtime} />
-
-          <section className="grid gap-3 rounded-2xl bg-card p-4 shadow-[var(--elev-1)] md:grid-cols-2">
-            <div className="flex flex-wrap items-center gap-3 px-1 pb-1 md:col-span-2">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[12.5px] font-semibold">
-                  {t("security.center.model.title")}
-                </h2>
-                <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-                  {modelConfig?.configured
-                    ? t("security.center.model.configuredState")
-                    : t("security.center.model.missingState")}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModelOpen(true)}
-                className="rounded-full bg-surface-2 px-3 py-1.5 text-[11px] hover:bg-accent"
-              >
-                {modelConfig?.configured
-                  ? t("security.center.model.update")
-                  : t("security.center.model.configure")}
-              </button>
-            </div>
-            <ModeCard
-              icon={FileScan}
-              title={t("security.center.mode.quick")}
-              description={t("security.center.mode.quickDesc")}
-              action={t("security.center.briefing.quickScan")}
-              disabled={isScanActive(scanState.status)}
-              onClick={() => void startScan("quick")}
-            />
-            <ModeCard
-              icon={BrainCircuit}
-              title={t("security.center.mode.full")}
-              description={t("security.center.mode.fullDesc")}
-              action={
-                modelConfig?.configured
-                  ? t("security.center.briefing.fullScan")
-                  : t("security.center.model.configure")
-              }
-              warning={
-                !modelConfig?.configured
-                  ? t("security.center.mode.modelRequired")
-                  : undefined
-              }
-              disabled={isScanActive(scanState.status)}
-              onClick={() => void startScan("full")}
-            />
-          </section>
 
           <ScanStatus
             state={scanState}
@@ -429,63 +379,17 @@ export function SecurityAssessmentPage() {
           />
 
           {latestEntries.length > 0 && (
-            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-              <Metric
-                icon={Boxes}
-                label={t("security.center.metrics.scannedSkills")}
-                value={latestTotals.total}
-              />
-              <Metric
-                icon={ShieldCheck}
-                label={t("security.center.metrics.safe")}
-                value={latestTotals.safe}
-                color="var(--ok)"
-              />
-              <Metric
-                icon={ShieldX}
-                label={t("security.center.metrics.unsafe")}
-                value={
-                  latestTotals.warn + latestTotals.danger + latestTotals.unknown
-                }
-                color={
-                  latestTotals.warn + latestTotals.danger + latestTotals.unknown
-                    ? "var(--danger)"
-                    : undefined
+            <>
+              <SecurityResultsSummary
+                entries={latestEntries}
+                dimensions={riskKinds.length}
+                onRescan={(mode, skillRef) =>
+                  void startScan(mode, "single", skillRef)
                 }
               />
-              <Metric
-                icon={Layers}
-                label={t("security.center.metrics.dimensions")}
-                value={riskKinds.length}
-              />
-              <Metric
-                icon={FileScan}
-                label={t("security.center.metrics.files")}
-                value={latestTotals.files}
-              />
-              <Metric
-                icon={AlertTriangle}
-                label={t("security.center.metrics.failed")}
-                value={latestTotals.failed}
-                color={latestTotals.failed ? "var(--danger)" : undefined}
-              />
-              <Metric
-                icon={AlertTriangle}
-                label={t("security.center.metrics.skipped")}
-                value={latestTotals.skipped}
-                color={latestTotals.skipped ? "var(--warn)" : undefined}
-              />
-            </section>
+              <RuntimeBlockPanel />
+            </>
           )}
-
-          <SecurityResults
-            entries={latestEntries}
-            dimensions={riskKinds.length}
-            onRescan={(entry) =>
-              void startScan(entry.mode, "single", entry.skillRef)
-            }
-          />
-          <RuntimeBlockPanel />
           <ScanHistory entries={history} />
         </>
       )}
@@ -502,77 +406,10 @@ export function SecurityAssessmentPage() {
         open={modelOpen}
         config={modelConfig}
         saving={savingModel}
+        devMode={devMode}
         onClose={() => setModelOpen(false)}
         onSave={(update) => void saveModel(update)}
       />
-    </div>
-  );
-}
-
-function ModeCard({
-  icon: Icon,
-  title,
-  description,
-  action,
-  warning,
-  disabled,
-  onClick,
-}: {
-  icon: typeof FileScan;
-  title: string;
-  description: string;
-  action: string;
-  warning?: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-xl bg-surface px-4 py-3.5 ring-1 ring-border/50">
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <h3 className="text-[12.5px] font-semibold">{title}</h3>
-        <p className="mt-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
-          {description}
-        </p>
-        {warning && <p className="mt-1.5 text-[10.5px] text-warn">{warning}</p>}
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onClick}
-        className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-[11px] hover:bg-accent disabled:opacity-40"
-      >
-        {action}
-      </button>
-    </div>
-  );
-}
-
-function Metric({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: typeof Boxes;
-  label: string;
-  value: number;
-  color?: string;
-}) {
-  return (
-    <div className="rounded-xl bg-card px-4 py-3 shadow-[var(--elev-1)]">
-      <div className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-wide text-muted-foreground uppercase">
-        <Icon className="size-3" />
-        {label}
-      </div>
-      <div
-        className="tt-num mt-1.5 text-xl font-black"
-        style={color ? { color } : undefined}
-      >
-        {value}
-      </div>
     </div>
   );
 }

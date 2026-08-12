@@ -95,6 +95,10 @@ export const security = {
   },
   center: {
     summary: "{skills} 個の Skill · {dimensions} 検査次元 · 健全度 {health}%",
+    devBanner: {
+      title: "開発モード · 検査サービス接続済み",
+      desc: "スキャンは実際のローカル Skill ルートを使用します。検査履歴とモデル設定は ~/.trusttools/security-dev/ に分離保存されます。",
+    },
     unavailable: {
       title: "ローカルコンパニオンサービスを利用できません",
       desc: "このブラウザページは {appName} のローカルコンパニオンに接続されていないため、ローカル Skill を読み取りません。デスクトップアプリからブラウザ入口を開いて再試行してください。",
@@ -104,6 +108,8 @@ export const security = {
     },
     briefing: {
       title: "セキュリティ速報",
+      devOnly: "開発モードのみ",
+      startGlobalScan: "全体スキャン開始",
       allPassed: "すべて合格",
       needsAttention: "{count} 件を要確認",
       findingsDetected: "{count} 件を検出",
@@ -201,6 +207,10 @@ export const security = {
     result: {
       title: "検査結果 · リスク項目",
       description: "{skills} 個の Skill · {findings} 件の検出",
+      rescan: "再検査",
+      hitDimensions: "該当次元",
+      unsafe: "不安全",
+      multipleAnomalies: "複数の異常",
       noReportTitle: "検査結果がありません",
       noReportDesc:
         "クイックまたは詳細スキャンを選択してください。すべての統計は実際のレポートから表示されます。",
@@ -263,6 +273,8 @@ export const security = {
     model: {
       title: "詳細スキャンのモデル設定",
       desc: "API Key は Electron safeStorage によりメインプロセスで暗号化され、この画面や通常の設定には保存されません。",
+      devModeNote:
+        "開発モードのみ：API Key は分離開発ディレクトリ ~/.trusttools/security-dev/ に平文保存されます（0600、ローカル開発専用）。",
       provider: "API プロトコル",
       openai: "OpenAI 互換",
       anthropic: "Anthropic Messages",

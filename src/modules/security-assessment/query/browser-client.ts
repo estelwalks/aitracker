@@ -307,10 +307,15 @@ export class CompanionSecurityClientError extends Error {
 }
 
 export function isCompanionOrigin(location: BrowserLocation): boolean {
+  if (location.protocol !== "http:") return false;
+  const hostname = location.hostname.toLowerCase();
+  // Loopback only. `localhost` is accepted alongside `127.0.0.1` so the browser
+  // dev server (which often binds/prints `localhost`) can reach the companion
+  // API; both names resolve to the loopback interface, and the server side
+  // (Electron `local-web-server.ts` / the dev handler) still enforces its own
+  // capability token / Origin+CSRF gates for mutations.
   return (
-    location.protocol === "http:" &&
-    location.hostname === "127.0.0.1" &&
-    location.origin.startsWith("http://127.0.0.1:")
+    hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1"
   );
 }
 

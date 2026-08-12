@@ -88,6 +88,10 @@ export const security = {
   },
   center: {
     summary: "{skills} 个 Skill · {dimensions} 个检测维度 · 健康度 {health}%",
+    devBanner: {
+      title: "开发模式 · 检测服务已连接",
+      desc: "扫描使用真实本机 Skill 根目录；检测历史与模型配置隔离保存在 ~/.trusttools/security-dev/。",
+    },
     unavailable: {
       title: "本机伴随服务不可用",
       desc: "当前浏览器页面未连接到 {appName} 的本机伴随服务，因此不会读取本机 Skill。请从桌面应用打开浏览器入口后重试。",
@@ -97,6 +101,8 @@ export const security = {
     },
     briefing: {
       title: "安全播报",
+      devOnly: "仅开发模式",
+      startGlobalScan: "开始全局检测",
       allPassed: "全部通过",
       needsAttention: "{count} 项待处理",
       findingsDetected: "{count} 项提示",
@@ -192,6 +198,10 @@ export const security = {
     result: {
       title: "检测结果 · 风险项",
       description: "共 {skills} 个 Skill · 命中 {findings} 项",
+      rescan: "重新检测",
+      hitDimensions: "命中维度",
+      unsafe: "不安全",
+      multipleAnomalies: "多项异常",
       noReportTitle: "尚无检测结果",
       noReportDesc: "请选择快速检测或深度检测。所有统计都会来自真实扫描报告。",
       allPassed: "全部 {skills} 个 Skill 通过 {dimensions} 个维度检测。",
@@ -251,6 +261,8 @@ export const security = {
     model: {
       title: "深度扫描模型配置",
       desc: "API Key 由 Electron safeStorage 加密保存在主进程，不会返回页面或写入普通偏好设置。",
+      devModeNote:
+        "仅开发模式：API Key 以明文保存于隔离开发目录 ~/.trusttools/security-dev/（0600，仅本机开发用）。",
       provider: "API 协议",
       openai: "OpenAI 兼容",
       anthropic: "Anthropic Messages",
