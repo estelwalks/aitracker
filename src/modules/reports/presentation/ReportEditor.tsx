@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Copy, Printer } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   Dialog,
@@ -11,13 +10,16 @@ import {
 } from "../../../components/ui/dialog";
 import { Segmented, TTButton } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
+import { useDraftAutosave, useReportActions } from "./report-actions.ts";
 
 const DRAFT_PREFIX = "tt.report.draft.";
 
 /**
- * Report draft editor. The body is user-authored markdown persisted to this
- * browser only (localStorage) with a 30s autosave; the server's report bodies
- * never cross this boundary. Export offers copy and print (PDF).
+ * Report draft editor (kept as a standalone dialog for callers that prefer a
+ * modal; the inline page uses `ReportBodyCard`). The body is user-authored
+ * markdown persisted to this browser only (localStorage) with a 30s autosave;
+ * the server's report bodies are never overwritten. Copy / print / export reuse
+ * the shared `useReportActions` helpers.
  */
 export function ReportEditor({
   reportId,
@@ -39,49 +41,10 @@ export function ReportEditor({
       return "";
     }
   });
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-  const dirty = useRef(false);
-
-  // Autosave: every 30s while the dialog is open, plus immediately when
-  // closing. Polling lives in the component effect (routes may not use
-  // setInterval at the top level per the architecture gate).
-  useEffect(() => {
-    const persist = () => {
-      if (!dirty.current) return;
-      try {
-        window.localStorage.setItem(DRAFT_PREFIX + reportId, body);
-        dirty.current = false;
-        setSavedAt(new Date().toLocaleTimeString());
-      } catch {
-        // localStorage unavailable — draft is best-effort
-      }
-    };
-    const timer = window.setInterval(persist, 30_000);
-    return () => {
-      window.clearInterval(timer);
-      persist();
-    };
-  }, [body, reportId]);
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(body || title);
-      toast.success(t("common.reports.editor.copy"));
-    } catch {
-      toast.error(t("common.failed"));
-    }
-  }
-
-  function handlePrint() {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(
-      `<pre style="font:12px/1.6 ui-monospace,monospace;padding:2rem;white-space:pre-wrap">${body.replace(/</g, "&lt;")}</pre>`,
-    );
-    win.document.close();
-    win.focus();
-    win.print();
-  }
+  const dirtyRef = useRef(false);
+  const { copy, print, exportMd } = useReportActions(body, title);
+  // The hook's cleanup persists the latest draft on unmount (dialog close).
+  const { savedAt } = useDraftAutosave(DRAFT_PREFIX + reportId, body, dirtyRef);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -114,21 +77,15 @@ export function ReportEditor({
                 {t("common.reports.editor.autosaved")} · {savedAt}
               </span>
             )}
-            <TTButton size="sm" variant="ghost" onClick={handleCopy}>
+            <TTButton size="sm" variant="ghost" onClick={() => void copy()}>
               <Copy className="size-3.5" />
               {t("common.reports.editor.copy")}
             </TTButton>
-            <TTButton size="sm" variant="ghost" onClick={handlePrint}>
+            <TTButton size="sm" variant="ghost" onClick={print}>
               <Printer className="size-3.5" />
               {t("common.reports.editor.print")}
             </TTButton>
-            <TTButton
-              size="sm"
-              variant="primary"
-              onClick={() => {
-                void handleCopy();
-              }}
-            >
+            <TTButton size="sm" variant="primary" onClick={exportMd}>
               {t("common.reports.editor.exportMd")}
             </TTButton>
           </div>
@@ -138,7 +95,7 @@ export function ReportEditor({
           <textarea
             value={body}
             onChange={(event) => {
-              dirty.current = true;
+              dirtyRef.current = true;
               setBody(event.target.value);
             }}
             spellCheck={false}

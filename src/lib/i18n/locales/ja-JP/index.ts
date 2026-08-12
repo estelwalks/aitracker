@@ -11,6 +11,7 @@ import { market } from "./market";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
+import { reports } from "./reports";
 import { tracker } from "./tracker";
 import { skills } from "./skills";
 import { security } from "./security";
@@ -24,6 +25,7 @@ export const ja = {
   distill,
   dashboard,
   insights,
+  reports,
   pricing,
 
   nav,
