@@ -251,6 +251,15 @@ export const security = {
       covered: "{skills} 個の Skill · 安全 {safe} / 要確認 {unsafe}",
       generatedLocale: "レポート言語：{locale}",
     },
+    runtimeBlock: {
+      title: "実行時防御 · ブロックログ",
+      desc: "デスクトップ実行時のブロックイベントをここに記録 · 現在は無効",
+      statusOff: "無効",
+      emptyTitle: "ブロック記録はありません",
+      emptyDesc:
+        "実際のインターセプトイベントはまだありません。実行時防御は既定で無効で、デスクトップで有効化して初めてブロックの記録が始まります。それまではシミュレーションやプレースホルダーデータは表示されません。",
+      settings: "スキャン設定を開く",
+    },
     model: {
       title: "詳細スキャンのモデル設定",
       desc: "API Key は Electron safeStorage によりメインプロセスで暗号化され、この画面や通常の設定には保存されません。",

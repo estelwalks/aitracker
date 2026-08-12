@@ -24,6 +24,7 @@ import {
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { AutoScanGuide } from "./components/AutoScanGuide";
 import { ModelConfigDialog } from "./components/ModelConfigDialog";
+import { RuntimeBlockPanel } from "./components/RuntimeBlockPanel";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus } from "./components/ScanStatus";
 import { ScanVortex } from "./components/ScanVortex";
@@ -484,6 +485,7 @@ export function SecurityAssessmentPage() {
               void startScan(entry.mode, "single", entry.skillRef)
             }
           />
+          <RuntimeBlockPanel />
           <ScanHistory entries={history} />
         </>
       )}

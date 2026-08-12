@@ -239,6 +239,15 @@ export const security = {
       covered: "覆盖 {skills} 个 Skill · 安全 {safe} / 需处理 {unsafe}",
       generatedLocale: "报告语言：{locale}",
     },
+    runtimeBlock: {
+      title: "运行时防御 · 拦截日志",
+      desc: "桌面端运行时拦截事件将记录于此 · 当前未开启",
+      statusOff: "未开启",
+      emptyTitle: "暂无拦截记录",
+      emptyDesc:
+        "当前没有任何真实的拦截事件。运行时防御默认关闭，需在桌面端开启后才会开始拦截并产生记录；启用前不会展示任何模拟或占位数据。",
+      settings: "前往扫描配置",
+    },
     model: {
       title: "深度扫描模型配置",
       desc: "API Key 由 Electron safeStorage 加密保存在主进程，不会返回页面或写入普通偏好设置。",
