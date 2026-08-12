@@ -74,10 +74,10 @@ test("四语言无空字符串/纯空格值", () => {
 });
 
 test("getMessage: 无参数消息按当前语言解析", () => {
-  assert.equal(getMessage(catalogs["zh-CN"], "nav.dashboard"), "首页总览");
-  assert.equal(getMessage(catalogs["en-US"], "nav.dashboard"), "Dashboard");
-  assert.equal(getMessage(catalogs["ja-JP"], "nav.dashboard"), "ホーム総覧");
-  assert.equal(getMessage(catalogs["ko-KR"], "nav.dashboard"), "홈 개요");
+  assert.equal(getMessage(catalogs["zh-CN"], "nav.home"), "首页");
+  assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Home");
+  assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "ホーム");
+  assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "홈");
 });
 
 test("getMessage: {var} 插值(合成带参消息)", () => {
@@ -92,16 +92,16 @@ test("getMessage: {var} 插值(合成带参消息)", () => {
 });
 
 test("getMessage: 当前语言缺失回退 zh-CN, zh 也缺失返回 key 路径", () => {
-  // en-US 删掉 nav.dashboard → 回退 zh
+  // en-US 删掉 nav.home → 回退 zh
   const stripped = JSON.parse(JSON.stringify(catalogs["en-US"])) as Record<
     string,
     unknown
   >;
-  (stripped.nav as Record<string, unknown>).dashboard = undefined as never;
-  delete (stripped.nav as Record<string, unknown>).dashboard;
+  (stripped.nav as Record<string, unknown>).home = undefined as never;
+  delete (stripped.nav as Record<string, unknown>).home;
   assert.equal(
-    getMessage(stripped as unknown as Translations, "nav.dashboard"),
-    "首页总览",
+    getMessage(stripped as unknown as Translations, "nav.home"),
+    "首页",
   );
 
   // zh 也没有 → 返回 key 路径
@@ -132,16 +132,13 @@ test("getMessage: 复数 {one, other} 按 count 选择(en-US)", () => {
 });
 
 test("getMessage: 无参数 key 传参不影响结果", () => {
-  assert.equal(
-    getMessage(catalogs["zh-CN"], "nav.dashboard", { count: 5 }),
-    "首页总览",
-  );
+  assert.equal(getMessage(catalogs["zh-CN"], "nav.home", { count: 5 }), "首页");
 });
 
 test("catalogs: 覆盖四种语言", () => {
   const locales = Object.keys(catalogs).sort();
   assert.deepEqual(locales, [...LOCALES].sort());
   for (const locale of LOCALES) {
-    assert.ok(flatten(catalogs[locale as Locale])["nav.dashboard"]);
+    assert.ok(flatten(catalogs[locale as Locale])["nav.home"]);
   }
 });

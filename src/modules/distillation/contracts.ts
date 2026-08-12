@@ -109,6 +109,11 @@ export interface DistillationApplication {
   cancel(
     candidateId: string,
   ): Promise<Result<DistillationResult, DistillationErrorCode>>;
+  /**
+   * Number of persisted knowledge assets produced by distillation (approved
+   * candidates), or null when the knowledge repository is unavailable.
+   */
+  count(): Promise<number | null>;
 }
 
 export interface DistillationModuleContract {

@@ -12,8 +12,26 @@ export const settings = {
   themeDesc: "테마를 선택합니다",
   sections: {
     general: "일반",
+    scan: "스캔 구성",
+    model: "모델 구성",
     appearance: "모양",
     about: "정보",
+  },
+  scan: {
+    onDemand: "스캔 방식",
+    onDemandDesc:
+      "스캔은 요청 시 실행되며, 지원되는 로컬 AI 도구 로그를 읽고 증분 인덱스를 구축합니다.",
+    retentionNote: "아래 보존 기간은 사용량 및 스캔 캐시에도 적용됩니다:",
+  },
+  model: {
+    notConfigured: "LLM 미설정",
+    notConfiguredDesc:
+      "AI 생성 기능(증류, 보고서, AI 인사이트)을 사용할 수 없습니다. TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수를 설정하세요.",
+    configured: "LLM 구성됨",
+    baseUrl: "엔드포인트",
+    model: "모델",
+    apiKeyMasked: "API Key 구성됨(마스킹 표시)",
+    loading: "읽는 중…",
   },
   pageHeader: "설정",
   pageHeaderDesc:

@@ -164,6 +164,25 @@ export function MarketPage({ initial }: { initial: MarketPageData }) {
     [result.skills, installedSkillNames],
   );
 
+  /**
+   * Security pass rate for the current page only. The market API provides a
+   * securityScore/verdict per skill; a full-catalog rate would require paging
+   * the entire index server-side. When no skill on the page carries security
+   * evidence, the card shows "—" rather than a fabricated 100%.
+   */
+  const passRate = useMemo(() => {
+    const scored = result.skills.filter(
+      (s) => s.securityScore != null || s.verdict != null,
+    );
+    if (scored.length === 0) return null;
+    const passed = scored.filter(
+      (s) =>
+        s.verdict === "allow" ||
+        (s.securityScore != null && s.securityScore >= 80),
+    ).length;
+    return Math.round((passed / scored.length) * 100);
+  }, [result.skills]);
+
   const stats = result.stats;
   const pages = result.pagination.pages;
 
@@ -185,7 +204,11 @@ export function MarketPage({ initial }: { initial: MarketPageData }) {
           value={stats ? format.formatNumber(stats.officialCount) : "-"}
           hint={t("market.stats.hintCurrentPage")}
         />
-        <StatCard label={t("market.stats.passRate")} value="100%" />
+        <StatCard
+          label={t("market.stats.passRatePage")}
+          value={passRate === null ? "—" : `${passRate}%`}
+          hint={t("market.stats.hintCurrentPage")}
+        />
         <StatCard
           label={t("market.stats.installedCount")}
           value={format.formatNumber(installedCount)}

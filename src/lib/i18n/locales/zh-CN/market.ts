@@ -19,6 +19,7 @@ export const market = {
     totalSkills: "上架 Skill 总数",
     officialCount: "官方发布数",
     passRate: "安全通过率",
+    passRatePage: "本页通过率",
     installedCount: "已安装数",
     totalDownloads: "总下载量",
     hintCurrentPage: "当前页统计",
@@ -61,12 +62,18 @@ export const market = {
   security: {
     score: "安全分 {score}",
     scoreMissing: "安全分未提供",
+    safe: "安全",
+    attention: "需关注",
   },
   install: {
     button: "安装",
     toSelected: "安装到所选工具",
     success: "已安装到 {agent}",
     downloading: "下载并扫描中…",
+    target: "安装目标",
+    notDetected: "未检测到",
+    succeeded: "安装成功",
+    failed: "安装失败",
     failure: {
       scanBlocked: "静态扫描发现高风险规则，已阻止安装。",
       noAgent: "请选择安装目标",

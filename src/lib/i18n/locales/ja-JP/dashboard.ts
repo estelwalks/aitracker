@@ -176,6 +176,8 @@ export const dashboard = {
     rotateInsight: "次のインサイト",
     generateAIInsight: "AI 洞察を生成",
     generatingAIInsight: "生成中…",
+    aiNotConfigured: "LLM 未設定",
+    aiNotConfiguredDesc: "設定でモデルを構成すると AI インサイトを生成できます",
     insightDotsAria: "インサイトの切り替え",
     insightDot: "インサイト {index}",
     monitoringAria: "ローカルリスナーの状態",

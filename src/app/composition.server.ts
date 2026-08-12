@@ -64,12 +64,6 @@ import {
   createAtomicMonitoringStatusStore,
   monitoringStatusSchema,
 } from "../modules/monitoring/infrastructure.ts";
-import { createLocalSkillSecurityMonitor } from "../modules/security-assessment/adapters/local-skill-monitor.server.ts";
-import {
-  createAtomicSecurityAssessmentHistoryStore,
-  securityAssessmentHistorySchema,
-} from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
-import type { SecurityAssessmentHistoryDocument } from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -223,20 +217,13 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     now: () => clock.now(),
   });
 
-  // The security monitor is default-enabled in the scheduler below. This
-  // adapter reads only discovered local Skill/package content, never follows
-  // symlinks, and persists only opaque hashes plus assessment summaries.
-  const securityHistoryStore =
-    new NodeAtomicJsonStore<SecurityAssessmentHistoryDocument>({
-      filePath: join(tasksDir, "security-assessments.v1.json"),
-      defaultValue: { entries: [] },
-      schema: securityAssessmentHistorySchema,
-      clock,
-    });
-  const security = createLocalSkillSecurityMonitor({
-    history: createAtomicSecurityAssessmentHistoryStore(securityHistoryStore),
-    now: () => clock.now(),
-  });
+  // Automatic security assessment intentionally remains unavailable here.
+  // The Electron service owns the trusted-directory, O_NOFOLLOW/realpath and
+  // current-locale boundaries. Wiring the older background filesystem adapter
+  // would create a weaker second scanning path. The task registry therefore
+  // reports its stable `executor-unavailable` result until it can delegate to
+  // that same service; manual and configured automatic scans remain available
+  // through the desktop security IPC boundary.
 
   // AI orchestration: register the deterministic offline provider by default so
   // distillation/reports get a stable fallback. A real provider can be
@@ -321,7 +308,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         });
       },
     },
-    security,
     reports,
     monitoring,
   });

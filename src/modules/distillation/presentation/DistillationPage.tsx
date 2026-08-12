@@ -1,13 +1,12 @@
 import { useMemo, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { AlertTriangle, FolderOpen, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  Dot,
   EmptyState,
   PageHeader,
   Panel,
-  StatusBadge,
+  Segmented,
   TTButton,
 } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
@@ -16,6 +15,9 @@ import type { MessageKey } from "../../../lib/i18n/messages";
 import type { CandidateOutput } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
+import { DistillMetrics } from "./distill/DistillMetrics";
+import { MaterialDrawer } from "./distill/MaterialDrawer";
+import { ExpCard } from "./distill/ExpCard";
 
 const MAX_SELECTION = 8;
 
@@ -23,15 +25,12 @@ function keyOf(item: { source: string; sessionId: string }): string {
   return `${item.source}:${item.sessionId}`;
 }
 
-const APPROVAL_TONE: Record<
-  CandidateOutput["approvalState"],
-  "neutral" | "primary" | "ok" | "warn" | "danger"
-> = {
-  "waiting-approval": "warn",
-  approved: "ok",
-  cancelled: "neutral",
-};
-
+/**
+ * Distillation workbench aligned with the prototype: quick/advanced mode,
+ * session-level material picker, one-click run and an experiment card. All
+ * data is real (existing server fns); without a configured LLM the candidate
+ * is honestly marked as an offline fallback.
+ */
 export function DistillationPage({
   initial,
 }: {
@@ -40,15 +39,23 @@ export function DistillationPage({
   const { t, format } = useI18n();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  // The candidate most recently produced or actioned in this view. Because
-  // the application keeps candidates in memory and exposes no list API, this
-  // is the only candidate the workbench can act on after `start`.
+  const [mode, setMode] = useState<"quick" | "pro">("quick");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [active, setActive] = useState<CandidateOutput | undefined>(undefined);
+  const [runs, setRuns] = useState(0);
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
   const selectionCount = selected.size;
   const canStart =
     !busy && selectionCount > 0 && selectionCount <= MAX_SELECTION;
+  const selectedItems = useMemo(
+    () => sessions.filter((item) => selected.has(keyOf(item))),
+    [sessions, selected],
+  );
+  const selectedTurns = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.turns, 0),
+    [selectedItems],
+  );
 
   function toggle(item: DistillationSessionItem) {
     setSelected((prev) => {
@@ -65,9 +72,10 @@ export function DistillationPage({
   }
 
   async function handleStart() {
-    const refs = sessions
-      .filter((item) => selected.has(keyOf(item)))
-      .map((item) => ({ source: item.source, sessionId: item.sessionId }));
+    const refs = selectedItems.map((item) => ({
+      source: item.source,
+      sessionId: item.sessionId,
+    }));
     setBusy(true);
     try {
       const result = await startDistillation({ data: { sessionRefs: refs } });
@@ -80,6 +88,7 @@ export function DistillationPage({
         return;
       }
       setActive(result.candidate);
+      setRuns((current) => current + 1);
       toast.success(t("common.success"));
     } catch (error) {
       const ui = toUiError(error);
@@ -139,6 +148,9 @@ export function DistillationPage({
     }
   }
 
+  const offlineResult =
+    active?.mode === "offline" || active?.execution.status === "offline";
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -146,129 +158,120 @@ export function DistillationPage({
           title={t("common.distillation.pageTitle")}
           desc={t("common.distillation.pageDesc")}
         />
-        <TTButton
-          variant="primary"
-          disabled={!canStart}
-          title={
-            selectionCount === 0
-              ? t("common.distillation.startHint")
-              : undefined
-          }
-          onClick={handleStart}
-        >
-          <Sparkles className="size-3.5" />
-          {t("common.distillation.start")}
-        </TTButton>
+        <div className="flex items-center gap-2">
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "quick", label: t("common.distillation.modeQuick") },
+              { value: "pro", label: t("common.distillation.modePro") },
+            ]}
+          />
+          <TTButton
+            variant="primary"
+            disabled={!canStart}
+            title={
+              selectionCount === 0
+                ? t("common.distillation.runHint")
+                : undefined
+            }
+            onClick={handleStart}
+          >
+            <Sparkles className="size-3.5" />
+            {t("common.distillation.start")}
+          </TTButton>
+        </div>
       </div>
 
+      {offlineResult && (
+        <div className="mb-3 flex items-center gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {t("common.distillation.modelNotConfigured")}
+        </div>
+      )}
+
+      <DistillMetrics
+        selectedCount={selectionCount}
+        selectedTurns={selectedTurns}
+        runs={runs}
+        approved={active?.approvalState === "approved" ? 1 : 0}
+      />
+
       <Panel
-        className="mt-3"
+        className="mb-3"
         title={t("common.distillation.selectSessions", { max: MAX_SELECTION })}
         action={
-          selectionCount > 0 ? (
+          <div className="flex items-center gap-2">
             <span className="tt-num text-[11px] text-muted-foreground">
               {t("common.distillation.selected", { count: selectionCount })}
             </span>
-          ) : undefined
+            <TTButton
+              size="sm"
+              variant="ghost"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <FolderOpen className="size-3.5" />
+              {t("common.distillation.openMaterial")}
+            </TTButton>
+          </div>
         }
       >
-        {sessions.length === 0 ? (
-          <EmptyState
-            title={t("common.distillation.noSessions")}
-            desc={t("common.distillation.noSessionsDesc")}
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {sessions.map((item) => {
-              const key = keyOf(item);
-              const checked = selected.has(key);
-              const disabled = !checked && selected.size >= MAX_SELECTION;
-              return (
-                <li
-                  key={key}
-                  className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px]"
-                >
-                  <label className="flex min-w-[180px] flex-1 cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={disabled}
-                      onChange={() => toggle(item)}
-                      className="size-3.5 accent-primary"
-                    />
-                    <Dot className="bg-primary" />
-                    <span className="truncate font-medium text-foreground">
-                      {item.title}
-                    </span>
-                  </label>
-                  <span className="tt-num text-[11px] text-muted-foreground">
-                    {item.source}:{item.sessionId}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {t("common.distillation.selectedTurns", {
-                      count: item.turns,
-                    })}
-                  </span>
-                  <span className="tt-num text-[11px] text-muted-foreground">
-                    {format.formatDateTime(item.startedAt, false)}
-                  </span>
-                  <StatusBadge tone="neutral">{item.status}</StatusBadge>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Panel>
-
-      <Panel className="mt-3" title={t("common.distillation.candidate")}>
-        <p className="mb-3 text-[11px] text-muted-foreground">
-          {t("common.distillation.candidateNote")}
-        </p>
-        {active ? (
-          <div className="rounded-sm border border-border bg-surface px-3 py-3 text-[13px]">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              <span className="truncate font-medium text-foreground">
-                {active.title}
-              </span>
-              <StatusBadge tone={APPROVAL_TONE[active.approvalState]}>
-                {active.approvalState}
-              </StatusBadge>
-              <span className="tt-num text-[11px] text-muted-foreground">
-                {active.mode}
-              </span>
-              <span className="tt-num text-[11px] text-muted-foreground">
-                {format.formatDateTime(active.generatedAt, false)}
-              </span>
-            </div>
-            <p className="mt-2 line-clamp-3 text-[12px] text-muted-foreground">
-              {active.summary}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <TTButton
-                variant="primary"
-                size="sm"
-                disabled={busy || active.approvalState !== "waiting-approval"}
-                onClick={handleApprove}
-              >
-                {t("common.distillation.approve")}
-              </TTButton>
-              <TTButton
-                variant="danger"
-                size="sm"
-                disabled={busy || active.approvalState !== "waiting-approval"}
-                onClick={handleCancel}
-              >
-                {t("common.distillation.cancel")}
-              </TTButton>
-            </div>
-          </div>
-        ) : (
+        {selectedItems.length === 0 ? (
           <EmptyState
             title={t("common.distillation.candidate")}
             desc={t("common.distillation.candidateNote")}
           />
+        ) : (
+          <ul className="divide-y divide-border">
+            {selectedItems.map((item) => (
+              <li
+                key={keyOf(item)}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px]"
+              >
+                <span className="min-w-[180px] flex-1 truncate font-medium text-foreground">
+                  {item.title}
+                </span>
+                <span className="tt-num text-[11px] text-muted-foreground">
+                  {item.source}:{item.sessionId}
+                </span>
+                <span className="tt-num text-[11px] text-muted-foreground">
+                  {t("common.distillation.selectedTurns", {
+                    count: item.turns,
+                  })}
+                </span>
+                <span className="tt-num text-[11px] text-muted-foreground">
+                  {format.formatDateTime(item.startedAt, false)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </Panel>
+
+      {active ? (
+        <ExpCard
+          candidate={active}
+          busy={busy}
+          onApprove={handleApprove}
+          onCancel={handleCancel}
+        />
+      ) : (
+        <Panel title={t("common.distillation.candidate")}>
+          <EmptyState
+            title={t("common.distillation.candidate")}
+            desc={t("common.distillation.candidateNote")}
+          />
+        </Panel>
+      )}
+
+      {drawerOpen && (
+        <MaterialDrawer
+          sessions={sessions}
+          selected={selected}
+          onToggle={toggle}
+          onClose={() => setDrawerOpen(false)}
+        />
+      )}
     </>
   );
 }

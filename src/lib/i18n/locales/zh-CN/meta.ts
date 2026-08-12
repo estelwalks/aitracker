@@ -6,6 +6,7 @@ export const meta = {
     dashboard: "首页总览 · {appName} V3.0",
     skills: "Skill 管理 · {appName} V3.0",
     market: "Skill 市场 · {appName} V3.0",
+    tracker: "燃烧榜 · {appName} V3.0",
     security: "安全检测 · {appName} V3.0",
     sessions: "会话恢复 · {appName} V3.0",
     sources: "数据来源 · {appName} V3.0",

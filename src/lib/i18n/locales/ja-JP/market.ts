@@ -23,6 +23,7 @@ export const market = {
     totalSkills: "掲載 Skill 総数",
     officialCount: "公式リリース数",
     passRate: "セキュリティ通過率",
+    passRatePage: "このページの通過率",
     installedCount: "インストール済み数",
     totalDownloads: "総ダウンロード数",
     hintCurrentPage: "現在のページの集計",
@@ -65,10 +66,16 @@ export const market = {
   security: {
     score: "セキュリティスコア {score}",
     scoreMissing: "セキュリティスコア未提供",
+    safe: "安全",
+    attention: "要確認",
   },
   install: {
     button: "インストール",
     toSelected: "選択したツールにインストール",
+    target: "インストール先",
+    notDetected: "未検出",
+    succeeded: "インストール成功",
+    failed: "インストール失敗",
     success: "{agent} にインストールしました",
     downloading: "ダウンロード・スキャン中…",
     failure: {

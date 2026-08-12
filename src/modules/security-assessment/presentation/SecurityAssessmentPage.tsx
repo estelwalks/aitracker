@@ -1,602 +1,576 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Check,
-  FolderOpen,
-  Search,
-  ShieldAlert,
+  Boxes,
+  BrainCircuit,
+  FileScan,
+  Layers,
+  MonitorX,
+  RefreshCw,
   ShieldCheck,
   ShieldX,
-  Trash2,
-  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  PageHeader,
-  Panel,
-  StatusBadge,
-  TTButton,
-} from "../../../components/tt";
+import { PageHeader } from "../../../components/tt";
+import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
-import { brandParams } from "../../../lib/app-config";
 import {
-  filterAllLabel,
-  severityLabels,
-  verdictLabels,
-} from "../../../lib/security/labels";
+  getDesktopSecurityClient,
+  type SecurityClient,
+  type SecurityModelConfigUpdate,
+} from "../query/desktop-client";
+import { getBrowserSecurityClient } from "../query/browser-client";
+import { AutoScanGuide } from "./components/AutoScanGuide";
+import { ModelConfigDialog } from "./components/ModelConfigDialog";
+import { ScanHistory } from "./components/ScanHistory";
+import { ScanStatus } from "./components/ScanStatus";
+import { ScanVortex } from "./components/ScanVortex";
+import { SecurityBriefing } from "./components/SecurityBriefing";
+import { SecurityResults } from "./components/SecurityResults";
 import {
-  DAILY_SCAN_LIMIT,
-  readDailyScanCount,
-  seedDailyCountFromPlatform,
-  consumeDailyScan,
-} from "../query";
-import {
-  clearSecurityHistory,
-  loadAssessmentHistory,
-  saveAssessmentHistory,
-  selectSkillFile,
-  scanSelection,
-  type SecurityAssessmentReport,
-  type SecuritySeverity,
-} from "../query";
-import { formatDuration } from "../../../lib/security/presentation";
-import {
-  SECURITY_RULE_KINDS,
-  SECURITY_RULES_VERSION,
-} from "../../../lib/security/rules";
+  EMPTY_SECURITY_PROGRESS,
+  EMPTY_SECURITY_TOTALS,
+  SECURITY_RISK_KINDS,
+  isScanActive,
+  latestHistory,
+  latestScanEntries,
+  summarizeReports,
+  type SecurityHistoryView,
+  type SecurityModelConfigView,
+  type SecurityRuntimeCapabilityView,
+  type SecurityScanMode,
+  type SecurityScanStateView,
+  type SecuritySkillView,
+} from "./security-view";
 
-type VerdictFilter = "全部" | "安全" | "可疑" | "危险";
-type ScanPhase = "空闲" | "扫描中" | "已完成";
-
-const SCAN_STEPS = ["读取本地 SKILL.md", ...SECURITY_RULE_KINDS];
-
-const severityClass: Record<SecuritySeverity, string> = {
-  高危: "text-danger",
-  中危: "text-warn",
-  低危: "text-muted-foreground",
+const IDLE_STATE: SecurityScanStateView = {
+  scanId: null,
+  status: "idle",
+  mode: null,
+  trigger: null,
+  locale: null,
+  progress: EMPTY_SECURITY_PROGRESS,
+  resultIds: [],
 };
 
-function verdictClass(verdict: SecurityAssessmentReport["verdict"]): string {
-  return verdict === "危险"
-    ? "text-danger"
-    : verdict === "可疑"
-      ? "text-warn"
-      : "text-ok";
-}
-
-function verdictTone(
-  verdict: SecurityAssessmentReport["verdict"],
-): "ok" | "warn" | "danger" {
-  return verdict === "危险" ? "danger" : verdict === "可疑" ? "warn" : "ok";
-}
-
 export function SecurityAssessmentPage() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const directoryInputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-  const [phase, setPhase] = useState<ScanPhase>("空闲");
-  const [completedSteps, setCompletedSteps] = useState(0);
-  const [report, setReport] = useState<SecurityAssessmentReport | null>(null);
-  const [history, setHistory] = useState<SecurityAssessmentReport[]>([]);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyQuery, setHistoryQuery] = useState("");
-  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>("全部");
-  const [used, setUsed] = useState(() =>
-    typeof window === "undefined" ? 0 : readDailyScanCount(window.localStorage),
-  );
   const { t, format } = useI18n();
+  const clientRef = useRef<SecurityClient | null>(null);
+  const previousStatus = useRef<SecurityScanStateView["status"]>("idle");
+  const [connection, setConnection] = useState<
+    "connecting" | "available" | "unavailable"
+  >("connecting");
+  const [loading, setLoading] = useState(true);
+  const [skills, setSkills] = useState<readonly SecuritySkillView[]>([]);
+  const [scanState, setScanState] = useState<SecurityScanStateView>(IDLE_STATE);
+  const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
+  const [modelConfig, setModelConfig] =
+    useState<SecurityModelConfigView | null>(null);
+  const [runtime, setRuntime] = useState<SecurityRuntimeCapabilityView | null>(
+    null,
+  );
+  const [modelOpen, setModelOpen] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      await seedDailyCountFromPlatform();
-      const [reports] = await Promise.all([loadAssessmentHistory()]);
-      if (cancelled) return;
-      setUsed(readDailyScanCount(window.localStorage));
-      setHistory(reports);
-      setHistoryLoaded(true);
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
+  const getClient = useCallback(async () => {
+    if (clientRef.current) return clientRef.current;
+    const client =
+      getDesktopSecurityClient() ?? (await getBrowserSecurityClient());
+    clientRef.current = client;
+    return client;
   }, []);
 
-  const remaining = Math.max(0, DAILY_SCAN_LIMIT - used);
-  const stats = useMemo(() => {
-    const result = {
-      scanned: history.length,
-      safe: 0,
-      suspicious: 0,
-      dangerous: 0,
-      averageDurationMs: 0,
-    };
-    for (const item of history) {
-      if (item.verdict === "安全") result.safe += 1;
-      else if (item.verdict === "可疑") result.suspicious += 1;
-      else result.dangerous += 1;
-      result.averageDurationMs += item.durationMs;
-    }
-    result.averageDurationMs = result.scanned
-      ? Math.round(result.averageDurationMs / result.scanned)
-      : 0;
-    return result;
-  }, [history]);
-  const filteredHistory = useMemo(() => {
-    const query = historyQuery.trim().toLowerCase();
-    return history.filter((item) => {
-      if (verdictFilter !== "全部" && item.verdict !== verdictFilter)
-        return false;
-      return !query || item.targetLabel.toLowerCase().includes(query);
-    });
-  }, [history, historyQuery, verdictFilter]);
-
-  const runScan = async (files: FileList) => {
-    if (files.length === 0 || phase === "扫描中") return;
-    try {
-      // 读取、文件名及 100MB 校验都发生在额度消费之前。
-      const selected = await selectSkillFile(files);
-      const nextUsed = consumeDailyScan(window.localStorage);
-      setUsed(nextUsed);
-      setPhase("扫描中");
-      setCompletedSteps(1);
-      setReport(null);
-      const completedReport = await scanSelection(
-        selected,
-        ({ completedDimensions }) => setCompletedSteps(completedDimensions + 1),
-      );
-      const nextHistory = [completedReport, ...history];
-      setReport(completedReport);
-      setHistory(nextHistory);
-      setPhase("已完成");
-      void saveAssessmentHistory(nextHistory);
-      toast.success(
-        t("security.toast.scanDone", {
-          verdict: t(verdictLabels[completedReport.verdict]),
-        }),
-      );
-    } catch (error) {
-      setPhase("空闲");
-      setCompletedSteps(0);
+  const reportError = useCallback(
+    (error: unknown) => {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+    },
+    [t],
+  );
+
+  const refresh = useCallback(
+    async (reconnect = false) => {
+      if (reconnect) clientRef.current = null;
+      setConnection("connecting");
+      const client = await getClient();
+      if (client == null) {
+        setConnection("unavailable");
+        setLoading(false);
+        return;
+      }
+      if (client.transport === "desktop") setConnection("available");
+      try {
+        const [nextSkills, nextState, nextHistory, nextConfig, nextRuntime] =
+          await Promise.all([
+            client.listSkills(),
+            client.getStatus(),
+            client.getHistory(),
+            client.getModelConfig(),
+            client.getRuntimeCapability(),
+          ]);
+        setSkills(nextSkills);
+        setScanState(nextState);
+        setHistory(nextHistory);
+        setModelConfig(nextConfig);
+        setRuntime(nextRuntime);
+        setConnection("available");
+      } catch (error) {
+        if (client.transport === "companion") {
+          clientRef.current = null;
+          setConnection("unavailable");
+        }
+        reportError(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getClient, reportError],
+  );
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("configureModel") === "1"
+    ) {
+      setModelOpen(true);
     }
-  };
+  }, []);
 
-  const resetReport = () => {
-    if (!window.confirm(t("security.confirm.deleteReport"))) return;
-    setReport(null);
-    setPhase("空闲");
-    setCompletedSteps(0);
-  };
+  useEffect(() => {
+    if (!isScanActive(scanState.status)) return;
+    const client = clientRef.current;
+    if (client == null) return;
+    let disposed = false;
+    let busy = false;
+    const poll = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const next = await client.getStatus();
+        if (disposed) return;
+        if (!isScanActive(next.status)) {
+          const nextHistory = await client.getHistory();
+          if (disposed) return;
+          // Commit the matching history before the terminal state. Updating
+          // scanState tears down this polling effect, so doing it first would
+          // mark the request disposed and leave a completed scan looking empty.
+          setHistory(nextHistory);
+        }
+        setScanState(next);
+      } catch (error) {
+        if (!disposed) reportError(error);
+      } finally {
+        busy = false;
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 450);
+    void poll();
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [reportError, scanState.status]);
 
-  const clearHistory = async () => {
-    if (!window.confirm(t("security.confirm.clearHistory"))) return;
-    setHistory([]);
-    await clearSecurityHistory();
-    toast.success(t("security.toast.historyCleared"));
-  };
+  useEffect(() => {
+    const previous = previousStatus.current;
+    previousStatus.current = scanState.status;
+    if (!isScanActive(previous) || isScanActive(scanState.status)) return;
+    if (scanState.status === "complete")
+      toast.success(t("security.center.toast.completed"));
+    else if (scanState.status === "partial")
+      toast.warning(t("security.center.toast.partial"));
+    else if (scanState.status === "failed")
+      toast.error(t("security.center.toast.failed"));
+  }, [scanState.status, t]);
 
-  const progress = Math.round((completedSteps / SCAN_STEPS.length) * 100);
-  const statCards = [
-    {
-      label: t("security.stats.scanned"),
-      value: format.formatNumber(stats.scanned),
-      className: "",
+  const latest = latestHistory(history);
+  const riskKinds = runtime?.riskKinds ?? SECURITY_RISK_KINDS;
+  const latestEntries = useMemo(() => latestScanEntries(history), [history]);
+  const latestTotals = useMemo(
+    () => summarizeReports(latestEntries),
+    [latestEntries],
+  );
+  const statusTotals = isScanActive(scanState.status)
+    ? {
+        ...EMPTY_SECURITY_TOTALS,
+        total: scanState.progress.discovered,
+        failed: scanState.progress.failed,
+        skipped: scanState.progress.skipped,
+      }
+    : latestTotals;
+  const health = latestTotals.total
+    ? Math.round((latestTotals.safe / latestTotals.total) * 100)
+    : 0;
+  const lastScanLabel = latest
+    ? format.formatDateTime(latest.finishedAt, false)
+    : "—";
+  const latestPhase =
+    latest == null
+      ? null
+      : latest.status === "skipped"
+        ? "partial"
+        : latest.status;
+
+  const startScan = useCallback(
+    async (
+      mode: SecurityScanMode,
+      scope: "single" | "all" = "all",
+      skillRef?: string,
+    ) => {
+      const client = clientRef.current;
+      if (client == null || isScanActive(scanState.status)) return;
+      try {
+        const next = await client.startScan({
+          scope,
+          mode,
+          trigger: "manual",
+          ...(scope === "single" && skillRef
+            ? { skillRef: skillRef as `skill:${string}` }
+            : {}),
+        });
+        setScanState(next);
+        if (next.status === "model-required") {
+          setModelOpen(true);
+          toast.warning(t("security.center.model.requiredDesc"));
+        } else {
+          toast.success(t("security.center.toast.started"));
+        }
+      } catch (error) {
+        reportError(error);
+      }
     },
-    {
-      label: t(verdictLabels["安全"]),
-      value: format.formatNumber(stats.safe),
-      className: "text-ok",
+    [reportError, scanState.status, t],
+  );
+
+  const selectDirectory = useCallback(async () => {
+    const client = clientRef.current;
+    if (client == null || !client.supportsDirectorySelection) return;
+    try {
+      const selected = await client.selectSkillDirectory();
+      if (selected == null) return;
+      setSkills((current) => [
+        selected,
+        ...current.filter((item) => item.skillRef !== selected.skillRef),
+      ]);
+      toast.success(t("security.center.toast.directorySelected"));
+      await startScan("quick", "single", selected.skillRef);
+    } catch (error) {
+      reportError(error);
+    }
+  }, [reportError, startScan, t]);
+
+  const cancelScan = useCallback(async () => {
+    const client = clientRef.current;
+    if (client == null) return;
+    try {
+      const accepted = await client.cancelScan();
+      if (accepted) {
+        setScanState((current) => ({ ...current, status: "cancelling" }));
+        toast.info(t("security.center.toast.cancelled"));
+      }
+    } catch (error) {
+      reportError(error);
+    }
+  }, [reportError, t]);
+
+  const saveModel = useCallback(
+    async (update: SecurityModelConfigUpdate) => {
+      const client = clientRef.current;
+      if (client == null) return;
+      setSavingModel(true);
+      try {
+        const saved = await client.setModelConfig(update);
+        setModelConfig(saved);
+        setModelOpen(false);
+        toast.success(t("security.center.toast.modelSaved"));
+      } catch (error) {
+        reportError(error);
+      } finally {
+        setSavingModel(false);
+      }
     },
-    {
-      label: t(verdictLabels["可疑"]),
-      value: format.formatNumber(stats.suspicious),
-      className: "text-warn",
-    },
-    {
-      label: t(verdictLabels["危险"]),
-      value: format.formatNumber(stats.dangerous),
-      className: "text-danger",
-    },
-    {
-      label: t("security.stats.averageDuration"),
-      value:
-        stats.scanned === 0 ? "—" : formatDuration(stats.averageDurationMs),
-      className: "",
-    },
-    {
-      label: t("security.stats.rulesVersion"),
-      value: `v${SECURITY_RULES_VERSION}`,
-      className: "",
-    },
-  ];
+    [reportError, t],
+  );
 
   return (
-    <>
+    <div className="space-y-5 pb-12">
       <PageHeader
         title={t("security.pageHeader")}
-        desc={t("security.pageHeaderDesc")}
+        desc={t("security.center.summary", {
+          skills: skills.length,
+          dimensions: riskKinds.length,
+          health,
+        })}
       />
 
-      <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
-        {statCards.map((card) => (
-          <div key={card.label} className="bg-surface-1 px-3 py-2.5">
-            <div className="tt-label text-[11px] text-muted-foreground">
-              {card.label}
-            </div>
-            <div
-              className={`tt-num mt-1 text-lg leading-none ${card.className}`}
+      {connection === "unavailable" ? (
+        <section className="grid min-h-[520px] place-items-center rounded-3xl bg-card p-8 text-center shadow-[var(--elev-1)]">
+          <div className="max-w-lg">
+            <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-surface-2 text-muted-foreground">
+              <MonitorX className="size-8" strokeWidth={1.5} />
+            </span>
+            <h2 className="mt-5 text-[16px] font-semibold">
+              {t("security.center.unavailable.title")}
+            </h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+              {t("security.center.unavailable.desc", brandParams)}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refresh(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[12px] font-medium text-primary-foreground"
             >
-              {card.value}
-            </div>
+              <RefreshCw className="size-4" />{" "}
+              {t("security.center.unavailable.retry")}
+            </button>
           </div>
-        ))}
-      </div>
-
-      <div className="mb-3 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[12px] text-muted-foreground">
-        {t("security.rulesNotice", {
-          ...brandParams,
-          version: SECURITY_RULES_VERSION,
-        })}
-      </div>
-
-      <div
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragging(false);
-          void runScan(event.dataTransfer.files);
-        }}
-        className={`flex flex-col items-center justify-center rounded-sm border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragging
-            ? "border-primary bg-primary/10"
-            : "border-border-strong bg-surface-1"
-        }`}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".md,text/markdown"
-          className="hidden"
-          onChange={(event) =>
-            event.target.files && void runScan(event.target.files)
-          }
-        />
-        <input
-          ref={(element) => {
-            directoryInputRef.current = element;
-            element?.setAttribute("webkitdirectory", "");
-            element?.setAttribute("directory", "");
-          }}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(event) =>
-            event.target.files && void runScan(event.target.files)
-          }
-        />
-        <Upload className="size-7 text-muted-foreground" />
-        <p className="mt-3 text-sm font-medium">
-          {t("security.dropzone.title")}
-        </p>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          {t("security.dropzone.hint")}
-        </p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground/80">
-          {t("security.dropzone.tccHint")}
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <TTButton
-            disabled={phase === "扫描中" || remaining === 0}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {t("security.dropzone.selectFile")}
-          </TTButton>
-          <TTButton
-            disabled={phase === "扫描中" || remaining === 0}
-            onClick={() => directoryInputRef.current?.click()}
-          >
-            <FolderOpen className="size-3.5" />{" "}
-            {t("security.dropzone.selectFolder")}
-          </TTButton>
+        </section>
+      ) : connection === "connecting" || loading ? (
+        <div className="grid min-h-[480px] place-items-center text-muted-foreground">
+          <div className="text-center">
+            <RefreshCw className="mx-auto size-6 animate-spin" />
+            <p className="mt-3 text-[12px]">
+              {t("security.center.unavailable.connecting")}
+            </p>
+          </div>
         </div>
-        <p className="tt-num mt-3 text-[11px] text-muted-foreground">
-          {t("security.dropzone.remaining", {
-            remaining: format.formatNumber(remaining),
-            limit: format.formatNumber(DAILY_SCAN_LIMIT),
-          })}
-        </p>
-      </div>
+      ) : (
+        <>
+          {clientRef.current?.transport === "companion" && (
+            <div className="flex items-center gap-2 rounded-xl bg-ok/10 px-3.5 py-2 text-[11px] text-ok ring-1 ring-ok/15">
+              <span className="size-1.5 rounded-full bg-ok" />
+              {t("security.center.unavailable.connected")}
+            </div>
+          )}
+          <SecurityBriefing
+            totals={latestTotals}
+            dimensions={riskKinds.length}
+            lastScan={lastScanLabel}
+            latestStatus={
+              latestEntries.some(
+                (item) =>
+                  item.status === "partial" || item.status === "skipped",
+              )
+                ? "partial"
+                : latestPhase
+            }
+            runtime={runtime}
+            scanning={isScanActive(scanState.status)}
+            canSelectDirectory={
+              clientRef.current?.supportsDirectorySelection === true
+            }
+            onQuickScan={() => void startScan("quick")}
+            onFullScan={() => void startScan("full")}
+            onSelectDirectory={() => void selectDirectory()}
+          />
 
-      {phase === "扫描中" && (
-        <Panel
-          className="mb-3"
-          title={t("security.scanning.title", { progress })}
-        >
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-            <div
-              className="h-full bg-primary transition-all duration-150"
-              style={{ width: `${progress}%` }}
+          <AutoScanGuide runtime={runtime} />
+
+          <section className="grid gap-3 rounded-2xl bg-card p-4 shadow-[var(--elev-1)] md:grid-cols-2">
+            <div className="flex flex-wrap items-center gap-3 px-1 pb-1 md:col-span-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[12.5px] font-semibold">
+                  {t("security.center.model.title")}
+                </h2>
+                <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                  {modelConfig?.configured
+                    ? t("security.center.model.configuredState")
+                    : t("security.center.model.missingState")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModelOpen(true)}
+                className="rounded-full bg-surface-2 px-3 py-1.5 text-[11px] hover:bg-accent"
+              >
+                {modelConfig?.configured
+                  ? t("security.center.model.update")
+                  : t("security.center.model.configure")}
+              </button>
+            </div>
+            <ModeCard
+              icon={FileScan}
+              title={t("security.center.mode.quick")}
+              description={t("security.center.mode.quickDesc")}
+              action={t("security.center.briefing.quickScan")}
+              disabled={isScanActive(scanState.status)}
+              onClick={() => void startScan("quick")}
             />
-          </div>
-          <ol className="mt-3 grid gap-1 text-[12px] sm:grid-cols-2 lg:grid-cols-3">
-            {SCAN_STEPS.map((step, index) => {
-              const done = index < completedSteps;
-              const current = index === completedSteps;
-              const label = index === 0 ? t("security.scanSteps.read") : step;
-              return (
-                <li
-                  key={step}
-                  className={`flex items-center gap-2 ${done ? "text-ok" : current ? "text-foreground" : "text-muted-foreground/50"}`}
-                >
-                  {done ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <span className="tt-num grid size-3.5 place-items-center rounded-full border text-[9px]">
-                      {index + 1}
-                    </span>
-                  )}
-                  {label}
-                </li>
-              );
-            })}
-          </ol>
-        </Panel>
+            <ModeCard
+              icon={BrainCircuit}
+              title={t("security.center.mode.full")}
+              description={t("security.center.mode.fullDesc")}
+              action={
+                modelConfig?.configured
+                  ? t("security.center.briefing.fullScan")
+                  : t("security.center.model.configure")
+              }
+              warning={
+                !modelConfig?.configured
+                  ? t("security.center.mode.modelRequired")
+                  : undefined
+              }
+              disabled={isScanActive(scanState.status)}
+              onClick={() => void startScan("full")}
+            />
+          </section>
+
+          <ScanStatus
+            state={scanState}
+            totals={statusTotals}
+            lastScan={lastScanLabel}
+          />
+
+          {latestEntries.length > 0 && (
+            <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+              <Metric
+                icon={Boxes}
+                label={t("security.center.metrics.scannedSkills")}
+                value={latestTotals.total}
+              />
+              <Metric
+                icon={ShieldCheck}
+                label={t("security.center.metrics.safe")}
+                value={latestTotals.safe}
+                color="var(--ok)"
+              />
+              <Metric
+                icon={ShieldX}
+                label={t("security.center.metrics.unsafe")}
+                value={
+                  latestTotals.warn + latestTotals.danger + latestTotals.unknown
+                }
+                color={
+                  latestTotals.warn + latestTotals.danger + latestTotals.unknown
+                    ? "var(--danger)"
+                    : undefined
+                }
+              />
+              <Metric
+                icon={Layers}
+                label={t("security.center.metrics.dimensions")}
+                value={riskKinds.length}
+              />
+              <Metric
+                icon={FileScan}
+                label={t("security.center.metrics.files")}
+                value={latestTotals.files}
+              />
+              <Metric
+                icon={AlertTriangle}
+                label={t("security.center.metrics.failed")}
+                value={latestTotals.failed}
+                color={latestTotals.failed ? "var(--danger)" : undefined}
+              />
+              <Metric
+                icon={AlertTriangle}
+                label={t("security.center.metrics.skipped")}
+                value={latestTotals.skipped}
+                color={latestTotals.skipped ? "var(--warn)" : undefined}
+              />
+            </section>
+          )}
+
+          <SecurityResults
+            entries={latestEntries}
+            dimensions={riskKinds.length}
+            onRescan={(entry) =>
+              void startScan(entry.mode, "single", entry.skillRef)
+            }
+          />
+          <ScanHistory entries={history} />
+        </>
       )}
 
-      {report && <SecurityReportPanel report={report} onDelete={resetReport} />}
-
-      <Panel
-        title={t("security.history.title")}
-        className="mt-3"
-        action={
-          history.length > 0 ? (
-            <TTButton
-              size="sm"
-              variant="ghost"
-              disabled={!historyLoaded}
-              onClick={() => void clearHistory()}
-            >
-              <Trash2 className="size-3.5" /> {t("security.history.clear")}
-            </TTButton>
-          ) : undefined
-        }
-      >
-        {!historyLoaded ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t("security.history.loading")}
-          </p>
-        ) : history.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            {t("security.history.empty")}
-          </p>
-        ) : (
-          <>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <label className="relative min-w-[180px] flex-1">
-                <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="search"
-                  value={historyQuery}
-                  onChange={(event) => setHistoryQuery(event.target.value)}
-                  placeholder={t("security.history.searchPlaceholder")}
-                  className="h-7 w-full rounded-sm border border-border bg-surface-2 pl-7 pr-2 text-[12px] outline-none focus:border-primary"
-                />
-              </label>
-              {(["全部", "安全", "可疑", "危险"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setVerdictFilter(value)}
-                  className={`h-7 rounded-sm border px-2 text-[11px] ${verdictFilter === value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
-                >
-                  {value === "全部"
-                    ? t(filterAllLabel)
-                    : t(verdictLabels[value])}
-                </button>
-              ))}
-            </div>
-            <ul className="divide-y divide-border">
-              {filteredHistory.map((item, index) => (
-                <li key={`${item.scannedAt}-${index}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReport(item);
-                      setPhase("已完成");
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    className="flex w-full items-center gap-3 py-2 text-left text-[13px] hover:bg-accent/40"
-                  >
-                    <span className="tt-num text-muted-foreground">
-                      {format.formatDateTime(item.scannedAt, false)}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">
-                      {item.targetLabel}
-                    </span>
-                    <span className="tt-num hidden text-[11px] text-muted-foreground sm:inline">
-                      {formatDuration(item.durationMs)}
-                    </span>
-                    <StatusBadge tone={verdictTone(item.verdict)}>
-                      {t(verdictLabels[item.verdict])}
-                    </StatusBadge>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              {t("security.history.showing", {
-                shown: format.formatNumber(filteredHistory.length),
-                total: format.formatNumber(history.length),
-              })}
-            </p>
-          </>
-        )}
-      </Panel>
-    </>
+      {isScanActive(scanState.status) && (
+        <ScanVortex
+          state={scanState}
+          skills={skills}
+          riskKinds={riskKinds}
+          onCancel={() => void cancelScan()}
+        />
+      )}
+      <ModelConfigDialog
+        open={modelOpen}
+        config={modelConfig}
+        saving={savingModel}
+        onClose={() => setModelOpen(false)}
+        onSave={(update) => void saveModel(update)}
+      />
+    </div>
   );
 }
 
-function SecurityReportPanel({
-  report,
-  onDelete,
+function ModeCard({
+  icon: Icon,
+  title,
+  description,
+  action,
+  warning,
+  disabled,
+  onClick,
 }: {
-  report: SecurityAssessmentReport;
-  onDelete: () => void;
+  icon: typeof FileScan;
+  title: string;
+  description: string;
+  action: string;
+  warning?: string;
+  disabled?: boolean;
+  onClick: () => void;
 }) {
-  const { t, format } = useI18n();
-  const VerdictIcon =
-    report.verdict === "危险"
-      ? ShieldX
-      : report.verdict === "可疑"
-        ? ShieldAlert
-        : ShieldCheck;
-  const riskByKind = new Map(
-    SECURITY_RULE_KINDS.map((kind) => [
-      kind,
-      report.risks.filter((risk) => risk.kind === kind),
-    ]),
-  );
   return (
-    <Panel
-      className="mb-3"
-      title={t("security.report.title", { name: report.targetLabel })}
-      action={
-        <div className="flex gap-1">
-          <TTButton size="sm" variant="danger" onClick={onDelete}>
-            <Trash2 className="size-3.5" /> {t("common.delete")}
-          </TTButton>
-        </div>
-      }
-    >
-      <div
-        className={`flex flex-wrap items-center gap-2 ${verdictClass(report.verdict)}`}
-      >
-        <VerdictIcon className="size-6" />
-        <span className="text-sm font-semibold">
-          {t("security.report.verdictLabel", {
-            verdict: t(verdictLabels[report.verdict]),
-          })}
-        </span>
-        <span className="tt-num text-lg font-semibold">{report.riskScore}</span>
-        <span className="text-[11px] text-muted-foreground">
-          {t("security.report.riskScore")}
-        </span>
-        <span className="ml-auto text-[12px]">
-          {t("security.report.riskHits", {
-            count: format.formatNumber(report.risks.length),
-            duration: formatDuration(report.durationMs),
-          })}
-        </span>
-      </div>
-      <p className="mt-2 text-[12px] text-muted-foreground">
-        {t("security.privacy.statement")}
-      </p>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
-        <div
-          className="h-full rounded-full"
-          style={{
-            width: `${report.riskScore}%`,
-            background:
-              report.riskScore >= 70
-                ? "var(--color-danger)"
-                : report.riskScore >= 30
-                  ? "var(--color-warn)"
-                  : "var(--color-ok)",
-          }}
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {SECURITY_RULE_KINDS.map((kind, index) => {
-          const risks = riskByKind.get(kind) ?? [];
-          const worst = risks.some((risk) => risk.severity === "高危")
-            ? "text-danger"
-            : risks.length > 0
-              ? "text-warn"
-              : "text-ok";
-          return (
-            <div
-              key={kind}
-              className="rounded-sm border border-border bg-surface-2 p-2"
-            >
-              <div className="tt-num text-[10px] text-muted-foreground">
-                {String(index + 1).padStart(2, "0")}
-              </div>
-              <div className="mt-1 text-[12px]">{kind}</div>
-              <div className={`mt-1 text-[11px] ${worst}`}>
-                {risks.length === 0
-                  ? t("security.report.pass")
-                  : t("security.report.hits", {
-                      count: format.formatNumber(risks.length),
-                    })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {report.risks.length === 0 ? (
-        <div className="mt-4 flex items-center gap-2 rounded-sm border border-ok/30 bg-ok/10 p-3 text-[13px] text-ok">
-          <Check className="size-4" />
-          {t("security.report.noRisks")}
-        </div>
-      ) : (
-        <div className="mt-4">
-          <div className="tt-label mb-2">
-            {t("security.report.riskDetails")}
-          </div>
-          <ul className="space-y-2">
-            {report.risks.map((risk, index) => (
-              <li
-                key={`${risk.kind}-${risk.severity}-${index}`}
-                className="rounded-sm border border-border bg-surface-2 p-3 text-[13px]"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <AlertTriangle
-                    className={`size-3.5 ${severityClass[risk.severity]}`}
-                  />
-                  <span className="font-medium">{risk.kind}</span>
-                  <StatusBadge
-                    tone={
-                      risk.severity === "高危"
-                        ? "danger"
-                        : risk.severity === "中危"
-                          ? "warn"
-                          : "neutral"
-                    }
-                  >
-                    {t(severityLabels[risk.severity] ?? "common.unknown")}
-                  </StatusBadge>
-                  <span className="rounded-sm border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    {risk.source}
-                  </span>
-                </div>
-                <p className="mt-1 text-muted-foreground">
-                  {t("security.report.riskDetails")}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="mt-4 rounded-sm border border-border bg-surface-2 p-3 text-[13px]">
-        <div className="tt-label mb-1">{t("security.report.reviewTitle")}</div>
-        <p className="text-muted-foreground">
-          {report.verdict === "安全"
-            ? t("security.review.safe")
-            : report.verdict === "可疑"
-              ? t("security.review.suspicious")
-              : t("security.review.dangerous")}
+    <div className="flex items-start gap-3 rounded-xl bg-surface px-4 py-3.5 ring-1 ring-border/50">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted-foreground">
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[12.5px] font-semibold">{title}</h3>
+        <p className="mt-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+          {description}
         </p>
+        {warning && <p className="mt-1.5 text-[10.5px] text-warn">{warning}</p>}
       </div>
-    </Panel>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-[11px] hover:bg-accent disabled:opacity-40"
+      >
+        {action}
+      </button>
+    </div>
+  );
+}
+
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: typeof Boxes;
+  label: string;
+  value: number;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-xl bg-card px-4 py-3 shadow-[var(--elev-1)]">
+      <div className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-wide text-muted-foreground uppercase">
+        <Icon className="size-3" />
+        {label}
+      </div>
+      <div
+        className="tt-num mt-1.5 text-xl font-black"
+        style={color ? { color } : undefined}
+      >
+        {value}
+      </div>
+    </div>
   );
 }

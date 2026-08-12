@@ -12,6 +12,7 @@ import { sessions } from "./sessions";
 import { sources } from "./sources";
 import { settings } from "./settings";
 import { theme } from "./theme";
+import { tracker } from "./tracker";
 
 /**
  * 简体中文主字典 —— 消息 key、参数名与形状的单一事实来源。
@@ -29,6 +30,7 @@ export const zh = {
   sources,
   settings,
   market,
+  tracker,
   meta,
   errors,
   export: exportMessages,
