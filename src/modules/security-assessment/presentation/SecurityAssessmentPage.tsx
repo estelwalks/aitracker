@@ -9,11 +9,9 @@ import { useI18n } from "../../../lib/i18n/context";
 import {
   getDesktopSecurityClient,
   type SecurityClient,
-  type SecurityModelConfigUpdate,
 } from "../query/desktop-client";
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { AutoScanGuide } from "./components/AutoScanGuide";
-import { ModelConfigDialog } from "./components/ModelConfigDialog";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus } from "./components/ScanStatus";
 import { ScanVortex } from "./components/ScanVortex";
@@ -61,8 +59,6 @@ export function SecurityAssessmentPage() {
   const [runtime, setRuntime] = useState<SecurityRuntimeCapabilityView | null>(
     null,
   );
-  const [modelOpen, setModelOpen] = useState(false);
-  const [savingModel, setSavingModel] = useState(false);
 
   const getClient = useCallback(async () => {
     if (clientRef.current) return clientRef.current;
@@ -122,15 +118,6 @@ export function SecurityAssessmentPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("configureModel") === "1"
-    ) {
-      setModelOpen(true);
-    }
-  }, []);
 
   useEffect(() => {
     if (!isScanActive(scanState.status)) return;
@@ -226,8 +213,7 @@ export function SecurityAssessmentPage() {
         });
         setScanState(next);
         if (next.status === "model-required") {
-          setModelOpen(true);
-          toast.warning(t("security.center.model.requiredDesc"));
+          toast.warning(t("security.center.model.requiredSettings"));
         } else {
           toast.success(t("security.center.toast.started"));
         }
@@ -251,25 +237,6 @@ export function SecurityAssessmentPage() {
       reportError(error);
     }
   }, [reportError, t]);
-
-  const saveModel = useCallback(
-    async (update: SecurityModelConfigUpdate) => {
-      const client = clientRef.current;
-      if (client == null) return;
-      setSavingModel(true);
-      try {
-        const saved = await client.setModelConfig(update);
-        setModelConfig(saved);
-        setModelOpen(false);
-        toast.success(t("security.center.toast.modelSaved"));
-      } catch (error) {
-        reportError(error);
-      } finally {
-        setSavingModel(false);
-      }
-    },
-    [reportError, t],
-  );
 
   return (
     <div className="space-y-5 pb-12">
@@ -364,13 +331,6 @@ export function SecurityAssessmentPage() {
           onCancel={() => void cancelScan()}
         />
       )}
-      <ModelConfigDialog
-        open={modelOpen}
-        config={modelConfig}
-        saving={savingModel}
-        onClose={() => setModelOpen(false)}
-        onSave={(update) => void saveModel(update)}
-      />
     </div>
   );
 }

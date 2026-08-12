@@ -25,8 +25,9 @@ const CYCLE_OPTIONS: readonly SecurityScanCycle[] = [
 ];
 
 /**
- * 自动扫描计划：开启/暂停 + 扫描周期（hourly/daily/weekly）。
- * 绑定真实 SecurityClient.getScanSchedule()/setScanSchedule()。
+ * 自动扫描计划：开启/暂停 + 扫描周期（hourly/daily/weekly）+ 扫描时间 + 扫描范围
+ * （固定 all = 全部本地 Skill）+ 告警通知。绑定真实
+ * SecurityClient.getScanSchedule()/setScanSchedule()。
  */
 export function ScanScheduleSection({
   client,
@@ -126,6 +127,32 @@ export function ScanScheduleSection({
               }))}
             />
           </div>
+        </Field>
+        <Field label={t("settings.security.schedule.time")}>
+          <input
+            type="time"
+            value={schedule.time}
+            onChange={(event) =>
+              void save({ ...schedule, time: event.target.value })
+            }
+            disabled={saving}
+            className="security-config-input max-w-[9rem]"
+          />
+        </Field>
+        <Field
+          label={t("settings.security.schedule.scope")}
+          hint={t("settings.security.schedule.scopeHint")}
+        >
+          <span className="font-mono text-[13px] text-muted-foreground">
+            {t("settings.security.schedule.scopeAll")}
+          </span>
+        </Field>
+        <Field label={t("settings.security.schedule.notify")}>
+          <Toggle
+            value={schedule.notify}
+            onChange={(notify) => void save({ ...schedule, notify })}
+            disabled={saving}
+          />
         </Field>
       </div>
     );

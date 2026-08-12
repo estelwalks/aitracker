@@ -1,12 +1,23 @@
 import { useMemo, useState } from "react";
-import { Boxes, ChevronDown, ShieldCheck, ShieldX } from "lucide-react";
+import {
+  Boxes,
+  ChevronDown,
+  FileText,
+  Lightbulb,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react";
 
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
   securityHistoryEntryIsSafe,
   summarizeReports,
+  type SecurityBranchName,
+  type SecurityBranchStatus,
   type SecurityHistoryView,
+  type SecuritySeverity,
+  type SecurityVerdict,
 } from "../security-view";
 import { ChipTabs, SecurityCard } from "./SecurityCard";
 
@@ -23,7 +34,6 @@ const timeSpans: Record<TimeFilter, number> = {
 interface HistoryGroup {
   scanId: string;
   finishedAt: string;
-  mode: SecurityHistoryView["mode"];
   trigger: SecurityHistoryView["trigger"];
   entries: SecurityHistoryView[];
 }
@@ -34,6 +44,33 @@ const historyStatusKeys: Record<SecurityHistoryView["status"], MessageKey> = {
   failed: "security.center.result.statusFailed",
   skipped: "security.center.result.statusSkipped",
   cancelled: "security.center.result.statusCancelled",
+};
+
+const branchNameKeys: Record<SecurityBranchName, MessageKey> = {
+  static: "security.center.branch.static",
+  ruleReview: "security.center.branch.ruleReview",
+  singleFileAnalysis: "security.center.branch.singleFileAnalysis",
+  multiFileAnalysis: "security.center.branch.multiFileAnalysis",
+};
+
+const branchStatusKeys: Record<SecurityBranchStatus, MessageKey> = {
+  complete: "security.center.branch.complete",
+  skipped: "security.center.branch.skipped",
+  failed: "security.center.branch.failed",
+};
+
+const verdictKeys: Record<SecurityVerdict, MessageKey> = {
+  allow: "security.center.verdict.allow",
+  warn: "security.center.verdict.warn",
+  block: "security.center.verdict.block",
+  unknown: "security.center.verdict.unknown",
+};
+
+const severityColors: Record<SecuritySeverity, string> = {
+  critical: "var(--danger)",
+  high: "var(--danger)",
+  medium: "var(--warn)",
+  low: "var(--ok)",
 };
 
 function groupsOf(entries: readonly SecurityHistoryView[]): HistoryGroup[] {
@@ -48,7 +85,6 @@ function groupsOf(entries: readonly SecurityHistoryView[]): HistoryGroup[] {
       groups.set(entry.scanId, {
         scanId: entry.scanId,
         finishedAt: entry.finishedAt,
-        mode: entry.mode,
         trigger: entry.trigger,
         entries: [entry],
       });
@@ -68,6 +104,7 @@ export function ScanHistory({
   const [state, setState] = useState<StateFilter>("all");
   const [span, setSpan] = useState<TimeFilter>("7d");
   const [open, setOpen] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState<string | null>(null);
   const now = Date.now();
   const list = useMemo(
     () =>
@@ -123,6 +160,11 @@ export function ScanHistory({
               group.entries.length > 0 &&
               group.entries.every(securityHistoryEntryIsSafe);
             const expanded = open === group.scanId;
+            const reportShown = reportOpen === group.scanId;
+            const latestEntry = [...group.entries].sort(
+              (left, right) =>
+                Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
+            )[0];
             return (
               <div
                 key={group.scanId}
@@ -183,9 +225,6 @@ export function ScanHistory({
                         <span className="min-w-[140px] flex-1 font-medium">
                           {entry.skillName}
                         </span>
-                        <span className="font-mono text-muted-foreground">
-                          {entry.mode}
-                        </span>
                         <span
                           className={
                             entry.status === "complete"
@@ -209,6 +248,26 @@ export function ScanHistory({
                         )}
                       </div>
                     ))}
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReportOpen(reportShown ? null : group.scanId)
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[11.5px] font-medium transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <FileText className="size-3.5" />
+                        {t("security.center.history.viewReport")}
+                        <ChevronDown
+                          className={`size-3.5 text-muted-foreground transition-transform ${reportShown ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                    </div>
+
+                    {reportShown && latestEntry && (
+                      <ReportPanel entry={latestEntry} />
+                    )}
                   </div>
                 )}
               </div>
@@ -217,5 +276,116 @@ export function ScanHistory({
         </div>
       )}
     </SecurityCard>
+  );
+}
+
+function ReportPanel({ entry }: { entry: SecurityHistoryView }) {
+  const { t } = useI18n();
+  const report = entry.report;
+
+  if (!report) {
+    return (
+      <p className="rounded-xl bg-card px-4 py-3 font-mono text-[11.5px] text-muted-foreground">
+        {t("security.center.history.noReport")}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl bg-card p-4 shadow-[var(--elev-1)]">
+      <p className="font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+        {t("security.center.history.reportSummary", {
+          verdict: t(verdictKeys[report.verdict]),
+          score: report.riskScore,
+          threat: report.threatLevelDisplay,
+          files: report.scannedFiles,
+          rules: report.rulesVersion,
+        })}
+      </p>
+
+      <div>
+        <h4 className="font-mono text-[10.5px] font-semibold text-muted-foreground uppercase">
+          {t("security.center.history.reportBranches")}
+        </h4>
+        <ul className="mt-1.5 grid gap-1 sm:grid-cols-2">
+          {report.branches.map((branch) => (
+            <li
+              key={branch.name}
+              className="rounded-lg bg-surface-2/60 px-3 py-2 text-[11.5px]"
+            >
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {t(branchNameKeys[branch.name])}
+                </span>
+                <span
+                  className={
+                    branch.status === "complete"
+                      ? "text-ok"
+                      : branch.status === "failed"
+                        ? "text-danger"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {t(branchStatusKeys[branch.status])}
+                </span>
+              </div>
+              {branch.status === "failed" && branch.detail && (
+                <span className="mt-1 block break-all text-[10px] text-danger">
+                  {branch.detail}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h4 className="font-mono text-[10.5px] font-semibold text-muted-foreground uppercase">
+          {t("security.center.history.reportFindings")}
+        </h4>
+        {report.findings.length === 0 ? (
+          <p className="mt-1.5 font-mono text-[11.5px] text-ok">
+            {t("security.center.result.noFindings")}
+          </p>
+        ) : (
+          <div className="mt-1.5 space-y-2">
+            {report.findings.map((finding) => (
+              <div
+                key={finding.id}
+                className="rounded-lg bg-surface-2/60 px-3.5 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="rounded-full bg-card px-2 py-0.5 font-mono text-[10px]"
+                    style={{ color: severityColors[finding.severity] }}
+                  >
+                    {finding.severityDisplay}
+                  </span>
+                  <span className="rounded-full bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {finding.kindDisplay}
+                  </span>
+                  <span className="min-w-0 flex-1 break-all text-[11.5px] font-medium">
+                    {finding.path}
+                    {finding.line != null
+                      ? ` · ${t("security.center.result.line", {
+                          line: finding.line,
+                        })}`
+                      : ""}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-foreground/85">
+                  {finding.message}
+                </p>
+                <p className="mt-1 flex items-start gap-1.5 text-[12px] leading-relaxed text-muted-foreground">
+                  <Lightbulb className="mt-0.5 size-3.5 shrink-0" />
+                  {t("security.center.result.remediation")}：
+                  {finding.remediation}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

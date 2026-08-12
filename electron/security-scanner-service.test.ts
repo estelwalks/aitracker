@@ -258,7 +258,15 @@ test("automatic scans use full model-aware analysis when a model is configured",
   assert.equal(persisted.entries[0]?.mode, "full");
 });
 
-test("scan schedule round-trips, persists, and falls back on corrupt files", async () => {
+const DEFAULT_SCHEDULE = {
+  enabled: true,
+  cycle: "daily",
+  time: "03:00",
+  scope: "all",
+  notify: false,
+} as const;
+
+test("scan schedule round-trips the extended shape, persists, and falls back on corrupt files", async () => {
   const { home, data } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
@@ -267,24 +275,39 @@ test("scan schedule round-trips, persists, and falls back on corrupt files", asy
     env: {},
     secretStorage: unavailableStorage,
   });
-  assert.deepEqual(await service.getScanSchedule(), {
-    enabled: true,
-    cycle: "daily",
-  });
+  assert.deepEqual(await service.getScanSchedule(), DEFAULT_SCHEDULE);
   const saved = await service.setScanSchedule({
     enabled: false,
     cycle: "weekly",
+    time: "09:30",
+    scope: "all",
+    notify: true,
   });
-  assert.deepEqual(saved, { enabled: false, cycle: "weekly" });
+  assert.deepEqual(saved, {
+    enabled: false,
+    cycle: "weekly",
+    time: "09:30",
+    scope: "all",
+    notify: true,
+  });
   assert.deepEqual(await service.getScanSchedule(), {
     enabled: false,
     cycle: "weekly",
+    time: "09:30",
+    scope: "all",
+    notify: true,
   });
   assert.deepEqual(
     JSON.parse(
       await readFile(join(data, "security-scan-schedule.json"), "utf8"),
     ),
-    { enabled: false, cycle: "weekly" },
+    {
+      enabled: false,
+      cycle: "weekly",
+      time: "09:30",
+      scope: "all",
+      notify: true,
+    },
   );
   await assert.rejects(
     service.setScanSchedule({ enabled: true, cycle: "monthly" }),
@@ -294,14 +317,73 @@ test("scan schedule round-trips, persists, and falls back on corrupt files", asy
     service.setScanSchedule({ enabled: true, cycle: "daily", extra: true }),
     /unsupported fields/u,
   );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "daily", time: "25:00" }),
+    /HH:MM/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "daily", time: "9:00" }),
+    /HH:MM/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "daily", scope: "single" }),
+    /Unsupported scan scope/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({ enabled: true, cycle: "daily", notify: "yes" }),
+    /notify must be a boolean/u,
+  );
   await writeFile(
     join(data, "security-scan-schedule.json"),
     "not json",
     "utf8",
   );
+  assert.deepEqual(await service.getScanSchedule(), DEFAULT_SCHEDULE);
+});
+
+test("fills defaults for omitted time, scope, and notify on save", async () => {
+  const { home, data } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  const saved = await service.setScanSchedule({
+    enabled: false,
+    cycle: "daily",
+  });
+  assert.deepEqual(saved, {
+    enabled: false,
+    cycle: "daily",
+    time: "03:00",
+    scope: "all",
+    notify: false,
+  });
+});
+
+test("migrates a legacy { enabled, cycle } schedule on read", async () => {
+  const { home, data } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "en-US",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  await mkdir(data, { recursive: true });
+  await writeFile(
+    join(data, "security-scan-schedule.json"),
+    JSON.stringify({ enabled: true, cycle: "weekly" }),
+    "utf8",
+  );
   assert.deepEqual(await service.getScanSchedule(), {
     enabled: true,
-    cycle: "daily",
+    cycle: "weekly",
+    time: "03:00",
+    scope: "all",
+    notify: false,
   });
 });
 

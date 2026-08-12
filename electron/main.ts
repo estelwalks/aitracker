@@ -10,6 +10,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Notification,
   safeStorage,
   shell,
   Tray,
@@ -21,7 +22,9 @@ import {
   type AutoLaunchState,
   type RuntimeInfo,
   type SecurityScanCycle,
+  type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
+  type SecurityScanState,
 } from "./contracts.js";
 import {
   createTrayTemplate,
@@ -164,29 +167,153 @@ const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
   weekly: 7 * 24 * 60 * 60 * 1_000,
 };
 
-async function runAutomaticSecurityScan(): Promise<void> {
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const WEEK_MS = 7 * DAY_MS;
+/** Wall-clock time of the most recent scheduled automatic run (weekly anchor). */
+let lastAutomaticScanRunAt: number | null = null;
+
+const SECURITY_RISK_NOTICE: Record<
+  DesktopLocale,
+  { title: string; body: string }
+> = {
+  "zh-CN": {
+    title: "安全扫描发现风险",
+    body: "自动扫描在 {count} 个 Skill 中发现风险，请查看安全中心。",
+  },
+  "en-US": {
+    title: "Security scan found risks",
+    body: "The automatic scan found risks in {count} skill(s). Open the Security Center.",
+  },
+  "ja-JP": {
+    title: "セキュリティスキャンでリスクを検出",
+    body: "自動スキャンで {count} 件のリスクを検出しました。",
+  },
+  "ko-KR": {
+    title: "보안 스캔에서 위험 발견",
+    body: "자동 스캔에서 {count}개의 위험이 발견되었습니다.",
+  },
+};
+
+/** Parse a validated "HH:MM" schedule time into local hour/minute. */
+function parseScheduleTime(time: string): [number, number] {
+  const [hour, minute] = time.split(":").map(Number);
+  return [hour, minute];
+}
+
+/** Next local wall-clock occurrence of `time` strictly after `base`. */
+function nextTimeAtOrAfter(base: Date, time: string): Date {
+  const [hour, minute] = parseScheduleTime(time);
+  const next = new Date(base);
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+/**
+ * Next local occurrence of the anchor weekday's `time` after `base` — the
+ * weekly cadence runs once per week on the weekday the schedule was last armed.
+ */
+function nextWeeklyAtOrAfter(base: Date, anchor: Date, time: string): Date {
+  const [hour, minute] = parseScheduleTime(time);
+  const next = new Date(anchor);
+  next.setHours(hour, minute, 0, 0);
+  while (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 7);
+  return next;
+}
+
+/**
+ * Delay until the next automatic run: hourly reuses the fixed 1h interval;
+ * daily/weekly honor the configured "HH:MM" local wall-clock time.
+ */
+function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
+  const now = new Date();
+  if (schedule.cycle === "hourly") return SECURITY_SCAN_CYCLE_MS.hourly;
+  if (schedule.cycle === "daily") {
+    return nextTimeAtOrAfter(now, schedule.time).getTime() - now.getTime();
+  }
+  const anchor =
+    lastAutomaticScanRunAt == null ? now : new Date(lastAutomaticScanRunAt);
+  return Math.max(
+    0,
+    nextWeeklyAtOrAfter(now, anchor, schedule.time).getTime() - now.getTime(),
+  );
+}
+
+async function runAutomaticSecurityScan(
+  schedule?: SecurityScanSchedule,
+): Promise<void> {
   const scanner = securityScanner;
   if (!scanner) return;
   const status = scanner.getStatus().status;
   if (status === "running" || status === "cancelling") return;
+  let state: SecurityScanState;
   try {
-    await scanner.startAutomaticScan();
+    state = await scanner.startAutomaticScan();
   } catch {
     // No discovered Skills (or a concurrent manual scan) is a recoverable
-    // automatic pass. The next interval retries through the same safe service.
+    // automatic pass. The next run retries through the same safe service.
+    return;
   }
+  if (schedule?.notify !== true) return;
+  await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+}
+
+/** Wait for the automatic scan to settle, then notify when it found risks. */
+async function notifyIfAutomaticScanFoundRisks(
+  scanner: SecurityScannerService,
+  scanId: string | null,
+): Promise<void> {
+  const state = await waitForAutomaticScanSettled(scanner, scanId);
+  // A manual scan taking over the session is never the automatic run we armed.
+  if (scanId == null || state.scanId !== scanId) return;
+  if (state.status !== "complete" && state.status !== "partial") return;
+  if (state.resultIds.length === 0) return;
+  const history = await scanner.history();
+  const scanEntries = history.filter(
+    (entry: SecurityScanHistoryEntry) => entry.scanId === scanId,
+  );
+  const riskCount = scanEntries.filter(
+    (entry) =>
+      (entry.status === "complete" || entry.status === "partial") &&
+      (entry.report?.findings.length ?? 0) > 0,
+  ).length;
+  if (riskCount === 0) return;
+  if (!Notification.isSupported()) return;
+  const notice = SECURITY_RISK_NOTICE[currentPreferences.locale];
+  const notification = new Notification({
+    title: notice.title,
+    body: interpolate(notice.body, { count: riskCount }),
+  });
+  notification.on("click", showMainWindow);
+  notification.show();
+}
+
+async function waitForAutomaticScanSettled(
+  scanner: SecurityScannerService,
+  scanId: string | null,
+): Promise<SecurityScanState> {
+  const deadline = Date.now() + 10 * 60 * 1_000;
+  while (Date.now() < deadline) {
+    const state = scanner.getStatus();
+    if (state.scanId !== scanId) return state;
+    if (state.status !== "running" && state.status !== "cancelling") {
+      return state;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return scanner.getStatus();
 }
 
 function clearAutomaticSecurityScanTimer(): void {
   if (automaticSecurityScanTimer) {
-    clearInterval(automaticSecurityScanTimer);
+    clearTimeout(automaticSecurityScanTimer);
     automaticSecurityScanTimer = null;
   }
 }
 
 /**
  * Schedule the automatic security scan from the persisted schedule: an
- * immediate first pass on launch when enabled, then a repeating timer on the
+ * immediate first pass on launch when enabled, then a time-aware timer for the
  * configured cycle. A disabled schedule clears the timer entirely.
  */
 async function scheduleAutomaticSecurityScan(): Promise<void> {
@@ -202,12 +329,19 @@ async function scheduleAutomaticSecurityScan(): Promise<void> {
     return;
   }
   if (!schedule.enabled) return;
-  // Initial run shortly after launch when enabled, then repeat on the cycle.
-  void runAutomaticSecurityScan();
-  automaticSecurityScanTimer = setInterval(
-    () => void runAutomaticSecurityScan(),
-    SECURITY_SCAN_CYCLE_MS[schedule.cycle],
-  );
+  // Initial run shortly after launch when enabled, then arm the repeating timer.
+  void runAutomaticSecurityScan(schedule);
+  armAutomaticSecurityScanTimer(schedule);
+}
+
+function armAutomaticSecurityScanTimer(schedule: SecurityScanSchedule): void {
+  const delayMs = nextAutomaticScanDelayMs(schedule);
+  automaticSecurityScanTimer = setTimeout(() => {
+    automaticSecurityScanTimer = null;
+    lastAutomaticScanRunAt = Date.now();
+    void runAutomaticSecurityScan(schedule);
+    armAutomaticSecurityScanTimer(schedule);
+  }, delayMs);
 }
 
 function registerIpcHandlers(): void {

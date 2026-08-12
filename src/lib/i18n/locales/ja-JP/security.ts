@@ -124,7 +124,7 @@ export const security = {
       riskyLine:
         "最新検査は {total} 個の Skill を対象とし、{risky} 個を要確認です。ブロック {danger}、警告 {warn}。",
       noReportLine:
-        "実際の検査結果はまだありません。クイックスキャンでこの端末の Skill を検査してください。",
+        "実際の検査結果はまだありません。スキャンでこの端末の Skill を検査してください。",
       boundaryLine:
         "現在は検出と通知のみです。外部 Agent の動作を阻止せず、実行時防御があるようには表示しません。",
       partialLine:
@@ -149,13 +149,24 @@ export const security = {
       enable: "自動スキャンを有効化",
       pause: "自動スキャンを一時停止",
       loading: "スキャン予定を読み込み中…",
-      scheduleDesc: "{cycle} · 範囲：{scope} · {modelNote}",
+      scheduleDesc: "{cycle} · 時間：{time} · 範囲：{scope} · 通知：{notify}",
       modelFull: "モデル設定あり → 詳細スキャン",
       modelQuick: "モデル未設定 → クイックスキャン",
       offDesc:
         "有効化すると設定した周期でローカル Skill を自動巡回し、毎回手動で実行する必要がなくなります。",
       scopeAll: "すべてのローカル Skill",
-      settings: "周期を設定",
+      cycleLabel: "スキャン周期",
+      scope: "スキャン範囲",
+      time: "スキャン時刻",
+      notify: "アラート通知",
+      notifyOn: "通知オン",
+      notifyOff: "通知オフ",
+      enabledLabel: "定期スキャン",
+      settings: "設定",
+      settingsTitle: "スキャン予定の設定",
+      timeRange: "範囲を調整",
+      close: "閉じる",
+      saveFailed: "スキャン予定の保存に失敗しました",
       stepSchedule: "① 定期実行を有効化",
       stepScheduleDesc: "「設定 · スキャン設定」で有効化",
       stepCycle: "② 周期を選択",
@@ -285,6 +296,12 @@ export const security = {
       scopeSingle: "単一 Skill",
       covered: "{skills} 個の Skill · 安全 {safe} / 要確認 {unsafe}",
       generatedLocale: "レポート言語：{locale}",
+      viewReport: "レポートを見る",
+      reportSummary:
+        "判定 {verdict} · リスク {score} · 脅威 {threat} · {files} ファイルをスキャン · ルール {rules}",
+      noReport: "このスキャンにはレポートがありません",
+      reportBranches: "スキャン分岐",
+      reportFindings: "リスク詳細",
     },
     runtimeBlock: {
       title: "実行時防御 · ブロックログ",
@@ -324,6 +341,8 @@ export const security = {
       requiredTitle: "モデル設定が必要",
       requiredDesc:
         "有効な Endpoint、API Key、軽量モデル、高性能モデルを保存してから詳細スキャンを開始してください。",
+      requiredSettings:
+        "全体スキャンを実行するには、先に設定でモデルインターフェースを構成してください。",
       encryptionUnavailable:
         "このシステムでは安全な鍵暗号化を利用できないため、API Key を保存できません。",
       encryptionAvailable:
