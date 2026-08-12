@@ -8,6 +8,7 @@ import {
 } from "../domain.ts";
 import type {
   GenerateReportInput,
+  ReportContent,
   ReportDefinition,
   ReportDocument,
   ReportRun,
@@ -62,6 +63,27 @@ export function createReportsApplication(
     return definition
       ? ok(toReportSummary(document, definition))
       : err("errors.reports.notFound");
+  };
+
+  const readContent = async (
+    reportId: string,
+  ): Promise<Result<ReportContent>> => {
+    const document = await options.store.getDocument(reportId);
+    if (!document) return err("errors.reports.notFound");
+    const definition = definitions.find(
+      (item) => item.definitionId === document.definitionId,
+    );
+    if (!definition) return err("errors.reports.notFound");
+    return ok({
+      reportId: document.reportId,
+      definitionId: document.definitionId,
+      kind: definition.kind,
+      title: document.title,
+      // `body` was redacted by `safeReportText` at write time; it is generated
+      // report content, never raw sessions/paths/secrets.
+      body: document.body,
+      generatedAt: document.generatedAt,
+    });
   };
 
   const createDraft = async (input: {
@@ -240,6 +262,7 @@ export function createReportsApplication(
     createDraft,
     generate,
     get,
+    readContent,
     approve: (id, actor) => transition(id, actor, "approved"),
     archive: (id, actor) => transition(id, actor, "archived"),
     list,

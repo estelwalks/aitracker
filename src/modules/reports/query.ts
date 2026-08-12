@@ -7,6 +7,9 @@
  * navigation the loader always executes on the server (the reports read model
  * builds the composition root, which requires Node filesystem access). A plain
  * async loader would run in the browser and leak `node:fs` into the client.
+ *
+ * `generateReportNow` / `getReportBody` (in `./server-fns.ts`) are the
+ * mutation/read server fns the page uses for "立即生成" and inline body preview.
  */
 import { createServerFn } from "@tanstack/react-start";
 
@@ -14,6 +17,8 @@ import type { Locale } from "../../lib/i18n/locale";
 import type { LoadReportsResult } from "./api.server";
 
 export { ReportsPage } from "./presentation/ReportsPage.tsx";
+export { generateReportNow, getReportBody } from "./server-fns.ts";
+export type { GenerateReportNowResult } from "./server-fns.ts";
 
 /**
  * Resolve the reports read model on the server. Accepts the resolved locale
