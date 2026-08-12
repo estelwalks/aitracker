@@ -45,9 +45,7 @@ const CURRENCY_SEARCH_PARAM = "currency";
  */
 const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
   ["/agents", "meta.titles.skills"],
-  ["/market", "meta.titles.market"],
   ["/security", "meta.titles.security"],
-  ["/sessions", "meta.titles.sessions"],
   ["/sources", "meta.titles.sources"],
   ["/reports", "meta.titles.reports"],
   ["/distill", "meta.titles.distill"],
