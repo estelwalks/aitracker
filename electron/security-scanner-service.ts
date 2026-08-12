@@ -25,6 +25,7 @@ import {
 
 import {
   SECURITY_SCAN_CYCLES,
+  SECURITY_SCAN_SCOPES,
   type DesktopLocale,
   type SecurityModelConfigInput,
   type SecurityModelConfigView,
@@ -33,6 +34,7 @@ import {
   type SecurityScanHistoryEntry,
   type SecurityScanReportDto,
   type SecurityScanSchedule,
+  type SecurityScanScope,
   type SecurityScanStartRequest,
   type SecurityScanState,
   type SecuritySkillTarget,
@@ -180,11 +182,22 @@ function parseConfig(input: unknown): SecurityModelConfigInput {
   return result;
 }
 
+/** Default automatic-scan schedule (also the migration target for the legacy `{ enabled, cycle }` shape). */
+const DEFAULT_SCAN_SCHEDULE: SecurityScanSchedule = {
+  enabled: true,
+  cycle: "daily",
+  time: "03:00",
+  scope: "all",
+  notify: false,
+};
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/u;
+
 function parseSchedule(input: unknown): SecurityScanSchedule {
   if (input == null || typeof input !== "object" || Array.isArray(input))
     throw new TypeError("Scan schedule is required");
   const value = input as Record<string, unknown>;
-  const allowed = new Set(["enabled", "cycle"]);
+  const allowed = new Set(["enabled", "cycle", "time", "scope", "notify"]);
   if (Object.keys(value).some((key) => !allowed.has(key)))
     throw new TypeError("Scan schedule contains unsupported fields");
   if (typeof value.enabled !== "boolean")
@@ -195,7 +208,31 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
     !(SECURITY_SCAN_CYCLES as readonly string[]).includes(cycle)
   )
     throw new TypeError("Unsupported scan cycle");
-  return { enabled: value.enabled, cycle: cycle as SecurityScanCycle };
+  // Legacy `{ enabled, cycle }` documents (from the pre-extension version) omit
+  // time/scope/notify; fill the extended fields with the defaults here so the
+  // read path migrates them transparently.
+  const time =
+    value.time === undefined ? DEFAULT_SCAN_SCHEDULE.time : value.time;
+  if (typeof time !== "string" || !TIME_PATTERN.test(time))
+    throw new TypeError("Scan schedule time must be a 24h HH:MM string");
+  const scope =
+    value.scope === undefined ? DEFAULT_SCAN_SCHEDULE.scope : value.scope;
+  if (
+    typeof scope !== "string" ||
+    !(SECURITY_SCAN_SCOPES as readonly string[]).includes(scope)
+  )
+    throw new TypeError("Unsupported scan scope");
+  const notify =
+    value.notify === undefined ? DEFAULT_SCAN_SCHEDULE.notify : value.notify;
+  if (typeof notify !== "boolean")
+    throw new TypeError("Scan schedule notify must be a boolean");
+  return {
+    enabled: value.enabled,
+    cycle: cycle as SecurityScanCycle,
+    time,
+    scope: scope as SecurityScanScope,
+    notify,
+  };
 }
 
 function skillRef(path: string): SecuritySkillTarget["skillRef"] {
@@ -1214,11 +1251,13 @@ export class SecurityScannerService {
 
   async #readSchedule(): Promise<SecurityScanSchedule> {
     try {
+      // Legacy `{ enabled, cycle }` documents migrate through `parseSchedule`'s
+      // default filling of time/scope/notify; corrupt files fall back below.
       return parseSchedule(
         JSON.parse(await readFile(this.#schedulePath, "utf8")),
       );
     } catch {
-      return { enabled: true, cycle: "daily" };
+      return { ...DEFAULT_SCAN_SCHEDULE };
     }
   }
 
