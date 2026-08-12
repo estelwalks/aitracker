@@ -1,20 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Columns2,
-  FolderOpen,
-  HelpCircle,
-  Sparkles,
-} from "lucide-react";
+import { AlertTriangle, ArrowDown, Columns2, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  EmptyState,
-  PageHeader,
-  Panel,
-  Segmented,
-  TTButton,
-} from "../../../components/tt";
+import { EmptyState, Panel, TTButton } from "../../../components/tt";
 import { JarvisInsight } from "../../../components/JarvisInsight";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
@@ -23,13 +11,15 @@ import type { CandidateOutput, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
-import { MaterialDrawer, MaterialPicker } from "./distill/MaterialDrawer";
-import { ExpCard } from "./distill/ExpCard";
+import { MaterialDrawer } from "./distill/MaterialDrawer";
+import { CandidateCompareDialog, ExpCard } from "./distill/ExpCard";
 import { DistillConfig } from "./distill/DistillConfig";
 import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
 import {
   filterDistillationSessions,
   materialKeyOf,
+  toggleMaterialSelection,
+  toggleProjectSelection,
   type DistillationMaterialGranularity,
   type DistillationTimeRange,
 } from "./distill/materials";
@@ -70,6 +60,7 @@ export function DistillationPage({
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [candidates, setCandidates] = useState<CandidateOutput[]>(() => [
     ...initial.candidates,
   ]);
@@ -151,17 +142,14 @@ export function DistillationPage({
   }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
 
   function toggle(item: DistillationSessionItem) {
-    setSelected((prev) => {
-      const key = keyOf(item);
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-        return next;
-      }
-      if (next.size >= MAX_SELECTION) return prev;
-      next.add(key);
-      return next;
-    });
+    setSelected(
+      (prev) =>
+        toggleMaterialSelection(
+          prev,
+          keyOf(item),
+          MAX_SELECTION,
+        ) as Set<string>,
+    );
   }
 
   function removeItem(item: DistillationSessionItem) {
@@ -173,22 +161,14 @@ export function DistillationPage({
   }
 
   function toggleProject(items: readonly DistillationSessionItem[]) {
-    setSelected((prev) => {
-      const keys = items.map(keyOf);
-      const selectedEverySession = keys.every((key) => prev.has(key));
-      const next = new Set(prev);
-      if (selectedEverySession) {
-        for (const key of keys) next.delete(key);
-        return next;
-      }
-      const missing = keys.filter((key) => !next.has(key));
-      // The server-side distillation contract accepts at most eight opaque
-      // refs. Preserve the current selection when the real project group does
-      // not fit instead of silently dropping sessions.
-      if (next.size + missing.length > MAX_SELECTION) return prev;
-      for (const key of missing) next.add(key);
-      return next;
-    });
+    setSelected(
+      (prev) =>
+        toggleProjectSelection(
+          prev,
+          items.map(keyOf),
+          MAX_SELECTION,
+        ) as Set<string>,
+    );
   }
 
   function dismissGuide() {
@@ -323,159 +303,149 @@ export function DistillationPage({
     <>
       {showGuide && <DistillGuide onClose={dismissGuide} />}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <PageHeader
-          title={t("common.distillation.pageTitle")}
-          desc={t("common.distillation.pageDesc")}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "quick", label: t("common.distillation.modeQuick") },
-              { value: "pro", label: t("common.distillation.modePro") },
-            ]}
-          />
-          <TTButton variant="ghost" onClick={() => setShowGuide(true)}>
-            <HelpCircle className="size-3.5" />
-            {t("distill.help")}
-          </TTButton>
-          <TTButton
-            variant="ghost"
-            title={t("distill.compareUnavailable")}
-            onClick={() => toast.info(t("distill.compareUnavailable"))}
-          >
-            <Columns2 className="size-3.5" />
-            {t("distill.compare")}
-          </TTButton>
-          <TTButton
-            variant="primary"
-            disabled={!canStart}
-            title={
-              selectionCount === 0
-                ? t("common.distillation.runHint")
-                : undefined
-            }
-            onClick={handleStart}
-          >
-            <Sparkles className="size-3.5" />
-            {t("common.distillation.start")}
-          </TTButton>
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <JarvisInsight
-          title={t("distill.jarvisTitle")}
-          lines={jarvisLines}
-          rotateLabel={t("distill.insightRotate")}
-          dotsLabel={t("distill.insightDots")}
-        />
-      </div>
-
-      {offlineResult && (
-        <div className="mb-3 flex items-center gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
-          <AlertTriangle className="size-3.5 shrink-0" />
-          {t("common.distillation.modelNotConfigured")}
-        </div>
-      )}
-
-      <DistillMetrics
-        selectedCount={selectionCount}
-        selectedTurns={selectedTurns}
-        runs={runs}
-        approved={approved}
-      />
-
-      <DistillConfig
-        mode={mode}
-        timeRange={timeRange}
-        onTimeRange={setTimeRange}
-        granularity={granularity}
-        onGranularity={setGranularity}
-        modelId={modelId}
-        onModelId={setModelId}
-        modelOptions={initial.modelOptions}
-        promptPreset={promptPreset}
-        onPromptPreset={setPromptPreset}
-        promptText={promptText}
-        onPromptText={setPromptText}
-        selectedItems={selectedItems}
-        onOpenMaterial={() => setDrawerOpen(true)}
-        onRemoveItem={removeItem}
-        onRun={handleStart}
-        canRun={canStart}
-        busy={busy}
-      />
-
-      <Panel
-        className="mb-3"
-        title={t("common.distillation.selectSessions", { max: MAX_SELECTION })}
-        action={
-          <div className="flex items-center gap-2">
-            <span className="tt-num text-[11px] text-muted-foreground">
-              {t("common.distillation.selected", { count: selectionCount })}
-            </span>
+      <div className="relative space-y-5 pb-10">
+        <header className="flex flex-wrap items-center gap-3">
+          <h1 className="text-[15px] font-semibold tracking-tight">
+            {t("common.distillation.pageTitle")}
+          </h1>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            {t("distill.workflow")}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <TTButton variant="ghost" onClick={() => setShowGuide(true)}>
+              <HelpCircle className="size-3.5" />
+              {t("distill.help")}
+            </TTButton>
             <TTButton
-              size="sm"
               variant="ghost"
-              onClick={() => setDrawerOpen(true)}
+              disabled={candidates.length < 2}
+              title={
+                candidates.length < 2 ? t("distill.compareNeedTwo") : undefined
+              }
+              onClick={() => setCompareOpen(true)}
             >
-              <FolderOpen className="size-3.5" />
-              {t("common.distillation.openMaterial")}
+              <Columns2 className="size-3.5" />
+              {t("distill.compare")}
             </TTButton>
           </div>
-        }
-        bodyClassName="pt-0"
-      >
-        <MaterialPicker
-          sessions={materialSessions}
-          selected={selected}
-          granularity={granularity}
-          onToggle={toggle}
-          onToggleProject={toggleProject}
-        />
-      </Panel>
+        </header>
 
-      <section className="mb-3">
-        <h2 className="mb-2 text-[13px] font-medium tracking-[0.025em]">
-          {t("distill.resultsTitle")}
-        </h2>
-        {candidates.length === 0 ? (
-          <Panel>
-            <EmptyState
-              title={t("distill.noCandidates")}
-              desc={t("distill.noCandidatesDesc")}
-            />
-          </Panel>
-        ) : (
-          <ul className="space-y-3">
-            {candidates.map((candidate) => (
-              <li key={candidate.candidateId}>
-                <ExpCard
-                  candidate={candidate}
-                  busy={busy}
-                  onApprove={() => void handleApprove(candidate.candidateId)}
-                  onCancel={() => void handleCancel(candidate.candidateId)}
-                  onRegenerate={() => handleRegenerate(candidate)}
-                />
-              </li>
-            ))}
-          </ul>
+        <div className="mb-3">
+          <JarvisInsight
+            title={t("distill.jarvisTitle")}
+            lines={jarvisLines}
+            rotateLabel={t("distill.insightRotate")}
+            dotsLabel={t("distill.insightDots")}
+          />
+        </div>
+
+        {offlineResult && (
+          <div className="mb-3 flex items-center gap-2 rounded-md border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            {t("common.distillation.modelNotConfigured")}
+          </div>
         )}
-      </section>
 
-      {drawerOpen && (
-        <MaterialDrawer
-          sessions={materialSessions}
-          selected={selected}
+        <DistillMetrics
+          selectedCount={selectionCount}
+          selectedTurns={selectedTurns}
+          runs={runs}
+          approved={approved}
+        />
+
+        <DistillConfig
+          mode={mode}
+          onMode={setMode}
+          timeRange={timeRange}
+          onTimeRange={setTimeRange}
           granularity={granularity}
+          onGranularity={setGranularity}
+          modelId={modelId}
+          onModelId={setModelId}
+          modelOptions={initial.modelOptions}
+          promptPreset={promptPreset}
+          onPromptPreset={setPromptPreset}
+          promptText={promptText}
+          onPromptText={setPromptText}
+          availableItems={materialSessions}
+          selected={selected}
+          selectedItems={selectedItems}
           onToggle={toggle}
           onToggleProject={toggleProject}
-          onClose={() => setDrawerOpen(false)}
+          onOpenMaterial={() => setDrawerOpen(true)}
+          onRemoveItem={removeItem}
+          onRun={handleStart}
+          canRun={canStart}
+          busy={busy}
         />
-      )}
+
+        <section className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
+            <h2 className="text-[13px] font-semibold tracking-tight">
+              {t("distill.resultsTitle")}
+            </h2>
+            <span className="font-mono text-[10.5px] text-muted-foreground">
+              {t("distill.resultsSummary", {
+                count: candidates.length,
+                approved,
+              })}
+            </span>
+            {candidates.length > 0 && (
+              <TTButton
+                className="ml-auto"
+                variant="ghost"
+                onClick={() =>
+                  document
+                    .getElementById("distill-results")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+              >
+                <ArrowDown className="size-3.5" /> {t("distill.latestResult")}
+              </TTButton>
+            )}
+          </div>
+          {candidates.length === 0 ? (
+            <Panel>
+              <EmptyState
+                title={t("distill.noCandidates")}
+                desc={t("distill.noCandidatesDesc")}
+              />
+            </Panel>
+          ) : (
+            <ul id="distill-results" className="scroll-mt-20 space-y-3">
+              {candidates.map((candidate) => (
+                <li key={candidate.candidateId}>
+                  <ExpCard
+                    candidate={candidate}
+                    busy={busy}
+                    onApprove={() => void handleApprove(candidate.candidateId)}
+                    onCancel={() => void handleCancel(candidate.candidateId)}
+                    onRegenerate={() => handleRegenerate(candidate)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {drawerOpen && (
+          <MaterialDrawer
+            sessions={materialSessions}
+            selected={selected}
+            granularity={granularity}
+            onToggle={toggle}
+            onToggleProject={toggleProject}
+            onClose={() => setDrawerOpen(false)}
+          />
+        )}
+
+        {compareOpen && candidates[0] && candidates[1] && (
+          <CandidateCompareDialog
+            candidates={[candidates[0], candidates[1]]}
+            onClose={() => setCompareOpen(false)}
+          />
+        )}
+      </div>
     </>
   );
 }

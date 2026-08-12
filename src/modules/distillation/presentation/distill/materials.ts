@@ -18,6 +18,12 @@ function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function startOfNextLocalDay(date: Date): Date {
+  const next = startOfLocalDay(date);
+  next.setDate(next.getDate() + 1);
+  return next;
+}
+
 /**
  * Applies the selected workbench range to renderer-safe session metadata.
  * Invalid timestamps are deliberately excluded from finite ranges: presenting
@@ -32,13 +38,18 @@ export function filterDistillationSessions(
   if (range === "all") return sessions;
 
   const today = startOfLocalDay(now);
+  const tomorrow = startOfNextLocalDay(now);
   const days = range === "today" ? 0 : Number(range) - 1;
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() - days);
 
   return sessions.filter((session) => {
     const startedAt = new Date(session.startedAt);
-    return !Number.isNaN(startedAt.getTime()) && startedAt >= cutoff;
+    return (
+      !Number.isNaN(startedAt.getTime()) &&
+      startedAt >= cutoff &&
+      startedAt < tomorrow
+    );
   });
 }
 
@@ -73,4 +84,49 @@ export function materialKeyOf(item: {
   readonly sessionId: string;
 }): string {
   return `${item.source}:${item.sessionId}`;
+}
+
+/**
+ * Applies a single-session checkbox transition without ever exceeding the
+ * server contract's opaque-ref limit. Returning the original Set instance on
+ * a rejected addition lets React avoid a redundant render and makes the
+ * boundary behaviour straightforward to unit test.
+ */
+export function toggleMaterialSelection(
+  current: ReadonlySet<string>,
+  key: string,
+  maxSelection: number,
+): ReadonlySet<string> {
+  const next = new Set(current);
+  if (next.has(key)) {
+    next.delete(key);
+    return next;
+  }
+  if (next.size >= maxSelection) return current;
+  next.add(key);
+  return next;
+}
+
+/**
+ * Project selection is atomic: either every missing real session fits and is
+ * added, or the existing selection is preserved. This avoids presenting a
+ * partially-selected project as though it had been distilled in full.
+ */
+export function toggleProjectSelection(
+  current: ReadonlySet<string>,
+  projectKeys: readonly string[],
+  maxSelection: number,
+): ReadonlySet<string> {
+  const uniqueKeys = [...new Set(projectKeys)];
+  const selectedEverySession =
+    uniqueKeys.length > 0 && uniqueKeys.every((key) => current.has(key));
+  const next = new Set(current);
+  if (selectedEverySession) {
+    for (const key of uniqueKeys) next.delete(key);
+    return next;
+  }
+  const missing = uniqueKeys.filter((key) => !next.has(key));
+  if (next.size + missing.length > maxSelection) return current;
+  for (const key of missing) next.add(key);
+  return next;
 }

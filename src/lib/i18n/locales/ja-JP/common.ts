@@ -96,6 +96,7 @@ export const common = {
     metricApproved: "承認済み",
     openMaterial: "素材ライブラリを開く",
     materialDrawerTitle: "蒸留素材を選択",
+    materialSearch: "セッション / プロジェクトを検索…",
     materialSegmentUnavailable:
       "現在のバージョンはセッション単位での素材選択のみ対応です。単一メッセージの内容は読み取りません（プライバシー境界）。",
     modelOffline: "オフライン回退",
