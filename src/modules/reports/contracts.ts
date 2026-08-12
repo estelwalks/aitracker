@@ -94,6 +94,21 @@ export interface ReportSummary {
   readonly assets: readonly AssetRef[];
 }
 
+/**
+ * Renderer-facing report body. The `body` is generated report content already
+ * redacted by `safeReportText` at persistence time (no paths, commands,
+ * secrets or raw conversation content) — safe to cross the transport boundary
+ * for inline preview/editing.
+ */
+export interface ReportContent {
+  readonly reportId: string;
+  readonly definitionId: string;
+  readonly kind: ReportKind;
+  readonly title: string;
+  readonly body: string;
+  readonly generatedAt: string;
+}
+
 export interface ReportStore {
   createRun(run: ReportRun): Promise<void>;
   updateRun(run: ReportRun): Promise<void>;
@@ -143,6 +158,8 @@ export interface ReportsApplication {
   }): Promise<Result<ReportSummary>>;
   generate(input: GenerateReportInput): Promise<Result<ReportSummary>>;
   get(reportId: string): Promise<Result<ReportSummary>>;
+  /** Redacted generated body for inline preview/editing (renderer-safe). */
+  readContent(reportId: string): Promise<Result<ReportContent>>;
   approve(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   archive(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   /** Enumerate persisted reports (newest first). */

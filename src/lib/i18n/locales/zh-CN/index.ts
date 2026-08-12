@@ -8,6 +8,7 @@ import { market } from "./market";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
+import { reports } from "./reports";
 import { skills } from "./skills";
 import { security } from "./security";
 import { sessions } from "./sessions";
@@ -25,6 +26,7 @@ export const zh = {
   distill,
   dashboard,
   insights,
+  reports,
   pricing,
 
   nav,
