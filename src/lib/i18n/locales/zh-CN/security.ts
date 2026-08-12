@@ -117,7 +117,7 @@ export const security = {
       riskyLine:
         "最近一次检测覆盖 {total} 个 Skill，其中 {risky} 个需要确认：阻止 {danger} 个、警告 {warn} 个。",
       noReportLine:
-        "尚无真实检测结果。开始快速检测后，这里会显示本机 Skill 的实际结论。",
+        "尚无真实检测结果。开始检测后，这里会显示本机 Skill 的实际结论。",
       boundaryLine:
         "当前能力边界为检测与告警，不会阻止外部 Agent 执行行为，也不会伪装成运行时防御。",
       partialLine:
@@ -142,12 +142,23 @@ export const security = {
       enable: "开启自动扫描",
       pause: "暂停自动扫描",
       loading: "正在读取扫描计划…",
-      scheduleDesc: "{cycle} · 范围：{scope} · {modelNote}",
+      scheduleDesc: "{cycle} · 时间：{time} · 范围：{scope} · 通知：{notify}",
       modelFull: "已配置模型接口 → 深度检测",
       modelQuick: "未配置模型接口 → 快速检测",
       offDesc: "开启后将按设定周期自动巡检本地 Skill，无需每次手动点击检测",
       scopeAll: "全部本地 Skill",
-      settings: "配置周期",
+      cycleLabel: "扫描周期",
+      scope: "扫描范围",
+      time: "扫描时间",
+      notify: "告警通知",
+      notifyOn: "通知开",
+      notifyOff: "通知关",
+      enabledLabel: "定时扫描",
+      settings: "设置",
+      settingsTitle: "扫描计划设置",
+      timeRange: "调整范围",
+      close: "关闭",
+      saveFailed: "保存扫描计划失败",
       stepSchedule: "① 开启定时",
       stepScheduleDesc: "在「设置 · 扫描配置」中启用",
       stepCycle: "② 选择周期",
@@ -272,6 +283,12 @@ export const security = {
       scopeSingle: "单个 Skill",
       covered: "覆盖 {skills} 个 Skill · 安全 {safe} / 需处理 {unsafe}",
       generatedLocale: "报告语言：{locale}",
+      viewReport: "查看报告",
+      reportSummary:
+        "结论 {verdict} · 风险分 {score} · 威胁 {threat} · 扫描 {files} 个文件 · 规则 {rules}",
+      noReport: "该次扫描未生成报告",
+      reportBranches: "检测分支",
+      reportFindings: "风险详情",
     },
     runtimeBlock: {
       title: "运行时防御 · 拦截日志",
@@ -309,6 +326,7 @@ export const security = {
       requiredTitle: "需要模型配置",
       requiredDesc:
         "请先保存有效的 Endpoint、API Key、轻量模型和高级模型，再开始深度检测。",
+      requiredSettings: "全量检测需先在设置中配置模型接口",
       encryptionUnavailable:
         "当前系统无法使用安全密钥加密，因此不能保存 API Key。",
       encryptionAvailable:

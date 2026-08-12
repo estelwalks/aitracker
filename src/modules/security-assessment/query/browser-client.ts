@@ -262,6 +262,9 @@ const scanScheduleSchema = z
   .object({
     enabled: z.boolean(),
     cycle: scanCycleSchema,
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u),
+    scope: z.literal("all"),
+    notify: z.boolean(),
   })
   .strict();
 

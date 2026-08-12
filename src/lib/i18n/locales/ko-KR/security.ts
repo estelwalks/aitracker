@@ -122,7 +122,7 @@ export const security = {
       riskyLine:
         "최근 검사는 Skill {total}개를 다뤘으며 {risky}개를 확인해야 합니다. 차단 {danger}개, 경고 {warn}개입니다.",
       noReportLine:
-        "아직 실제 검사 결과가 없습니다. 빠른 검사를 실행해 이 장치의 Skill을 확인하세요.",
+        "아직 실제 검사 결과가 없습니다. 검사를 실행해 이 장치의 Skill을 확인하세요.",
       boundaryLine:
         "현재 기능은 탐지와 알림뿐입니다. 외부 Agent 동작을 차단하지 않으며 런타임 방어가 있는 것처럼 표시하지 않습니다.",
       partialLine:
@@ -147,13 +147,24 @@ export const security = {
       enable: "자동 검사 활성화",
       pause: "자동 검사 일시중지",
       loading: "검사 일정을 불러오는 중…",
-      scheduleDesc: "{cycle} · 범위: {scope} · {modelNote}",
+      scheduleDesc: "{cycle} · 시간: {time} · 범위: {scope} · 알림: {notify}",
       modelFull: "모델 설정됨 → 심층 검사",
       modelQuick: "모델 미설정 → 빠른 검사",
       offDesc:
         "활성화하면 설정한 주기로 로컬 Skill을 자동 검사하므로 매번 수동으로 실행할 필요가 없습니다.",
       scopeAll: "모든 로컬 Skill",
-      settings: "주기 설정",
+      cycleLabel: "검사 주기",
+      scope: "검사 범위",
+      time: "검사 시간",
+      notify: "경고 알림",
+      notifyOn: "알림 켜짐",
+      notifyOff: "알림 꺼짐",
+      enabledLabel: "예약 검사",
+      settings: "설정",
+      settingsTitle: "검사 일정 설정",
+      timeRange: "범위 조정",
+      close: "닫기",
+      saveFailed: "검사 일정을 저장하지 못했습니다",
       stepSchedule: "① 일정 활성화",
       stepScheduleDesc: "「설정 · 스캔 구성」에서 활성화",
       stepCycle: "② 주기 선택",
@@ -283,6 +294,12 @@ export const security = {
       scopeSingle: "단일 Skill",
       covered: "Skill {skills}개 · 안전 {safe} / 확인 필요 {unsafe}",
       generatedLocale: "보고서 언어: {locale}",
+      viewReport: "보고서 보기",
+      reportSummary:
+        "결론 {verdict} · 리스크 점수 {score} · 위협 {threat} · 파일 {files}개 검사 · 규칙 {rules}",
+      noReport: "이 스캔에는 보고서가 없습니다",
+      reportBranches: "검사 분기",
+      reportFindings: "리스크 상세",
     },
     runtimeBlock: {
       title: "런타임 방어 · 차단 로그",
@@ -322,6 +339,8 @@ export const security = {
       requiredTitle: "모델 설정 필요",
       requiredDesc:
         "유효한 Endpoint, API Key, 경량 모델 및 고급 모델을 저장한 후 심층 검사를 시작하세요.",
+      requiredSettings:
+        "전체 검사를 실행하려면 먼저 설정에서 모델 인터페이스를 구성해야 합니다.",
       encryptionUnavailable:
         "이 시스템에서는 안전한 키 암호화를 사용할 수 없어 API Key를 저장할 수 없습니다.",
       encryptionAvailable:

@@ -21,8 +21,20 @@ function service(
     cancel: () => ({ cancelled: false }),
     getModelConfig: async () => ({ configured: false }),
     setModelConfig: async () => ({ configured: true, apiKeyConfigured: true }),
-    getScanSchedule: async () => ({ enabled: true, cycle: "daily" }),
-    setScanSchedule: async () => ({ enabled: false, cycle: "hourly" }),
+    getScanSchedule: async () => ({
+      enabled: true,
+      cycle: "daily",
+      time: "03:00",
+      scope: "all",
+      notify: false,
+    }),
+    setScanSchedule: async () => ({
+      enabled: false,
+      cycle: "hourly",
+      time: "03:00",
+      scope: "all",
+      notify: false,
+    }),
     start: async (input: unknown) => ({ status: "running", input }),
     ...overrides,
   } as unknown as SecurityScannerService;
@@ -188,7 +200,13 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
   const scanner = service({
     setScanSchedule: async (input: unknown) => {
       captured = input;
-      return { enabled: false, cycle: "hourly" };
+      return {
+        enabled: false,
+        cycle: "hourly",
+        time: "08:00",
+        scope: "all",
+        notify: true,
+      };
     },
   });
   const getResponse = await handleSecurityHttpApi(
@@ -200,18 +218,36 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
   assert.deepEqual(await getResponse?.json(), {
     enabled: true,
     cycle: "daily",
+    time: "03:00",
+    scope: "all",
+    notify: false,
   });
 
   const postResponse = await handleSecurityHttpApi(
-    post("/scan-schedule", { enabled: false, cycle: "hourly" }),
+    post("/scan-schedule", {
+      enabled: false,
+      cycle: "hourly",
+      time: "08:00",
+      scope: "all",
+      notify: true,
+    }),
     origin,
     scanner,
   );
   assert.equal(postResponse?.status, 200);
-  assert.deepEqual(captured, { enabled: false, cycle: "hourly" });
+  assert.deepEqual(captured, {
+    enabled: false,
+    cycle: "hourly",
+    time: "08:00",
+    scope: "all",
+    notify: true,
+  });
   assert.deepEqual(await postResponse?.json(), {
     enabled: false,
     cycle: "hourly",
+    time: "08:00",
+    scope: "all",
+    notify: true,
   });
 });
 
@@ -219,7 +255,13 @@ test("scan schedule POST rejects without the CSRF header", async () => {
   const response = await handleSecurityHttpApi(
     post(
       "/scan-schedule",
-      { enabled: true, cycle: "weekly" },
+      {
+        enabled: true,
+        cycle: "weekly",
+        time: "03:00",
+        scope: "all",
+        notify: false,
+      },
       { [SECURITY_CSRF_HEADER]: "wrong" },
     ),
     origin,

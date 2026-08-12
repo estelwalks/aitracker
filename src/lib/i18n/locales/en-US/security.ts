@@ -123,7 +123,7 @@ export const security = {
       riskyLine:
         "The latest scan covers {total} Skills. {risky} need review: {danger} blocked and {warn} warned.",
       noReportLine:
-        "There are no real scan results yet. Run a quick scan to inspect the Skills installed on this device.",
+        "There are no real scan results yet. Run a scan to inspect the Skills installed on this device.",
       boundaryLine:
         "Current capabilities are detection and alerting only. The app does not block external Agent behavior or claim runtime defense.",
       partialLine:
@@ -148,13 +148,25 @@ export const security = {
       enable: "Enable automatic scan",
       pause: "Pause automatic scan",
       loading: "Loading scan schedule…",
-      scheduleDesc: "{cycle} · Scope: {scope} · {modelNote}",
+      scheduleDesc:
+        "{cycle} · Time: {time} · Scope: {scope} · Notify: {notify}",
       modelFull: "Model configured → deep scan",
       modelQuick: "No model configured → quick scan",
       offDesc:
         "Once enabled, local Skills are checked automatically on the schedule — no manual scans needed.",
       scopeAll: "All local Skills",
-      settings: "Configure cycle",
+      cycleLabel: "Scan cycle",
+      scope: "Scan scope",
+      time: "Scan time",
+      notify: "Alert notification",
+      notifyOn: "Notify on",
+      notifyOff: "Notify off",
+      enabledLabel: "Scheduled scanning",
+      settings: "Settings",
+      settingsTitle: "Scan schedule settings",
+      timeRange: "Adjust scope",
+      close: "Close",
+      saveFailed: "Failed to save scan schedule",
       stepSchedule: "① Enable schedule",
       stepScheduleDesc: "Enable it under Settings · Scan config",
       stepCycle: "② Choose a cycle",
@@ -284,6 +296,12 @@ export const security = {
       scopeSingle: "Single Skill",
       covered: "{skills} Skills · {safe} safe / {unsafe} need review",
       generatedLocale: "Report language: {locale}",
+      viewReport: "View report",
+      reportSummary:
+        "Verdict {verdict} · Risk score {score} · Threat {threat} · {files} files scanned · Rules {rules}",
+      noReport: "No report for this scan",
+      reportBranches: "Scan branches",
+      reportFindings: "Findings",
     },
     runtimeBlock: {
       title: "Runtime defense · Block log",
@@ -323,6 +341,8 @@ export const security = {
       requiredTitle: "Model configuration required",
       requiredDesc:
         "Save a valid endpoint, API key, lite model, and pro model before starting a deep scan.",
+      requiredSettings:
+        "Full scan requires configuring a model interface in Settings first.",
       encryptionUnavailable:
         "Secure key encryption is unavailable on this system, so an API key cannot be saved.",
       encryptionAvailable:
