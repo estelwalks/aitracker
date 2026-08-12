@@ -171,9 +171,17 @@ test("NFR-001: 10 万条、30 天核心查询总耗时低于 3000ms", () => {
     sessions.eventsWithSession + sessions.eventsWithoutSession,
     EVENT_COUNT,
   );
-  assert.equal(cost.pricedEvents, EVENT_COUNT);
+  // Local events carry no route evidence, so offline pricing resolves them as
+  // reference-route estimates (`estimatedEvents`/`estimatedUsd`), never as
+  // `exact`/`pricedEvents`. Assert the pricing contract holds on the full
+  // fixture: every fixture model is known (no unknowns), a non-zero estimated
+  // cost is produced, and the estimate is complete. (`complete` stays true even
+  // with not-billable sources — those are explicitly not charged.)
   assert.equal(cost.unknownEvents, 0);
-  assert.ok(cost.knownUsd > 0);
+  assert.equal(cost.unknownModels.length, 0);
+  assert.ok(cost.estimatedEvents > 0);
+  assert.ok(cost.estimatedUsd > 0);
+  assert.equal(cost.complete, true);
 
   console.info(
     [
