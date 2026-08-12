@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
 const routes = [
   { path: "/", heading: "首页总览" },
   { path: "/agents", heading: "工具概览" },
-  { path: "/skills", heading: "Skill Hub" },
+  { path: "/skills", heading: "Skill 资产管理" },
   { path: "/security", heading: "安全检测" },
   { path: "/settings", heading: "设置" },
 ] as const;
@@ -125,6 +125,9 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
   // 独立市场路由已删除，市场入口在 /skills 的 market tab（卡片网格）
   await page.goto("/skills?tab=market");
+  // 等待 React 水合：搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，
+  // React 不会收到 input 事件，搜索不会触发（水合竞态）。
+  await page.waitForTimeout(1000);
 
   const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
   await search.fill("draw.io");
