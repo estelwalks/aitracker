@@ -149,7 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={item.to}
                       to={item.to}
                       title={label}
-                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : item.hero ? "border border-primary/25 bg-primary/10 font-medium text-primary hover:bg-primary/15" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                      className={`tt-nav-item flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${active ? "bg-primary font-medium text-primary-foreground shadow-sm" : item.hero ? "border border-primary/25 bg-primary/10 font-medium text-primary hover:bg-primary/15" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                       aria-current={active ? "page" : undefined}
                     >
                       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
@@ -168,7 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/settings"
             title={t("nav.settings")}
-            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"} ${collapsed ? "justify-center" : ""}`}
+            className={`flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-primary font-medium text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"} ${collapsed ? "justify-center" : ""}`}
           >
             <Settings className="size-4 shrink-0" strokeWidth={1.75} />
             {!collapsed && <span>{t("nav.settings")}</span>}
