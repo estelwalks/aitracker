@@ -206,6 +206,8 @@ export const dashboard = {
     distillationAssetsLabel: "蒸馏资产",
     agentActivityLabel: "Agent 活跃",
     securityRunsLabel: "安全扫描",
+    securityScanTimes: "扫描 {count} 次",
+    securityCoverage: "覆盖 {count} 个 Skill",
     distillationOutputsLabel: "蒸馏产出",
     dailyReportsLabel: "日报生成",
     outputUnavailableHint: "当前服务未提供可聚合的真实计数",

@@ -215,6 +215,8 @@ export const dashboard = {
     distillationAssetsLabel: "증류 자산",
     agentActivityLabel: "Agent 활동",
     securityRunsLabel: "보안 스캔",
+    securityScanTimes: "스캔 {count}회",
+    securityCoverage: "Skill {count}개 커버",
     distillationOutputsLabel: "증류 결과",
     dailyReportsLabel: "일일 보고서 생성",
     outputUnavailableHint:

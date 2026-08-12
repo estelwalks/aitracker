@@ -130,9 +130,11 @@ export const security = {
       partialLine:
         "最新検査は一部完了です。静的結果は保持されています。モデル分岐、失敗、スキップを確認してください。",
       passed: "合格 {count}",
+      highRisk: "高リスク {count}",
+      suspicious: "要確認 {count}",
       warned: "警告 {count}",
       blocked: "ブロック {count}",
-      lastScan: "{dimensions} 次元 · 最新 {time}",
+      lastScan: "{dimensions} 次元 · 前回 {time}",
       health: "健全度",
       quickScan: "クイックスキャン開始",
       fullScan: "詳細スキャン",
@@ -142,6 +144,29 @@ export const security = {
     },
     autoScan: {
       title: "自動スキャン",
+      enabled: "有効",
+      disabled: "無効",
+      enable: "自動スキャンを有効化",
+      pause: "自動スキャンを一時停止",
+      loading: "スキャン予定を読み込み中…",
+      scheduleDesc: "{cycle} · 範囲：{scope} · {modelNote}",
+      modelFull: "モデル設定あり → 詳細スキャン",
+      modelQuick: "モデル未設定 → クイックスキャン",
+      offDesc:
+        "有効化すると設定した周期でローカル Skill を自動巡回し、毎回手動で実行する必要がなくなります。",
+      scopeAll: "すべてのローカル Skill",
+      settings: "周期を設定",
+      stepSchedule: "① 定期実行を有効化",
+      stepScheduleDesc: "「設定 · スキャン設定」で有効化",
+      stepCycle: "② 周期を選択",
+      stepCycleDesc: "現在：{cycle}",
+      stepAlert: "③ リスク通知",
+      stepAlertDesc: "リスクを検出したら即時通知",
+      cycle: {
+        hourly: "毎時",
+        daily: "毎日",
+        weekly: "毎週",
+      },
       unavailable: "未有効 / 利用不可",
       unavailableDesc:
         "現在の実行環境には自動セキュリティスキャンの根拠がありません。上の操作から quick または full を手動実行してください。",
@@ -153,7 +178,6 @@ export const security = {
       stepModeDesc: "モデルの Endpoint に内容を送信しません",
       stepReview: "③ 結果を確認",
       stepReviewDesc: "失敗とスキップは履歴に保持",
-      settings: "スキャナー設定",
     },
     mode: {
       label: "スキャンモード",
@@ -197,6 +221,7 @@ export const security = {
     },
     metrics: {
       scannedSkills: "検査済み Skill",
+      unit: "個",
       safe: "安全",
       unsafe: "要確認",
       dimensions: "検査次元",

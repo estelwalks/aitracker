@@ -21,6 +21,8 @@ export const desktopIpc = {
   cancelSecurityScan: "security:cancel-scan",
   getSecurityModelConfig: "security:get-model-config",
   setSecurityModelConfig: "security:set-model-config",
+  getSecurityScanSchedule: "security:get-scan-schedule",
+  setSecurityScanSchedule: "security:set-scan-schedule",
   getSecurityRuntimeCapability: "security:get-runtime-capability",
 } as const;
 
@@ -128,6 +130,15 @@ export interface SecurityScanState {
   progress: SecurityScanProgress;
   resultIds: string[];
   errorCode?: string;
+}
+
+export const SECURITY_SCAN_CYCLES = ["hourly", "daily", "weekly"] as const;
+export type SecurityScanCycle = (typeof SECURITY_SCAN_CYCLES)[number];
+
+/** Persisted automatic-scan cadence; drives the main-process timer. */
+export interface SecurityScanSchedule {
+  readonly enabled: boolean;
+  readonly cycle: SecurityScanCycle;
 }
 
 export interface SecurityModelConfigInput {
@@ -316,5 +327,9 @@ export interface DesktopApi {
   setSecurityModelConfig(
     config: SecurityModelConfigInput,
   ): Promise<SecurityModelConfigView>;
+  getSecurityScanSchedule(): Promise<SecurityScanSchedule>;
+  setSecurityScanSchedule(
+    schedule: SecurityScanSchedule,
+  ): Promise<SecurityScanSchedule>;
   getSecurityRuntimeCapability(): Promise<SecurityRuntimeCapability>;
 }

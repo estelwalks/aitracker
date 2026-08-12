@@ -14,6 +14,7 @@ import type {
 import type {
   SecurityModelConfigView,
   SecurityRuntimeCapabilityView,
+  SecurityScanScheduleView,
 } from "../presentation/security-view";
 import {
   historyView,
@@ -255,6 +256,15 @@ const modelConfigInputSchema = z
   })
   .strict();
 
+const scanCycleSchema = z.enum(["hourly", "daily", "weekly"]);
+
+const scanScheduleSchema = z
+  .object({
+    enabled: z.boolean(),
+    cycle: scanCycleSchema,
+  })
+  .strict();
+
 const scanStartSchema = z
   .object({
     scope: z.enum(["single", "all"]),
@@ -438,6 +448,20 @@ function createCompanionClient(
           requestBody,
         )) as SecurityModelConfigDto),
       } satisfies SecurityModelConfigView;
+    },
+    async getScanSchedule() {
+      return (await request(
+        "/scan-schedule",
+        scanScheduleSchema,
+      )) as SecurityScanScheduleView;
+    },
+    async setScanSchedule(schedule: SecurityScanScheduleView) {
+      const requestBody = scanScheduleSchema.parse(schedule);
+      return (await request(
+        "/scan-schedule",
+        scanScheduleSchema,
+        requestBody,
+      )) as SecurityScanScheduleView;
     },
     async getRuntimeCapability() {
       capability = (await request(

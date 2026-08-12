@@ -14,6 +14,8 @@ type SecurityHttpService = Pick<
   | "cancel"
   | "getModelConfig"
   | "setModelConfig"
+  | "getScanSchedule"
+  | "setScanSchedule"
   | "getRuntimeCapability"
 >;
 
@@ -95,7 +97,7 @@ export async function handleSecurityHttpApi(
   try {
     const route = pathname.slice(SECURITY_API_PREFIX.length);
     const allowedMethods =
-      route === "/model-config"
+      route === "/model-config" || route === "/scan-schedule"
         ? ["GET", "POST"]
         : route === "/start" ||
             route === "/cancel" ||
@@ -108,7 +110,8 @@ export async function handleSecurityHttpApi(
       route === "/start" ||
       route === "/cancel" ||
       route === "/select-skill-directory" ||
-      (route === "/model-config" && request.method === "POST");
+      (route === "/model-config" && request.method === "POST") ||
+      (route === "/scan-schedule" && request.method === "POST");
     if (mutation) authorizeMutation(request, expectedOrigin);
 
     switch (route) {
@@ -129,6 +132,11 @@ export async function handleSecurityHttpApi(
           return json(await service.getModelConfig());
         if (request.method !== "POST") return method(request, "POST");
         return json(await service.setModelConfig(await jsonBody(request)));
+      case "/scan-schedule":
+        if (request.method === "GET")
+          return json(await service.getScanSchedule());
+        if (request.method !== "POST") return method(request, "POST");
+        return json(await service.setScanSchedule(await jsonBody(request)));
       case "/start": {
         if (request.method !== "POST") return method(request, "POST");
         const input = await jsonBody(request);

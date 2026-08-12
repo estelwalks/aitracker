@@ -216,6 +216,8 @@ export const dashboard = {
     distillationAssetsLabel: "Distillation assets",
     agentActivityLabel: "Agent activity",
     securityRunsLabel: "Security scans",
+    securityScanTimes: "Scanned {count} time(s)",
+    securityCoverage: "Covers {count} Skills",
     distillationOutputsLabel: "Distillation outputs",
     dailyReportsLabel: "Daily reports",
     outputUnavailableHint: "No aggregate count is exposed by the local service",

@@ -13,6 +13,7 @@ import {
   type SecurityModelConfigView,
   type SecurityRuntimeCapability,
   type SecurityScanHistoryEntry,
+  type SecurityScanSchedule,
   type SecurityScanStartRequest,
   type SecurityScanState,
   type SecuritySkillTarget,
@@ -108,6 +109,15 @@ const desktopApi: DesktopApi = Object.freeze({
       desktopIpc.setSecurityModelConfig,
       config,
     ) as Promise<SecurityModelConfigView>,
+  getSecurityScanSchedule: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getSecurityScanSchedule,
+    ) as Promise<SecurityScanSchedule>,
+  setSecurityScanSchedule: (schedule: SecurityScanSchedule) =>
+    ipcRenderer.invoke(
+      desktopIpc.setSecurityScanSchedule,
+      schedule,
+    ) as Promise<SecurityScanSchedule>,
   getSecurityRuntimeCapability: () =>
     ipcRenderer.invoke(
       desktopIpc.getSecurityRuntimeCapability,
@@ -115,3 +125,6 @@ const desktopApi: DesktopApi = Object.freeze({
 });
 
 contextBridge.exposeInMainWorld(DESKTOP_GLOBAL, desktopApi);
+// Renderer modules use this established contract. Keep the configured name
+// above as a compatibility alias for existing integrations.
+contextBridge.exposeInMainWorld("desktopApi", desktopApi);

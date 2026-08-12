@@ -179,7 +179,6 @@ export function SecurityAssessmentPage() {
       toast.error(t("security.center.toast.failed"));
   }, [scanState.status, t]);
 
-  const devMode = clientRef.current?.transport === "companion";
   const latest = latestHistory(history);
   const riskKinds = runtime?.riskKinds ?? SECURITY_RISK_KINDS;
   const latestEntries = useMemo(() => latestScanEntries(history), [history]);
@@ -238,23 +237,6 @@ export function SecurityAssessmentPage() {
     },
     [reportError, scanState.status, t],
   );
-
-  const selectDirectory = useCallback(async () => {
-    const client = clientRef.current;
-    if (client == null || !client.supportsDirectorySelection) return;
-    try {
-      const selected = await client.selectSkillDirectory();
-      if (selected == null) return;
-      setSkills((current) => [
-        selected,
-        ...current.filter((item) => item.skillRef !== selected.skillRef),
-      ]);
-      toast.success(t("security.center.toast.directorySelected"));
-      await startScan("quick", "single", selected.skillRef);
-    } catch (error) {
-      reportError(error);
-    }
-  }, [reportError, startScan, t]);
 
   const cancelScan = useCallback(async () => {
     const client = clientRef.current;
@@ -333,19 +315,6 @@ export function SecurityAssessmentPage() {
         </div>
       ) : (
         <>
-          {devMode && (
-            <div className="flex items-start gap-2 rounded-xl bg-ok/10 px-3.5 py-2 text-[11px] text-ok ring-1 ring-ok/15">
-              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-ok" />
-              <div className="min-w-0">
-                <p className="font-medium">
-                  {t("security.center.devBanner.title")}
-                </p>
-                <p className="text-ok/80">
-                  {t("security.center.devBanner.desc")}
-                </p>
-              </div>
-            </div>
-          )}
           <SecurityBriefing
             totals={latestTotals}
             dimensions={riskKinds.length}
@@ -358,18 +327,13 @@ export function SecurityAssessmentPage() {
                 ? "partial"
                 : latestPhase
             }
-            runtime={runtime}
             scanning={isScanActive(scanState.status)}
-            canSelectDirectory={
-              clientRef.current?.supportsDirectorySelection === true
+            onScan={() =>
+              void startScan(modelConfig?.configured ? "full" : "quick")
             }
-            devMode={devMode}
-            onScan={() => void startScan("quick")}
-            onFullScan={() => void startScan("full")}
-            onSelectDirectory={() => void selectDirectory()}
           />
 
-          <AutoScanGuide runtime={runtime} />
+          <AutoScanGuide />
 
           <ScanStatus
             state={scanState}
@@ -404,7 +368,6 @@ export function SecurityAssessmentPage() {
         open={modelOpen}
         config={modelConfig}
         saving={savingModel}
-        devMode={devMode}
         onClose={() => setModelOpen(false)}
         onSave={(update) => void saveModel(update)}
       />

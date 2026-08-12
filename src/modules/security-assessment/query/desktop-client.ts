@@ -11,6 +11,7 @@ import type {
   SecurityModelConfigView,
   SecurityReportView,
   SecurityRuntimeCapabilityView,
+  SecurityScanScheduleView,
   SecurityScanStateView,
   SecuritySkillView,
 } from "../presentation/security-view";
@@ -30,6 +31,10 @@ export interface SecurityClient {
   setModelConfig(
     config: SecurityModelConfigUpdate,
   ): Promise<SecurityModelConfigView>;
+  getScanSchedule(): Promise<SecurityScanScheduleView>;
+  setScanSchedule(
+    schedule: SecurityScanScheduleView,
+  ): Promise<SecurityScanScheduleView>;
   getRuntimeCapability(): Promise<SecurityRuntimeCapabilityView>;
 }
 
@@ -123,6 +128,12 @@ export function getDesktopSecurityClient(): SecurityClient | null {
     },
     async setModelConfig(config) {
       return { ...(await api.setSecurityModelConfig(config)) };
+    },
+    async getScanSchedule() {
+      return { ...(await api.getSecurityScanSchedule()) };
+    },
+    async setScanSchedule(schedule) {
+      return { ...(await api.setSecurityScanSchedule(schedule)) };
     },
     async getRuntimeCapability() {
       return { ...(await api.getSecurityRuntimeCapability()) };
