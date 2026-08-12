@@ -71,6 +71,7 @@ export const skills = {
   },
   table: {
     title: "Skill list ({count})",
+    rank: "Rank",
     name: "Name",
     desc: "Description",
     agent: "Install location",
@@ -219,6 +220,41 @@ export const skills = {
     workspaceTitle: "Skill asset management",
     workspaceDesc:
       "The operation area below keeps using real local scans and confirmed safe changes.",
+  },
+  hub: {
+    title: "Skill Hub",
+    summary: "{count} local skills",
+    desc: "Manage local Skill assets in one place and install security-scanned Skills from the market.",
+  },
+  jarvis: {
+    localSkills:
+      "{count} local Skills across {agents} Agents, {installs} installation copies.",
+    securityDetected:
+      "Security checks completed for {count} local Skills with {risk} findings.",
+    securityClean: "All local Skills passed security checks — no findings.",
+    marketAvailable:
+      "{total} Skills available in the market, {official} of them official.",
+    marketInstalled: "{count} market Skills installed on this machine.",
+  },
+  kpi: {
+    localSkills: "Local Skills",
+    distilled: "Local distillation",
+    detected: "Checked",
+    risks: "Findings",
+    localSkillsHint: "{count} installation copies",
+    distilledHint: "Approved distillation output",
+    detectedHint: "Skills with security results",
+    risksHint: "Findings from security checks",
+  },
+  banner: {
+    distillActive:
+      "Local distillation produced {approved} approved and {waiting} pending knowledge notes — manage them in the distill studio.",
+    goDistill: "Open distill studio",
+  },
+  security: {
+    detected: "Security checked",
+    attention: "Needs attention",
+    clean: "Passed",
   },
   pagination: {
     range: "Items {start}-{end} of {total}",

@@ -68,6 +68,7 @@ export const skills = {
   },
   table: {
     title: "Skill 목록({count})",
+    rank: "순위",
     name: "이름",
     desc: "설명",
     agent: "설치 위치",
@@ -215,6 +216,41 @@ export const skills = {
     workspaceTitle: "Skill 자산 관리",
     workspaceDesc:
       "아래 작업 영역은 실제 로컬 스캔과 확인된 안전한 변경을 계속 사용합니다.",
+  },
+  hub: {
+    title: "Skill Hub",
+    summary: "로컬 Skill {count}개",
+    desc: "로컬 Skill 자산을 한곳에서 관리하고, 보안 검사를 통과한 Skill을 마켓에서 설치합니다.",
+  },
+  jarvis: {
+    localSkills:
+      "로컬에 {count}개의 Skill, {agents}개 Agent에 {installs}개의 설치 복사본이 있습니다.",
+    securityDetected:
+      "{count}개의 로컬 Skill 보안 검사가 완료되었으며 위험은 {risk}건입니다.",
+    securityClean: "모든 로컬 Skill 보안 검사를 통과했습니다.",
+    marketAvailable:
+      "마켓에서 {total}개의 Skill을 설치할 수 있으며 그중 {official}개는 공식 릴리스입니다.",
+    marketInstalled: "이 머신에 마켓 Skill {count}개가 설치되었습니다.",
+  },
+  kpi: {
+    localSkills: "로컬 Skill",
+    distilled: "로컬 증류",
+    detected: "검사됨",
+    risks: "위험 항목",
+    localSkillsHint: "설치 복사본 {count}개",
+    distilledHint: "승인된 증류 산출물",
+    detectedHint: "보안 검사 결과 있음",
+    risksHint: "보안 검사에서 발견된 위험",
+  },
+  banner: {
+    distillActive:
+      "로컬 증류로 승인 {approved}건·대기 {waiting}건의 지식 노트가 생성되었습니다. 증류 워크벤치에서 관리할 수 있습니다.",
+    goDistill: "증류 워크벤치 열기",
+  },
+  security: {
+    detected: "보안 검사됨",
+    attention: "확인 필요",
+    clean: "안전",
   },
   pagination: {
     range: "{start}-{end}번째 / 전체 {total}개",
