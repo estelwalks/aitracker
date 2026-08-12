@@ -1,5 +1,5 @@
-import { RefreshCw, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Sparkles, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 /**
  * Shared Jarvis insight card: a big rounded hero with an orb, a typewriter
@@ -9,6 +9,14 @@ import { useEffect, useMemo, useState } from "react";
  *
  * `lines` are short, real-data-derived insights; the card types the active
  * one character-by-character and auto-rotates every 6s (reduced-motion aware).
+ *
+ * Two optional extensions keep every existing caller unchanged:
+ * - `icon` swaps the orb glyph (defaults to Sparkles).
+ * - `actions` renders into the right-hand action column (before the rotate
+ *   button), mirroring the dashboard's `flex shrink-0 flex-col items-end`
+ *   column. When omitted the rotate/refresh controls stay in the title row.
+ * - `pills` renders extra chips in the title row (after the title), matching
+ *   the homepage's `dashboard-hero-pill` status pills.
  */
 const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 6000;
@@ -21,6 +29,9 @@ export function JarvisInsight({
   refreshLabel,
   rotateLabel,
   dotsLabel,
+  icon: Icon = Sparkles,
+  actions,
+  pills,
 }: {
   title?: string;
   lines: readonly string[];
@@ -33,6 +44,12 @@ export function JarvisInsight({
   rotateLabel?: string;
   /** Localized accessible label for the dot rail. */
   dotsLabel?: string;
+  /** Orb icon override; defaults to Sparkles. */
+  icon?: LucideIcon;
+  /** Right-hand action column content, rendered before the rotate button. */
+  actions?: ReactNode;
+  /** Extra chips rendered in the title row, after the title. */
+  pills?: ReactNode;
 }) {
   const safeLines = useMemo(
     () => lines.filter((line) => line.length > 0),
@@ -90,11 +107,34 @@ export function JarvisInsight({
       safeLines.length ? (current + 1) % safeLines.length : 0,
     );
 
+  const refreshButton = onRefresh ? (
+    <button
+      type="button"
+      onClick={onRefresh}
+      className="dashboard-hero-refresh"
+    >
+      <RefreshCw className="size-3" strokeWidth={2} />
+      {refreshLabel}
+    </button>
+  ) : null;
+
+  const rotateButton = (
+    <button
+      type="button"
+      onClick={rotateNext}
+      disabled={safeLines.length < 2}
+      className="dashboard-hero-refresh"
+    >
+      <RefreshCw className="size-3" strokeWidth={2} />
+      {rotateLabel}
+    </button>
+  );
+
   return (
     <section className="dashboard-insight-hero" aria-label={title}>
       <div className="relative flex min-w-0 gap-5">
         <span className="dashboard-insight-orb tt-breathe" style={orbStyle}>
-          <Sparkles className="size-6" />
+          <Icon className="size-6" />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -103,27 +143,13 @@ export function JarvisInsight({
                 {title}
               </h1>
             ) : null}
-            <div className="ml-auto flex items-center gap-2">
-              {onRefresh ? (
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  className="dashboard-hero-refresh"
-                >
-                  <RefreshCw className="size-3" strokeWidth={2} />
-                  {refreshLabel}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={rotateNext}
-                disabled={safeLines.length < 2}
-                className="dashboard-hero-refresh"
-              >
-                <RefreshCw className="size-3" strokeWidth={2} />
-                {rotateLabel}
-              </button>
-            </div>
+            {pills}
+            {actions == null ? (
+              <div className="ml-auto flex items-center gap-2">
+                {refreshButton}
+                {rotateButton}
+              </div>
+            ) : null}
           </div>
           <p
             className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]"
@@ -154,6 +180,13 @@ export function JarvisInsight({
             ))}
           </div>
         </div>
+        {actions != null ? (
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {actions}
+            {refreshButton}
+            {rotateButton}
+          </div>
+        ) : null}
       </div>
     </section>
   );
