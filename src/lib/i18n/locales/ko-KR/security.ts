@@ -249,6 +249,15 @@ export const security = {
       covered: "Skill {skills}개 · 안전 {safe} / 확인 필요 {unsafe}",
       generatedLocale: "보고서 언어: {locale}",
     },
+    runtimeBlock: {
+      title: "런타임 방어 · 차단 로그",
+      desc: "데스크톱 런타임 차단 이벤트가 여기에 기록됩니다 · 현재 비활성",
+      statusOff: "비활성",
+      emptyTitle: "차단 기록 없음",
+      emptyDesc:
+        "아직 실제 차단 이벤트가 없습니다. 런타임 방어는 기본적으로 꺼져 있으며 데스크톱에서 활성화한 뒤에야 차단 기록이 생성됩니다. 그 전에는 시뮬레이션이나 자리 표시자 데이터를 표시하지 않습니다.",
+      settings: "스캔 설정 열기",
+    },
     model: {
       title: "심층 검사 모델 설정",
       desc: "API Key는 Electron safeStorage로 메인 프로세스에 암호화 저장되며 이 페이지나 일반 환경설정으로 반환되지 않습니다.",
