@@ -17,6 +17,8 @@ import { AppError } from "../../lib/errors.ts";
 import type { Locale } from "../../lib/i18n/locale.ts";
 import type {
   DistillationActionResponse,
+  DistillationSaveSkillInput,
+  DistillationSaveSkillResponse,
   DistillationStartInput,
   DistillationStartResponse,
   DistillationViewModel,
@@ -24,6 +26,8 @@ import type {
 
 export type {
   DistillationActionResponse,
+  DistillationSaveSkillInput,
+  DistillationSaveSkillResponse,
   DistillationStartInput,
   DistillationStartResponse,
   DistillationViewModel,
@@ -75,7 +79,16 @@ export const startDistillation = createServerFn({ method: "POST" })
       typeof input?.modelId === "string" && input.modelId.trim().length > 0
         ? input.modelId.trim()
         : undefined;
-    return { sessionRefs: refs, ...(modelId ? { modelId } : {}) };
+    const promptText =
+      typeof input?.promptText === "string" &&
+      input.promptText.trim().length > 0
+        ? input.promptText.trim().slice(0, 4_000)
+        : undefined;
+    return {
+      sessionRefs: refs,
+      ...(modelId ? { modelId } : {}),
+      ...(promptText ? { promptText } : {}),
+    };
   })
   .handler(async ({ data }): Promise<DistillationStartResponse> => {
     const { startDistillation: run } = await import("./api.server.ts");
@@ -118,4 +131,45 @@ export const cancelCandidate = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<DistillationActionResponse> => {
     const { cancelCandidate: run } = await import("./api.server.ts");
     return run(data.candidateId);
+  });
+
+/**
+ * Save an approved candidate's knowledge note as a local Skill. The server
+ * re-validates the candidate (must be approved), the skill name and the
+ * target agent against the shared `SKILL_AGENTS` list.
+ */
+export const saveCandidateAsSkill = createServerFn({ method: "POST" })
+  .validator((input: DistillationSaveSkillInput) => {
+    if (
+      typeof input?.candidateId !== "string" ||
+      !OPAQUE_ID.test(input.candidateId)
+    ) {
+      throw new AppError("errors.distillation.notFound");
+    }
+    if (
+      typeof input?.skillName !== "string" ||
+      input.skillName.trim().length === 0
+    ) {
+      throw new AppError("errors.distillation.invalidName");
+    }
+    if (
+      typeof input?.targetAgent !== "string" ||
+      input.targetAgent.trim().length === 0
+    ) {
+      throw new AppError("errors.distillation.invalidAgent");
+    }
+    const content =
+      typeof input?.content === "string" && input.content.trim().length > 0
+        ? input.content.trim().slice(0, 16_000)
+        : undefined;
+    return {
+      candidateId: input.candidateId,
+      skillName: input.skillName.trim().slice(0, 64),
+      targetAgent: input.targetAgent.trim(),
+      ...(content ? { content } : {}),
+    };
+  })
+  .handler(async ({ data }): Promise<DistillationSaveSkillResponse> => {
+    const { saveCandidateAsSkill: run } = await import("./api.server.ts");
+    return run(data);
   });

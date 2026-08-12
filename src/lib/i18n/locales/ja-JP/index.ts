@@ -2,6 +2,7 @@
 import type { Translations } from "../../schema";
 
 import { common } from "./common";
+import { distill } from "./distill";
 import { dashboard } from "./dashboard";
 import { errors } from "./errors";
 import { exportMessages } from "./export";
@@ -20,6 +21,7 @@ import { theme } from "./theme";
 
 export const ja = {
   common,
+  distill,
   dashboard,
   insights,
   pricing,

@@ -45,6 +45,10 @@ export const errors = {
     notWaiting: "候选项不在待审批状态",
     knowledgeUnavailable: "知识库不可用",
     knowledgeFailed: "知识条目写入失败",
+    notApproved: "请先审批该候选再保存为 Skill",
+    invalidName: "Skill 名称不合法",
+    invalidAgent: "目标工具不可用",
+    skillExists: "同名 Skill 已存在，请更换名称",
   },
   pricing: {
     modelListInvalid: "模型列表不合法",
