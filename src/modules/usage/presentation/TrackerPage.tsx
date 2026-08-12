@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 
+import { JarvisInsight } from "../../../components/JarvisInsight";
 import { MetricGrid, PageHeader } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
+import {
+  composeTrackerInsights,
+  resolveInsightLines,
+} from "../../../lib/page-insights";
 import type { TrackerReadModel } from "../contracts.ts";
 import { RoastBoard } from "./roast/RoastBoard.tsx";
 
@@ -10,7 +15,7 @@ import { RoastBoard } from "./roast/RoastBoard.tsx";
  * model (real usage events); nothing here is mocked or estimated.
  */
 export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   const { boards, totals, generatedAt } = initial;
 
   const metrics = useMemo(
@@ -30,10 +35,20 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
     ],
     [t, format, totals],
   );
+  const insightLines = useMemo(
+    () => resolveInsightLines(t, composeTrackerInsights(initial, locale)),
+    [t, initial, locale],
+  );
 
   return (
     <div>
       <PageHeader title={t("tracker.title")} desc={t("tracker.desc")} />
+      <JarvisInsight
+        title={t("insights.title")}
+        lines={insightLines}
+        rotateLabel={t("insights.rotate")}
+        dotsLabel={t("insights.dots")}
+      />
       <MetricGrid items={metrics} className="mb-3" />
       <p className="mb-3 text-[11px] text-muted-foreground">
         {generatedAt
