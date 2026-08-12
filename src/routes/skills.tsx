@@ -5,6 +5,7 @@ import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { getDashboardReadModel } from "../modules/dashboard/query";
+import { getDistillationQuery } from "../modules/distillation/query";
 import { getMarketSkills } from "../modules/skill-distribution/query";
 import type {
   SkillHubData,
@@ -29,14 +30,24 @@ export const Route = createFileRoute("/skills")({
   }),
   loader: async ({ location }): Promise<SkillsLoader> => {
     const locale = resolveLocaleFromSearch(location.search);
-    const [workspace, usage, market] = await Promise.all([
+    const [workspace, usage, market, distillation] = await Promise.all([
       getSkillWorkspace(),
       getDashboardReadModel({ data: locale }),
       getMarketSkills({
         data: { page: 1, limit: 24, search: "", sort: "downloads" },
       }),
+      // Real distillation activity from the composition root; never breaks the
+      // page when the workbench is unavailable.
+      getDistillationQuery({ data: locale })
+        .then((view) => ({
+          approved: view.stats.approved,
+          waiting: view.candidates.filter(
+            (candidate) => candidate.approvalState === "waiting-approval",
+          ).length,
+        }))
+        .catch(() => null),
     ]);
-    return { locale, workspace, usage, market };
+    return { locale, workspace, usage, market, distillation };
   },
   head: ({ loaderData }) => ({
     meta: [
