@@ -9,6 +9,13 @@ import {
   type DesktopApi,
   type LocalePreferences,
   type RuntimeInfo,
+  type SecurityModelConfigInput,
+  type SecurityModelConfigView,
+  type SecurityRuntimeCapability,
+  type SecurityScanHistoryEntry,
+  type SecurityScanStartRequest,
+  type SecurityScanState,
+  type SecuritySkillTarget,
 } from "./contracts.js";
 import { DESKTOP_GLOBAL } from "./app-config.js";
 
@@ -47,19 +54,12 @@ const desktopApi: DesktopApi = Object.freeze({
     };
   },
   getLocalePreferences: () =>
-    ipcRenderer.invoke(desktopIpc.getLocalePreferences) as Promise<
-      LocalePreferences
-    >,
-  setLocaleMode: (mode: DesktopPreferenceMode, locale?: DesktopLocale) =>
     ipcRenderer.invoke(
-      desktopIpc.setLocaleMode,
-      mode,
-      locale,
-    ) as Promise<void>,
-  setCurrencyMode: (
-    mode: DesktopPreferenceMode,
-    currency?: DesktopCurrency,
-  ) =>
+      desktopIpc.getLocalePreferences,
+    ) as Promise<LocalePreferences>,
+  setLocaleMode: (mode: DesktopPreferenceMode, locale?: DesktopLocale) =>
+    ipcRenderer.invoke(desktopIpc.setLocaleMode, mode, locale) as Promise<void>,
+  setCurrencyMode: (mode: DesktopPreferenceMode, currency?: DesktopCurrency) =>
     ipcRenderer.invoke(
       desktopIpc.setCurrencyMode,
       mode,
@@ -74,6 +74,44 @@ const desktopApi: DesktopApi = Object.freeze({
       ipcRenderer.removeListener(desktopIpc.preferencesChanged, listener);
     };
   },
+  listSecuritySkills: () =>
+    ipcRenderer.invoke(desktopIpc.listSecuritySkills) as Promise<
+      SecuritySkillTarget[]
+    >,
+  selectSecuritySkillDirectory: () =>
+    ipcRenderer.invoke(
+      desktopIpc.selectSecuritySkillDirectory,
+    ) as Promise<SecuritySkillTarget | null>,
+  startSecurityScan: (request: SecurityScanStartRequest) =>
+    ipcRenderer.invoke(
+      desktopIpc.startSecurityScan,
+      request,
+    ) as Promise<SecurityScanState>,
+  getSecurityScanStatus: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getSecurityScanStatus,
+    ) as Promise<SecurityScanState>,
+  getSecurityScanHistory: () =>
+    ipcRenderer.invoke(desktopIpc.getSecurityScanHistory) as Promise<
+      SecurityScanHistoryEntry[]
+    >,
+  cancelSecurityScan: () =>
+    ipcRenderer.invoke(desktopIpc.cancelSecurityScan) as Promise<{
+      cancelled: boolean;
+    }>,
+  getSecurityModelConfig: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getSecurityModelConfig,
+    ) as Promise<SecurityModelConfigView>,
+  setSecurityModelConfig: (config: SecurityModelConfigInput) =>
+    ipcRenderer.invoke(
+      desktopIpc.setSecurityModelConfig,
+      config,
+    ) as Promise<SecurityModelConfigView>,
+  getSecurityRuntimeCapability: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getSecurityRuntimeCapability,
+    ) as Promise<SecurityRuntimeCapability>,
 });
 
 contextBridge.exposeInMainWorld(DESKTOP_GLOBAL, desktopApi);

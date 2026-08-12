@@ -57,6 +57,16 @@ export const common = {
     kindDaily: "일일",
     kindWeekly: "주간",
     updatedAt: "업데이트 {time}",
+    editor: {
+      preview: "미리보기",
+      edit: "편집",
+      exportMd: "Markdown 내보내기",
+      print: "인쇄 / PDF",
+      copy: "복사",
+      autosaved: "초안 자동 저장됨",
+      draftNote: "초안은 이 브라우저에만 저장되며 서버에는 기록되지 않습니다.",
+      draftHint: "생성된 보고서를 클릭하면 초안을 편집할 수 있습니다.",
+    },
   },
   distillation: {
     pageTitle: "증류 워크벤치",
@@ -74,5 +84,25 @@ export const common = {
     candidateNote:
       "후보는 서버 메모리에 보관되며 새로고침 후 유지되지 않습니다. 후보가 영속화된 후에 전체 승인 UI를 제공합니다.",
     selectedTurns: "{count}턴",
+    modeQuick: "빠른 모드",
+    modePro: "고급 설정",
+    metricMaterial: "선택한 소재",
+    metricTurns: "소재 턴",
+    metricRuns: "증류 횟수",
+    metricApproved: "승인됨",
+    openMaterial: "소재 라이브러리 열기",
+    materialDrawerTitle: "증류 소재 선택",
+    materialSegmentUnavailable:
+      "현재 버전은 세션 단위 소재 선택만 지원합니다. 단일 메시지 내용은 읽지 않습니다(개인정보 경계).",
+    modelOffline: "오프라인 폴백",
+    modelNotConfigured:
+      "LLM 미설정 · 증류 결과는 결정적 오프라인 폴백으로 생성됩니다",
+    runHint: "세션을 하나 이상 선택한 후 증류하세요.",
+    expMode: "모드",
+    expTime: "생성 시간",
+    expOfflineNotice:
+      "이 후보는 결정적 오프라인 폴백으로 생성되었습니다. LLM을 구성하면 실제 모델 출력을 얻을 수 있습니다.",
+    saveAndManage: "저장 후 Skill 관리로 이동",
+    estimatedTokens: "약 {count} tokens",
   },
 } as const;

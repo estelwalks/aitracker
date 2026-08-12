@@ -6,24 +6,20 @@ import { nav as ja } from "./ja-JP/nav.ts";
 import { nav as ko } from "./ko-KR/nav.ts";
 
 const requiredV3Navigation = [
-  "groupCore",
-  "groupGuard",
-  "groupInfrastructure",
-  "dashboard",
-  "skills",
-  "sessions",
+  "tier1",
+  "tier2",
+  "tier3",
+  "home",
+  "agents",
   "distill",
-  "reports",
-  "security",
-  "market",
-  "sources",
+  "memory",
+  "guard",
+  "tracker",
+  "skillHub",
   "settings",
-  "login",
-  "soon",
-  "loginUnavailable",
   "collapse",
   "search",
-  "agentStatusUnavailable",
+  "agentActive",
 ] as const;
 
 test("all locales expose the shared V3 navigation contract", () => {

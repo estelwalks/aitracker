@@ -58,6 +58,17 @@ export const common = {
     kindDaily: "Daily",
     kindWeekly: "Weekly",
     updatedAt: "Updated {time}",
+    editor: {
+      preview: "Preview",
+      edit: "Edit",
+      exportMd: "Export Markdown",
+      print: "Print / PDF",
+      copy: "Copy",
+      autosaved: "Draft auto-saved",
+      draftNote:
+        "Draft is stored in this browser only; it is not written to the server.",
+      draftHint: "Click a generated report to edit its draft.",
+    },
   },
   distillation: {
     pageTitle: "Distillation Workbench",
@@ -75,5 +86,25 @@ export const common = {
     candidateNote:
       "Candidates are kept in server memory and are not retained after refresh; the full approval UI will arrive once candidates are persisted.",
     selectedTurns: "{count} turns",
+    modeQuick: "Quick mode",
+    modePro: "Advanced",
+    metricMaterial: "Selected material",
+    metricTurns: "Material turns",
+    metricRuns: "Distill runs",
+    metricApproved: "Approved",
+    openMaterial: "Open material library",
+    materialDrawerTitle: "Choose distillation material",
+    materialSegmentUnavailable:
+      "This version selects material per session only; single message content is not read (privacy boundary).",
+    modelOffline: "Offline fallback",
+    modelNotConfigured:
+      "No LLM configured · distillation output will be a deterministic offline fallback",
+    runHint: "Pick at least one session, then distill.",
+    expMode: "Mode",
+    expTime: "Generated",
+    expOfflineNotice:
+      "This candidate was produced by the deterministic offline fallback. Configure an LLM for real model output.",
+    saveAndManage: "Save & go to Skill management",
+    estimatedTokens: "~{count} tokens",
   },
 } as const;

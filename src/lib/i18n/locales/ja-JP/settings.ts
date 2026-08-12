@@ -12,8 +12,27 @@ export const settings = {
   themeDesc: "テーマを選択します",
   sections: {
     general: "一般",
+    scan: "スキャン設定",
+    model: "モデル設定",
     appearance: "外観",
     about: "情報",
+  },
+  scan: {
+    onDemand: "スキャン方式",
+    onDemandDesc:
+      "スキャンはオンデマンドで実行され、対応するローカル AI ツールのログを読み取り増分インデックスを構築します。",
+    retentionNote:
+      "以下の保持期間は使用量・スキャンキャッシュにも適用されます：",
+  },
+  model: {
+    notConfigured: "LLM 未設定",
+    notConfiguredDesc:
+      "AI 生成機能（蒸留、レポート、AI インサイト）は利用できません。TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 環境変数を設定してください。",
+    configured: "LLM 設定済み",
+    baseUrl: "エンドポイント",
+    model: "モデル",
+    apiKeyMasked: "API Key 設定済み（マスク表示）",
+    loading: "読み込み中…",
   },
   pageHeader: "設定",
   pageHeaderDesc:

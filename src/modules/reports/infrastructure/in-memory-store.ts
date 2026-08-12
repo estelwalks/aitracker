@@ -41,5 +41,13 @@ export function createInMemoryReportStore(): ReportStore & {
       )[0];
       return document ? structuredClone(document) : undefined;
     },
+    async listDocuments() {
+      return [...documents].sort((a, b) =>
+        b.generatedAt.localeCompare(a.generatedAt),
+      );
+    },
+    async listRuns() {
+      return [...runs].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    },
   };
 }

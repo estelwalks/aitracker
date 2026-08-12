@@ -9,6 +9,7 @@ import { market } from "./market";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
+import { tracker } from "./tracker";
 import { skills } from "./skills";
 import { security } from "./security";
 import { sessions } from "./sessions";
@@ -28,6 +29,7 @@ export const ja = {
   sources,
   settings,
   market,
+  tracker,
   meta,
   errors,
   export: exportMessages,

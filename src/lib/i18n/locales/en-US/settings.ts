@@ -11,8 +11,27 @@ export const settings = {
   themeDesc: "Choose the interface theme",
   sections: {
     general: "General",
+    scan: "Scan config",
+    model: "Model config",
     appearance: "Appearance",
     about: "About",
+  },
+  scan: {
+    onDemand: "Scan mode",
+    onDemandDesc:
+      "Scanning runs on demand: it reads supported local AI tool logs and builds an incremental index.",
+    retentionNote:
+      "The retention period below also applies to usage and scan caches:",
+  },
+  model: {
+    notConfigured: "LLM not configured",
+    notConfiguredDesc:
+      "AI-generated features (distillation, reports, AI insights) are unavailable. Set TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
+    configured: "LLM configured",
+    baseUrl: "Endpoint",
+    model: "Model",
+    apiKeyMasked: "API key configured (masked)",
+    loading: "Reading…",
   },
   pageHeader: "Settings",
   pageHeaderDesc:

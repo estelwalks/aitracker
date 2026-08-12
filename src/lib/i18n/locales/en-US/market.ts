@@ -21,6 +21,7 @@ export const market = {
     totalSkills: "Total Skills listed",
     officialCount: "Official releases",
     passRate: "Security pass rate",
+    passRatePage: "This page pass rate",
     installedCount: "Installed",
     totalDownloads: "Total downloads",
     hintCurrentPage: "Current page stats",
@@ -63,10 +64,16 @@ export const market = {
   security: {
     score: "Security score {score}",
     scoreMissing: "Security score not provided",
+    safe: "Safe",
+    attention: "Review",
   },
   install: {
     button: "Install",
     toSelected: "Install to selected tool",
+    target: "Install target",
+    notDetected: "Not detected",
+    succeeded: "Install succeeded",
+    failed: "Install failed",
     success: "Installed to {agent}",
     downloading: "Downloading and scanning…",
     failure: {

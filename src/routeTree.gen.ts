@@ -19,6 +19,7 @@ import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as TrackerRouteImport } from './routes/tracker'
 
@@ -72,6 +73,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
 }
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
 }
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
     | '/tracker'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
     | '/tracker'
   id:
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
     | '/tracker'
   fileRoutesById: FileRoutesById
@@ -182,6 +194,7 @@ export interface RootRouteChildren {
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
   TrackerRoute: typeof TrackerRoute
 }
@@ -258,6 +271,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sources': {
       id: '/sources'
       path: '/sources'
@@ -286,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
   TrackerRoute: TrackerRoute,
 }

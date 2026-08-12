@@ -190,6 +190,46 @@ test("restart recovery: a fresh store instance reads previously persisted data",
   });
 });
 
+test("listDocuments returns persisted documents newest first", async () => {
+  await temp(async (dir) => {
+    const store = newStore(dir);
+    await store.saveDocument(
+      document({
+        reportId: "report:old",
+        generatedAt: "2026-08-06T00:00:00.000Z",
+      }),
+    );
+    await store.saveDocument(
+      document({
+        reportId: "report:new",
+        generatedAt: "2026-08-07T00:00:00.000Z",
+      }),
+    );
+    const list = await store.listDocuments();
+    assert.deepEqual(
+      list.map((item) => item.reportId),
+      ["report:new", "report:old"],
+    );
+  });
+});
+
+test("listRuns returns persisted runs newest first", async () => {
+  await temp(async (dir) => {
+    const store = newStore(dir);
+    await store.createRun(
+      run({ runId: "run:old", startedAt: "2026-08-06T00:00:00.000Z" }),
+    );
+    await store.createRun(
+      run({ runId: "run:new", startedAt: "2026-08-07T00:00:00.000Z" }),
+    );
+    const list = await store.listRuns();
+    assert.deepEqual(
+      list.map((item) => item.runId),
+      ["run:new", "run:old"],
+    );
+  });
+});
+
 test("callers cannot mutate persisted state via returned references (defensive clone)", async () => {
   await temp(async (dir) => {
     const store = newStore(dir);

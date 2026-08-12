@@ -38,6 +38,7 @@ export {
   querySkillAssets,
   toSkillAssetView,
 } from "./application/index.ts";
+export { SkillsPage } from "./presentation/SkillsPage.tsx";
 export type {
   AssetSortDirection,
   AssetSortKey,

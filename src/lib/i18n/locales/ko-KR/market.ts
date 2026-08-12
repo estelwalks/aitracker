@@ -23,6 +23,7 @@ export const market = {
     totalSkills: "등록된 Skill 총수",
     officialCount: "공식 릴리스 수",
     passRate: "보안 통과율",
+    passRatePage: "이 페이지 통과율",
     installedCount: "설치된 수",
     totalDownloads: "총 다운로드 수",
     hintCurrentPage: "현재 페이지 통계",
@@ -65,10 +66,16 @@ export const market = {
   security: {
     score: "보안 점수 {score}",
     scoreMissing: "보안 점수 미제공",
+    safe: "안전",
+    attention: "확인 필요",
   },
   install: {
     button: "설치",
     toSelected: "선택한 도구에 설치",
+    target: "설치 대상",
+    notDetected: "미감지",
+    succeeded: "설치 성공",
+    failed: "설치 실패",
     success: "{agent}에 설치됨",
     downloading: "다운로드 및 스캔 중…",
     failure: {

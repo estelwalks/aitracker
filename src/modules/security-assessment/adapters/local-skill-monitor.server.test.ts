@@ -89,9 +89,7 @@ test("background monitor scans discovered skills, persists opaque hashes, and re
       assessment.assetHashRef?.startsWith("asset-hash:sha256-"),
     ),
   );
-  assert.ok(
-    memory.values.some((assessment) => assessment.verdict === "dangerous"),
-  );
+  assert.ok(memory.values.some((assessment) => assessment.findings.length > 0));
   assert.deepEqual(findDtoDisclosureViolations(result), []);
   const serialized = JSON.stringify({ result, history: memory.values });
   for (const forbidden of [

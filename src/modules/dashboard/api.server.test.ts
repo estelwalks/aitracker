@@ -111,6 +111,11 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
       bySourceDay: [],
     },
     pricingAvailable: true,
+    outputAvailability: {
+      securityRuns: { count: null, available: false },
+      distillationOutputs: { count: null, available: false },
+      dailyReports: { count: null, available: false },
+    },
   });
 
   assert.deepEqual(result.events[0]?.context, {
@@ -222,6 +227,11 @@ test("dashboard V2 keeps installation detection when Claude has no usage events"
     },
     pricingAvailable: false,
     installedToolIds: new Set(["claude-code"]),
+    outputAvailability: {
+      securityRuns: { count: null, available: false },
+      distillationOutputs: { count: null, available: false },
+      dailyReports: { count: null, available: false },
+    },
   });
 
   const claude = result.tools.find((tool) => tool.id === "claude-code");

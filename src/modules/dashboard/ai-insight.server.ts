@@ -26,11 +26,12 @@ import type {
   DashboardV2Snapshot,
 } from "./contracts.ts";
 import type { MonitoringStatus } from "../monitoring/contracts.ts";
+import { APP_NAME } from "../../lib/app-config.ts";
 
 const DASHBOARD_INSIGHT_PROMPT = {
   id: "dashboard.insight.aggregate",
   version: 1,
-  template: `You are AITracker' local dashboard analyst. Analyze only the supplied aggregate JSON. Do not infer hidden activity, identifiers, paths, prompts, commands, or source content. Return JSON only with this exact shape: {"headline":"...","insights":[{"title":"...","detail":"...","severity":"info|attention|risk"}]}. Provide at most 3 concise, actionable observations. If data quality is incomplete, say so plainly.`,
+  template: `You are ${APP_NAME}' local dashboard analyst. Analyze only the supplied aggregate JSON. Do not infer hidden activity, identifiers, paths, prompts, commands, or source content. Return JSON only with this exact shape: {"headline":"...","insights":[{"title":"...","detail":"...","severity":"info|attention|risk"}]}. Provide at most 3 concise, actionable observations. If data quality is incomplete, say so plainly.`,
 } as const;
 
 const INSIGHT_TTL_MS = 5 * 60 * 1000;
