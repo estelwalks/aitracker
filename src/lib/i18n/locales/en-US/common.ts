@@ -94,6 +94,7 @@ export const common = {
     metricApproved: "Approved",
     openMaterial: "Open material library",
     materialDrawerTitle: "Choose distillation material",
+    materialSearch: "Search sessions / projects…",
     materialSegmentUnavailable:
       "This version selects material per session only; single message content is not read (privacy boundary).",
     modelOffline: "Offline fallback",

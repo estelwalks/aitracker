@@ -89,6 +89,7 @@ export const common = {
     metricApproved: "已审批",
     openMaterial: "打开素材库",
     materialDrawerTitle: "选择蒸馏素材",
+    materialSearch: "搜索会话 / 项目…",
     materialSegmentUnavailable:
       "当前版本仅支持按会话选择素材，不读取单条消息内容（隐私边界）。",
     modelOffline: "离线回退",

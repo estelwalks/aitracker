@@ -6,6 +6,8 @@ import {
   filterDistillationSessions,
   groupDistillationSessionsByProject,
   materialKeyOf,
+  toggleMaterialSelection,
+  toggleProjectSelection,
 } from "./materials.ts";
 
 function session(
@@ -35,6 +37,7 @@ test("filterDistillationSessions applies today and rolling ranges to real timest
     session("seven-days", "2026-08-06T23:59:00+08:00"),
     session("thirty-days", "2026-07-14T08:00:00+08:00"),
     session("outside", "2026-07-13T23:59:00+08:00"),
+    session("future", "2026-08-13T00:00:00+08:00"),
     session("legacy", "not-a-timestamp"),
   ];
 
@@ -56,7 +59,26 @@ test("filterDistillationSessions applies today and rolling ranges to real timest
     ),
     ["today", "seven-days", "thirty-days"],
   );
-  assert.equal(filterDistillationSessions(sessions, "all", NOW).length, 5);
+  assert.equal(filterDistillationSessions(sessions, "all", NOW).length, 6);
+});
+
+test("toggleMaterialSelection enforces the opaque-ref limit and still allows removal", () => {
+  const full = new Set(["a", "b"]);
+  assert.equal(toggleMaterialSelection(full, "c", 2), full);
+  assert.deepEqual([...toggleMaterialSelection(full, "a", 2)], ["b"]);
+});
+
+test("toggleProjectSelection is atomic when a real project exceeds the limit", () => {
+  const current = new Set(["outside"]);
+  assert.equal(toggleProjectSelection(current, ["p:1", "p:2"], 2), current);
+  assert.deepEqual(
+    [...toggleProjectSelection(new Set(), ["p:1", "p:2", "p:2"], 2)],
+    ["p:1", "p:2"],
+  );
+  assert.deepEqual(
+    [...toggleProjectSelection(new Set(["p:1", "p:2"]), ["p:1", "p:2"], 2)],
+    [],
+  );
 });
 
 test("groupDistillationSessionsByProject keeps same-named projects separate by source", () => {
