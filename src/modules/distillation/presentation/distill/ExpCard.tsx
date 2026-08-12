@@ -200,8 +200,9 @@ export function ExpCard({
             {t("common.distillation.expMode")}: {candidate.mode}
           </span>
           <span>
-            {t("common.distillation.selected")}:{" "}
-            {candidate.selectedSessionRefs.length}
+            {t("common.distillation.selected", {
+              count: candidate.selectedSessionRefs.length,
+            })}
           </span>
           <span>{candidate.candidateId}</span>
         </div>

@@ -17,7 +17,10 @@ export interface DistillationSessionItem {
 export interface DistillationViewModel {
   /** Sessions available for selection; may be empty when no local sessions exist. */
   readonly sessions: readonly DistillationSessionItem[];
-  /** Candidates awaiting approval, hydrated from the persisted candidate store. */
+  /**
+   * Complete privacy-safe experiment history, hydrated from the persisted
+   * candidate store (waiting, approved and cancelled; newest first).
+   */
   readonly candidates: readonly CandidateOutput[];
   /** Workbench counters derived from the persisted candidate store. */
   readonly stats: { readonly runs: number; readonly approved: number };

@@ -107,17 +107,26 @@ test("loadDistillation returns an empty but honest read model on a fresh root", 
   });
 });
 
-test("loadDistillation hydrates persisted waiting candidates and reports counters", async () => {
+test("loadDistillation hydrates the complete persisted candidate history and reports counters", async () => {
   await withIsolatedRoot(async (dir) => {
     await seedStore(dir, [
       candidate("candidate-1", "waiting-approval"),
       candidate("candidate-2", "approved"),
+      candidate("candidate-3", "cancelled"),
     ]);
     const view = await loadDistillation("zh-CN");
-    assert.equal(view.candidates.length, 1);
-    assert.equal(view.candidates[0]!.candidateId, "candidate-1");
-    assert.equal(view.candidates[0]!.approvalState, "waiting-approval");
-    assert.equal(view.stats.runs, 2);
+    assert.equal(view.candidates.length, 3);
+    assert.deepEqual(
+      new Set(
+        view.candidates.map((item) => [item.candidateId, item.approvalState]),
+      ),
+      new Set([
+        ["candidate-1", "waiting-approval"],
+        ["candidate-2", "approved"],
+        ["candidate-3", "cancelled"],
+      ]),
+    );
+    assert.equal(view.stats.runs, 3);
     assert.equal(view.stats.approved, 1);
   });
 });
