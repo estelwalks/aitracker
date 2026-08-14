@@ -12,16 +12,20 @@ function SettingsRouteComponent() {
 
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
+    const search = location.search as Record<string, unknown>;
+    const section = search.section === "scan" ? "scan" : undefined;
     try {
       const usage = await getStorageUsageQuery();
       return {
-        locale: resolveLocaleFromSearch(location.search),
+        locale: resolveLocaleFromSearch(search),
+        section,
         storageUsage: usage,
         storageError: null,
       };
     } catch (error) {
       return {
-        locale: resolveLocaleFromSearch(location.search),
+        locale: resolveLocaleFromSearch(search),
+        section,
         storageUsage: null,
         storageError:
           error instanceof Error

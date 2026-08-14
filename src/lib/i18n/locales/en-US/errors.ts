@@ -35,6 +35,7 @@ export const errors = {
     overlappingPaths: "Source and target paths overlap — operation blocked",
     duplicateName: "A Skill with the same name already exists at the target",
     noSkillSelected: "Select at least one Skill",
+    notFound: "Skill not found or unreadable",
   },
   sessions: {
     filterInvalid: "Invalid session filter",

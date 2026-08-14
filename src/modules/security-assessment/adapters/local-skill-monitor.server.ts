@@ -235,6 +235,18 @@ export function createLocalSkillSecurityMonitor(
             files = { files: [], complete: false };
           }
           const assetHashRef = opaqueHash(files.files);
+          // Unchanged since the last scan: reuse the stored assessment for this
+          // run's summary without re-running the model scanner or re-writing
+          // history — avoids wasting tokens/time on identical content.
+          const previous = await options.history.latest(assetRef);
+          if (
+            files.complete &&
+            files.files.length > 0 &&
+            previous?.assetHashRef === assetHashRef
+          ) {
+            assessments.push(previous);
+            continue;
+          }
           let assessment: AssetAssessment;
           if (!files.complete || files.files.length === 0) {
             failedAssetCount += 1;

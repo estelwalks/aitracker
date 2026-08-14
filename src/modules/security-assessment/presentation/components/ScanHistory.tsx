@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Boxes,
   ChevronDown,
+  ChevronRight,
   FileText,
   Lightbulb,
   ShieldCheck,
@@ -11,11 +12,11 @@ import {
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
-  securityHistoryEntryIsSafe,
-  summarizeReports,
+  aggregateScanTasks,
   type SecurityBranchName,
   type SecurityBranchStatus,
   type SecurityHistoryView,
+  type SecurityScanTaskView,
   type SecuritySeverity,
   type SecurityVerdict,
 } from "../security-view";
@@ -30,13 +31,6 @@ const timeSpans: Record<TimeFilter, number> = {
   "30d": 30 * 24 * 3_600_000,
   all: Number.POSITIVE_INFINITY,
 };
-
-interface HistoryGroup {
-  scanId: string;
-  finishedAt: string;
-  trigger: SecurityHistoryView["trigger"];
-  entries: SecurityHistoryView[];
-}
 
 const historyStatusKeys: Record<SecurityHistoryView["status"], MessageKey> = {
   complete: "security.center.result.statusComplete",
@@ -73,32 +67,12 @@ const severityColors: Record<SecuritySeverity, string> = {
   low: "var(--ok)",
 };
 
-function groupsOf(entries: readonly SecurityHistoryView[]): HistoryGroup[] {
-  const groups = new Map<string, HistoryGroup>();
-  for (const entry of entries) {
-    const current = groups.get(entry.scanId);
-    if (current) {
-      current.entries.push(entry);
-      if (Date.parse(entry.finishedAt) > Date.parse(current.finishedAt))
-        current.finishedAt = entry.finishedAt;
-    } else {
-      groups.set(entry.scanId, {
-        scanId: entry.scanId,
-        finishedAt: entry.finishedAt,
-        trigger: entry.trigger,
-        entries: [entry],
-      });
-    }
-  }
-  return [...groups.values()].sort(
-    (left, right) => Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
-  );
-}
-
 export function ScanHistory({
   entries,
+  onOpenTask,
 }: {
   entries: readonly SecurityHistoryView[];
+  onOpenTask?: (task: SecurityScanTaskView) => void;
 }) {
   const { t, format } = useI18n();
   const [state, setState] = useState<StateFilter>("all");
@@ -108,13 +82,9 @@ export function ScanHistory({
   const now = Date.now();
   const list = useMemo(
     () =>
-      groupsOf(entries).filter((group) => {
+      aggregateScanTasks(entries).filter((group) => {
         if (now - Date.parse(group.finishedAt) > timeSpans[span]) return false;
-        const totals = summarizeReports(group.entries);
-        const safe =
-          group.entries.length > 0 &&
-          group.entries.every(securityHistoryEntryIsSafe);
-        return state === "all" || (state === "safe" ? safe : !safe);
+        return state === "all" || (state === "safe" ? group.safe : !group.safe);
       }),
     [entries, now, span, state],
   );
@@ -155,10 +125,8 @@ export function ScanHistory({
       ) : (
         <div className="border-t border-border/60">
           {list.map((group) => {
-            const totals = summarizeReports(group.entries);
-            const safe =
-              group.entries.length > 0 &&
-              group.entries.every(securityHistoryEntryIsSafe);
+            const totals = group.totals;
+            const safe = group.safe;
             const expanded = open === group.scanId;
             const reportShown = reportOpen === group.scanId;
             const latestEntry = [...group.entries].sort(
@@ -249,7 +217,17 @@ export function ScanHistory({
                       </div>
                     ))}
 
-                    <div className="flex justify-end pt-1">
+                    <div className="flex justify-end gap-2 pt-1">
+                      {onOpenTask && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenTask(group)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[11.5px] font-medium transition-colors hover:bg-accent hover:text-foreground"
+                        >
+                          {t("security.center.task.viewDetails")}
+                          <ChevronRight className="size-3.5" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() =>

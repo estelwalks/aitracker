@@ -62,6 +62,7 @@ export type {
 } from "./application/index.ts";
 export {
   getLocalSkills,
+  getSkillFiles,
   getSkillWorkspace,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
@@ -73,6 +74,8 @@ export type {
   BatchUninstallResult,
   LocalSkill,
   SkillAgent,
+  SkillFileEntry,
+  SkillFileList,
   SkillInstallation,
   SkillSnapshot,
   SkillSyncResult,

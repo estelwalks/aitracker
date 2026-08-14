@@ -12,12 +12,28 @@ export type SkillInstallation = Omit<
   "path" | "source"
 > & {
   readonly installationRef: string;
-  readonly source: { readonly kind: "frontmatter" | "market" } | null;
+  readonly source: {
+    readonly kind: "frontmatter" | "market";
+    readonly label: string;
+  } | null;
 };
 
 export type LocalSkill = Omit<LegacyLocalSkill, "installations"> & {
   readonly installations: readonly SkillInstallation[];
 };
+
+/** One readable file inside a skill directory (directory-relative path). */
+export interface SkillFileEntry {
+  readonly path: string;
+  readonly content: string;
+}
+
+/** Detail-view file tree resolved server-side by skill name. */
+export interface SkillFileList {
+  readonly name: string;
+  readonly root: string;
+  readonly files: readonly SkillFileEntry[];
+}
 
 export type SkillAgent = LegacySkillAgent;
 

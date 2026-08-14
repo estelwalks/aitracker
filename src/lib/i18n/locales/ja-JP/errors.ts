@@ -42,6 +42,7 @@ export const errors = {
       "ソースと対象パスが重複しているため、操作をブロックしました",
     duplicateName: "対象に同名の Skill がすでに存在します",
     noSkillSelected: "少なくとも 1 つの Skill を選択してください",
+    notFound: "Skill が見つからないか、読み取れません",
   },
   sessions: {
     filterInvalid: "セッションフィルターが不正です",

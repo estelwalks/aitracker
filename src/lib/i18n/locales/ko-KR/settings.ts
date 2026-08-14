@@ -73,8 +73,14 @@ export const settings = {
       weekly: "매주",
       time: "검사 시간",
       scope: "검사 범위",
-      scopeAll: "모든 로컬 Skill",
-      scopeHint: "범위는 모든 로컬 Skill로 고정됩니다",
+      scopeAll: "전체",
+      scopeAgent: "지정 Agent",
+      scopeDir: "지정 디렉터리",
+      scopeHint: "자동 검사가 적용될 Skill 범위를 선택하세요",
+      agentHint:
+        "자동 검사에 포함할 Agent를 선택하세요. 선택하지 않으면 자동 검사가 실행되지 않습니다.",
+      dirHint:
+        "검사할 Skill 루트 디렉터리(절대 경로)를 입력하세요. 입력하지 않으면 자동 검사가 실행되지 않습니다.",
       notify: "경고 알림",
       saved: "검사 일정을 저장했습니다",
       saveFailed: "검사 일정을 저장하지 못했습니다",

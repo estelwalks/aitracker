@@ -62,7 +62,7 @@ function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
     case "downloads":
       sorted.sort((a, b) => (b.installCount ?? 0) - (a.installCount ?? 0));
       break;
-    case "latest":
+    case "created_at":
       sorted.sort((a, b) => {
         const timeA = a.updatedAt ? Date.parse(a.updatedAt) : 0;
         const timeB = b.updatedAt ? Date.parse(b.updatedAt) : 0;
@@ -72,8 +72,11 @@ function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
     case "stars":
       sorted.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
       break;
-    case "tokens":
-      sorted.sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0));
+    case "name_asc":
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case "name_desc":
+      sorted.sort((a, b) => b.name.localeCompare(a.name));
       break;
   }
   return sorted;
@@ -123,11 +126,19 @@ export async function fetchMarketSkills(
     limit: number;
     search: string;
     sort?: MarketSort;
+    tags?: string[];
   },
   options: MarketApiOptions = {},
 ): Promise<MarketListResult> {
-  const sort = query.sort ?? "downloads";
-  const key = marketCacheKey(query.page, query.limit, query.search, sort);
+  const sort = query.sort ?? "stars";
+  const tags = query.tags ?? [];
+  const key = marketCacheKey(
+    query.page,
+    query.limit,
+    query.search,
+    sort,
+    tags.join(","),
+  );
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -135,14 +146,26 @@ export async function fetchMarketSkills(
   );
 
   try {
-    const url = new URL(`${MARKET_API}/skills`);
-    url.searchParams.set("page", String(query.page));
-    url.searchParams.set("limit", String(query.limit));
-    if (query.search) url.searchParams.set("search", query.search);
-    url.searchParams.set("sort", sort);
+    const url = new URL(`${MARKET_API}/skills/search`);
+    url.searchParams.set("lang", "zh");
 
     const response = await (options.fetcher ?? fetch)(url, {
-      headers: { accept: "application/json" },
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        search: query.search,
+        mode: "fast",
+        limit: query.limit,
+        page: query.page,
+        tags,
+        safety_level: null,
+        status: null,
+        language: null,
+        ...(sort === "downloads" ? { sort } : { sort_by: sort }),
+      }),
       signal: controller.signal,
     });
     if (!response.ok)

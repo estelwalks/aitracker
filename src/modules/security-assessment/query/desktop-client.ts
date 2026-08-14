@@ -54,6 +54,7 @@ export function reportView(report: SecurityScanReportDto): SecurityReportView {
     rulesVersion: report.rulesVersion,
     engineVersion: report.engineVersion,
     locale: report.locale,
+    contentHash: report.contentHash,
     scannedFiles: report.scannedFiles,
     threatLevel: report.threatLevel,
     threatLevelDisplay: report.threatLevelDisplay,

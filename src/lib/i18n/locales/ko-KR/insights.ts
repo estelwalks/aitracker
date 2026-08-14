@@ -1,6 +1,6 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const insights = {
-  title: "Jarvis 오늘의 인사이트",
+  title: "오늘의 인사이트",
   rotate: "전환",
   dots: "인사이트 목록",
   sources: {

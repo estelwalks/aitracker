@@ -17,6 +17,13 @@ export const skills = {
     updateAll: "All update states",
     sort: "Sort",
     sortDirection: "Change sort direction",
+    reset: "Reset",
+  },
+  origin: {
+    all: "All",
+    distilled: "Distilled",
+    external: "External",
+    other: "Other",
   },
   summary: {
     assets: "Assets",
@@ -30,6 +37,18 @@ export const skills = {
     coverageHint: "Covered / available Agents",
     unassigned: "Unassigned assets",
     unassignedHint: "Not currently installed to an Agent",
+    localCount: "{count} local Skills · enable or remove them across AI tools",
+  },
+  card: {
+    token: "Token",
+    size: "Size",
+    synced: "Synced",
+    syncMissing: "Sync {count}",
+    verdictUnknown: "Unknown",
+    expandDesc: "Expand description",
+    collapseDesc: "Collapse description",
+    select: "Select {name}",
+    deselect: "Deselect {name}",
   },
   source: {
     frontmatter: "Metadata",
@@ -65,9 +84,11 @@ export const skills = {
   batch: {
     selectPage: "Select all on this page",
     selectedCount: "{count} selected",
-    sync: "Batch sync",
-    uninstall: "Batch uninstall",
-    clearSelection: "Clear selection",
+    totalCount: "{count} Skills total",
+    sync: "Sync",
+    scan: "Scan",
+    uninstall: "Uninstall",
+    clearSelection: "Cancel",
   },
   table: {
     title: "Skill list ({count})",
@@ -217,7 +238,7 @@ export const skills = {
     securityAttentionLabel: "Needs attention",
     securityUnknownLabel: "Undetermined",
     securityFailedLabel: "Read failures",
-    workspaceTitle: "Skill asset management",
+    workspaceTitle: "Local Skill management",
     workspaceDesc:
       "The operation area below keeps using real local scans and confirmed safe changes.",
   },
@@ -239,12 +260,13 @@ export const skills = {
   kpi: {
     localSkills: "Local Skills",
     distilled: "Local distillation",
-    detected: "Checked",
-    risks: "Findings",
-    localSkillsHint: "{count} installation copies",
-    distilledHint: "Approved distillation output",
-    detectedHint: "Skills with security results",
-    risksHint: "Findings from security checks",
+    detected: "Scanned",
+    risks: "Unsafe",
+    localSkillsHint: "Distributed to {count} install slots",
+    distilledHint: "Distilled from sessions",
+    detectedHint: "Coverage {pct}%",
+    risksHint: "Review recommended",
+    risksHintClean: "No unsafe skills",
   },
   banner: {
     distillActive:
@@ -254,7 +276,7 @@ export const skills = {
   security: {
     detected: "Security checked",
     attention: "Needs attention",
-    clean: "Passed",
+    clean: "Safe",
   },
   pagination: {
     range: "Items {start}-{end} of {total}",
@@ -275,6 +297,28 @@ export const skills = {
     updateAvailable: "Update available",
     updateCurrent: "Already at the current evidence version",
     updateUnknown: "Cannot determine",
+    rootTitle: "Skill details · {root}/",
+    render: "Render",
+    sourceCode: "Source",
+    installedPos: "Install location",
+    installPos: "Install location ({installed}/{usable} installed)",
+    size: "Size: {size}",
+    exportFile: "Export current file",
+    exportDir: "Export directory",
+    scanSecurity: "Security check",
+    syncToTools: "Sync to tools",
+    verifySecurity: "View security results",
+  },
+  syncTarget: {
+    title: "Choose sync targets · {title}",
+    count: "{selected} / {available} install targets selected",
+    enable: "Enable on selected tools",
+    detectedCount: "{count} Skill-capable tools detected",
+    selectAll: "Select all",
+    clearAll: "Clear selection",
+    hint: "Only tools implementing the Skill (SKILL.md) spec are listed; other tools cannot install or enable Skills.",
+    missingCount: "Skill-capable but client not detected · {count}",
+    overwrite: "Overwrite existing Skills with the same name",
   },
   uninstall: {
     title: "Confirm uninstall",
@@ -325,5 +369,6 @@ export const skills = {
     syncDoneFailed:
       "Sync complete: {succeeded} succeeded / {skipped} skipped / {failed} failed",
     syncFailed: "Sync failed",
+    exportedTo: "Exported to {path}",
   },
 } as const;

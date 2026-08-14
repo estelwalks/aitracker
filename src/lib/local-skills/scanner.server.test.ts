@@ -19,6 +19,7 @@ import { APP_DATA_DIR } from "../app-config";
 import {
   batchUninstallLocalSkills,
   installMarketSkill,
+  readSkillFiles,
   refreshMarketSkillEvidence,
   scanLocalSkills,
   SKILL_ROOT_SUFFIXES,
@@ -143,11 +144,7 @@ test("reads real version and source from SKILL.md frontmatter and changes finger
 test("marks an update only when persisted market evidence is truly newer", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
-  const skillPath = join(
-    root,
-    SKILL_ROOT_SUFFIXES["Codex"],
-    "market-skill",
-  );
+  const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "market-skill");
   try {
     await mkdir(skillPath, { recursive: true });
     await mkdir(dataDirectory, { recursive: true });
@@ -361,11 +358,7 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
 test("reads description from SKILL.md frontmatter block scalars", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-desc-"));
   const dataDirectory = join(root, APP_DATA_DIR);
-  const foldedPath = join(
-    root,
-    SKILL_ROOT_SUFFIXES["Codex"],
-    "folded-skill",
-  );
+  const foldedPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "folded-skill");
   const literalPath = join(
     root,
     SKILL_ROOT_SUFFIXES["Claude Code"],
@@ -858,9 +851,7 @@ test("env overrides redirect codex and grok roots; empty values fall back to HOM
       dataDirectory,
       env: { CODEX_HOME: "", GROK_HOME: "" },
     });
-    assert.deepEqual(fallback.roots["Codex"], [
-      join(root, ".codex", "skills"),
-    ]);
+    assert.deepEqual(fallback.roots["Codex"], [join(root, ".codex", "skills")]);
     assert.deepEqual(fallback.roots["Grok Build"], [
       join(root, ".grok", "skills"),
     ]);
@@ -877,9 +868,7 @@ test("resolves default codex and grok roots under HOME without env overrides", a
       homeDirectory: root,
       dataDirectory: join(root, APP_DATA_DIR),
     });
-    assert.deepEqual(snapshot.roots["Codex"], [
-      join(root, ".codex", "skills"),
-    ]);
+    assert.deepEqual(snapshot.roots["Codex"], [join(root, ".codex", "skills")]);
     assert.deepEqual(snapshot.roots["Grok Build"], [
       join(root, ".grok", "skills"),
     ]);
@@ -957,6 +946,69 @@ test("syncLocalSkill flattens a nested source skill into the codex root", async 
     const content = await readFile(join(targetPath, "SKILL.md"), "utf8");
     assert.match(content, /version: 1\.0\.0/);
     assert.match(content, /Nested/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("measures skill size/token and reads the real file tree via readSkillFiles", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-read-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  const skillDir = join(
+    root,
+    SKILL_ROOT_SUFFIXES["Claude Code"],
+    "file-reader",
+  );
+  const referencesDir = join(skillDir, "references");
+  await mkdir(referencesDir, { recursive: true });
+  await writeFile(
+    join(skillDir, "SKILL.md"),
+    "---\nname: file-reader\ndescription: Reads files\n---\n# File reader\n",
+  );
+  await writeFile(
+    join(referencesDir, "usage.md"),
+    "# Usage\n\nRead and report.",
+  );
+  await writeFile(join(skillDir, "assets.bin"), "x".repeat(1024));
+
+  try {
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+      now: new Date(),
+    });
+    const skill = snapshot.skills.find((item) => item.name === "file-reader");
+    assert.ok(skill, "scan exposes the skill");
+    // Byte size counts every file (including assets.bin); token estimate only
+    // reflects readable text (SKILL.md + references/usage.md).
+    assert.ok(skill.sizeBytes >= 1024, "size includes the binary asset");
+    assert.ok(skill.tokenEstimate > 0, "token estimate reflects text files");
+
+    const listing = await readSkillFiles("file-reader", {
+      homeDirectory: root,
+      dataDirectory,
+    });
+    assert.equal(listing.name, "file-reader");
+    assert.equal(listing.root, "file-reader");
+    const paths = listing.files.map((file) => file.path).sort();
+    assert.deepEqual(paths, ["SKILL.md", "references/usage.md"]);
+    const manifest = listing.files.find((file) => file.path === "SKILL.md");
+    assert.match(manifest?.content ?? "", /# File reader/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("readSkillFiles rejects unknown skills and traversal-shaped names", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-read-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  try {
+    await assert.rejects(
+      readSkillFiles("does-not-exist", { homeDirectory: root, dataDirectory }),
+    );
+    await assert.rejects(
+      readSkillFiles("../escape", { homeDirectory: root, dataDirectory }),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

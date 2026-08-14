@@ -107,6 +107,8 @@ export const skillSnapshotFixture: SkillSnapshot = {
       name: "Sample Skill",
       description: "Synthetic fixture",
       lastUsedAt: null,
+      sizeBytes: 0,
+      tokenEstimate: 0,
       installations: [],
     },
   ],

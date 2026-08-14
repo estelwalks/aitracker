@@ -1,6 +1,6 @@
 // AI 翻訳稿、審校待ち (2026-08)
 export const insights = {
-  title: "Jarvis 今日のインサイト",
+  title: "今日のインサイト",
   rotate: "切替",
   dots: "インサイト一覧",
   sources: {

@@ -32,11 +32,13 @@ import {
   type SecurityRuntimeCapability,
   type SecurityScanCycle,
   type SecurityScanHistoryEntry,
+  type SecurityScanMode,
   type SecurityScanReportDto,
   type SecurityScanSchedule,
   type SecurityScanScope,
   type SecurityScanStartRequest,
   type SecurityScanState,
+  type SecurityScanTrigger,
   type SecuritySkillTarget,
 } from "./contracts.js";
 
@@ -188,6 +190,8 @@ const DEFAULT_SCAN_SCHEDULE: SecurityScanSchedule = {
   cycle: "daily",
   time: "03:00",
   scope: "all",
+  agents: [],
+  dir: null,
   notify: false,
 };
 
@@ -197,7 +201,15 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
   if (input == null || typeof input !== "object" || Array.isArray(input))
     throw new TypeError("Scan schedule is required");
   const value = input as Record<string, unknown>;
-  const allowed = new Set(["enabled", "cycle", "time", "scope", "notify"]);
+  const allowed = new Set([
+    "enabled",
+    "cycle",
+    "time",
+    "scope",
+    "notify",
+    "agents",
+    "dir",
+  ]);
   if (Object.keys(value).some((key) => !allowed.has(key)))
     throw new TypeError("Scan schedule contains unsupported fields");
   if (typeof value.enabled !== "boolean")
@@ -209,8 +221,8 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
   )
     throw new TypeError("Unsupported scan cycle");
   // Legacy `{ enabled, cycle }` documents (from the pre-extension version) omit
-  // time/scope/notify; fill the extended fields with the defaults here so the
-  // read path migrates them transparently.
+  // time/scope/notify/agents/dir; fill the extended fields with the defaults
+  // here so the read path migrates them transparently.
   const time =
     value.time === undefined ? DEFAULT_SCAN_SCHEDULE.time : value.time;
   if (typeof time !== "string" || !TIME_PATTERN.test(time))
@@ -222,6 +234,16 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
     !(SECURITY_SCAN_SCOPES as readonly string[]).includes(scope)
   )
     throw new TypeError("Unsupported scan scope");
+  const agents =
+    value.agents === undefined ? DEFAULT_SCAN_SCHEDULE.agents : value.agents;
+  if (
+    !Array.isArray(agents) ||
+    agents.some((item) => typeof item !== "string" || !item.trim())
+  )
+    throw new TypeError("Scan schedule agents must be an array of strings");
+  const dir = value.dir === undefined ? DEFAULT_SCAN_SCHEDULE.dir : value.dir;
+  if (dir !== null && typeof dir !== "string")
+    throw new TypeError("Scan schedule dir must be a string or null");
   const notify =
     value.notify === undefined ? DEFAULT_SCAN_SCHEDULE.notify : value.notify;
   if (typeof notify !== "boolean")
@@ -231,6 +253,9 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
     cycle: cycle as SecurityScanCycle,
     time,
     scope: scope as SecurityScanScope,
+    agents: [...new Set(agents.map((item) => item.trim()).filter(Boolean))],
+    // Empty-string dir normalizes to null; `resolve("")` would hit the cwd.
+    dir: typeof dir === "string" && dir.trim() === "" ? null : dir,
     notify,
   };
 }
@@ -338,6 +363,22 @@ const SKIP_REASON_CODES = new Set<
   "binary",
   "scanner-skip",
 ]);
+
+/**
+ * Stable content hash over the collected files, mirroring the `skill-scanner`
+ * package's `contentHash`: sorted relative paths + NUL + content. Two install
+ * copies of the same skill (different absolute paths) produce the same hash,
+ * so it is the dedup/skip key for unchanged skills.
+ */
+function contentHashOf(
+  files: readonly { path: string; content: string }[],
+): string {
+  const hash = createHash("sha256");
+  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
+    hash.update(file.path).update("\0").update(file.content);
+  }
+  return hash.digest("hex");
+}
 
 function sanitizeReport(
   report: ScanSkillReport | SecurityScanReportDto,
@@ -664,12 +705,72 @@ export class SecurityScannerService {
     const discovered = await this.listSkills();
     if (startingEpoch !== this.#epoch)
       throw new Error("Security scan was cleared");
-    const targets =
-      request.scope === "all"
-        ? discovered
-        : [this.#trusted.get(request.skillRef!)?.target].filter(
-            (item): item is SecuritySkillTarget => item != null,
+    const targets = this.#resolveTargets(discovered, {
+      scope: request.scope,
+      skillRef: request.skillRef,
+    });
+    return this.#executeScan(
+      discovered,
+      targets,
+      request.mode,
+      request.trigger,
+    );
+  }
+
+  /**
+   * Scope-based target selection. "single"/"all" mirror the public start
+   * contract; "agent" narrows by skill agents, "dir" by skill root path prefix
+   * (roots live only on the private #trusted map, so dir filtering consults it).
+   */
+  #resolveTargets(
+    discovered: SecuritySkillTarget[],
+    options: {
+      scope: SecurityScanScope | "single";
+      skillRef?: SecuritySkillTarget["skillRef"];
+      agents?: readonly string[];
+      dir?: string | null;
+    },
+  ): SecuritySkillTarget[] {
+    switch (options.scope) {
+      case "single": {
+        const trusted = options.skillRef
+          ? this.#trusted.get(options.skillRef)
+          : undefined;
+        return trusted ? [trusted.target] : [];
+      }
+      case "all":
+        return discovered;
+      case "agent": {
+        const wanted = new Set(options.agents ?? []);
+        if (wanted.size === 0) return [];
+        return discovered.filter((target) =>
+          target.agents.some((agent) => wanted.has(agent)),
+        );
+      }
+      case "dir": {
+        const dir = options.dir ? resolve(options.dir) : "";
+        if (!dir) return [];
+        // Exact match (user picked the skill dir itself) or path-prefix with a
+        // separator so `/a/foo` never matches `/a/foobar/skill`.
+        const prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
+        return discovered.filter((target) => {
+          const trusted = this.#trusted.get(target.skillRef);
+          return (
+            trusted != null &&
+            (trusted.root === dir || trusted.root.startsWith(prefix))
           );
+        });
+      }
+    }
+  }
+
+  /** Run the scan over the already-resolved target list and wire completion. */
+  #executeScan(
+    discovered: SecuritySkillTarget[],
+    targets: SecuritySkillTarget[],
+    mode: SecurityScanMode,
+    trigger: SecurityScanTrigger,
+  ): SecurityScanState {
     if (targets.length === 0)
       throw new Error("No trusted Skill target was found");
 
@@ -681,8 +782,8 @@ export class SecurityScannerService {
     this.#state = {
       scanId: id,
       status: "running",
-      mode: request.mode,
-      trigger: request.trigger,
+      mode,
+      trigger,
       locale,
       startedAt,
       progress: {
@@ -696,7 +797,7 @@ export class SecurityScannerService {
       },
       resultIds: [],
     };
-    const activeRun = this.#run(id, epoch, locale, targets, request);
+    const activeRun = this.#run(id, epoch, locale, targets, { mode, trigger });
     this.#activeRun = activeRun;
     void activeRun
       .catch(() => {
@@ -716,10 +817,29 @@ export class SecurityScannerService {
     return this.getStatus();
   }
 
-  /** Model-aware scheduler boundary: full when a model is configured, else quick. */
-  async startAutomaticScan(): Promise<SecurityScanState> {
+  /**
+   * Model-aware scheduler boundary: full when a model is configured, else quick.
+   * Honors the persisted schedule's scope (all / agent / dir); an omitted
+   * schedule scans everything (back-compat for existing callers and tests).
+   */
+  async startAutomaticScan(
+    schedule?: SecurityScanSchedule,
+  ): Promise<SecurityScanState> {
+    if (this.#clearing) throw new Error("Security scanner is being cleared");
+    if (this.#state.status === "running" || this.#state.status === "cancelling")
+      throw new Error("A security scan is already running");
     const mode = (await this.#modelConfig()) ? "full" : "quick";
-    return this.start({ scope: "all", mode, trigger: "automatic" });
+    const startingEpoch = this.#epoch;
+    const discovered = await this.listSkills();
+    if (startingEpoch !== this.#epoch)
+      throw new Error("Security scan was cleared");
+    const scope = schedule?.scope ?? "all";
+    const targets = this.#resolveTargets(discovered, {
+      scope,
+      agents: scope === "agent" ? schedule?.agents : undefined,
+      dir: scope === "dir" ? schedule?.dir : undefined,
+    });
+    return this.#executeScan(discovered, targets, mode, "automatic");
   }
 
   async history(): Promise<SecurityScanHistoryEntry[]> {
@@ -846,12 +966,25 @@ export class SecurityScannerService {
     epoch: number,
     locale: DesktopLocale,
     targets: SecuritySkillTarget[],
-    request: Required<SecurityScanStartRequest>,
+    request: Required<Pick<SecurityScanStartRequest, "mode" | "trigger">>,
   ): Promise<void> {
     const newEntries: SecurityScanHistoryEntry[] = [];
     const config =
       request.mode === "full" ? await this.#modelConfig() : undefined;
     if (!this.#isActive(id, epoch)) return;
+    // Last-known content hash per skill (latest complete scan). Unchanged
+    // skills are skipped on automatic runs so repeated monitoring does not
+    // waste model tokens/time re-analyzing the same content.
+    const lastContentHash = new Map<string, string>();
+    const lastFinishedAt = new Map<string, number>();
+    for (const entry of (await this.#readHistory([])).entries) {
+      if (entry.status !== "complete" || !entry.report) continue;
+      const timestamp = Date.parse(entry.finishedAt);
+      const previous = lastFinishedAt.get(entry.skillRef);
+      if (previous !== undefined && previous >= timestamp) continue;
+      lastFinishedAt.set(entry.skillRef, timestamp);
+      lastContentHash.set(entry.skillRef, entry.report.contentHash);
+    }
     for (const target of targets) {
       if (!this.#isActive(id, epoch)) return;
       if (this.#cancelRequested) {
@@ -870,6 +1003,16 @@ export class SecurityScannerService {
       try {
         const collected = await this.#collect(trusted.root);
         if (!this.#isActive(id, epoch)) return;
+        // Unchanged since the last complete automatic scan: skip re-analysis to
+        // avoid wasting model tokens/time (manual runs always re-scan).
+        if (
+          request.trigger === "automatic" &&
+          lastContentHash.get(target.skillRef) ===
+            contentHashOf(collected.files)
+        ) {
+          this.#state.progress.skipped += 1;
+          continue;
+        }
         const report = await (this.#options.scanner ?? scanSkill)({
           mode: request.mode,
           locale,

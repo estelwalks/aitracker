@@ -60,15 +60,22 @@ const validResponse = {
   pagination: { page: 1, limit: 20, total: 2, pages: 1 },
 };
 
-test("fetchMarketSkills sends pagination, keyword, and sort to the API", async () => {
+test("fetchMarketSkills sends pagination, keyword, tags, and sort to the API", async () => {
   let requestedUrl = "";
+  let requestedBody: Record<string, unknown> = {};
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "测试", sort: "downloads" },
+    { page: 1, limit: 20, search: "测试", sort: "stars", tags: ["ai"] },
     {
       ...noScan(),
       fetcher: async (input, init) => {
-        // 仅捕获列表请求（GET）；体积预取的 HEAD 不应覆盖记录的列表 URL。
-        if (init?.method !== "HEAD") requestedUrl = String(input);
+        // 仅捕获列表请求（POST）；体积预取的 HEAD 不应覆盖记录的列表请求。
+        if (init?.method === "POST") {
+          requestedUrl = String(input);
+          requestedBody = JSON.parse(String(init.body)) as Record<
+            string,
+            unknown
+          >;
+        }
         return new Response(JSON.stringify(validResponse), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -78,10 +85,13 @@ test("fetchMarketSkills sends pagination, keyword, and sort to the API", async (
   );
 
   const url = new URL(requestedUrl);
-  assert.equal(url.searchParams.get("page"), "1");
-  assert.equal(url.searchParams.get("limit"), "20");
-  assert.equal(url.searchParams.get("search"), "测试");
-  assert.equal(url.searchParams.get("sort"), "downloads");
+  assert.equal(url.pathname.endsWith("/skills/search"), true);
+  assert.equal(url.searchParams.get("lang"), "zh");
+  assert.equal(requestedBody.page, 1);
+  assert.equal(requestedBody.limit, 20);
+  assert.equal(requestedBody.search, "测试");
+  assert.equal(requestedBody.sort_by, "stars");
+  assert.deepEqual(requestedBody.tags, ["ai"]);
   assert.equal(result.source, "network");
   assert.equal(result.skills[0]?.name, "market-test-skill");
 });

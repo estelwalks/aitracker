@@ -18,9 +18,9 @@ export const market = {
     noMatchDesc: "Try a different keyword.",
   },
   stats: {
-    totalSkills: "Total Skills listed",
-    officialCount: "Official releases",
-    passRate: "Security pass rate",
+    totalSkills: "Total Skills",
+    officialCount: "Official",
+    passRate: "Security passed",
     passRatePage: "This page pass rate",
     installedCount: "Installed",
     totalDownloads: "Total downloads",
@@ -34,10 +34,11 @@ export const market = {
     perPage: "{count} per page · page {page}",
   },
   sort: {
-    downloads: "Downloads",
+    hot: "Popular",
     latest: "Latest",
-    stars: "Star",
-    tokens: "Token usage",
+    nameAsc: "A-Z",
+    nameDesc: "Z-A",
+    downloads: "Downloads",
   },
   list: {
     title: "Skill list ({count})",
@@ -54,7 +55,21 @@ export const market = {
   },
   installed: "Installed",
   official: "Official",
+  domainAll: "All",
+  card: {
+    detail: "Details",
+    publisher: "Publisher",
+    installedAgents: "Installed in {count} tools",
+  },
   noDescription: "This Skill has no description yet.",
+  detail: {
+    repo: "Source repository",
+    sourcePath: "Source path",
+    tokens: "Context tokens",
+    securityPass: "Security scan passed · safe to install",
+    infoTitle: "Install info",
+    lastScanned: "Last scanned",
+  },
   metric: {
     downloads: "Downloads",
     tokenUsage: "Token usage",
@@ -100,6 +115,7 @@ export const market = {
     agentNotInstalled: "Not installed",
   },
   pagination: {
+    range: "Items {start}–{end} of {total}",
     prev: "Previous",
     next: "Next",
   },

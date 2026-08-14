@@ -26,6 +26,8 @@ function service(
       cycle: "daily",
       time: "03:00",
       scope: "all",
+      agents: [],
+      dir: null,
       notify: false,
     }),
     setScanSchedule: async () => ({
@@ -33,6 +35,8 @@ function service(
       cycle: "hourly",
       time: "03:00",
       scope: "all",
+      agents: [],
+      dir: null,
       notify: false,
     }),
     start: async (input: unknown) => ({ status: "running", input }),
@@ -205,6 +209,8 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
         cycle: "hourly",
         time: "08:00",
         scope: "all",
+        agents: [],
+        dir: null,
         notify: true,
       };
     },
@@ -220,6 +226,8 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
     cycle: "daily",
     time: "03:00",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: false,
   });
 
@@ -229,6 +237,8 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
       cycle: "hourly",
       time: "08:00",
       scope: "all",
+      agents: [],
+      dir: null,
       notify: true,
     }),
     origin,
@@ -240,6 +250,8 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
     cycle: "hourly",
     time: "08:00",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: true,
   });
   assert.deepEqual(await postResponse?.json(), {
@@ -247,6 +259,8 @@ test("scan schedule supports authenticated GET and CSRF-gated POST", async () =>
     cycle: "hourly",
     time: "08:00",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: true,
   });
 });
