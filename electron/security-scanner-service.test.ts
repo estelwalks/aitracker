@@ -263,6 +263,8 @@ const DEFAULT_SCHEDULE = {
   cycle: "daily",
   time: "03:00",
   scope: "all",
+  agents: [],
+  dir: null,
   notify: false,
 } as const;
 
@@ -281,6 +283,8 @@ test("scan schedule round-trips the extended shape, persists, and falls back on 
     cycle: "weekly",
     time: "09:30",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: true,
   });
   assert.deepEqual(saved, {
@@ -288,6 +292,8 @@ test("scan schedule round-trips the extended shape, persists, and falls back on 
     cycle: "weekly",
     time: "09:30",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: true,
   });
   assert.deepEqual(await service.getScanSchedule(), {
@@ -295,6 +301,8 @@ test("scan schedule round-trips the extended shape, persists, and falls back on 
     cycle: "weekly",
     time: "09:30",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: true,
   });
   assert.deepEqual(
@@ -306,6 +314,8 @@ test("scan schedule round-trips the extended shape, persists, and falls back on 
       cycle: "weekly",
       time: "09:30",
       scope: "all",
+      agents: [],
+      dir: null,
       notify: true,
     },
   );
@@ -359,6 +369,8 @@ test("fills defaults for omitted time, scope, and notify on save", async () => {
     cycle: "daily",
     time: "03:00",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: false,
   });
 });
@@ -383,8 +395,183 @@ test("migrates a legacy { enabled, cycle } schedule on read", async () => {
     cycle: "weekly",
     time: "03:00",
     scope: "all",
+    agents: [],
+    dir: null,
     notify: false,
   });
+});
+
+test("parseSchedule normalizes agent/dir scope fields and rejects invalid values", async () => {
+  const { home, data } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  const agentSaved = await service.setScanSchedule({
+    enabled: true,
+    cycle: "daily",
+    time: "03:00",
+    scope: "agent",
+    agents: [" Codex ", "Codex", "Codex"],
+    dir: null,
+    notify: false,
+  });
+  assert.deepEqual(agentSaved.agents, ["Codex"]);
+  const dirSaved = await service.setScanSchedule({
+    enabled: true,
+    cycle: "daily",
+    time: "03:00",
+    scope: "dir",
+    agents: [],
+    dir: "  ",
+    notify: false,
+  });
+  assert.equal(dirSaved.dir, null);
+  await assert.rejects(
+    service.setScanSchedule({
+      enabled: true,
+      cycle: "daily",
+      scope: "agent",
+      agents: "Codex",
+    }),
+    /agents must be an array of strings/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({
+      enabled: true,
+      cycle: "daily",
+      scope: "agent",
+      agents: [42],
+    }),
+    /agents must be an array of strings/u,
+  );
+  await assert.rejects(
+    service.setScanSchedule({
+      enabled: true,
+      cycle: "daily",
+      scope: "dir",
+      dir: 42,
+    }),
+    /dir must be a string or null/u,
+  );
+});
+
+test("automatic scans with agent scope scan only the selected agents' skills", async () => {
+  const { home, data } = await fixture();
+  const other = join(home, ".claude", "skills", "other");
+  await mkdir(other, { recursive: true });
+  await writeFile(
+    join(other, "SKILL.md"),
+    "---\nname: Other Skill\n---\n# Safe\n",
+    "utf8",
+  );
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  await service.startAutomaticScan({
+    ...DEFAULT_SCHEDULE,
+    scope: "agent",
+    agents: ["Codex"],
+  });
+  await waitForTerminal(service);
+  const codexPersisted = JSON.parse(
+    await readFile(join(data, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ skillName: string }> };
+  assert.equal(codexPersisted.entries.length, 1);
+  assert.equal(codexPersisted.entries[0]?.skillName, "demo");
+
+  await rm(join(data, "security-scan-history.json"), { force: true });
+  await service.startAutomaticScan({
+    ...DEFAULT_SCHEDULE,
+    scope: "agent",
+    agents: ["Claude Code"],
+  });
+  await waitForTerminal(service);
+  const claudePersisted = JSON.parse(
+    await readFile(join(data, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ skillName: string }> };
+  assert.equal(claudePersisted.entries.length, 1);
+  assert.equal(claudePersisted.entries[0]?.skillName, "other");
+});
+
+test("automatic scans with an empty agent selection reject with no trusted targets", async () => {
+  const { home, data } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  await assert.rejects(
+    service.startAutomaticScan({
+      ...DEFAULT_SCHEDULE,
+      scope: "agent",
+      agents: [],
+    }),
+    /No trusted Skill target was found/u,
+  );
+});
+
+test("automatic scans with dir scope scan only skills under the directory prefix", async () => {
+  const { home, data } = await fixture();
+  const other = join(home, ".claude", "skills", "other");
+  await mkdir(other, { recursive: true });
+  await writeFile(
+    join(other, "SKILL.md"),
+    "---\nname: Other Skill\n---\n# Safe\n",
+    "utf8",
+  );
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    dataDirectory: data,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+  // Parent root prefix matches the Codex skill only.
+  await service.startAutomaticScan({
+    ...DEFAULT_SCHEDULE,
+    scope: "dir",
+    dir: join(home, ".codex", "skills"),
+  });
+  await waitForTerminal(service);
+  const prefixPersisted = JSON.parse(
+    await readFile(join(data, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ skillName: string }> };
+  assert.equal(prefixPersisted.entries.length, 1);
+  assert.equal(prefixPersisted.entries[0]?.skillName, "demo");
+
+  // Exact skill-root path still matches.
+  await rm(join(data, "security-scan-history.json"), { force: true });
+  await service.startAutomaticScan({
+    ...DEFAULT_SCHEDULE,
+    scope: "dir",
+    dir: join(home, ".codex", "skills", "demo"),
+  });
+  await waitForTerminal(service);
+  const exactPersisted = JSON.parse(
+    await readFile(join(data, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ skillName: string }> };
+  assert.equal(exactPersisted.entries.length, 1);
+  assert.equal(exactPersisted.entries[0]?.skillName, "demo");
+
+  // A dir that matches nothing rejects.
+  await assert.rejects(
+    service.startAutomaticScan({
+      ...DEFAULT_SCHEDULE,
+      scope: "dir",
+      dir: join(home, ".gemini", "skills"),
+    }),
+    /No trusted Skill target was found/u,
+  );
 });
 
 test("stores API keys only through encryption and never returns plaintext", async () => {

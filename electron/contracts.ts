@@ -135,7 +135,7 @@ export interface SecurityScanState {
 export const SECURITY_SCAN_CYCLES = ["hourly", "daily", "weekly"] as const;
 export type SecurityScanCycle = (typeof SECURITY_SCAN_CYCLES)[number];
 
-export const SECURITY_SCAN_SCOPES = ["all"] as const;
+export const SECURITY_SCAN_SCOPES = ["all", "agent", "dir"] as const;
 export type SecurityScanScope = (typeof SECURITY_SCAN_SCOPES)[number];
 
 /** Persisted automatic-scan cadence; drives the main-process timer. */
@@ -144,8 +144,12 @@ export interface SecurityScanSchedule {
   readonly cycle: SecurityScanCycle; // hourly | daily | weekly
   /** "HH:MM" (24h) local wall-clock time; ignored for hourly. */
   readonly time: string;
-  /** "all" scans every managed Skill root. */
+  /** "all" scans every managed Skill root; "agent"/"dir" narrow by selection. */
   readonly scope: SecurityScanScope;
+  /** Skill-agent names to include when scope === "agent" (empty ⇒ no targets). */
+  readonly agents: readonly string[];
+  /** Absolute skill root directory prefix when scope === "dir" (null ⇒ no targets). */
+  readonly dir: string | null;
   /** Fire an alert notification when a scheduled scan finds risks. */
   readonly notify: boolean;
 }

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonitorX, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { PageHeader } from "../../../components/tt";
 import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
@@ -13,11 +12,14 @@ import {
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { AutoScanGuide } from "./components/AutoScanGuide";
 import { ScanHistory } from "./components/ScanHistory";
-import { ScanStatus } from "./components/ScanStatus";
+import { ScanStatus, type ScanStatusNav } from "./components/ScanStatus";
+import { ScanTaskDetail } from "./components/ScanTaskDetail";
 import { ScanVortex } from "./components/ScanVortex";
 import { SecurityBriefing } from "./components/SecurityBriefing";
-import { SecurityResultsSummary } from "./components/SecurityResultsSummary";
+import { SkillReportModal } from "./components/SkillReportModal";
+import { UnsafeSkillList } from "./components/UnsafeSkillList";
 import {
+  countScanTasks,
   EMPTY_SECURITY_PROGRESS,
   EMPTY_SECURITY_TOTALS,
   SECURITY_RISK_KINDS,
@@ -30,6 +32,7 @@ import {
   type SecurityRuntimeCapabilityView,
   type SecurityScanMode,
   type SecurityScanStateView,
+  type SecurityScanTaskView,
   type SecuritySkillView,
 } from "./security-view";
 
@@ -59,6 +62,18 @@ export function SecurityAssessmentPage() {
   const [runtime, setRuntime] = useState<SecurityRuntimeCapabilityView | null>(
     null,
   );
+  const [selectedReport, setSelectedReport] =
+    useState<SecurityHistoryView | null>(null);
+  const [selectedTask, setSelectedTask] = useState<SecurityScanTaskView | null>(
+    null,
+  );
+  const unsafeListRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
+
+  const goTo = useCallback((key: ScanStatusNav) => {
+    const target = key === "unsafe" ? unsafeListRef : historyRef;
+    target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const getClient = useCallback(async () => {
     if (clientRef.current) return clientRef.current;
@@ -181,9 +196,6 @@ export function SecurityAssessmentPage() {
         skipped: scanState.progress.skipped,
       }
     : latestTotals;
-  const health = latestTotals.total
-    ? Math.round((latestTotals.safe / latestTotals.total) * 100)
-    : 0;
   const lastScanLabel = latest
     ? format.formatDateTime(latest.finishedAt, false)
     : "—";
@@ -240,15 +252,6 @@ export function SecurityAssessmentPage() {
 
   return (
     <div className="space-y-5 pb-12">
-      <PageHeader
-        title={t("security.pageHeader")}
-        desc={t("security.center.summary", {
-          skills: skills.length,
-          dimensions: riskKinds.length,
-          health,
-        })}
-      />
-
       {connection === "unavailable" ? (
         <section className="grid min-h-[520px] place-items-center rounded-3xl bg-card p-8 text-center shadow-[var(--elev-1)]">
           <div className="max-w-lg">
@@ -305,21 +308,25 @@ export function SecurityAssessmentPage() {
           <ScanStatus
             state={scanState}
             totals={statusTotals}
-            lastScan={lastScanLabel}
+            scanCount={countScanTasks(history)}
+            dimensions={riskKinds.length}
+            latestFinishedAt={latest?.finishedAt}
+            runtime={runtime}
+            riskKinds={riskKinds}
+            onGo={goTo}
           />
 
           {latestEntries.length > 0 && (
-            <>
-              <SecurityResultsSummary
+            <div ref={unsafeListRef}>
+              <UnsafeSkillList
                 entries={latestEntries}
-                dimensions={riskKinds.length}
-                onRescan={(mode, skillRef) =>
-                  void startScan(mode, "single", skillRef)
-                }
+                onOpenReport={setSelectedReport}
               />
-            </>
+            </div>
           )}
-          <ScanHistory entries={history} />
+          <div ref={historyRef}>
+            <ScanHistory entries={history} onOpenTask={setSelectedTask} />
+          </div>
         </>
       )}
 
@@ -329,6 +336,29 @@ export function SecurityAssessmentPage() {
           skills={skills}
           riskKinds={riskKinds}
           onCancel={() => void cancelScan()}
+        />
+      )}
+
+      {selectedTask && (
+        <ScanTaskDetail
+          task={selectedTask}
+          dimensions={riskKinds.length}
+          onClose={() => setSelectedTask(null)}
+          onOpenReport={(entry) => {
+            setSelectedTask(null);
+            setSelectedReport(entry);
+          }}
+        />
+      )}
+      {selectedReport && (
+        <SkillReportModal
+          entry={selectedReport}
+          dimensions={riskKinds.length}
+          onClose={() => setSelectedReport(null)}
+          onRescan={(entry) => {
+            setSelectedReport(null);
+            void startScan(entry.mode, "single", entry.skillRef);
+          }}
         />
       )}
     </div>

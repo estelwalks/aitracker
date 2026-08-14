@@ -17,7 +17,7 @@ export const SECURITY_RISK_KINDS = [
 export type SecurityRiskKind = (typeof SECURITY_RISK_KINDS)[number];
 export type SecurityScanMode = "quick" | "full";
 export type SecurityScanCycle = "hourly" | "daily" | "weekly";
-export type SecurityScanScope = "all";
+export type SecurityScanScope = "all" | "agent" | "dir";
 
 export interface SecurityScanScheduleView {
   readonly enabled: boolean;
@@ -25,6 +25,10 @@ export interface SecurityScanScheduleView {
   /** "HH:MM" (24h) local wall-clock time; ignored for hourly. */
   readonly time: string;
   readonly scope: SecurityScanScope;
+  /** Skill-agent names to include when scope === "agent" (empty ⇒ no targets). */
+  readonly agents: readonly string[];
+  /** Absolute skill root directory prefix when scope === "dir" (null ⇒ no targets). */
+  readonly dir: string | null;
   readonly notify: boolean;
 }
 export type SecurityScanPhase =
@@ -128,6 +132,8 @@ export interface SecurityReportView {
   readonly rulesVersion: string;
   readonly engineVersion: string;
   readonly locale: Locale;
+  /** Stable content hash of the scanned skill — the dedup key across install copies and re-scans. */
+  readonly contentHash?: string;
   readonly scannedFiles: number;
   readonly threatLevel: "critical" | "high" | "medium" | "low" | "none";
   readonly threatLevelDisplay: string;
@@ -209,11 +215,42 @@ export const EMPTY_SECURITY_TOTALS: SecurityTotals = {
   files: 0,
 };
 
+/**
+ * Deduplicate history to one entry per unique skill, keyed by the stable
+ * content hash (`report.contentHash`). The same skill installed under two
+ * roots, or re-scanned unchanged, shares one content hash, so statistics count
+ * each skill once — consistent with skill management, which already dedups by
+ * skill name. Entries without a content hash (failed/older scans) are kept
+ * as-is since they cannot be reliably mapped to a skill's content.
+ */
+export function dedupeHistoryByContentHash(
+  history: readonly SecurityHistoryView[],
+): SecurityHistoryView[] {
+  const latestByKey = new Map<string, SecurityHistoryView>();
+  const withoutHash: SecurityHistoryView[] = [];
+  for (const entry of history) {
+    const key = entry.report?.contentHash;
+    if (!key) {
+      withoutHash.push(entry);
+      continue;
+    }
+    const previous = latestByKey.get(key);
+    if (
+      previous &&
+      Date.parse(previous.finishedAt) >= Date.parse(entry.finishedAt)
+    ) {
+      continue;
+    }
+    latestByKey.set(key, entry);
+  }
+  return [...withoutHash, ...latestByKey.values()];
+}
+
 export function summarizeReports(
   history: readonly SecurityHistoryView[],
   progress?: SecurityProgressView,
 ): SecurityTotals {
-  const totals = history.reduce<SecurityTotals>(
+  const totals = dedupeHistoryByContentHash(history).reduce<SecurityTotals>(
     (result, item) => ({
       total: result.total + 1,
       safe: result.safe + (securityHistoryEntryIsSafe(item) ? 1 : 0),
@@ -316,4 +353,199 @@ export function isScanActive(status: SecurityScanPhase): boolean {
 
 export function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+/**
+ * Task/report aggregation helpers for the prototype-aligned scan UI.
+ *
+ * The page has no on-demand per-skill report endpoint: a scan task's
+ * per-skill findings live inside each history entry's embedded `report`.
+ * These helpers shape history entries into the task view the UI consumes
+ * (unsafe list, scan-task detail modal, report modal). All pure functions —
+ * no i18n, no React.
+ */
+
+export type RelativeTimeUnit = "just" | "minute" | "hour" | "day";
+
+export interface SecurityTaskFindingView {
+  /** Source history entry id, so the UI can jump back to that skill's report. */
+  readonly entryId: string;
+  readonly skillName: string;
+  readonly tone: "danger" | "warn";
+  /** Finding-level severity, or null for entry-level (no-report) rows. */
+  readonly severity: SecuritySeverity | null;
+  readonly severityDisplay: string;
+  readonly kindDisplay: string;
+  readonly issue: string;
+  readonly advice: string;
+}
+
+export interface SecurityScanTaskView {
+  readonly scanId: string;
+  /** Min of entries' startedAt. */
+  readonly startedAt: string;
+  /** Max of entries' finishedAt. */
+  readonly finishedAt: string;
+  readonly trigger: "manual" | "automatic";
+  readonly scope: "all" | "single";
+  readonly status: "complete" | "partial" | "failed";
+  readonly safe: boolean;
+  readonly entries: readonly SecurityHistoryView[];
+  readonly totals: SecurityTotals;
+  readonly findings: readonly SecurityTaskFindingView[];
+}
+
+export function countScanTasks(
+  history: readonly SecurityHistoryView[],
+): number {
+  return new Set(history.map((entry) => entry.scanId)).size;
+}
+
+export function unsafeEntries(
+  entries: readonly SecurityHistoryView[],
+): SecurityHistoryView[] {
+  return entries.filter((item) => !securityHistoryEntryIsSafe(item));
+}
+
+/** block verdict reads as high-risk; everything else unsafe is a warning. */
+export function unsafeVerdictTone(
+  item: SecurityHistoryView,
+): "danger" | "warn" {
+  return item.report?.verdict === "block" ? "danger" : "warn";
+}
+
+/** Deduplicated, human-readable risk-dimension names for a report. */
+export function hitDimensionsOf(item: SecurityHistoryView): readonly string[] {
+  return [
+    ...new Set(
+      (item.report?.findings ?? [])
+        .map((finding) => finding.kindDisplay)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+}
+
+export function severityCounts(
+  report: SecurityReportView,
+): Record<SecuritySeverity, number> {
+  const counts: Record<SecuritySeverity, number> = {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+  };
+  for (const finding of report.findings) {
+    counts[finding.severity] += 1;
+  }
+  return counts;
+}
+
+/**
+ * Aggregate one scan's history entries (which must share a single scanId)
+ * into the task view the detail modal consumes. Entries without a report
+ * (failed/skipped) degrade to entry-level finding rows rather than being
+ * silently dropped.
+ */
+export function aggregateScanTask(
+  entries: readonly SecurityHistoryView[],
+): SecurityScanTaskView {
+  const startedAt = entries.reduce(
+    (latest, entry) => Math.min(latest, Date.parse(entry.startedAt)),
+    Number.POSITIVE_INFINITY,
+  );
+  const finishedAt = entries.reduce(
+    (latest, entry) => Math.max(latest, Date.parse(entry.finishedAt)),
+    0,
+  );
+  const totals = summarizeReports(entries);
+  const anyFailed = entries.some((entry) => entry.status === "failed");
+  const allComplete = entries.every(
+    (entry) =>
+      entry.status === "complete" &&
+      entry.report?.status === "complete" &&
+      !entry.errorCode,
+  );
+
+  const findings: SecurityTaskFindingView[] = [];
+  for (const entry of entries) {
+    if (securityHistoryEntryIsSafe(entry)) continue;
+    const tone = unsafeVerdictTone(entry);
+    const report = entry.report;
+    if (report && report.findings.length > 0) {
+      for (const finding of report.findings) {
+        findings.push({
+          entryId: entry.id,
+          skillName: entry.skillName,
+          tone,
+          severity: finding.severity,
+          severityDisplay: finding.severityDisplay,
+          kindDisplay: finding.kindDisplay,
+          issue: finding.message,
+          advice: finding.remediation,
+        });
+      }
+    } else {
+      findings.push({
+        entryId: entry.id,
+        skillName: entry.skillName,
+        tone,
+        severity: null,
+        severityDisplay: "",
+        kindDisplay: "",
+        issue:
+          entry.errorCode ??
+          report?.summary ??
+          report?.threatLevelDisplay ??
+          "",
+        advice: "",
+      });
+    }
+  }
+
+  return {
+    scanId: entries[0]?.scanId ?? "",
+    startedAt: Number.isFinite(startedAt)
+      ? new Date(startedAt).toISOString()
+      : "",
+    finishedAt: new Date(finishedAt).toISOString(),
+    trigger: entries[0]?.trigger ?? "manual",
+    scope: entries.length > 1 ? "all" : "single",
+    status: anyFailed ? "failed" : allComplete ? "complete" : "partial",
+    safe: entries.length > 0 && entries.every(securityHistoryEntryIsSafe),
+    entries,
+    totals,
+    findings,
+  };
+}
+
+export function aggregateScanTasks(
+  history: readonly SecurityHistoryView[],
+): readonly SecurityScanTaskView[] {
+  const groups = new Map<string, SecurityHistoryView[]>();
+  for (const entry of history) {
+    const group = groups.get(entry.scanId);
+    if (group) {
+      group.push(entry);
+    } else {
+      groups.set(entry.scanId, [entry]);
+    }
+  }
+  return [...groups.values()]
+    .map(aggregateScanTask)
+    .sort(
+      (left, right) =>
+        Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
+    );
+}
+
+export function relativeTimeParts(
+  iso: string,
+  now: number,
+): { unit: RelativeTimeUnit; value: number } {
+  const minutes = Math.floor(Math.max(0, now - Date.parse(iso)) / 60_000);
+  if (minutes < 1) return { unit: "just", value: 0 };
+  if (minutes < 60) return { unit: "minute", value: minutes };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { unit: "hour", value: hours };
+  return { unit: "day", value: Math.floor(hours / 24) };
 }

@@ -248,7 +248,7 @@ async function runAutomaticSecurityScan(
   if (status === "running" || status === "cancelling") return;
   let state: SecurityScanState;
   try {
-    state = await scanner.startAutomaticScan();
+    state = await scanner.startAutomaticScan(schedule);
   } catch {
     // No discovered Skills (or a concurrent manual scan) is a recoverable
     // automatic pass. The next run retries through the same safe service.

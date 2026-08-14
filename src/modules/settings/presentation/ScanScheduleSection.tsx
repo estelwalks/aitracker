@@ -2,12 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
-import { Segmented } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
 import type { SecurityClient } from "../../security-assessment/query/desktop-client";
 import type {
   SecurityScanCycle,
   SecurityScanScheduleView,
+  SecurityScanScope,
 } from "../../security-assessment/presentation/security-view";
 import {
   Field,
@@ -24,10 +24,29 @@ const CYCLE_OPTIONS: readonly SecurityScanCycle[] = [
   "weekly",
 ];
 
+const SCOPE_OPTIONS: readonly SecurityScanScope[] = ["all", "agent", "dir"];
+
+const cycleKeys: Record<SecurityScanCycle, "hourly" | "daily" | "weekly"> = {
+  hourly: "hourly",
+  daily: "daily",
+  weekly: "weekly",
+};
+
+const scopeKeys: Record<
+  SecurityScanScope,
+  "scopeAll" | "scopeAgent" | "scopeDir"
+> = {
+  all: "scopeAll",
+  agent: "scopeAgent",
+  dir: "scopeDir",
+};
+
 /**
- * 自动扫描计划：开启/暂停 + 扫描周期（hourly/daily/weekly）+ 扫描时间 + 扫描范围
- * （固定 all = 全部本地 Skill）+ 告警通知。绑定真实
- * SecurityClient.getScanSchedule()/setScanSchedule()。
+ * 扫描配置：与 V3.0 原型对齐的 Field 行 + chip 风格。
+ *
+ * 定时扫描(Toggle) / 扫描周期(chip) / 扫描时间 / 扫描范围(全部/指定 Agent/指定目录)
+ * / 告警通知(Toggle)。全部绑定真实 SecurityClient.getScanSchedule()/
+ * setScanSchedule()，范围选择通过 schedule.agents / schedule.dir 持久化。
  */
 export function ScanScheduleSection({
   client,
@@ -45,6 +64,7 @@ export function ScanScheduleSection({
   const [loadError, setLoadError] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [agents, setAgents] = useState<readonly string[]>([]);
 
   useEffect(() => {
     if (client == null) return;
@@ -65,6 +85,27 @@ export function ScanScheduleSection({
       cancelled = true;
     };
   }, [client, reloadTick, t]);
+
+  // 真实可选的 Agent 列表来自已发现 Skill 的 agents 元数据。
+  useEffect(() => {
+    if (client == null) return;
+    let cancelled = false;
+    client
+      .listSkills()
+      .then((skills) => {
+        if (cancelled) return;
+        const names = [
+          ...new Set(skills.flatMap((skill) => skill.agents)),
+        ].sort((left, right) => left.localeCompare(right));
+        setAgents(names);
+      })
+      .catch(() => {
+        if (!cancelled) setAgents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
 
   const retryLoad = () => setReloadTick((value) => value + 1);
 
@@ -104,6 +145,7 @@ export function ScanScheduleSection({
       </Field>
     );
   } else {
+    const disabled = saving;
     content = (
       <div>
         <Field
@@ -113,21 +155,25 @@ export function ScanScheduleSection({
           <Toggle
             value={schedule.enabled}
             onChange={(enabled) => void save({ ...schedule, enabled })}
-            disabled={saving}
+            disabled={disabled}
           />
         </Field>
+
         <Field label={t("settings.security.schedule.cycle")}>
-          <div className={saving ? "pointer-events-none opacity-50" : ""}>
-            <Segmented
-              value={schedule.cycle}
-              onChange={(cycle) => void save({ ...schedule, cycle })}
-              options={CYCLE_OPTIONS.map((cycle) => ({
-                value: cycle,
-                label: t(`settings.security.schedule.${cycle}`),
-              }))}
-            />
+          <div className="flex flex-wrap gap-1.5">
+            {CYCLE_OPTIONS.map((cycle) => (
+              <Chip
+                key={cycle}
+                active={schedule.cycle === cycle}
+                disabled={disabled}
+                onClick={() => void save({ ...schedule, cycle })}
+              >
+                {t(`settings.security.schedule.${cycleKeys[cycle]}`)}
+              </Chip>
+            ))}
           </div>
         </Field>
+
         <Field label={t("settings.security.schedule.time")}>
           <input
             type="time"
@@ -135,23 +181,92 @@ export function ScanScheduleSection({
             onChange={(event) =>
               void save({ ...schedule, time: event.target.value })
             }
-            disabled={saving}
+            disabled={disabled}
             className="security-config-input max-w-[9rem]"
           />
         </Field>
+
         <Field
           label={t("settings.security.schedule.scope")}
-          hint={t("settings.security.schedule.scopeHint")}
+          hint={
+            schedule.scope === "agent"
+              ? t("settings.security.schedule.agentHint")
+              : schedule.scope === "dir"
+                ? t("settings.security.schedule.dirHint")
+                : t("settings.security.schedule.scopeHint")
+          }
         >
-          <span className="font-mono text-[13px] text-muted-foreground">
-            {t("settings.security.schedule.scopeAll")}
-          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {SCOPE_OPTIONS.map((scope) => (
+              <Chip
+                key={scope}
+                active={schedule.scope === scope}
+                disabled={disabled}
+                onClick={() => void save({ ...schedule, scope })}
+              >
+                {t(`settings.security.schedule.${scopeKeys[scope]}`)}
+              </Chip>
+            ))}
+          </div>
         </Field>
+
+        {schedule.scope === "agent" && (
+          <Field
+            label={t("settings.security.schedule.scopeAgent")}
+            hint={t("settings.security.schedule.agentHint")}
+          >
+            {agents.length === 0 ? (
+              <span className="font-mono text-[12px] text-muted-foreground">
+                {t("common.loading")}
+              </span>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {agents.map((agent) => {
+                  const on = schedule.agents.includes(agent);
+                  return (
+                    <Chip
+                      key={agent}
+                      active={on}
+                      disabled={disabled}
+                      onClick={() => {
+                        const next = on
+                          ? schedule.agents.filter((name) => name !== agent)
+                          : [...schedule.agents, agent];
+                        void save({ ...schedule, agents: next });
+                      }}
+                    >
+                      {agent}
+                    </Chip>
+                  );
+                })}
+              </div>
+            )}
+          </Field>
+        )}
+
+        {schedule.scope === "dir" && (
+          <Field
+            label={t("settings.security.schedule.scopeDir")}
+            hint={t("settings.security.schedule.dirHint")}
+          >
+            <input
+              type="text"
+              value={schedule.dir ?? ""}
+              placeholder="/path/to/skills"
+              onChange={(event) =>
+                void save({ ...schedule, dir: event.target.value || null })
+              }
+              disabled={disabled}
+              className="security-config-input max-w-[15rem]"
+            />
+          </Field>
+        )}
+
         <Field label={t("settings.security.schedule.notify")}>
           <Toggle
             value={schedule.notify}
             onChange={(notify) => void save({ ...schedule, notify })}
-            disabled={saving}
+            disabled={disabled}
           />
         </Field>
       </div>
@@ -168,5 +283,33 @@ export function ScanScheduleSection({
       </p>
       {content}
     </div>
+  );
+}
+
+function Chip({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-lg px-2.5 py-1.5 font-mono text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-foreground text-background"
+          : "bg-surface text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

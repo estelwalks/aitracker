@@ -18,6 +18,13 @@ export const skills = {
     updateAll: "すべての更新状態",
     sort: "並び替え",
     sortDirection: "並び順を変更",
+    reset: "リセット",
+  },
+  origin: {
+    all: "すべて",
+    distilled: "蒸留",
+    external: "外部",
+    other: "その他",
   },
   summary: {
     assets: "資産",
@@ -31,6 +38,19 @@ export const skills = {
     coverageHint: "カバー済み / 利用可能 Agent",
     unassigned: "未割り当ての資産",
     unassignedHint: "現在どの Agent にもインストールされていません",
+    localCount:
+      "ローカルに {count} 個の Skill · 複数の AI ツールで有効化・削除できます",
+  },
+  card: {
+    token: "Token",
+    size: "サイズ",
+    synced: "同期済み",
+    syncMissing: "{count} を同期",
+    verdictUnknown: "不明",
+    expandDesc: "説明を展開",
+    collapseDesc: "説明を折りたたむ",
+    select: "{name} を選択",
+    deselect: "{name} の選択を解除",
   },
   source: { frontmatter: "メタデータ", market: "マーケット", unknown: "不明" },
   update: {
@@ -62,9 +82,11 @@ export const skills = {
   batch: {
     selectPage: "このページをすべて選択",
     selectedCount: "{count} 件を選択中",
-    sync: "一括同期",
-    uninstall: "一括アンインストール",
-    clearSelection: "選択を解除",
+    totalCount: "合計 {count} 件の Skill",
+    sync: "同期",
+    scan: "スキャン",
+    uninstall: "アンインストール",
+    clearSelection: "キャンセル",
   },
   table: {
     title: "Skill リスト（{count}）",
@@ -215,7 +237,7 @@ export const skills = {
     securityAttentionLabel: "要確認",
     securityUnknownLabel: "判定不能",
     securityFailedLabel: "読み取り失敗",
-    workspaceTitle: "Skill 資産管理",
+    workspaceTitle: "ローカル Skill 管理",
     workspaceDesc:
       "以下の操作エリアでは、実際のローカルスキャンと確認済みの安全な変更を維持します。",
   },
@@ -239,12 +261,13 @@ export const skills = {
   kpi: {
     localSkills: "ローカル Skill",
     distilled: "ローカル蒸留",
-    detected: "検査済み",
-    risks: "リスク項目",
-    localSkillsHint: "{count} 個のインストールコピー",
-    distilledHint: "承認済みの蒸留成果物",
-    detectedHint: "セキュリティチェック結果あり",
-    risksHint: "セキュリティチェックで検出されたリスク",
+    detected: "スキャン済み",
+    risks: "安全でない",
+    localSkillsHint: "{count} 箇所に配布",
+    distilledHint: "セッションから抽出",
+    detectedHint: "カバレッジ {pct}%",
+    risksHint: "対応を推奨",
+    risksHintClean: "安全でない Skill はありません",
   },
   banner: {
     distillActive:
@@ -275,6 +298,28 @@ export const skills = {
     updateAvailable: "更新可能",
     updateCurrent: "既に最新のエビデンス版",
     updateUnknown: "判断できません",
+    rootTitle: "Skill 詳細 · {root}/",
+    render: "レンダリング",
+    sourceCode: "ソース",
+    installedPos: "インストール先",
+    installPos: "インストール先（{installed}/{usable} インストール済み）",
+    size: "サイズ: {size}",
+    exportFile: "現在のファイルをエクスポート",
+    exportDir: "ディレクトリをエクスポート",
+    scanSecurity: "セキュリティチェック",
+    syncToTools: "ツールに同期",
+    verifySecurity: "セキュリティ結果を確認",
+  },
+  syncTarget: {
+    title: "同期先を選択 · {title}",
+    count: "{selected} / {available} 個のインストール先を選択中",
+    enable: "選択したツールで有効化",
+    detectedCount: "Skill 対応ツールを {count} 個検出",
+    selectAll: "すべて選択",
+    clearAll: "選択を解除",
+    hint: "Skill（SKILL.md）仕様を実装したツールのみを表示します。その他のツールでは Skill をインストール・有効化できません。",
+    missingCount: "Skill 対応だがクライアント未検出 · {count} 個",
+    overwrite: "同名の既存 Skill を上書き",
   },
   uninstall: {
     title: "アンインストールの確認",
@@ -326,5 +371,6 @@ export const skills = {
     syncDoneFailed:
       "同期完了: 成功 {succeeded} 件 / スキップ {skipped} 件 / 失敗 {failed} 件",
     syncFailed: "同期に失敗しました",
+    exportedTo: "{path} にエクスポートしました",
   },
 } as const;

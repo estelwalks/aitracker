@@ -16,6 +16,13 @@ export const skills = {
     updateAll: "全部更新状态",
     sort: "排序",
     sortDirection: "切换排序方向",
+    reset: "重置",
+  },
+  origin: {
+    all: "全部",
+    distilled: "蒸馏",
+    external: "外部",
+    other: "其他",
   },
   summary: {
     assets: "工具资产",
@@ -29,6 +36,18 @@ export const skills = {
     coverageHint: "已覆盖 / 可用 Agent",
     unassigned: "待分配资产",
     unassignedHint: "当前未安装到任何 Agent",
+    localCount: "本地共 {count} 个 Skill · 可在多个 AI 工具中启用或移除",
+  },
+  card: {
+    token: "Token",
+    size: "体积",
+    synced: "已同步",
+    syncMissing: "同步 {count}",
+    verdictUnknown: "未知",
+    expandDesc: "展开描述",
+    collapseDesc: "收起描述",
+    select: "选择 {name}",
+    deselect: "取消选择 {name}",
   },
   source: { frontmatter: "元数据", market: "市场", unknown: "未知" },
   update: {
@@ -60,9 +79,11 @@ export const skills = {
   batch: {
     selectPage: "全选当前页",
     selectedCount: "已选 {count} 项",
-    sync: "批量同步",
-    uninstall: "批量卸载",
-    clearSelection: "取消选择",
+    totalCount: "共 {count} 个 Skill",
+    sync: "同步",
+    scan: "扫描",
+    uninstall: "卸载",
+    clearSelection: "取消",
   },
   table: {
     title: "Skill 列表（{count}）",
@@ -205,7 +226,7 @@ export const skills = {
     securityAttentionLabel: "需关注",
     securityUnknownLabel: "无法判定",
     securityFailedLabel: "读取失败",
-    workspaceTitle: "Skill 资产管理",
+    workspaceTitle: "本地 Skill 管理",
     workspaceDesc: "以下操作区继续使用真实本地扫描与确认后的安全变更。",
   },
   hub: {
@@ -226,12 +247,13 @@ export const skills = {
   kpi: {
     localSkills: "本地 Skill",
     distilled: "本地蒸馏",
-    detected: "已检测",
-    risks: "风险项",
-    localSkillsHint: "{count} 个安装副本",
-    distilledHint: "已批准的蒸馏产物",
-    detectedHint: "有安全检测结果",
-    risksHint: "安全检测发现的风险项",
+    detected: "已扫描",
+    risks: "不安全",
+    localSkillsHint: "分发到 {count} 个已安装位",
+    distilledHint: "由会话提炼生成",
+    detectedHint: "覆盖 {pct}%",
+    risksHint: "建议立即处理",
+    risksHintClean: "暂无不安全 Skill",
   },
   banner: {
     distillActive:
@@ -241,10 +263,10 @@ export const skills = {
   security: {
     detected: "已安全检测",
     attention: "需关注",
-    clean: "安全通过",
+    clean: "安全",
   },
   pagination: {
-    range: "第 {start}-{end} 条 / 共 {total} 条",
+    range: "第 {start}–{end} 项 / 共 {total} 项",
   },
   detail: {
     noDescription: "暂无描述",
@@ -262,6 +284,28 @@ export const skills = {
     updateAvailable: "可更新",
     updateCurrent: "已是当前证据版本",
     updateUnknown: "无法判断",
+    rootTitle: "Skill 详情 · {root}/",
+    render: "渲染",
+    sourceCode: "源码",
+    installedPos: "安装位置",
+    installPos: "安装位置（已装 {installed}/{usable}）",
+    size: "体积：{size}",
+    exportFile: "导出当前文件",
+    exportDir: "导出目录",
+    scanSecurity: "安全检测",
+    syncToTools: "同步到工具",
+    verifySecurity: "查看安全检测结果",
+  },
+  syncTarget: {
+    title: "选择同步目标 · {title}",
+    count: "已选 {selected} / {available} 个安装目标",
+    enable: "启用到所选工具",
+    detectedCount: "支持 Skill 的工具中已检测到 {count} 个",
+    selectAll: "全选",
+    clearAll: "清空选择",
+    hint: "仅列出实现了 Skill（SKILL.md）规范的工具，其余工具无法安装或启用 Skill。",
+    missingCount: "支持 Skill 但本地未检测到客户端 · {count} 个",
+    overwrite: "覆盖已存在的同名 Skill",
   },
   uninstall: {
     title: "确认卸载",
@@ -311,5 +355,6 @@ export const skills = {
     syncDoneFailed:
       "同步完成：成功 {succeeded} 条 / 跳过 {skipped} 条 / 失败 {failed} 条",
     syncFailed: "同步失败",
+    exportedTo: "已导出到 {path}",
   },
 } as const;

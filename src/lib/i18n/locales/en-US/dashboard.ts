@@ -216,7 +216,7 @@ export const dashboard = {
     distillationAssetsLabel: "Distillation assets",
     agentActivityLabel: "Agent activity",
     securityRunsLabel: "Security scans",
-    securityScanTimes: "Scanned {count} time(s)",
+    securityScanTimes: "{count} time(s)",
     securityCoverage: "Covers {count} Skills",
     distillationOutputsLabel: "Distillation outputs",
     dailyReportsLabel: "Daily reports",

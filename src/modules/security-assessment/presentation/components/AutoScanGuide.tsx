@@ -1,18 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import {
-  AlarmClock,
-  ArrowRight,
-  BellRing,
   CalendarClock,
-  Power,
-  Settings2,
+  Check,
+  ChevronDown,
+  Clock,
   ShieldOff,
-  X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { Segmented } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
@@ -37,38 +33,12 @@ const CYCLE_OPTIONS: readonly SecurityScanCycle[] = [
   "weekly",
 ];
 
-/** 卡片内小号开关（与设置页 Toggle 视觉一致）。 */
-function InlineToggle({
-  value,
-  onChange,
-  disabled = false,
-}: {
-  value: boolean;
-  onChange: (value: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      disabled={disabled}
-      className={`h-5 w-9 rounded-full p-0.5 transition-colors ${
-        value ? "bg-primary" : "border border-border bg-surface-2"
-      } disabled:cursor-not-allowed disabled:opacity-50`}
-      aria-pressed={value}
-    >
-      <span
-        className="block size-4 rounded-full bg-background transition-transform"
-        style={{ transform: value ? "translateX(16px)" : "translateX(0)" }}
-      />
-    </button>
-  );
-}
-
 /**
- * 安全页自动扫描引导：读取真实扫描计划（getScanSchedule），提供开启/暂停开关与
- * 「设置」内联快速设置弹层（定时扫描/扫描周期/扫描时间/告警通知），全部就地编辑。
- * 只有扫描时间行的「调整范围」会跳转到 /settings 全量扫描配置页。
+ * 安全页自动扫描定时：与 V3.0 原型 ScheduleBar 对齐的卡片。
+ *
+ * 头部为「状态行 + 开关 + 设置」，展开后仅两行（周期 / 时间），
+ * 下方不再有说明步骤。读写真实扫描计划（getScanSchedule/setScanSchedule），
+ * 「调整范围」跳转 /settings 全量扫描配置页。
  * SSR 安全 —— 客户端挂载后才解析 client 并读取计划，未就绪前渲染中性加载态。
  */
 export function AutoScanGuide() {
@@ -78,7 +48,7 @@ export function AutoScanGuide() {
     null,
   );
   const [unavailable, setUnavailable] = useState(false);
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -133,7 +103,7 @@ export function AutoScanGuide() {
 
   if (unavailable) {
     return (
-      <section className="rounded-2xl bg-card p-4 shadow-[var(--elev-1)]">
+      <section className="rounded-xl bg-card px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted-foreground">
             <ShieldOff className="size-4" strokeWidth={2} />
@@ -157,219 +127,162 @@ export function AutoScanGuide() {
   }
 
   const enabled = schedule?.enabled ?? false;
-  const cycleLabel = schedule ? t(CYCLE_KEYS[schedule.cycle]) : "—";
-
-  const scheduleLine =
+  const cycleLabel = schedule
+    ? schedule.cycle === "hourly"
+      ? t(CYCLE_KEYS[schedule.cycle])
+      : `${t(CYCLE_KEYS[schedule.cycle])} ${schedule.time}`
+    : "";
+  const scopeLabel = schedule
+    ? schedule.scope === "agent"
+      ? t("security.center.autoScan.scopeAgent")
+      : schedule.scope === "dir"
+        ? t("security.center.autoScan.scopeDir", {
+            dir: schedule.dir ?? "",
+          })
+        : t("security.center.autoScan.scopeAll")
+    : "";
+  const status =
     schedule == null
       ? t("security.center.autoScan.loading")
       : enabled
-        ? [
-            cycleLabel,
-            schedule.cycle === "hourly"
-              ? null
-              : `${t("security.center.autoScan.time")}：${schedule.time}`,
-            `${t("security.center.autoScan.scope")}：${t(
-              "security.center.autoScan.scopeAll",
-            )}`,
-            `${t("security.center.autoScan.notify")}：${
-              schedule.notify
-                ? t("security.center.autoScan.notifyOn")
-                : t("security.center.autoScan.notifyOff")
-            }`,
-          ]
-            .filter(Boolean)
-            .join(" · ")
+        ? t("security.center.autoScan.triggered", {
+            cycle: cycleLabel,
+            scope: scopeLabel,
+          })
         : t("security.center.autoScan.offDesc");
 
   return (
-    <div className="space-y-2">
-      <section className="rounded-2xl bg-card p-4 shadow-[var(--elev-1)]">
-        <div className="flex flex-wrap items-center gap-3">
+    <section className="rounded-xl bg-card px-4 py-3">
+      <header className="flex flex-wrap items-center gap-3">
+        <CalendarClock
+          className="size-4 shrink-0"
+          style={{
+            color: enabled ? "var(--chart-1)" : "var(--muted-foreground)",
+          }}
+        />
+        <span className="text-[12.5px] font-semibold tracking-tight">
+          {t("security.center.autoScan.title")}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          {status}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => void toggle()}
+          disabled={schedule == null || saving}
+          aria-label={t("security.center.autoScan.title")}
+          className="relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+          style={{
+            background: enabled ? "var(--chart-1)" : "var(--surface-2, #333)",
+          }}
+        >
           <span
-            className={`grid size-9 shrink-0 place-items-center rounded-xl ${
-              enabled
-                ? "bg-ok/15 text-ok"
-                : "bg-surface-2 text-muted-foreground"
+            className="absolute top-0.5 size-4 rounded-full bg-white transition-all"
+            style={{ left: enabled ? 18 : 2 }}
+          />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {t("security.center.autoScan.settings")}
+          <ChevronDown
+            className={`size-3.5 transition-transform ${
+              open ? "rotate-180" : ""
             }`}
-          >
-            <CalendarClock className="size-4" strokeWidth={2} />
-          </span>
+          />
+        </button>
+      </header>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[13px] font-semibold tracking-tight">
-                {t("security.center.autoScan.title")}
-              </h3>
-              <span
-                className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold ${
-                  enabled
-                    ? "bg-ok/15 text-ok"
-                    : "bg-surface-2 text-muted-foreground"
-                }`}
+      {open && schedule != null && (
+        <div className="mt-3 divide-y divide-border/40">
+          <ScheduleRow label={t("security.center.autoScan.cycleLabel")}>
+            {CYCLE_OPTIONS.map((cycle) => (
+              <ScheduleChip
+                key={cycle}
+                active={schedule.cycle === cycle}
+                onClick={() => void save({ cycle })}
               >
-                {enabled
-                  ? t("security.center.autoScan.enabled")
-                  : t("security.center.autoScan.disabled")}
-              </span>
-            </div>
-            <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
-              {scheduleLine}
-            </p>
-          </div>
+                {schedule.cycle === cycle && (
+                  <Check
+                    className="size-3.5"
+                    style={{ color: "var(--chart-1)" }}
+                  />
+                )}
+                {t(CYCLE_KEYS[cycle])}
+              </ScheduleChip>
+            ))}
+          </ScheduleRow>
 
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => void toggle()}
-              disabled={schedule == null || saving}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 ${
-                enabled ? "bg-surface-2 text-foreground" : "text-white"
-              }`}
-              style={enabled ? undefined : { background: "var(--chart-1)" }}
-            >
-              <Power className="size-3.5" strokeWidth={2} />
-              {enabled
-                ? t("security.center.autoScan.pause")
-                : t("security.center.autoScan.enable")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPopoverOpen((open) => !open)}
-              aria-expanded={popoverOpen}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11.5px] transition-opacity hover:opacity-80 ${
-                popoverOpen
-                  ? "bg-foreground text-background"
-                  : "bg-surface-2 text-foreground"
-              }`}
-            >
-              {t("security.center.autoScan.settings")}
-              <Settings2 className="size-3.5" strokeWidth={2} />
-            </button>
-          </div>
+          <ScheduleRow label={t("security.center.autoScan.time")}>
+            <span className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+              <Clock className="size-3.5 text-muted-foreground" />
+              <input
+                type="time"
+                value={schedule.time}
+                disabled={schedule.cycle === "hourly" || saving}
+                onChange={(event) => void save({ time: event.target.value })}
+                className="bg-transparent font-mono text-[11.5px] outline-none disabled:opacity-40"
+              />
+            </span>
+            <span className="min-w-0 flex-1 font-mono text-[11px] text-muted-foreground">
+              {t("security.center.autoScan.scope")}：{scopeLabel}
+              <Link
+                to="/settings"
+                search={{ section: "scan" }}
+                className="ml-2 underline underline-offset-2 hover:text-foreground"
+              >
+                {t("security.center.autoScan.timeRange")}
+              </Link>
+            </span>
+          </ScheduleRow>
         </div>
-
-        <ol className="mt-3 grid gap-2 sm:grid-cols-3">
-          {[
-            {
-              icon: Power,
-              title: t("security.center.autoScan.stepSchedule"),
-              desc: t("security.center.autoScan.stepScheduleDesc"),
-            },
-            {
-              icon: AlarmClock,
-              title: t("security.center.autoScan.stepCycle"),
-              desc:
-                schedule == null
-                  ? t("security.center.autoScan.loading")
-                  : t("security.center.autoScan.stepCycleDesc", {
-                      cycle: cycleLabel,
-                    }),
-            },
-            {
-              icon: BellRing,
-              title: t("security.center.autoScan.stepAlert"),
-              desc: t("security.center.autoScan.stepAlertDesc"),
-            },
-          ].map((step) => (
-            <li
-              key={step.title}
-              className="flex items-start gap-2 rounded-xl bg-surface px-3 py-2.5"
-            >
-              <step.icon
-                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                strokeWidth={2}
-              />
-              <span className="min-w-0">
-                <span className="block text-[12px] font-medium">
-                  {step.title}
-                </span>
-                <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
-                  {step.desc}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {popoverOpen && schedule != null && (
-        <section className="rounded-2xl bg-card p-4 shadow-[var(--elev-1)] ring-1 ring-border/60">
-          <div className="mb-1 flex items-center justify-between gap-3">
-            <h3 className="text-[13px] font-semibold tracking-tight">
-              {t("security.center.autoScan.settingsTitle")}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setPopoverOpen(false)}
-              aria-label={t("security.center.autoScan.close")}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              <X className="size-3.5" strokeWidth={2} />
-            </button>
-          </div>
-
-          <div className={saving ? "pointer-events-none opacity-60" : ""}>
-            <div className="flex items-center justify-between gap-3 border-b border-border py-2.5">
-              <span className="text-[13px]">
-                {t("security.center.autoScan.enabledLabel")}
-              </span>
-              <InlineToggle
-                value={schedule.enabled}
-                onChange={(enabled) => void save({ enabled })}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="border-b border-border py-2.5">
-              <div className="mb-1.5 text-[13px]">
-                {t("security.center.autoScan.cycleLabel")}
-              </div>
-              <Segmented
-                value={schedule.cycle}
-                onChange={(cycle) => void save({ cycle })}
-                options={CYCLE_OPTIONS.map((cycle) => ({
-                  value: cycle,
-                  label: t(CYCLE_KEYS[cycle]),
-                }))}
-              />
-            </div>
-
-            <div className="border-b border-border py-2.5">
-              <div className="mb-1.5 text-[13px]">
-                {t("security.center.autoScan.time")}
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type="time"
-                  value={schedule.time}
-                  onChange={(event) => void save({ time: event.target.value })}
-                  disabled={saving}
-                  className="security-config-input max-w-[9rem]"
-                />
-                <Link
-                  to="/settings"
-                  onClick={() => setPopoverOpen(false)}
-                  className="inline-flex items-center gap-1 text-[11.5px] text-primary hover:opacity-80"
-                >
-                  {t("security.center.autoScan.timeRange")}
-                  <ArrowRight className="size-3.5" strokeWidth={2} />
-                </Link>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-2.5">
-              <span className="text-[13px]">
-                {t("security.center.autoScan.notify")}
-              </span>
-              <InlineToggle
-                value={schedule.notify}
-                onChange={(notify) => void save({ notify })}
-                disabled={saving}
-              />
-            </div>
-          </div>
-        </section>
       )}
+    </section>
+  );
+}
+
+function ScheduleRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 py-3 last:pb-0">
+      <span className="w-[64px] shrink-0 font-mono text-[11px] text-muted-foreground">
+        {label}
+      </span>
+      {children}
     </div>
+  );
+}
+
+function ScheduleChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] transition-colors ${
+        active
+          ? "bg-surface-2 text-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

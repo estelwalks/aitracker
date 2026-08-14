@@ -7,11 +7,9 @@ import {
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
   Settings,
   ShieldCheck,
   Store,
-  X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -74,7 +72,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(240);
-  const [navQuery, setNavQuery] = useState("");
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
@@ -88,16 +85,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const visibleTiers = navTiers
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) =>
-        t(item.label)
-          .toLocaleLowerCase()
-          .includes(navQuery.toLocaleLowerCase()),
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
   const railWidth = collapsed ? 64 : sidebarWidth;
 
   return (
@@ -125,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label={APP_NAME}
           className="tt-scroll flex-1 overflow-y-auto px-2 pb-2"
         >
-          {visibleTiers.map((group) => (
+          {navTiers.map((group) => (
             <div key={group.label} className="mb-3">
               {!collapsed && (
                 <p className="px-3 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.18em] text-muted-foreground uppercase">
@@ -186,32 +173,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
         style={{ paddingLeft: railWidth }}
       >
-        <header className="tt-shell-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 px-4 md:px-6">
-          <div className="relative hidden max-w-2xl flex-1 sm:block">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={navQuery}
-              onChange={(event) => setNavQuery(event.target.value)}
-              placeholder={t("nav.search")}
-              aria-label={t("nav.search")}
-              className="h-9 w-full rounded-md bg-foreground/[0.05] pr-8 pl-9 font-mono text-xs outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
-            />
-            {navQuery && (
-              <button
-                type="button"
-                onClick={() => setNavQuery("")}
-                aria-label={t("common.close")}
-                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
-          <span className="ml-auto inline-flex items-center gap-2 rounded-md bg-foreground/[0.05] px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-ok tt-breathe" />
-            {t("nav.agentActive")}
-          </span>
-        </header>
         <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 py-6 pb-10 md:px-8 2xl:px-10">
           <div className="tt-container">{children}</div>
         </main>

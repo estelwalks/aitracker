@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Boxes, Store } from "lucide-react";
 
-import { PageBar, Segmented } from "../../../components/tt";
 import { JarvisInsight } from "../../../components/JarvisInsight";
 import { useI18n } from "../../../lib/i18n/context";
-import { loadSecurityHistory } from "../../../lib/security/history";
-import type { SecurityReport } from "../../../lib/security/scanner";
+import { getBrowserSecurityClient } from "../../security-assessment/query/browser-client";
+import { getDesktopSecurityClient } from "../../security-assessment/query/desktop-client";
+import type { SecurityHistoryView } from "../../security-assessment/presentation/security-view";
 import { SkillsPage } from "../../skill-catalog/index.ts";
 import type { SkillWorkspaceSnapshot } from "../../skill-catalog/index.ts";
 import type { DashboardReadModel } from "../../dashboard/contracts.ts";
@@ -28,9 +29,10 @@ export interface SkillHubData {
 }
 
 /**
- * Skill Hub (prototype `/skills`): PageBar + shared Jarvis insight card over
- * two real tabs. All insight/KPI figures are derived from real loader data and
- * a real client-side security-history read — nothing is mocked.
+ * Skill Hub (prototype `/skills`): hero Jarvis insight card over two real
+ * tabs (local card grid + market catalog). All insight/KPI figures are derived
+ * from real loader data and a real client-side security-history read — nothing
+ * is mocked.
  */
 export function SkillHubPage({
   initial,
@@ -41,7 +43,9 @@ export function SkillHubPage({
 }) {
   const { t, format } = useI18n();
   const [tab, setTab] = useState<SkillHubTab>(initialTab);
-  const [securityHistory, setSecurityHistory] = useState<SecurityReport[]>([]);
+  const [securityHistory, setSecurityHistory] = useState<
+    readonly SecurityHistoryView[]
+  >([]);
 
   // Keep the active tab in sync when the route's `?tab=` search param changes
   // (e.g. the local empty-state "去市场" link navigates to /skills?tab=market).
@@ -49,14 +53,24 @@ export function SkillHubPage({
     setTab(initialTab);
   }, [initialTab]);
 
-  // Real security-detection history (client-side; SSR returns [] until hydrate).
+  // Real security-detection history from the same Security & Defense client the
+  // /security page uses (automatic/monitor scans included). Client-side only;
+  // SSR returns [] until hydrate.
   useEffect(() => {
     let cancelled = false;
-    void loadSecurityHistory()
-      .then((history) => {
+    const load = async () => {
+      try {
+        const client =
+          getDesktopSecurityClient() ?? (await getBrowserSecurityClient());
+        if (client == null || cancelled) return;
+        const history = await client.getHistory();
         if (!cancelled) setSecurityHistory(history);
-      })
-      .catch(() => undefined);
+      } catch {
+        // Security client unavailable — keep the KPI empty rather than invent
+        // numbers.
+      }
+    };
+    void load();
     return () => {
       cancelled = true;
     };
@@ -68,15 +82,23 @@ export function SkillHubPage({
     [initial.workspace.snapshot.skills],
   );
 
-  /** skill name → risk-finding count, restricted to locally present skills. */
+  /**
+   * skill name → risk-finding count from the latest completed scan of each
+   * locally present skill (mirrors the /security page's history, deduped to the
+   * most recent scan so a skill is never counted twice).
+   */
   const securityView = useMemo(() => {
     const byName = new Map<string, number>();
-    for (const report of securityHistory) {
-      if (!localSkillNames.has(report.targetName)) continue;
-      byName.set(
-        report.targetName,
-        (byName.get(report.targetName) ?? 0) + report.risks.length,
-      );
+    const latestFinishedAt = new Map<string, string>();
+    for (const entry of securityHistory) {
+      if (!localSkillNames.has(entry.skillName)) continue;
+      if (!entry.report) continue; // failed/skipped scans have no findings.
+      const previous = latestFinishedAt.get(entry.skillName);
+      if (previous && Date.parse(previous) >= Date.parse(entry.finishedAt)) {
+        continue;
+      }
+      latestFinishedAt.set(entry.skillName, entry.finishedAt);
+      byName.set(entry.skillName, entry.report.findings.length);
     }
     return { byName };
   }, [securityHistory, localSkillNames]);
@@ -122,33 +144,45 @@ export function SkillHubPage({
     return lines;
   }, [t, format, summary, securityView, initial.market.stats]);
 
+  const TABS = [
+    {
+      id: "local",
+      label: t("skills.agentOverview.workspaceTitle"),
+      icon: Boxes,
+    },
+    { id: "market", label: t("market.pageHeader"), icon: Store },
+  ] as const;
+
   return (
-    <div>
-      <PageBar
-        title={t("skills.hub.title")}
-        summary={t("skills.hub.summary", {
-          count: format.formatNumber(summary.skillCount),
-        })}
+    <div className="space-y-4">
+      <JarvisInsight
+        title={t("insights.title")}
+        lines={jarvisLines}
+        rotateLabel={t("insights.rotate")}
+        dotsLabel={t("insights.dots")}
       />
 
-      <div className="mt-4">
-        <JarvisInsight
-          title={t("insights.title")}
-          lines={jarvisLines}
-          rotateLabel={t("insights.rotate")}
-          dotsLabel={t("insights.dots")}
-        />
-      </div>
-
-      <div className="mt-4 mb-4">
-        <Segmented
-          value={tab}
-          onChange={setTab}
-          options={[
-            { value: "local", label: t("skills.agentOverview.workspaceTitle") },
-            { value: "market", label: t("market.pageHeader") },
-          ]}
-        />
+      {/* Prototype pill tab bar */}
+      <div className="flex items-center gap-1 rounded-xl bg-surface-2/60 p-1">
+        {TABS.map((tabItem) => {
+          const on = tab === tabItem.id;
+          const Icon = tabItem.icon;
+          return (
+            <button
+              key={tabItem.id}
+              type="button"
+              onClick={() => setTab(tabItem.id)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-medium transition-colors ${
+                on
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
+              <span className="truncate">{tabItem.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {tab === "local" ? (

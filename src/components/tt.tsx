@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
 /** Shared compact input for module toolbars and data views. */
@@ -19,14 +19,14 @@ export function SearchInput({
     <div className={`relative ${className}`}>
       <Search
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground"
+        className="pointer-events-none absolute top-1/2 left-3.5 size-3.5 -translate-y-1/2 text-muted-foreground"
       />
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-9 w-full rounded-lg bg-surface-2/70 pr-3 pl-8 text-[13px] outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+        className="h-[34px] w-full rounded-full border border-transparent bg-surface-2 pr-3.5 pl-9 text-[12.5px] outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:bg-surface"
       />
     </div>
   );
@@ -213,6 +213,98 @@ export function Stat({
       <div className="tt-num mt-1 text-lg">{value}</div>
       {hint && (
         <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Shared pager (V3.0 prototype style): a top divider, a localized range on the
+ * left and prev/numbered/next buttons on the right. Page buttons mirror the
+ * prototype exactly — square (`rounded-sm`), bordered, monospaced numerals —
+ * and the window shows first/last plus the current page's neighbours.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  onChange,
+  rangeLabel,
+  prevLabel = "上一页",
+  nextLabel = "下一页",
+  className = "",
+}: {
+  page: number;
+  pageCount: number;
+  onChange: (page: number) => void;
+  rangeLabel?: string;
+  prevLabel?: string;
+  nextLabel?: string;
+  className?: string;
+}) {
+  const safePageCount = Math.max(1, pageCount);
+  const current = Math.min(Math.max(1, page), safePageCount);
+
+  // Show first/last plus a window of 5 around the current page (e.g.
+  // `1 2 3 4 … 4203`), so wide catalogs never collapse to a 3-button strip.
+  const nums = Array.from({ length: safePageCount }, (_, i) => i + 1).filter(
+    (p) =>
+      p === 1 || p === safePageCount || (p >= current - 1 && p <= current + 3),
+  );
+
+  const stepButton =
+    "inline-flex h-7 items-center justify-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+
+  return (
+    <div
+      className={`flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[12px] text-muted-foreground ${className}`}
+    >
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          disabled={current <= 1}
+          onClick={() => onChange(current - 1)}
+          aria-label={prevLabel}
+          title={prevLabel}
+          className={stepButton}
+        >
+          <ChevronLeft className="size-3" />
+          {prevLabel}
+        </button>
+        {nums.map((p, idx) => (
+          <span key={p} className="flex items-center gap-1">
+            {idx > 0 && nums[idx - 1] !== p - 1 && (
+              <span className="px-0.5">…</span>
+            )}
+            <button
+              type="button"
+              aria-current={p === current ? "page" : undefined}
+              onClick={() => onChange(p)}
+              className={`tt-num size-7 rounded-sm border text-[12px] transition-colors ${
+                p === current
+                  ? "border-ok bg-ok/15 text-ok"
+                  : "border-border hover:text-foreground"
+              }`}
+            >
+              {p}
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          disabled={current >= safePageCount}
+          onClick={() => onChange(current + 1)}
+          aria-label={nextLabel}
+          title={nextLabel}
+          className={stepButton}
+        >
+          {nextLabel}
+          <ChevronRight className="size-3" />
+        </button>
+      </div>
+      {rangeLabel ? (
+        <span className="tt-num">{rangeLabel}</span>
+      ) : (
+        <span aria-hidden="true" />
       )}
     </div>
   );

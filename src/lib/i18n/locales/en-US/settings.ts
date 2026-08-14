@@ -73,8 +73,14 @@ export const settings = {
       weekly: "Weekly",
       time: "Scan time",
       scope: "Scan scope",
-      scopeAll: "All local Skills",
-      scopeHint: "Scope is fixed to all local Skills",
+      scopeAll: "All",
+      scopeAgent: "Specific Agents",
+      scopeDir: "Specific directory",
+      scopeHint: "Choose which Skills the automatic scan covers",
+      agentHint:
+        "Select the Agents to include in automatic scans. With none selected, the automatic scan does not run.",
+      dirHint:
+        "Enter an absolute Skill root directory to scan. Leave empty to disable the automatic scan.",
       notify: "Alert notification",
       saved: "Scan schedule saved",
       saveFailed: "Failed to save scan schedule",

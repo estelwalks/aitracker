@@ -143,7 +143,7 @@ export const security = {
         "コンパニオンブラウザモードではネイティブのフォルダー選択を利用できません。検出済みのすべてのローカル Skill を検査できます。",
     },
     autoScan: {
-      title: "自動スキャン",
+      title: "自動定期スキャン",
       enabled: "有効",
       disabled: "無効",
       enable: "自動スキャンを有効化",
@@ -152,9 +152,11 @@ export const security = {
       scheduleDesc: "{cycle} · 時間：{time} · 範囲：{scope} · 通知：{notify}",
       modelFull: "モデル設定あり → 詳細スキャン",
       modelQuick: "モデル未設定 → クイックスキャン",
-      offDesc:
-        "有効化すると設定した周期でローカル Skill を自動巡回し、毎回手動で実行する必要がなくなります。",
+      offDesc: "オフ · 手動で検査を実行してください",
+      triggered: "{cycle} にトリガー · 範囲：{scope}",
       scopeAll: "すべてのローカル Skill",
+      scopeAgent: "指定 Agent",
+      scopeDir: "指定ディレクトリ：{dir}",
       cycleLabel: "スキャン周期",
       scope: "スキャン範囲",
       time: "スキャン時刻",
@@ -220,6 +222,24 @@ export const security = {
       failed: "失敗",
       skipped: "スキップ",
       progress: "実際の進捗 {completed}/{total}",
+      title: "全体セキュリティ統計",
+      scannedLabel: "検査済み Skill",
+      scanCountLabel: "累計スキャン",
+      unsafeLabel: "不安全",
+      navAll: "すべての Skill を見る",
+      navHistory: "検査履歴を見る",
+      navSafe: "安全な Skill を見る",
+      navUnsafe: "不安全な Skill を見る",
+      dimensionsFooter:
+        "すべての Skill を {dimensions} 次元のセキュリティで検査",
+      detectionOnly: "検出のみ · 実行時動作はブロックしません",
+      scanning: "スキャン中",
+      latestAgo: "最新スキャン · {ago} {time}",
+      agoJust: "たった今",
+      agoMinutes: "{count} 分前",
+      agoHours: "{count} 時間前",
+      agoDays: "{count} 日前",
+      scanCountUnit: "回",
     },
     vortex: {
       title: "全体セキュリティ検査 · {dimensions} 次元",
@@ -282,6 +302,13 @@ export const security = {
       statusCancelled: "キャンセル済み",
       errorUnavailable: "秘匿化された失敗詳細はありません",
     },
+    unsafe: {
+      title: "不安全 Skill リスト",
+      desc: "{count} 件の確認が必要",
+      empty: "不安全な Skill はありません",
+      report: "レポートを見る",
+      vulnerable: "不安全",
+    },
     history: {
       title: "検査履歴",
       count: "{count} 件 · 新しい順",
@@ -302,6 +329,27 @@ export const security = {
       noReport: "このスキャンにはレポートがありません",
       reportBranches: "スキャン分岐",
       reportFindings: "リスク詳細",
+    },
+    task: {
+      title: "スキャンタスク詳細",
+      done: "タスク完了",
+      startTime: "開始時間",
+      coveredSkills: "対象 Skill",
+      dimensions: "スキャン次元",
+      scope: "範囲",
+      taskId: "タスク ID",
+      riskDetails: "リスク詳細 · {count} 件",
+      noFindings: "このタスクで不安全な項目はありませんでした",
+      openReport: "Skill スキャンレポート",
+      viewDetails: "タスク詳細",
+      rescan: "この Skill を再検査",
+    },
+    reportModal: {
+      securityScore: "セキュリティスコア",
+      coveredDimensions: "{count} 次元をカバー",
+      description: "説明",
+      location: "場所",
+      code: "コード",
     },
     runtimeBlock: {
       title: "実行時防御 · ブロックログ",
@@ -388,6 +436,30 @@ export const security = {
       sensitive_file_access: "機密ファイルアクセス",
       network_abuse: "ネットワーク悪用",
       prompt_injection: "プロンプト注入",
+    },
+    dimensionDesc: {
+      remote_execution:
+        "curl|sh パターン、base64 デコード実行、リバースシェル、PowerShell エンコードコマンドを検出します。",
+      command_injection:
+        "eval()、exec()、pickle 逆シリアライズ、安全でない YAML 読み込みを検出します。",
+      data_exfiltration:
+        "機密データの HTTP POST、外部ソケット接続、base64 エンコードされたネットワーク転送を検出します。",
+      secret_access:
+        "ハードコードされた秘密鍵、API キー、AWS 認証情報、JWT トークンを検出します。",
+      persistence:
+        "crontab の変更、SSH キーのインストール、レジストリの Run キー、スケジュールタスクを検出します。",
+      destructive:
+        "rm -rf /、ディスク消去コマンド、ファイルシステムのフォーマット操作を識別します。",
+      obfuscation:
+        "base64 デコード実行チェーン、16 進数エンコード、XOR 難読化を検出します。",
+      privilege_escalation:
+        "sudo の乱用、chmod 777 操作、sudoers ファイルの変更を検出します。",
+      sensitive_file_access:
+        "SSH 秘密鍵、AWS 認証情報、ブラウザのパスワード、/etc/shadow へのアクセスを監視します。",
+      network_abuse:
+        "暗号化されていない WebSocket 接続と安全でない FTP プロトコルの使用を検出します。",
+      prompt_injection:
+        "ジェイルブレイク試行、DAN モードの活性化、安全フィルターの回避テクニックを検出します。",
     },
     toast: {
       started: "実際のスキャンタスクを開始しました",

@@ -75,8 +75,14 @@ export const settings = {
       weekly: "毎週",
       time: "スキャン時刻",
       scope: "スキャン範囲",
-      scopeAll: "すべてのローカル Skill",
-      scopeHint: "範囲はすべてのローカル Skill に固定されています",
+      scopeAll: "すべて",
+      scopeAgent: "指定 Agent",
+      scopeDir: "指定ディレクトリ",
+      scopeHint: "自動スキャンが対象とする Skill の範囲を選択",
+      agentHint:
+        "自動スキャンに含める Agent を選択してください。未選択の場合は自動スキャンは実行されません。",
+      dirHint:
+        "スキャン対象の Skill ルートディレクトリ（絶対パス）を入力してください。未入力の場合は自動スキャンは実行されません。",
       notify: "アラート通知",
       saved: "スキャン予定を保存しました",
       saveFailed: "スキャン予定の保存に失敗しました",
