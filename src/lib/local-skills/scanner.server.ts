@@ -88,6 +88,79 @@ const ORIGINS_FILE = join(DATA_DIR, "skill-origins.json");
 const MARKET_API = `${MARKET_API_BASE}/skills`;
 const MARKET_EVIDENCE_TTL_MS = 5 * 60 * 1_000;
 
+/** Text-ish extensions whose content counts toward the token estimate. */
+const TEXT_EXTENSIONS = new Set([
+  ".md",
+  ".markdown",
+  ".mdx",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".sh",
+  ".css",
+]);
+/** Per-file cap when reading content (both measure and detail view). */
+const MAX_TEXT_BYTES = 1_024 * 1_024;
+
+/**
+ * Walk a skill directory and compute its total byte size plus the character
+ * count of readable text files (used to estimate context tokens). Dot entries
+ * and symbolic links are skipped; unreadable files only count their size.
+ */
+async function measureSkillDirectory(
+  root: string,
+): Promise<{ sizeBytes: number; chars: number }> {
+  let sizeBytes = 0;
+  let chars = 0;
+  const stack = [root];
+  while (stack.length > 0) {
+    const directory = stack.pop()!;
+    let handle;
+    try {
+      handle = await opendir(directory);
+    } catch {
+      continue; // Missing/unreadable directory: skip.
+    }
+    for await (const entry of handle) {
+      if (entry.name.startsWith(".")) continue;
+      const entryPath = join(directory, entry.name);
+      let entryStat;
+      try {
+        entryStat = await lstat(entryPath);
+      } catch {
+        continue;
+      }
+      if (entryStat.isSymbolicLink()) continue;
+      if (entryStat.isDirectory()) {
+        stack.push(entryPath);
+        continue;
+      }
+      if (!entryStat.isFile()) continue;
+      sizeBytes += entryStat.size;
+      const extension = entry.name.includes(".")
+        ? entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase()
+        : "";
+      if (TEXT_EXTENSIONS.has(extension) && entryStat.size <= MAX_TEXT_BYTES) {
+        try {
+          chars += (await readFile(entryPath, "utf8")).length;
+        } catch {
+          // Unreadable/binary: size already counted.
+        }
+      }
+    }
+  }
+  return { sizeBytes, chars };
+}
+
 interface MarketOrigin {
   source: SkillSource & { kind: "market" };
   installedAt: string;
@@ -770,10 +843,29 @@ export async function scanLocalSkills(
         description: descriptions.get(name) ?? null,
         lastUsedAt:
           usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
+        sizeBytes: 0,
+        tokenEstimate: 0,
         installations: entries.sort((a, b) => a.agent.localeCompare(b.agent)),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Measure each skill's directory from its first installation copy.
+  const measures = await Promise.all(
+    skills.map(async (skill) => {
+      const firstPath = skill.installations[0]?.path;
+      if (!firstPath) return { sizeBytes: 0, tokenEstimate: 0 };
+      const { sizeBytes, chars } = await measureSkillDirectory(firstPath);
+      return { sizeBytes, tokenEstimate: Math.round(chars / 4) };
+    }),
+  );
+  skills.forEach((skill, index) => {
+    const measure = measures[index];
+    if (measure) {
+      skill.sizeBytes = measure.sizeBytes;
+      skill.tokenEstimate = measure.tokenEstimate;
+    }
+  });
 
   const fingerprint = createHash("sha256")
     .update(
@@ -797,6 +889,86 @@ export async function scanLocalSkills(
     skills,
     blacklist,
   };
+}
+
+/** One readable file inside a skill directory (browser-safe path + content). */
+export interface SkillFileEntry {
+  /** Directory-relative path, e.g. `SKILL.md` or `references/usage.md`. */
+  path: string;
+  content: string;
+}
+
+/** Full skill directory listing resolved server-side for the detail view. */
+export interface SkillFileList {
+  name: string;
+  /** Display root (the skill directory basename). */
+  root: string;
+  files: SkillFileEntry[];
+}
+
+/**
+ * Read the real file tree of a locally installed skill. The skill is resolved
+ * by name from a fresh scan (never from caller-supplied paths), verified
+ * against the managed skill roots (rejecting traversal / symlink escape), then
+ * walked recursively for readable text files. Binary files and files larger
+ * than the text cap are skipped rather than read into memory.
+ */
+export async function readSkillFiles(
+  name: string,
+  options: ScanOptions = {},
+): Promise<SkillFileList> {
+  const safeName = safeSkillName(name);
+  const snapshot = await scanLocalSkills(options);
+  const skill = snapshot.skills.find((item) => item.name === safeName);
+  const rootPath = skill?.installations[0]?.path;
+  if (skill === undefined || rootPath === undefined)
+    throw new AppError("errors.skills.notFound");
+
+  await assertManagedSkillPath(rootPath, snapshot.roots);
+
+  const files: SkillFileEntry[] = [];
+  const stack = [rootPath];
+  while (stack.length > 0) {
+    const directory = stack.pop()!;
+    let handle;
+    try {
+      handle = await opendir(directory);
+    } catch {
+      continue;
+    }
+    for await (const entry of handle) {
+      if (entry.name.startsWith(".")) continue;
+      const entryPath = join(directory, entry.name);
+      let entryStat;
+      try {
+        entryStat = await lstat(entryPath);
+      } catch {
+        continue;
+      }
+      if (entryStat.isSymbolicLink()) continue;
+      if (entryStat.isDirectory()) {
+        stack.push(entryPath);
+        continue;
+      }
+      if (!entryStat.isFile() || entryStat.size > MAX_TEXT_BYTES) continue;
+      const extension = entry.name.includes(".")
+        ? entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase()
+        : "";
+      if (!TEXT_EXTENSIONS.has(extension)) continue;
+      let content;
+      try {
+        content = await readFile(entryPath, "utf8");
+      } catch {
+        continue; // Unreadable/binary: skip.
+      }
+      files.push({
+        path: relative(rootPath, entryPath),
+        content,
+      });
+    }
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path));
+  return { name: safeName, root: basename(rootPath), files };
 }
 
 async function copySkillToAgent(

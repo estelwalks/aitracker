@@ -141,7 +141,7 @@ export const security = {
         "컴패니언 브라우저 모드에서는 기본 폴더 선택을 사용할 수 없습니다. 발견된 모든 로컬 Skill을 검사할 수 있습니다.",
     },
     autoScan: {
-      title: "자동 검사",
+      title: "자동 정기 검사",
       enabled: "활성화됨",
       disabled: "비활성화됨",
       enable: "자동 검사 활성화",
@@ -150,9 +150,11 @@ export const security = {
       scheduleDesc: "{cycle} · 시간: {time} · 범위: {scope} · 알림: {notify}",
       modelFull: "모델 설정됨 → 심층 검사",
       modelQuick: "모델 미설정 → 빠른 검사",
-      offDesc:
-        "활성화하면 설정한 주기로 로컬 Skill을 자동 검사하므로 매번 수동으로 실행할 필요가 없습니다.",
+      offDesc: "꺼짐 · 수동으로 검사를 실행하세요",
+      triggered: "{cycle} 트리거 · 범위: {scope}",
       scopeAll: "모든 로컬 Skill",
+      scopeAgent: "지정 Agent",
+      scopeDir: "지정 디렉터리: {dir}",
       cycleLabel: "검사 주기",
       scope: "검사 범위",
       time: "검사 시간",
@@ -218,6 +220,23 @@ export const security = {
       failed: "실패",
       skipped: "건너뜀",
       progress: "실제 진행률 {completed}/{total}",
+      title: "전체 보안 통계",
+      scannedLabel: "검사한 Skill",
+      scanCountLabel: "누적 검사",
+      unsafeLabel: "안전하지 않음",
+      navAll: "전체 Skill 보기",
+      navHistory: "검사 기록 보기",
+      navSafe: "안전한 Skill 보기",
+      navUnsafe: "안전하지 않은 Skill 보기",
+      dimensionsFooter: "모든 Skill을 {dimensions}개 보안 차원으로 검사",
+      detectionOnly: "탐지 전용 · 런타임 동작을 차단하지 않음",
+      scanning: "검사 중",
+      latestAgo: "최근 검사 · {ago} {time}",
+      agoJust: "방금",
+      agoMinutes: "{count}분 전",
+      agoHours: "{count}시간 전",
+      agoDays: "{count}일 전",
+      scanCountUnit: "회",
     },
     vortex: {
       title: "전체 보안 검사 · {dimensions}개 차원",
@@ -280,6 +299,13 @@ export const security = {
       statusCancelled: "취소됨",
       errorUnavailable: "비식별화된 실패 상세 정보가 없습니다",
     },
+    unsafe: {
+      title: "안전하지 않은 Skill 목록",
+      desc: "{count}개 항목 확인 필요",
+      empty: "안전하지 않은 Skill 없음",
+      report: "보고서 보기",
+      vulnerable: "안전하지 않음",
+    },
     history: {
       title: "검사 기록",
       count: "총 {count}건 · 최신순",
@@ -300,6 +326,27 @@ export const security = {
       noReport: "이 스캔에는 보고서가 없습니다",
       reportBranches: "검사 분기",
       reportFindings: "리스크 상세",
+    },
+    task: {
+      title: "검사 작업 상세",
+      done: "작업 완료",
+      startTime: "시작 시간",
+      coveredSkills: "대상 Skill",
+      dimensions: "검사 차원",
+      scope: "범위",
+      taskId: "작업 ID",
+      riskDetails: "리스크 상세 · {count}건",
+      noFindings: "이 작업에서 안전하지 않은 항목이 없습니다",
+      openReport: "Skill 검사 보고서",
+      viewDetails: "작업 상세",
+      rescan: "이 Skill 다시 검사",
+    },
+    reportModal: {
+      securityScore: "보안 점수",
+      coveredDimensions: "{count}개 차원 커버",
+      description: "설명",
+      location: "위치",
+      code: "코드",
     },
     runtimeBlock: {
       title: "런타임 방어 · 차단 로그",
@@ -386,6 +433,30 @@ export const security = {
       sensitive_file_access: "민감 파일 접근",
       network_abuse: "네트워크 악용",
       prompt_injection: "프롬프트 주입",
+    },
+    dimensionDesc: {
+      remote_execution:
+        "curl|sh 패턴, base64 디코딩 실행, 리버스 셸, PowerShell 인코딩 명령을 탐지합니다.",
+      command_injection:
+        "eval(), exec(), pickle 역직렬화, 안전하지 않은 YAML 로드를 탐지합니다.",
+      data_exfiltration:
+        "민감 데이터 HTTP POST, 외부 소켓 연결, base64 인코딩 네트워크 전송을 표시합니다.",
+      secret_access:
+        "하드코딩된 개인 키, API 키, AWS 자격 증명, JWT 토큰을 포착합니다.",
+      persistence:
+        "crontab 수정, SSH 키 설치, 레지스트리 Run 키, 예약 작업을 탐지합니다.",
+      destructive:
+        "rm -rf /, 디스크 삭제 명령, 파일시스템 포맷 작업을 식별합니다.",
+      obfuscation:
+        "base64 디코딩 실행 체인, 16진수 인코딩, XOR 난독화를 찾습니다.",
+      privilege_escalation:
+        "sudo 남용, chmod 777 작업, sudoers 파일 수정을 발견합니다.",
+      sensitive_file_access:
+        "SSH 개인 키, AWS 자격 증명, 브라우저 비밀번호, /etc/shadow 접근을 모니터링합니다.",
+      network_abuse:
+        "암호화되지 않은 WebSocket 연결과 안전하지 않은 FTP 프로토콜 사용을 표시합니다.",
+      prompt_injection:
+        "탈옥 시도, DAN 모드 활성화, 안전 필터 우회 기법을 탐지합니다.",
     },
     toast: {
       started: "실제 검사 작업을 시작했습니다",

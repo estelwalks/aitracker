@@ -34,7 +34,7 @@ export const Route = createFileRoute("/skills")({
       getSkillWorkspace(),
       getDashboardReadModel({ data: locale }),
       getMarketSkills({
-        data: { page: 1, limit: 24, search: "", sort: "downloads" },
+        data: { page: 1, limit: 12, search: "", sort: "downloads" },
       }),
       // Real distillation activity from the composition root; never breaks the
       // page when the workbench is unavailable.

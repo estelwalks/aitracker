@@ -206,3 +206,94 @@ test("automatic scans are rejected at the browser boundary", async () => {
     client.startScan({ scope: "all", mode: "quick", trigger: "automatic" }),
   );
 });
+
+test("scan schedule reads agent and dir scope fields from the companion", async () => {
+  const client = await connectBrowserSecurityClient({
+    location,
+    fetchFn: async (input) => {
+      if (String(input).endsWith("/capability"))
+        return jsonResponse(capability);
+      return jsonResponse({
+        enabled: true,
+        cycle: "daily",
+        time: "03:00",
+        scope: "agent",
+        agents: ["Codex", "Cursor"],
+        dir: null,
+        notify: false,
+      });
+    },
+  });
+  assert.ok(client);
+  const schedule = await client.getScanSchedule();
+  assert.equal(schedule.scope, "agent");
+  assert.deepEqual(schedule.agents, ["Codex", "Cursor"]);
+  assert.equal(schedule.dir, null);
+});
+
+test("scan schedule defaults agents and dir for legacy 5-field responses", async () => {
+  const client = await connectBrowserSecurityClient({
+    location,
+    fetchFn: async (input) => {
+      if (String(input).endsWith("/capability"))
+        return jsonResponse(capability);
+      return jsonResponse({
+        enabled: true,
+        cycle: "daily",
+        time: "03:00",
+        scope: "all",
+        notify: false,
+      });
+    },
+  });
+  assert.ok(client);
+  const schedule = await client.getScanSchedule();
+  assert.equal(schedule.scope, "all");
+  assert.deepEqual(schedule.agents, []);
+  assert.equal(schedule.dir, null);
+});
+
+test("setScanSchedule posts the full widened schedule including agents and dir", async () => {
+  const requests: Array<{ input: unknown; init: RequestInit | undefined }> = [];
+  const client = await connectBrowserSecurityClient({
+    location,
+    fetchFn: async (input, init) => {
+      requests.push({ input, init });
+      if (String(input).endsWith("/capability"))
+        return jsonResponse(capability);
+      return jsonResponse({
+        enabled: true,
+        cycle: "daily",
+        time: "03:00",
+        scope: "dir",
+        agents: [],
+        dir: "/tmp/skills",
+        notify: true,
+      });
+    },
+  });
+  assert.ok(client);
+  await client.setScanSchedule({
+    enabled: true,
+    cycle: "daily",
+    time: "03:00",
+    scope: "dir",
+    agents: [],
+    dir: "/tmp/skills",
+    notify: true,
+  });
+  const request = requests[1];
+  assert.equal(String(request?.input), "/api/security/scan-schedule");
+  assert.equal(request?.init?.method, "POST");
+  const headers = new Headers(request?.init?.headers);
+  assert.equal(headers.get("content-type"), "application/json");
+  assert.deepEqual(JSON.parse(String(request?.init?.body)), {
+    enabled: true,
+    cycle: "daily",
+    time: "03:00",
+    scope: "dir",
+    agents: [],
+    dir: "/tmp/skills",
+    notify: true,
+  });
+});

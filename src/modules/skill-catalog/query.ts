@@ -19,6 +19,8 @@ export type {
   BatchUninstallResult,
   LocalSkill,
   SkillAgent,
+  SkillFileEntry,
+  SkillFileList,
   SkillInstallation,
   SkillSnapshot,
   SkillSyncResult,
@@ -55,13 +57,17 @@ function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
       name: skill.name,
       description: skill.description,
       lastUsedAt: skill.lastUsedAt,
+      sizeBytes: skill.sizeBytes,
+      tokenEstimate: skill.tokenEstimate,
       installations: skill.installations.map((installation, index) => ({
         installationRef: refFor(skill.id, installation.agent, index),
         agent: installation.agent,
         installedAt: installation.installedAt,
         modifiedAt: installation.modifiedAt,
         version: installation.version,
-        source: installation.source ? { kind: installation.source.kind } : null,
+        source: installation.source
+          ? { kind: installation.source.kind, label: installation.source.label }
+          : null,
         updateStatus: installation.updateStatus,
         updateReason: installation.updateReason,
       })),
@@ -216,4 +222,5 @@ export const requestApprovedSkillSync = createServerFn({ method: "POST" })
   });
 
 export { updateSkillBlacklist } from "../../lib/local-skills/server-fns.ts";
+export { getSkillFiles } from "../../lib/local-skills/server-fns.ts";
 export type { SkillAgent as LocalSkillAgent } from "../../lib/local-skills/types.ts";

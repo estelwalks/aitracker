@@ -1,5 +1,5 @@
 export const insights = {
-  title: "Jarvis Daily Insights",
+  title: "Daily Insights",
   rotate: "Rotate",
   dots: "Insights",
   sources: {

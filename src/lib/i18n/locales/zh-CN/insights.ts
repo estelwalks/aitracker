@@ -4,7 +4,7 @@
  * 不依赖任何 LLM 或写死数字。
  */
 export const insights = {
-  title: "Jarvis 今日洞察",
+  title: "今日洞察",
   rotate: "切换洞察",
   dots: "洞察列表",
   sources: {

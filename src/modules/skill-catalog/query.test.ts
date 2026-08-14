@@ -28,5 +28,5 @@ test("operations workspace does not render paths, roots, or raw source labels", 
     /sourceLabel\(|skills\.detail\.source|updateReason/,
   );
   assert.match(source, /buildSkillWorkspace/);
-  assert.match(source, /skill-workspace-card/);
+  assert.match(source, /<SkillCard/);
 });

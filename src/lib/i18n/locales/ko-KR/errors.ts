@@ -36,6 +36,7 @@ export const errors = {
     overlappingPaths: "소스와 대상 경로가 겹쳐 작업이 차단되었습니다",
     duplicateName: "대상 위치에 같은 이름의 Skill이 이미 있습니다",
     noSkillSelected: "Skill을 하나 이상 선택하세요",
+    notFound: "Skill을 찾을 수 없거나 읽을 수 없습니다",
   },
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",

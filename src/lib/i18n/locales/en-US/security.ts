@@ -142,7 +142,7 @@ export const security = {
         "Native folder selection is unavailable in companion browser mode. You can scan all discovered local Skills.",
     },
     autoScan: {
-      title: "Automatic scan",
+      title: "Scheduled auto scan",
       enabled: "Enabled",
       disabled: "Disabled",
       enable: "Enable automatic scan",
@@ -152,9 +152,11 @@ export const security = {
         "{cycle} · Time: {time} · Scope: {scope} · Notify: {notify}",
       modelFull: "Model configured → deep scan",
       modelQuick: "No model configured → quick scan",
-      offDesc:
-        "Once enabled, local Skills are checked automatically on the schedule — no manual scans needed.",
+      offDesc: "Off · trigger a scan manually",
+      triggered: "Triggered {cycle} · Scope: {scope}",
       scopeAll: "All local Skills",
+      scopeAgent: "Specific Agents",
+      scopeDir: "Directory: {dir}",
       cycleLabel: "Scan cycle",
       scope: "Scan scope",
       time: "Scan time",
@@ -221,6 +223,24 @@ export const security = {
       failed: "Failed",
       skipped: "Skipped",
       progress: "Real progress {completed}/{total}",
+      title: "Global scan stats",
+      scannedLabel: "Skills scanned",
+      scanCountLabel: "Total scans",
+      unsafeLabel: "Unsafe",
+      navAll: "View all Skills",
+      navHistory: "View scan history",
+      navSafe: "View safe Skills",
+      navUnsafe: "View unsafe Skills",
+      dimensionsFooter:
+        "Every Skill is scanned across {dimensions} security dimensions",
+      detectionOnly: "Detection only · does not block runtime behavior",
+      scanning: "Scanning",
+      latestAgo: "Latest scan · {ago} {time}",
+      agoJust: "just now",
+      agoMinutes: "{count} minutes ago",
+      agoHours: "{count} hours ago",
+      agoDays: "{count} days ago",
+      scanCountUnit: "scans",
     },
     vortex: {
       title: "Global security scan · {dimensions} dimensions",
@@ -282,6 +302,13 @@ export const security = {
       statusCancelled: "Cancelled",
       errorUnavailable: "No sanitized failure details were provided",
     },
+    unsafe: {
+      title: "Unsafe Skills",
+      desc: "{count} items need attention",
+      empty: "No unsafe Skills",
+      report: "View report",
+      vulnerable: "Unsafe",
+    },
     history: {
       title: "Scan history",
       count: "{count} records · Newest first",
@@ -302,6 +329,27 @@ export const security = {
       noReport: "No report for this scan",
       reportBranches: "Scan branches",
       reportFindings: "Findings",
+    },
+    task: {
+      title: "Scan task details",
+      done: "Task completed",
+      startTime: "Started",
+      coveredSkills: "Skills covered",
+      dimensions: "Scan dimensions",
+      scope: "Scope",
+      taskId: "Task ID",
+      riskDetails: "Risk details · {count} items",
+      noFindings: "No unsafe items found in this task",
+      openReport: "Skill scan report",
+      viewDetails: "Task details",
+      rescan: "Rescan this Skill",
+    },
+    reportModal: {
+      securityScore: "Security score",
+      coveredDimensions: "Covers {count} dimensions",
+      description: "Description",
+      location: "Location",
+      code: "Code",
     },
     runtimeBlock: {
       title: "Runtime defense · Block log",
@@ -392,6 +440,30 @@ export const security = {
       sensitive_file_access: "Sensitive file access",
       network_abuse: "Network abuse",
       prompt_injection: "Prompt injection",
+    },
+    dimensionDesc: {
+      remote_execution:
+        "Detects curl|sh patterns, base64-decoded execution, reverse shells, and PowerShell encoded commands.",
+      command_injection:
+        "Detects eval(), exec(), pickle deserialization, and unsafe YAML loading.",
+      data_exfiltration:
+        "Flags HTTP POSTs of sensitive data, outbound socket connections, and base64-encoded network transfers.",
+      secret_access:
+        "Catches hardcoded private keys, API keys, AWS credentials, and JWT tokens.",
+      persistence:
+        "Detects crontab edits, SSH key installation, registry Run keys, and scheduled tasks.",
+      destructive:
+        "Identifies rm -rf /, disk-wipe commands, and filesystem format operations.",
+      obfuscation:
+        "Finds base64-decoded execution chains, hex encoding, and XOR obfuscation.",
+      privilege_escalation:
+        "Surfaces sudo abuse, chmod 777 operations, and sudoers file edits.",
+      sensitive_file_access:
+        "Watches for access to SSH private keys, AWS credentials, browser passwords, and /etc/shadow.",
+      network_abuse:
+        "Flags unencrypted WebSocket connections and insecure FTP protocol use.",
+      prompt_injection:
+        "Detects jailbreak attempts, DAN mode activation, and safety-filter bypass techniques.",
     },
     toast: {
       started: "Real scan task started",

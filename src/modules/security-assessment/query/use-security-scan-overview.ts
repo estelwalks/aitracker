@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { MonitoringSecuritySummary } from "../../monitoring/contracts";
-import {
-  latestHistory,
-  latestScanEntries,
-  summarizeReports,
-} from "../presentation/security-view";
+import { latestHistory, summarizeReports } from "../presentation/security-view";
 import { getBrowserSecurityClient } from "./browser-client";
 import {
   getDesktopSecurityClient,
@@ -70,11 +66,21 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         }
         const history = await client.getHistory();
         if (disposed) return;
-        const entries = latestScanEntries(history);
-        const totals = summarizeReports(entries);
+        // summarizeReports dedups across all history by content hash, so the
+        // latest run skipping unchanged skills never drops their totals.
+        const totals = summarizeReports(history);
         const latest = latestHistory(history);
-        setRunCount(history.length);
-        setCoverage(new Set(history.map((entry) => entry.skillRef)).size);
+        // 检测次数 = the number of scan RUNS (distinct scanIds), not history
+        // entries: one full scan covering 16 skills counts as 1, not 16.
+        setRunCount(new Set(history.map((entry) => entry.scanId)).size);
+        // Dedup by the stable content hash so each skill is counted once (an
+        // unchanged skill re-scanned, or installed under two roots, shares one
+        // content hash — consistent with skill management's dedup).
+        setCoverage(
+          new Set(
+            history.map((entry) => entry.report?.contentHash ?? entry.skillRef),
+          ).size,
+        );
         setSummary(
           totals.total === 0
             ? null

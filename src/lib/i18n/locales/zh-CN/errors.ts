@@ -33,6 +33,7 @@ export const errors = {
     overlappingPaths: "源与目标路径重叠，已阻止操作",
     duplicateName: "目标位置已存在同名 Skill",
     noSkillSelected: "至少选择一个 Skill",
+    notFound: "Skill 未找到或无法读取",
   },
   sessions: {
     filterInvalid: "会话过滤参数不合法",
