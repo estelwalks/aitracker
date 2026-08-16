@@ -294,7 +294,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const reports = createReportsApplication({
     store: createAtomicReportStore({ store: reportsStore }),
     context: createReportContextPort(),
-    generation: createReportGenerationPort({ ai: aiExecutor }),
+    generation: createReportGenerationPort({
+      ai: aiExecutor,
+      // B-400: reports reuse the active S-500 profile (a real model call via
+      // the `profile` provider); without one the adapter keeps the default
+      // offline model id. `null` here lets the adapter apply its own default.
+      resolveModelId: async () =>
+        (await modelProfiles.getActiveView())?.id ?? null,
+    }),
     now: () => new Date(),
     createId: (prefix) => `${prefix}:${randomUUID()}`,
   });

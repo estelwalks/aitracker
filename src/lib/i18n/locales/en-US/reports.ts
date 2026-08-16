@@ -10,7 +10,8 @@ export const reports = {
     runs: "{count} generation runs triggered",
     sessions: "covers {count} sessions",
     empty: "No briefings yet — configure a model to generate one.",
-    modelNotConfigured: "No model configured yet; generation is unavailable.",
+    modelNotConfigured:
+      "No model configured (profile or environment variables); generation is unavailable.",
   },
   archive: {
     title: "History archive",

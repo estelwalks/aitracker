@@ -27,7 +27,7 @@ export const settings = {
   model: {
     notConfigured: "LLM not configured",
     notConfiguredDesc:
-      "AI-generated features (distillation, reports, AI insights) are unavailable. Set TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
+      "No environment-variable LLM is configured. Distillation and reports can be enabled through the model profiles below; AI insights still require the TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
     configured: "LLM configured",
     baseUrl: "Endpoint",
     model: "Model",
@@ -40,7 +40,7 @@ export const settings = {
     storageNote:
       "API keys are stored only in a server-side file (mode 0600); the UI only shows whether one is configured.",
     reportsUseEnv:
-      "Report generation currently uses the TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables; the profiles here are for distillation and other on-demand selection.",
+      "Report generation prefers the active model profile (a real model call); without a profile it falls back to the TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
     count: "{count} profiles",
     empty: "No profiles yet",
     emptyHint: "Click “Add” to create your first model profile",

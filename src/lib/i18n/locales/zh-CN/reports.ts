@@ -10,7 +10,7 @@ export const reports = {
     runs: "累计触发 {count} 次生成",
     sessions: "覆盖 {count} 场会话",
     empty: "暂无简报，配置模型后即可生成。",
-    modelNotConfigured: "尚未配置模型，生成按钮暂不可用。",
+    modelNotConfigured: "尚未配置模型（Profile 或环境变量），生成按钮暂不可用。",
   },
   archive: {
     title: "历史归档",

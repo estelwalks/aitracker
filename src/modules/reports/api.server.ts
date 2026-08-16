@@ -10,10 +10,11 @@
  * from the composition root's sessions port (`root.sessions`), aggregated by
  * `aggregateSessionDensity` — never mocked.
  *
- * Generation is gated on an actual LLM being configured
- * (see ai-orchestration/config); without one the transport reports
- * `{ triggered: false }` so the UI shows the honest disabled state rather than
- * a fake success.
+ * Generation is gated on a usable model backend: an active S-500 model
+ * profile (real model call) or the legacy TRUSTTOOLS_LLM_* environment
+ * configuration (see ai-orchestration/config). Without either the transport
+ * reports `{ triggered: false }` so the UI shows the honest disabled state
+ * rather than a fake success.
  */
 import type { Locale } from "../../lib/i18n/locale";
 import type { SessionQueryPort } from "../sessions/contracts.ts";
@@ -123,9 +124,11 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
   const presentation = createReportsPresentation({
     reports,
     source: compositionReportsSource(reports, root.sessions),
-    // Without a configured LLM the generation pipeline cannot run; surface the
-    // honest offline state so the page disables generation instead of faking it.
-    offline: !isLLMConfigured(),
+    // Generation runs when an S-500 model profile is active OR the legacy
+    // environment-variable LLM is configured; without either the page shows
+    // the honest offline state so it disables generation instead of faking it.
+    offline:
+      !(await root.modelProfiles.getActiveView()) && !isLLMConfigured(),
   });
   const result = await presentation.query();
   if (!result.ok) {
@@ -155,22 +158,29 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
 }
 
 /**
- * Trigger a draft report generation. Honest gate: without a configured LLM the
- * transport reports `{ triggered: false }` (the UI keeps the button disabled);
- * with one it runs the real generation pipeline and reports success.
+ * Trigger a draft report generation. Honest gate: generation is available when
+ * an S-500 model profile is active (real model call) or the legacy
+ * TRUSTTOOLS_LLM_* environment configuration exists; with neither the
+ * transport reports `{ triggered: false }` (the UI keeps the button disabled).
+ * When an active profile exists its id is passed through so the profile-backed
+ * provider performs the real call.
  */
 export async function generateReport(definitionId: string): Promise<{
   triggered: boolean;
   errorCode?: string;
 }> {
-  const { isLLMConfigured } = await import("../ai-orchestration/config.ts");
-  if (!isLLMConfigured()) return { triggered: false };
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
+  const activeProfile = await root.modelProfiles.getActiveView();
+  if (!activeProfile) {
+    const { isLLMConfigured } = await import("../ai-orchestration/config.ts");
+    if (!isLLMConfigured()) return { triggered: false };
+  }
   const result = await root.reports.generate({
     definitionId,
     trigger: "manual",
+    modelId: activeProfile?.id,
   });
   if (!result.ok) {
     return { triggered: false, errorCode: result.error.code };

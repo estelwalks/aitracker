@@ -7,7 +7,8 @@ export const reports = {
     runs: "生成を {count} 回実行",
     sessions: "セッション {count} 件をカバー",
     empty: "まだブリーフィングはありません。モデルを設定すると生成できます。",
-    modelNotConfigured: "モデルが未設定のため、生成は利用できません。",
+    modelNotConfigured:
+      "モデル（Profile または環境変数）が未設定のため、生成は利用できません。",
   },
   archive: {
     title: "履歴アーカイブ",

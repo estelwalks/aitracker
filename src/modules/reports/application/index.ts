@@ -155,6 +155,7 @@ export function createReportsApplication(
       definition,
       context,
       budgetUsd: input.budgetUsd,
+      modelId: input.modelId,
     });
     const finishedAt = now().toISOString();
     const finalRun: ReportRun = {

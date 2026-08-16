@@ -27,7 +27,7 @@ export const settings = {
   model: {
     notConfigured: "LLM 미설정",
     notConfiguredDesc:
-      "AI 생성 기능(증류, 보고서, AI 인사이트)을 사용할 수 없습니다. TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수를 설정하세요.",
+      "환경 변수 LLM이 설정되지 않았습니다. 증류와 보고서는 아래의 '일반 AI 모델 Profile'로 사용할 수 있으며, AI 인사이트에는 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수가 필요합니다.",
     configured: "LLM 구성됨",
     baseUrl: "엔드포인트",
     model: "모델",
@@ -40,7 +40,7 @@ export const settings = {
     storageNote:
       "API Key는 서버 측 파일(권한 0600)에만 저장되며, UI에는 설정 여부만 표시됩니다.",
     reportsUseEnv:
-      "보고서 생성은 현재 환경 변수 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL을 사용합니다. 여기의 모델 Profile은 증류 등 선택형 시나리오용입니다.",
+      "보고서 생성은 활성 모델 Profile(실제 모델 호출)을 우선 사용하며, Profile이 없으면 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수로 대체됩니다.",
     count: "{count}개 설정",
     empty: "아직 설정이 없습니다",
     emptyHint: "「추가」를 클릭하여 첫 번째 모델 설정을 만드세요",
