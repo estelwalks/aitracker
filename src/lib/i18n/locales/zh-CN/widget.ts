@@ -116,6 +116,7 @@ export const widget = {
   dwJarvis: "JARVIS",
   dwBriefOff: "文案已关闭",
   dwMemories: "今日记忆",
+  dwMemory: "记忆",
   dwDistilled: "已沉淀",
   dwToday: "TODAY",
   dwLast7d: "近 7 天 {count} 场",

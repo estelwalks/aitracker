@@ -126,6 +126,7 @@ export const widget = {
   dwJarvis: "JARVIS",
   dwBriefOff: "Text off",
   dwMemories: "Today memories",
+  dwMemory: "Memory",
   dwDistilled: "Distilled",
   dwToday: "TODAY",
   dwLast7d: "{count} sessions in 7 days",

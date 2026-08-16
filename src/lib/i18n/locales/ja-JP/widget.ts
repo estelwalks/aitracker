@@ -128,6 +128,7 @@ export const widget = {
   dwJarvis: "JARVIS",
   dwBriefOff: "テキスト非表示",
   dwMemories: "今日の記憶",
+  dwMemory: "記憶",
   dwDistilled: "蓄積済み",
   dwToday: "TODAY",
   dwLast7d: "直近 7 日 {count} セッション",
