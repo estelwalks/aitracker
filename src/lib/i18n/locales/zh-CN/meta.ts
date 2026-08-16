@@ -12,6 +12,8 @@ export const meta = {
     sources: "数据来源 · {appName} V3.0",
     reports: "简报与记忆 · {appName} V3.0",
     distill: "蒸馏工作台 · {appName} V3.0",
+    memory: "记忆库 · {appName} V3.0",
+    widget: "小组件 · {appName} V3.0",
     settings: "设置 · {appName} V3.0",
     notFound: "页面不存在 · {appName} V3.0",
   },

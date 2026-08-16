@@ -8,6 +8,7 @@ import { errors } from "./errors";
 import { exportMessages } from "./export";
 import { insights } from "./insights";
 import { market } from "./market";
+import { memory } from "./memory";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
@@ -19,6 +20,7 @@ import { sessions } from "./sessions";
 import { sources } from "./sources";
 import { settings } from "./settings";
 import { theme } from "./theme";
+import { widget } from "./widget";
 
 export const ja = {
   common,
@@ -36,6 +38,8 @@ export const ja = {
   settings,
   market,
   tracker,
+  memory,
+  widget,
   meta,
   errors,
   export: exportMessages,

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as DistillRouteImport } from './routes/distill'
+import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -19,6 +20,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as TrackerRouteImport } from './routes/tracker'
+import { Route as WidgetRouteImport } from './routes/widget'
 import { Route as ChatsIndexRouteImport } from './routes/chats.index'
 import { Route as ChatsIdRouteImport } from './routes/chats.$id'
 
@@ -35,6 +37,11 @@ const AgentsRoute = AgentsRouteImport.update({
 const DistillRoute = DistillRouteImport.update({
   id: '/distill',
   path: '/distill',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -72,6 +79,11 @@ const TrackerRoute = TrackerRouteImport.update({
   path: '/tracker',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WidgetRoute = WidgetRouteImport.update({
+  id: '/widget',
+  path: '/widget',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatsIndexRoute = ChatsIndexRouteImport.update({
   id: '/chats/',
   path: '/chats/',
@@ -87,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
@@ -94,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/widget': typeof WidgetRoute
   '/chats/$id': typeof ChatsIdRoute
   '/chats/': typeof ChatsIndexRoute
 }
@@ -101,6 +115,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
@@ -108,6 +123,7 @@ export interface FileRoutesByTo {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/widget': typeof WidgetRoute
   '/chats/$id': typeof ChatsIdRoute
   '/chats': typeof ChatsIndexRoute
 }
@@ -116,6 +132,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
@@ -123,6 +140,7 @@ export interface FileRoutesById {
   '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
   '/tracker': typeof TrackerRoute
+  '/widget': typeof WidgetRoute
   '/chats/$id': typeof ChatsIdRoute
   '/chats/': typeof ChatsIndexRoute
 }
@@ -132,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/memory'
     | '/reports'
     | '/security'
     | '/settings'
@@ -139,6 +158,7 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/widget'
     | '/chats/$id'
     | '/chats/'
   fileRoutesByTo: FileRoutesByTo
@@ -146,6 +166,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/memory'
     | '/reports'
     | '/security'
     | '/settings'
@@ -153,6 +174,7 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/widget'
     | '/chats/$id'
     | '/chats'
   id:
@@ -160,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/memory'
     | '/reports'
     | '/security'
     | '/settings'
@@ -167,6 +190,7 @@ export interface FileRouteTypes {
     | '/skills'
     | '/sources'
     | '/tracker'
+    | '/widget'
     | '/chats/$id'
     | '/chats/'
   fileRoutesById: FileRoutesById
@@ -175,6 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DistillRoute: typeof DistillRoute
+  MemoryRoute: typeof MemoryRoute
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
@@ -182,6 +207,7 @@ export interface RootRouteChildren {
   SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
   TrackerRoute: typeof TrackerRoute
+  WidgetRoute: typeof WidgetRoute
   ChatsIdRoute: typeof ChatsIdRoute
   ChatsIndexRoute: typeof ChatsIndexRoute
 }
@@ -207,6 +233,13 @@ declare module '@tanstack/react-router' {
       path: '/distill'
       fullPath: '/distill'
       preLoaderRoute: typeof DistillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -258,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/widget': {
+      id: '/widget'
+      path: '/widget'
+      fullPath: '/widget'
+      preLoaderRoute: typeof WidgetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chats/': {
       id: '/chats/'
       path: '/chats'
@@ -279,6 +319,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DistillRoute: DistillRoute,
+  MemoryRoute: MemoryRoute,
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
@@ -286,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
   TrackerRoute: TrackerRoute,
+  WidgetRoute: WidgetRoute,
   ChatsIdRoute: ChatsIdRoute,
   ChatsIndexRoute: ChatsIndexRoute,
 }
