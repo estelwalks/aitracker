@@ -65,11 +65,6 @@ export const distill = {
   running: "蒸馏中…",
   runSummary: "已选 {count} 个真实会话 · 推荐参数已就绪",
   selectionLimit: "已达到 8 个会话上限",
-  quotaLabel: "官方额度",
-  quotaRemaining: "官方额度今日剩余 {count} 次",
-  quotaExhausted: "今日官方模型蒸馏额度已用完",
-  quotaManage: "管理模型",
-  quotaOffline: "离线模式不消耗额度",
   resultsTitle: "实验结果",
   resultsSummary: "共 {count} 次 · 已审批 {approved}",
   latestResult: "回到最新结果",
@@ -114,5 +109,10 @@ export const distill = {
     tooltipReady: "将已选的 {count} {unit}{noun} 蒸馏为本地 Skill",
     noun: "会话",
     unit: "场",
+  },
+  segment: {
+    banner: "已带入 {count} 条消息片段",
+    clear: "清除",
+    origin: "来自 {source} · {sessionId}",
   },
 } as const;

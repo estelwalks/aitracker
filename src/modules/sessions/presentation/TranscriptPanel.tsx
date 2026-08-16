@@ -24,6 +24,7 @@ import {
 } from "../../../components/ui/dialog.tsx";
 import { EmptyState, StatusBadge, TTButton } from "../../../components/tt.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
+import { encodeSegmentRef } from "../../../lib/distill-segment.ts";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { useReportActions } from "../../reports";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
@@ -159,11 +160,14 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
 
   /**
    * 蒸馏所选: assemble the picked segment markdown, copy it to the clipboard
-   * (so it can be pasted into the distill workbench prompt), notify, and jump
-   * to /distill. Nothing is uploaded — the segment lives in this browser only.
+   * (compat, so it can still be pasted manually), notify, and jump to /distill
+   * carrying the selection as a compact `?segment=` reference. Only the ref
+   * (source/sessionId/window) crosses the URL — the message text stays in this
+   * browser and is re-read into memory on the server only when the user
+   * actually starts a distillation. Nothing is uploaded.
    */
   async function runDistill() {
-    if (end === null || total === 0) return;
+    if (end === null || total === 0 || range === null) return;
     const pickedMessages = picked
       .map((index) => transcript[index])
       .filter(
@@ -181,7 +185,13 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
         count: pickedMessages.length,
       }),
     );
-    void navigate({ to: "/distill" });
+    const segment = encodeSegmentRef({
+      source: session.source,
+      sessionId: session.sessionId,
+      startIndex: range.s,
+      endIndex: range.e,
+    });
+    void navigate({ to: "/distill", search: { segment } });
   }
 
   const messageCount = status === "ready" ? total : session.turns;

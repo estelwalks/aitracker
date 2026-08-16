@@ -70,11 +70,6 @@ export const distill = {
   running: "증류 중…",
   runSummary: "실제 세션 {count}개 선택 · 권장 설정 준비됨",
   selectionLimit: "세션 8개 상한에 도달했습니다",
-  quotaLabel: "공식 한도",
-  quotaRemaining: "공식 모델 오늘 남은 횟수 {count}회",
-  quotaExhausted: "오늘 공식 모델 증류 한도를 모두 사용했습니다",
-  quotaManage: "모델 관리",
-  quotaOffline: "오프라인 모드는 한도를 소모하지 않습니다",
   resultsTitle: "결과",
   resultsSummary: "총 {count}개 · 승인 {approved}개",
   latestResult: "최신 결과로",
@@ -123,5 +118,10 @@ export const distill = {
     tooltipReady: "선택한 {count}{unit} {noun}을 로컬 Skill로 증류합니다",
     noun: "세션",
     unit: "개",
+  },
+  segment: {
+    banner: "메시지 조각 {count}개를 가져왔습니다",
+    clear: "지우기",
+    origin: "{source} · {sessionId}에서",
   },
 } as const;

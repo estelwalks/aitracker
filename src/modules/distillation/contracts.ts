@@ -10,9 +10,9 @@ import type {
 import type {
   SessionQueryPort,
   SessionSummary,
+  SessionTranscript,
 } from "../sessions/contracts.ts";
 import type { Result } from "../../shared/result.ts";
-import type { DistillQuota } from "./quota.ts";
 
 export const distillationModuleId = "distillation" as const;
 export type DistillationModuleId = typeof distillationModuleId;
@@ -28,8 +28,7 @@ export type DistillationErrorCode =
   | "errors.distillation.notApproved"
   | "errors.distillation.invalidName"
   | "errors.distillation.invalidAgent"
-  | "errors.distillation.skillExists"
-  | "errors.distillation.quotaExceeded";
+  | "errors.distillation.skillExists";
 
 export type ApprovalState = "waiting-approval" | "approved" | "cancelled";
 export type DistillationMode =
@@ -41,8 +40,45 @@ export interface SessionRef {
   readonly sessionId: string;
 }
 
+/**
+ * Inclusive message-index window into one session's transcript (0-based).
+ * Only the user explicitly selected segment is ever read into memory; the
+ * referenced text goes into the AI request and is never persisted.
+ */
+export interface SegmentRef {
+  readonly source: string;
+  readonly sessionId: string;
+  /** First message index (0-based, inclusive). */
+  readonly startIndex: number;
+  /** Last message index (0-based, inclusive). */
+  readonly endIndex: number;
+}
+
+/**
+ * In-memory material extracted from a user-selected transcript segment.
+ * Exists only for the current AI request; never persisted, never uploaded.
+ */
+export interface SegmentMessage {
+  readonly role: "user" | "assistant";
+  readonly text: string;
+}
+
+export interface SegmentMaterial {
+  readonly source: string;
+  readonly sessionId: string;
+  /** Optional session title attached from the controlled metadata context. */
+  readonly title?: string;
+  readonly messages: readonly SegmentMessage[];
+}
+
 export interface SessionSelection {
   readonly sessionRefs: readonly SessionRef[];
+  /**
+   * Optional user-selected transcript segments (Story B-100). When present,
+   * the referenced sessions must also be in `sessionRefs`; the segment window
+   * marks which messages of that session feed the distillation input.
+   */
+  readonly segments?: readonly SegmentRef[];
 }
 
 export interface DistillationRequest {
@@ -122,21 +158,20 @@ export interface CandidatePersistence {
 export interface DistillationPorts {
   readonly sessions: SessionQueryPort;
   readonly ai: AIOrchestrationPort;
+  /**
+   * Optional transcript reader for user-selected message segments. It is the
+   * ONLY distillation path that ever touches conversation text: invoked per
+   * explicitly selected `SegmentRef`, held in memory for the current AI
+   * request, and never persisted or uploaded (Story B-100). A failed read
+   * degrades that segment away — distillation never fails on transcripts.
+   */
+  readonly transcriptPort?: {
+    load(ref: SessionRef): Promise<SessionTranscript | null>;
+  };
   /** Only used after explicit approval; never during candidate generation. */
   readonly knowledge?: KnowledgeRepository;
   /** Optional durable candidate store; degrades to in-memory when absent. */
   readonly persistence?: CandidatePersistence;
-  /**
-   * Optional server-side daily quota ledger for real-model calls (Story B-600).
-   * When present, `start` rejects a real-model request that has exhausted
-   * today's quota and records one usage after a successful run. Offline runs
-   * never touch it; a missing or failing quota port degrades to unlimited so
-   * distillation is never blocked by quota bookkeeping itself.
-   */
-  readonly quota?: {
-    read(): Promise<DistillQuota>;
-    increment(date: string): Promise<DistillQuota>;
-  };
   readonly now?: () => Date;
   readonly createCandidateId?: () => string;
 }

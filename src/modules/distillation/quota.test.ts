@@ -139,13 +139,15 @@ interface Harness {
  * port entirely (degrade-to-unlimited path); `failRead`/`failIncrement`
  * simulate ledger I/O failures (which must never block distillation).
  */
-function setupApp(options: {
-  quota?: boolean;
-  used?: number;
-  limit?: number;
-  failRead?: boolean;
-  failIncrement?: boolean;
-} = {}): Harness {
+function setupApp(
+  options: {
+    quota?: boolean;
+    used?: number;
+    limit?: number;
+    failRead?: boolean;
+    failIncrement?: boolean;
+  } = {},
+): Harness {
   const {
     quota = true,
     used = 0,
@@ -194,7 +196,10 @@ test("localDateKey renders the local calendar day as YYYY-MM-DD", () => {
 });
 
 test("distillDailyQuotaLimit falls back to the default and parses the env override", () => {
-  assert.equal(distillDailyQuotaLimit(() => ({})), DISTILL_DAILY_QUOTA);
+  assert.equal(
+    distillDailyQuotaLimit(() => ({})),
+    DISTILL_DAILY_QUOTA,
+  );
   assert.equal(
     distillDailyQuotaLimit(() => ({ [ENV.DISTILL_DAILY_QUOTA]: "5" })),
     5,
