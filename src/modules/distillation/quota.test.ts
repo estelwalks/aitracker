@@ -58,6 +58,7 @@ const session = (id: string): SessionSummary => ({
     pricedEvents: 0,
     estimatedEvents: 0,
     unknownEvents: 0,
+    unknownModels: [],
     complete: true,
   },
   subagentCalls: 0,
