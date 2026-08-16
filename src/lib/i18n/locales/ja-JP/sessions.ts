@@ -5,6 +5,13 @@ export const sessions = {
   pageHeader: "セッション管理",
   pageHeaderDesc:
     "時刻・ツール・プロジェクトでローカルセッションを閲覧し、利用可能なセッションを安全に復元します。",
+  insight: {
+    title: "Jarvis セッション洞察",
+    total: "合計 {count} セッション",
+    sources: "{count} ツール由来",
+    turns: "合計 {count} ターン",
+    resumable: "{count} セッションを安全に復元可能",
+  },
   range: {
     d7: "過去 7 日間",
     d30: "過去 30 日間",

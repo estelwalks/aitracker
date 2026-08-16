@@ -7,6 +7,7 @@ import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
+import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
 import {
   Card,
   ChipTabs,
@@ -200,6 +201,30 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     };
   }, [page.sessions]);
 
+  /**
+   * Real-data insight lines for the Jarvis hero (no fabricated figures):
+   * total comes from the server page counter, the rest aggregate the visible
+   * page's sessions. Rotated by the shared card; hidden when empty.
+   */
+  const insightLines = useMemo(() => {
+    if (page.total === 0) return [];
+    const sessions = page.sessions;
+    const toolCount = new Set(sessions.map((session) => session.source)).size;
+    const turnCount = sessions.reduce(
+      (total, session) => total + session.turns,
+      0,
+    );
+    const resumable = sessions.filter(
+      (session) => session.resumeAvailable,
+    ).length;
+    return [
+      t("sessions.insight.total", { count: page.total }),
+      t("sessions.insight.sources", { count: toolCount }),
+      t("sessions.insight.turns", { count: turnCount }),
+      t("sessions.insight.resumable", { count: resumable }),
+    ].filter((line) => line.length > 0);
+  }, [page.sessions, page.total, t]);
+
   const changeFilter = (change: () => void) => {
     change();
     setPage((current) => ({ ...current, page: 1 }));
@@ -237,6 +262,13 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
           {loading ? t("sessions.refreshing") : t("common.refresh")}
         </TTButton>
       </PageBar>
+
+      <JarvisInsight
+        title={t("sessions.insight.title")}
+        lines={insightLines}
+        rotateLabel={t("insights.rotate")}
+        dotsLabel={t("insights.dots")}
+      />
 
       <p className="text-[13px] text-muted-foreground">
         {t("sessions.pageHeaderDesc")}

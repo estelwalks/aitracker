@@ -2,6 +2,13 @@ export const sessions = {
   metaDescription: "浏览本地历史会话并安全恢复可用会话。",
   pageHeader: "会话管理",
   pageHeaderDesc: "按时间、工具和项目浏览本地会话，并安全恢复可用会话。",
+  insight: {
+    title: "Jarvis 会话洞察",
+    total: "共 {count} 场会话",
+    sources: "来自 {count} 个工具",
+    turns: "合计 {count} 轮对话",
+    resumable: "{count} 个会话可安全恢复",
+  },
   range: {
     d7: "近 7 天",
     d30: "近 30 天",
