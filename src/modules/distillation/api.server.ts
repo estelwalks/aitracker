@@ -78,11 +78,33 @@ export async function loadDistillation(
   ]);
   const sessions = page.ok ? page.value.sessions.map(toItem) : [];
   const { readLLMConfig } = await import("../ai-orchestration/config.ts");
+  const { getModelProfileRepository } =
+    await import("../ai-orchestration/model-profile.server.ts");
   const configured = readLLMConfig();
-  const modelOptions = [
-    ...(configured ? [{ id: configured.model, label: configured.model }] : []),
-    { id: "offline", label: "offline", offline: true as const },
-  ];
+  const profiles = await getModelProfileRepository().listViews();
+  // Saved S-500 profiles first (id + label=name), then the env-configured
+  // model, then the deterministic offline fallback. Ids are de-duplicated in
+  // case an env model collides with a profile id.
+  const seen = new Set<string>();
+  const modelOptions: Array<{
+    id: string;
+    label: string;
+    offline?: boolean;
+  }> = [];
+  for (const profile of profiles) {
+    if (seen.has(profile.id)) continue;
+    seen.add(profile.id);
+    modelOptions.push({ id: profile.id, label: profile.name });
+  }
+  if (configured && !seen.has(configured.model)) {
+    seen.add(configured.model);
+    modelOptions.push({ id: configured.model, label: configured.model });
+  }
+  modelOptions.push({
+    id: "offline",
+    label: "offline",
+    offline: true as const,
+  });
   return {
     sessions,
     candidates,
@@ -108,10 +130,21 @@ export async function startDistillation(
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
   const refs = Array.isArray(input?.sessionRefs) ? input.sessionRefs : [];
+  const modelId = input.modelId?.trim() || "offline";
+  // When the selected model is a saved S-500 profile, route the request to the
+  // composition root's profile-backed provider (providerId "profile") so the
+  // real endpoint/key are used server-side. Unknown ids (env model, offline)
+  // keep the previous registry/offline behaviour.
+  let providerId: string | undefined;
+  if (modelId !== "offline") {
+    const profile = await root.modelProfiles.getProfileForExecution(modelId);
+    if (profile) providerId = "profile";
+  }
   const result = await root.distillation.start({
     requestId: `distill:${crypto.randomUUID()}`,
     selection: { sessionRefs: refs },
-    modelId: input.modelId ?? "offline",
+    modelId,
+    providerId,
     prompt: {
       id: "distillation.summary",
       version: 1,

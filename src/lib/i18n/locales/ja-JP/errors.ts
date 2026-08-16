@@ -74,6 +74,21 @@ export const errors = {
     invalidAgent: "対象ツールが利用できません",
     skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
   },
+  modelProfile: {
+    nameRequired: "設定名を入力してください",
+    nameTooLong: "設定名は 64 文字以内にしてください",
+    invalidMode: "設定モードが不正です",
+    invalidProtocol: "プロトコルが不正です",
+    invalidUrl: "エンドポイントは有効な http/https URL にしてください",
+    invalidModel: "モデル名が不正です（英数字/._:/- のみ、最大 120 文字）",
+    apiKeyRequired: "API Key を入力してください",
+    apiKeyTooShort: "API Key は 8 文字以上にしてください",
+    apiKeyTooLong: "API Key は 512 文字以内にしてください",
+    notFound: "このモデル設定は存在しないか、削除されました",
+    testFailed:
+      "接続テストに失敗しました。エンドポイント・API Key・ネットワークを確認してください",
+    testTimeout: "接続テストがタイムアウトしました（5 秒）",
+  },
   pricing: {
     modelListInvalid: "モデルリストが不正です",
     rateResponseIncomplete: "為替レートの応答が不完全です",

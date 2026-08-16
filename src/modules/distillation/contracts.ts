@@ -48,6 +48,13 @@ export interface DistillationRequest {
   readonly selection: SessionSelection;
   readonly modelId: string;
   readonly prompt: AIRequest["prompt"];
+  /**
+   * Optional provider routing hint. The transport sets `"profile"` when
+   * `modelId` is a saved S-500 model profile, so the composition root's
+   * profile-backed provider performs the real call; absent → the offline
+   * registry route.
+   */
+  readonly providerId?: string;
   readonly budgetUsd?: number;
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
