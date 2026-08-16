@@ -257,6 +257,7 @@ export function DistillConfig({
   modelId,
   onModelId,
   modelOptions,
+  quota,
   promptPreset,
   onPromptPreset,
   promptText,
