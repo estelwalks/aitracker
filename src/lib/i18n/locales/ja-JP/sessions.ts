@@ -32,18 +32,27 @@ export const sessions = {
   },
   panelTitle: "ローカルセッション",
   hint: "現在は Claude Code、Codex、Grok のみ復元可能です。費用はローカルのモデル価格表で見積り、未知の価格は明示されます。",
-  searchPlaceholder: "タイトル / プロジェクト / モデル / sessionId を検索",
+  searchPlaceholder: "タイトル / プロジェクト / セッション ID を検索",
   summary: {
     count: "セッション数",
     tokens: "Token 合計",
     cost: "費用合計",
-    turns: "ターン数合計",
+    tools: "セッションツール数",
+    turns: "会話ターン数",
+    countHint: "{range}内のセッション",
+    toolsHint: "対象の AI ツール",
+    turnsHint: "累計の往復ターン",
   },
   empty: {
     title: "一致するセッションがありません",
-    desc: "フィルター条件や検索キーワードを調整して再試行してください。",
+    desc: "検索キーワード、ツール、時間範囲を調整して再試行してください。",
   },
   refreshing: "更新中",
+  group: {
+    today: "今日",
+    yesterday: "昨日",
+    count: "{count} 件",
+  },
   detail: {
     back: "セッション一覧に戻る",
     title: "セッション詳細",
@@ -69,6 +78,8 @@ export const sessions = {
   },
   row: {
     untitled: "(名前のないセッション)",
+    copyHash: "ID をコピー",
+    copiedHash: "コピー済み",
     copy: "セッションを復元",
     copied: "開始済み",
     copyUnsafe: "このセッション ID は安全でないため、復元できません",
@@ -85,6 +96,7 @@ export const sessions = {
   },
   toast: {
     refreshed: "セッション一覧を更新しました",
+    hashCopied: "セッション ID をコピーしました",
     copied: "ローカル復元リクエストを開始しました",
   },
   transcript: {

@@ -1,5 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronRight, RefreshCw, Search, Terminal } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Hash,
+  MessagesSquare,
+  RefreshCw,
+  Sparkles,
+  Terminal,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -9,11 +18,11 @@ import {
 } from "../../../components/DistillButton.tsx";
 import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
 import {
-  Card,
   ChipTabs,
   EmptyState,
-  MetricGrid,
-  PageBar,
+  Pagination,
+  SearchInput,
+  Segmented,
   TTButton,
 } from "../../../components/tt.tsx";
 import { toUiError } from "../../../lib/errors.ts";
@@ -22,7 +31,6 @@ import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { formatCostLabel } from "../../../lib/pricing/cost-label.ts";
 import { refreshSessionsQuery, getSessionsQuery } from "../query.ts";
 import type {
-  SessionCostSummary,
   SessionFilter,
   SessionPage,
   SessionStatus,
@@ -38,10 +46,10 @@ const RANGE_OPTIONS: Array<{
     | "sessions.range.d30"
     | "sessions.range.d90";
 }> = [
-  { value: "all", labelKey: "common.all" },
   { value: "7d", labelKey: "sessions.range.d7" },
   { value: "30d", labelKey: "sessions.range.d30" },
   { value: "90d", labelKey: "sessions.range.d90" },
+  { value: "all", labelKey: "common.all" },
 ];
 
 const STATUS_META: Record<
@@ -80,42 +88,20 @@ function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-function aggregateCost(
-  sessions: readonly SessionSummary[],
-): SessionCostSummary {
-  return sessions.reduce<SessionCostSummary>(
-    (total, session) => ({
-      knownUsd: total.knownUsd + session.cost.knownUsd,
-      estimatedUsd: total.estimatedUsd + session.cost.estimatedUsd,
-      cacheSavingsUsd: total.cacheSavingsUsd + session.cost.cacheSavingsUsd,
-      pricedEvents: total.pricedEvents + session.cost.pricedEvents,
-      estimatedEvents: total.estimatedEvents + session.cost.estimatedEvents,
-      unknownEvents: total.unknownEvents + session.cost.unknownEvents,
-      unknownModels: [
-        ...new Set([...total.unknownModels, ...session.cost.unknownModels]),
-      ],
-      complete: total.complete && session.cost.complete,
-    }),
-    {
-      knownUsd: 0,
-      estimatedUsd: 0,
-      cacheSavingsUsd: 0,
-      pricedEvents: 0,
-      estimatedEvents: 0,
-      unknownEvents: 0,
-      unknownModels: [],
-      complete: true,
-    },
-  );
+/** Local `YYYY-MM-DD` key so sessions group by the viewer's own day. */
+function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 /**
  * Real local-session list. Filtering, pagination and refresh all call the
  * server query facade; no prototype fixtures or client-generated records are
- * used here.
+ * used here. Layout mirrors the V3.0 prototype: Jarvis hero, three
+ * period-scoped stat cards, a filter rail, and date-grouped session rows.
  */
 export function SessionsPage({ initial }: { initial: SessionPage }) {
   const { t, format } = useI18n();
+  const navigate = useNavigate();
   const [page, setPage] = useState(initial);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -189,17 +175,12 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
       [...new Set(page.sessions.map((session) => session.projectKey))].sort(),
     [page.sessions],
   );
-  const totals = useMemo(() => {
-    const sessions = page.sessions;
-    return {
-      tokens: sessions.reduce(
-        (total, session) => total + session.totals.totalTokens,
-        0,
-      ),
-      turns: sessions.reduce((total, session) => total + session.turns, 0),
-      cost: aggregateCost(sessions),
-    };
-  }, [page.sessions]);
+  const totals = useMemo(
+    () => ({
+      turns: page.sessions.reduce((total, session) => total + session.turns, 0),
+    }),
+    [page.sessions],
+  );
 
   /**
    * Real-data insight lines for the Jarvis hero (no fabricated figures):
@@ -225,6 +206,76 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     ].filter((line) => line.length > 0);
   }, [page.sessions, page.total, t]);
 
+  /** Range label for the stat-card hint, matching the active time filter. */
+  const rangeLabel = useMemo(() => {
+    switch (range) {
+      case "7d":
+        return t("sessions.range.d7");
+      case "30d":
+        return t("sessions.range.d30");
+      case "90d":
+        return t("sessions.range.d90");
+      default:
+        return t("common.all");
+    }
+  }, [range, t]);
+
+  const stats = useMemo(
+    () => [
+      {
+        label: t("sessions.summary.count"),
+        value: format.formatNumber(page.total),
+        hint: t("sessions.summary.countHint", { range: rangeLabel }),
+        icon: MessagesSquare,
+      },
+      {
+        label: t("sessions.summary.tools"),
+        value: format.formatNumber(sources.length),
+        hint: t("sessions.summary.toolsHint"),
+        icon: Wrench,
+      },
+      {
+        label: t("sessions.summary.turns"),
+        value: format.formatNumber(totals.turns),
+        hint: t("sessions.summary.turnsHint"),
+        icon: Sparkles,
+      },
+    ],
+    [format, page.total, rangeLabel, sources.length, t, totals.turns],
+  );
+
+  /** Local-day groups, in page order (startedAt desc); counts are per page. */
+  const groups = useMemo(() => {
+    const todayKey = localDateKey(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayKey = localDateKey(yesterdayDate);
+    const ordered: Array<{ dateKey: string; sessions: SessionSummary[] }> = [];
+    const index = new Map<string, number>();
+    for (const session of page.sessions) {
+      const dateKey = localDateKey(new Date(session.startedAt));
+      let slot = index.get(dateKey);
+      if (slot === undefined) {
+        slot = ordered.length;
+        index.set(dateKey, slot);
+        ordered.push({ dateKey, sessions: [] });
+      }
+      ordered[slot].sessions.push(session);
+    }
+    return ordered.map((group) => ({
+      ...group,
+      label: format.formatDate(group.sessions[0].startedAt, {
+        weekday: "short",
+      }),
+      suffix:
+        group.dateKey === todayKey
+          ? t("sessions.group.today")
+          : group.dateKey === yesterdayKey
+            ? t("sessions.group.yesterday")
+            : null,
+    }));
+  }, [format, page.sessions, t]);
+
   const changeFilter = (change: () => void) => {
     change();
     setPage((current) => ({ ...current, page: 1 }));
@@ -249,128 +300,135 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 
   return (
     <div className="space-y-4 pb-12">
-      <PageBar
-        title={t("sessions.pageHeader")}
-        summary={`${t("sessions.summary.count")} ${format.formatNumber(page.total)} · ${t("common.lastUpdatedAt", { time: format.formatDateTime(page.generatedAt, false) })}`}
-      >
-        <TTButton
-          onClick={refresh}
-          disabled={loading}
-          title={t("common.refresh")}
-        >
-          <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? t("sessions.refreshing") : t("common.refresh")}
-        </TTButton>
-      </PageBar>
-
       <JarvisInsight
-        title={t("sessions.insight.title")}
+        title={t("insights.title")}
         lines={insightLines}
         rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
 
-      <p className="text-[13px] text-muted-foreground">
-        {t("sessions.pageHeaderDesc")}
-      </p>
-
-      <MetricGrid
-        items={[
-          {
-            label: t("sessions.summary.count"),
-            v: format.formatNumber(page.total),
-            sub: t("sessions.panelTitle"),
-          },
-          {
-            label: t("sessions.summary.tokens"),
-            v: format.formatTokens(totals.tokens),
-            sub: t("sessions.row.time"),
-          },
-          {
-            label: t("sessions.summary.cost"),
-            v: formatCostLabel(t, format, totals.cost),
-            sub: t("sessions.hint"),
-          },
-          {
-            label: t("sessions.summary.turns"),
-            v: format.formatNumber(totals.turns),
-            sub: t("sessions.row.turns"),
-          },
-        ]}
-      />
-
-      <Card title={t("sessions.panelTitle")} desc={t("sessions.hint")}>
-        <div className="border-b border-border/60 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="relative min-w-52 flex-1 sm:max-w-sm">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={keywordInput}
-                onChange={(event) =>
-                  changeFilter(() => setKeywordInput(event.target.value))
-                }
-                placeholder={t("sessions.searchPlaceholder")}
-                aria-label={t("sessions.searchPlaceholder")}
-                className="h-9 w-full rounded-lg bg-surface-2/70 pr-3 pl-8 text-[13px] outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+      {/* 周期口径卡片：会话数 / 工具数 / 轮次数（与原型一致的 3 卡条） */}
+      <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border/60 bg-card">
+        {stats.map((card, index) => (
+          <div
+            key={card.label}
+            className={`px-4 py-3.5 ${index > 0 ? "border-l border-border/60" : ""}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+                {card.label}
+              </span>
+              <card.icon
+                className="size-3.5 shrink-0 text-muted-foreground"
+                strokeWidth={1.8}
               />
-            </label>
-            <select
-              value={projectId}
-              onChange={(event) =>
-                changeFilter(() => setProjectId(event.target.value))
-              }
-              aria-label={t("sessions.project.all")}
-              className="h-9 max-w-52 rounded-lg bg-surface-2/70 px-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="all">{t("sessions.project.all")}</option>
-              {projects.map((project) => (
-                <option key={project} value={project}>
-                  {project}
-                </option>
-              ))}
-            </select>
-            <select
-              value={status}
-              onChange={(event) =>
-                changeFilter(() =>
-                  setStatus(event.target.value as SessionStatus | "all"),
-                )
-              }
-              aria-label={t("sessions.status.all")}
-              className="h-9 rounded-lg bg-surface-2/70 px-2.5 text-[12px] outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="all">{t("sessions.status.all")}</option>
-              {Object.entries(STATUS_META).map(([value, meta]) => (
-                <option key={value} value={value}>
-                  {t(meta.labelKey)}
-                </option>
-              ))}
-            </select>
+            </div>
+            <div className="tt-num mt-2 font-mono text-[22px] leading-none font-black tracking-tight">
+              {card.value}
+            </div>
+            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/80">
+              {card.hint}
+            </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <ChipTabs
-              value={range}
-              onChange={(value) => changeFilter(() => setRange(value))}
-              options={RANGE_OPTIONS.map((option) => ({
-                value: option.value,
-                label: t(option.labelKey),
-              }))}
+        ))}
+      </div>
+
+      {/* 筛选栏：搜索 + 时间 + 项目/状态 + 刷新 + 蒸馏（刷新与批量蒸馏在右侧） */}
+      <section className="space-y-3">
+        <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
+          <SearchInput
+            value={keywordInput}
+            onChange={(value) => changeFilter(() => setKeywordInput(value))}
+            placeholder={t("sessions.searchPlaceholder")}
+            ariaLabel={t("sessions.searchPlaceholder")}
+            className="min-w-0 flex-1"
+          />
+          <Segmented
+            value={range}
+            onChange={(value) => changeFilter(() => setRange(value))}
+            options={RANGE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: t(option.labelKey),
+            }))}
+          />
+          <select
+            value={projectId}
+            onChange={(event) =>
+              changeFilter(() => setProjectId(event.target.value))
+            }
+            aria-label={t("sessions.project.all")}
+            className="h-[28px] shrink-0 rounded-full bg-surface-2/70 px-3 text-[12px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="all">{t("sessions.project.all")}</option>
+            {projects.map((project) => (
+              <option key={project} value={project}>
+                {project}
+              </option>
+            ))}
+          </select>
+          <select
+            value={status}
+            onChange={(event) =>
+              changeFilter(() =>
+                setStatus(event.target.value as SessionStatus | "all"),
+              )
+            }
+            aria-label={t("sessions.status.all")}
+            className="h-[28px] shrink-0 rounded-full bg-surface-2/70 px-3 text-[12px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="all">{t("sessions.status.all")}</option>
+            {Object.entries(STATUS_META).map(([value, meta]) => (
+              <option key={value} value={value}>
+                {t(meta.labelKey)}
+              </option>
+            ))}
+          </select>
+          <TTButton
+            size="sm"
+            onClick={refresh}
+            disabled={loading}
+            title={t("common.refresh")}
+            className="ml-auto"
+          >
+            <RefreshCw
+              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
             />
-            <span className="h-5 w-px bg-border" />
-            <ChipTabs
-              value={source}
-              onChange={(value) => changeFilter(() => setSource(value))}
-              options={[
-                { value: "all", label: t("sessions.source.all") },
-                ...sources.map((value) => ({
-                  value,
-                  label: sourceLabel(value),
-                })),
-              ]}
-            />
-          </div>
+            <span className="sr-only">{t("common.refresh")}</span>
+          </TTButton>
+          <DistillButton
+            size="md"
+            count={page.total}
+            onClick={() =>
+              notifyDistillStarted({
+                sessions: page.total,
+                minutes: Math.max(
+                  1,
+                  Math.round((60_000 + page.total * 20_000) / 60_000),
+                ),
+                t,
+                onGo: () => void navigate({ to: "/distill" }),
+              })
+            }
+          />
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 px-1">
+          <ChipTabs
+            value={source}
+            onChange={(value) => changeFilter(() => setSource(value))}
+            options={[
+              { value: "all", label: t("sessions.source.all") },
+              ...sources.map((value) => ({
+                value,
+                label: sourceLabel(value),
+              })),
+            ]}
+          />
+        </div>
+      </section>
+
+      {/* 按本地日期分组的会话记录；分页保留，组内为当前页会话 */}
+      <div className="min-w-0 space-y-5">
         {error ? (
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium">{t("common.pageLoadFailed")}</p>
@@ -384,46 +442,48 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             desc={t("sessions.empty.desc")}
           />
         ) : (
-          <ul className="divide-y divide-border/60">
-            {page.sessions.map((session) => (
-              <SessionRow
-                key={`${session.source}:${session.sessionId}:${session.startedAt}`}
-                session={session}
-              />
-            ))}
-          </ul>
+          groups.map((group) => (
+            <section key={group.dateKey}>
+              <div className="mb-3 flex items-center gap-2 text-[12px] text-muted-foreground">
+                <span className="text-[13px] font-semibold text-foreground">
+                  {group.label}
+                  {group.suffix ? ` · ${group.suffix}` : ""}
+                </span>
+                <span className="rounded-full bg-surface-2 px-2 py-px text-[10px]">
+                  {t("sessions.group.count", {
+                    count: format.formatNumber(group.sessions.length),
+                  })}
+                </span>
+              </div>
+              <ul className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card">
+                {group.sessions.map((session) => (
+                  <SessionRow
+                    key={`${session.source}:${session.sessionId}:${session.startedAt}`}
+                    session={session}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))
         )}
+      </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
-          <span className="tt-num text-[11px] text-muted-foreground">
-            {t("sessions.pagination.summary", {
-              page: format.formatNumber(page.page),
-              totalPages: format.formatNumber(page.totalPages),
-              total: format.formatNumber(page.total),
-            })}
-          </span>
-          <div className="flex items-center gap-2">
-            <TTButton
-              size="sm"
-              disabled={loading || page.page <= 1}
-              onClick={() =>
-                setPage((current) => ({ ...current, page: current.page - 1 }))
-              }
-            >
-              {t("sessions.pagination.previous")}
-            </TTButton>
-            <TTButton
-              size="sm"
-              disabled={loading || page.page >= page.totalPages}
-              onClick={() =>
-                setPage((current) => ({ ...current, page: current.page + 1 }))
-              }
-            >
-              {t("sessions.pagination.next")}
-            </TTButton>
-          </div>
-        </footer>
-      </Card>
+      {!error && page.total > 0 ? (
+        <Pagination
+          page={page.page}
+          pageCount={page.totalPages}
+          onChange={(next) =>
+            setPage((current) => ({ ...current, page: next }))
+          }
+          prevLabel={t("sessions.pagination.previous")}
+          nextLabel={t("sessions.pagination.next")}
+          rangeLabel={t("sessions.pagination.summary", {
+            page: format.formatNumber(page.page),
+            totalPages: format.formatNumber(page.totalPages),
+            total: format.formatNumber(page.total),
+          })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -433,6 +493,30 @@ function SessionRow({ session }: { session: SessionSummary }) {
   const navigate = useNavigate();
   const status = STATUS_META[session.status];
   const detailAvailable = session.sessionId !== "unavailable";
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  /** Copies the privacy-safe opaque session id; commands/paths never leave the server. */
+  async function copyHash() {
+    try {
+      if (navigator.clipboard?.writeText == null) throw new Error("no-clip");
+      await navigator.clipboard.writeText(session.sessionId);
+      setCopied(true);
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
+      toast.success(t("sessions.toast.hashCopied"));
+    } catch {
+      toast.error(t("common.error"));
+    }
+  }
+
   return (
     <li className="group flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 transition-colors hover:bg-surface-2/60">
       <div className="min-w-0 flex-1">
@@ -475,6 +559,25 @@ function SessionRow({ session }: { session: SessionSummary }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <ResumeSessionButton session={session} />
+        {detailAvailable ? (
+          <button
+            type="button"
+            onClick={copyHash}
+            title={session.sessionId}
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] transition-colors ${
+              copied
+                ? "text-primary"
+                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+            }`}
+          >
+            {copied ? (
+              <Check className="size-3.5" />
+            ) : (
+              <Hash className="size-3.5" />
+            )}
+            {copied ? t("sessions.row.copiedHash") : t("sessions.row.copyHash")}
+          </button>
+        ) : null}
         <DistillButton
           size="sm"
           count={1}
