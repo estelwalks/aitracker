@@ -1,6 +1,6 @@
 import {
+  BookHeart,
   Brain,
-  FlaskConical,
   Gauge,
   MessagesSquare,
   ShieldAlert,
@@ -257,11 +257,11 @@ export function MediumWidget() {
             <div className="flex items-end gap-5">
               <div>
                 <div className="tt-num font-mono text-[18px] leading-none font-semibold">
-                  {outputs.distilled ?? "—"}
+                  {outputs.memory ?? "—"}
                 </div>
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
-                  <FlaskConical className="size-3" strokeWidth={1.75} />
-                  {t("widget.dwDistilled")}
+                  <BookHeart className="size-3" strokeWidth={1.75} />
+                  {t("widget.dwMemory")}
                 </div>
               </div>
               <div>
@@ -501,7 +501,7 @@ export function LargeWidget() {
                     ? "—"
                     : format.formatNumber(outputs.distilled)
                 }
-                label={t("widget.dwDistilled")}
+                label={t("widget.dwDistillable")}
               />
             </div>
             <TrendBars values={trend} className="mt-auto h-6" />

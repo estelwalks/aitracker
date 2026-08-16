@@ -126,6 +126,7 @@ export const widget = {
   dwJarvis: "JARVIS",
   dwBriefOff: "문구 숨김",
   dwMemories: "오늘의 기억",
+  dwMemory: "기억",
   dwDistilled: "축적됨",
   dwToday: "TODAY",
   dwLast7d: "최근 7일 {count} 세션",
