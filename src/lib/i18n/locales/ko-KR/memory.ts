@@ -3,11 +3,13 @@ export const memory = {
   metaDescription:
     "메모리 허브는 증류로 만들어진 프로필과 작업 메모리를 관리합니다: 소스별 그룹, 유형별 필터, 수동 추가·편집·삭제 지원.",
   placeholderTitle: "메모리 허브 준비 중",
-  placeholderDesc: "메모리 허브 페이지를 프로토타입에 맞춰 구축 중입니다. 곧 로컬 메모리 자산을 조회하고 편집할 수 있습니다.",
+  placeholderDesc:
+    "메모리 허브 페이지를 프로토타입에 맞춰 구축 중입니다. 곧 로컬 메모리 자산을 조회하고 편집할 수 있습니다.",
   title: "메모리 허브",
   empty: "아직 메모리 항목이 없습니다",
-  emptyDesc: "증류 작업대에서 '프로필' 또는 '작업 메모리'를 선택하면 결과물이 자동으로 여기에 쌓입니다. 수동으로 추가할 수도 있습니다.",
-  searchPlaceholder: "메모리 제목, 본문 또는 소스 검색",
+  emptyDesc:
+    "증류 작업대에서 '프로필' 또는 '작업 메모리'를 선택하면 결과물이 자동으로 여기에 쌓입니다. 수동으로 추가할 수도 있습니다.",
+  searchPlaceholder: "메모리 제목, 요약 또는 소스 검색",
   add: "메모리 추가",
   goDistill: "증류로 이동",
   source: "소스",
@@ -16,12 +18,28 @@ export const memory = {
   typeProfile: "프로필",
   typeTask: "작업 메모리",
   deleteTitle: "메모리 삭제",
-  deleteConfirm: "\"{title}\"을(를) 삭제하시겠습니까? 삭제 후 되돌릴 수 없습니다.",
+  deleteConfirm:
+    '"{title}"을(를) 삭제하시겠습니까? 삭제 후 되돌릴 수 없습니다.',
   cancel: "취소",
   delete: "삭제",
   edited: "메모리 업데이트됨",
   added: "메모리 추가됨",
   removed: "삭제됨",
+  edit: "편집",
+  editTitle: "메모리 편집",
+  originDistill: "증류",
+  originManual: "수동",
+  sourceDistill: "증류",
+  sourceUnknown: "알 수 없는 소스",
+  insightEmpty:
+    "아직 메모리 항목이 없습니다: 증류를 실행하거나 수동으로 추가하세요.",
+  insightTotal: "메모리 {total}개: 프로필 {profile}개, 작업 메모리 {task}개.",
+  insightMeaning:
+    "프로필은 당신이 누구인지, 어떻게 일하는지를 기억하고, 작업 메모리는 우리가 정한 규칙을 기억합니다.",
+  insightDistill:
+    "증류 작업대에서 '프로필' 또는 '작업 메모리'를 선택하면 결과물이 자동으로 여기에 쌓입니다.",
+  insightRotate: "다음 인사이트",
+  insightDots: "인사이트 캐러셀",
   form: {
     type: "유형",
     title: "제목",
@@ -30,5 +48,11 @@ export const memory = {
     project: "프로젝트",
     save: "저장",
     typePlaceholder: "메모리 유형 선택",
+    titlePlaceholder: "이 메모리를 한 문장으로 요약",
+    bodyPlaceholder: "자세히 작성: 선호하는 세부 사항 또는 정한 규칙",
+    sourcePlaceholder: "소스 도구 (Claude Code / Codex / Cursor…)",
+    projectPlaceholder: "프로젝트 (선택)",
+    typeProfileDesc: "당신에 대해: 선호, 습관, 취향",
+    typeTaskDesc: "약속과 결정에 대해: 정한 규칙",
   },
 } as const;
