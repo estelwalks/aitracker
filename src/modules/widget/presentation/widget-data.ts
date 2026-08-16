@@ -12,6 +12,7 @@ import type {
   DashboardV2Event,
   DashboardV2Snapshot,
 } from "../../dashboard";
+import { getMemoryAssets } from "../../knowledge";
 import {
   useSecurityScanOverview,
   type SecurityScanOverview,
@@ -53,6 +54,11 @@ export interface WidgetDataModel {
   readonly outputs: {
     readonly distilled: number | null;
     readonly reports: number | null;
+    /**
+     * 知识库已批准的记忆资产数（approved/published），来自 knowledge 模块；
+     * null 表示拉取失败或未提供数据（UI 显示「—」）。
+     */
+    readonly memory: number | null;
   };
   readonly security: SecurityScanOverview;
   /** 手动重新拉取 dashboard 读模型。 */
@@ -155,6 +161,8 @@ function buildPeriod(
 
 interface SharedReadModel {
   readonly data: DashboardReadModel | null;
+  /** 知识库已批准记忆资产数；null = 拉取失败/未提供（独立于 dashboard 失败）。 */
+  readonly memory: number | null;
   readonly loading: boolean;
   readonly failed: boolean;
   readonly locale: Locale;
@@ -162,6 +170,7 @@ interface SharedReadModel {
 
 const initialShared: SharedReadModel = {
   data: null,
+  memory: null,
   loading: true,
   failed: false,
   locale: "zh-CN",
@@ -170,7 +179,7 @@ const initialShared: SharedReadModel = {
 /**
  * 多个小组件（浮窗/托盘/桌面/菜单栏）共享同一份 dashboard 读模型：
  * 模块级 store + useSyncExternalStore，首次订阅即拉取，30s 轮询去重，
- * 避免每个预览实例各自重复请求。
+ * 避免每个预览实例各自重复请求。知识库记忆计数并入同一刷新周期，不额外轮询。
  */
 let shared: SharedReadModel = initialShared;
 const listeners = new Set<() => void>();
@@ -187,12 +196,34 @@ function subscribeShared(listener: () => void): () => void {
   };
 }
 
+/** 知识库已批准（approved/published）的记忆资产数；拉取失败返回 null。 */
+function countApprovedMemories(entries: readonly { status: string }[]): number {
+  return entries.filter(
+    (entry) => entry.status === "approved" || entry.status === "published",
+  ).length;
+}
+
 function loadShared(locale: Locale): void {
   if (busy) return;
   busy = true;
-  void getDashboardReadModel({ data: locale })
-    .then((next) => {
-      shared = { data: next, loading: false, failed: false, locale };
+  // Promise.allSettled：dashboard 与记忆计数互相独立，一方失败不阻塞另一方。
+  void Promise.allSettled([
+    getDashboardReadModel({ data: locale }),
+    getMemoryAssets(),
+  ])
+    .then(([dashboardResult, memoryResult]) => {
+      const dashboardOk = dashboardResult.status === "fulfilled";
+      shared = {
+        ...shared,
+        data: dashboardOk ? dashboardResult.value : shared.data,
+        memory:
+          memoryResult.status === "fulfilled"
+            ? countApprovedMemories(memoryResult.value)
+            : null,
+        loading: false,
+        failed: !dashboardOk,
+        locale,
+      };
     })
     .catch(() => {
       shared = { ...shared, loading: false, failed: true };
@@ -241,7 +272,7 @@ export function useWidgetData(): WidgetDataModel {
         week: emptyPeriod(),
         month: emptyPeriod(),
         total: emptyPeriod(),
-        outputs: { distilled: null, reports: null },
+        outputs: { distilled: null, reports: null, memory: null },
       };
     }
     return {
@@ -254,6 +285,7 @@ export function useWidgetData(): WidgetDataModel {
       outputs: {
         distilled: readModel.v2.outputAvailability.distillationOutputs.count,
         reports: readModel.v2.outputAvailability.dailyReports.count,
+        memory: sharedModel.memory,
       },
     };
   }, [sharedModel]);

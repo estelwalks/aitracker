@@ -6,3 +6,4 @@ export {
   createKnowledgeApplication,
   createKnowledgeRepository,
 } from "./application/index.ts";
+export { getMemoryAssets } from "./query";
