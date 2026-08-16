@@ -1,15 +1,21 @@
 export const tracker = {
   title: "燃烧榜",
   desc: "行为诊断式浪费榜单：从真实 Token 数据中识别低效消耗并给出优化建议。",
+  insightTitle: "今日洞察",
   metric: {
     tokens: "总消耗",
-    events: "事件数",
-    entries: "上榜条目",
+    projects: "上榜项目",
+    skills: "上榜 Skill",
+    sessions: "上榜会话",
+    sortedBy: "按浪费程度排序",
   },
   board: {
     skill: "Skill 消耗榜",
     project: "项目消耗榜",
     session: "会话消耗榜",
+    skillSub: "哪些 Skill 在偷偷烧钱",
+    projectSub: "哪些项目消耗最凶",
+    sessionSub: "哪些会话最不划算",
   },
   row: {
     tokens: "{count} tokens",
@@ -31,9 +37,12 @@ export const tracker = {
     none: "暂无明显优化点。",
   },
   detail: {
-    wasteDetail: "浪费拆解",
+    wasteDetail: "浪费指数 {waste}% 怎么算出来的",
+    wasteExplain:
+      "指数 = 100 × (1 − 缓存命中率) × 输出占比：缓存复用低 + 输出占比高 = 浪费。",
+    wastedTotal: "合计无效消耗 {tokens} tokens",
     close: "关闭",
   },
-  empty: "暂无可用数据",
+  empty: "暂无浪费记录",
   emptyDesc: "扫描到真实用量后，这里会展示按浪费指数排序的榜单。",
 } as const;
