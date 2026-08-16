@@ -12,13 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as DistillRouteImport } from './routes/distill'
-import { Route as MarketRouteImport } from './routes/market'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
-import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SourcesRouteImport } from './routes/sources'
+import { Route as TrackerRouteImport } from './routes/tracker'
+import { Route as ChatsIndexRouteImport } from './routes/chats.index'
+import { Route as ChatsIdRouteImport } from './routes/chats.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,11 +37,6 @@ const DistillRoute = DistillRouteImport.update({
   path: '/distill',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MarketRoute = MarketRouteImport.update({
-  id: '/market',
-  path: '/market',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -48,11 +45,6 @@ const ReportsRoute = ReportsRouteImport.update({
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SessionsRoute = SessionsRouteImport.update({
-  id: '/sessions',
-  path: '/sessions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -65,9 +57,29 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SkillsRoute = SkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackerRoute = TrackerRouteImport.update({
+  id: '/tracker',
+  path: '/tracker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatsIndexRoute = ChatsIndexRouteImport.update({
+  id: '/chats/',
+  path: '/chats/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatsIdRoute = ChatsIdRouteImport.update({
+  id: '/chats/$id',
+  path: '/chats/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -75,38 +87,44 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
+  '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats/': typeof ChatsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
+  '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats': typeof ChatsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
-  '/market': typeof MarketRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
-  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/skills': typeof SkillsRoute
   '/sources': typeof SourcesRoute
+  '/tracker': typeof TrackerRoute
+  '/chats/$id': typeof ChatsIdRoute
+  '/chats/': typeof ChatsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -114,50 +132,58 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
+    | '/tracker'
+    | '/chats/$id'
+    | '/chats/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/agents'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
+    | '/tracker'
+    | '/chats/$id'
+    | '/chats'
   id:
     | '__root__'
     | '/'
     | '/agents'
     | '/distill'
-    | '/market'
     | '/reports'
     | '/security'
-    | '/sessions'
     | '/settings'
     | '/sitemap.xml'
+    | '/skills'
     | '/sources'
+    | '/tracker'
+    | '/chats/$id'
+    | '/chats/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DistillRoute: typeof DistillRoute
-  MarketRoute: typeof MarketRoute
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
-  SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  SkillsRoute: typeof SkillsRoute
   SourcesRoute: typeof SourcesRoute
+  TrackerRoute: typeof TrackerRoute
+  ChatsIdRoute: typeof ChatsIdRoute
+  ChatsIndexRoute: typeof ChatsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -183,13 +209,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DistillRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/market': {
-      id: '/market'
-      path: '/market'
-      fullPath: '/market'
-      preLoaderRoute: typeof MarketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/reports': {
       id: '/reports'
       path: '/reports'
@@ -202,13 +221,6 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/security'
       preLoaderRoute: typeof SecurityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sessions': {
-      id: '/sessions'
-      path: '/sessions'
-      fullPath: '/sessions'
-      preLoaderRoute: typeof SessionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -225,11 +237,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sources': {
       id: '/sources'
       path: '/sources'
       fullPath: '/sources'
       preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tracker': {
+      id: '/tracker'
+      path: '/tracker'
+      fullPath: '/tracker'
+      preLoaderRoute: typeof TrackerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chats/': {
+      id: '/chats/'
+      path: '/chats'
+      fullPath: '/chats/'
+      preLoaderRoute: typeof ChatsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chats/$id': {
+      id: '/chats/$id'
+      path: '/chats/$id'
+      fullPath: '/chats/$id'
+      preLoaderRoute: typeof ChatsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -239,13 +279,15 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DistillRoute: DistillRoute,
-  MarketRoute: MarketRoute,
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,
-  SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  SkillsRoute: SkillsRoute,
   SourcesRoute: SourcesRoute,
+  TrackerRoute: TrackerRoute,
+  ChatsIdRoute: ChatsIdRoute,
+  ChatsIndexRoute: ChatsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -203,7 +203,8 @@ function toDate(value: Date | string | number): Date | null {
 }
 
 function trimFixed(value: number): string {
-  return value
-    .toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)
-    .replace(/\.?0+$/, "");
+  const fixed = value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2);
+  return fixed.includes(".")
+    ? fixed.replace(/0+$/, "").replace(/\.$/, "")
+    : fixed;
 }

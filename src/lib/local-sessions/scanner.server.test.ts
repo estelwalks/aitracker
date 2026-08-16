@@ -311,6 +311,67 @@ test("Codex: resolves title from session_index.jsonl, model from turn_context, c
   });
 });
 
+test("Codex: parses current payload envelopes and counts explicit patch events once", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "codex2222-2222-3333-4444-555555555555";
+    const sessionDir = join(home, ".codex", "sessions", "2026", "08", "01");
+    await mkdir(sessionDir, { recursive: true });
+    const fixture = await readFile(
+      join(
+        process.cwd(),
+        "src/lib/local-sessions/__fixtures__/codex-current-envelope.jsonl",
+      ),
+      "utf8",
+    );
+    await writeFile(
+      join(sessionDir, `rollout-${sessionId}.jsonl`),
+      fixture.replaceAll("__SESSION_ID__", sessionId),
+    );
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.sessionId, sessionId);
+    assert.equal(session.model, "gpt-5-codex");
+    assert.equal(session.projectRef, "/Users/demo/codex-current");
+    assert.equal(session.editTurns, 1);
+    assert.equal(session.totals.inputTokens, 150);
+    assert.equal(session.totals.cachedInputTokens, 50);
+    assert.equal(session.totals.outputTokens, 40);
+    assert.equal(session.totals.reasoningOutputTokens, 15);
+    // reasoning is a subcategory of output, not an additional token bucket.
+    assert.equal(session.totals.totalTokens, 240);
+    assertPrivacyClean(session);
+  });
+});
+
+test("Claude Code: deduplicates streamed usage and turns by session and message id", async () => {
+  await withTempHome(async (home) => {
+    const projectDir = join(home, ".claude", "projects", "duplicate-project");
+    await mkdir(projectDir, { recursive: true });
+    const fixture = await readFile(
+      join(
+        process.cwd(),
+        "src/lib/local-sessions/__fixtures__/claude-duplicate-message.jsonl",
+      ),
+      "utf8",
+    );
+    await writeFile(join(projectDir, "duplicate.jsonl"), fixture);
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 100);
+    assert.equal(session.totals.cachedInputTokens, 20);
+    assert.equal(session.totals.cacheCreationInputTokens, 10);
+    assert.equal(session.totals.outputTokens, 40);
+    assert.equal(session.totals.reasoningOutputTokens, 8);
+    assert.equal(session.totals.totalTokens, 170);
+    assertPrivacyClean(session);
+  });
+});
+
 test("Grok: title precedence generated_title over session_summary, id from summary.info.id", async () => {
   await withTempHome(async (home) => {
     const sessionId = "grokaaaa-2222-3333-4444-555555555555";
@@ -337,17 +398,55 @@ test("Grok: title precedence generated_title over session_summary, id from summa
       join(sessionDir, "updates.jsonl"),
       [
         JSON.stringify({
-          type: "turn_completed",
-          timestamp: "2026-08-01T11:00:00.000Z",
-          usage: {
-            modelUsage: [
-              {
-                modelId: "grok-4",
-                inputTokens: 80,
-                outputTokens: 30,
-                cachedInputTokens: 10,
+          timestamp: 1785581940,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: { sessionUpdate: "tool_call", title: "Apply patch" },
+            _meta: {
+              eventId: "tool-current-1",
+              agentTimestampMs: 1785581940000,
+              "x.ai/tool": { name: "apply_patch" },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: 1785581970,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: { sessionUpdate: "tool_call", title: "Spawn subagent" },
+            _meta: {
+              eventId: "tool-current-2",
+              agentTimestampMs: 1785581970000,
+              "x.ai/tool": { name: "spawn_subagent" },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: 1785582000,
+          method: "session/update",
+          params: {
+            sessionId,
+            update: {
+              sessionUpdate: "turn_completed",
+              usage: {
+                modelUsage: {
+                  "grok-4": {
+                    inputTokens: 80,
+                    outputTokens: 30,
+                    cachedReadTokens: 10,
+                    reasoningTokens: 7,
+                    totalTokens: 110,
+                  },
+                },
               },
-            ],
+            },
+            _meta: {
+              eventId: "turn-current-1",
+              agentTimestampMs: 1785582000000,
+              totalTokens: 999999,
+            },
           },
         }),
       ].join("\n") + "\n",
@@ -361,9 +460,13 @@ test("Grok: title precedence generated_title over session_summary, id from summa
     assert.equal(session.title, "Build dashboard");
     assert.equal(session.model, "grok-4");
     assert.equal(session.projectKey, "grokproj");
-    assert.equal(session.totals.inputTokens, 80);
+    assert.equal(session.totals.inputTokens, 70);
     assert.equal(session.totals.cachedInputTokens, 10);
     assert.equal(session.totals.outputTokens, 30);
+    assert.equal(session.totals.reasoningOutputTokens, 7);
+    assert.equal(session.totals.totalTokens, 110);
+    assert.equal(session.editTurns, 1);
+    assert.equal(session.subagentCalls, 1);
     assert.equal(session.resumeCommand, `grok --resume ${sessionId}`);
     assertPrivacyClean(session);
   });

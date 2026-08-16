@@ -35,9 +35,16 @@ export const errors = {
     overlappingPaths: "Source and target paths overlap — operation blocked",
     duplicateName: "A Skill with the same name already exists at the target",
     noSkillSelected: "Select at least one Skill",
+    notFound: "Skill not found or unreadable",
   },
   sessions: {
     filterInvalid: "Invalid session filter",
+    queryFailed: "Local session query failed; try again",
+    sessionNotFound: "The selected session does not exist or is unavailable",
+    resumeUnavailable: "This session cannot currently be resumed",
+    resumeInvalid: "Invalid session resume request",
+    resumeCancelled: "Session resume was cancelled",
+    resumeFailed: "Could not start local session recovery",
   },
   distillation: {
     invalidSelection: "Select 1 to 8 distinct sessions",
@@ -47,6 +54,10 @@ export const errors = {
     notWaiting: "Candidate is not awaiting approval",
     knowledgeUnavailable: "Knowledge store is unavailable",
     knowledgeFailed: "Knowledge entry could not be written",
+    notApproved: "Approve the candidate first before saving it as a Skill",
+    invalidName: "Skill name is invalid",
+    invalidAgent: "Target tool is unavailable",
+    skillExists: "A Skill with this name already exists; choose another",
   },
   pricing: {
     modelListInvalid: "Invalid model list",

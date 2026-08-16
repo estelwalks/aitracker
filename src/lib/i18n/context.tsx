@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -40,18 +41,25 @@ const LOCALE_SEARCH_PARAM = "locale";
 const CURRENCY_SEARCH_PARAM = "currency";
 
 /**
+ * Local preferences are only available after hydration.  Apply them in a
+ * layout effect so a browser session does not leave the SSR fallback locale
+ * visible while the dashboard's client queries are settling.
+ */
+const useBrowserLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
  * Route-path → meta title key, used to update `document.title` immediately
  * when the language switches (route `head()` re-runs only on navigation).
  */
 const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
   ["/agents", "meta.titles.skills"],
-  ["/market", "meta.titles.market"],
   ["/security", "meta.titles.security"],
-  ["/sessions", "meta.titles.sessions"],
   ["/sources", "meta.titles.sources"],
   ["/reports", "meta.titles.reports"],
   ["/distill", "meta.titles.distill"],
   ["/settings", "meta.titles.settings"],
+  ["/skills", "meta.titles.skills"],
   ["/", "meta.titles.dashboard"],
 ];
 
@@ -242,7 +250,7 @@ export function I18nProvider({
    * resolved via prefs > system and passed `?locale=&currency=` to SSR), so we
    * never override it here — a stale localStorage mirror must not win.
    */
-  useEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (converged.current) return;
     if (typeof window === "undefined") return;
     if (window.desktopApi) {

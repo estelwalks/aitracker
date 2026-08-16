@@ -33,9 +33,16 @@ export const errors = {
     overlappingPaths: "源与目标路径重叠，已阻止操作",
     duplicateName: "目标位置已存在同名 Skill",
     noSkillSelected: "至少选择一个 Skill",
+    notFound: "Skill 未找到或无法读取",
   },
   sessions: {
     filterInvalid: "会话过滤参数不合法",
+    queryFailed: "本地会话查询失败，请重试",
+    sessionNotFound: "所选会话不存在或不可用",
+    resumeUnavailable: "该会话当前无法恢复",
+    resumeInvalid: "会话恢复请求无效",
+    resumeCancelled: "会话恢复已取消",
+    resumeFailed: "无法启动本地会话恢复",
   },
   distillation: {
     invalidSelection: "请选择 1 至 8 个不重复的会话",
@@ -45,6 +52,10 @@ export const errors = {
     notWaiting: "候选项不在待审批状态",
     knowledgeUnavailable: "知识库不可用",
     knowledgeFailed: "知识条目写入失败",
+    notApproved: "请先审批该候选再保存为 Skill",
+    invalidName: "Skill 名称不合法",
+    invalidAgent: "目标工具不可用",
+    skillExists: "同名 Skill 已存在，请更换名称",
   },
   pricing: {
     modelListInvalid: "模型列表不合法",

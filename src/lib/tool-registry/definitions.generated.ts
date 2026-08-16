@@ -380,9 +380,14 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "linux"
           ],
           "base": "home",
-          "path": ".gemini"
+          "path": ".gemini/tmp"
         }
-      ]
+      ],
+      "executable": {
+        "shared": [
+          "gemini"
+        ]
+      }
     },
     "storage": {
       "skills": {
@@ -401,8 +406,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "adapter",
-        "reader": "generic",
+        "mode": "native",
+        "reader": "gemini-session-v1",
         "paths": [
           {
             "targets": [
@@ -413,20 +418,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             ],
             "base": "home",
             "path": ".gemini/tmp",
-            "glob": "**/chats/*.json",
+            "glob": "**/chats/session-*.json",
             "format": "json"
-          },
-          {
-            "targets": [
-              "macos",
-              "windows10",
-              "windows11",
-              "linux"
-            ],
-            "base": "home",
-            "path": ".gemini",
-            "glob": "**/*usage*.jsonl",
-            "format": "jsonl"
           }
         ]
       },
@@ -575,7 +568,34 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "openclaw-session-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".openclaw/agents",
+            "glob": "*/sessions/**/*.jsonl*",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".openclaw/agents",
+            "glob": "*/session-sqlite-import-archive/**/*.jsonl*",
+            "format": "jsonl"
+          }
+        ]
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -1037,8 +1057,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "adapter",
-        "reader": "generic",
+        "mode": "native",
+        "reader": "grok-turn-v1",
         "paths": [
           {
             "targets": [
@@ -1049,19 +1069,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             ],
             "base": "home",
             "path": ".grok/sessions",
-            "glob": "**/*.jsonl",
-            "format": "jsonl"
-          },
-          {
-            "targets": [
-              "macos",
-              "windows10",
-              "windows11",
-              "linux"
-            ],
-            "base": "home",
-            "path": ".grok/logs",
-            "glob": "**/*.jsonl",
+            "glob": "**/updates.jsonl",
             "format": "jsonl"
           }
         ]
@@ -1230,7 +1238,46 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     },
     "capabilities": {
       "usage": {
-        "mode": "unsupported"
+        "mode": "native",
+        "reader": "antigravity-transcript-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity-ide",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".gemini/antigravity-cli",
+            "glob": "**/.system_generated/logs/transcript.jsonl",
+            "format": "jsonl"
+          }
+        ]
       },
       "skills": "read-write",
       "agents": "unsupported",
@@ -2204,4 +2251,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "edb4c93d0125f103";
+export const TOOL_REGISTRY_VERSION: string = "72debb1d528006d6";

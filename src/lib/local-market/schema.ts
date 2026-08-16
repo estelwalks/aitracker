@@ -10,10 +10,11 @@ import type {
 } from "./types.ts";
 
 const VALID_SORTS: readonly MarketSort[] = [
-  "downloads",
-  "latest",
   "stars",
-  "tokens",
+  "created_at",
+  "name_asc",
+  "name_desc",
+  "downloads",
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -124,6 +125,7 @@ export function parseMarketQuery(value: unknown): {
   limit: number;
   search: string;
   sort: MarketSort;
+  tags: string[];
 } {
   if (!isRecord(value)) throw new AppError("errors.market.queryInvalid");
 
@@ -131,6 +133,9 @@ export function parseMarketQuery(value: unknown): {
   const limit =
     typeof value.limit === "number" ? value.limit : Number(value.limit);
   const search = typeof value.search === "string" ? value.search.trim() : "";
+  const tags = Array.isArray(value.tags)
+    ? value.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
 
   if (!Number.isInteger(page) || page < 1)
     throw new AppError("errors.market.pageNotPositive");
@@ -139,12 +144,12 @@ export function parseMarketQuery(value: unknown): {
   }
   if (search.length > 100) throw new AppError("errors.market.searchTooLong");
 
-  const sortRaw = typeof value.sort === "string" ? value.sort : "downloads";
+  const sortRaw = typeof value.sort === "string" ? value.sort : "stars";
   if (!VALID_SORTS.includes(sortRaw as MarketSort)) {
     throw new AppError("errors.market.sortInvalid");
   }
 
-  return { page, limit, search, sort: sortRaw as MarketSort };
+  return { page, limit, search, sort: sortRaw as MarketSort, tags };
 }
 
 export function parseInstallRequest(value: unknown): {

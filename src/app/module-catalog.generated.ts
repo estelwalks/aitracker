@@ -105,7 +105,7 @@ export const PUBLIC_MODULE_CATALOG: PublicModuleCatalog = {
       id: "skill-distribution",
       navigation: {
         group: "core",
-        route: "/market",
+        route: "/skills",
         order: 60,
       },
       i18n: {
@@ -220,24 +220,6 @@ export const PUBLIC_MODULE_CATALOG: PublicModuleCatalog = {
         labelKey: "module.search",
       },
       capabilities: ["search-local-data"],
-      platforms: {
-        macos: "supported",
-        windows10: "supported",
-        windows11: "supported",
-        linux: "planned",
-      },
-    },
-    {
-      id: "sessions",
-      navigation: {
-        group: "core",
-        route: "/sessions",
-        order: 131,
-      },
-      i18n: {
-        labelKey: "module.sessions",
-      },
-      capabilities: ["read-sessions"],
       platforms: {
         macos: "supported",
         windows10: "supported",

@@ -6,7 +6,9 @@ import { getReportsQuery, ReportsPage } from "../modules/reports/query";
 
 export const Route = createFileRoute("/reports")({
   loader: ({ location }) =>
-    getReportsQuery().then((data) => ({
+    getReportsQuery({
+      data: resolveLocaleFromSearch(location.search),
+    }).then((data) => ({
       ...data,
       locale: resolveLocaleFromSearch(location.search),
     })),

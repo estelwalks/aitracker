@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createReadStream, promises as fs } from "node:fs";
 import {
   createServer,
@@ -9,6 +9,11 @@ import { extname, join, normalize, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { COOKIE_TOKEN_NAME } from "./app-config.js";
+import {
+  handleSecurityHttpApi,
+  SECURITY_API_PREFIX,
+} from "./security-http-api.js";
+import type { SecurityScannerService } from "./security-scanner-service.js";
 
 interface NitroExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -31,8 +36,19 @@ type NitroNodeMiddleware = (
 export interface LocalWebServer {
   origin: string;
   capabilityToken: string;
+  createBrowserBootstrapUrl(pathname?: string): string;
   close(): Promise<void>;
 }
+
+export interface LocalWebServerOptions {
+  securityScanner?: SecurityScannerService;
+}
+
+const MAX_GENERAL_BODY_BYTES = 10 * 1024 * 1024;
+const MAX_SECURITY_API_BODY_BYTES = 64 * 1024;
+const MAX_CONCURRENT_SECURITY_REQUESTS = 16;
+const MAX_BROWSER_BOOTSTRAP_TOKENS = 16;
+const BROWSER_BOOTSTRAP_TTL_MS = 60_000;
 
 const mimeTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -106,17 +122,24 @@ async function servePublicAsset(
 
 async function readRequestBody(
   request: IncomingMessage,
+  maximumBytes = MAX_GENERAL_BODY_BYTES,
 ): Promise<Buffer | undefined> {
   if (request.method === "GET" || request.method === "HEAD") {
     return undefined;
   }
 
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.byteLength;
+    if (totalBytes > maximumBytes) throw new RequestBodyTooLargeError();
+    chunks.push(buffer);
   }
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
 }
+
+class RequestBodyTooLargeError extends Error {}
 
 /**
  * Capability-token cookie name. The renderer's SPA requests (TanStack Start
@@ -141,6 +164,16 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return cookies;
 }
 
+function equalToken(candidate: string | undefined, expected: string): boolean {
+  if (candidate == null) return false;
+  const candidateBytes = Buffer.from(candidate);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    candidateBytes.byteLength === expectedBytes.byteLength &&
+    timingSafeEqual(candidateBytes, expectedBytes)
+  );
+}
+
 /**
  * Validate the capability token. Returns:
  *  - "cookie":    the HttpOnly cookie already matches (no Set-Cookie needed);
@@ -153,28 +186,19 @@ function validateToken(
   capabilityToken: string,
 ): TokenStatus {
   if (
-    parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME] === capabilityToken
+    equalToken(
+      parseCookies(request.headers.cookie)[TOKEN_COOKIE_NAME],
+      capabilityToken,
+    )
   ) {
     return "cookie";
   }
-
-  const authHeader = request.headers.authorization;
-  if (authHeader && authHeader === `Bearer ${capabilityToken}`) {
-    return "challenge";
-  }
-
-  const customToken = request.headers["x-capability-token"];
-  if (typeof customToken === "string" && customToken === capabilityToken) {
-    return "challenge";
-  }
-
-  const url = new URL(request.url ?? "/", "http://localhost");
-  const queryToken = url.searchParams.get("token");
-  if (queryToken === capabilityToken) {
-    return "challenge";
-  }
-
   return "none";
+}
+
+function securityResponseHeaders(response: ServerResponse): void {
+  response.setHeader("cache-control", "no-store");
+  response.setHeader("x-content-type-options", "nosniff");
 }
 
 function tokenCookieHeader(capabilityToken: string): string {
@@ -212,10 +236,13 @@ async function sendFetchResponse(
 
 export async function startLocalWebServer(
   webRoot: string,
+  options: LocalWebServerOptions = {},
 ): Promise<LocalWebServer> {
   const serverEntry = join(webRoot, "server", "index.mjs");
   const publicDirectory = join(webRoot, "public");
   const capabilityToken = randomUUID();
+  const browserBootstrapTokens = new Map<string, number>();
+  let activeSecurityRequests = 0;
   const module = (await import(pathToFileURL(serverEntry).href)) as {
     default?: NitroHandler;
     middleware?: NitroNodeMiddleware;
@@ -233,6 +260,45 @@ export async function startLocalWebServer(
       const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
       const requestUrl = new URL(request.url ?? "/", origin);
       if (
+        request.headers.host !== new URL(origin).host ||
+        requestUrl.origin !== origin
+      ) {
+        response.statusCode = 421;
+        securityResponseHeaders(response);
+        response.setHeader("Content-Type", "text/plain; charset=utf-8");
+        response.end("Misdirected Request");
+        return;
+      }
+
+      // External browsers receive a single-use bootstrap URL from the native
+      // tray. Consume it once, establish the HttpOnly cookie, then redirect to
+      // a clean URL so no reusable capability remains in address/history.
+      const browserBootstrap = requestUrl.searchParams.get("bootstrap");
+      if (browserBootstrap != null) {
+        const expiresAt = browserBootstrapTokens.get(browserBootstrap);
+        browserBootstrapTokens.delete(browserBootstrap);
+        if (expiresAt == null || expiresAt < Date.now()) {
+          response.statusCode = 401;
+          securityResponseHeaders(response);
+          response.setHeader("referrer-policy", "no-referrer");
+          response.setHeader("Content-Type", "text/plain; charset=utf-8");
+          response.end("Unauthorized");
+          return;
+        }
+        requestUrl.searchParams.delete("bootstrap");
+        response.statusCode = 303;
+        response.setHeader("set-cookie", tokenCookieHeader(capabilityToken));
+        response.setHeader(
+          "location",
+          `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`,
+        );
+        securityResponseHeaders(response);
+        response.setHeader("referrer-policy", "no-referrer");
+        response.end();
+        return;
+      }
+
+      if (
         await servePublicAsset(
           request,
           response,
@@ -246,11 +312,28 @@ export async function startLocalWebServer(
       // Reject oversized request bodies before reading them into memory.
       const contentLengthHeader = request.headers["content-length"];
       if (contentLengthHeader) {
-        const contentLength = parseInt(contentLengthHeader, 10);
-        if (!Number.isNaN(contentLength) && contentLength > 10 * 1024 * 1024) {
+        const contentLength = /^\d+$/u.test(contentLengthHeader)
+          ? Number(contentLengthHeader)
+          : Number.NaN;
+        const isSecurityApi =
+          requestUrl.pathname.startsWith(SECURITY_API_PREFIX);
+        const maximum = isSecurityApi
+          ? MAX_SECURITY_API_BODY_BYTES
+          : MAX_GENERAL_BODY_BYTES;
+        if (isSecurityApi && !Number.isSafeInteger(contentLength)) {
+          response.statusCode = 400;
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end(
+            '{"error":{"code":"security.http.invalid_content_length"}}',
+          );
+          return;
+        }
+        if (!Number.isNaN(contentLength) && contentLength > maximum) {
           response.statusCode = 413;
-          response.setHeader("Content-Type", "text/plain; charset=utf-8");
-          response.end("Request body too large");
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end('{"error":{"code":"security.http.body_too_large"}}');
           return;
         }
       }
@@ -262,12 +345,86 @@ export async function startLocalWebServer(
       const tokenStatus = validateToken(request, capabilityToken);
       if (tokenStatus === "none") {
         response.statusCode = 401;
-        response.setHeader("Content-Type", "text/plain; charset=utf-8");
-        response.end("Unauthorized");
+        if (requestUrl.pathname.startsWith(SECURITY_API_PREFIX)) {
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end('{"error":{"code":"security.http.unauthorized"}}');
+        } else {
+          response.setHeader("Content-Type", "text/plain; charset=utf-8");
+          response.end("Unauthorized");
+        }
         return;
       }
       const challengeCookies =
         tokenStatus === "challenge" ? [tokenCookieHeader(capabilityToken)] : [];
+
+      if (requestUrl.pathname.startsWith(SECURITY_API_PREFIX)) {
+        if (!options.securityScanner) {
+          response.statusCode = 503;
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end(
+            '{"error":{"code":"security.http.service_unavailable"}}',
+          );
+          return;
+        }
+        if (request.headers["content-encoding"] != null) {
+          response.statusCode = 415;
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end(
+            '{"error":{"code":"security.http.content_encoding_unsupported"}}',
+          );
+          return;
+        }
+        if (activeSecurityRequests >= MAX_CONCURRENT_SECURITY_REQUESTS) {
+          response.statusCode = 429;
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.setHeader("retry-after", "1");
+          response.end('{"error":{"code":"security.http.too_many_requests"}}');
+          return;
+        }
+        activeSecurityRequests += 1;
+        try {
+          const body = await readRequestBody(
+            request,
+            MAX_SECURITY_API_BODY_BYTES,
+          );
+          const declaredLength = request.headers["content-length"];
+          if (
+            declaredLength != null &&
+            Number(declaredLength) !== (body?.byteLength ?? 0)
+          ) {
+            response.statusCode = 400;
+            securityResponseHeaders(response);
+            response.setHeader(
+              "Content-Type",
+              "application/json; charset=utf-8",
+            );
+            response.end(
+              '{"error":{"code":"security.http.content_length_mismatch"}}',
+            );
+            return;
+          }
+          const apiRequest = new Request(requestUrl, {
+            method: request.method,
+            headers: new Headers(request.headers as Record<string, string>),
+            ...(body == null ? {} : { body: body.toString("utf8") }),
+          });
+          const apiResponse = await handleSecurityHttpApi(
+            apiRequest,
+            origin,
+            options.securityScanner,
+          );
+          if (!apiResponse)
+            throw new Error("Security API route was not handled");
+          await sendFetchResponse(apiResponse, response, challengeCookies);
+        } finally {
+          activeSecurityRequests -= 1;
+        }
+        return;
+      }
 
       if (middleware) {
         if (challengeCookies.length > 0) {
@@ -300,9 +457,22 @@ export async function startLocalWebServer(
       await sendFetchResponse(fetchResponse, response, challengeCookies);
       void Promise.allSettled(pendingTasks);
     } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        response.statusCode = 413;
+        securityResponseHeaders(response);
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        response.end('{"error":{"code":"security.http.body_too_large"}}');
+        return;
+      }
       console.error("Local web server request failed", error);
       if (!response.headersSent) {
         response.statusCode = 500;
+        if ((request.url ?? "").includes(SECURITY_API_PREFIX)) {
+          securityResponseHeaders(response);
+          response.setHeader("Content-Type", "application/json; charset=utf-8");
+          response.end('{"error":{"code":"security.http.internal_error"}}');
+          return;
+        }
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
       }
       response.end("Local server error");
@@ -316,6 +486,8 @@ export async function startLocalWebServer(
       resolveListen();
     });
   });
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 10_000;
 
   const address = server.address();
   if (!address || typeof address === "string") {
@@ -325,6 +497,25 @@ export async function startLocalWebServer(
   return {
     origin: `http://127.0.0.1:${address.port}`,
     capabilityToken,
+    createBrowserBootstrapUrl(pathname = "/security") {
+      const now = Date.now();
+      for (const [token, expiresAt] of browserBootstrapTokens) {
+        if (expiresAt < now) browserBootstrapTokens.delete(token);
+      }
+      while (browserBootstrapTokens.size >= MAX_BROWSER_BOOTSTRAP_TOKENS) {
+        const oldest = browserBootstrapTokens.keys().next().value as
+          string | undefined;
+        if (oldest == null) break;
+        browserBootstrapTokens.delete(oldest);
+      }
+      const bootstrap = randomUUID();
+      browserBootstrapTokens.set(bootstrap, now + BROWSER_BOOTSTRAP_TTL_MS);
+      const url = new URL(pathname, `http://127.0.0.1:${address.port}`);
+      if (url.origin !== `http://127.0.0.1:${address.port}`)
+        throw new TypeError("Browser bootstrap path must stay same-origin");
+      url.searchParams.set("bootstrap", bootstrap);
+      return url.href;
+    },
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {
         server.close((error) => {

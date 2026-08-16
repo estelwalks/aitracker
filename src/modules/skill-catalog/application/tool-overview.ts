@@ -3,6 +3,8 @@ import {
   type UsagePeriod,
 } from "../../../lib/local-usage/presentation.ts";
 import { estimateUsageCost } from "../../../lib/pricing/index.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
+import type { LocalUsageToolCategory } from "../../../lib/local-usage/types.ts";
 import type {
   DashboardV2ContextCounts,
   DashboardV2Event,
@@ -12,22 +14,13 @@ import type {
 export type ToolOverviewState =
   "active" | "detected" | "available" | "unavailable";
 
-/**
- * `/agents` is intentionally the compact view for the two locally supported
- * first-party CLI integrations. This is product metadata, not a usage
- * fallback: every metric below is still calculated exclusively from the
- * renderer-safe dashboard snapshot.
- */
-const overviewTools = [
-  { id: "claude-code", name: "Claude Code" },
-  { id: "codex", name: "Codex CLI" },
-] as const;
+const registryNameById = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
+);
 
-type OverviewToolId = (typeof overviewTools)[number]["id"];
-
-function isOverviewToolId(id: string): id is OverviewToolId {
-  return overviewTools.some((tool) => tool.id === id);
-}
+/** The aggregate can be mixed only when the source itself has mixed records. */
+export type ToolOverviewMeasurement =
+  "observed" | "estimated" | "mixed" | "unavailable";
 
 export interface ToolOverviewCard {
   readonly id: string;
@@ -43,12 +36,16 @@ export interface ToolOverviewCard {
   readonly share: number;
   /** Null is an unavailable session source, never a synthetic zero. */
   readonly sessions: number | null;
+  /** Null means the session scanner is unavailable. */
+  readonly subagentCalls: number | null;
   /** Null means the source did not expose a cacheable input denominator. */
   readonly cacheRate: number | null;
   /** Null is no event evidence; zero is an observed range with no responses. */
   readonly messages: number | null;
   readonly lastActiveAt: string | null;
   readonly skillUsage: ToolOverviewSkillUsage;
+  /** Estimate-only sources expose model totals but no context attribution. */
+  readonly measurement: ToolOverviewMeasurement;
 }
 
 /** `observed: false` is intentionally different from an observed zero call count. */
@@ -75,7 +72,20 @@ export interface ToolOverviewBreakdownRow {
 
 export interface ToolOverviewContextRow {
   readonly key: keyof DashboardV2ContextCounts;
-  readonly count: number;
+  readonly count: number | null;
+  readonly available: boolean;
+}
+
+/** A named, privacy-safe tool-call aggregate from local usage logs. */
+export interface ToolOverviewToolCallDetail {
+  readonly name: string;
+  readonly category: LocalUsageToolCategory;
+  readonly calls: number;
+  /**
+   * Token attribution across calls in the same observed usage event. This is
+   * not provider-supplied per-tool billing and is labelled as such in the UI.
+   */
+  readonly attributedTokens: number;
 }
 
 export interface ToolOverviewTokenComposition {
@@ -100,14 +110,25 @@ export interface ToolOverviewView {
   readonly availableToolCount: number;
   readonly totalTokens: number;
   readonly totalEvents: number;
+  readonly naturalDays: number;
   readonly sessions: number | null;
   readonly cacheRate: number | null;
   readonly trend: readonly ToolOverviewTrendPoint[];
   readonly models: readonly ToolOverviewBreakdownRow[];
   readonly projects: readonly ToolOverviewBreakdownRow[];
   readonly context: readonly ToolOverviewContextRow[];
+  /** Detailed, sanitized tool-call evidence for the selected source/range. */
+  readonly toolCallDetails: readonly ToolOverviewToolCallDetail[];
+  /** False only when the source did not expose tool-call context at all. */
+  readonly toolCallDetailsAvailable: boolean;
   readonly tokenComposition: ToolOverviewTokenComposition;
+  readonly reasoningAvailable: boolean;
+  readonly systemPromptAvailable: boolean;
   readonly skillUsage: ToolOverviewSkillUsage;
+  /** Whether the selected source has any safely attributable context field. */
+  readonly hasContextBreakdown: boolean;
+  /** Directly observed, estimated-only, mixed, or no usage event in range. */
+  readonly measurement: ToolOverviewMeasurement;
 }
 
 function inRange(
@@ -188,6 +209,34 @@ function trend(events: readonly DashboardV2Event[]): ToolOverviewTrendPoint[] {
     .sort((left, right) => left.date.localeCompare(right.date));
 }
 
+function completeTrend(
+  events: readonly DashboardV2Event[],
+  period: UsagePeriod,
+  from?: string,
+  to?: string,
+): ToolOverviewTrendPoint[] {
+  const observed = trend(events);
+  const byDate = new Map(observed.map((point) => [point.date, point]));
+  const range = resolveUsageRange(period, from, to);
+  if (!range.valid || !range.fromDate || !range.toDate) return [];
+  const start =
+    period === "all"
+      ? observed[0]
+        ? new Date(`${observed[0].date}T00:00:00`)
+        : range.toDate
+      : range.fromDate;
+  const points: ToolOverviewTrendPoint[] = [];
+  for (
+    let cursor = new Date(start);
+    cursor <= range.toDate;
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    points.push(byDate.get(date) ?? { date, tokens: 0 });
+  }
+  return points;
+}
+
 function context(
   events: readonly DashboardV2Event[],
 ): ToolOverviewContextRow[] {
@@ -197,15 +246,115 @@ function context(
     skillCalls: 0,
     toolOutputCalls: 0,
   };
+  const evidence: Record<keyof DashboardV2ContextCounts, boolean> = {
+    textResponses: false,
+    toolCalls: false,
+    skillCalls: false,
+    toolOutputCalls: false,
+  };
   for (const event of events) {
     counts.textResponses += event.context.textResponses;
     counts.toolCalls += event.context.toolCalls;
     counts.skillCalls += event.context.skillCalls;
     counts.toolOutputCalls += event.context.toolOutputCalls;
+    evidence.textResponses ||= event.evidence.textResponses;
+    evidence.toolCalls ||= event.evidence.toolCalls;
+    evidence.skillCalls ||= event.evidence.skillCalls;
+    evidence.toolOutputCalls ||= event.evidence.toolOutputCalls;
   }
   return (Object.keys(counts) as (keyof DashboardV2ContextCounts)[]).map(
-    (key) => ({ key, count: counts[key] }),
+    (key) => ({
+      key,
+      count: evidence[key] ? counts[key] : null,
+      available: evidence[key],
+    }),
   );
+}
+
+function uniqueEventTools(event: DashboardV2Event) {
+  const rows = new Map<
+    string,
+    { name: string; category: LocalUsageToolCategory; calls: number }
+  >();
+  for (const tool of event.context.tools ?? []) {
+    if (tool.calls <= 0 || tool.name.length === 0) continue;
+    const key = `${tool.category}\u0000${tool.name}`;
+    const current = rows.get(key);
+    if (current == null) rows.set(key, { ...tool });
+    else current.calls += tool.calls;
+  }
+  return [...rows.values()].sort(
+    (left, right) =>
+      left.name.localeCompare(right.name) ||
+      left.category.localeCompare(right.category),
+  );
+}
+
+/** Integer, call-weighted allocation that preserves each event's total exactly. */
+function allocateTokens(total: number, calls: readonly number[]): number[] {
+  const sum = calls.reduce((value, count) => value + count, 0);
+  if (sum <= 0) return calls.map(() => 0);
+  const raw = calls.map((count) => (total * count) / sum);
+  const allocated = raw.map((value) => Math.floor(value));
+  let remaining =
+    total - allocated.reduce((value, tokens) => value + tokens, 0);
+  const order = raw
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort(
+      (left, right) =>
+        right.fraction - left.fraction || left.index - right.index,
+    );
+  for (const item of order) {
+    if (remaining <= 0) break;
+    allocated[item.index]! += 1;
+    remaining -= 1;
+  }
+  return allocated;
+}
+
+function toolCallDetails(events: readonly DashboardV2Event[]): {
+  available: boolean;
+  rows: readonly ToolOverviewToolCallDetail[];
+} {
+  const rows = new Map<
+    string,
+    {
+      name: string;
+      category: LocalUsageToolCategory;
+      calls: number;
+      attributedTokens: number;
+    }
+  >();
+  let available = false;
+  for (const event of events) {
+    if (!event.evidence.toolCalls) continue;
+    available = true;
+    const tools = uniqueEventTools(event);
+    const allocations = allocateTokens(
+      event.totalTokens,
+      tools.map((tool) => tool.calls),
+    );
+    for (const [index, tool] of tools.entries()) {
+      const key = `${tool.category}\u0000${tool.name}`;
+      const current = rows.get(key) ?? {
+        name: tool.name,
+        category: tool.category,
+        calls: 0,
+        attributedTokens: 0,
+      };
+      current.calls += tool.calls;
+      current.attributedTokens += allocations[index] ?? 0;
+      rows.set(key, current);
+    }
+  }
+  return {
+    available,
+    rows: [...rows.values()].sort(
+      (left, right) =>
+        right.attributedTokens - left.attributedTokens ||
+        left.name.localeCompare(right.name),
+    ),
+  };
 }
 
 function tokenComposition(
@@ -217,7 +366,11 @@ function tokenComposition(
       cachedInputTokens: total.cachedInputTokens + event.cachedInputTokens,
       cacheCreationInputTokens:
         total.cacheCreationInputTokens + event.cacheCreationInputTokens,
-      outputTokens: total.outputTokens + event.outputTokens,
+      // output includes reasoning in current provider schemas; expose the
+      // mutually-exclusive assistant-response slice to avoid double counting.
+      outputTokens:
+        total.outputTokens +
+        Math.max(0, event.outputTokens - event.reasoningOutputTokens),
       reasoningOutputTokens:
         total.reasoningOutputTokens + event.reasoningOutputTokens,
     }),
@@ -236,14 +389,38 @@ function skillUsage(
 ): ToolOverviewSkillUsage {
   // V2 projects source logs into aggregate counts. A zero is therefore
   // observed evidence whenever an event exists; an empty event set is not.
-  const observed = events.length > 0;
+  const observed = events.some((event) => event.evidence.skillCalls);
   return {
     observed,
     calls: events.reduce((total, event) => total + event.context.skillCalls, 0),
   };
 }
 
+function measurementFor(
+  events: readonly DashboardV2Event[],
+): ToolOverviewMeasurement {
+  if (events.length === 0) return "unavailable";
+  const observed = events.some((event) => event.measurement !== "estimated");
+  const estimated = events.some((event) => event.measurement === "estimated");
+  if (observed && estimated) return "mixed";
+  return estimated ? "estimated" : "observed";
+}
+
+function hasContextBreakdown(events: readonly DashboardV2Event[]): boolean {
+  return events.some((event) =>
+    Object.values(event.evidence).some((available) => available),
+  );
+}
+
 function cacheRate(events: readonly DashboardV2Event[]): number | null {
+  // Transcript-size estimates cannot establish cache usage. Do not turn an
+  // omitted cache field into a misleading observed 0%.
+  if (
+    events.length === 0 ||
+    events.every((event) => event.measurement === "estimated")
+  ) {
+    return null;
+  }
   const input = events.reduce(
     (total, event) =>
       total +
@@ -293,6 +470,23 @@ function sessionsForSource(
   );
 }
 
+function subagentsForSource(
+  snapshot: DashboardV2Snapshot,
+  source: string,
+  period: UsagePeriod,
+  from?: string,
+  to?: string,
+): number | null {
+  if (!snapshot.sessions.available) return null;
+  return snapshot.sessions.bySourceDay.reduce(
+    (total, row) =>
+      row.source === source && dateWithinRange(row.date, period, from, to)
+        ? total + row.subagentCalls
+        : total,
+    0,
+  );
+}
+
 function projectSessionsForSource(
   snapshot: DashboardV2Snapshot,
   source: string,
@@ -317,26 +511,32 @@ export function buildToolOverview(
   from?: string,
   to?: string,
 ): ToolOverviewView {
-  // Sources outside the two installed CLI integrations never contribute a
-  // card, trend, share, or selected-tool detail on this prototype-aligned
-  // page. Their raw records remain owned by the dashboard module.
-  const periodEvents = inRange(snapshot.events, period, from, to).filter(
-    (event) => isOverviewToolId(event.source),
-  );
+  const periodEvents = inRange(snapshot.events, period, from, to);
   const totalPeriodTokens = periodEvents.reduce(
     (total, event) => total + event.totalTokens,
     0,
   );
   const sourceTools = new Map(snapshot.tools.map((tool) => [tool.id, tool]));
-  const cards = overviewTools.map((configuredTool) => {
-    const scannedTool = sourceTools.get(configuredTool.id);
+  // Only show a tool when local installation/data evidence exists. This keeps
+  // the overview focused while allowing every actually used/detected tool
+  // (rather than a fixed pair) to select its own supported detail dimensions.
+  const cardToolIds = snapshot.tools
+    .filter(
+      (tool) =>
+        tool.detected ||
+        tool.available ||
+        periodEvents.some((event) => event.source === tool.id),
+    )
+    .map((tool) => tool.id);
+  const cards = cardToolIds.map((toolId) => {
+    const scannedTool = sourceTools.get(toolId);
     const tool = {
-      id: configuredTool.id,
+      id: toolId,
       // The dashboard snapshot is built server-side from the public tool
       // manifest, whose name is the registry definition's `display.name`.
-      // Keep the fixed text only for a missing source projection so the
-      // two-card layout remains usable while a scanner is unavailable.
-      name: scannedTool?.name ?? configuredTool.name,
+      // The generated manifest is a browser-safe projection of `display.name`.
+      // It remains the fallback while scanner data is unavailable.
+      name: scannedTool?.name ?? registryNameById.get(toolId) ?? toolId,
       available: scannedTool?.available ?? false,
       detected: scannedTool?.detected ?? false,
     };
@@ -366,16 +566,17 @@ export function buildToolOverview(
       events: events.length,
       share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
       sessions: sessionsForSource(snapshot, tool.id, period, from, to),
+      subagentCalls: subagentsForSource(snapshot, tool.id, period, from, to),
       cacheRate: cacheRate(events),
-      messages:
-        events.length === 0
-          ? null
-          : events.reduce(
-              (total, event) => total + event.context.textResponses,
-              0,
-            ),
+      messages: !events.some((event) => event.evidence.textResponses)
+        ? null
+        : events.reduce(
+            (total, event) => total + event.context.textResponses,
+            0,
+          ),
       lastActiveAt,
       skillUsage: skillUsage(events),
+      measurement: measurementFor(events),
     };
   });
   // A persisted/manual selection wins. On first load, prefer actual activity
@@ -392,6 +593,7 @@ export function buildToolOverview(
   const selectedProjectSessions = selected
     ? projectSessionsForSource(snapshot, selected.id, period, from, to)
     : null;
+  const detailedToolCalls = toolCallDetails(selectedEvents);
 
   return {
     period,
@@ -405,11 +607,12 @@ export function buildToolOverview(
       0,
     ),
     totalEvents: selectedEvents.length,
+    naturalDays: completeTrend(selectedEvents, period, from, to).length,
     sessions: selected
       ? sessionsForSource(snapshot, selected.id, period, from, to)
       : null,
     cacheRate: cacheRate(selectedEvents),
-    trend: trend(selectedEvents),
+    trend: completeTrend(selectedEvents, period, from, to),
     models: rank(
       selectedEvents,
       (event) => event.model,
@@ -422,7 +625,17 @@ export function buildToolOverview(
       selectedProjectSessions,
     ),
     context: context(selectedEvents),
+    toolCallDetails: detailedToolCalls.rows,
+    toolCallDetailsAvailable: detailedToolCalls.available,
     tokenComposition: tokenComposition(selectedEvents),
+    reasoningAvailable: selectedEvents.some(
+      (event) => event.evidence.reasoningTokens,
+    ),
+    systemPromptAvailable: selectedEvents.some(
+      (event) => event.evidence.systemPromptTokens,
+    ),
     skillUsage: skillUsage(selectedEvents),
+    hasContextBreakdown: hasContextBreakdown(selectedEvents),
+    measurement: measurementFor(selectedEvents),
   };
 }

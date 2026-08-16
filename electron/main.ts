@@ -10,6 +10,8 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Notification,
+  safeStorage,
   shell,
   Tray,
   type IpcMainInvokeEvent,
@@ -19,6 +21,10 @@ import {
   desktopIpc,
   type AutoLaunchState,
   type RuntimeInfo,
+  type SecurityScanCycle,
+  type SecurityScanHistoryEntry,
+  type SecurityScanSchedule,
+  type SecurityScanState,
 } from "./contracts.js";
 import {
   createTrayTemplate,
@@ -51,6 +57,8 @@ import {
   ENV,
   STORAGE_KEY_PREFIX,
 } from "./app-config.js";
+import { SecurityScannerService } from "./security-scanner-service.js";
+import { isTrustedIpcSender } from "./ipc-security.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -60,8 +68,9 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
-let capabilityToken = "";
 let isQuitting = false;
+let securityScanner: SecurityScannerService | null = null;
+let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -87,11 +96,22 @@ function markCloseHintShown(): void {
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  if (!event.senderFrame || event.senderFrame.url === "about:blank") {
-    throw new Error("Untrusted IPC sender");
-  }
-
-  if (new URL(event.senderFrame.url).origin !== allowedOrigin) {
+  const mainFrame = event.sender.mainFrame;
+  if (
+    !event.senderFrame ||
+    !mainFrame ||
+    !isTrustedIpcSender({
+      senderWebContentsId: event.sender.id,
+      expectedWebContentsId:
+        mainWindow == null || mainWindow.isDestroyed()
+          ? null
+          : mainWindow.webContents.id,
+      senderFrameRoutingId: event.senderFrame.routingId,
+      mainFrameRoutingId: mainFrame.routingId,
+      senderFrameUrl: event.senderFrame.url,
+      allowedOrigin,
+    })
+  ) {
     throw new Error("Untrusted IPC sender");
   }
 }
@@ -131,6 +151,197 @@ function showMainWindow(): void {
   }
   mainWindow.show();
   mainWindow.focus();
+}
+
+function openBrowserCompanion(): void {
+  if (!localWebServer) return;
+  const url = localWebServer.createBrowserBootstrapUrl(
+    `/security?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+  );
+  void shell.openExternal(url);
+}
+
+const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
+  hourly: 60 * 60 * 1_000,
+  daily: 24 * 60 * 60 * 1_000,
+  weekly: 7 * 24 * 60 * 60 * 1_000,
+};
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
+const WEEK_MS = 7 * DAY_MS;
+/** Wall-clock time of the most recent scheduled automatic run (weekly anchor). */
+let lastAutomaticScanRunAt: number | null = null;
+
+const SECURITY_RISK_NOTICE: Record<
+  DesktopLocale,
+  { title: string; body: string }
+> = {
+  "zh-CN": {
+    title: "安全扫描发现风险",
+    body: "自动扫描在 {count} 个 Skill 中发现风险，请查看安全中心。",
+  },
+  "en-US": {
+    title: "Security scan found risks",
+    body: "The automatic scan found risks in {count} skill(s). Open the Security Center.",
+  },
+  "ja-JP": {
+    title: "セキュリティスキャンでリスクを検出",
+    body: "自動スキャンで {count} 件のリスクを検出しました。",
+  },
+  "ko-KR": {
+    title: "보안 스캔에서 위험 발견",
+    body: "자동 스캔에서 {count}개의 위험이 발견되었습니다.",
+  },
+};
+
+/** Parse a validated "HH:MM" schedule time into local hour/minute. */
+function parseScheduleTime(time: string): [number, number] {
+  const [hour, minute] = time.split(":").map(Number);
+  return [hour, minute];
+}
+
+/** Next local wall-clock occurrence of `time` strictly after `base`. */
+function nextTimeAtOrAfter(base: Date, time: string): Date {
+  const [hour, minute] = parseScheduleTime(time);
+  const next = new Date(base);
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+/**
+ * Next local occurrence of the anchor weekday's `time` after `base` — the
+ * weekly cadence runs once per week on the weekday the schedule was last armed.
+ */
+function nextWeeklyAtOrAfter(base: Date, anchor: Date, time: string): Date {
+  const [hour, minute] = parseScheduleTime(time);
+  const next = new Date(anchor);
+  next.setHours(hour, minute, 0, 0);
+  while (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 7);
+  return next;
+}
+
+/**
+ * Delay until the next automatic run: hourly reuses the fixed 1h interval;
+ * daily/weekly honor the configured "HH:MM" local wall-clock time.
+ */
+function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
+  const now = new Date();
+  if (schedule.cycle === "hourly") return SECURITY_SCAN_CYCLE_MS.hourly;
+  if (schedule.cycle === "daily") {
+    return nextTimeAtOrAfter(now, schedule.time).getTime() - now.getTime();
+  }
+  const anchor =
+    lastAutomaticScanRunAt == null ? now : new Date(lastAutomaticScanRunAt);
+  return Math.max(
+    0,
+    nextWeeklyAtOrAfter(now, anchor, schedule.time).getTime() - now.getTime(),
+  );
+}
+
+async function runAutomaticSecurityScan(
+  schedule?: SecurityScanSchedule,
+): Promise<void> {
+  const scanner = securityScanner;
+  if (!scanner) return;
+  const status = scanner.getStatus().status;
+  if (status === "running" || status === "cancelling") return;
+  let state: SecurityScanState;
+  try {
+    state = await scanner.startAutomaticScan(schedule);
+  } catch {
+    // No discovered Skills (or a concurrent manual scan) is a recoverable
+    // automatic pass. The next run retries through the same safe service.
+    return;
+  }
+  if (schedule?.notify !== true) return;
+  await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+}
+
+/** Wait for the automatic scan to settle, then notify when it found risks. */
+async function notifyIfAutomaticScanFoundRisks(
+  scanner: SecurityScannerService,
+  scanId: string | null,
+): Promise<void> {
+  const state = await waitForAutomaticScanSettled(scanner, scanId);
+  // A manual scan taking over the session is never the automatic run we armed.
+  if (scanId == null || state.scanId !== scanId) return;
+  if (state.status !== "complete" && state.status !== "partial") return;
+  if (state.resultIds.length === 0) return;
+  const history = await scanner.history();
+  const scanEntries = history.filter(
+    (entry: SecurityScanHistoryEntry) => entry.scanId === scanId,
+  );
+  const riskCount = scanEntries.filter(
+    (entry) =>
+      (entry.status === "complete" || entry.status === "partial") &&
+      (entry.report?.findings.length ?? 0) > 0,
+  ).length;
+  if (riskCount === 0) return;
+  if (!Notification.isSupported()) return;
+  const notice = SECURITY_RISK_NOTICE[currentPreferences.locale];
+  const notification = new Notification({
+    title: notice.title,
+    body: interpolate(notice.body, { count: riskCount }),
+  });
+  notification.on("click", showMainWindow);
+  notification.show();
+}
+
+async function waitForAutomaticScanSettled(
+  scanner: SecurityScannerService,
+  scanId: string | null,
+): Promise<SecurityScanState> {
+  const deadline = Date.now() + 10 * 60 * 1_000;
+  while (Date.now() < deadline) {
+    const state = scanner.getStatus();
+    if (state.scanId !== scanId) return state;
+    if (state.status !== "running" && state.status !== "cancelling") {
+      return state;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return scanner.getStatus();
+}
+
+function clearAutomaticSecurityScanTimer(): void {
+  if (automaticSecurityScanTimer) {
+    clearTimeout(automaticSecurityScanTimer);
+    automaticSecurityScanTimer = null;
+  }
+}
+
+/**
+ * Schedule the automatic security scan from the persisted schedule: an
+ * immediate first pass on launch when enabled, then a time-aware timer for the
+ * configured cycle. A disabled schedule clears the timer entirely.
+ */
+async function scheduleAutomaticSecurityScan(): Promise<void> {
+  clearAutomaticSecurityScanTimer();
+  const scanner = securityScanner;
+  if (!scanner) return;
+  let schedule: SecurityScanSchedule;
+  try {
+    schedule = await scanner.getScanSchedule();
+  } catch {
+    // Corrupt/missing schedule already falls back to the default inside the
+    // service; any unexpected failure simply leaves auto-scan unscheduled.
+    return;
+  }
+  if (!schedule.enabled) return;
+  // Initial run shortly after launch when enabled, then arm the repeating timer.
+  void runAutomaticSecurityScan(schedule);
+  armAutomaticSecurityScanTimer(schedule);
+}
+
+function armAutomaticSecurityScanTimer(schedule: SecurityScanSchedule): void {
+  const delayMs = nextAutomaticScanDelayMs(schedule);
+  automaticSecurityScanTimer = setTimeout(() => {
+    automaticSecurityScanTimer = null;
+    lastAutomaticScanRunAt = Date.now();
+    void runAutomaticSecurityScan(schedule);
+    armAutomaticSecurityScanTimer(schedule);
+  }, delayMs);
 }
 
 function registerIpcHandlers(): void {
@@ -182,7 +393,7 @@ function registerIpcHandlers(): void {
   );
   ipcMain.handle(
     desktopIpc.resetPreferences,
-    (event): { removedKeys: number } => {
+    async (event): Promise<{ removedKeys: number }> => {
       assertTrustedSender(event);
       const current = readPrefs(prefsPath());
       const keys = Object.keys(current).filter(
@@ -190,6 +401,7 @@ function registerIpcHandlers(): void {
       );
       for (const key of keys) delete current[key];
       writePrefs(prefsPath(), current);
+      await securityScanner?.clear();
       return { removedKeys: keys.length };
     },
   );
@@ -256,6 +468,80 @@ function registerIpcHandlers(): void {
       applyPreferences(prefs);
     },
   );
+
+  ipcMain.handle(desktopIpc.listSecuritySkills, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.listSkills();
+  });
+  ipcMain.handle(desktopIpc.selectSecuritySkillDirectory, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, {
+          properties: ["openDirectory"],
+        })
+      : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    const selected = result.filePaths[0];
+    if (result.canceled || !selected) return null;
+    return securityScanner.registerSelectedDirectory(selected);
+  });
+  ipcMain.handle(
+    desktopIpc.startSecurityScan,
+    async (event, request: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      return securityScanner.start(request);
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityScanStatus, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getStatus();
+  });
+  ipcMain.handle(desktopIpc.getSecurityScanHistory, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.history();
+  });
+  ipcMain.handle(desktopIpc.cancelSecurityScan, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.cancel();
+  });
+  ipcMain.handle(desktopIpc.getSecurityModelConfig, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getModelConfig();
+  });
+  ipcMain.handle(
+    desktopIpc.setSecurityModelConfig,
+    async (event, config: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      return securityScanner.setModelConfig(config);
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityScanSchedule, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getScanSchedule();
+  });
+  ipcMain.handle(
+    desktopIpc.setSecurityScanSchedule,
+    async (event, schedule: unknown) => {
+      assertTrustedSender(event);
+      if (!securityScanner) throw new Error("Security scanner is unavailable");
+      const result = await securityScanner.setScanSchedule(schedule);
+      await scheduleAutomaticSecurityScan();
+      return result;
+    },
+  );
+  ipcMain.handle(desktopIpc.getSecurityRuntimeCapability, (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getRuntimeCapability();
+  });
 }
 
 /**
@@ -294,9 +580,11 @@ function rebuildTray(): void {
     {
       autoLaunchEnabled: autoLaunch.enabled,
       autoLaunchSupported: autoLaunch.supported,
+      browserCompanionSupported: localWebServer != null,
     },
     {
       onOpen: showMainWindow,
+      onOpenBrowser: openBrowserCompanion,
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -366,8 +654,10 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
-  const appUrl = capabilityToken
-    ? `${allowedOrigin}?token=${capabilityToken}&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`
+  const appUrl = localWebServer
+    ? localWebServer.createBrowserBootstrapUrl(
+        `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+      )
     : `${allowedOrigin}?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
   await mainWindow.loadURL(appUrl);
 }
@@ -380,8 +670,9 @@ async function resolveApplicationOrigin(): Promise<string> {
   const webRoot = app.isPackaged
     ? join(process.resourcesPath, "web")
     : join(app.getAppPath(), ".output");
-  localWebServer = await startLocalWebServer(webRoot);
-  capabilityToken = localWebServer.capabilityToken;
+  localWebServer = await startLocalWebServer(webRoot, {
+    securityScanner: securityScanner ?? undefined,
+  });
   return localWebServer.origin;
 }
 
@@ -394,13 +685,37 @@ async function prewarmLocalData(origin: string): Promise<void> {
     // installation opens with its historical usage instead of briefly
     // rendering an empty dashboard. Later loads reuse the scanner's
     // file-signature index and in-memory snapshot.
-    const prewarmUrl = capabilityToken
-      ? `${origin}/?token=${capabilityToken}&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`
+    const prewarmUrl = localWebServer
+      ? localWebServer.createBrowserBootstrapUrl(
+          `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+        )
       : `${origin}/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
-    const response = await fetch(prewarmUrl, {
-      headers: { Accept: "text/html" },
-      signal: controller.signal,
-    });
+    let response: Response;
+    if (localWebServer) {
+      // Node fetch follows redirects but does not persist Set-Cookie. Complete
+      // the same one-time bootstrap handshake as a browser explicitly so the
+      // authenticated prewarm request reaches the route loaders.
+      const bootstrap = await fetch(prewarmUrl, {
+        headers: { Accept: "text/html" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      const location = bootstrap.headers.get("location");
+      const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0];
+      await bootstrap.body?.cancel();
+      if (bootstrap.status !== 303 || location == null || cookie == null) {
+        throw new Error("Local prewarm bootstrap handshake failed");
+      }
+      response = await fetch(new URL(location, origin), {
+        headers: { Accept: "text/html", Cookie: cookie },
+        signal: controller.signal,
+      });
+    } else {
+      response = await fetch(prewarmUrl, {
+        headers: { Accept: "text/html" },
+        signal: controller.signal,
+      });
+    }
     if (!response.ok) {
       console.warn(`Initial data scan returned HTTP ${response.status}`);
     }
@@ -460,6 +775,7 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
+    clearAutomaticSecurityScanTimer();
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -472,6 +788,17 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getLocalePreferences);
     ipcMain.removeHandler(desktopIpc.setLocaleMode);
     ipcMain.removeHandler(desktopIpc.setCurrencyMode);
+    ipcMain.removeHandler(desktopIpc.listSecuritySkills);
+    ipcMain.removeHandler(desktopIpc.selectSecuritySkillDirectory);
+    ipcMain.removeHandler(desktopIpc.startSecurityScan);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanStatus);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);
+    ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
+    ipcMain.removeHandler(desktopIpc.getSecurityModelConfig);
+    ipcMain.removeHandler(desktopIpc.setSecurityModelConfig);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanSchedule);
+    ipcMain.removeHandler(desktopIpc.setSecurityScanSchedule);
+    ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);
     void localWebServer?.close();
   });
 
@@ -484,6 +811,21 @@ if (!hasSingleInstanceLock) {
 
     const prefs = readPrefs(prefsPath());
     currentPreferences = resolveDesktopPreferences(prefs, app.getLocale());
+    securityScanner = new SecurityScannerService({
+      homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
+      dataDirectory: join(
+        process.env[ENV.USAGE_HOME] || app.getPath("home"),
+        APP_DATA_DIR,
+      ),
+      locale: () => currentPreferences.locale,
+      env: process.env,
+      secretStorage: {
+        isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+        encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
+        decrypt: (value) =>
+          safeStorage.decryptString(Buffer.from(value, "base64")),
+      },
+    });
 
     const compat = await checkDataCompatibility();
     if (!compat.compatible) {
@@ -528,5 +870,6 @@ if (!hasSingleInstanceLock) {
     registerIpcHandlers();
     rebuildTray();
     await createMainWindow();
+    await scheduleAutomaticSecurityScan();
   });
 }

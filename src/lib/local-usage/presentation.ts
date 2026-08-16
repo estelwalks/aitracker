@@ -10,7 +10,17 @@ import type {
 } from "./types.ts";
 
 export type UsagePeriod =
-  "today" | "week" | "7d" | "30d" | "month" | "year" | "all" | "custom";
+  | "today"
+  | "week"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "180d"
+  | "1y"
+  | "month"
+  | "year"
+  | "all"
+  | "custom";
 export type UsageTimeGrain = "day" | "hour";
 
 export interface UsageRange {
@@ -86,12 +96,12 @@ export function createEmptyUsageSnapshot(): LocalUsageSnapshot {
 
 /**
  * Browser-facing source label (F6-T2): projected from the public manifest's
- * `nameZh` — the UI display-name convention used by the sources page and the
- * skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
+ * `name` — the registry-owned primary display name used by the sources page
+ * and the skill-agent labels (SKILL_AGENTS). Unknown ids (e.g. a legacy source that
  * left the registry) fall back to the raw id.
  */
 const MANIFEST_SOURCE_LABELS: ReadonlyMap<string, string> = new Map(
-  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.nameZh]),
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
 );
 
 export function sourceLabel(source: LocalUsageSource | string): string {
@@ -354,6 +364,9 @@ export function resolveUsageRange(
 
   if (period === "7d") from = localDateKey(addDays(now, -6));
   if (period === "30d") from = localDateKey(addDays(now, -29));
+  if (period === "90d") from = localDateKey(addDays(now, -89));
+  if (period === "180d") from = localDateKey(addDays(now, -179));
+  if (period === "1y") from = localDateKey(addDays(now, -364));
   if (period === "week") {
     const day = now.getDay();
     from = localDateKey(addDays(now, -(day === 0 ? 6 : day - 1)));

@@ -19,7 +19,12 @@ export const Route = createFileRoute("/agents")({
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: "工具概览" },
+      {
+        title: getMessage(
+          catalogs[loaderData?.locale ?? "zh-CN"],
+          "skills.agentOverview.title",
+        ),
+      },
       {
         name: "description",
         content: getMessage(

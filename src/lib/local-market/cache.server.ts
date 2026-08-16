@@ -18,8 +18,9 @@ export function marketCacheKey(
   limit: number,
   search: string,
   sort?: string,
+  tags?: string,
 ): string {
-  return `${page}:${limit}:${search.toLocaleLowerCase()}:${sort ?? "downloads"}`;
+  return `${page}:${limit}:${search.toLocaleLowerCase()}:${sort ?? "stars"}:${tags ?? ""}`;
 }
 
 async function readCacheFile(): Promise<MarketCache> {

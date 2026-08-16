@@ -134,11 +134,19 @@ for (const file of codeFiles) {
   if (!BRAND_RE.test(clean)) continue;
   const lines = clean.split("\n");
   lines.forEach((line, index) => {
-    if (BRAND_RE.test(line)) {
-      failures.push(
-        `${file}:${index + 1}: hardcoded brand literal — derive from app-config instead`,
-      );
-    }
+    if (!BRAND_RE.test(line)) return;
+    // Functional (non-display) brand tokens are exempted the same way the
+    // scripts' env literals are cross-checked rather than flagged:
+    //   - `TRUSTTOOLS_LLM_*`  env-var family (Base URL / API Key / Model)
+    //   - HMAC domain separator used for privacy fingerprints
+    //   - repository/project fixture labels in tests
+    const functional =
+      /\bTRUSTTOOLS_LLM_[A-Z0-9_]+|trusttools-local-usage-event|trusttools_webapp|trusttools\/security-dev|TRUSTTOOLS_SECURITY_DEV_SERVICE/g;
+    const remaining = line.replace(functional, "");
+    if (!BRAND_RE.test(remaining)) return;
+    failures.push(
+      `${file}:${index + 1}: hardcoded brand literal — derive from app-config instead`,
+    );
   });
 }
 

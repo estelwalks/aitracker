@@ -6,6 +6,8 @@ import type {
   KnowledgeVersion,
 } from "../../knowledge/contracts.ts";
 import type { SessionSummary } from "../../sessions/contracts.ts";
+import type { CandidatePersistence } from "../contracts.ts";
+import type { CandidateOutput } from "../contracts.ts";
 import { createSessionQueryService } from "../../sessions/index.ts";
 import { createDistillationApplication } from "./index.ts";
 
@@ -80,6 +82,7 @@ const execution = (
 function setup(
   aiResult: AIExecutionResult = execution(),
   rows: readonly SessionSummary[] = [session("s1"), session("s2")],
+  persistence?: CandidatePersistence,
 ) {
   const calls: string[] = [];
   const knowledge = {
@@ -129,10 +132,29 @@ function setup(
     sessions: createSessionQueryService({ list: async () => rows }),
     ai: { execute: async () => aiResult },
     knowledge,
+    persistence,
     createCandidateId: () => "candidate-1",
     now: () => new Date("2026-08-07T00:02:00.000Z"),
   });
   return { app, calls };
+}
+
+/** In-memory CandidatePersistence double that captures writes and supports re-hydration. */
+function fakePersistence(initial: CandidateOutput[] = []) {
+  const map = new Map(initial.map((item) => [item.candidateId, item]));
+  return {
+    port: {
+      async list(): Promise<readonly CandidateOutput[]> {
+        return [...map.values()].sort((a, b) =>
+          b.generatedAt.localeCompare(a.generatedAt),
+        );
+      },
+      async save(candidate: CandidateOutput): Promise<void> {
+        map.set(candidate.candidateId, candidate);
+      },
+    },
+    snapshot: () => [...map.values()],
+  };
 }
 
 const request = (overrides: Record<string, unknown> = {}) => ({
@@ -273,4 +295,97 @@ test("cancelled requests do not invoke the model", async () => {
   );
   assert.equal(result.ok, false);
   assert.equal(invoked, false);
+});
+
+test("start persists the candidate so a fresh application can list it via listWaiting", async () => {
+  const persistence = fakePersistence();
+  const { app } = setup(
+    execution(),
+    [session("s1"), session("s2")],
+    persistence.port,
+  );
+  const started = await app.start(request());
+  assert.equal(started.ok, true);
+
+  const fresh = createDistillationApplication({
+    sessions: createSessionQueryService({ list: async () => [] }),
+    ai: { execute: async () => execution() },
+    persistence: persistence.port,
+  });
+  const waiting = await fresh.listWaiting();
+  assert.equal(waiting.length, 1);
+  assert.equal(waiting[0]!.candidateId, "candidate-1");
+  assert.equal(waiting[0]!.approvalState, "waiting-approval");
+  assert.equal(waiting[0]!.title, "Distilled summary (2 sessions)");
+});
+
+test("approve persists the updated state and removes the candidate from listWaiting", async () => {
+  const persistence = fakePersistence();
+  const { app } = setup(
+    execution(),
+    [session("s1"), session("s2")],
+    persistence.port,
+  );
+  const started = await app.start(request());
+  const candidateId = started.ok ? started.value.candidate!.candidateId : "";
+  const approved = await app.approve(candidateId, "user");
+  assert.equal(approved.ok, true);
+
+  const fresh = createDistillationApplication({
+    sessions: createSessionQueryService({ list: async () => [] }),
+    ai: { execute: async () => execution() },
+    persistence: persistence.port,
+  });
+  assert.equal((await fresh.listWaiting()).length, 0);
+  const all = await fresh.listAll();
+  assert.equal(all.length, 1);
+  assert.equal(all[0]!.approvalState, "approved");
+  assert.equal((await fresh.get(candidateId))?.approvalState, "approved");
+});
+
+test("cancel persists the updated state and is visible via get/listAll", async () => {
+  const persistence = fakePersistence();
+  const { app } = setup(
+    execution(),
+    [session("s1"), session("s2")],
+    persistence.port,
+  );
+  const started = await app.start(request());
+  const candidateId = started.ok ? started.value.candidate!.candidateId : "";
+  const cancelled = await app.cancel(candidateId);
+  assert.equal(cancelled.ok, true);
+
+  const fresh = createDistillationApplication({
+    sessions: createSessionQueryService({ list: async () => [] }),
+    ai: { execute: async () => execution() },
+    persistence: persistence.port,
+  });
+  assert.equal((await fresh.listWaiting()).length, 0);
+  assert.equal((await fresh.get(candidateId))?.approvalState, "cancelled");
+  assert.equal((await fresh.listAll())[0]!.approvalState, "cancelled");
+});
+
+test("a store seeded on disk is hydrated into the map before any list call", async () => {
+  const seeded = await setup().app.start(request());
+  assert.equal(seeded.ok, true);
+  const candidate = seeded.ok ? seeded.value.candidate! : undefined;
+  const persistence = fakePersistence(candidate ? [candidate] : []);
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({ list: async () => [] }),
+    ai: { execute: async () => execution() },
+    persistence: persistence.port,
+  });
+  assert.equal((await app.listWaiting())[0]!.candidateId, "candidate-1");
+});
+
+test("approve/cancel on a missing or non-waiting candidate never writes through", async () => {
+  const persistence = fakePersistence();
+  const { app } = setup(
+    execution(),
+    [session("s1"), session("s2")],
+    persistence.port,
+  );
+  assert.equal((await app.approve("unknown", "user")).ok, false);
+  assert.equal((await app.cancel("unknown")).ok, false);
+  assert.equal(persistence.snapshot().length, 0);
 });

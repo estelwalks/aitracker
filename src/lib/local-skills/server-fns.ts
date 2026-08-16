@@ -7,6 +7,7 @@ import {
   type SkillSnapshot,
   type SkillSyncResult,
 } from "./types.ts";
+import type { SkillFileList } from "./scanner.server.ts";
 import { AppError } from "../errors";
 
 const stringInput = (value: unknown): string => {
@@ -117,3 +118,18 @@ export const updateSkillBlacklist = createServerFn({ method: "POST" })
     const { setSkillBlacklisted } = await import("./scanner.server.ts");
     await setSkillBlacklisted(data.name, data.blocked);
   });
+
+/** Read a locally installed skill's real file tree for the detail view. */
+export const getSkillFiles = createServerFn({ method: "GET" })
+  .validator((input: { name: string }) => {
+    if (typeof input?.name !== "string" || input.name.trim().length === 0) {
+      throw new AppError("errors.skills.emptyInput");
+    }
+    return { name: input.name };
+  })
+  .handler(async ({ data }): Promise<SkillFileList> => {
+    const { readSkillFiles } = await import("./scanner.server.ts");
+    return readSkillFiles(data.name);
+  });
+
+export type { SkillFileEntry, SkillFileList } from "./scanner.server.ts";

@@ -218,6 +218,7 @@ function recordCommand(
     args?.cmd,
     args?.command,
     args?.input && asObject(args.input)?.command,
+    typeof argumentValue === "string" ? argumentValue : undefined,
   );
   if (command == null) return;
   const { executable, safeSignature } = safeCommandSignature(command);
@@ -349,7 +350,7 @@ export function collectCodexContextRecord(
       const name = normalizedToolName(firstString(item?.name, item?.tool_name));
       const argumentValue = item?.arguments ?? item?.input;
       addTool(state, name);
-      if (name === "exec_command")
+      if (name === "exec_command" || name === "exec")
         recordCommand(state, argumentValue, item ?? payload);
       else addSkill(state, skillNameFromArguments(argumentValue));
       addSkill(state, explicitSkillName(item));
@@ -365,7 +366,8 @@ export function collectCodexContextRecord(
     );
     const argumentValue = details.arguments ?? details.input;
     addTool(state, name);
-    if (name === "exec_command") recordCommand(state, argumentValue, details);
+    if (name === "exec_command" || name === "exec")
+      recordCommand(state, argumentValue, details);
     else addSkill(state, skillNameFromArguments(argumentValue));
     addSkill(state, explicitSkillName(details));
     return;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { scanSelection, selectSkillFile } from "./index";
 
-test("assessment query returns selection refs and never renderer source details", async () => {
+test("legacy browser selection cannot execute the scanner outside Electron IPC", async () => {
   const selected = await selectSkillFile([
     {
       name: "SKILL.md",
@@ -10,17 +10,9 @@ test("assessment query returns selection refs and never renderer source details"
       text: async () => "# safe skill\nrun: echo hello",
     } as File,
   ]);
-  const report = await scanSelection(selected);
-  const serialized = JSON.stringify(report);
-  assert.match(report.selectionRef, /^selection:/);
-  assert.equal(report.targetLabel, "SKILL.md");
-  assert.doesNotMatch(
-    serialized,
-    /\/Users|C:\\\\|excerpt|command|prompt|content|rawError/i,
+  assert.match(selected.selectionRef, /^selection:/);
+  await assert.rejects(
+    scanSelection(selected),
+    /Desktop security scanner IPC/u,
   );
-  for (const risk of report.risks) {
-    assert.equal("file" in risk, false);
-    assert.equal("line" in risk, false);
-    assert.equal("excerpt" in risk, false);
-  }
 });

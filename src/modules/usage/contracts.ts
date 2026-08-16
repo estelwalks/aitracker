@@ -56,6 +56,19 @@ export interface UsageCollector {
   collect(request?: UsageCollectionRequest): Promise<UsageCollectionResult>;
 }
 
+/** Renderer-safe read model for the Token burn leaderboard. */
+export interface TrackerReadModel {
+  /** Null when the usage scanner has no real snapshot to report. */
+  readonly generatedAt: string | null;
+  readonly boards: Readonly<
+    Record<
+      import("./application/tracker.ts").RoastDimension,
+      import("./application/tracker.ts").TrackerBoard
+    >
+  >;
+  readonly totals: { tokens: number; events: number; entries: number };
+}
+
 export interface SnapshotRepository {
   load(): Promise<UsageSnapshotDto | undefined>;
   save(snapshot: UsageSnapshotDto): Promise<void>;

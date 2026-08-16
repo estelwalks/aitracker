@@ -92,16 +92,33 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
       page: 2,
       limit: 20,
       search: "测试",
-      sort: "downloads",
+      sort: "stars",
+      tags: [],
     },
   );
   assert.deepEqual(
-    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "latest" }),
+    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "created_at" }),
     {
       page: 1,
       limit: 14,
       search: "",
-      sort: "latest",
+      sort: "created_at",
+      tags: [],
+    },
+  );
+  assert.deepEqual(
+    parseMarketQuery({
+      page: 1,
+      limit: 20,
+      search: "",
+      tags: ["ai", "automation"],
+    }),
+    {
+      page: 1,
+      limit: 20,
+      search: "",
+      sort: "stars",
+      tags: ["ai", "automation"],
     },
   );
   assert.throws(
