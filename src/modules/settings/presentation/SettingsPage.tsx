@@ -60,7 +60,7 @@ import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { SecurityModelConfigSection } from "./SecurityModelConfigSection";
 import { useSecurityClient } from "./use-security-client";
-import { WidgetConfigPanel } from "../../widget/presentation/WidgetConfigPanel";
+import { WidgetConfigPanel } from "../../widget";
 
 // 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
 const categories = [

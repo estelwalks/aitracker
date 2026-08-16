@@ -25,7 +25,7 @@ import {
 import { EmptyState, StatusBadge, TTButton } from "../../../components/tt.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { useReportActions } from "../../reports/presentation/report-actions.ts";
+import { useReportActions } from "../../reports";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
 import {
