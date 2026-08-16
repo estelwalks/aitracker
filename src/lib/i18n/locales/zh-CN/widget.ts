@@ -2,11 +2,12 @@ export const widget = {
   metaDescription:
     "{appName} 小组件设计稿与配置：菜单栏样式、浮窗三 Tab、桌面小号/中号/大号内容与贾维斯语气。",
   title: "菜单栏小组件",
-  pageDesc: "菜单栏 · 浮窗 · 桌面小组件 · 实时预览，配置见设置页",
+  pageDesc: "菜单栏 · 浮窗 · 桌面小组件 · 预览实时呈现 · 配置见设置页",
   floatPanel: "浮窗 · 420px",
   floatPanelDesc: "安全 / 用量 / 今日 三 Tab，右上角 ⚙ 打开轻量配置",
   desktopWidgets: "桌面小组件",
-  desktopWidgetsDesc: "小号 168 · 中号 360 · 大号 360×360，内容随配置变化",
+  desktopWidgetsDesc:
+    "小号 168 情绪球+安全 · 中号 360 播报+记忆/沉淀 · 大号 360×360 三段信号",
   menuBar: "菜单栏",
   menuBarDesc: "显示样式与点击行为随配置变化，点击图标可预览",
   tabSecurity: "安全",
