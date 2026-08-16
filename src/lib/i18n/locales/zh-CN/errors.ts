@@ -1,5 +1,8 @@
 export const errors = {
   generic: "操作失败，请重试",
+  sources: {
+    migrateInvalid: "迁移参数不合法",
+  },
   security: {
     dailyLimitReached: "今日 {limit} 次本地扫描额度已用完",
     fileRequired: "请选择 SKILL.md 或包含它的 Skill 文件夹",
@@ -64,6 +67,7 @@ export const errors = {
     invalidName: "Skill 名称不合法",
     invalidAgent: "目标工具不可用",
     skillExists: "同名 Skill 已存在，请更换名称",
+    quotaExceeded: "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
   },
   modelProfile: {
     nameRequired: "请输入配置名称",
