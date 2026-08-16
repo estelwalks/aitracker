@@ -1105,8 +1105,9 @@ export function DashboardContribHeatmap({
     setBox(el.clientWidth);
     return () => observer.disconnect();
   }, []);
-  // Adaptive sizing (reference): cells fill the panel width with a 10–18px
-  // floor/ceiling, so a fullscreen panel does not compress the calendar.
+  // Adaptive sizing: cells fill the panel width (10px floor, no ceiling), so
+  // a fullscreen panel stretches the calendar edge-to-edge instead of
+  // compressing or leaving a right-hand gap.
   const GAP = 3;
   const columns = useMemo(() => {
     const out: DashboardV2CalendarPoint[][] = [];
@@ -1116,10 +1117,7 @@ export function DashboardContribHeatmap({
     return out;
   }, [cells]);
   const cellSize = box
-    ? Math.max(
-        10,
-        Math.min(18, (box - (columns.length - 1) * GAP) / columns.length),
-      )
+    ? Math.max(10, (box - (columns.length - 1) * GAP) / columns.length)
     : 10;
   const gap = GAP;
   const monthTicks = useMemo(() => {
