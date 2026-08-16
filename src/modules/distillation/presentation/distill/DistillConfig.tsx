@@ -4,9 +4,10 @@ import {
   ChevronDown,
   FlaskConical,
   FolderOpen,
+  History,
   Info,
-  Play,
   Search,
+  Settings2,
   Sparkles,
   X,
   Zap,
@@ -15,13 +16,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
-import { Panel, TTButton } from "../../../../components/tt";
+import { EmptyState, Panel, TTButton } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { DistillationSessionItem } from "../index.ts";
 import { MaterialPicker } from "./MaterialDrawer.tsx";
-import type {
-  DistillationMaterialGranularity,
-  DistillationTimeRange,
+import {
+  OUT_GROUPS,
+  OUT_TYPES,
+  outTypeMeta,
+  type OutTypeId,
+} from "./out-types.ts";
+import {
+  isConfigMaterial,
+  type DistillationMaterialGranularity,
+  type DistillationTimeRange,
 } from "./materials.ts";
 
 const PRESETS = [
@@ -48,50 +56,6 @@ export interface DistillQuotaView {
   readonly limit: number;
   /** Calls still available today (`max(0, limit - used)`). */
   readonly remaining: number;
-}
-
-/**
- * One-line quota status for the config panel. Real-model runs consume the
- * daily quota; offline runs are deterministic and never counted. An exhausted
- * quota shows the warning copy plus a link into the model-profiles settings.
- */
-function QuotaHint({
-  quota,
-  realModel,
-}: {
-  quota: DistillQuotaView | null;
-  realModel: boolean;
-}) {
-  const { t } = useI18n();
-  if (!quota || !realModel) {
-    return (
-      <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
-        <Info className="size-3" />
-        {t("distill.quotaOffline")}
-      </span>
-    );
-  }
-  if (quota.remaining <= 0) {
-    return (
-      <span className="inline-flex flex-wrap items-center gap-1.5 font-mono text-[10.5px] text-warn">
-        <AlertTriangle className="size-3 shrink-0" />
-        {t("distill.quotaExhausted")}
-        <Link
-          to="/settings"
-          search={{ section: "model" }}
-          className="rounded bg-surface-2 px-1.5 py-0.5 text-primary hover:bg-accent"
-        >
-          {t("distill.quotaManage")}
-        </Link>
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
-      <Sparkles className="size-3" />
-      {t("distill.quotaRemaining", { count: quota.remaining })}
-    </span>
-  );
 }
 
 function ConfigRow({
@@ -143,6 +107,70 @@ function ChipRail<T extends string>({
           {option.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Output-type picker (prototype ② 出产物): two group cards — capability
+ * assets → Skill library, memory assets → memory library — each carrying its
+ * type chips. Selection drives the run-button label and the prompt directive.
+ */
+function OutTypePicker({
+  value,
+  onChange,
+}: {
+  value: OutTypeId;
+  onChange: (value: OutTypeId) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+      {OUT_GROUPS.map((group) => {
+        const items = OUT_TYPES.filter((meta) => meta.group === group.id);
+        const active = items.some((meta) => meta.id === value);
+        return (
+          <div
+            key={group.id}
+            className={`rounded-[12px] px-3 py-2.5 transition-colors ${
+              active
+                ? "bg-primary/[0.06] ring-1 ring-primary/40"
+                : "bg-surface-2/60 ring-1 ring-border/70"
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[11.5px] font-semibold">
+                {t(group.labelKey)}
+              </span>
+              <span className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[9.5px] text-muted-foreground">
+                → {t(group.destKey)}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {items.map((meta) => {
+                const on = meta.id === value;
+                return (
+                  <button
+                    key={meta.id}
+                    type="button"
+                    onClick={() => onChange(meta.id)}
+                    aria-pressed={on}
+                    title={t(meta.hintKey)}
+                    className={`rounded-full px-3 py-1 font-mono text-[10.5px] transition-colors ${
+                      on
+                        ? "text-background"
+                        : "bg-surface-2 text-muted-foreground hover:text-foreground"
+                    }`}
+                    style={on ? { background: meta.color } : undefined}
+                  >
+                    {t(meta.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -262,6 +290,11 @@ export function DistillConfig({
   onPromptPreset,
   promptText,
   onPromptText,
+  outType,
+  onOutType,
+  historyCount,
+  onHistory,
+  onSwitchModel,
   availableItems,
   selected,
   selectedItems,
@@ -288,6 +321,15 @@ export function DistillConfig({
   onPromptPreset: (value: string) => void;
   promptText: string;
   onPromptText: (value: string) => void;
+  /** Selected output type (prototype ② 出产物). */
+  outType: OutTypeId;
+  onOutType: (value: OutTypeId) => void;
+  /** Number of persisted candidates, shown on the header history chip. */
+  historyCount: number;
+  /** Open the distill-history dialog (E-600). */
+  onHistory: () => void;
+  /** Switch the pro-mode model to the first non-offline option (E-400). */
+  onSwitchModel: () => void;
   availableItems: readonly DistillationSessionItem[];
   selected: ReadonlySet<string>;
   selectedItems: readonly DistillationSessionItem[];
@@ -306,11 +348,22 @@ export function DistillConfig({
     if (key) onPromptText(t(key));
   };
 
+  const realModel = mode === "pro" && modelId !== "offline";
+  const hasRealModels = modelOptions.some((option) => !option.offline);
+  const quotaExhausted = quota != null && quota.remaining <= 0 && realModel;
+  const configMode = isConfigMaterial(granularity);
+  const typeMeta = outTypeMeta(outType);
+  const switchTarget = modelOptions.find((option) => !option.offline);
+
   return (
     <Panel
       className="mb-5 overflow-visible"
       title={t("distill.configTitle")}
-      action={
+      bodyClassName="pt-3"
+    >
+      {/* Header row: Quick/Pro switch + quota status + history + manage models
+          (prototype config-card header, lines 847-882). */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/40 pb-3">
         <div className="inline-flex items-center gap-0.5 rounded-lg bg-surface-2 p-0.5">
           {(
             [
@@ -332,9 +385,55 @@ export function DistillConfig({
             </button>
           ))}
         </div>
-      }
-      bodyClassName="pt-0"
-    >
+        <span
+          className="ml-auto min-w-0 truncate font-mono text-[11px] text-muted-foreground"
+          title={
+            quota != null && realModel
+              ? t("distill.quotaHeader", { count: quota.remaining })
+              : hasRealModels
+                ? t("distill.ownModelConnected")
+                : t("distill.ownModelUnconfigured")
+          }
+        >
+          {quota != null && realModel
+            ? t("distill.quotaHeader", { count: quota.remaining })
+            : hasRealModels
+              ? t("distill.ownModelConnected")
+              : t("distill.ownModelUnconfigured")}
+        </span>
+        <TTButton variant="ghost" onClick={onHistory} className="shrink-0">
+          <History className="size-3.5" />
+          {t("distill.historyHeader")}
+          {historyCount > 0 ? ` · ${historyCount}` : ""}
+        </TTButton>
+        <Link
+          to="/settings"
+          search={{ section: "model" }}
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Settings2 className="size-3.5" />
+          {t("distill.manageModels")}
+        </Link>
+      </div>
+
+      {/* E-400: exhausted-quota banner with a one-click switch to the first
+          own-model profile (prototype lines 884-903). */}
+      {quotaExhausted && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">{t("distill.quotaOutBanner")}</span>
+          {switchTarget && (
+            <button
+              type="button"
+              onClick={onSwitchModel}
+              className="rounded-lg bg-foreground px-3 py-1 font-mono text-[11px] text-background transition-opacity hover:opacity-90"
+            >
+              {t("distill.quotaSwitch", { name: switchTarget.label })}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="divide-y divide-border/50">
         <ConfigRow label={t("distill.quickTimeRange")}>
           <div className="flex flex-wrap items-center gap-2">
@@ -361,11 +460,25 @@ export function DistillConfig({
             options={[
               { value: "session", label: t("distill.grainSession") },
               { value: "project", label: t("distill.grainProject") },
+              { value: "config", label: t("distill.configMaterial") },
             ]}
           />
         </ConfigRow>
 
-        {mode === "quick" ? (
+        {configMode ? (
+          <ConfigRow label={t("distill.configMaterial")} align="start">
+            <p className="mb-2 font-mono text-[10.5px] text-muted-foreground">
+              {t("distill.configMaterialHint")}
+            </p>
+            {/* No tool config-file source in the data layer yet — honest empty
+                state instead of fabricating a TOOL_PROMPT_FILES mock list. */}
+            <EmptyState
+              icon={<FolderOpen className="size-5" />}
+              title={t("distill.configMaterialEmpty")}
+              desc={t("distill.configMaterialEmptyDesc")}
+            />
+          </ConfigRow>
+        ) : mode === "quick" ? (
           <ConfigRow
             label={
               granularity === "project"
@@ -489,13 +602,12 @@ export function DistillConfig({
           </>
         )}
 
-        <ConfigRow label={t("distill.quotaLabel")}>
-          <QuotaHint
-            quota={quota}
-            realModel={mode === "pro" && modelId !== "offline"}
-          />
+        {/* ② 出产物：能力资产 → Skill 库 / 记忆资产 → 记忆库 */}
+        <ConfigRow label={t("distill.outLabel")} align="start">
+          <OutTypePicker value={outType} onChange={onOutType} />
         </ConfigRow>
 
+        {/* ③ 跑蒸馏 */}
         <ConfigRow label={t("distill.runLabel")}>
           <div className="flex flex-wrap items-center gap-3">
             <TTButton
@@ -505,24 +617,36 @@ export function DistillConfig({
             >
               {busy ? (
                 <Sparkles className="size-3.5 animate-pulse" />
+              ) : mode === "quick" ? (
+                <Zap className="size-3.5" />
               ) : (
-                <Play className="size-3.5" />
+                <FlaskConical className="size-3.5" />
               )}
               {busy
                 ? t("distill.running")
                 : mode === "quick"
-                  ? t("common.distillation.start")
-                  : t("distill.proRun")}
+                  ? t("distill.runQuick", { type: t(typeMeta.labelKey) })
+                  : t("distill.runPro", { type: t(typeMeta.labelKey) })}
             </TTButton>
             <span className="font-mono text-[10.5px] text-muted-foreground">
-              {selectedItems.length > 0
-                ? t("distill.runSummary", { count: selectedItems.length })
-                : t("common.distillation.runHint")}
+              {configMode
+                ? t("distill.configMaterialRunHint")
+                : selectedItems.length > 0
+                  ? t("distill.runSummary", {
+                      count: selectedItems.length,
+                    })
+                  : t("common.distillation.runHint")}
             </span>
-            {selectedItems.length >= 8 && (
+            {!configMode && selectedItems.length >= 8 && (
               <span className="inline-flex items-center gap-1 text-[10.5px] text-warn">
                 <AlertTriangle className="size-3" />{" "}
                 {t("distill.selectionLimit")}
+              </span>
+            )}
+            {!configMode && quota != null && !realModel && (
+              <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
+                <Info className="size-3" />
+                {t("distill.quotaOffline")}
               </span>
             )}
           </div>

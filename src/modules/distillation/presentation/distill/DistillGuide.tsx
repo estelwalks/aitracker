@@ -1,4 +1,4 @@
-import { ClipboardList, FolderOpen, Save, Sparkles } from "lucide-react";
+import { FolderOpen, Rocket, Save, Sparkles } from "lucide-react";
 
 import { Panel, TTButton } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
@@ -17,12 +17,12 @@ const STEPS = [
     descKey: "distill.guideStep2Desc",
   },
   {
-    icon: ClipboardList,
+    icon: Save,
     titleKey: "distill.guideStep3",
     descKey: "distill.guideStep3Desc",
   },
   {
-    icon: Save,
+    icon: Rocket,
     titleKey: "distill.guideStep4",
     descKey: "distill.guideStep4Desc",
   },
@@ -30,8 +30,9 @@ const STEPS = [
 
 /**
  * First-run guide overlay (V3.0 prototype). Covers the content area with a
- * centred card explaining the four-step distillation flow. Dismissal is
- * recorded in localStorage so it shows once per browser/install.
+ * centred card explaining the four-step distillation flow: 选素材 → 跑蒸馏 →
+ * 存为 Skill → 同步到工具. Dismissal is recorded in localStorage so it shows
+ * once per browser/install.
  */
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
