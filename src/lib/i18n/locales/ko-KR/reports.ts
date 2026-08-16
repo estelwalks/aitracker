@@ -7,7 +7,8 @@ export const reports = {
     runs: "생성 {count}회 실행됨",
     sessions: "세션 {count}개 커버",
     empty: "아직 브리핑이 없습니다. 모델을 설정하면 생성할 수 있습니다.",
-    modelNotConfigured: "모델이 설정되지 않아 생성을 사용할 수 없습니다.",
+    modelNotConfigured:
+      "모델(Profile 또는 환경 변수)이 설정되지 않아 생성을 사용할 수 없습니다.",
   },
   archive: {
     title: "히스토리 아카이브",
