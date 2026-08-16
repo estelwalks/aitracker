@@ -1,0 +1,56 @@
+/*
+ * 小组件预览的强制暗色作用域。
+ *
+ * 应用默认主题为暗色（:root 上定义的变量），亮色主题通过 <html> 上的
+ * `.theme-light` 覆盖变量。这里把同款暗色变量复制到 `.tt-widget-dark`
+ * 类上，让「小组件主题=暗色」的预览在应用处于亮色主题时仍能局部渲染为暗色
+ * （CSS 自定义属性沿子树继承，作用域内的卡片/文字全部随变量变化）。
+ */
+.tt-widget-dark {
+  --radius: 14px;
+  --background: oklch(0.16 0.004 265);
+  --foreground: oklch(0.98 0 0);
+  --surface: oklch(0.225 0.005 265);
+  --surface-2: oklch(0.27 0.006 265);
+  --card: oklch(0.196 0.005 265);
+  --elev-1: 0 1px 1px oklch(0 0 0 / 0.5), 0 10px 26px -18px oklch(0 0 0 / 0.9);
+  --elev-2:
+    0 2px 6px oklch(0 0 0 / 0.55), 0 22px 48px -24px oklch(0 0 0 / 0.95);
+  --hairline: inset 0 1px 0 oklch(1 0 0 / 0.055);
+  --card-foreground: oklch(0.98 0 0);
+  --popover: oklch(0.24 0.005 265);
+  --popover-foreground: oklch(0.98 0 0);
+  --primary: oklch(1 0 0);
+  --primary-foreground: oklch(0.16 0.004 265);
+  --secondary: oklch(1 0 0 / 0.07);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(1 0 0 / 0.06);
+  --muted-foreground: oklch(0.72 0.004 265);
+  --accent: oklch(1 0 0 / 0.09);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.655 0.208 22);
+  --destructive-foreground: oklch(0.98 0.01 250);
+  --border: oklch(1 0 0 / 0.06);
+  --border-strong: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.08);
+  --ring: oklch(0.7 0 0);
+  --ok: oklch(0.72 0.105 162);
+  --warn: oklch(0.84 0.15 88);
+  --doze: oklch(0.78 0.16 62);
+  --danger: oklch(0.68 0.2 22);
+  --ai: oklch(0.92 0 0);
+  --ai-2: oklch(0.72 0 0);
+  --chart-1: oklch(0.74 0.15 162);
+  --chart-2: oklch(0.68 0.17 250);
+  --chart-3: oklch(0.76 0.16 62);
+  --chart-4: oklch(0.68 0.16 300);
+  --chart-5: oklch(0.68 0.17 22);
+  --sidebar: oklch(0.05 0 0);
+  --sidebar-foreground: oklch(0.93 0.003 286);
+  --sidebar-primary: oklch(1 0 0);
+  --sidebar-primary-foreground: oklch(0.16 0.01 165);
+  --sidebar-accent: oklch(1 0 0 / 0.08);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(0.27 0 0);
+  --sidebar-ring: oklch(0.7 0 0);
+}
