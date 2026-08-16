@@ -32,18 +32,27 @@ export const sessions = {
   },
   panelTitle: "로컬 세션",
   hint: "현재 Claude Code, Codex, Grok만 복원할 수 있습니다. 비용은 로컬 모델 가격표로 추정되며, 알 수 없는 가격은 명확히 표시됩니다.",
-  searchPlaceholder: "제목 / 프로젝트 / 모델 / sessionId 검색",
+  searchPlaceholder: "제목 / 프로젝트 / 세션 ID 검색",
   summary: {
     count: "세션 수",
     tokens: "Token 합계",
     cost: "비용 합계",
-    turns: "턴 합계",
+    tools: "세션 도구 수",
+    turns: "대화 턴 수",
+    countHint: "{range} 내 세션",
+    toolsHint: "포함된 AI 도구",
+    turnsHint: "누적 왕복 횟수",
   },
   empty: {
     title: "일치하는 세션이 없습니다",
-    desc: "필터 조건이나 검색 키워드를 조정한 후 다시 시도하세요.",
+    desc: "검색 키워드, 도구 또는 시간 범위를 조정한 후 다시 시도하세요.",
   },
   refreshing: "새로고침 중",
+  group: {
+    today: "오늘",
+    yesterday: "어제",
+    count: "{count}개 세션",
+  },
   detail: {
     back: "세션 목록으로 돌아가기",
     title: "세션 상세",
@@ -69,6 +78,8 @@ export const sessions = {
   },
   row: {
     untitled: "(이름 없는 세션)",
+    copyHash: "ID 복사",
+    copiedHash: "복사됨",
     copy: "세션 복원",
     copied: "시작됨",
     copyUnsafe: "이 세션 ID는 안전하지 않아 복원할 수 없습니다",
@@ -85,6 +96,7 @@ export const sessions = {
   },
   toast: {
     refreshed: "세션 목록이 새로고침되었습니다",
+    hashCopied: "세션 ID가 복사되었습니다",
     copied: "로컬 복원 요청을 시작했습니다",
   },
   transcript: {

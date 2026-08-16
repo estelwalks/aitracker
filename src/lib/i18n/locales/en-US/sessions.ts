@@ -31,18 +31,27 @@ export const sessions = {
   },
   panelTitle: "Local Sessions",
   hint: "Only Claude Code, Codex, and Grok are currently supported; costs are estimated from the local model pricing catalog, with unknown prices explicitly marked.",
-  searchPlaceholder: "Search title / project / model / sessionId",
+  searchPlaceholder: "Search title / project / session ID",
   summary: {
     count: "Sessions",
     tokens: "Total Tokens",
     cost: "Total Cost",
-    turns: "Total Turns",
+    tools: "Session tools",
+    turns: "Conversation turns",
+    countHint: "Sessions within {range}",
+    toolsHint: "AI tools covered",
+    turnsHint: "Total human-AI round trips",
   },
   empty: {
     title: "No matching sessions",
-    desc: "Adjust the filters or search keywords and try again.",
+    desc: "Adjust the search keywords, tools, or time range and try again.",
   },
   refreshing: "Refreshing",
+  group: {
+    today: "Today",
+    yesterday: "Yesterday",
+    count: "{count} sessions",
+  },
   detail: {
     back: "Back to sessions",
     title: "Session details",
@@ -68,6 +77,8 @@ export const sessions = {
   },
   row: {
     untitled: "(Untitled session)",
+    copyHash: "Copy ID",
+    copiedHash: "Copied",
     copy: "Resume session",
     copied: "Started",
     copyUnsafe: "This session ID is not safe and cannot be resumed",
@@ -84,6 +95,7 @@ export const sessions = {
   },
   toast: {
     refreshed: "Session list refreshed",
+    hashCopied: "Session ID copied",
     copied: "Local recovery request started",
   },
   transcript: {
