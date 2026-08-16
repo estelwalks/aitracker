@@ -1,8 +1,12 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRight, RefreshCw, Search, Terminal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  DistillButton,
+  notifyDistillStarted,
+} from "../../../components/DistillButton.tsx";
 import {
   Card,
   ChipTabs,
@@ -394,6 +398,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 
 function SessionRow({ session }: { session: SessionSummary }) {
   const { t, format } = useI18n();
+  const navigate = useNavigate();
   const status = STATUS_META[session.status];
   const detailAvailable = session.sessionId !== "unavailable";
   return (
@@ -438,6 +443,18 @@ function SessionRow({ session }: { session: SessionSummary }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <ResumeSessionButton session={session} />
+        <DistillButton
+          size="sm"
+          count={1}
+          onClick={() =>
+            notifyDistillStarted({
+              sessions: 1,
+              minutes: 1,
+              t,
+              onGo: () => void navigate({ to: "/distill" }),
+            })
+          }
+        />
         {detailAvailable ? (
           <Link
             to="/chats/$id"

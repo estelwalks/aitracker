@@ -110,4 +110,17 @@ export const distill = {
   guideStep4Desc:
     "Save as a Skill and sync it to installed tools from the Skills page.",
   guideStart: "Get started",
+  notify: {
+    title: "Distillation task started",
+    desc: "{sessions} item(s) in total, about {minutes} minute(s) expected. The task runs in the background — keep the app open; the result will appear in the Local Distillations list when done.",
+    go: "Go now",
+  },
+  button: {
+    label: "Distill selected",
+    tooltipEmpty: "Select {noun} to distill first",
+    tooltipReady:
+      "Distill the {count} selected {noun} into a local Skill ({unit})",
+    noun: "session(s)",
+    unit: "in total",
+  },
 } as const;
