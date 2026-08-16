@@ -43,6 +43,7 @@ export const errors = {
     resumeInvalid: "会话恢复请求无效",
     resumeCancelled: "会话恢复已取消",
     resumeFailed: "无法启动本地会话恢复",
+    transcriptUnavailable: "会话正文读取失败，请重试",
   },
   memory: {
     invalidInput: "记忆内容不合法",

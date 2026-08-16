@@ -1,0 +1,4 @@
+{"timestamp":"2026-08-01T11:00:00.000Z","type":"update","params":{"sessionId":"__SESSION_ID__","update":{"sessionUpdate":"user_message","content":"Explain the architecture"}}}
+{"timestamp":"2026-08-01T11:00:01.000Z","type":"update","params":{"sessionId":"__SESSION_ID__","update":{"sessionUpdate":"assistant_message","content":"The system is split into modules.","thinking":"Consider the boundary first"}}}
+{"timestamp":"2026-08-01T11:00:02.000Z","type":"update","params":{"sessionId":"__SESSION_ID__","update":{"sessionUpdate":"tool_call","title":"apply_patch"}}}
+{"timestamp":"2026-08-01T11:00:03.000Z","type":"update","params":{"sessionId":"__SESSION_ID__","update":{"sessionUpdate":"turn_completed","usage":{"modelUsage":{"grok-4":{"inputTokens":80,"outputTokens":30}}}}}}
