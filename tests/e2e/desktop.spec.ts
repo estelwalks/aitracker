@@ -20,7 +20,7 @@ const routes = [
   { path: "/skills", heading: "今日洞察" },
   { path: "/security", heading: "安全播报" },
   { path: "/settings", heading: "设置" },
-  { path: "/memory", heading: "记忆库" },
+  { path: "/memory", heading: "今日洞察" },
 ] as const;
 
 /** Routes whose title is rendered by PageBar (a span, not a heading). */
