@@ -67,7 +67,8 @@ export const errors = {
     invalidName: "Skill 名称不合法",
     invalidAgent: "目标工具不可用",
     skillExists: "同名 Skill 已存在，请更换名称",
-    quotaExceeded: "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
+    quotaExceeded:
+      "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
   },
   modelProfile: {
     nameRequired: "请输入配置名称",
