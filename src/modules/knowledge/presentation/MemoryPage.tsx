@@ -7,9 +7,16 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
+import { BrandIcon } from "../../../components/BrandIcon";
 import { JarvisInsight } from "../../../components/JarvisInsight";
 import {
   EmptyState,
@@ -111,6 +118,9 @@ export function MemoryPage() {
       .filter((item) => (source === "all" ? true : item.source === source))
       .filter((item) => {
         if (!keyword) return true;
+        // 占位文案与原型一致（搜「正文」）：本地只投影摘要、绝不返回对话正文
+        // （CLEAN_ROOM），摘要即正文的安全投影，因此仍搜 title/summary/
+        // source/project 即可覆盖同样的检索意图。
         return [item.title, item.summary, sourceLabel(item, t), item.project]
           .filter(Boolean)
           .join(" ")
@@ -198,7 +208,7 @@ export function MemoryPage() {
   return (
     <div className="space-y-4 pb-12">
       <JarvisInsight
-        title={t("memory.title")}
+        title={t("memory.insightTitle")}
         lines={jarvisLines}
         rotateLabel={t("memory.insightRotate")}
         dotsLabel={t("memory.insightDots")}
@@ -266,6 +276,12 @@ export function MemoryPage() {
                 key={key}
                 label={row.label}
                 count={row.count}
+                // 与原型一致：非「蒸馏 / unknown」来源显示品牌图标。
+                icon={
+                  key !== "distill" && key !== "unknown" ? (
+                    <BrandIcon name={key} className="size-3.5 shrink-0" />
+                  ) : undefined
+                }
                 on={source === key}
                 onClick={() => setSource(key)}
               />
@@ -352,11 +368,13 @@ function SourceRow({
   count,
   on,
   onClick,
+  icon,
 }: {
   label: string;
   count: number;
   on: boolean;
   onClick: () => void;
+  icon?: ReactNode;
 }) {
   return (
     <li>
@@ -370,6 +388,7 @@ function SourceRow({
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
         }`}
       >
+        {icon}
         <span className="min-w-0 flex-1 truncate">{label}</span>
         <span className="font-mono text-[10.5px] opacity-70">{count}</span>
       </button>

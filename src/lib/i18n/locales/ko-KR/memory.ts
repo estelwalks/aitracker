@@ -2,14 +2,10 @@
 export const memory = {
   metaDescription:
     "메모리 허브는 증류로 만들어진 프로필과 작업 메모리를 관리합니다: 소스별 그룹, 유형별 필터, 수동 추가·편집·삭제 지원.",
-  placeholderTitle: "메모리 허브 준비 중",
-  placeholderDesc:
-    "메모리 허브 페이지를 프로토타입에 맞춰 구축 중입니다. 곧 로컬 메모리 자산을 조회하고 편집할 수 있습니다.",
-  title: "메모리 허브",
   empty: "아직 메모리 항목이 없습니다",
   emptyDesc:
     "증류 작업대에서 '프로필' 또는 '작업 메모리'를 선택하면 결과물이 자동으로 여기에 쌓입니다. 수동으로 추가할 수도 있습니다.",
-  searchPlaceholder: "메모리 제목, 요약 또는 소스 검색",
+  searchPlaceholder: "메모리 제목, 본문 또는 소스 검색",
   add: "메모리 추가",
   goDistill: "증류로 이동",
   source: "소스",
@@ -31,6 +27,7 @@ export const memory = {
   originManual: "수동",
   sourceDistill: "증류",
   sourceUnknown: "알 수 없는 소스",
+  insightTitle: "오늘의 인사이트",
   insightEmpty:
     "아직 메모리 항목이 없습니다: 증류를 실행하거나 수동으로 추가하세요.",
   insightTotal: "메모리 {total}개: 프로필 {profile}개, 작업 메모리 {task}개.",

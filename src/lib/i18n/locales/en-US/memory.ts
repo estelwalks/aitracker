@@ -1,14 +1,10 @@
 export const memory = {
   metaDescription:
     "The Memory Hub stores distilled profiles and task memories: grouped by source, filtered by type, with manual add, edit and delete.",
-  placeholderTitle: "Memory Hub is under construction",
-  placeholderDesc:
-    "The Memory Hub page is being aligned with the prototype; local memory assets will be browsable and editable here shortly.",
-  title: "Memory Hub",
   empty: "No memory entries yet",
   emptyDesc:
     'Pick "Profile" or "Task Memory" in the Distill Studio and the output lands here automatically; you can also add one manually.',
-  searchPlaceholder: "Search memory title, summary or source",
+  searchPlaceholder: "Search memory title, body or source",
   add: "Add Memory",
   goDistill: "Go to Distill",
   source: "Source",
@@ -29,6 +25,7 @@ export const memory = {
   originManual: "Manual",
   sourceDistill: "Distilled",
   sourceUnknown: "Unknown source",
+  insightTitle: "Today's insight",
   insightEmpty:
     "No memory entries yet: run a distillation or add one manually.",
   insightTotal:

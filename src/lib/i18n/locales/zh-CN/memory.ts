@@ -1,13 +1,10 @@
 export const memory = {
   metaDescription:
     "记忆库承接蒸馏产出的画像与任务记忆：按来源分组、按类型筛选，支持手动新增、编辑与删除。",
-  placeholderTitle: "记忆库建设中",
-  placeholderDesc: "记忆库页面正在对齐原型，稍后即可浏览与编辑本地记忆资产。",
-  title: "记忆库",
   empty: "还没有记忆条目",
   emptyDesc:
     "在蒸馏工作台选择「画像」或「任务记忆」，产物会自动沉淀到这里；也可以手动新增一条。",
-  searchPlaceholder: "搜索记忆标题、摘要或来源",
+  searchPlaceholder: "搜索记忆标题、正文或来源",
   add: "新增记忆",
   goDistill: "去蒸馏",
   source: "来源",
@@ -28,6 +25,7 @@ export const memory = {
   originManual: "手动",
   sourceDistill: "蒸馏",
   sourceUnknown: "未知来源",
+  insightTitle: "今日洞察",
   insightEmpty: "还没有记忆条目：去蒸馏工作台产出一条，或手动新增一条。",
   insightTotal:
     "记忆库里有 {total} 条记忆：画像 {profile} 条、任务记忆 {task} 条。",
