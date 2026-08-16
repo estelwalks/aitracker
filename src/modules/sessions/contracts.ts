@@ -81,6 +81,25 @@ export interface SessionPage {
   readonly totalPages: number;
 }
 
+/**
+ * Transcript contract (Story S-300) — deliberately independent of
+ * `SessionSummary`, which stays a content-free browser-safe projection.
+ * A transcript is read from the user's own local logs, held in memory only,
+ * serialized into the current page response, and never persisted or uploaded.
+ */
+export interface SessionTranscriptMessage {
+  readonly role: "user" | "assistant";
+  readonly text: string;
+  /** Reasoning / thinking block; may be absent. */
+  readonly thinking?: string;
+}
+
+export interface SessionTranscript {
+  readonly sessionId: string;
+  readonly source: SessionSource;
+  readonly messages: readonly SessionTranscriptMessage[];
+}
+
 export interface SessionRepository {
   list(signal?: AbortSignal): Promise<readonly SessionSummary[]>;
 }

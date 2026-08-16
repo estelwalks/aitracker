@@ -46,6 +46,7 @@ export const errors = {
     resumeInvalid: "세션 복원 요청이 올바르지 않습니다",
     resumeCancelled: "세션 복원이 취소되었습니다",
     resumeFailed: "로컬 세션 복원을 시작할 수 없습니다",
+    transcriptUnavailable: "세션 대화를 읽지 못했습니다",
   },
   memory: {
     invalidInput: "메모리 내용이 올바르지 않습니다",

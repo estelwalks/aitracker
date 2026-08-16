@@ -12,6 +12,7 @@ import type {
   ResumeSessionInput,
   SessionDetailInput,
   SessionsPageInput,
+  TranscriptInput,
 } from "./api.server.ts";
 
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
@@ -164,6 +165,20 @@ function validateResumeSessionInput(value: unknown): ResumeSessionInput {
   return { source: input.source, sessionId: input.sessionId };
 }
 
+function validateTranscriptInput(value: unknown): TranscriptInput {
+  const input = record(value);
+  onlyKeys(input, ["source", "sessionId"]);
+  if (
+    typeof input.source !== "string" ||
+    !SESSION_SOURCES.has(input.source) ||
+    typeof input.sessionId !== "string" ||
+    !SAFE_SESSION_ID.test(input.sessionId)
+  ) {
+    throw new AppError("errors.sessions.filterInvalid");
+  }
+  return { source: input.source, sessionId: input.sessionId };
+}
+
 /** Browser-safe server-function facade for paged local-session queries. */
 export const getSessionsQuery = createServerFn({ method: "GET" })
   .validator(validateSessionsPageInput)
@@ -193,4 +208,15 @@ export const resumeSession = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { resumeLocalSession } = await import("./api.server.ts");
     return resumeLocalSession(data);
+  });
+
+/**
+ * Fetches one session's local transcript for the current page. The reader is
+ * in-memory only: messages are never persisted and never uploaded.
+ */
+export const getSessionTranscript = createServerFn({ method: "GET" })
+  .validator(validateTranscriptInput)
+  .handler(async ({ data }) => {
+    const { loadSessionTranscript } = await import("./api.server.ts");
+    return loadSessionTranscript(data);
   });
