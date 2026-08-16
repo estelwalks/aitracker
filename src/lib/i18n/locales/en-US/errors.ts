@@ -46,6 +46,13 @@ export const errors = {
     resumeCancelled: "Session resume was cancelled",
     resumeFailed: "Could not start local session recovery",
   },
+  memory: {
+    invalidInput: "Invalid memory content",
+    notFound: "Memory entry not found",
+    conflict: "Memory entry was modified by another operation",
+    invalidTransition: "Memory entry state does not allow this operation",
+    writeFailed: "Could not save the memory; try again",
+  },
   distillation: {
     invalidSelection: "Select 1 to 8 distinct sessions",
     sessionNotFound: "A selected session does not exist or is unavailable",

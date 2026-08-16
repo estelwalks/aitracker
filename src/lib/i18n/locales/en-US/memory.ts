@@ -2,11 +2,13 @@ export const memory = {
   metaDescription:
     "The Memory Hub stores distilled profiles and task memories: grouped by source, filtered by type, with manual add, edit and delete.",
   placeholderTitle: "Memory Hub is under construction",
-  placeholderDesc: "The Memory Hub page is being aligned with the prototype; local memory assets will be browsable and editable here shortly.",
+  placeholderDesc:
+    "The Memory Hub page is being aligned with the prototype; local memory assets will be browsable and editable here shortly.",
   title: "Memory Hub",
   empty: "No memory entries yet",
-  emptyDesc: "Pick \"Profile\" or \"Task Memory\" in the Distill Studio and the output lands here automatically; you can also add one manually.",
-  searchPlaceholder: "Search memory title, body or source",
+  emptyDesc:
+    'Pick "Profile" or "Task Memory" in the Distill Studio and the output lands here automatically; you can also add one manually.',
+  searchPlaceholder: "Search memory title, summary or source",
   add: "Add Memory",
   goDistill: "Go to Distill",
   source: "Source",
@@ -15,12 +17,28 @@ export const memory = {
   typeProfile: "Profiles",
   typeTask: "Task Memories",
   deleteTitle: "Delete Memory",
-  deleteConfirm: "Delete \"{title}\"? This cannot be undone.",
+  deleteConfirm: 'Delete "{title}"? This cannot be undone.',
   cancel: "Cancel",
   delete: "Delete",
   edited: "Memory updated",
   added: "Memory added",
   removed: "Deleted",
+  edit: "Edit",
+  editTitle: "Edit Memory",
+  originDistill: "Distilled",
+  originManual: "Manual",
+  sourceDistill: "Distilled",
+  sourceUnknown: "Unknown source",
+  insightEmpty:
+    "No memory entries yet: run a distillation or add one manually.",
+  insightTotal:
+    "{total} memories: {profile} profiles and {task} task memories.",
+  insightMeaning:
+    "Profiles remember who you are and how you like to work; task memories remember the rules we agreed on.",
+  insightDistill:
+    'Pick "Profile" or "Task Memory" in the Distill Studio and the output lands here automatically.',
+  insightRotate: "Next insight",
+  insightDots: "Insight carousel",
   form: {
     type: "Type",
     title: "Title",
@@ -29,5 +47,11 @@ export const memory = {
     project: "Project",
     save: "Save",
     typePlaceholder: "Select memory type",
+    titlePlaceholder: "Summarize this memory in one sentence",
+    bodyPlaceholder: "Expand: preference details, or the rules we agreed on",
+    sourcePlaceholder: "Source tool (Claude Code / Codex / Cursor…)",
+    projectPlaceholder: "Project (optional)",
+    typeProfileDesc: "About you: preferences, habits, tastes",
+    typeTaskDesc: "About agreements and decisions: the rules we set",
   },
 } as const;

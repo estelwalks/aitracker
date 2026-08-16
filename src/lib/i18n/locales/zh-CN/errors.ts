@@ -44,6 +44,13 @@ export const errors = {
     resumeCancelled: "会话恢复已取消",
     resumeFailed: "无法启动本地会话恢复",
   },
+  memory: {
+    invalidInput: "记忆内容不合法",
+    notFound: "记忆条目不存在",
+    conflict: "记忆条目已被其他操作修改",
+    invalidTransition: "记忆条目状态不允许该操作",
+    writeFailed: "记忆写入失败，请重试",
+  },
   distillation: {
     invalidSelection: "请选择 1 至 8 个不重复的会话",
     sessionNotFound: "所选会话不存在或不可用",

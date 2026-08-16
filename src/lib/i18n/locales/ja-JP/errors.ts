@@ -53,6 +53,13 @@ export const errors = {
     resumeCancelled: "セッション復元はキャンセルされました",
     resumeFailed: "ローカルセッション復元を開始できませんでした",
   },
+  memory: {
+    invalidInput: "メモリ内容が不正です",
+    notFound: "メモリ項目が見つかりません",
+    conflict: "メモリ項目が他の操作によって変更されました",
+    invalidTransition: "メモリ項目の状態ではこの操作は実行できません",
+    writeFailed: "メモリの保存に失敗しました。再試行してください",
+  },
   distillation: {
     invalidSelection: "1〜8 個の重複しないセッションを選択してください",
     sessionNotFound: "選択したセッションが存在しないか利用できません",

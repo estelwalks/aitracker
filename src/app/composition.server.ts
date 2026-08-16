@@ -40,6 +40,7 @@ import {
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import { createKnowledgeRepository } from "../modules/knowledge/application/index.ts";
+import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
 import {
   DEFAULT_KNOWLEDGE_DOCUMENT,
   knowledgeDocumentSchema,
@@ -122,6 +123,14 @@ export interface CompositionRoot {
    * that writes to the knowledge repository.
    */
   readonly distillation: DistillationApplication;
+  /**
+   * Knowledge repository backing the memory hub and distillation approval
+   * writes. Persists only privacy-filtered metadata — asset ids, kinds,
+   * titles, opaque content hashes and provenance summaries — never
+   * conversation content (the content itself is only hashed, see
+   * `createDraft` in the knowledge application layer).
+   */
+  readonly knowledge: KnowledgeRepository;
   /**
    * Session query port shared by the distillation workbench. Backed by the
    * same legacy local-sessions scanner as `/sessions`. Exposed so the
@@ -359,6 +368,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     aiExecutor,
     reports,
     distillation,
+    knowledge,
     sessions,
     resumeSession,
     usage,
