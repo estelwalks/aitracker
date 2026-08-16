@@ -20,6 +20,13 @@ const routes = [
   { path: "/skills", heading: "Skill 资产管理" },
   { path: "/security", heading: "安全与防御" },
   { path: "/settings", heading: "设置" },
+  { path: "/memory", heading: "记忆库" },
+] as const;
+
+/** Routes whose title is rendered by PageBar (a span, not a heading). */
+const textRoutes = [
+  { path: "/widget", text: "菜单栏小组件" },
+  { path: "/chats", text: "会话管理" },
 ] as const;
 
 async function openRouteWithoutPageErrors(
@@ -44,9 +51,35 @@ async function openRouteWithoutPageErrors(
   expect(pageErrors, `${path} 不应触发未捕获页面错误`).toEqual([]);
 }
 
+async function openRouteWithoutPageErrorsByText(
+  page: Page,
+  path: string,
+  text: string,
+) {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+
+  expect(response, `${path} 应返回页面响应`).not.toBeNull();
+  expect(response?.status(), `${path} 不应返回 HTTP 错误`).toBeLessThan(400);
+  await expect(page.getByText(text, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "页面加载失败" })).toHaveCount(
+    0,
+  );
+  await page.waitForTimeout(300);
+  expect(pageErrors, `${path} 不应触发未捕获页面错误`).toEqual([]);
+}
+
 for (const route of routes) {
   test(`${route.path} 可访问且无页面错误`, async ({ page }) => {
     await openRouteWithoutPageErrors(page, route.path, route.heading);
+  });
+}
+
+for (const route of textRoutes) {
+  test(`${route.path} 可访问且无页面错误（PageBar 标题）`, async ({ page }) => {
+    await openRouteWithoutPageErrorsByText(page, route.path, route.text);
   });
 }
 
