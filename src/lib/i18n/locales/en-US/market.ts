@@ -28,7 +28,7 @@ export const market = {
     hintLocalInstalled: "Installed on this machine",
   },
   search: {
-    placeholder: "Search real Skills by name or description…",
+    placeholder: "Search skill name, source path, or capability",
     keyword: " · keyword “{keyword}”",
     updatedAt: "Data updated {time}",
     perPage: "{count} per page · page {page}",

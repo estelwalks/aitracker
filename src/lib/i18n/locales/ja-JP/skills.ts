@@ -6,7 +6,7 @@ export const skills = {
   pageHeaderDesc: "全 {count} 個のローカル Skill · {time} にスキャン",
   pollingHint:
     "更新は実際のローカルスキャンを実行します。コンテンツとローカルの場所は公開しません。",
-  searchPlaceholder: "名前または説明を検索…",
+  searchPlaceholder: "Skill 名、ソースパス、または機能を検索",
   filter: {
     agentAll: "インストール先: すべて",
     source: "ソース",
