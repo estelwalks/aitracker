@@ -78,7 +78,9 @@ function withLlmEnv<T>(fn: () => Promise<T>): Promise<T> {
   );
 }
 
-async function latestRunStatus(root: Awaited<ReturnType<typeof getCompositionRoot>>) {
+async function latestRunStatus(
+  root: Awaited<ReturnType<typeof getCompositionRoot>>,
+) {
   const runs = await root.reports.listRuns();
   if (!runs.ok) throw new Error(runs.error.code);
   return runs.value[0]?.status;
@@ -126,7 +128,9 @@ test("an active profile triggers a real generation against the profile endpoint"
           );
         });
       });
-      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      await new Promise<void>((resolve) =>
+        server.listen(0, "127.0.0.1", resolve),
+      );
       const { port } = server.address() as AddressInfo;
       try {
         const profile = await root.modelProfiles.upsert({

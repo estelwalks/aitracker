@@ -127,8 +127,7 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
     // Generation runs when an S-500 model profile is active OR the legacy
     // environment-variable LLM is configured; without either the page shows
     // the honest offline state so it disables generation instead of faking it.
-    offline:
-      !(await root.modelProfiles.getActiveView()) && !isLLMConfigured(),
+    offline: !(await root.modelProfiles.getActiveView()) && !isLLMConfigured(),
   });
   const result = await presentation.query();
   if (!result.ok) {
