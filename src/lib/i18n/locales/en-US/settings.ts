@@ -14,6 +14,7 @@ export const settings = {
     scan: "Scan config",
     model: "Model config",
     appearance: "Appearance",
+    widget: "Widgets",
     about: "About",
   },
   scan: {

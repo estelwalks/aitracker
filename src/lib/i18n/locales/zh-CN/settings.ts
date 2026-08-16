@@ -14,6 +14,7 @@ export const settings = {
     scan: "扫描配置",
     model: "模型配置",
     appearance: "外观",
+    widget: "小组件",
     about: "关于",
   },
   scan: {

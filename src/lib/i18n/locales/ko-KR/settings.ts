@@ -15,6 +15,7 @@ export const settings = {
     scan: "스캔 구성",
     model: "모델 구성",
     appearance: "모양",
+    widget: "위젯",
     about: "정보",
   },
   scan: {
