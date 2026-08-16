@@ -239,6 +239,11 @@ export interface DashboardV2BreakdownRow {
   readonly deltaPercent: number | null;
   /** Present for projects only, aggregated on the server without session ids. */
   readonly sessions: number | null;
+  /**
+   * Model rows only: deduplicated list of the tools (event sources) that
+   * produced this model's events, for the reference tool-icon strip.
+   */
+  readonly tools?: readonly string[];
 }
 
 export interface DashboardV2MetricDelta {
@@ -277,6 +282,12 @@ export interface DashboardV2Insight {
   readonly cacheRate?: number;
   readonly estimatedCostUsd?: number;
   readonly riskCount?: number;
+  /** Total observed events (calls) across the all-time window. */
+  readonly calls?: number;
+  /** Top tool's share of all-time tokens, as a 0-100 percentage. */
+  readonly pct?: number;
+  /** Locally scanned Skill count when the skills module is available. */
+  readonly scanned?: number | null;
 }
 
 export type DashboardV2MonitoringHealth =
@@ -317,6 +328,12 @@ export interface DashboardV2View {
   readonly modelCount: number;
   readonly projectCount: number;
   readonly outputAvailability: DashboardV2OutputAvailability;
+  /**
+   * Persisted knowledge/memory asset count (derived from the distillation
+   * knowledge store when available); null means the count is unavailable,
+   * never a fabricated zero.
+   */
+  readonly memoryCount?: number | null;
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
