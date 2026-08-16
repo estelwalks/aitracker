@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 
 const routes = [
   { path: "/", heading: "今日洞察" },
-  { path: "/agents", heading: "工具概览" },
+  { path: "/agents", heading: /专属洞察/ },
   { path: "/skills", heading: "今日洞察" },
   { path: "/security", heading: "安全播报" },
   { path: "/settings", heading: "设置" },

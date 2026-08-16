@@ -5,6 +5,7 @@ export const meta = {
     "{appName} V3.0 프로토타입: 여러 AI 코딩 도구의 Token 사용량, Skill 자산, 보안 검사와 메모리를 한곳에서 관리합니다.",
   titles: {
     dashboard: "대시보드 · {appName} V3.0",
+    agents: "도구 개요 · {appName} V3.0",
     skills: "Skill 관리 · {appName} V3.0",
     market: "Skill 마켓 · {appName} V3.0",
     tracker: "버닝 리더보드 · {appName} V3.0",
