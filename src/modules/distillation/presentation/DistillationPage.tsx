@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, Columns2, HelpCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  Columns2,
+  HelpCircle,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyState, Panel, TTButton } from "../../../components/tt";
@@ -15,9 +21,12 @@ import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { CandidateCompareDialog, ExpCard } from "./distill/ExpCard";
 import { DistillConfig } from "./distill/DistillConfig";
+import { DistillHistoryDialog } from "./distill/DistillHistory";
 import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
+import { outTypeMeta, type OutTypeId } from "./distill/out-types";
 import {
   filterDistillationSessions,
+  isConfigMaterial,
   materialKeyOf,
   toggleMaterialSelection,
   toggleProjectSelection,
@@ -26,6 +35,13 @@ import {
 } from "./distill/materials";
 
 const MAX_SELECTION = 8;
+/**
+ * Heuristic tokens-per-turn used to estimate the selected material's size.
+ * The privacy-safe renderer projection deliberately omits raw token totals,
+ * so this estimate is always presented with the "~" prefix and the
+ * "本次输入预估" sub-line (E-200) — never as a measured value.
+ */
+const EST_TOKENS_PER_TURN = 900;
 
 function keyOf(item: { source: string; sessionId: string }): string {
   return materialKeyOf(item);
@@ -46,10 +62,11 @@ function readGuideSeen(): boolean {
 
 /**
  * Distillation workbench aligned with the V3.0 prototype: shared Jarvis
- * insight card, first-run guide overlay, quick/pro config card, session-level
- * material picker and a complete experiment history backed by the persisted
- * candidate store. All figures come from real server fns — sessions, model
- * options, persisted candidates and the workbench counters.
+ * insight card, first-run guide overlay, quick/pro config card with a header
+ * quota status + history, output-type selection (② 出产物), a metric bar with
+ * the prototype's semantics and a complete experiment history backed by the
+ * persisted candidate store. All figures come from real server fns — sessions,
+ * model options, persisted candidates and the workbench counters.
  */
 export function DistillationPage({
   initial,
@@ -62,13 +79,19 @@ export function DistillationPage({
   const { t } = useI18n();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  /** True only while a distillation run is in flight (drives 蒸馏中… states). */
+  const [distilling, setDistilling] = useState(false);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
+  const [outType, setOutType] = useState<OutTypeId>("skill");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [candidates, setCandidates] = useState<CandidateOutput[]>(() => [
     ...initial.candidates,
   ]);
   const [runs, setRuns] = useState(initial.stats.runs);
+  /** Runs completed within this page session (prototype "本次会话" semantics). */
+  const [sessionRuns, setSessionRuns] = useState(0);
   const [approved, setApproved] = useState(initial.stats.approved);
   const [timeRange, setTimeRange] = useState<DistillationTimeRange>("all");
   const [granularity, setGranularity] =
@@ -143,8 +166,12 @@ export function DistillationPage({
     modelId !== "offline" &&
     initial.quota != null &&
     initial.quota.remaining <= 0;
+  // Config-material mode has no real file source yet — the run stays disabled
+  // until the data layer exposes tool config files (E-300, honest empty state).
+  const configMaterial = isConfigMaterial(granularity);
   const canStart =
     !busy &&
+    !configMaterial &&
     selectionCount > 0 &&
     selectionCount <= MAX_SELECTION &&
     !quotaExhausted;
@@ -159,6 +186,12 @@ export function DistillationPage({
   const selectedTurns = useMemo(
     () => selectedItems.reduce((sum, item) => sum + item.turns, 0),
     [selectedItems],
+  );
+  // E-200: documented heuristic estimate (see EST_TOKENS_PER_TURN) presented
+  // with the "~" prefix and the "本次输入预估" sub-line, never as measured data.
+  const estTokens = selectedItems.reduce(
+    (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
+    0,
   );
 
   const jarvisLines = useMemo(() => {
@@ -235,12 +268,24 @@ export function DistillationPage({
     setShowGuide(false);
   }
 
+  /**
+   * E-300: the transport does not carry the selected output type yet, so the
+   * chosen type reaches the model through the prompt directive. The directive
+   * always leads; the user's pro-mode prompt text (if any) follows.
+   */
+  function buildPrompt(userPrompt: string | undefined): string | undefined {
+    const directive = t(outTypeMeta(outType).instructionKey);
+    const parts = [directive, userPrompt?.trim()].filter(Boolean);
+    return parts.length > 0 ? parts.join("；") : undefined;
+  }
+
   async function runDistillation(
     refs: readonly SessionRef[],
     options?: { modelId?: string; promptText?: string },
   ) {
     if (refs.length === 0) return;
     setBusy(true);
+    setDistilling(true);
     try {
       const result = await startDistillation({
         data: {
@@ -264,26 +309,28 @@ export function DistillationPage({
         setCandidates((prev) => [result.candidate!, ...prev]);
       }
       setRuns((current) => current + 1);
+      setSessionRuns((current) => current + 1);
       toast.success(t("common.success"));
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
     } finally {
       setBusy(false);
+      setDistilling(false);
     }
   }
 
   function handleStart() {
     void runDistillation(selectedItems.map(toRef), {
       modelId: mode === "pro" ? modelId : undefined,
-      promptText: mode === "pro" ? promptText : undefined,
+      promptText: buildPrompt(mode === "pro" ? promptText : undefined),
     });
   }
 
   function handleRegenerate(candidate: CandidateOutput) {
     void runDistillation(candidate.selectedSessionRefs, {
       modelId: mode === "pro" ? modelId : undefined,
-      promptText: mode === "pro" ? promptText : undefined,
+      promptText: buildPrompt(mode === "pro" ? promptText : undefined),
     });
   }
 
@@ -352,6 +399,18 @@ export function DistillationPage({
     }
   }
 
+  function handleViewHistory(candidateId: string) {
+    setHistoryOpen(false);
+    document
+      .getElementById(`distill-result-${candidateId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function handleSwitchModel() {
+    const firstReal = initial.modelOptions.find((option) => !option.offline);
+    if (firstReal) setModelId(firstReal.id);
+  }
+
   // No real model is configured, so any run today uses the offline fallback.
   const offlineResult = !initial.modelOptions.some((option) => !option.offline);
 
@@ -360,6 +419,9 @@ export function DistillationPage({
       {showGuide && <DistillGuide onClose={dismissGuide} />}
 
       <div className="relative space-y-5 pb-10">
+        {/* Page header mirrors the prototype (738-757): title + workflow hint +
+            help + side-by-side compare. The mode switch / quota status /
+            history / manage-models controls live in the config card header. */}
         <header className="flex flex-wrap items-center gap-3">
           <h1 className="text-[15px] font-semibold tracking-tight">
             {t("common.distillation.pageTitle")}
@@ -404,9 +466,10 @@ export function DistillationPage({
 
         <DistillMetrics
           selectedCount={selectionCount}
-          selectedTurns={selectedTurns}
-          runs={runs}
+          estTokens={estTokens}
+          runs={sessionRuns}
           approved={approved}
+          busy={distilling}
         />
 
         {segment ? (
@@ -443,6 +506,11 @@ export function DistillationPage({
           onPromptPreset={setPromptPreset}
           promptText={promptText}
           onPromptText={setPromptText}
+          outType={outType}
+          onOutType={setOutType}
+          historyCount={candidates.length}
+          onHistory={() => setHistoryOpen(true)}
+          onSwitchModel={handleSwitchModel}
           availableItems={materialSessions}
           selected={selected}
           selectedItems={selectedItems}
@@ -480,7 +548,7 @@ export function DistillationPage({
               </TTButton>
             )}
           </div>
-          {candidates.length === 0 ? (
+          {candidates.length === 0 && !distilling ? (
             <Panel>
               <EmptyState
                 title={t("distill.noCandidates")}
@@ -489,8 +557,30 @@ export function DistillationPage({
             </Panel>
           ) : (
             <ul id="distill-results" className="scroll-mt-20 space-y-3">
+              {distilling && (
+                <li aria-live="polite">
+                  <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="size-3.5 animate-pulse text-primary" />
+                      <span className="text-[12.5px] font-medium">
+                        {t("distill.running")}
+                      </span>
+                    </div>
+                    <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-foreground/[0.07]">
+                      <div className="h-full w-1/3 animate-pulse rounded-full bg-primary/50" />
+                    </div>
+                    <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">
+                      {t("distill.distillingNote")}
+                    </p>
+                  </div>
+                </li>
+              )}
               {candidates.map((candidate) => (
-                <li key={candidate.candidateId}>
+                <li
+                  key={candidate.candidateId}
+                  id={`distill-result-${candidate.candidateId}`}
+                  className="scroll-mt-20"
+                >
                   <ExpCard
                     candidate={candidate}
                     busy={busy}
@@ -519,6 +609,14 @@ export function DistillationPage({
           <CandidateCompareDialog
             candidates={[candidates[0], candidates[1]]}
             onClose={() => setCompareOpen(false)}
+          />
+        )}
+
+        {historyOpen && (
+          <DistillHistoryDialog
+            candidates={candidates}
+            onClose={() => setHistoryOpen(false)}
+            onView={handleViewHistory}
           />
         )}
       </div>

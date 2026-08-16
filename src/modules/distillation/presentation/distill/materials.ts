@@ -3,8 +3,20 @@ import type { DistillationSessionItem } from "../index.ts";
 /** Values exposed by the workbench time-range toolbar. */
 export type DistillationTimeRange = "today" | "7" | "30" | "all";
 
-/** The material picker can select individual sessions or complete projects. */
-export type DistillationMaterialGranularity = "session" | "project";
+/**
+ * The material picker can select individual sessions, complete projects, or
+ * the prototype's "config" material mode (tool prompt/rule files). The config
+ * mode currently has no real file source, so the UI shows an honest empty
+ * state and blocks the run until the data layer exposes such files.
+ */
+export type DistillationMaterialGranularity = "session" | "project" | "config";
+
+/** True when the material mode selects tool config files instead of sessions. */
+export function isConfigMaterial(
+  granularity: DistillationMaterialGranularity,
+): boolean {
+  return granularity === "config";
+}
 
 export interface DistillationProjectMaterial {
   /** Source is included because project keys are not globally unique. */
