@@ -47,9 +47,21 @@ import {
 import { createSha256HashPort } from "../modules/knowledge/infrastructure/hash-port.server.ts";
 import { createDistillationApplication } from "../modules/distillation/application/index.ts";
 import type { DistillationApplication } from "../modules/distillation/index.ts";
+import {
+  DEFAULT_DISTILL_CANDIDATE_FILE,
+  createAtomicCandidateStore,
+  distillCandidateStoreSchema,
+} from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
-import type { SessionQueryPort } from "../modules/sessions/contracts.ts";
-import { createLegacySessionRepository } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import type {
+  ResumeSessionPort,
+  SessionQueryPort,
+} from "../modules/sessions/contracts.ts";
+import {
+  createLegacyResumeSessionPort,
+  createLegacySessionRepository,
+} from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
 import {
   createUsageApplication,
   type UsageApplication,
@@ -64,12 +76,6 @@ import {
   createAtomicMonitoringStatusStore,
   monitoringStatusSchema,
 } from "../modules/monitoring/infrastructure.ts";
-import { createLocalSkillSecurityMonitor } from "../modules/security-assessment/adapters/local-skill-monitor.server.ts";
-import {
-  createAtomicSecurityAssessmentHistoryStore,
-  securityAssessmentHistorySchema,
-} from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
-import type { SecurityAssessmentHistoryDocument } from "../modules/security-assessment/infrastructure/atomic-history-store.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -109,9 +115,11 @@ export interface CompositionRoot {
   readonly reports: ReportsApplication;
   /**
    * Distillation application. Backed by the legacy local-sessions repository
-   * (wrapped as a `SessionQueryPort`), `aiExecutor` and an AtomicJsonStore-backed
-   * knowledge repository. Candidates live in-memory until approved; approval is
-   * the only path that writes to the knowledge repository.
+   * (wrapped as a `SessionQueryPort`), `aiExecutor`, an AtomicJsonStore-backed
+   * knowledge repository and an AtomicJsonStore-backed candidate store.
+   * Candidates are hydrated from `distill-candidates.v1.json` on construction
+   * and every start/approve/cancel writes through; approval is the only path
+   * that writes to the knowledge repository.
    */
   readonly distillation: DistillationApplication;
   /**
@@ -121,6 +129,11 @@ export interface CompositionRoot {
    * into the application's private ports.
    */
   readonly sessions: SessionQueryPort;
+  /**
+   * Server-only session recovery port. It revalidates the scanned record and
+   * launches only a registry-owned tokenized command without a shell.
+   */
+  readonly resumeSession: ResumeSessionPort;
   /** Local-only usage application used by the collector scheduler. */
   readonly usage: UsageApplication;
   /** Renderer-safe heartbeat for the desktop background listener. */
@@ -223,20 +236,13 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     now: () => clock.now(),
   });
 
-  // The security monitor is default-enabled in the scheduler below. This
-  // adapter reads only discovered local Skill/package content, never follows
-  // symlinks, and persists only opaque hashes plus assessment summaries.
-  const securityHistoryStore =
-    new NodeAtomicJsonStore<SecurityAssessmentHistoryDocument>({
-      filePath: join(tasksDir, "security-assessments.v1.json"),
-      defaultValue: { entries: [] },
-      schema: securityAssessmentHistorySchema,
-      clock,
-    });
-  const security = createLocalSkillSecurityMonitor({
-    history: createAtomicSecurityAssessmentHistoryStore(securityHistoryStore),
-    now: () => clock.now(),
-  });
+  // Automatic security assessment intentionally remains unavailable here.
+  // The Electron service owns the trusted-directory, O_NOFOLLOW/realpath and
+  // current-locale boundaries. Wiring the older background filesystem adapter
+  // would create a weaker second scanning path. The task registry therefore
+  // reports its stable `executor-unavailable` result until it can delegate to
+  // that same service; manual and configured automatic scans remain available
+  // through the desktop security IPC boundary.
 
   // AI orchestration: register the deterministic offline provider by default so
   // distillation/reports get a stable fallback. A real provider can be
@@ -289,10 +295,24 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     hash: createSha256HashPort(),
   });
   const sessions = createSessionQueryService(createLegacySessionRepository());
+  const resumeSession = createLegacyResumeSessionPort(
+    createNodeResumeExecutor(),
+  );
+
+  // Candidate store lives next to the reports/knowledge state under the same
+  // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
+  // projections (session refs, generated knowledge note, execution summary).
+  const candidateStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "distill-candidates.v1.json"),
+    defaultValue: DEFAULT_DISTILL_CANDIDATE_FILE,
+    schema: distillCandidateStoreSchema(),
+    clock,
+  });
   const distillation = createDistillationApplication({
     sessions,
     ai: aiExecutor,
     knowledge,
+    persistence: createAtomicCandidateStore({ store: candidateStore }),
     now: () => new Date(),
     createCandidateId: () => `candidate:${randomUUID()}`,
   });
@@ -321,7 +341,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         });
       },
     },
-    security,
     reports,
     monitoring,
   });
@@ -341,6 +360,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     reports,
     distillation,
     sessions,
+    resumeSession,
     usage,
     monitoring,
     dataRoot,

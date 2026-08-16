@@ -68,10 +68,29 @@ export function createDistillationApplication(
   const nextId = () =>
     ports.createCandidateId?.() ?? `candidate-${crypto.randomUUID()}`;
 
+  // Hydrate once from the optional persistence port. A failed read must never
+  // break distillation: the map degrades to empty and the next mutation
+  // retries the write. Every start/approve/cancel awaits hydration so a
+  // concurrent construction cannot lose a candidate that was already on disk.
+  let hydration: Promise<void> = Promise.resolve();
+  if (ports.persistence) {
+    hydration = ports.persistence.list().then(
+      (rows) => {
+        for (const row of rows) candidates.set(row.candidateId, row);
+      },
+      () => undefined,
+    );
+  }
+  const ready = () => hydration;
+  const persist = (candidate: CandidateOutput): Promise<void> =>
+    ports.persistence?.save(candidate).catch(() => undefined) ??
+    Promise.resolve();
+
   return {
     async start(
       request,
     ): Promise<Result<DistillationResult, DistillationErrorCode>> {
+      await ready();
       if (!validRequest(request))
         return err("errors.distillation.invalidSelection");
       if (request.signal?.aborted) return err("errors.distillation.cancelled");
@@ -115,6 +134,7 @@ export function createDistillationApplication(
         now().toISOString(),
       );
       candidates.set(candidateOutput.candidateId, candidateOutput);
+      await persist(candidateOutput);
       return ok({
         requestId: request.requestId,
         status: "waiting-approval",
@@ -127,6 +147,7 @@ export function createDistillationApplication(
       candidateId,
       actor,
     ): Promise<Result<DistillationResult, DistillationErrorCode>> {
+      await ready();
       const current = candidates.get(candidateId);
       if (!current) return err("errors.distillation.notFound");
       if (current.approvalState !== "waiting-approval")
@@ -160,6 +181,7 @@ export function createDistillationApplication(
         approvalState: "approved",
       };
       candidates.set(candidateId, updated);
+      await persist(updated);
       return ok({
         requestId: current.execution.requestId,
         status: "approved",
@@ -172,6 +194,7 @@ export function createDistillationApplication(
     async cancel(
       candidateId,
     ): Promise<Result<DistillationResult, DistillationErrorCode>> {
+      await ready();
       const current = candidates.get(candidateId);
       if (!current) return err("errors.distillation.notFound");
       if (current.approvalState !== "waiting-approval")
@@ -181,12 +204,38 @@ export function createDistillationApplication(
         approvalState: "cancelled",
       };
       candidates.set(candidateId, updated);
+      await persist(updated);
       return ok({
         requestId: current.execution.requestId,
         status: "cancelled",
         candidate: updated,
         execution: current.execution,
       });
+    },
+
+    async listWaiting(): Promise<CandidateOutput[]> {
+      await ready();
+      return [...candidates.values()]
+        .filter((item) => item.approvalState === "waiting-approval")
+        .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
+    },
+
+    async listAll(): Promise<CandidateOutput[]> {
+      await ready();
+      return [...candidates.values()].sort((a, b) =>
+        b.generatedAt.localeCompare(a.generatedAt),
+      );
+    },
+
+    async get(candidateId: string): Promise<CandidateOutput | undefined> {
+      await ready();
+      return candidates.get(candidateId);
+    },
+
+    async count(): Promise<number | null> {
+      if (!ports.knowledge) return null;
+      const result = await ports.knowledge.list();
+      return isOk(result) ? result.value.length : null;
     },
   };
 }

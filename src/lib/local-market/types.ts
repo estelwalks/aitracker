@@ -47,7 +47,8 @@ export interface MarketPagination {
   pages: number;
 }
 
-export type MarketSort = "downloads" | "latest" | "stars" | "tokens";
+export type MarketSort =
+  "stars" | "created_at" | "name_asc" | "name_desc" | "downloads";
 
 export interface MarketStats {
   totalSkills: number;

@@ -5,12 +5,23 @@
  * consumers (detection, usage sources, skills scanner, onboarding) keep working
  * without per-file edits.
  */
-import { getUsagePlan, listTools } from "../tool-registry/registry.ts";
+import {
+  getUsagePlan,
+  listTools,
+  officialDownloadUrlFor,
+  toolSurfaceFor,
+  type ToolSurface,
+} from "../tool-registry/registry.ts";
+
+export type { ToolSurface } from "../tool-registry/registry.ts";
 
 export interface AiTool {
   /** Stable lowercase-kebab identifier (used as the usage `source` id). */
   id: string;
-  /** PRD display name (also used as the Skill / Market agent label). */
+  /**
+   * Legacy field name retained for compatibility. Its value is always the
+   * registry's primary `display.name`, never a hand-authored UI alias.
+   */
   nameZh: string;
   /**
    * HOME-relative probe paths (macOS first, Windows variant where known) used
@@ -18,6 +29,10 @@ export interface AiTool {
    * known - the tool then renders as "未安装".
    */
   detectRoots: readonly string[];
+  /** Registry-owned product surface label for browser-safe source cards. */
+  toolSurface: ToolSurface;
+  /** Verified official URL, or null when the registry has no safe link. */
+  officialDownloadUrl: string | null;
 }
 
 /**
@@ -44,9 +59,11 @@ const REGISTRY_TOOLS = listTools().filter(
 
 export const AI_TOOLS: readonly AiTool[] = REGISTRY_TOOLS.map((def) => ({
   id: def.id,
-  nameZh: def.display.nameZh,
+  nameZh: def.display.name,
   detectRoots: def.detection.roots,
+  toolSurface: toolSurfaceFor(def.id),
+  officialDownloadUrl: officialDownloadUrlFor(def.id),
 }));
 
-/** Stable lowercase-kebab ids for the 27 visible catalog tools (legacy sources excluded). */
+/** Stable lowercase-kebab ids for the 29 visible catalog tools (legacy sources excluded). */
 export const AI_TOOL_IDS: readonly string[] = AI_TOOLS.map((tool) => tool.id);

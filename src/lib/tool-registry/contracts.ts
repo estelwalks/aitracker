@@ -69,6 +69,10 @@ export type UsageReaderKey =
   | "generic-sqlite"
   | "claude-rollout-v1"
   | "codex-rollout-v1"
+  | "gemini-session-v1"
+  | "grok-turn-v1"
+  | "openclaw-session-v1"
+  | "antigravity-transcript-v1"
   | (string & {});
 
 export type SessionReaderKey =

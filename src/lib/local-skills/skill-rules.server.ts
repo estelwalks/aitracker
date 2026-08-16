@@ -47,7 +47,7 @@ export const SKILL_AGENT_RULES: readonly SkillAgentRule[] =
  */
 export const SKILL_ROOT_SUFFIXES: Record<string, string> = Object.fromEntries(
   SKILL_AGENT_RULES.map((rule) => [
-    SKILL_TOOL_BY_ID.get(rule.toolId)!.display.nameZh,
+    SKILL_TOOL_BY_ID.get(rule.toolId)!.display.name,
     rule.roots[0],
   ]),
 );

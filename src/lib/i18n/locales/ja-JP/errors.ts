@@ -42,9 +42,16 @@ export const errors = {
       "ソースと対象パスが重複しているため、操作をブロックしました",
     duplicateName: "対象に同名の Skill がすでに存在します",
     noSkillSelected: "少なくとも 1 つの Skill を選択してください",
+    notFound: "Skill が見つからないか、読み取れません",
   },
   sessions: {
     filterInvalid: "セッションフィルターが不正です",
+    queryFailed: "ローカルセッションの照会に失敗しました。再試行してください",
+    sessionNotFound: "選択したセッションが存在しないか利用できません",
+    resumeUnavailable: "このセッションは現在復元できません",
+    resumeInvalid: "セッション復元リクエストが無効です",
+    resumeCancelled: "セッション復元はキャンセルされました",
+    resumeFailed: "ローカルセッション復元を開始できませんでした",
   },
   distillation: {
     invalidSelection: "1〜8 個の重複しないセッションを選択してください",
@@ -54,6 +61,10 @@ export const errors = {
     notWaiting: "候補は承認待ちではありません",
     knowledgeUnavailable: "ナレッジストアが利用できません",
     knowledgeFailed: "ナレッジエントリの書き込みに失敗しました",
+    notApproved: "Skill として保存する前に候補を承認してください",
+    invalidName: "Skill 名が無効です",
+    invalidAgent: "対象ツールが利用できません",
+    skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
   },
   pricing: {
     modelListInvalid: "モデルリストが不正です",

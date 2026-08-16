@@ -14,12 +14,13 @@ import { APP_DATA_DIR } from "../app-config";
 
 import { scanLocalUsage } from "./scanner.server.ts";
 import type { LocalUsageEvent } from "./types.ts";
+import type { LocalUsageSource } from "./types.ts";
 
 const NOW = new Date("2026-07-27T12:00:00.000Z");
 
 function sourceSummary(
   snapshot: Awaited<ReturnType<typeof scanLocalUsage>>,
-  source: "claude-code" | "codex",
+  source: LocalUsageSource,
 ) {
   const summary = snapshot.sources.find(
     (candidate) => candidate.source === source,
@@ -27,6 +28,356 @@ function sourceSummary(
   assert.ok(summary);
   return summary;
 }
+
+const NATIVE_FIXTURES = join(
+  process.cwd(),
+  "src/lib/local-usage/adapters/__fixtures__",
+);
+
+test("Gemini native reader diffs cumulative snapshots, clamps component drops, and rebases only on total reset", async () => {
+  const root = join(tmpdir(), `tt-gemini-native-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionDirectory = join(
+    homeDirectory,
+    ".gemini",
+    "tmp",
+    "project",
+    "chats",
+  );
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDirectory, "session-real.json"),
+    await readFile(join(NATIVE_FIXTURES, "gemini-session-native.json"), "utf8"),
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = first.details
+      .filter((event) => event.source === "gemini-cli")
+      .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+    assert.equal(events.length, 4);
+    assert.deepEqual(
+      events.map((event) => ({
+        input: event.inputTokens,
+        cached: event.cachedInputTokens,
+        output: event.outputTokens,
+        reasoning: event.reasoningOutputTokens,
+        total: event.totalTokens,
+      })),
+      [
+        { input: 100, cached: 20, output: 35, reasoning: 10, total: 165 },
+        { input: 60, cached: 10, output: 22, reasoning: 5, total: 97 },
+        { input: 40, cached: 0, output: 3, reasoning: 0, total: 43 },
+        { input: 10, cached: 0, output: 5, reasoning: 2, total: 17 },
+      ],
+    );
+    assert.equal(
+      first.bySource.find((row) => row.key === "gemini-cli")?.totalTokens,
+      322,
+    );
+    assert.ok(events.every((event) => event.project === "unknown"));
+    assert.ok(
+      events.every((event) =>
+        /^session_[a-f0-9]{20}$/.test(event.sessionId ?? ""),
+      ),
+    );
+
+    const cachePayload = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      cachePayload,
+      /PRIVATE_GEMINI_BODY|private-gemini-session/,
+    );
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "gemini-cli").filesReused, 1);
+    assert.deepEqual(second.totals, first.totals);
+    assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Grok native reader uses keyed modelUsage, reported totals, component fallback, and eventId-model dedup", async () => {
+  const root = join(tmpdir(), `tt-grok-native-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionDirectory = join(
+    homeDirectory,
+    ".grok",
+    "sessions",
+    "project",
+    "sid",
+  );
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDirectory, "updates.jsonl"),
+    await readFile(join(NATIVE_FIXTURES, "grok-updates-native.jsonl"), "utf8"),
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = first.details.filter((event) => event.source === "grok");
+    assert.equal(events.length, 3);
+    const totals = first.bySource.find((row) => row.key === "grok");
+    assert.equal(totals?.inputTokens, 145);
+    assert.equal(totals?.cachedInputTokens, 35);
+    assert.equal(totals?.outputTokens, 22);
+    assert.equal(totals?.reasoningOutputTokens, 3);
+    assert.equal(totals?.totalTokens, 202);
+    assert.equal(
+      events.find(
+        (event) =>
+          event.model === "grok-4.5-build" && event.totalTokens === 110,
+      )?.totalTokens,
+      110,
+      "reported total is authoritative even when reasoning is present",
+    );
+    assert.equal(
+      events.find((event) => event.model === "grok-helper")?.totalTokens,
+      37,
+      "missing reported total falls back to normalized components",
+    );
+    assert.ok(events.every((event) => event.project === "unknown"));
+    assert.ok(
+      events.every((event) =>
+        /^session_[a-f0-9]{20}$/.test(event.sessionId ?? ""),
+      ),
+    );
+    assert.ok(events.every((event) => event.totalTokens < 999_999));
+
+    const cachePayload = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      cachePayload,
+      /PRIVATE_GROK_BODY|private-grok-session|turn-1/,
+    );
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "grok").filesReused, 1);
+    assert.deepEqual(second.totals, first.totals);
+    assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenClaw native reader merges active/archive/reset copies as a multiset and keeps genuine repeats", async () => {
+  const root = join(
+    tmpdir(),
+    `tt-openclaw-native-${process.pid}-${Date.now()}`,
+  );
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const agentsRoot = join(homeDirectory, ".openclaw", "agents", "main");
+  const activeDirectory = join(agentsRoot, "sessions");
+  const archiveDirectory = join(
+    agentsRoot,
+    "session-sqlite-import-archive",
+    "batch",
+  );
+  await mkdir(activeDirectory, { recursive: true });
+  await mkdir(archiveDirectory, { recursive: true });
+  const fixture = await readFile(
+    join(NATIVE_FIXTURES, "openclaw-session-native.jsonl"),
+    "utf8",
+  );
+  await writeFile(join(activeDirectory, "session-a.jsonl"), fixture);
+  await writeFile(join(activeDirectory, "session-a.jsonl.reset.1"), fixture);
+  await writeFile(join(archiveDirectory, "session-a.jsonl"), fixture);
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const events = first.details.filter((event) => event.source === "openclaw");
+    assert.equal(events.length, 3);
+    const totals = first.bySource.find((row) => row.key === "openclaw");
+    assert.equal(totals?.inputTokens, 280);
+    assert.equal(totals?.cachedInputTokens, 1_020);
+    assert.equal(totals?.cacheCreationInputTokens, 81);
+    assert.equal(totals?.outputTokens, 60);
+    assert.equal(totals?.totalTokens, 1_441);
+    assert.ok(events.every((event) => event.project === "unknown"));
+
+    const cachePayload = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      cachePayload,
+      /PRIVATE_OPENCLAW_BODY|stable-event-1|response-private-2/,
+    );
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "openclaw").filesReused, 3);
+    assert.deepEqual(second.totals, first.totals);
+    assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Claude attaches tool-result metadata to the matching tool-use event without retaining output text", async () => {
+  const root = join(tmpdir(), `tt-claude-output-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const sessionDirectory = join(homeDirectory, ".claude", "projects", "demo");
+  await mkdir(sessionDirectory, { recursive: true });
+  await writeFile(
+    join(sessionDirectory, "session.jsonl"),
+    [
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:00.000Z",
+        message: {
+          id: "assistant-private-id",
+          model: "claude-test",
+          usage: { input_tokens: 12, output_tokens: 8 },
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-private-id",
+              name: "Bash",
+              input: { command: "echo DO_NOT_CACHE" },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-07-27T10:00:01.000Z",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-private-id",
+              content: `PRIVATE_TOOL_RESULT${String.fromCharCode(10)}line-two`,
+              is_error: false,
+            },
+          ],
+        },
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const snapshot = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const event = snapshot.details.find(
+      (candidate) => candidate.source === "claude-code",
+    );
+    assert.deepEqual(event?.context?.toolOutputs, {
+      characters: 28,
+      lines: 2,
+      completed: true,
+      calls: 1,
+    });
+    const cache = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(cache, /PRIVATE_TOOL_RESULT|tool-private-id/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Antigravity emits labelled model-only transcript estimates without context evidence", async () => {
+  const root = join(tmpdir(), `tt-antigravity-${process.pid}-${Date.now()}`);
+  const homeDirectory = join(root, "home");
+  const cacheDirectory = join(root, "cache");
+  const logDirectory = join(
+    homeDirectory,
+    ".gemini",
+    "antigravity",
+    "brain",
+    "session-private",
+    ".system_generated",
+    "logs",
+  );
+  await mkdir(logDirectory, { recursive: true });
+  await writeFile(
+    join(logDirectory, "transcript.jsonl"),
+    [
+      JSON.stringify({
+        type: "USER_SETTINGS_CHANGE",
+        content:
+          "changed setting `Model Selection` from Default to Gemini 2.5 Pro (thinking). ",
+      }),
+      JSON.stringify({
+        type: "USER_INPUT",
+        content: "PRIVATE_PROMPT_INPUT",
+        created_at: "2026-07-27T10:00:00.000Z",
+      }),
+      JSON.stringify({
+        type: "PLANNER_RESPONSE",
+        content: "PRIVATE_PLANNER_OUTPUT",
+        thinking: "PRIVATE_REASONING",
+        tool_calls: [{ name: "PRIVATE_TOOL" }],
+        created_at: "2026-07-27T10:00:01.000Z",
+      }),
+    ].join("\n") + "\n",
+  );
+
+  try {
+    const first = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    const event = first.details.find(
+      (candidate) => candidate.source === "antigravity",
+    );
+    assert.equal(event?.measurement, "estimated");
+    assert.equal(event?.model, "gemini-2.5-pro");
+    assert.ok((event?.totalTokens ?? 0) > 0);
+    assert.equal(event?.context, undefined);
+    const cache = await readFile(
+      join(cacheDirectory, "local-usage-index-v10.json"),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      cache,
+      /PRIVATE_PROMPT|PRIVATE_PLANNER|PRIVATE_REASONING|PRIVATE_TOOL/i,
+    );
+    const second = await scanLocalUsage({
+      homeDirectory,
+      cacheDirectory,
+      now: NOW,
+    });
+    assert.equal(sourceSummary(second, "antigravity").filesReused, 1);
+    assert.deepEqual(second.details, first.details);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("persistent cache reuses, reparses, prunes, and rebuilds files safely", async () => {
   const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
@@ -262,7 +613,7 @@ test("cache embeds registryFingerprint and invalidates on mismatch", async () =>
       registryFingerprint: string;
       files: unknown[];
     };
-    assert.equal(index.version, 12);
+    assert.equal(index.version, 14);
     assert.ok(
       typeof index.registryFingerprint === "string" &&
         index.registryFingerprint.length > 0,

@@ -52,12 +52,22 @@ const app = (): ReportsApplication => ({
   get: async () => {
     throw new Error("unused");
   },
+  readContent: async () => {
+    throw new Error("unused");
+  },
   approve: async () => {
     throw new Error("unused");
   },
   archive: async () => {
     throw new Error("unused");
   },
+  list: async () => {
+    throw new Error("unused");
+  },
+  listRuns: async () => {
+    throw new Error("unused");
+  },
+  count: async () => null,
 });
 
 const run = (overrides: Partial<ReportRun> = {}): ReportRun => ({
@@ -161,6 +171,47 @@ test("retains a failed run alongside the previous report and keeps renderer payl
     /body|prompt|command|path|rawError|secret|token/i,
   );
   assert.match(serialized, /errors\.reports\.generationFailed/);
+});
+
+test("surfaces real session density and report/run counts in the feed", async () => {
+  const query = createReportsPresentation({
+    reports: app(),
+    source: {
+      listReports: async () => [report()],
+      listRuns: async () => [
+        run(),
+        run({ runId: "run:2", status: "succeeded" }),
+      ],
+      sessionMetrics: async () => ({
+        total: 3,
+        days: {
+          "2026-08-07": { count: 2, tokens: 30, knownUsd: 1.5 },
+          "2026-08-06": { count: 1, tokens: 5, knownUsd: 0.1 },
+        },
+      }),
+    },
+    now: () => new Date("2026-08-07T02:00:00.000Z"),
+  });
+  const result = await query.query();
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.feed.reportCount, 1);
+  assert.equal(result.value.feed.runCount, 2);
+  assert.equal(result.value.feed.density.total, 3);
+  assert.equal(result.value.feed.density.days["2026-08-07"]?.count, 2);
+});
+
+test("defaults density to empty when the source has no session metrics", async () => {
+  const query = createReportsPresentation({
+    reports: app(),
+    source: { listReports: async () => [], listRuns: async () => [] },
+  });
+  const result = await query.query();
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.feed.density, { total: 0, days: {} });
+  assert.equal(result.value.feed.reportCount, 0);
+  assert.equal(result.value.feed.runCount, 0);
 });
 
 test("drops unsafe opaque references from the detail DTO", async () => {

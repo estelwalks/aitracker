@@ -62,6 +62,7 @@ export const getMarketSkills = createServerFn({ method: "GET" })
       limit: number;
       search: string;
       sort: MarketSort;
+      tags?: string[];
     }) => input,
   )
   .handler(async ({ data }) => {

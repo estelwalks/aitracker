@@ -12,8 +12,82 @@ export const settings = {
   themeDesc: "テーマを選択します",
   sections: {
     general: "一般",
+    scan: "スキャン設定",
+    model: "モデル設定",
     appearance: "外観",
     about: "情報",
+  },
+  scan: {
+    onDemand: "スキャン方式",
+    onDemandDesc:
+      "スキャンはオンデマンドで実行され、対応するローカル AI ツールのログを読み取り増分インデックスを構築します。",
+    retentionNote:
+      "以下の保持期間は使用量・スキャンキャッシュにも適用されます：",
+  },
+  model: {
+    notConfigured: "LLM 未設定",
+    notConfiguredDesc:
+      "AI 生成機能（蒸留、レポート、AI インサイト）は利用できません。TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 環境変数を設定してください。",
+    configured: "LLM 設定済み",
+    baseUrl: "エンドポイント",
+    model: "モデル",
+    apiKeyMasked: "API Key 設定済み（マスク表示）",
+    loading: "読み込み中…",
+  },
+  security: {
+    unavailable: {
+      title: "セキュリティ検出サービスを利用できません",
+      desc: "利用可能なセキュリティ検出サービスがありません（デスクトップアプリまたはローカルコンパニオンに未接続）。モデル設定と自動スキャン予定の保存にはそのサービスが必要です。",
+      retry: "再接続",
+    },
+    model: {
+      title: "セキュリティ検出モデル",
+      desc: "ディープスキャンのモデルレビューと動作分析に使用します。API Key はシステムの安全なストレージで暗号化され、メインプロセス内でのみ保持されます。",
+      provider: "API プロトコル",
+      openai: "OpenAI 互換",
+      anthropic: "Anthropic Messages",
+      endpoint: "Endpoint",
+      apiKey: "API Key",
+      apiKeyConfigured: "安全に保存済み。空欄のままにすると維持されます",
+      apiKeyMissing: "未設定",
+      liteModel: "軽量モデル",
+      proModel: "上位モデル",
+      timeoutMs: "タイムアウト（ミリ秒）",
+      save: "設定を保存",
+      saving: "保存中",
+      saved: "セキュリティ検出モデルを保存しました",
+      saveFailed: "モデル設定の保存に失敗しました",
+      loadFailed: "モデル設定の読み込みに失敗しました",
+      encryptionAvailable:
+        "システムのセキュアキー暗号化が利用可能です。API Key はメインプロセス内でのみ暗号化されます。",
+      encryptionUnavailable:
+        "このシステムではセキュアキー暗号化を利用できないため、API Key を保存できません。",
+    },
+    schedule: {
+      title: "スキャン予定",
+      desc: "自動スキャンはモデルが設定されているかどうかに応じて、クイック／ディープ検出を自動選択します。",
+      enabled: "自動スキャン",
+      enabledHint:
+        "有効にすると、スケジュールに従ってローカルの Skill を自動点検します",
+      cycle: "スキャン周期",
+      hourly: "毎時",
+      daily: "毎日",
+      weekly: "毎週",
+      time: "スキャン時刻",
+      scope: "スキャン範囲",
+      scopeAll: "すべて",
+      scopeAgent: "指定 Agent",
+      scopeDir: "指定ディレクトリ",
+      scopeHint: "自動スキャンが対象とする Skill の範囲を選択",
+      agentHint:
+        "自動スキャンに含める Agent を選択してください。未選択の場合は自動スキャンは実行されません。",
+      dirHint:
+        "スキャン対象の Skill ルートディレクトリ（絶対パス）を入力してください。未入力の場合は自動スキャンは実行されません。",
+      notify: "アラート通知",
+      saved: "スキャン予定を保存しました",
+      saveFailed: "スキャン予定の保存に失敗しました",
+      loadFailed: "スキャン予定の読み込みに失敗しました",
+    },
   },
   pageHeader: "設定",
   pageHeaderDesc:

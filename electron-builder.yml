@@ -11,6 +11,11 @@ files:
   - build/electron/**/*
   - package.json
   - "!node_modules/**/*"
+  # Main-process-only scanner runtime. Its ESM bundle loads Prompt markdown at
+  # module initialization even for quick scans, and imports zod at runtime.
+  - node_modules/skill-scanner/dist/**/*
+  - node_modules/skill-scanner/package.json
+  - node_modules/zod/**/*
 extraResources:
   - from: .output
     to: web

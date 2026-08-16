@@ -37,6 +37,8 @@ export const STORAGE_KEY_PREFIX = `${APP_ID}.`;
 export const PREFS_FILENAME = `${APP_ID}-prefs.json`;
 /** Capability-token cookie name in the local web server. [safe] */
 export const COOKIE_TOKEN_NAME = `${APP_ID}_token`;
+/** Same-origin mutation header for the browser companion API. [safe] */
+export const SECURITY_CSRF_HEADER = `x-${APP_ID}-csrf`;
 /** HMAC domain-separation string for local-usage session IDs. [compat: changing orphans every existing session ID] */
 export const SESSION_HMAC_DOMAIN = `${APP_ID}-local-usage-session-v1`;
 /** Marker file name that designates a directory as the data root. [compat: prune safety checks] */

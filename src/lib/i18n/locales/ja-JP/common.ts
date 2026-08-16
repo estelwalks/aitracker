@@ -59,6 +59,17 @@ export const common = {
     kindDaily: "日次",
     kindWeekly: "週次",
     updatedAt: "更新 {time}",
+    editor: {
+      preview: "プレビュー",
+      edit: "編集",
+      exportMd: "Markdown をエクスポート",
+      print: "印刷 / PDF 出力",
+      copy: "コピー",
+      autosaved: "草稿を自動保存しました",
+      draftNote:
+        "草稿はこのブラウザにのみ保存され、サーバーには書き込まれません。",
+      draftHint: "生成済みレポートをクリックすると草稿を編集できます。",
+    },
   },
   distillation: {
     pageTitle: "蒸留ワークベンチ",
@@ -77,5 +88,26 @@ export const common = {
     candidateNote:
       "候補はサーバーメモリに保持され、リロード後は失われます。候補が永続化された時点で完全な承認 UI を提供します。",
     selectedTurns: "{count} ターン",
+    modeQuick: "クイックモード",
+    modePro: "詳細設定",
+    metricMaterial: "選択済み素材",
+    metricTurns: "素材ターン",
+    metricRuns: "蒸留回数",
+    metricApproved: "承認済み",
+    openMaterial: "素材ライブラリを開く",
+    materialDrawerTitle: "蒸留素材を選択",
+    materialSearch: "セッション / プロジェクトを検索…",
+    materialSegmentUnavailable:
+      "現在のバージョンはセッション単位での素材選択のみ対応です。単一メッセージの内容は読み取りません（プライバシー境界）。",
+    modelOffline: "オフライン回退",
+    modelNotConfigured:
+      "LLM 未設定 · 蒸留結果は決定的なオフライン回退で生成されます",
+    runHint: "セッションを 1 つ以上選択してから蒸留してください。",
+    expMode: "モード",
+    expTime: "生成時刻",
+    expOfflineNotice:
+      "この候補は決定的なオフライン回退で生成されました。LLM を設定すると実際のモデル出力が得られます。",
+    saveAndManage: "保存して Skill 管理へ",
+    estimatedTokens: "約 {count} tokens",
   },
 } as const;

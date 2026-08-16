@@ -1,7 +1,4 @@
-import {
-  buildResumeCommand,
-  isResumeSafeId,
-} from "../../../lib/local-sessions/resume-id.ts";
+import { isResumeSafeId } from "../../../lib/local-sessions/resume-id.ts";
 import { scanLocalSessions } from "../../../lib/local-sessions/scanner.server.ts";
 import type { SessionRecord } from "../../../lib/local-sessions/types.ts";
 import { err, ok, type Result } from "../../../shared/result.ts";
@@ -27,7 +24,14 @@ export function createLegacySessionRepository(): SessionRepository {
 }
 
 export interface ResumeCommandExecutor {
-  execute(command: readonly string[], signal?: AbortSignal): Promise<void>;
+  /**
+   * Executes a resume request from a trusted source/session pair. The adapter
+   * never accepts a command, cwd, or other launch parameter from a renderer.
+   */
+  execute(
+    request: Pick<ResumeSessionRequest, "source" | "sessionId">,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 export interface LegacySessionScan {
@@ -60,13 +64,13 @@ export function createLegacyResumeSessionPort(
           item.source === request.source &&
           item.sessionId === request.sessionId,
       );
-      const command = record
-        ? buildResumeCommand(record.source, record.sessionId)
-        : null;
-      if (!record || !command || !record.resumeSafe)
+      if (!record || !record.resumeSafe)
         return err("errors.sessions.resumeUnavailable");
       try {
-        await executor.execute(command.split(" "), request.signal);
+        await executor.execute(
+          { source: record.source, sessionId: record.sessionId },
+          request.signal,
+        );
         return ok({
           accepted: true,
           source: request.source,

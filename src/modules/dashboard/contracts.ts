@@ -8,9 +8,11 @@ export interface DashboardModuleContract {
 import type {
   LocalTokenCounts,
   LocalUsageContext,
+  LocalUsageToolCall,
   LocalUsageBreakdown,
   LocalUsageDaily,
   LocalUsageEvent,
+  LocalUsageMeasurement,
   LocalUsageSnapshot,
   LocalUsageSourceSummary,
   LocalUsageTotals,
@@ -18,6 +20,7 @@ import type {
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
 import type { MonitoringStatus } from "../monitoring/index.ts";
+import type { DashboardProjectKind } from "./project-classification.server.ts";
 
 /** Browser-safe usage event. Raw commands and filesystem references are omitted. */
 export interface DashboardUsageEvent extends LocalTokenCounts {
@@ -26,6 +29,10 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project key, never a local path. */
   readonly project: string;
+  /** Server-derived category; omitted only by legacy test/compatibility DTOs. */
+  readonly projectKind?: DashboardProjectKind;
+  /** An estimate is model-level only and must never imply context evidence. */
+  readonly measurement?: LocalUsageMeasurement;
   readonly context?: Pick<
     LocalUsageContext,
     "textResponse" | "tools" | "skills" | "toolOutputs"
@@ -79,6 +86,9 @@ export interface DashboardProjectSessionAggregate {
   readonly source: string;
   readonly date: string;
   readonly count: number;
+  readonly turns: number;
+  readonly editTurns: number;
+  readonly subagentCalls: number;
 }
 
 /** Same privacy boundary as project aggregates, grouped for tool workflow KPIs. */
@@ -86,6 +96,9 @@ export interface DashboardSourceSessionAggregate {
   readonly source: string;
   readonly date: string;
   readonly count: number;
+  readonly turns: number;
+  readonly editTurns: number;
+  readonly subagentCalls: number;
 }
 
 export interface DashboardSessionsSummary {
@@ -107,12 +120,31 @@ export interface DashboardV2Event extends LocalTokenCounts {
   readonly model: string;
   /** Display-only project label, derived from the final project segment. */
   readonly project: string;
+  readonly projectKind?: DashboardProjectKind;
+  /** Omitted means a directly observed provider/local usage record. */
+  readonly measurement?: LocalUsageMeasurement;
   readonly context: {
     readonly textResponses: number;
     readonly toolCalls: number;
+    /** Sanitized tool names/categories/calls; arguments and outputs stay server-only. */
+    readonly tools?: readonly Pick<
+      LocalUsageToolCall,
+      "name" | "category" | "calls"
+    >[];
     readonly skillCalls: number;
     readonly toolOutputCalls: number;
   };
+  /** Field-level evidence prevents an unobserved metric from rendering as zero. */
+  readonly evidence: DashboardV2ContextAvailability;
+}
+
+export interface DashboardV2ContextAvailability {
+  readonly textResponses: boolean;
+  readonly toolCalls: boolean;
+  readonly skillCalls: boolean;
+  readonly toolOutputCalls: boolean;
+  readonly reasoningTokens: boolean;
+  readonly systemPromptTokens: boolean;
 }
 
 export interface DashboardV2Tool {
@@ -120,6 +152,39 @@ export interface DashboardV2Tool {
   readonly name: string;
   readonly available: boolean;
   readonly detected: boolean;
+  readonly usageSupport: "native" | "adapter" | "unsupported";
+}
+
+export interface DashboardV2AvailabilityMetric {
+  readonly count: number | null;
+  readonly available: boolean;
+}
+
+export interface DashboardV2OutputAvailability {
+  readonly securityRuns: DashboardV2AvailabilityMetric;
+  readonly distillationOutputs: DashboardV2AvailabilityMetric;
+  readonly dailyReports: DashboardV2AvailabilityMetric;
+}
+
+/**
+ * Browser-safe projection of an optional server-generated dashboard insight.
+ * Configuration, endpoint, API key, provider request and raw response stay in
+ * the server adapter; this DTO only states whether a validated result exists.
+ */
+export interface DashboardAIInsightView {
+  readonly status:
+    "not-configured" | "idle" | "ready" | "failed" | "invalid-output";
+  readonly configured: boolean;
+  readonly generatedAt: string | null;
+  readonly model: string | null;
+  readonly insight: {
+    readonly headline: string;
+    readonly insights: readonly {
+      readonly title: string;
+      readonly detail: string;
+      readonly severity: "info" | "attention" | "risk";
+    }[];
+  } | null;
 }
 
 export interface DashboardV2Snapshot {
@@ -130,12 +195,22 @@ export interface DashboardV2Snapshot {
   readonly skills: DashboardSkillSummary;
   readonly sessions: DashboardSessionsSummary;
   readonly pricingAvailable: boolean;
+  readonly outputAvailability: DashboardV2OutputAvailability;
 }
 
 export interface DashboardV2TrendPoint {
   readonly date: string;
   readonly tokens: number;
   readonly events: number;
+  /** Direct request-level cached input; never inferred from costs. */
+  readonly cacheTokens: number;
+  /** Non-cached input plus cache-creation input, observed from local usage. */
+  readonly netInputTokens: number;
+  readonly outputTokens: number;
+  /** Null when the session module is not available for this date. */
+  readonly sessions: number | null;
+  /** Equal-position point from the immediately preceding equal-length range. */
+  readonly previousTokens: number | null;
 }
 
 export interface DashboardV2CalendarPoint extends DashboardV2TrendPoint {
@@ -147,6 +222,7 @@ export interface DashboardV2CalendarSummary {
   readonly days: number;
   readonly activeDays: number;
   readonly longestStreak: number;
+  readonly totalTokens: number;
 }
 
 export interface DashboardV2BreakdownRow {
@@ -236,6 +312,11 @@ export interface DashboardV2View {
   readonly sessions: number | null;
   readonly skills: number | null;
   readonly activeTools: number;
+  readonly usageSupportedToolCount: number;
+  /** Full cardinality before any presentation Top-N projection. */
+  readonly modelCount: number;
+  readonly projectCount: number;
+  readonly outputAvailability: DashboardV2OutputAvailability;
   readonly tools: readonly (DashboardV2Tool & {
     readonly tokens: number;
     readonly events: number;
@@ -246,6 +327,7 @@ export interface DashboardV2View {
   readonly calendar: readonly DashboardV2CalendarPoint[];
   readonly calendarSummary: DashboardV2CalendarSummary;
   readonly context: DashboardV2ContextCounts;
+  readonly contextAvailability: DashboardV2ContextAvailability;
 }
 
 /** Inputs accepted by the dashboard query. Infrastructure stays behind the API adapter. */
@@ -261,6 +343,8 @@ export interface DashboardQuery {
   /** Privacy-safe aggregates; raw project refs/insight evidence never cross the route boundary. */
   readonly projectCount?: number;
   readonly activeInsightCount?: number;
+  /** Cache-only server projection; loading the dashboard never invokes a model. */
+  readonly aiInsight?: DashboardAIInsightView;
   readonly v2: DashboardV2Snapshot;
 }
 

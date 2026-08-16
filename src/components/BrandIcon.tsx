@@ -31,16 +31,53 @@ function match(name: string) {
 
 const brandColor: Record<string, string> = {
   claude: "#d97757",
-  codex: "currentColor",
-  cursor: "#8b8b8b",
+  codex: "#10a37f",
+  cursor: "#cfcfcf",
   gemini: "#4285f4",
   kimi: "#7c5cff",
   deepseek: "#4d6bfe",
   other: "currentColor",
 };
 
+/** 各产品品牌原色（顺序优先：第一个命中的规则胜出）。 */
+const productColor: { test: (n: string) => boolean; color: string }[] = [
+  {
+    test: (n) =>
+      n.includes("claude") ||
+      n.includes("sonnet") ||
+      n.includes("opus") ||
+      n.includes("haiku"),
+    color: "#d97757",
+  },
+  {
+    test: (n) =>
+      n.includes("codex") ||
+      n.includes("openai") ||
+      n.startsWith("gpt") ||
+      n.startsWith("o5"),
+    color: "#10a37f",
+  },
+  {
+    test: (n) => n.includes("gemini") || n.includes("antigravity"),
+    color: "#4285f4",
+  },
+  { test: (n) => n.includes("cursor"), color: "#cfcfcf" },
+  { test: (n) => n.includes("kimi"), color: "#7c5cff" },
+  { test: (n) => n.includes("deepseek"), color: "#4d6bfe" },
+  { test: (n) => n.includes("windsurf"), color: "#09b6a2" },
+  { test: (n) => n.includes("cline"), color: "#5b8def" },
+  { test: (n) => n.includes("roo"), color: "#f0524d" },
+  { test: (n) => n.includes("aider"), color: "#14b8a6" },
+  { test: (n) => n.includes("qwen"), color: "#615ced" },
+  { test: (n) => n.includes("opencode"), color: "#f59e0b" },
+  { test: (n) => n.includes("grok"), color: "#d1d5db" },
+  { test: (n) => n.includes("trae"), color: "#ff4d4f" },
+  { test: (n) => n.includes("zed"), color: "#3b82f6" },
+];
+
 export function brandColorOf(name: string) {
-  return brandColor[match(name)];
+  const n = name.toLowerCase();
+  return productColor.find((p) => p.test(n))?.color ?? "currentColor";
 }
 
 export function BrandIcon({ name, className = "size-3.5", color }: Props) {

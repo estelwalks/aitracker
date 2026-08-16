@@ -1,9 +1,10 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const sessions = {
   metaDescription:
-    "로컬 과거 세션을 탐색하고 한 번의 클릭으로 복원 명령을 복사합니다.",
-  pageHeader: "세션 복원",
-  pageHeaderDesc: "로컬 과거 세션을 탐색하고 한 번의 클릭으로 복원 명령 복사",
+    "로컬 과거 세션을 탐색하고 사용 가능한 세션을 안전하게 복원합니다.",
+  pageHeader: "세션 관리",
+  pageHeaderDesc:
+    "시간, 도구, 프로젝트별 로컬 세션을 탐색하고 사용 가능한 세션을 안전하게 복원합니다.",
   range: {
     d7: "최근 7일",
     d30: "최근 30일",
@@ -36,11 +37,34 @@ export const sessions = {
     desc: "필터 조건이나 검색 키워드를 조정한 후 다시 시도하세요.",
   },
   refreshing: "새로고침 중",
+  detail: {
+    back: "세션 목록으로 돌아가기",
+    title: "세션 상세",
+    safeSummary:
+      "정제된 세션 요약만 표시합니다. 경로, 명령, 대화 내용은 표시하지 않습니다.",
+    activity: "세션 활동",
+    startedAt: "시작",
+    endedAt: "종료",
+    duration: "활성 시간",
+    subagents: "하위 에이전트 호출",
+  },
+  action: {
+    open: "상세 보기",
+    resume: "세션 복원",
+    resuming: "복원 중",
+    resumeAccepted: "로컬 복원 요청을 시작했습니다",
+    resumeUnavailable: "복원 불가",
+  },
+  pagination: {
+    previous: "이전",
+    next: "다음",
+    summary: "{page} / {totalPages}페이지 · {total}개 세션",
+  },
   row: {
     untitled: "(이름 없는 세션)",
-    copy: "복원 명령 복사",
-    copied: "복사됨",
-    copyUnsafe: "이 세션 ID는 안전하지 않아 복원 명령을 생성할 수 없습니다",
+    copy: "세션 복원",
+    copied: "시작됨",
+    copyUnsafe: "이 세션 ID는 안전하지 않아 복원할 수 없습니다",
     project: "프로젝트",
     model: "모델",
     time: "시간",
@@ -48,11 +72,12 @@ export const sessions = {
     cost: "비용",
     turns: "턴",
     edits: "편집 횟수",
-    resumeDirHint: "이 디렉터리에서 복원 명령을 실행하세요:",
+    resumeDirHint:
+      "복원은 제어된 로컬 서비스로 실행되며 명령이나 디렉터리는 브라우저에 공개되지 않습니다.",
     statusReason: "상태:",
   },
   toast: {
     refreshed: "세션 목록이 새로고침되었습니다",
-    copied: "복원 명령이 복사되었습니다",
+    copied: "로컬 복원 요청을 시작했습니다",
   },
 } as const;

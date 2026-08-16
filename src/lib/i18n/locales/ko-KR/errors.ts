@@ -36,9 +36,16 @@ export const errors = {
     overlappingPaths: "소스와 대상 경로가 겹쳐 작업이 차단되었습니다",
     duplicateName: "대상 위치에 같은 이름의 Skill이 이미 있습니다",
     noSkillSelected: "Skill을 하나 이상 선택하세요",
+    notFound: "Skill을 찾을 수 없거나 읽을 수 없습니다",
   },
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",
+    queryFailed: "로컬 세션 조회에 실패했습니다. 다시 시도하세요",
+    sessionNotFound: "선택한 세션이 존재하지 않거나 사용할 수 없습니다",
+    resumeUnavailable: "이 세션은 현재 복원할 수 없습니다",
+    resumeInvalid: "세션 복원 요청이 올바르지 않습니다",
+    resumeCancelled: "세션 복원이 취소되었습니다",
+    resumeFailed: "로컬 세션 복원을 시작할 수 없습니다",
   },
   distillation: {
     invalidSelection: "1~8개의 중복 없는 세션을 선택하세요",
@@ -48,6 +55,10 @@ export const errors = {
     notWaiting: "후보가 승인 대기 상태가 아닙니다",
     knowledgeUnavailable: "지식 저장소를 사용할 수 없습니다",
     knowledgeFailed: "지식 항목을 기록하지 못했습니다",
+    notApproved: "Skill로 저장하려면 먼저 후보를 승인하세요",
+    invalidName: "Skill 이름이 올바르지 않습니다",
+    invalidAgent: "대상 도구를 사용할 수 없습니다",
+    skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",

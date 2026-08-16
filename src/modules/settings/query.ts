@@ -4,6 +4,7 @@ import type {
   CleanupStats,
   StorageUsage,
 } from "../../lib/local-usage/prune.server";
+import type { LLMConfigStatus } from "../ai-orchestration/index.ts";
 
 /**
  * Browser-safe settings data-lifecycle facade.
@@ -52,4 +53,19 @@ export const clearRegenerableCacheQuery = createServerFn({
   },
 );
 
+/** Read whether a usable model endpoint is configured (Settings model panel). */
+export const getLLMConfigStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<LLMConfigStatus> => {
+    const { readLLMConfig } = await import("../ai-orchestration/index.ts");
+    const config = readLLMConfig();
+    return {
+      configured: config !== undefined,
+      model: config?.model ?? null,
+      baseUrl: config?.baseUrl ?? null,
+      apiKeyMasked: config != null,
+    };
+  },
+);
+
 export type { CleanupStats, StorageUsage };
+export type { LLMConfigStatus };

@@ -110,6 +110,13 @@ export interface LocalUsageContext {
   toolOutputs?: LocalUsageToolOutputSummary;
 }
 
+/**
+ * Whether a token count came directly from a tool usage record or from a
+ * documented local estimate. Estimated values are kept separate from context
+ * attribution: a transcript-size estimate cannot prove where tokens went.
+ */
+export type LocalUsageMeasurement = "observed" | "estimated";
+
 export interface LocalUsageEvent extends LocalTokenCounts {
   source: LocalUsageSource;
   timestamp: string;
@@ -117,6 +124,8 @@ export interface LocalUsageEvent extends LocalTokenCounts {
   project: string;
   sessionId?: string;
   context?: LocalUsageContext;
+  /** Omitted by older/native readers; omission means directly observed. */
+  measurement?: LocalUsageMeasurement;
 }
 
 export interface LocalUsageSourceSummary {

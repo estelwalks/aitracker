@@ -18,11 +18,20 @@ import { createInsightsApplication } from "../insights/index.ts";
 import { estimateEventCost } from "../../lib/pricing/index.ts";
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
-import type { DashboardV2Snapshot } from "./contracts.ts";
+import type {
+  DashboardV2OutputAvailability,
+  DashboardV2Snapshot,
+} from "./contracts.ts";
+import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { AI_TOOLS } from "../../lib/tools/catalog.ts";
 import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
 import { homedir } from "node:os";
+import { getDashboardAIInsightService } from "./ai-insight.server.ts";
+import {
+  classifyDashboardProjectRefs,
+  type DashboardProjectClassification,
+} from "./project-classification.server.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -42,25 +51,57 @@ function localDateKey(timestamp: string): string | null {
  * rows only need a count by local day; session identifiers, source paths and
  * session metadata never leave this server adapter.
  */
-function aggregateDashboardProjectSessions(
+export function aggregateDashboardProjectSessions(
   sessions: readonly {
     projectKey: string;
+    projectRef?: string | null;
     source: string;
     startedAt: string;
+    turns: number;
+    editTurns: number;
+    subagentCalls: number;
   }[],
+  classifications: ReadonlyMap<
+    string,
+    DashboardProjectClassification
+  > = new Map(),
 ) {
-  const counts = new Map<string, number>();
+  const counts = new Map<
+    string,
+    { count: number; turns: number; editTurns: number; subagentCalls: number }
+  >();
   for (const session of sessions) {
     const date = localDateKey(session.startedAt);
     if (date == null) continue;
-    const project = projectKey(session.projectKey);
+    // Use the same final-segment projection as usage events. Codex session
+    // projectKey can be a display fallback while projectRef carries the
+    // authoritative cwd; neither raw value crosses this adapter.
+    const projectRef = session.projectRef ?? session.projectKey;
+    const classification = classifications.get(projectRef);
+    if (
+      classification?.kind !== undefined &&
+      classification.kind !== "workspace"
+    ) {
+      continue;
+    }
+    const project = classification?.label ?? projectKey(projectRef);
     const key = `${project}\u0000${session.source}\u0000${date}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? {
+      count: 0,
+      turns: 0,
+      editTurns: 0,
+      subagentCalls: 0,
+    };
+    current.count += 1;
+    current.turns += session.turns;
+    current.editTurns += session.editTurns;
+    current.subagentCalls += session.subagentCalls;
+    counts.set(key, current);
   }
   return [...counts.entries()]
-    .map(([key, count]) => {
+    .map(([key, aggregate]) => {
       const [project, source, date] = key.split("\u0000");
-      return { project: project!, source: source!, date: date!, count };
+      return { project: project!, source: source!, date: date!, ...aggregate };
     })
     .sort(
       (left, right) =>
@@ -70,20 +111,39 @@ function aggregateDashboardProjectSessions(
     );
 }
 
-function aggregateDashboardSourceSessions(
-  sessions: readonly { source: string; startedAt: string }[],
+export function aggregateDashboardSourceSessions(
+  sessions: readonly {
+    source: string;
+    startedAt: string;
+    turns: number;
+    editTurns: number;
+    subagentCalls: number;
+  }[],
 ) {
-  const counts = new Map<string, number>();
+  const counts = new Map<
+    string,
+    { count: number; turns: number; editTurns: number; subagentCalls: number }
+  >();
   for (const session of sessions) {
     const date = localDateKey(session.startedAt);
     if (date == null) continue;
     const key = `${session.source}\u0000${date}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? {
+      count: 0,
+      turns: 0,
+      editTurns: 0,
+      subagentCalls: 0,
+    };
+    current.count += 1;
+    current.turns += session.turns;
+    current.editTurns += session.editTurns;
+    current.subagentCalls += session.subagentCalls;
+    counts.set(key, current);
   }
   return [...counts.entries()]
-    .map(([key, count]) => {
+    .map(([key, aggregate]) => {
       const [source, date] = key.split("\u0000");
-      return { source: source!, date: date!, count };
+      return { source: source!, date: date!, ...aggregate };
     })
     .sort(
       (left, right) =>
@@ -92,30 +152,37 @@ function aggregateDashboardSourceSessions(
     );
 }
 
-function toDashboardEvent(event: {
-  source: DashboardUsageEvent["source"];
-  timestamp: string;
-  model: string;
-  project: string;
-  inputTokens: number;
-  cachedInputTokens: number;
-  cacheCreationInputTokens: number;
-  outputTokens: number;
-  reasoningOutputTokens: number;
-  totalTokens: number;
-  context?: DashboardUsageEvent["context"] & { commands?: unknown };
-}): DashboardUsageEvent {
+function toDashboardEvent(
+  event: {
+    source: DashboardUsageEvent["source"];
+    timestamp: string;
+    model: string;
+    project: string;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheCreationInputTokens: number;
+    outputTokens: number;
+    reasoningOutputTokens: number;
+    totalTokens: number;
+    measurement?: DashboardUsageEvent["measurement"];
+    context?: DashboardUsageEvent["context"] & { commands?: unknown };
+  },
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+): DashboardUsageEvent {
+  const classification = classifications.get(event.project);
   return {
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
-    project: projectKey(event.project),
+    project: classification?.label ?? projectKey(event.project),
+    projectKind: classification?.kind ?? "workspace",
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
     cacheCreationInputTokens: event.cacheCreationInputTokens,
     outputTokens: event.outputTokens,
     reasoningOutputTokens: event.reasoningOutputTokens,
     totalTokens: event.totalTokens,
+    ...(event.measurement == null ? {} : { measurement: event.measurement }),
     ...(event.context
       ? {
           context: {
@@ -135,6 +202,10 @@ function toDashboardEvent(event: {
 
 export function toDashboardSnapshot(
   snapshot: LocalUsageSnapshot,
+  classifications: ReadonlyMap<
+    string,
+    DashboardProjectClassification
+  > = new Map(),
 ): DashboardUsageSnapshot {
   return {
     generatedAt: snapshot.generatedAt,
@@ -166,13 +237,67 @@ export function toDashboardSnapshot(
     totals: snapshot.totals,
     bySource: snapshot.bySource,
     byModel: snapshot.byModel,
-    byProject: snapshot.byProject.map((row) => ({
-      ...row,
-      key: projectKey(row.key),
-    })),
+    byProject: snapshot.byProject.flatMap((row) => {
+      const classification = classifications.get(row.key);
+      if (
+        classification?.kind !== undefined &&
+        classification.kind !== "workspace"
+      ) {
+        return [];
+      }
+      return [{ ...row, key: classification?.label ?? projectKey(row.key) }];
+    }),
     daily: snapshot.daily,
-    details: snapshot.details.map(toDashboardEvent),
-    recent: snapshot.recent.map(toDashboardEvent),
+    details: snapshot.details.map((event) =>
+      toDashboardEvent(event, classifications),
+    ),
+    recent: snapshot.recent.map((event) =>
+      toDashboardEvent(event, classifications),
+    ),
+  };
+}
+
+function sourceEvidence(event: DashboardUsageEvent) {
+  // Antigravity-style transcript estimates are intentionally model-level only.
+  // Their numeric total cannot establish a message, tool, output, skill, or
+  // reasoning attribution.
+  if (event.measurement === "estimated") {
+    return {
+      textResponses: false,
+      toolCalls: false,
+      skillCalls: false,
+      toolOutputCalls: false,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    };
+  }
+  if (event.source === "claude-code") {
+    return {
+      textResponses: true,
+      toolCalls: true,
+      skillCalls: true,
+      toolOutputCalls: event.context?.toolOutputs !== undefined,
+      reasoningTokens: false,
+      systemPromptTokens: false,
+    };
+  }
+  if (event.source === "codex") {
+    return {
+      textResponses: true,
+      toolCalls: true,
+      skillCalls: true,
+      toolOutputCalls: true,
+      reasoningTokens: true,
+      systemPromptTokens: false,
+    };
+  }
+  return {
+    textResponses: event.context?.textResponse !== undefined,
+    toolCalls: event.context?.tools !== undefined,
+    skillCalls: event.context?.skills !== undefined,
+    toolOutputCalls: event.context?.toolOutputs !== undefined,
+    reasoningTokens: event.reasoningOutputTokens > 0,
+    systemPromptTokens: false,
   };
 }
 
@@ -188,6 +313,12 @@ export function toDashboardV2Snapshot(input: {
   readonly pricingAvailable: boolean;
   /** Server-only installation probing is reduced to ids before this DTO. */
   readonly installedToolIds?: ReadonlySet<string>;
+  /**
+   * Real counts for the three "output" KPI cards. Each metric is either
+   * available (with a real count) or honestly unavailable — never a fabricated
+   * number.
+   */
+  readonly outputAvailability: DashboardV2OutputAvailability;
 }): DashboardV2Snapshot {
   const sourceStatus = new Map(
     input.snapshot.sources.map((source) => [source.source, source]),
@@ -196,8 +327,9 @@ export function toDashboardV2Snapshot(input: {
     const source = sourceStatus.get(tool.id as DashboardUsageEvent["source"]);
     return {
       id: tool.id,
-      name: tool.nameZh,
+      name: tool.name,
       available: source?.available ?? false,
+      usageSupport: tool.capabilities.usage,
       // Usage-log roots and installation roots are intentionally separate:
       // `~/.claude` can be present while `.claude/projects` has no recent
       // usage records. Only this aggregate boolean crosses into the browser;
@@ -214,17 +346,20 @@ export function toDashboardV2Snapshot(input: {
     skills: input.skills,
     sessions: input.sessions,
     pricingAvailable: input.pricingAvailable,
+    outputAvailability: input.outputAvailability,
     events: input.snapshot.details.map((event) => ({
       source: event.source,
       timestamp: event.timestamp,
       model: event.model,
       project: event.project,
+      projectKind: event.projectKind,
       inputTokens: event.inputTokens,
       cachedInputTokens: event.cachedInputTokens,
       cacheCreationInputTokens: event.cacheCreationInputTokens,
       outputTokens: event.outputTokens,
       reasoningOutputTokens: event.reasoningOutputTokens,
       totalTokens: event.totalTokens,
+      ...(event.measurement == null ? {} : { measurement: event.measurement }),
       context: {
         textResponses: event.context?.textResponse ? 1 : 0,
         toolCalls:
@@ -232,6 +367,12 @@ export function toDashboardV2Snapshot(input: {
             (total, item) => total + item.calls,
             0,
           ) ?? 0,
+        tools:
+          event.context?.tools?.map((tool) => ({
+            name: tool.name,
+            category: tool.category,
+            calls: tool.calls,
+          })) ?? [],
         skillCalls:
           event.context?.skills?.reduce(
             (total, item) => total + item.calls,
@@ -239,11 +380,52 @@ export function toDashboardV2Snapshot(input: {
           ) ?? 0,
         toolOutputCalls: event.context?.toolOutputs?.calls ?? 0,
       },
+      evidence: sourceEvidence(event),
     })),
   };
 }
 
 export type DashboardApiResponse = DashboardModuleContract;
+
+/**
+ * Resolve the three "output" KPI counts from real sources. Security runs come
+ * from the monitoring heartbeat's security summary; distillation and daily
+ * reports come from the composition root's persisted knowledge/report stores.
+ * A metric without a persistent source is honestly unavailable (never a
+ * fabricated number).
+ */
+async function resolveOutputAvailability(
+  monitoringValue: MonitoringStatus | undefined,
+): Promise<DashboardV2OutputAvailability> {
+  const securitySummary = monitoringValue?.security;
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const [distillationCount, reportsCount] = await Promise.allSettled([
+    root.distillation.count(),
+    root.reports.count(),
+  ]);
+  return {
+    securityRuns: {
+      count: securitySummary?.assessedAssetCount ?? null,
+      available: securitySummary != null,
+    },
+    distillationOutputs: {
+      count:
+        distillationCount.status === "fulfilled"
+          ? distillationCount.value
+          : null,
+      available:
+        distillationCount.status === "fulfilled" &&
+        distillationCount.value != null,
+    },
+    dailyReports: {
+      count: reportsCount.status === "fulfilled" ? reportsCount.value : null,
+      available:
+        reportsCount.status === "fulfilled" && reportsCount.value != null,
+    },
+  };
+}
 
 /** Server-only query adapter. No scanner, pricing rules, or filesystem details cross this boundary. */
 export async function loadDashboardReadModel(
@@ -257,7 +439,6 @@ export async function loadDashboardReadModel(
     usageResult.status === "fulfilled"
       ? usageResult.value
       : createEmptyUsageSnapshot();
-  const snapshot = toDashboardSnapshot(rawSnapshot);
   const [
     skillsResult,
     pricingResult,
@@ -267,7 +448,7 @@ export async function loadDashboardReadModel(
   ] = await Promise.allSettled([
     getLocalSkills(),
     getPricingSnapshot({
-      data: [...new Set(snapshot.details.map((event) => event.model))],
+      data: [...new Set(rawSnapshot.details.map((event) => event.model))],
     }),
     getLocalSessions({ data: {} }),
     getMonitoringStatus(),
@@ -275,8 +456,25 @@ export async function loadDashboardReadModel(
     // logs nor allows concrete filesystem paths past this server adapter.
     detectToolInstallations(AI_TOOLS, homedir()),
   ]);
+  const projectRefs = [
+    ...rawSnapshot.details.map((event) => event.project),
+    ...(sessionsResult.status === "fulfilled"
+      ? sessionsResult.value.sessions.map(
+          (session) => session.projectRef ?? session.projectKey,
+        )
+      : []),
+  ];
+  const projectClassifications =
+    await classifyDashboardProjectRefs(projectRefs);
+  const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
   const projectModel = createProjectUsageReadModel(
-    { events: snapshot.details },
+    {
+      events: snapshot.details.filter(
+        (event) =>
+          event.projectKind !== "quick-conversation" &&
+          event.projectKind !== "unknown",
+      ),
+    },
     { estimateEventCost },
   );
   const insightSnapshot = createInsightsApplication().buildSnapshot({
@@ -301,6 +499,7 @@ export async function loadDashboardReadModel(
           generatedAt: sessionsResult.value.generatedAt,
           byProjectDay: aggregateDashboardProjectSessions(
             sessionsResult.value.sessions,
+            projectClassifications,
           ),
           bySourceDay: aggregateDashboardSourceSessions(
             sessionsResult.value.sessions,
@@ -322,6 +521,21 @@ export async function loadDashboardReadModel(
             .map((installation) => installation.id),
         )
       : undefined;
+  const v2 = toDashboardV2Snapshot({
+    snapshot,
+    skills,
+    sessions,
+    pricingAvailable: pricing != null,
+    installedToolIds,
+    outputAvailability: await resolveOutputAvailability(
+      monitoringResult.status === "fulfilled"
+        ? monitoringResult.value
+        : undefined,
+    ),
+  });
+  // Reading this service is strictly cache-only. No provider call can occur
+  // during route loading; the POST insight action is the only refresh path.
+  const aiInsight = getDashboardAIInsightService().read();
   return createDashboardApplication().read({
     snapshot,
     error:
@@ -344,12 +558,7 @@ export async function loadDashboardReadModel(
     activeInsightCount: insightSnapshot.insights.filter(
       (insight) => insight.status === "active",
     ).length,
-    v2: toDashboardV2Snapshot({
-      snapshot,
-      skills,
-      sessions,
-      pricingAvailable: pricing != null,
-      installedToolIds,
-    }),
+    aiInsight,
+    v2,
   });
 }
