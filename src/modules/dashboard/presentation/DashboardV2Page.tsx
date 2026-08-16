@@ -163,7 +163,11 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         points={view.calendar}
         summary={view.calendarSummary}
       />
-      <DashboardAgentWorkstreams view={view} selectedTool={selectedTool} />
+      {/* The workstream panel appears only for a picked tool (reference:
+          `agent !== "全部"`), not for the all-tools overview. */}
+      {selectedTool !== "all" ? (
+        <DashboardAgentWorkstreams view={view} selectedTool={selectedTool} />
+      ) : null}
     </div>
   );
 }
