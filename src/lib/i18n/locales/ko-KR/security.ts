@@ -302,7 +302,7 @@ export const security = {
     unsafe: {
       title: "안전하지 않은 Skill 목록",
       desc: "{count}개 항목 확인 필요",
-      empty: "안전하지 않은 Skill 없음",
+      empty: "안전하지 않은 Skill 없음。",
       report: "보고서 보기",
       vulnerable: "안전하지 않음",
     },
@@ -435,12 +435,12 @@ export const security = {
       unknown: "안전하게 표시할 수 있는 건너뜀 사유가 없습니다",
     },
     risk: {
-      remote_execution: "원격 실행",
+      remote_execution: "원격 코드/명령 실행",
       command_injection: "명령 주입",
       data_exfiltration: "데이터 유출",
       secret_access: "비밀 정보 접근",
       persistence: "지속성",
-      destructive: "파괴적 동작",
+      destructive: "파괴적 작업",
       obfuscation: "난독화",
       privilege_escalation: "권한 상승",
       sensitive_file_access: "민감 파일 접근",

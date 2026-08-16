@@ -320,19 +320,19 @@ export function SecurityAssessmentPage() {
             onGo={goTo}
           />
 
-          {latestEntries.length > 0 && (
-            <div ref={unsafeListRef}>
-              <UnsafeSkillList
-                entries={latestEntries}
-                onOpenReport={setSelectedReport}
-              />
-            </div>
+          <div ref={unsafeListRef}>
+            <UnsafeSkillList
+              entries={latestEntries}
+              onOpenReport={setSelectedReport}
+            />
+          </div>
+          {!isScanActive(scanState.status) && latest != null && (
+            <RuntimeBlockPanel
+              runtime={runtime}
+              scannedSkills={scannedSkills}
+              riskKindCount={riskKinds.length}
+            />
           )}
-          <RuntimeBlockPanel
-            runtime={runtime}
-            scannedSkills={scannedSkills}
-            riskKindCount={riskKinds.length}
-          />
           <div ref={historyRef}>
             <ScanHistory entries={history} onOpenTask={setSelectedTask} />
           </div>
