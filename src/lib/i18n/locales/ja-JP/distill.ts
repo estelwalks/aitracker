@@ -70,11 +70,6 @@ export const distill = {
   running: "蒸留中…",
   runSummary: "実際のセッションを {count} 件選択 · 推奨設定を使用",
   selectionLimit: "8 セッションの上限に達しました",
-  quotaLabel: "公式枠",
-  quotaRemaining: "公式モデルの今日の残り回数: {count} 回",
-  quotaExhausted: "今日の公式モデル蒸留枠は使い切りました",
-  quotaManage: "モデル管理",
-  quotaOffline: "オフラインモードは枠を消費しません",
   resultsTitle: "結果",
   resultsSummary: "計 {count} 件 · 承認済み {approved} 件",
   latestResult: "最新の結果へ",
@@ -123,5 +118,10 @@ export const distill = {
     tooltipReady: "選択した {count} {unit}{noun}をローカル Skill に蒸留します",
     noun: "セッション",
     unit: "件の",
+  },
+  segment: {
+    banner: "メッセージ断片 {count} 件を持ち込みました",
+    clear: "クリア",
+    origin: "{source} · {sessionId} から",
   },
 } as const;

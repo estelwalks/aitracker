@@ -46,9 +46,7 @@ export function distillDailyQuotaLimit(
   const raw = getEnv()[ENV.DISTILL_DAILY_QUOTA];
   if (raw == null || raw.trim() === "") return DISTILL_DAILY_QUOTA;
   const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0
-    ? parsed
-    : DISTILL_DAILY_QUOTA;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DISTILL_DAILY_QUOTA;
 }
 
 /** Read-only quota state exposed to the application and read model. */
@@ -88,9 +86,7 @@ const DistillQuotaFileSchema = z
   })
   .strict();
 
-export type PersistedDistillQuotaFile = z.infer<
-  typeof DistillQuotaFileSchema
->;
+export type PersistedDistillQuotaFile = z.infer<typeof DistillQuotaFileSchema>;
 
 export const DEFAULT_DISTILL_QUOTA_FILE: DistillQuotaFile = {
   date: "",

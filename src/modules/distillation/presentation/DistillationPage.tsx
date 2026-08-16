@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowDown, Columns2, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -7,7 +7,8 @@ import { JarvisInsight } from "../../../components/JarvisInsight";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import type { CandidateOutput, SessionRef } from "../contracts";
+import type { SegmentRefCodec } from "../../../lib/distill-segment";
+import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
@@ -52,8 +53,11 @@ function readGuideSeen(): boolean {
  */
 export function DistillationPage({
   initial,
+  initialSegment = null,
 }: {
   initial: DistillationViewModel;
+  /** User-picked transcript window handed over from the session detail page. */
+  initialSegment?: SegmentRefCodec | null;
 }) {
   const { t } = useI18n();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -75,6 +79,15 @@ export function DistillationPage({
   );
   const [promptPreset, setPromptPreset] = useState("summary");
   const [promptText, setPromptText] = useState("");
+  // Carried-over user segment (Story B-100). It lives only in this page's
+  // state and is forwarded to the server on start; the referenced text is
+  // loaded into memory server-side and never persisted.
+  const [segment, setSegment] = useState<SegmentRef | null>(() =>
+    initialSegment ? { ...initialSegment } : null,
+  );
+  // Once the user actively changes the selection, the carried-over segment
+  // stops auto-selecting its session so it never overrides their choice.
+  const selectionTouched = useRef(false);
   // Guide visibility is deferred to a client-only effect: SSR has no
   // localStorage, so reading it in the useState initializer makes the server
   // and first client render disagree and triggers a React hydration mismatch.
@@ -100,21 +113,29 @@ export function DistillationPage({
       return next.size === current.size ? current : next;
     });
   }, [materialSessions]);
+  // Auto-select the carried-over segment's session once, before the user
+  // touches the selection, so the distill run has the session it points at.
+  useEffect(() => {
+    if (!segment || selectionTouched.current) return;
+    const key = `${segment.source}:${segment.sessionId}`;
+    if (!materialSessions.some((item) => keyOf(item) === key)) return;
+    setSelected((current) => {
+      if (current.has(key) || current.size >= MAX_SELECTION) return current;
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+  }, [segment, materialSessions]);
+  // A segment whose session leaves the selection is meaningless — drop it so
+  // the run can never reference an unselected session.
+  useEffect(() => {
+    if (!segment) return;
+    const key = `${segment.source}:${segment.sessionId}`;
+    if (!selected.has(key)) setSegment(null);
+  }, [selected, segment]);
   const selectionCount = selected.size;
-  // B-600: a real-model run whose daily quota is exhausted cannot start. The
-  // server re-checks the authoritative ledger on every start, so this only
-  // pre-empts the obvious case; a race is still rejected with
-  // `errors.distillation.quotaExceeded` and toasted by the error path below.
-  const quotaExhausted =
-    mode === "pro" &&
-    modelId !== "offline" &&
-    initial.quota != null &&
-    initial.quota.remaining <= 0;
   const canStart =
-    !busy &&
-    selectionCount > 0 &&
-    selectionCount <= MAX_SELECTION &&
-    !quotaExhausted;
+    !busy && selectionCount > 0 && selectionCount <= MAX_SELECTION;
   const waitingCount = candidates.filter(
     (item) => item.approvalState === "waiting-approval",
   ).length;
@@ -154,6 +175,7 @@ export function DistillationPage({
   }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
 
   function toggle(item: DistillationSessionItem) {
+    selectionTouched.current = true;
     setSelected(
       (prev) =>
         toggleMaterialSelection(
@@ -165,6 +187,7 @@ export function DistillationPage({
   }
 
   function removeItem(item: DistillationSessionItem) {
+    selectionTouched.current = true;
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(keyOf(item));
@@ -173,6 +196,7 @@ export function DistillationPage({
   }
 
   function toggleProject(items: readonly DistillationSessionItem[]) {
+    selectionTouched.current = true;
     setSelected(
       (prev) =>
         toggleProjectSelection(
@@ -181,6 +205,11 @@ export function DistillationPage({
           MAX_SELECTION,
         ) as Set<string>,
     );
+  }
+
+  function clearSegment() {
+    selectionTouched.current = true;
+    setSegment(null);
   }
 
   function dismissGuide() {
@@ -204,6 +233,9 @@ export function DistillationPage({
       const result = await startDistillation({
         data: {
           sessionRefs: refs.map((ref) => ({ ...ref })),
+          // Forward the carried-over user segment; the server loads its
+          // transcript window into memory for this request only.
+          ...(segment ? { segments: [segment] } : {}),
           ...(options?.modelId ? { modelId: options.modelId } : {}),
           ...(options?.promptText ? { promptText: options.promptText } : {}),
         },
@@ -365,6 +397,25 @@ export function DistillationPage({
           approved={approved}
         />
 
+        {segment ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-[12px]">
+            <span className="font-medium text-foreground">
+              {t("distill.segment.banner", {
+                count: segment.endIndex - segment.startIndex + 1,
+              })}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground">
+              {t("distill.segment.origin", {
+                source: segment.source,
+                sessionId: segment.sessionId,
+              })}
+            </span>
+            <TTButton variant="ghost" size="sm" onClick={clearSegment}>
+              {t("distill.segment.clear")}
+            </TTButton>
+          </div>
+        ) : null}
+
         <DistillConfig
           mode={mode}
           onMode={setMode}
@@ -375,7 +426,6 @@ export function DistillationPage({
           modelId={modelId}
           onModelId={setModelId}
           modelOptions={initial.modelOptions}
-          quota={initial.quota}
           promptPreset={promptPreset}
           onPromptPreset={setPromptPreset}
           promptText={promptText}

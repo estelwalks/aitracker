@@ -61,11 +61,10 @@ function toItem(session: SessionSummary): DistillationSessionItem {
 /**
  * Load the distillation workbench read model. Resolves the selectable sessions
  * from the composition root's shared session port, the complete persisted
- * candidate history, the real model options from the LLM configuration probe
- * and the server-side daily quota projection for real-model calls (Story
- * B-600). The same `listAll` snapshot powers both candidate cards and
- * counters, avoiding inconsistent or duplicate persistence reads. `locale` is
- * accepted for transport parity; the projection is locale-neutral.
+ * candidate history and the real model options from the LLM configuration
+ * probe. The same `listAll` snapshot powers both candidate cards and counters,
+ * avoiding inconsistent or duplicate persistence reads. `locale` is accepted
+ * for transport parity; the projection is locale-neutral.
  */
 export async function loadDistillation(
   _locale: Locale,
@@ -78,17 +77,6 @@ export async function loadDistillation(
     root.distillation.listAll(),
   ]);
   const sessions = page.ok ? page.value.sessions.map(toItem) : [];
-  // The quota ledger is authoritative on the server; the renderer only reads
-  // this remaining-count projection. A failing read degrades to `null` — the
-  // workbench keeps working and shows the offline hint instead.
-  const quota = await root.distillQuota
-    .read()
-    .then((current) => ({
-      used: current.used,
-      limit: current.limit,
-      remaining: Math.max(0, current.limit - current.used),
-    }))
-    .catch(() => null);
   const { readLLMConfig } = await import("../ai-orchestration/config.ts");
   const { getModelProfileRepository } =
     await import("../ai-orchestration/model-profile.server.ts");
@@ -126,7 +114,6 @@ export async function loadDistillation(
         .length,
     },
     modelOptions,
-    quota,
   };
 }
 
@@ -143,6 +130,7 @@ export async function startDistillation(
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
   const refs = Array.isArray(input?.sessionRefs) ? input.sessionRefs : [];
+  const segments = Array.isArray(input?.segments) ? input.segments : [];
   const modelId = input.modelId?.trim() || "offline";
   // When the selected model is a saved S-500 profile, route the request to the
   // composition root's profile-backed provider (providerId "profile") so the
@@ -155,7 +143,10 @@ export async function startDistillation(
   }
   const result = await root.distillation.start({
     requestId: `distill:${crypto.randomUUID()}`,
-    selection: { sessionRefs: refs },
+    selection: {
+      sessionRefs: refs,
+      ...(segments.length > 0 ? { segments } : {}),
+    },
     modelId,
     providerId,
     prompt: {
