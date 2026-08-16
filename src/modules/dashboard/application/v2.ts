@@ -448,10 +448,44 @@ export function createDashboardV2HeroView(input: {
     allTime.totals.cachedInputTokens +
     allTime.totals.cacheCreationInputTokens;
   if (inputTokens > 0 && allTime.totals.cachedInputTokens > 0) {
+    // The reference broadcast names the worst-cache tool, so derive per-tool
+    // rates from the same all-time events instead of an anonymous aggregate.
+    const cacheBySource = new Map<
+      DashboardV2Event["source"],
+      { input: number; cached: number; events: number }
+    >();
+    for (const event of input.snapshot.events) {
+      const current = cacheBySource.get(event.source) ?? {
+        input: 0,
+        cached: 0,
+        events: 0,
+      };
+      current.input +=
+        event.inputTokens +
+        event.cachedInputTokens +
+        event.cacheCreationInputTokens;
+      current.cached += event.cachedInputTokens;
+      current.events += 1;
+      cacheBySource.set(event.source, current);
+    }
+    const worstCache = [...cacheBySource.entries()]
+      .filter(([, value]) => value.input > 0)
+      .sort(
+        (left, right) =>
+          left[1].cached / left[1].input - right[1].cached / right[1].input,
+      )[0];
+    const worstCacheTool =
+      worstCache == null
+        ? undefined
+        : input.snapshot.tools.find((tool) => tool.id === worstCache[0]);
     insights.push({
       id: "cache",
       kind: "cache",
-      cacheRate: (allTime.totals.cachedInputTokens / inputTokens) * 100,
+      toolName: worstCacheTool?.name,
+      cacheRate:
+        worstCache == null
+          ? (allTime.totals.cachedInputTokens / inputTokens) * 100
+          : (worstCache[1].cached / worstCache[1].input) * 100,
     });
   }
   if (cost && cost.unknownEvents === 0) {
@@ -459,13 +493,27 @@ export function createDashboardV2HeroView(input: {
       id: "cost",
       kind: "cost",
       estimatedCostUsd: cost.knownUsd + cost.estimatedUsd,
+      tokens: allTime.totals.totalTokens,
+      calls: allTime.totals.events,
+      toolName: topTool?.name,
+      pct:
+        topTool && allTime.totals.totalTokens > 0
+          ? (topTool.tokens / allTime.totals.totalTokens) * 100
+          : undefined,
     });
   }
   if (input.monitoring?.security) {
     const riskCount =
       input.monitoring.security.suspiciousCount +
       input.monitoring.security.dangerousCount;
-    insights.push({ id: "security", kind: "security", riskCount });
+    insights.push({
+      id: "security",
+      kind: "security",
+      riskCount,
+      scanned: input.snapshot.skills.available
+        ? input.snapshot.skills.count
+        : null,
+    });
   }
   insights.push({ id: "monitoring", kind: "monitoring" });
   if (insights.length === 1 && insights[0]?.kind === "monitoring") {
@@ -667,7 +715,16 @@ export function createDashboardV2View(
     snapshot.pricingAvailable,
     totals.totalTokens,
     null,
-  );
+  ).map((row) => ({
+    ...row,
+    tools: [
+      ...new Set(
+        events
+          .filter((event) => (event.model || "unknown") === row.key)
+          .map((event) => event.source),
+      ),
+    ].slice(0, 4),
+  }));
   const projects = topWithRest(
     enrichRows(
       allProjectRows,
@@ -758,6 +815,9 @@ export function createDashboardV2View(
     modelCount: allModelRows.length,
     projectCount: allProjectRows.length,
     outputAvailability: snapshot.outputAvailability,
+    memoryCount: snapshot.outputAvailability.distillationOutputs.available
+      ? snapshot.outputAvailability.distillationOutputs.count
+      : null,
     tools,
     trend: chartTrend,
     models,

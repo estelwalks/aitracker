@@ -6,15 +6,18 @@ import {
   CalendarRange,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Coins,
   FileText,
+  Shield,
   ShieldCheck,
   Sparkles,
   Wrench,
   Zap,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -33,7 +36,6 @@ import {
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
-  DashboardAIInsightView,
   DashboardV2BreakdownRow,
   DashboardV2CalendarPoint,
   DashboardV2HeroView,
@@ -74,25 +76,36 @@ function insightMessage(
   insight: DashboardV2Insight,
   t: ReturnType<typeof useI18n>["t"],
   format: ReturnType<typeof useI18n>["format"],
+  context: { range: string; live: number },
 ) {
   switch (insight.kind) {
     case "usage":
       return t("dashboard.v2.insights.usage", {
+        range: context.range,
+        live: context.live,
         tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-        tokens: format.formatTokens(insight.tokens ?? 0),
       });
     case "cache":
       return t("dashboard.v2.insights.cache", {
+        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
         rate: format.formatPercent(Math.round(insight.cacheRate ?? 0)),
       });
     case "cost":
       return t("dashboard.v2.insights.cost", {
+        tokens: format.formatTokens(insight.tokens ?? 0),
+        calls: format.formatNumber(insight.calls ?? 0),
         cost: format.formatUsd(insight.estimatedCostUsd ?? 0),
+        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
+        pct: format.formatPercent(Math.round(insight.pct ?? 0)),
       });
     case "security":
       return insight.riskCount
         ? t("dashboard.v2.insights.securityRisk", { count: insight.riskCount })
-        : t("dashboard.v2.insights.securityClean");
+        : insight.scanned != null
+          ? t("dashboard.v2.insights.securityClean", {
+              scanned: insight.scanned,
+            })
+          : t("dashboard.v2.insights.securityCleanNoScan");
     case "monitoring":
       return t("dashboard.v2.insights.monitoring");
     case "empty":
@@ -103,25 +116,20 @@ function insightMessage(
 /** Renderer accepts server-composed insights as-is; a future LLM adapter only needs to supply this contract. */
 export function DashboardJarvisInsight({
   hero,
-  aiInsight,
-  onGenerateAIInsight,
-  generatingAIInsight = false,
+  rangeLabel,
 }: {
   hero: DashboardV2HeroView;
-  aiInsight?: DashboardAIInsightView;
-  onGenerateAIInsight?: () => void;
-  generatingAIInsight?: boolean;
+  rangeLabel: string;
 }) {
   const { t, format } = useI18n();
   const [index, setIndex] = useState(0);
   const insight = hero.insights[index % Math.max(1, hero.insights.length)];
-  const serverInsight =
-    aiInsight?.status === "ready" ? aiInsight.insight : null;
-  const completeMessage =
-    serverInsight?.headline ??
-    (insight
-      ? insightMessage(insight, t, format)
-      : t("dashboard.v2.insights.empty"));
+  const completeMessage = insight
+    ? insightMessage(insight, t, format, {
+        range: rangeLabel,
+        live: hero.monitoring.liveTools,
+      })
+    : t("dashboard.v2.insights.empty");
   const [typedMessage, setTypedMessage] = useState(completeMessage);
   useEffect(() => setIndex(0), [hero.insights]);
   useEffect(() => {
@@ -141,6 +149,15 @@ export function DashboardJarvisInsight({
     }, 18);
     return () => window.clearInterval(timer);
   }, [completeMessage]);
+  // The reference hero auto-rotates its broadcast; the manual button is a
+  // quick skip, not the only way to advance.
+  useEffect(() => {
+    if (hero.insights.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % hero.insights.length);
+    }, 9_000);
+    return () => window.clearInterval(timer);
+  }, [hero.insights.length]);
   return (
     <section
       className="dashboard-insight-hero"
@@ -155,18 +172,19 @@ export function DashboardJarvisInsight({
             <h1 className="text-[15px] font-semibold tracking-tight">
               {t("dashboard.v2.heroTitle")}
             </h1>
-            <span className="dashboard-hero-pill dashboard-hero-pending">
-              {t("dashboard.v2.pendingItems", {
-                count: hero.monitoring.pendingCount,
-              })}
-            </span>
-            <span
-              className={`dashboard-hero-pill dashboard-hero-status dashboard-hero-status-${hero.monitoring.health}`}
+            <button
+              type="button"
+              onClick={() =>
+                setIndex((current) =>
+                  hero.insights.length
+                    ? (current + 1) % hero.insights.length
+                    : 0,
+                )
+              }
+              className="dashboard-hero-refresh ml-auto"
             >
-              {hero.monitoring.isLive
-                ? t("dashboard.v2.realtimeAnalysis")
-                : t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
-            </span>
+              {t("dashboard.v2.rotateInsight")}
+            </button>
           </div>
           <p
             className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]"
@@ -174,11 +192,6 @@ export function DashboardJarvisInsight({
           >
             {typedMessage}
           </p>
-          {serverInsight?.insights[0]?.detail ? (
-            <p className="max-w-4xl font-mono text-[11px] leading-5 text-muted-foreground">
-              {serverInsight.insights[0].detail}
-            </p>
-          ) : null}
           <div
             className="mt-5 flex gap-1.5"
             role="tablist"
@@ -203,43 +216,6 @@ export function DashboardJarvisInsight({
             ))}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          {aiInsight?.configured && onGenerateAIInsight ? (
-            <button
-              type="button"
-              onClick={onGenerateAIInsight}
-              disabled={generatingAIInsight}
-              className="dashboard-hero-refresh"
-            >
-              {generatingAIInsight
-                ? t("dashboard.v2.generatingAIInsight")
-                : t("dashboard.v2.generateAIInsight")}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() =>
-              setIndex((current) =>
-                hero.insights.length ? (current + 1) % hero.insights.length : 0,
-              )
-            }
-            className="dashboard-hero-refresh"
-          >
-            {t("dashboard.v2.rotateInsight")}
-          </button>
-          {aiInsight?.status === "not-configured" ? (
-            <span className="dashboard-hero-pill dashboard-hero-pending">
-              {t("dashboard.v2.aiNotConfigured")}
-              <Link
-                to="/settings"
-                title={t("dashboard.v2.aiNotConfiguredDesc")}
-                className="underline decoration-dotted underline-offset-2"
-              >
-                {t("dashboard.v2.aiNotConfiguredDesc")}
-              </Link>
-            </span>
-          ) : null}
-        </div>
       </div>
     </section>
   );
@@ -262,6 +238,14 @@ export function DashboardTrustHero({
     0,
     hero.monitoring.detectedTools - view.activeTools,
   );
+  const skillPart =
+    view.skills == null
+      ? t("dashboard.kpi.unavailable")
+      : t("dashboard.v2.assetSkillCount", { count: view.skills });
+  const memoryPart =
+    view.memoryCount == null
+      ? t("dashboard.kpi.unavailable")
+      : t("dashboard.v2.assetMemoryCount", { count: view.memoryCount });
   const securityValue =
     security == null
       ? t("dashboard.kpi.unavailable")
@@ -306,9 +290,7 @@ export function DashboardTrustHero({
         distill.available && distill.count != null
           ? format.formatNumber(distill.count)
           : t("dashboard.kpi.unavailable"),
-      sub: distill.available
-        ? t("dashboard.v2.distillationAssetsLabel")
-        : t("dashboard.v2.outputUnavailableHint"),
+      sub: `${skillPart} · ${memoryPart}`,
       to: "/distill" as const,
       action: t("dashboard.v2.viewAssets"),
     },
@@ -322,28 +304,7 @@ export function DashboardTrustHero({
     },
   ];
   return (
-    <section className="space-y-4">
-      <div
-        className={`dashboard-monitoring-strip dashboard-monitoring-${hero.monitoring.health}`}
-        aria-label={t("dashboard.v2.monitoringAria")}
-      >
-        <span className="dashboard-monitoring-status">
-          <span className="dashboard-monitoring-pulse" aria-hidden="true">
-            <span />
-            <span />
-          </span>
-          {t(`dashboard.v2.monitoring.${hero.monitoring.health}`)}
-        </span>
-        <span>
-          {t("dashboard.v2.agentsLive", {
-            live: hero.monitoring.liveTools,
-            detected: hero.monitoring.detectedTools,
-          })}
-        </span>
-        {hero.monitoring.isLive ? (
-          <strong>{t("dashboard.v2.liveBadge")}</strong>
-        ) : null}
-      </div>
+    <section>
       <div className="dashboard-spotlight-grid">
         {cards.map(({ icon: Icon, label, value, sub, to, action, accent }) => (
           <article key={label} className="dashboard-spotlight-card">
@@ -373,13 +334,15 @@ export function DashboardTrustHero({
 export function DashboardMetricGrid({
   view,
   monitoring,
-  securityRunsCount = null,
-  securityCoverage = null,
+  baselineLabel,
 }: {
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
-  securityRunsCount?: number | null;
-  securityCoverage?: number | null;
+  /**
+   * Comparison-baseline label for cards that show a delta (e.g. "较前 30 天").
+   * Only delta cards append it to their hint line, matching the reference.
+   */
+  baselineLabel?: string;
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
@@ -394,8 +357,6 @@ export function DashboardMetricGrid({
     value.available
       ? t("dashboard.v2.selectedRange")
       : t("dashboard.v2.outputUnavailableHint");
-  const hasRealSecurityRuns =
-    securityRunsCount != null && securityRunsCount > 0;
   const cards = [
     {
       icon: Coins,
@@ -458,16 +419,8 @@ export function DashboardMetricGrid({
     {
       icon: ShieldCheck,
       label: t("dashboard.v2.securityRunsLabel"),
-      value: hasRealSecurityRuns
-        ? t("dashboard.v2.securityScanTimes", {
-            count: securityRunsCount as number,
-          })
-        : availabilityValue(view.outputAvailability.securityRuns),
-      hint: hasRealSecurityRuns
-        ? t("dashboard.v2.securityCoverage", {
-            count: securityCoverage ?? 0,
-          })
-        : availabilityHint(view.outputAvailability.securityRuns),
+      value: availabilityValue(view.outputAvailability.securityRuns),
+      hint: availabilityHint(view.outputAvailability.securityRuns),
       delta: null,
     },
     {
@@ -492,6 +445,10 @@ export function DashboardMetricGrid({
     >
       {cards.map((card) => {
         const Icon = card.icon;
+        const hintLine =
+          card.delta != null && baselineLabel
+            ? `${card.hint} · ${baselineLabel}`
+            : card.hint;
         return (
           <article key={card.label} className="dashboard-metric-card">
             <div className="flex items-center justify-between gap-2 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
@@ -511,9 +468,9 @@ export function DashboardMetricGrid({
             </strong>
             <p
               className="mt-2 truncate font-mono text-[10px] text-muted-foreground"
-              title={card.hint}
+              title={hintLine}
             >
-              {card.hint}
+              {hintLine}
             </p>
           </article>
         );
@@ -651,6 +608,8 @@ export function DashboardRangePicker({
   );
 }
 
+const TOOL_RAIL_STEP = 200;
+
 export function DashboardToolSwitcher({
   tools,
   selected,
@@ -661,36 +620,112 @@ export function DashboardToolSwitcher({
   onChange: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const updateArrows = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  // SSR-safe: arrows start hidden and only appear once the client measures
+  // overflow on the real layout.
+  useEffect(() => {
+    updateArrows();
+    const el = trackRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(updateArrows);
+    observer.observe(el);
+    el.addEventListener("scroll", updateArrows, { passive: true });
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", updateArrows);
+    };
+  }, [tools.length]);
+
+  const scrollRail = (direction: number) => {
+    trackRef.current?.scrollBy({
+      left: direction * TOOL_RAIL_STEP,
+      behavior: "smooth",
+    });
+  };
+
   return (
-    <div
-      className="dashboard-tool-rail"
-      role="group"
-      aria-label={t("dashboard.v2.toolsTitle")}
-    >
-      <button
-        type="button"
-        onClick={() => onChange("all")}
-        aria-pressed={selected === "all"}
-        className={selected === "all" ? "dashboard-tool-active" : ""}
+    <div className="relative">
+      {canLeft ? (
+        <button
+          type="button"
+          aria-label={t("dashboard.v2.scrollLeft")}
+          onClick={() => scrollRail(-1)}
+          className="absolute top-1/2 left-1.5 z-30 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg border border-border bg-card text-foreground shadow-md hover:bg-surface-2"
+        >
+          <ChevronLeft className="size-3.5" />
+        </button>
+      ) : null}
+      {canLeft ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 z-20 w-7"
+          style={{
+            background:
+              "linear-gradient(to right, var(--color-background), transparent)",
+          }}
+        />
+      ) : null}
+      <div
+        ref={trackRef}
+        className="dashboard-tool-rail"
+        role="group"
+        aria-label={t("dashboard.v2.toolsTitle")}
       >
-        {t("dashboard.context.allTools")}
-      </button>
-      {tools.map((tool) => {
-        const color = brandColorOf(tool.name);
-        return (
-          <button
-            key={tool.id}
-            type="button"
-            onClick={() => onChange(tool.id)}
-            aria-pressed={selected === tool.id}
-            className={selected === tool.id ? "dashboard-tool-active" : ""}
-            style={{ "--dashboard-tool-color": color } as React.CSSProperties}
-          >
-            <BrandIcon name={tool.name} className="size-3.5" color={color} />
-            {tool.name}
-          </button>
-        );
-      })}
+        <button
+          type="button"
+          onClick={() => onChange("all")}
+          aria-pressed={selected === "all"}
+          className={selected === "all" ? "dashboard-tool-active" : ""}
+        >
+          {t("dashboard.context.allTools")}
+        </button>
+        {tools.map((tool) => {
+          const color = brandColorOf(tool.name);
+          return (
+            <button
+              key={tool.id}
+              type="button"
+              onClick={() => onChange(tool.id)}
+              aria-pressed={selected === tool.id}
+              className={selected === tool.id ? "dashboard-tool-active" : ""}
+              style={{ "--dashboard-tool-color": color } as React.CSSProperties}
+            >
+              <BrandIcon name={tool.name} className="size-3.5" color={color} />
+              {tool.name}
+            </button>
+          );
+        })}
+      </div>
+      {canRight ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 z-20 w-7"
+          style={{
+            background:
+              "linear-gradient(to left, var(--color-background), transparent)",
+          }}
+        />
+      ) : null}
+      {canRight ? (
+        <button
+          type="button"
+          aria-label={t("dashboard.v2.scrollRight")}
+          onClick={() => scrollRail(1)}
+          className="absolute top-1/2 right-1.5 z-30 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg border border-border bg-card text-foreground shadow-md hover:bg-surface-2"
+        >
+          <ChevronRight className="size-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -843,15 +878,44 @@ export function DashboardModelDonut({ view }: { view: DashboardV2View }) {
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-semibold">
           {item.key}
         </span>
+        {item.tools?.length ? (
+          <div className="hidden shrink-0 items-center gap-1 sm:flex">
+            {item.tools.map((tool) => (
+              <span
+                key={tool}
+                title={tool}
+                className="grid size-4 place-items-center rounded-full bg-surface-2"
+              >
+                <BrandIcon
+                  name={tool}
+                  className="size-2.5"
+                  color={brandColorOf(tool)}
+                />
+              </span>
+            ))}
+          </div>
+        ) : null}
         <span className="tt-num shrink-0 font-mono text-[11px] text-muted-foreground">
-          {format.formatNumber(item.events)}
+          {t("dashboard.v2.calls", {
+            count: format.formatNumber(item.events),
+          })}
         </span>
-        <span className="tt-num w-16 text-right font-mono text-[12px] font-semibold">
+        <span className="tt-num w-16 shrink-0 text-right font-mono text-[12px] font-semibold">
           {format.formatTokens(item.tokens)}
         </span>
-        <span className="tt-num w-12 text-right font-mono text-[11px]">
+        <span className="tt-num w-14 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+          {item.estimatedCostUsd == null
+            ? t("dashboard.kpi.unavailable")
+            : format.formatUsd(item.estimatedCostUsd)}
+        </span>
+        <span className="tt-num w-12 shrink-0 text-right font-mono text-[11px]">
           {format.formatPercent(item.share)}
         </span>
+        {item.deltaPercent != null ? (
+          <span className="hidden shrink-0 lg:block">
+            <DashboardDeltaChip value={item.deltaPercent} />
+          </span>
+        ) : null}
       </div>
       <div className="h-[3px] bg-surface-2">
         <div
@@ -1026,6 +1090,44 @@ export function DashboardContribHeatmap({
   const { format, t } = useI18n();
   const cells = points.slice(-365);
   const max = Math.max(...cells.map((point) => point.tokens), 1);
+  const [hover, setHover] = useState<{
+    index: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  // Reference sizing: 10px cells with a 3px gap, chunked into 7-day columns.
+  const cellSize = 10;
+  const gap = 3;
+  const columns = useMemo(() => {
+    const out: DashboardV2CalendarPoint[][] = [];
+    for (let index = 0; index < cells.length; index += 7) {
+      out.push(cells.slice(index, index + 7));
+    }
+    return out;
+  }, [cells]);
+  const monthTicks = useMemo(() => {
+    const ticks: { column: number; label: string }[] = [];
+    let previousMonth = -1;
+    columns.forEach((column, columnIndex) => {
+      const first = column[0];
+      if (!first) return;
+      const month = Number(first.date.slice(5, 7));
+      if (month !== previousMonth) {
+        ticks.push({
+          column: columnIndex,
+          label: format.formatDate(`${first.date}T00:00:00`, {
+            month: "short",
+          }),
+        });
+        previousMonth = month;
+      }
+    });
+    return ticks;
+  }, [columns, format]);
+  const levelOf = (point: DashboardV2CalendarPoint) =>
+    point.events === 0
+      ? 0
+      : Math.min(4, Math.max(1, Math.ceil((point.tokens / max) * 4)));
   return (
     <section className="dashboard-panel">
       <div className="dashboard-panel-head">
@@ -1041,22 +1143,52 @@ export function DashboardContribHeatmap({
         </div>
       </div>
       <div
-        className="mt-5 dashboard-calendar-grid"
+        className="tt-xscroll mt-5 pb-1"
         aria-label={t("dashboard.v2.calendarTitle")}
       >
-        {cells.map((point) => {
-          const level =
-            point.events === 0
-              ? 0
-              : Math.min(4, Math.max(1, Math.ceil((point.tokens / max) * 4)));
-          return (
-            <span
-              key={point.date}
-              className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level}`}
-              title={`${point.date} · ${format.formatTokens(point.tokens)} · ${format.formatNumber(point.events)} ${t("dashboard.v2.eventShort")}${point.sessions == null ? "" : ` · ${format.formatNumber(point.sessions)} ${t("dashboard.kpi.sessions")}`} · ${t("dashboard.v2.modelsTitle")} ${t("dashboard.kpi.unavailable")}`}
-            />
-          );
-        })}
+        <div className="inline-block min-w-full">
+          <div className="relative h-[14px]">
+            {monthTicks.map((tick) => (
+              <span
+                key={`${tick.column}-${tick.label}`}
+                className="tt-num absolute top-0 text-[10px] leading-none text-muted-foreground"
+                style={{ left: tick.column * (cellSize + gap) }}
+              >
+                {tick.label}
+              </span>
+            ))}
+          </div>
+          <div className="mt-1.5 flex" style={{ gap }}>
+            {columns.map((column, columnIndex) => (
+              <div key={columnIndex} className="flex flex-col" style={{ gap }}>
+                {column.map((point, rowIndex) => {
+                  const index = columnIndex * 7 + rowIndex;
+                  const level = levelOf(point);
+                  return (
+                    <span
+                      key={point.date}
+                      title={`${point.date} · ${format.formatTokens(point.tokens)} · ${format.formatNumber(point.events)} ${t("dashboard.v2.eventShort")}`}
+                      onMouseEnter={(event) => {
+                        const rect =
+                          event.currentTarget.getBoundingClientRect();
+                        setHover({
+                          index,
+                          left: rect.left + rect.width / 2,
+                          top: rect.top,
+                        });
+                      }}
+                      onMouseLeave={() => setHover(null)}
+                      className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level} ${
+                        hover?.index === index ? "ring-1 ring-primary" : ""
+                      }`}
+                      style={{ width: cellSize, height: cellSize }}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
         <span>{t("dashboard.heatmap.low")}</span>
@@ -1068,6 +1200,60 @@ export function DashboardContribHeatmap({
         ))}
         <span>{t("dashboard.heatmap.high")}</span>
       </div>
+      {hover != null
+        ? (() => {
+            const point = cells[hover.index];
+            if (!point) return null;
+            const level = levelOf(point);
+            return (
+              <div
+                className="pointer-events-none fixed z-50 w-[220px] -translate-x-1/2 -translate-y-full rounded-xl bg-card p-3 text-[11px] shadow-lg"
+                style={{ left: hover.left, top: hover.top - 8 }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="tt-num font-mono text-[11px] text-muted-foreground">
+                    {format.formatDate(point.date)}
+                  </span>
+                  <span
+                    className="rounded-full px-2 py-0.5 font-mono text-[10px]"
+                    style={{
+                      background:
+                        "color-mix(in oklab, var(--color-ok) 15%, transparent)",
+                      color: "var(--color-ok)",
+                    }}
+                  >
+                    {t("dashboard.heatmap.hoverLevel", { level })}
+                  </span>
+                </div>
+                {point.tokens === 0 ? (
+                  <div className="mt-2 text-muted-foreground">
+                    {t("dashboard.heatmap.noUsage")}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-1.5 flex items-baseline gap-1.5">
+                      <span className="tt-num font-mono text-[20px] leading-none font-black">
+                        {format.formatTokens(point.tokens)}
+                      </span>
+                    </div>
+                    <div className="tt-num mt-2 flex gap-3 font-mono text-[10px] text-muted-foreground">
+                      <span>
+                        {format.formatNumber(point.events)}{" "}
+                        {t("dashboard.v2.eventShort")}
+                      </span>
+                      <span>
+                        {t("dashboard.kpi.sessions")}{" "}
+                        {point.sessions == null
+                          ? t("dashboard.kpi.unavailable")
+                          : format.formatNumber(point.sessions)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()
+        : null}
     </section>
   );
 }
@@ -1105,6 +1291,8 @@ export function DashboardAgentWorkstreams({
         {tools.map((tool) => {
           const expanded = open === tool.id;
           const live = tool.events > 0;
+          const securityAvailable =
+            view.outputAvailability.securityRuns.available;
           return (
             <li key={tool.id}>
               <div className="flex items-center gap-3">
@@ -1129,6 +1317,24 @@ export function DashboardAgentWorkstreams({
                   <span className="font-mono text-[11px] text-muted-foreground">
                     {format.formatTokens(tool.tokens)} ·{" "}
                     {format.formatNumber(tool.events)}
+                  </span>
+                  <span className="hidden font-mono text-[11px] text-muted-foreground md:inline">
+                    —
+                  </span>
+                  <span
+                    className={`hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[10px] sm:inline-flex ${
+                      securityAvailable
+                        ? "border-border text-muted-foreground"
+                        : "border-border text-muted-foreground/60"
+                    }`}
+                    title={
+                      securityAvailable
+                        ? t("dashboard.v2.scannedSafe")
+                        : t("dashboard.v2.outputUnavailableHint")
+                    }
+                  >
+                    <Shield className="size-3" />
+                    {securityAvailable ? t("dashboard.v2.scannedSafe") : "—"}
                   </span>
                   <ChevronDown
                     className={expanded ? "size-4 rotate-180" : "size-4"}
