@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -21,6 +21,7 @@ import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
+import type { LocalUsageToolCategory } from "../../../lib/local-usage/types";
 import { cn } from "../../../lib/utils";
 import type { DashboardReadModel } from "../../dashboard/contracts";
 import {
@@ -31,6 +32,7 @@ import {
 } from "../application";
 
 const DASH = "—";
+const BADGE_STEP = 240;
 
 function daysAgo(days: number): string {
   const date = new Date();
@@ -38,7 +40,7 @@ function daysAgo(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** 工牌墙：总 Token + 占比条 + 纵向三项关键计数（对齐原型 AgentBadgeWall）。 */
+/** 工牌墙：紧凑横向滚动条 + 渐隐箭头（对齐原型 AgentBadgeWall）。 */
 function ToolBadgeWall({
   cards,
   selectedId,
@@ -49,118 +51,172 @@ function ToolBadgeWall({
   onPick: (id: string) => void;
 }) {
   const { t, format } = useI18n();
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const update = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    update();
+    const el = trackRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      el.removeEventListener("scroll", update);
+    };
+  }, []);
+
+  const scrollBy = (dir: number) => {
+    trackRef.current?.scrollBy({ left: dir * BADGE_STEP, behavior: "smooth" });
+  };
+
+  const arrowClass =
+    "absolute top-1/2 z-30 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg border border-border bg-card text-foreground shadow-md transition-[background,transform] hover:scale-[1.06] hover:bg-surface-2";
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map((card) => {
-        const color = brandColorOf(card.name);
-        const on = selectedId === card.id;
-        const statusLabel = card.active
-          ? t("skills.agentOverview.active")
-          : card.detected
-            ? t("skills.agentOverview.inactiveCard")
-            : t("skills.agentOverview.notInstalled");
-        const statusColor = card.active
-          ? "#34d399"
-          : card.detected
-            ? "#f5b64c"
-            : "#6b7280";
-        return (
-          <button
-            key={card.id}
-            type="button"
-            onClick={() => onPick(card.id)}
-            className={cn(
-              "rounded-xl bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-surface-2",
-              on && "ring-1 ring-foreground/25",
-            )}
-          >
-            <div className="flex items-center gap-2">
+    <div className="relative sticky top-14 z-20 -mx-1 bg-background/85 px-1 py-2 backdrop-blur-[10px]">
+      {canLeft && (
+        <button
+          type="button"
+          aria-label={t("skills.agentOverview.scrollLeft")}
+          onClick={() => scrollBy(-1)}
+          className={`${arrowClass} left-1.5`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M15 18l-6-6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
+      {canLeft && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 z-[25] w-7"
+          style={{
+            background:
+              "linear-gradient(to right, var(--color-background), transparent)",
+          }}
+        />
+      )}
+
+      <div
+        ref={trackRef}
+        className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {cards.map((card) => {
+          const color = brandColorOf(card.name);
+          const on = selectedId === card.id;
+          const statusLabel = card.active
+            ? t("skills.agentOverview.active")
+            : card.detected
+              ? t("skills.agentOverview.inactiveCard")
+              : t("skills.agentOverview.notInstalled");
+          const statusColor = card.active
+            ? "#34d399"
+            : card.detected
+              ? "#f5b64c"
+              : "#6b7280";
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => onPick(card.id)}
+              className={cn(
+                "relative flex shrink-0 snap-start items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                on ? "bg-surface-2" : "bg-card hover:bg-surface-2",
+              )}
+              style={
+                on
+                  ? {
+                      background: `linear-gradient(180deg, ${color}22, transparent 70%), var(--surface-2)`,
+                    }
+                  : undefined
+              }
+            >
               <span
-                className="flex size-8 items-center justify-center rounded-lg"
+                className={cn(
+                  "absolute inset-x-2 bottom-0 h-[2px] origin-left rounded-full transition-transform duration-200",
+                  on ? "scale-x-100" : "scale-x-0",
+                )}
+                style={{ background: color }}
+              />
+              <span
+                className="flex size-6 items-center justify-center rounded-md"
                 style={{ background: `${color}1f` }}
               >
-                <BrandIcon name={card.name} className="size-4" color={color} />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold tracking-tight">
-                {card.name}
-              </span>
-              <span className="flex items-center gap-1.5 font-mono text-[10.5px] text-muted-foreground">
-                <span
-                  className="inline-block size-2 rounded-full"
-                  style={{ background: statusColor }}
+                <BrandIcon
+                  name={card.name}
+                  className="size-3.5"
+                  color={color}
                 />
-                {statusLabel}
               </span>
-            </div>
-
-            <div className="mt-4 flex items-end justify-between gap-2">
-              <span className="tt-num font-mono text-2xl font-black tracking-tight">
-                {card.active ? format.formatTokens(card.tokens) : DASH}
+              <span className="flex flex-col">
+                <span className="flex items-center gap-1.5 text-[12.5px] font-semibold tracking-tight whitespace-nowrap">
+                  {card.name}
+                  <span
+                    className="inline-block size-1.5 rounded-full"
+                    style={{ background: statusColor }}
+                    title={statusLabel}
+                  />
+                </span>
+                <span className="tt-num font-mono text-[10.5px] whitespace-nowrap text-muted-foreground">
+                  {t("skills.agentOverview.badgeSubline", {
+                    tokens:
+                      card.tokens > 0 ? format.formatTokens(card.tokens) : DASH,
+                    sessions:
+                      card.sessions == null
+                        ? DASH
+                        : format.formatNumber(card.sessions),
+                  })}
+                </span>
               </span>
-              <span className="font-mono text-[10.5px] text-muted-foreground">
-                {t("skills.agentOverview.totalTokens")}
-              </span>
-            </div>
+            </button>
+          );
+        })}
+      </div>
 
-            <span className="mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <span
-                className="block h-full rounded-full"
-                style={{
-                  width: card.active ? `${Math.max(card.share, 3)}%` : "0%",
-                  background: color,
-                }}
-              />
-            </span>
-
-            <div className="mt-3 space-y-1 font-mono text-[10.5px] text-muted-foreground">
-              {card.active ? (
-                <>
-                  <p className="tt-num">
-                    {card.sessions == null
-                      ? t("skills.agentOverview.sessionsUnavailable")
-                      : t("skills.agentOverview.sessionsShort", {
-                          count: format.formatNumber(card.sessions),
-                        })}
-                    {" · "}
-                    {card.subagentCalls == null
-                      ? DASH
-                      : t("skills.agentOverview.subagentsShort", {
-                          count: format.formatNumber(card.subagentCalls),
-                        })}
-                  </p>
-                  <p className="tt-num">
-                    {card.cacheRate == null
-                      ? t("skills.agentOverview.cacheUnavailable")
-                      : t("skills.agentOverview.cacheRate", {
-                          rate: format.formatPercent(card.cacheRate),
-                        })}
-                    {" · "}
-                    {card.messages == null
-                      ? DASH
-                      : t("skills.agentOverview.messagesShort", {
-                          count: format.formatNumber(card.messages),
-                        })}
-                  </p>
-                  <p className="tt-num">
-                    {card.lastActiveAt
-                      ? t("skills.agentOverview.lastActive", {
-                          time: format.formatDateTime(card.lastActiveAt, false),
-                        })
-                      : t("skills.agentOverview.noActivity")}
-                  </p>
-                </>
-              ) : (
-                <p>{t("skills.agentOverview.noReadableUsage")}</p>
-              )}
-              {card.active && card.measurement === "estimated" && (
-                <p className="pt-0.5 text-[10px] text-amber-600 dark:text-amber-300">
-                  {t("skills.agentOverview.estimatedModelOnly")}
-                </p>
-              )}
-            </div>
-          </button>
-        );
-      })}
+      {canRight && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 z-[25] w-7"
+          style={{
+            background:
+              "linear-gradient(to left, var(--color-background), transparent)",
+          }}
+        />
+      )}
+      {canRight && (
+        <button
+          type="button"
+          aria-label={t("skills.agentOverview.scrollRight")}
+          onClick={() => scrollBy(1)}
+          className={`${arrowClass} right-1.5`}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M9 18l6-6-6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -383,6 +439,28 @@ function ContextTreePanel({
   const { t, format } = useI18n();
   const color = brandColorOf(name);
 
+  /** 工具调用类别中文映射（对齐原型 ContextTree 的 CN 映射语义）。 */
+  const categoryLabel = (category: LocalUsageToolCategory): string => {
+    switch (category) {
+      case "messages":
+        return t("skills.agentOverview.toolCategoryMessages");
+      case "execution":
+        return t("skills.agentOverview.toolCategoryExecution");
+      case "planning":
+        return t("skills.agentOverview.toolCategoryPlanning");
+      case "agent":
+        return t("skills.agentOverview.toolCategoryAgent");
+      case "browser":
+        return t("skills.agentOverview.toolCategoryBrowser");
+      case "mcp":
+        return t("skills.agentOverview.toolCategoryMcp");
+      case "skills":
+        return t("skills.agentOverview.toolCategorySkills");
+      case "other":
+        return t("skills.agentOverview.toolCategoryOther");
+    }
+  };
+
   const reused = view.tokenComposition.cachedInputTokens;
   const total = view.totalTokens;
 
@@ -484,7 +562,7 @@ function ContextTreePanel({
         : undefined,
       children: view.toolCallDetails.map((tool) => ({
         id: `tool:${tool.category}:${tool.name}`,
-        label: `${tool.name} · ${tool.category}`,
+        label: `${tool.name} · ${categoryLabel(tool.category)}`,
         tokens: tool.attributedTokens,
         calls: tool.calls,
         pct: null,
@@ -793,8 +871,20 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
   const detailRows =
     detailMode === "models" ? detailOverview.models : detailOverview.projects;
 
+  // 洞察描述的口语化文案（对齐原型 buildAgentInsights 风格，数据仍来自真实派生值）。
+  const rangeLabel =
+    toolPeriod === "today"
+      ? t("skills.agentOverview.range.today")
+      : toolPeriod === "7d"
+        ? t("skills.agentOverview.range.d7")
+        : toolPeriod === "all"
+          ? t("skills.agentOverview.range.all")
+          : toolPeriod === "custom"
+            ? t("skills.agentOverview.range.custom")
+            : t("skills.agentOverview.range.d30");
+
   const insights = [
-    ...(toolOverview.selected == null
+    ...(toolOverview.selected == null || !toolOverview.selected.active
       ? [
           {
             id: "empty",
@@ -809,8 +899,10 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
               tool: toolOverview.selected.name,
             }),
             description: t("skills.agentOverview.insightActivityDescription", {
-              events: format.formatNumber(toolOverview.totalEvents),
+              rangeLabel,
+              tool: toolOverview.selected.name,
               tokens: format.formatTokens(toolOverview.totalTokens),
+              pct: format.formatNumber(Math.round(toolOverview.selected.share)),
             }),
           },
         ]),
@@ -831,6 +923,7 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
             id: "skill",
             title: t("skills.agentOverview.insightSkillTitle"),
             description: t("skills.agentOverview.insightSkillDescription", {
+              rangeLabel,
               count: format.formatNumber(toolOverview.skillUsage.calls),
             }),
           },
@@ -843,6 +936,7 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
             id: "sessions",
             title: t("skills.agentOverview.insightSessionTitle"),
             description: t("skills.agentOverview.insightSessionDescription", {
+              rangeLabel,
               count: format.formatNumber(toolOverview.sessions),
             }),
           },
@@ -851,21 +945,26 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
   const insightIndexSafe = insights.length ? insightIndex % insights.length : 0;
   const line = insights[insightIndexSafe]?.description ?? "";
 
-  // 打字机效果：逐字显示当前洞察，6 秒后轮换下一条（对齐原型 JarvisInsight）。
+  const heroTitle =
+    selected == null
+      ? t("skills.agentOverview.insightTitle")
+      : `${selected.name} · ${t("skills.agentOverview.dedicatedInsight")}`;
+
+  // 打字机效果：逐字显示当前洞察，9 秒后轮换下一条（对齐原型 JarvisInsight hero）。
   useEffect(() => {
     setTyped("");
     let n = 0;
     const typer = setInterval(() => {
-      n += 2;
+      n += 1;
       setTyped(line.slice(0, n));
       if (n >= line.length) clearInterval(typer);
-    }, 18);
+    }, 22);
     const next = setTimeout(
       () =>
         setInsightIndex((v) =>
           insights.length ? (v + 1) % insights.length : 0,
         ),
-      6000,
+      9000,
     );
     return () => {
       clearInterval(typer);
@@ -875,27 +974,35 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
 
   return (
     <section className="space-y-5 pb-12">
-      <div>
-        <h1 className="text-[15px] leading-[25.5px] font-semibold tracking-tight">
-          {t("skills.agentOverview.title")}
-        </h1>
-      </div>
-
-      <section className="relative overflow-hidden rounded-lg bg-card p-5">
+      <section className="relative overflow-hidden rounded-2xl bg-card p-5 md:p-6">
         <span
-          className="pointer-events-none absolute -top-24 -right-16 size-56 rounded-full opacity-[0.13] blur-3xl"
+          className="pointer-events-none absolute -top-32 -right-20 size-96 rounded-full opacity-[0.16] blur-3xl"
           style={{ background: "var(--ok)" }}
         />
-        <div className="relative flex items-start gap-3.5">
+        <span
+          className="pointer-events-none absolute -bottom-28 -left-16 size-72 rounded-full opacity-[0.10] blur-3xl"
+          style={{ background: "var(--primary)" }}
+        />
+
+        <div className="relative flex items-start gap-4">
           <span className="relative mt-0.5 shrink-0">
-            <span className="tt-breathe relative flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2">
-              <Sparkles className="size-4" strokeWidth={1.7} />
+            <span
+              className="tt-breathe absolute inset-0 rounded-full blur-md"
+              style={{ background: "var(--ok)", opacity: 0.5 }}
+            />
+            <span className="tt-breathe relative flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2">
+              <Sparkles
+                className="size-5"
+                style={{ color: "var(--ok)" }}
+                strokeWidth={1.7}
+              />
             </span>
           </span>
+
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="text-[13px] font-semibold tracking-tight">
-                {selectedName} · {t("skills.agentOverview.dedicatedInsight")}
+              <h2 className="text-[15px] font-semibold tracking-tight">
+                {heroTitle}
               </h2>
               <button
                 type="button"
@@ -911,11 +1018,11 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
                 {t("skills.agentOverview.rotateInsight")}
               </button>
             </div>
-            <p className="mt-2 min-h-[42px] text-[14px] leading-relaxed text-foreground/90">
+            <p className="mt-2 min-h-[62px] text-[17px] leading-[1.65] font-medium tracking-tight text-foreground/90 md:text-[19px]">
               {typed}
-              <span className="tt-breathe ml-1 inline-block h-[15px] w-[7px] translate-y-[2px] bg-foreground/60" />
+              <span className="tt-breathe ml-1 inline-block h-[17px] w-[8px] translate-y-[3px] bg-foreground/60" />
             </p>
-            <div className="mt-3 flex items-center gap-1.5">
+            <div className="mt-3.5 flex items-center gap-1.5">
               {insights.map((item, index) => (
                 <button
                   key={item.id}
@@ -925,9 +1032,9 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
                   })}
                   onClick={() => setInsightIndex(index)}
                   className={cn(
-                    "h-[3px] rounded-full transition-all duration-500",
+                    "h-[4px] rounded-full transition-all duration-500",
                     index === insightIndexSafe
-                      ? "w-6 bg-foreground/70"
+                      ? "w-9 bg-foreground/70"
                       : "w-2.5 bg-foreground/15",
                   )}
                 />
