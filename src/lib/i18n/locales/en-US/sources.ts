@@ -58,9 +58,25 @@ export const sources = {
     skillsUnavailable: "Bound Skills unavailable",
     lastScan: "Last scanned {time}",
   },
-  migrate: "One-click migration",
-  migrationUnavailable:
-    "No verified context-migration source is available, so no migration package can be generated.",
+  migrate: {
+    button: "One-click migration",
+    noSkills: "This tool has no Skills to migrate",
+    title: "Skill migration · {name}",
+    desc: "Copies this tool's Skills into the skills directory of the selected tools.",
+    chooseTarget: "Choose target tools",
+    selectAll: "Select all",
+    clearAll: "Clear selection",
+    hint: "Only tools that implement the Skill (SKILL.md) spec are listed; the source tool itself is excluded automatically.",
+    overwrite: "Overwrite existing Skills with the same name",
+    count: "{selected} / {available} target tools selected",
+    confirm: "Start migration",
+    none: "This tool has no Skills to migrate",
+    selectTarget: "Select at least one target tool",
+    done: "Migration complete: {succeeded} migrated / {skipped} skipped",
+    doneFailed:
+      "Migration complete: {succeeded} migrated / {skipped} skipped / {failed} failed",
+    failed: "Migration failed",
+  },
   toast: {
     rescanDone: "Rescan complete",
   },
