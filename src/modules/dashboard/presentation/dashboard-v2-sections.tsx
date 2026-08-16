@@ -1284,8 +1284,17 @@ export function DashboardAgentWorkstreams({
       <div className="dashboard-panel-head">
         <div>
           <h2>{t("dashboard.v2.contextTitle")}</h2>
-          <p>{t("dashboard.v2.contextNote")}</p>
+          <p>
+            {tools.length} {t("dashboard.v2.toolsUnit")} ·{" "}
+            {t("dashboard.v2.sortedBy")} · {t("dashboard.v2.clickForModels")}
+          </p>
         </div>
+        <Link
+          to="/security"
+          className="font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {t("dashboard.v2.manageAll")} →
+        </Link>
       </div>
       <ul className="mt-3 divide-y divide-border">
         {tools.map((tool) => {

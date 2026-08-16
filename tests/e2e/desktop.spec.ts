@@ -90,7 +90,7 @@ test("首页展示真实数据", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "今日洞察", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("TOKEN 总量")).toBeVisible();
+  await expect(page.getByText("Token 消耗")).toBeVisible();
   await expect(page.getByText(/已观测 [\d,]+ 条事件/).first()).toBeVisible();
   await expect(
     page.getByText(/概览\s*[\d.]+[KMB]? tokens/).first(),
