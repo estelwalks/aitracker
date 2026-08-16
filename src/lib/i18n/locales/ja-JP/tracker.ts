@@ -2,15 +2,21 @@
 export const tracker = {
   title: "バーンランキング",
   desc: "行動診断型の浪費ランキング：実際のトークンデータから非効率な消費を特定し、改善案を提示します。",
+  insightTitle: "今日のインサイト",
   metric: {
     tokens: "総消費",
-    events: "イベント数",
-    entries: "ランクイン件数",
+    projects: "ランクイン プロジェクト",
+    skills: "ランクイン Skill",
+    sessions: "ランクイン セッション",
+    sortedBy: "浪費度順に並べ替え",
   },
   board: {
     skill: "Skill 消費ランキング",
     project: "プロジェクト消費ランキング",
     session: "セッション消費ランキング",
+    skillSub: "どの Skill がこっそりトークンを燃やしているか",
+    projectSub: "どのプロジェクトが最も消費しているか",
+    sessionSub: "どのセッションが最も割に合わないか",
   },
   row: {
     tokens: "{count} tokens",
@@ -34,10 +40,13 @@ export const tracker = {
     none: "明らかな改善点はありません。",
   },
   detail: {
-    wasteDetail: "浪費の内訳",
+    wasteDetail: "浪費指数 {waste}% の計算方法",
+    wasteExplain:
+      "指数 = 100 × (1 − キャッシュヒット率) × 出力比率：キャッシュ再利用が低く、出力比率が高いと浪費になります。",
+    wastedTotal: "合計無駄消費 {tokens} tokens",
     close: "閉じる",
   },
-  empty: "データがまだありません",
+  empty: "浪費記録はまだありません",
   emptyDesc:
     "実際の使用量がスキャンされると、浪費指数順のランキングが表示されます。",
 } as const;

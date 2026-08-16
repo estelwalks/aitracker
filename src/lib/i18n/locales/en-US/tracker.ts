@@ -1,15 +1,21 @@
 export const tracker = {
   title: "Burn Leaderboard",
   desc: "Behavioral waste diagnostics: surfaces inefficient spend from real token data with actionable suggestions.",
+  insightTitle: "Today's insight",
   metric: {
-    tokens: "Total tokens",
-    events: "Events",
-    entries: "Ranked entries",
+    tokens: "Total burn",
+    projects: "Ranked projects",
+    skills: "Ranked skills",
+    sessions: "Ranked sessions",
+    sortedBy: "Sorted by waste",
   },
   board: {
     skill: "Skill spend",
     project: "Project spend",
     session: "Session spend",
+    skillSub: "Which skills are quietly burning tokens",
+    projectSub: "Which projects consume the most",
+    sessionSub: "Which sessions are least cost-effective",
   },
   row: {
     tokens: "{count} tokens",
@@ -31,9 +37,12 @@ export const tracker = {
     none: "No obvious optimization opportunity.",
   },
   detail: {
-    wasteDetail: "Waste breakdown",
+    wasteDetail: "How the {waste}% waste index is calculated",
+    wasteExplain:
+      "Index = 100 × (1 − cache hit rate) × output share: low cache reuse plus high output share equals waste.",
+    wastedTotal: "Total wasted {tokens} tokens",
     close: "Close",
   },
-  empty: "No data yet",
+  empty: "No waste records yet",
   emptyDesc: "Once real usage is scanned, the ranked waste board appears here.",
 } as const;
