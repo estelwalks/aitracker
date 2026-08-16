@@ -3,6 +3,14 @@ import { Check, Copy, FileText, Printer, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog";
+import {
   EmptyState,
   Segmented,
   StatusBadge,
@@ -48,20 +56,24 @@ function readDraft(reportId: string): string | null {
 
 /**
  * 正文内联卡 (inline report body). With no report for the selected period it
- * renders an empty state + "生成草稿"; with one it renders the Markdown card
- * with preview/edit tabs and the shared copy / print / export-md actions
- * (reused from `useReportActions`). Edits are user-authored drafts persisted to
- * this browser only (localStorage, 30s autosave); the server's generated body
- * is fetched read-only via `getReportBody` and never overwritten.
+ * renders an empty state + "生成报告草稿"; with one it renders the Markdown card
+ * with preview/edit tabs and the shared copy / export-PDF / export-md actions
+ * (reused from `useReportActions`). 重新生成 asks for confirmation in a Dialog
+ * before delegating to `onRegenerate`. Edits are user-authored drafts persisted
+ * to this browser only (localStorage, 30s autosave); the server's generated
+ * body is fetched read-only via `getReportBody` and never overwritten.
  */
 export function ReportBodyCard({
   report,
+  sessionCount,
   generateBlocked,
   generateHint,
   onGenerate,
   onRegenerate,
 }: {
   report?: ReportListItem;
+  /** Real session count in the selected period (from the loader density). */
+  sessionCount: number;
   generateBlocked: boolean;
   generateHint?: string;
   onGenerate: () => void;
@@ -72,6 +84,7 @@ export function ReportBodyCard({
   const [mode, setMode] = useState<"preview" | "edit">("preview");
   const [body, setBody] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [askRewrite, setAskRewrite] = useState(false);
 
   useEffect(() => {
     if (!reportId) {
@@ -182,7 +195,7 @@ export function ReportBodyCard({
               variant="default"
               disabled={generateBlocked}
               title={generateBlocked ? generateHint : undefined}
-              onClick={onRegenerate}
+              onClick={() => setAskRewrite(true)}
             >
               <RefreshCw className="size-3.5" />
               {t("reports.body.regenerate")}
@@ -193,7 +206,7 @@ export function ReportBodyCard({
             </TTButton>
             <TTButton size="sm" variant="ghost" onClick={print}>
               <Printer className="size-3.5" />
-              {t("common.reports.editor.print")}
+              {t("reports.body.exportPdf")}
             </TTButton>
             <TTButton size="sm" variant="ghost" onClick={exportMd}>
               {t("common.reports.editor.exportMd")}
@@ -230,6 +243,36 @@ export function ReportBodyCard({
           </div>
         )}
       </div>
+
+      <Dialog open={askRewrite} onOpenChange={setAskRewrite}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("reports.body.rewriteTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("reports.body.rewriteDesc", { count: sessionCount })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 flex-row-reverse gap-2 sm:justify-end">
+            <TTButton
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                setAskRewrite(false);
+                onRegenerate();
+              }}
+            >
+              {t("reports.body.rewriteConfirm")}
+            </TTButton>
+            <TTButton
+              size="sm"
+              variant="ghost"
+              onClick={() => setAskRewrite(false)}
+            >
+              {t("common.cancel")}
+            </TTButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
