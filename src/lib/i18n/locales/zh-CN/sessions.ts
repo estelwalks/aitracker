@@ -29,18 +29,27 @@ export const sessions = {
   },
   panelTitle: "本地会话",
   hint: "当前仅支持恢复 Claude Code、Codex 与 Grok；费用按本地模型定价表估算，未知价格会明确标注。",
-  searchPlaceholder: "搜索标题 / 项目 / 模型 / sessionId",
+  searchPlaceholder: "搜索标题 / 项目 / 会话 ID",
   summary: {
-    count: "会话条数",
+    count: "会话数",
     tokens: "Token 合计",
     cost: "费用合计",
-    turns: "轮次合计",
+    tools: "会话工具数",
+    turns: "对话轮次数",
+    countHint: "{range}内的会话",
+    toolsHint: "覆盖的 AI 工具",
+    turnsHint: "累计人机往返",
   },
   empty: {
     title: "没有匹配的会话",
-    desc: "调整筛选条件或搜索关键词后重试。",
+    desc: "调整搜索关键词、工具或时间范围后重试。",
   },
   refreshing: "刷新中",
+  group: {
+    today: "今天",
+    yesterday: "昨天",
+    count: "{count} 场",
+  },
   detail: {
     back: "返回会话列表",
     title: "会话详情",
@@ -65,6 +74,8 @@ export const sessions = {
   },
   row: {
     untitled: "(未命名会话)",
+    copyHash: "复制 ID",
+    copiedHash: "已复制",
     copy: "恢复会话",
     copied: "已发起",
     copyUnsafe: "该会话 ID 不安全，无法恢复",
@@ -80,6 +91,7 @@ export const sessions = {
   },
   toast: {
     refreshed: "会话列表已刷新",
+    hashCopied: "会话 ID 已复制",
     copied: "已发起本地恢复请求",
   },
   transcript: {
