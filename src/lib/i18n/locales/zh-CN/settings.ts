@@ -25,7 +25,7 @@ export const settings = {
   model: {
     notConfigured: "未配置 LLM",
     notConfiguredDesc:
-      "AI 生成类功能（蒸馏、报告、AI 洞察）暂不可用。请配置 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 环境变量。",
+      "环境变量 LLM 未配置。蒸馏与报告可通过下方「通用 AI 模型 Profile」启用；AI 洞察仍需 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 环境变量。",
     configured: "已配置 LLM",
     baseUrl: "服务地址",
     model: "模型",
@@ -38,7 +38,7 @@ export const settings = {
     storageNote:
       "API Key 仅保存于本机服务端文件（权限 0600），界面只显示是否已配置。",
     reportsUseEnv:
-      "报告生成当前使用环境变量 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 配置；此处的模型 Profile 用于蒸馏等按需选择场景。",
+      "报告生成优先使用「生效中」的模型 Profile（真实模型调用）；未设置 Profile 时回退环境变量 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL。",
     count: "{count} 个配置",
     empty: "暂无配置",
     emptyHint: "点击「新增」创建第一套模型配置",

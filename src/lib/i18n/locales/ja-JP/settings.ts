@@ -28,7 +28,7 @@ export const settings = {
   model: {
     notConfigured: "LLM 未設定",
     notConfiguredDesc:
-      "AI 生成機能（蒸留、レポート、AI インサイト）は利用できません。TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 環境変数を設定してください。",
+      "環境変数 LLM が未設定です。蒸留とレポートは下の「汎用 AI モデル Profile」で利用可能になります。AI インサイトには TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 環境変数が必要です。",
     configured: "LLM 設定済み",
     baseUrl: "エンドポイント",
     model: "モデル",
@@ -41,7 +41,7 @@ export const settings = {
     storageNote:
       "API Key はサーバー側のファイル（権限 0600）にのみ保存され、UI には設定済みかどうかのみ表示されます。",
     reportsUseEnv:
-      "レポート生成は現在、環境変数 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL を使用します。ここのモデル Profile は蒸留などの選択型シーン向けです。",
+      "レポート生成は、有効なモデル Profile（実際のモデル呼び出し）を優先して使用します。Profile がない場合は環境変数 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL にフォールバックします。",
     count: "{count} 件の設定",
     empty: "設定はまだありません",
     emptyHint: "「追加」をクリックして最初のモデル設定を作成します",

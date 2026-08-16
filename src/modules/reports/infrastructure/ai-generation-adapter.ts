@@ -44,6 +44,13 @@ const FALLBACK_OFFLINE_TEXT =
 
 export interface ReportGenerationAdapterOptions {
   readonly ai: ReportAIExecutor;
+  /**
+   * Resolves the model id for a generation (B-400). Injected by the
+   * composition root to the active S-500 model profile id, so reports reuse
+   * the profile-backed provider (a real model call) instead of the offline
+   * fallback. `null`/undefined keeps the default `REPORT_MODEL_ID`.
+   */
+  readonly resolveModelId?: () => Promise<string | null>;
 }
 
 function offlineResult(text: string | undefined): ReportGenerationResult {
@@ -72,11 +79,22 @@ export function createReportGenerationPort(
       readonly definition: ReportDefinition;
       readonly context: ReportContext;
       readonly budgetUsd?: number;
+      readonly modelId?: string;
     }): Promise<ReportGenerationResult> {
       const { definition, context, budgetUsd } = input;
+      // Explicit input wins; otherwise the injected resolver (active profile
+      // id) is awaited — the request must not be built until it settles.
+      const modelId =
+        input.modelId ?? (await options.resolveModelId?.()) ?? REPORT_MODEL_ID;
+      // The composition registry only knows "offline" and "profile" (the
+      // S-500 provider resolves a saved profile by request.modelId). Any model
+      // id that is not the default therefore routes to the profile-backed
+      // provider; the default keeps the previous offline routing.
+      const providerId = modelId === REPORT_MODEL_ID ? undefined : "profile";
       const request: AIRequest = {
         requestId: randomUUID(),
-        modelId: REPORT_MODEL_ID,
+        providerId,
+        modelId,
         prompt: {
           id: definition.template.templateId,
           version: definition.template.version,
