@@ -47,6 +47,13 @@ export const errors = {
     resumeCancelled: "세션 복원이 취소되었습니다",
     resumeFailed: "로컬 세션 복원을 시작할 수 없습니다",
   },
+  memory: {
+    invalidInput: "메모리 내용이 올바르지 않습니다",
+    notFound: "메모리 항목을 찾을 수 없습니다",
+    conflict: "메모리 항목이 다른 작업에 의해 변경되었습니다",
+    invalidTransition: "메모리 항목 상태에서 이 작업을 수행할 수 없습니다",
+    writeFailed: "메모리 저장에 실패했습니다. 다시 시도하세요",
+  },
   distillation: {
     invalidSelection: "1~8개의 중복 없는 세션을 선택하세요",
     sessionNotFound: "선택한 세션이 존재하지 않거나 사용할 수 없습니다",

@@ -5,8 +5,9 @@ export const memory = {
   placeholderDesc: "记忆库页面正在对齐原型，稍后即可浏览与编辑本地记忆资产。",
   title: "记忆库",
   empty: "还没有记忆条目",
-  emptyDesc: "在蒸馏工作台选择「画像」或「任务记忆」，产物会自动沉淀到这里；也可以手动新增一条。",
-  searchPlaceholder: "搜索记忆标题、正文或来源",
+  emptyDesc:
+    "在蒸馏工作台选择「画像」或「任务记忆」，产物会自动沉淀到这里；也可以手动新增一条。",
+  searchPlaceholder: "搜索记忆标题、摘要或来源",
   add: "新增记忆",
   goDistill: "去蒸馏",
   source: "来源",
@@ -21,6 +22,21 @@ export const memory = {
   edited: "已更新记忆",
   added: "已新增记忆",
   removed: "已删除",
+  edit: "编辑",
+  editTitle: "编辑记忆",
+  originDistill: "蒸馏",
+  originManual: "手动",
+  sourceDistill: "蒸馏",
+  sourceUnknown: "未知来源",
+  insightEmpty: "还没有记忆条目：去蒸馏工作台产出一条，或手动新增一条。",
+  insightTotal:
+    "记忆库里有 {total} 条记忆：画像 {profile} 条、任务记忆 {task} 条。",
+  insightMeaning:
+    "画像帮我记住你是谁、喜欢怎样；任务记忆帮我记住我们定过什么规矩。",
+  insightDistill:
+    "在蒸馏工作台选择「画像」或「任务记忆」，产物会自动沉淀到这里。",
+  insightRotate: "下一条洞察",
+  insightDots: "洞察轮播",
   form: {
     type: "类型",
     title: "标题",
@@ -29,5 +45,11 @@ export const memory = {
     project: "项目",
     save: "保存",
     typePlaceholder: "选择记忆类型",
+    titlePlaceholder: "一句话概括这条记忆",
+    bodyPlaceholder: "展开描述：偏好细节，或我们约定的规矩",
+    sourcePlaceholder: "来源工具（Claude Code / Codex / Cursor…）",
+    projectPlaceholder: "项目（可选）",
+    typeProfileDesc: "关于你这个人：偏好、习惯、口味",
+    typeTaskDesc: "关于约定与决策：我们定了什么规矩",
   },
 } as const;

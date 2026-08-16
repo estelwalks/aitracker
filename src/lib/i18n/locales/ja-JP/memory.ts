@@ -3,11 +3,13 @@ export const memory = {
   metaDescription:
     "メモリーハブは蒸留で生まれたプロファイルとタスク記憶を管理：ソース別グループ、タイプ別フィルタ、手動追加・編集・削除に対応。",
   placeholderTitle: "メモリーハブは準備中です",
-  placeholderDesc: "メモリーハブページをプロトタイプに合わせて構築中です。まもなくローカルの記憶アセットを閲覧・編集できます。",
+  placeholderDesc:
+    "メモリーハブページをプロトタイプに合わせて構築中です。まもなくローカルの記憶アセットを閲覧・編集できます。",
   title: "メモリーハブ",
   empty: "メモリ項目はまだありません",
-  emptyDesc: "蒸留ワークベンチで「プロファイル」または「タスク記憶」を選ぶと、成果物が自動的にここへ貯まります。手動で追加することもできます。",
-  searchPlaceholder: "メモリのタイトル・本文・ソースを検索",
+  emptyDesc:
+    "蒸留ワークベンチで「プロファイル」または「タスク記憶」を選ぶと、成果物が自動的にここへ貯まります。手動で追加することもできます。",
+  searchPlaceholder: "メモリのタイトル・要約・ソースを検索",
   add: "メモリを追加",
   goDistill: "蒸留へ",
   source: "ソース",
@@ -22,6 +24,22 @@ export const memory = {
   edited: "メモリを更新しました",
   added: "メモリを追加しました",
   removed: "削除しました",
+  edit: "編集",
+  editTitle: "メモリを編集",
+  originDistill: "蒸留",
+  originManual: "手動",
+  sourceDistill: "蒸留",
+  sourceUnknown: "不明なソース",
+  insightEmpty:
+    "メモリ項目はまだありません：蒸留を実行するか、手動で追加してください。",
+  insightTotal:
+    "メモリは {total} 件：プロファイル {profile} 件、タスク記憶 {task} 件。",
+  insightMeaning:
+    "プロファイルはあなたの人となりを、タスク記憶は私たちが決めたルールを覚えています。",
+  insightDistill:
+    "蒸留ワークベンチで「プロファイル」または「タスク記憶」を選ぶと、成果物が自動的にここへ貯まります。",
+  insightRotate: "次のインサイト",
+  insightDots: "インサイトカルーセル",
   form: {
     type: "タイプ",
     title: "タイトル",
@@ -30,5 +48,11 @@ export const memory = {
     project: "プロジェクト",
     save: "保存",
     typePlaceholder: "メモリタイプを選択",
+    titlePlaceholder: "このメモリを一文で要約",
+    bodyPlaceholder: "詳しく記述：好みの詳細、または決めたルール",
+    sourcePlaceholder: "ソースツール（Claude Code / Codex / Cursor…）",
+    projectPlaceholder: "プロジェクト（任意）",
+    typeProfileDesc: "あなたについて：好み・習慣・趣向",
+    typeTaskDesc: "約束と決定について：決めたルール",
   },
 } as const;
