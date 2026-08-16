@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import {
+  ArrowRight,
   Check,
   FileCode2,
   FolderOpen,
@@ -10,7 +11,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { StatusBadge, TTButton } from "../../../../components/tt";
@@ -28,6 +29,7 @@ import type { MessageKey } from "../../../../lib/i18n/messages";
 import { SKILL_AGENTS } from "../../../../lib/local-skills/types";
 import type { CandidateOutput } from "../../contracts";
 import { saveCandidateAsSkill } from "../../query";
+import { isMemoryKind, kindMeta } from "./out-types.ts";
 
 const APPROVAL_TONE: Record<
   CandidateOutput["approvalState"],
@@ -54,6 +56,13 @@ function approvalLabel(
   if (state === "approved") return t("distill.stateApproved");
   if (state === "cancelled") return t("distill.stateCancelled");
   return t("distill.stateWaiting");
+}
+
+/** Deduplicated source names of the candidate's selected sessions. */
+function sourceNames(candidate: CandidateOutput): string {
+  return [...new Set(candidate.selectedSessionRefs.map((ref) => ref.source))]
+    .join(" / ")
+    .trim();
 }
 
 function SkillFileBrowser({
@@ -112,9 +121,15 @@ function SkillFileBrowser({
 }
 
 /**
- * Persisted result card with a truthful one-file browser. Candidates currently
- * expose only the generated note, so the tree contains SKILL.md and never
- * fabricates references/scripts to mimic prototype sample output.
+ * Persisted result card aligned with the prototype (lines 1808-1958): a kind
+ * color badge, the selected-material meta line, and — for approved candidates
+ * — a save modal with a multi-select install-target grid (E-500). The server
+ * save fn writes one agent per call, so the modal loops over the selected
+ * targets and reports partial failures honestly.
+ *
+ * Real progress: candidates only exist after the synchronous server run, so
+ * no card ever shows a running state; the in-flight "蒸馏中…" placeholder is
+ * rendered by the page instead of faking a percentage here.
  */
 export function ExpCard({
   candidate,
@@ -134,58 +149,78 @@ export function ExpCard({
     candidate.mode === "offline" || candidate.execution.status === "offline";
   const pending = candidate.approvalState === "waiting-approval";
   const approved = candidate.approvalState === "approved";
+  const memoryAsset = isMemoryKind(candidate.kind);
+  const badge = kindMeta(candidate.kind);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(candidate.summary);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState(() =>
     suggestSkillName(candidate.title),
   );
-  const [saveTarget, setSaveTarget] = useState(SKILL_AGENTS[0] ?? "");
+  const [saveTargets, setSaveTargets] = useState<string[]>(() => [
+    ...SKILL_AGENTS,
+  ]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!editing) setDraft(candidate.summary);
   }, [candidate.summary, editing]);
 
+  const sources = useMemo(() => sourceNames(candidate), [candidate]);
+
   async function handleSave() {
-    if (!saveName.trim()) return;
+    if (!saveName.trim() || saveTargets.length === 0) return;
     setSaving(true);
-    try {
-      const result = await saveCandidateAsSkill({
-        data: {
-          candidateId: candidate.candidateId,
-          skillName: saveName.trim(),
-          targetAgent: saveTarget,
-          content: draft,
-        },
-      });
-      if (!result.ok) {
-        toast.error(
-          result.errorCode
-            ? t(result.errorCode as MessageKey)
-            : t("common.failed"),
-        );
-        return;
+    const savedAgents: string[] = [];
+    const failed: string[] = [];
+    for (const agent of saveTargets) {
+      try {
+        const result = await saveCandidateAsSkill({
+          data: {
+            candidateId: candidate.candidateId,
+            skillName: saveName.trim(),
+            targetAgent: agent,
+            content: draft,
+          },
+        });
+        if (result.ok) {
+          savedAgents.push(agent);
+        } else {
+          failed.push(agent);
+        }
+      } catch {
+        failed.push(agent);
       }
-      toast.success(
-        t("distill.savedToast", { agent: result.agent ?? saveTarget }),
-      );
-      setSaveOpen(false);
-    } catch (error) {
-      const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+    if (savedAgents.length > 0) {
+      toast.success(
+        savedAgents.length === 1
+          ? t("distill.savedToast", { agent: savedAgents[0] })
+          : t("distill.savedToastMulti", { count: savedAgents.length }),
+      );
+    }
+    if (failed.length > 0) {
+      toast.error(t("distill.savePartialFail", { agents: failed.join(", ") }));
+    }
+    if (failed.length === 0) setSaveOpen(false);
   }
 
   return (
     <>
-      <article className="relative overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
-        <div className="absolute inset-y-0 left-0 w-[3px] bg-primary" />
+      <article
+        className="relative overflow-hidden rounded-xl bg-card ring-1 ring-border/60"
+        style={{ boxShadow: `inset 3px 0 0 ${badge.color}` }}
+      >
         <header className="flex flex-wrap items-center gap-2 px-4 py-3">
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
-            {candidate.kind.toUpperCase()}
+          <span
+            className="rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
+            style={{
+              background: `color-mix(in oklab, ${badge.color} 16%, transparent)`,
+              color: badge.color,
+            }}
+          >
+            {t(badge.labelKey)}
           </span>
           <h3 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
             {candidate.title}
@@ -199,11 +234,14 @@ export function ExpCard({
           <span>
             {t("common.distillation.expMode")}: {candidate.mode}
           </span>
-          <span>
-            {t("common.distillation.selected", {
-              count: candidate.selectedSessionRefs.length,
-            })}
-          </span>
+          {sources && (
+            <span>
+              {t("distill.materialMeta", {
+                count: candidate.selectedSessionRefs.length,
+                sources,
+              })}
+            </span>
+          )}
           <span>{candidate.candidateId}</span>
         </div>
 
@@ -262,17 +300,26 @@ export function ExpCard({
                 disabled={busy}
                 onClick={() => {
                   setSaveName(suggestSkillName(candidate.title));
+                  setSaveTargets([...SKILL_AGENTS]);
                   setSaveOpen(true);
                 }}
               >
                 <Rocket className="size-3.5" /> {t("distill.expSaveInstall")}
               </TTButton>
-              <Link to="/skills" className="ml-auto">
-                <TTButton variant="ghost">
-                  <Sparkles className="size-3.5" />{" "}
-                  {t("common.distillation.saveAndManage")}
-                </TTButton>
-              </Link>
+              {memoryAsset ? (
+                <Link to="/memory" className="ml-auto">
+                  <TTButton variant="ghost">
+                    <ArrowRight className="size-3.5" /> {t("distill.memoryGo")}
+                  </TTButton>
+                </Link>
+              ) : (
+                <Link to="/skills" className="ml-auto">
+                  <TTButton variant="ghost">
+                    <Sparkles className="size-3.5" />{" "}
+                    {t("common.distillation.saveAndManage")}
+                  </TTButton>
+                </Link>
+              )}
             </>
           )}
         </footer>
@@ -299,23 +346,73 @@ export function ExpCard({
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-[11px] text-muted-foreground">
-                {t("distill.saveTarget")}
-              </label>
-              <select
-                value={saveTarget}
-                onChange={(event) => setSaveTarget(event.target.value)}
-                className="h-9 w-full rounded-lg bg-surface-2/70 px-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {SKILL_AGENTS.map((agent) => (
-                  <option key={agent} value={agent}>
-                    {agent}
-                  </option>
-                ))}
-              </select>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-[11px] text-muted-foreground">
+                  {t("distill.saveTargets")}
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSaveTargets((current) =>
+                      current.length === SKILL_AGENTS.length
+                        ? []
+                        : [...SKILL_AGENTS],
+                    )
+                  }
+                  className="rounded-full bg-accent/50 px-2.5 py-0.5 text-[11px] text-foreground transition-colors hover:bg-accent"
+                >
+                  {saveTargets.length === SKILL_AGENTS.length
+                    ? t("distill.saveClearAll")
+                    : t("distill.saveSelectAll")}
+                </button>
+              </div>
+              <p className="mb-2 text-[11px] text-muted-foreground">
+                {t("distill.saveTargetHint")}
+              </p>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {SKILL_AGENTS.map((agent) => {
+                  const on = saveTargets.includes(agent);
+                  return (
+                    <button
+                      key={agent}
+                      type="button"
+                      onClick={() =>
+                        setSaveTargets((current) =>
+                          on
+                            ? current.filter((item) => item !== agent)
+                            : [...current, agent],
+                        )
+                      }
+                      aria-pressed={on}
+                      className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[12.5px] transition-colors ${
+                        on
+                          ? "bg-primary/15 text-foreground"
+                          : "bg-accent/25 text-foreground hover:bg-accent/50"
+                      }`}
+                    >
+                      <span
+                        className={`grid size-4 shrink-0 place-items-center rounded-md ${
+                          on
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-accent"
+                        }`}
+                      >
+                        {on && <Check className="size-3" />}
+                      </span>
+                      <span className="truncate">{agent}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <DialogFooter>
+            <span className="mr-auto self-center font-mono text-[10.5px] text-muted-foreground">
+              {t("distill.saveTargetsSelected", {
+                count: saveTargets.length,
+                total: SKILL_AGENTS.length,
+              })}
+            </span>
             <TTButton
               variant="ghost"
               disabled={saving}
@@ -325,10 +422,10 @@ export function ExpCard({
             </TTButton>
             <TTButton
               variant="primary"
-              disabled={saving || !saveName.trim() || !saveTarget}
+              disabled={saving || !saveName.trim() || saveTargets.length === 0}
               onClick={handleSave}
             >
-              <Save className="size-3.5" /> {t("distill.saveConfirm")}
+              <Save className="size-3.5" /> {t("distill.saveInstall")}
             </TTButton>
           </DialogFooter>
         </DialogContent>
