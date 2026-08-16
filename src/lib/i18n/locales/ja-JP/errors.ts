@@ -52,6 +52,7 @@ export const errors = {
     resumeInvalid: "セッション復元リクエストが無効です",
     resumeCancelled: "セッション復元はキャンセルされました",
     resumeFailed: "ローカルセッション復元を開始できませんでした",
+    transcriptUnavailable: "セッションの会話を読み取れませんでした",
   },
   memory: {
     invalidInput: "メモリ内容が不正です",

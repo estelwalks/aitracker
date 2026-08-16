@@ -45,6 +45,7 @@ export const errors = {
     resumeInvalid: "Invalid session resume request",
     resumeCancelled: "Session resume was cancelled",
     resumeFailed: "Could not start local session recovery",
+    transcriptUnavailable: "Failed to read the session transcript",
   },
   memory: {
     invalidInput: "Invalid memory content",
