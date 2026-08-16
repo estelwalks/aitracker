@@ -3,13 +3,13 @@ export const widget = {
     "Widget design preview and configuration for {appName}: menu bar style, floating three-tab panel, and small/medium/large desktop widgets with a Jarvis-style tone.",
   title: "Menu Bar Widgets",
   pageDesc:
-    "Menu bar · Floating panel · Desktop widgets · Live preview, config in Settings",
+    "Menu bar · Floating panel · Desktop widgets · Live preview · Config in Settings",
   floatPanel: "Floating Panel · 420px",
   floatPanelDesc:
     "Security / Usage / Today tabs — the ⚙ button in the top-right opens a lightweight config",
   desktopWidgets: "Desktop Widgets",
   desktopWidgetsDesc:
-    "Small 168 · Medium 360 · Large 360×360 — content follows the config",
+    "Small 168 orb+safety · Medium 360 announce+memory · Large 360×360 three signals",
   menuBar: "Menu Bar",
   menuBarDesc:
     "Icon style and click behavior follow the config; click the icon to preview",

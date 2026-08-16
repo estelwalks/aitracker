@@ -3,6 +3,7 @@ export const desktopIpc = {
   getAutoLaunch: "desktop:get-auto-launch",
   setAutoLaunch: "desktop:set-auto-launch",
   showWindow: "desktop:show-window",
+  openWidgetWindow: "desktop:open-widget-window",
   getPreferences: "desktop:get-preferences",
   setPreference: "desktop:set-preference",
   resetPreferences: "desktop:reset-preferences",
@@ -292,6 +293,8 @@ export interface DesktopApi {
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
   showWindow(): Promise<void>;
+  /** Show the floating widget window (created lazily, reused across opens). */
+  openWidgetWindow(): Promise<void>;
   getPreferences(): Promise<Record<string, unknown>>;
   setPreference(key: string, value: unknown): Promise<void>;
   resetPreferences(): Promise<{ removedKeys: number }>;

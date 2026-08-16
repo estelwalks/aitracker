@@ -182,6 +182,28 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
+  /**
+   * barClick 驱动真实行为：Electron 环境走桌面 IPC（弹真实浮窗 / 聚焦主窗
+   * 口），浏览器预览页回退为站内跳转与面板预览。
+   */
+  const handleBarClick = () => {
+    const desktop =
+      typeof window !== "undefined" ? window.desktopApi : undefined;
+    if (prefs.barClick === "main") {
+      if (desktop) {
+        void desktop.showWindow();
+      } else {
+        void navigate({ to: "/" });
+      }
+      return;
+    }
+    if (desktop) {
+      void desktop.openWidgetWindow();
+    } else {
+      setOpen((value) => !value);
+    }
+  };
+
   return (
     <WidgetThemeScope>
       <div className={`relative ${className}`}>
@@ -191,15 +213,7 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
             <Bluetooth className="size-3.5" strokeWidth={1.6} />
             <BatteryMedium className="size-4" strokeWidth={1.6} />
           </span>
-          <DynamicIsland
-            onClick={() => {
-              if (prefs.barClick === "main") {
-                void navigate({ to: "/" });
-              } else {
-                setOpen((value) => !value);
-              }
-            }}
-          />
+          <DynamicIsland onClick={handleBarClick} />
           <span className="font-mono text-[10.5px] text-muted-foreground/60">
             09:41
           </span>
