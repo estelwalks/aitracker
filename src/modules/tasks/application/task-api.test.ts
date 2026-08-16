@@ -98,6 +98,22 @@ test("unknown task and unsafe schedule are rejected", async () => {
   assert.equal(unsafe.error.code, "errors.tasks.invalidInput");
 });
 
+test("updatePreference accepts a monthly schedule for reports.generate", async () => {
+  const api = createTaskApi(fixtures());
+  const result = await api.updatePreference({
+    taskId: "reports.generate",
+    enabled: true,
+    schedule: { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) throw new Error("expected monthly schedule acceptance");
+  assert.deepEqual(result.value, {
+    taskId: "reports.generate",
+    enabled: true,
+    schedule: { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
+  });
+});
+
 test("manual run and cancellation delegate through controlled identifiers", async () => {
   const f = fixtures();
   let cancelled = "";
