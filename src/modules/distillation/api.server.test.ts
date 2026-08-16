@@ -104,6 +104,12 @@ test("loadDistillation returns an empty but honest read model on a fresh root", 
     assert.equal(view.stats.runs, 0);
     assert.equal(view.stats.approved, 0);
     assert.ok(view.modelOptions.some((m) => m.id === "offline"));
+    // B-600: the server-side quota ledger is always projected; a fresh root
+    // reports zero used calls against the configured daily limit.
+    assert.ok(view.quota, "quota projection must be present");
+    assert.equal(view.quota.used, 0);
+    assert.equal(view.quota.limit, 20);
+    assert.equal(view.quota.remaining, 20);
   });
 });
 

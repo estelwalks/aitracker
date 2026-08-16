@@ -19,8 +19,19 @@ import {
   controlledSessionSummary,
   isOpaqueSessionRef,
 } from "../domain.ts";
+import { localDateKey, type DistillQuota } from "../quota.ts";
 
 const MAX_SELECTION = 8;
+
+/**
+ * A real-model distillation call is one routed to a genuine model endpoint
+ * (a saved S-500 profile or the env-configured LLM) rather than the
+ * deterministic offline fallback. Only these calls consume the daily quota,
+ * because only they can incur real provider cost.
+ */
+function isRealModelRequest(request: DistillationRequest): boolean {
+  return request.modelId !== "offline";
+}
 const fallbackExecution = (request: AIRequest): AIExecutionResult => ({
   summary: {
     requestId: request.requestId,
@@ -95,6 +106,25 @@ export function createDistillationApplication(
         return err("errors.distillation.invalidSelection");
       if (request.signal?.aborted) return err("errors.distillation.cancelled");
 
+      // B-600 server-side quota: a real-model request that has exhausted
+      // today's quota is rejected BEFORE the model is invoked. A missing or
+      // failing quota port degrades to unlimited — distillation must never be
+      // blocked by quota bookkeeping itself.
+      const realModel = isRealModelRequest(request);
+      let quotaState: DistillQuota | undefined;
+      if (realModel && ports.quota) {
+        try {
+          quotaState = await ports.quota.read();
+        } catch {
+          quotaState = undefined;
+        }
+        if (quotaState && quotaState.used >= quotaState.limit) {
+          return err("errors.distillation.quotaExceeded", {
+            limit: quotaState.limit,
+          });
+        }
+      }
+
       const page = await ports.sessions.query({
         page: 1,
         pageSize: 100,
@@ -127,6 +157,15 @@ export function createDistillationApplication(
       }
       if (request.signal?.aborted || execution.summary.status === "cancelled")
         return err("errors.distillation.cancelled");
+      // Record one real-model call for today once the run actually completes.
+      // A failed write must never fail the run; offline runs never get here.
+      if (realModel && ports.quota) {
+        try {
+          await ports.quota.increment(localDateKey(now()));
+        } catch {
+          // Quota bookkeeping is best-effort; the run itself succeeded.
+        }
+      }
       const candidateOutput = candidate(
         nextId(),
         request.selection.sessionRefs,
