@@ -13,6 +13,8 @@ export const meta = {
     sources: "데이터 소스 · {appName} V3.0",
     reports: "브리핑 및 메모리 · {appName} V3.0",
     distill: "증류 워크벤치 · {appName} V3.0",
+    memory: "메모리 허브 · {appName} V3.0",
+    widget: "위젯 · {appName} V3.0",
     settings: "설정 · {appName} V3.0",
     notFound: "페이지를 찾을 수 없음 · {appName} V3.0",
   },

@@ -13,6 +13,8 @@ export const meta = {
     sources: "データソース · {appName} V3.0",
     reports: "ブリーフィングとメモリ · {appName} V3.0",
     distill: "蒸留ワークベンチ · {appName} V3.0",
+    memory: "メモリーハブ · {appName} V3.0",
+    widget: "ウィジェット · {appName} V3.0",
     settings: "設定 · {appName} V3.0",
     notFound: "ページが見つかりません · {appName} V3.0",
   },
