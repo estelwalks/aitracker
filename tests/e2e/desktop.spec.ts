@@ -177,7 +177,7 @@ test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
   await page.waitForURL(/locale=/, { timeout: 15_000 });
   await page.waitForTimeout(1000);
 
-  const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
+  const search = page.getByPlaceholder("搜索 Skill 名称、源路径或能力");
   await search.fill("draw.io");
   // 结果卡以真实名称/描述渲染 draw.io 文本（搜索框的 value 不参与 getByText 匹配）
   await expect(page.getByText(/draw\.io/i).first()).toBeVisible({
