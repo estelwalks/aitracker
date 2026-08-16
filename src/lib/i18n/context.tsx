@@ -53,7 +53,7 @@ const useBrowserLayoutEffect =
  * when the language switches (route `head()` re-runs only on navigation).
  */
 const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
-  ["/agents", "meta.titles.skills"],
+  ["/agents", "meta.titles.agents"],
   ["/security", "meta.titles.security"],
   ["/sources", "meta.titles.sources"],
   ["/reports", "meta.titles.reports"],
