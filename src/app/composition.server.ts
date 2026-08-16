@@ -9,6 +9,8 @@ import type { Clock } from "../platform/persistence/contracts.ts";
 import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
 import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
+import { createTaskApi } from "../modules/tasks/application/task-api.ts";
+import type { TaskApi } from "../modules/tasks/application/task-api.ts";
 import {
   DEFAULT_TASK_PREFERENCES,
   DEFAULT_TASK_RUNS,
@@ -107,6 +109,13 @@ export interface CompositionRoot {
   readonly scheduler: TaskScheduler;
   readonly preferences: TaskPreferenceRepository;
   readonly runs: TaskRunRepository;
+  /**
+   * Task use-case API (preferences, definitions, runs). Exposed so feature
+   * server functions can drive the scheduler through the same validated
+   * application layer the UI uses — e.g. the reports schedule sync writes the
+   * reports.generate preference here.
+   */
+  readonly taskApi: TaskApi;
   /**
    * AI executor for distillation/reports. Backed by the provider registry with
    * the offline provider registered, so consumers get a deterministic fallback
@@ -388,10 +397,13 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     executors: executorRegistry.executors,
   });
 
+  const taskApi = createTaskApi({ scheduler, preferences, runs });
+
   return {
     scheduler,
     preferences,
     runs,
+    taskApi,
     aiExecutor,
     modelProfiles,
     reports,

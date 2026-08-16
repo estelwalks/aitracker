@@ -76,6 +76,36 @@ test("preferences migrate v1 and reject unknown task or out-of-range schedule", 
   });
 });
 
+test("preference schema accepts a monthly schedule for a report task", () => {
+  const parsed = preferenceSchema(clock).parse({
+    schemaVersion: 2,
+    updatedAt: "2026-08-07T00:00:00.000Z",
+    tasks: {
+      "reports.generate": {
+        enabled: true,
+        schedule: { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
+      },
+    },
+  });
+  assert.deepEqual(parsed.tasks["reports.generate"], {
+    enabled: true,
+    schedule: { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
+  });
+  // Out-of-range dayOfMonth is still rejected.
+  assert.throws(() =>
+    preferenceSchema(clock).parse({
+      schemaVersion: 2,
+      updatedAt: "2026-08-07T00:00:00.000Z",
+      tasks: {
+        "reports.generate": {
+          enabled: true,
+          schedule: { kind: "monthly", dayOfMonth: 32, localTime: "09:00" },
+        },
+      },
+    }),
+  );
+});
+
 test("corrupt preferences are backed up and defaulted", async () => {
   await temp(async (dir) => {
     const path = join(dir, "preferences.json");
