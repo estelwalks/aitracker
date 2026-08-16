@@ -60,6 +60,13 @@ import {
   createAtomicCandidateStore,
   distillCandidateStoreSchema,
 } from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
+import {
+  DEFAULT_DISTILL_QUOTA_FILE,
+  createAtomicDistillQuotaStore,
+  distillDailyQuotaLimit,
+  distillQuotaStoreSchema,
+  type DistillQuotaPort,
+} from "../modules/distillation/quota.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
 import type {
   ResumeSessionPort,
@@ -113,7 +120,7 @@ export interface CompositionRoot {
    * Task use-case API (preferences, definitions, runs). Exposed so feature
    * server functions can drive the scheduler through the same validated
    * application layer the UI uses — e.g. the reports schedule sync writes the
-   * reports.generate preference here.
+   * `reports.generate` preference here.
    */
   readonly taskApi: TaskApi;
   /**
@@ -144,6 +151,13 @@ export interface CompositionRoot {
    * that writes to the knowledge repository.
    */
   readonly distillation: DistillationApplication;
+  /**
+   * Server-side daily quota ledger for real-model distillation calls (Story
+   * B-600). Persists only `{ date, used }` under
+   * `~/.trusttools/tasks/distill-quota.v1.json`; the daily limit is a
+   * constant/env value, so the count cannot be raised from the renderer.
+   */
+  readonly distillQuota: DistillQuotaPort;
   /**
    * Knowledge repository backing the memory hub and distillation approval
    * writes. Persists only privacy-filtered metadata — asset ids, kinds,
@@ -353,11 +367,27 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     schema: distillCandidateStoreSchema(),
     clock,
   });
+  // B-600 server-side daily quota ledger for real-model distillation calls.
+  // The file stores only `{ date, used }`; the limit is a constant/env value
+  // (`TRUSTTOOLS_DISTILL_DAILY_QUOTA`, default 20), so the renderer can never
+  // tamper with either the count or the ceiling. Increments serialise through
+  // the same file lock as the other task stores.
+  const distillQuotaStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "distill-quota.v1.json"),
+    defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
+    schema: distillQuotaStoreSchema(),
+    clock,
+  });
+  const distillQuota = createAtomicDistillQuotaStore({
+    store: distillQuotaStore,
+    limit: distillDailyQuotaLimit(),
+  });
   const distillation = createDistillationApplication({
     sessions,
     ai: aiExecutor,
     knowledge,
     persistence: createAtomicCandidateStore({ store: candidateStore }),
+    quota: distillQuota,
     // Story B-100: user-selected transcript segments. The adapter stays
     // behind a dynamic import of the sessions transport so this composition
     // root never forms a static cycle with the sessions module; reads are
@@ -426,6 +456,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     modelProfiles,
     reports,
     distillation,
+    distillQuota,
     knowledge,
     sessions,
     resumeSession,

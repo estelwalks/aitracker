@@ -13,6 +13,7 @@ import type {
   SessionTranscript,
 } from "../sessions/contracts.ts";
 import type { Result } from "../../shared/result.ts";
+import type { DistillQuota } from "./quota.ts";
 
 export const distillationModuleId = "distillation" as const;
 export type DistillationModuleId = typeof distillationModuleId;
@@ -28,7 +29,8 @@ export type DistillationErrorCode =
   | "errors.distillation.notApproved"
   | "errors.distillation.invalidName"
   | "errors.distillation.invalidAgent"
-  | "errors.distillation.skillExists";
+  | "errors.distillation.skillExists"
+  | "errors.distillation.quotaExceeded";
 
 export type ApprovalState = "waiting-approval" | "approved" | "cancelled";
 export type DistillationMode =
@@ -172,6 +174,17 @@ export interface DistillationPorts {
   readonly knowledge?: KnowledgeRepository;
   /** Optional durable candidate store; degrades to in-memory when absent. */
   readonly persistence?: CandidatePersistence;
+  /**
+   * Optional server-side daily quota ledger for real-model calls (Story B-600).
+   * When present, `start` rejects a real-model request that has exhausted
+   * today's quota and records one usage after a successful run. Offline runs
+   * never touch it; a missing or failing quota port degrades to unlimited so
+   * distillation is never blocked by quota bookkeeping itself.
+   */
+  readonly quota?: {
+    read(): Promise<DistillQuota>;
+    increment(date: string): Promise<DistillQuota>;
+  };
   readonly now?: () => Date;
   readonly createCandidateId?: () => string;
 }

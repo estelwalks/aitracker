@@ -61,10 +61,11 @@ function toItem(session: SessionSummary): DistillationSessionItem {
 /**
  * Load the distillation workbench read model. Resolves the selectable sessions
  * from the composition root's shared session port, the complete persisted
- * candidate history and the real model options from the LLM configuration
- * probe. The same `listAll` snapshot powers both candidate cards and counters,
- * avoiding inconsistent or duplicate persistence reads. `locale` is accepted
- * for transport parity; the projection is locale-neutral.
+ * candidate history, the real model options from the LLM configuration probe
+ * and the server-side daily quota projection for real-model calls (Story
+ * B-600). The same `listAll` snapshot powers both candidate cards and
+ * counters, avoiding inconsistent or duplicate persistence reads. `locale` is
+ * accepted for transport parity; the projection is locale-neutral.
  */
 export async function loadDistillation(
   _locale: Locale,
@@ -77,6 +78,17 @@ export async function loadDistillation(
     root.distillation.listAll(),
   ]);
   const sessions = page.ok ? page.value.sessions.map(toItem) : [];
+  // The quota ledger is authoritative on the server; the renderer only reads
+  // this remaining-count projection. A failing read degrades to `null` — the
+  // workbench keeps working and shows the offline hint instead.
+  const quota = await root.distillQuota
+    .read()
+    .then((current) => ({
+      used: current.used,
+      limit: current.limit,
+      remaining: Math.max(0, current.limit - current.used),
+    }))
+    .catch(() => null);
   const { readLLMConfig } = await import("../ai-orchestration/config.ts");
   const { getModelProfileRepository } =
     await import("../ai-orchestration/model-profile.server.ts");
@@ -114,14 +126,16 @@ export async function loadDistillation(
         .length,
     },
     modelOptions,
+    quota,
   };
 }
 
 /**
  * Start a distillation run. Validates the selection, delegates to the
  * application's `start` (which sanitises session metadata before invoking the
- * model), and returns the privacy-safe candidate. Never returns raw session
- * content.
+ * model), and returns the privacy-safe candidate. Optional user-selected
+ * transcript segments are forwarded as-is: the application loads them into
+ * memory for the AI request only — never returned here, never persisted.
  */
 export async function startDistillation(
   input: DistillationStartInput,
