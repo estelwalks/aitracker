@@ -7,7 +7,27 @@
 | 对齐基准 | `docs/V3.0_TrustTools/project-sparkle-hub-92-c957c2e6-main`（原型） |
 | 创建日期 | 2026-08-16                                                         |
 | 生成工具 | agile-feature-dev                                                  |
-| 文档状态 | 计划中                                                            |
+| 文档状态 | 已验证（2026-08-16：全量 lint/tsc/单测/e2e 通过）                  |
+
+## 完成记录（2026-08-16）
+
+全部 7 个 Story 已交付并提交（分支 feature/ui-rebuild）：
+
+| Story | 提交 | 说明 |
+|-------|------|------|
+| 共享接线 | `8601261` | AppShell 导航 10 项 + /memory /widget 路由骨架 + 四语言 nav/meta |
+| S-100 /memory | `735b0e6` | knowledge 查询层（list/create/update/archive，隐私安全投影）+ MemoryPage 完整 UI |
+| S-200 /widget | `0275ff9` | 浮窗三 Tab/桌面小中大/菜单栏预览 + WidgetConfigPanel（localStorage）+ 设置分类 |
+| S-300 /chats/$id | `cf84003` | transcript-reader（仅内存）+ ChatHistorySidebar + 气泡/片段框选 + 简报弹窗 |
+| S-400 蒸馏入口 | `5791f0c` | DistillButton + notifyDistillStarted + 首页/会话列表接线 |
+| S-500 多模型 Profile | `08e1195` | 服务端安全存储（apiKey 不进 renderer）+ ModelProfilesSection + 蒸馏接入 |
+| S-600 次要面板 | `c24306d` | RuntimeBlockPanel（真实契约派生）+ Markdown 渲染器 + 会话洞察卡 |
+| 架构收敛 | `2348d8c` | widget 模块骨架补齐 + 跨模块公共入口收敛（违规回基线 16 项） |
+| e2e 修复 | `e181787` | 陈旧断言更新 + hydration 等待 + 新路由冒烟 |
+
+**验收结果**：lint 0 errors · tsc 0 errors · 单测 893/905（12 失败均为基线既有：
+tool-registry 基线 6 + optimization 时间炸弹 5 + perf 负载 1，无新增回归）·
+e2e 22/22 全绿。
 
 ## 背景结论（Phase 0-1 完成）
 
