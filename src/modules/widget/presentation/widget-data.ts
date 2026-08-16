@@ -246,9 +246,9 @@ export function useWidgetData(): WidgetDataModel {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (shared.locale !== locale || shared.data == null) {
-      loadShared(locale);
-    }
+    // 拉取总是执行：首次订阅与手动刷新（refreshKey 变化）都会真实重新拉取
+    // dashboard 读模型；`busy` 去重避免并发重复请求。
+    loadShared(locale);
     const timer = window.setInterval(
       () => loadShared(locale),
       REFRESH_INTERVAL_MS,
