@@ -5,9 +5,13 @@ import type {
   KnowledgeRepository,
   KnowledgeVersion,
 } from "../../knowledge/contracts.ts";
-import type { SessionSummary } from "../../sessions/contracts.ts";
+import type {
+  SessionSummary,
+  SessionTranscript,
+} from "../../sessions/contracts.ts";
 import type { CandidatePersistence } from "../contracts.ts";
 import type { CandidateOutput } from "../contracts.ts";
+import type { SegmentRef, SessionRef } from "../contracts.ts";
 import { createSessionQueryService } from "../../sessions/index.ts";
 import { createDistillationApplication } from "./index.ts";
 
@@ -83,6 +87,9 @@ function setup(
   aiResult: AIExecutionResult = execution(),
   rows: readonly SessionSummary[] = [session("s1"), session("s2")],
   persistence?: CandidatePersistence,
+  transcriptPort?: {
+    load(ref: SessionRef): Promise<SessionTranscript | null>;
+  },
 ) {
   const calls: string[] = [];
   const knowledge = {
@@ -133,11 +140,22 @@ function setup(
     ai: { execute: async () => aiResult },
     knowledge,
     persistence,
+    ...(transcriptPort ? { transcriptPort } : {}),
     createCandidateId: () => "candidate-1",
     now: () => new Date("2026-08-07T00:02:00.000Z"),
   });
   return { app, calls };
 }
+
+/** In-memory SessionTranscript double for user-selected segment reads. */
+const transcript = (
+  sessionId: string,
+  messages: readonly { role: "user" | "assistant"; text: string }[],
+): SessionTranscript => ({
+  sessionId,
+  source: "codex",
+  messages: [...messages],
+});
 
 /** In-memory CandidatePersistence double that captures writes and supports re-hydration. */
 function fakePersistence(initial: CandidateOutput[] = []) {
@@ -388,4 +406,228 @@ test("approve/cancel on a missing or non-waiting candidate never writes through"
   assert.equal((await app.approve("unknown", "user")).ok, false);
   assert.equal((await app.cancel("unknown")).ok, false);
   assert.equal(persistence.snapshot().length, 0);
+});
+
+test("user-selected segments append segment text to the AI input and never persist it", async () => {
+  let input = "";
+  const persistence = fakePersistence();
+  const loadTranscript = async (
+    ref: SessionRef,
+  ): Promise<SessionTranscript | null> =>
+    ref.sessionId === "s1"
+      ? transcript("s1", [
+          { role: "user", text: "please fix the parser bug" },
+          { role: "assistant", text: "fixed the parser loop" },
+          { role: "user", text: "add a test for empty input" },
+        ])
+      : null;
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({
+      list: async () => [session("s1"), session("s2")],
+    }),
+    ai: {
+      execute: async (req) => {
+        input = req.input.text;
+        return execution();
+      },
+    },
+    persistence: persistence.port,
+    transcriptPort: { load: loadTranscript },
+  });
+  const result = await app.start(
+    request({
+      selection: {
+        sessionRefs: [
+          { source: "codex", sessionId: "s1" },
+          { source: "codex", sessionId: "s2" },
+        ],
+        segments: [
+          { source: "codex", sessionId: "s1", startIndex: 1, endIndex: 2 },
+        ],
+      },
+    }),
+  );
+  assert.equal(result.ok, true);
+  assert.match(input, /--- 用户选择片段 ---/);
+  assert.match(input, /fixed the parser loop/);
+  assert.match(input, /add a test for empty input/);
+  // The inclusive window [1..2] must exclude message 0.
+  assert.doesNotMatch(input, /please fix the parser bug/);
+  // The raw segment text must never reach the persisted candidate: the
+  // candidate carries only the AI-generated summary, not the input.
+  const persisted = JSON.stringify(persistence.snapshot());
+  assert.doesNotMatch(persisted, /parser bug|parser loop|empty input/);
+});
+
+test("a failing or missing segment read degrades to metadata-only distillation", async () => {
+  const build = (transcriptPort: {
+    load(ref: SessionRef): Promise<SessionTranscript | null>;
+  }) => {
+    let input = "";
+    const app = createDistillationApplication({
+      sessions: createSessionQueryService({
+        list: async () => [session("s1")],
+      }),
+      ai: {
+        execute: async (req) => {
+          input = req.input.text;
+          return execution();
+        },
+      },
+      transcriptPort,
+    });
+    return { app, input: () => input };
+  };
+
+  // Reader throws → segment dropped, metadata distillation still succeeds.
+  const failing = build({
+    load: async (): Promise<SessionTranscript | null> => {
+      throw new Error("reader exploded");
+    },
+  });
+  const failedResult = await failing.app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: [
+          { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 2 },
+        ],
+      },
+    }),
+  );
+  assert.equal(failedResult.ok, true);
+  assert.doesNotMatch(failing.input(), /--- 用户选择片段 ---/);
+  assert.match(failing.input(), /Session 1: codex:s1/);
+
+  // Null transcript (session not found / unsupported source) degrades too.
+  const missing = build({
+    load: async (): Promise<SessionTranscript | null> => null,
+  });
+  const missingResult = await missing.app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: [
+          { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 2 },
+        ],
+      },
+    }),
+  );
+  assert.equal(missingResult.ok, true);
+  assert.doesNotMatch(missing.input(), /--- 用户选择片段 ---/);
+  assert.match(missing.input(), /Session 1: codex:s1/);
+});
+
+test("out-of-range segment windows clamp to the available messages", async () => {
+  let input = "";
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({
+      list: async () => [session("s1")],
+    }),
+    ai: {
+      execute: async (req) => {
+        input = req.input.text;
+        return execution();
+      },
+    },
+    transcriptPort: {
+      load: async (): Promise<SessionTranscript | null> =>
+        transcript("s1", [
+          { role: "user", text: "message zero" },
+          { role: "assistant", text: "message one" },
+        ]),
+    },
+  });
+  const result = await app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: [
+          { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 99 },
+        ],
+      },
+    }),
+  );
+  assert.equal(result.ok, true);
+  assert.match(input, /--- 用户选择片段 ---/);
+  assert.match(input, /message zero/);
+  assert.match(input, /message one/);
+});
+
+test("invalid segments are rejected before the model runs", async () => {
+  let invoked = false;
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({
+      list: async () => [session("s1"), session("s2")],
+    }),
+    ai: {
+      execute: async () => {
+        invoked = true;
+        return execution();
+      },
+    },
+  });
+  const malformed = [
+    // Negative window bound.
+    { source: "codex", sessionId: "s1", startIndex: -1, endIndex: 2 },
+    // Inverted window (start > end).
+    { source: "codex", sessionId: "s1", startIndex: 3, endIndex: 1 },
+    // Non-integer bound.
+    { source: "codex", sessionId: "s1", startIndex: 1.5, endIndex: 2 },
+    // Non-opaque source.
+    { source: "../codex", sessionId: "s1", startIndex: 0, endIndex: 1 },
+  ] as SegmentRef[];
+  for (const segment of malformed) {
+    const result = await app.start(
+      request({
+        selection: {
+          sessionRefs: [{ source: "codex", sessionId: "s1" }],
+          segments: [segment],
+        },
+      }),
+    );
+    assert.equal(result.ok, false);
+  }
+  // A segment pointing outside the selection is rejected too.
+  const unselected = await app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: [
+          { source: "codex", sessionId: "s2", startIndex: 0, endIndex: 1 },
+        ],
+      },
+    }),
+  );
+  assert.equal(unselected.ok, false);
+  // Duplicate windows are rejected.
+  const duplicate = await app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: [
+          { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 1 },
+          { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 1 },
+        ],
+      },
+    }),
+  );
+  assert.equal(duplicate.ok, false);
+  // More than 8 segments are rejected.
+  const tooMany = Array.from({ length: 9 }, (_, index) => ({
+    source: "codex",
+    sessionId: "s1",
+    startIndex: index,
+    endIndex: index,
+  }));
+  const overLimit = await app.start(
+    request({
+      selection: {
+        sessionRefs: [{ source: "codex", sessionId: "s1" }],
+        segments: tooMany,
+      },
+    }),
+  );
+  assert.equal(overLimit.ok, false);
+  assert.equal(invoked, false);
 });

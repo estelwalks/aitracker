@@ -34,6 +34,7 @@ export type {
 };
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const MAX_SELECTION = 8;
 
 function validateSessionRefs(value: unknown): {
   source: string;
@@ -41,7 +42,7 @@ function validateSessionRefs(value: unknown): {
 }[] {
   if (!Array.isArray(value) || value.length === 0)
     throw new AppError("errors.distillation.invalidSelection");
-  if (value.length > 8)
+  if (value.length > MAX_SELECTION)
     throw new AppError("errors.distillation.invalidSelection");
   const refs = value.map((item) => {
     if (
@@ -63,6 +64,93 @@ function validateSessionRefs(value: unknown): {
   return refs;
 }
 
+/**
+ * Validate the optional user-selected transcript segments (Story B-100).
+ * Each segment references an opaque session plus an inclusive 0-based message
+ * window; windows must be non-negative and non-inverted. The transport never
+ * reads the transcript — it only forwards the refs for the application to
+ * load in memory.
+ */
+function validateSegments(value: unknown): {
+  source: string;
+  sessionId: string;
+  startIndex: number;
+  endIndex: number;
+}[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length === 0)
+    throw new AppError("errors.distillation.invalidSelection");
+  if (value.length > MAX_SELECTION)
+    throw new AppError("errors.distillation.invalidSelection");
+  const segments = value.map((item) => {
+    const record = item as {
+      source?: unknown;
+      sessionId?: unknown;
+      startIndex?: unknown;
+      endIndex?: unknown;
+    };
+    if (
+      record == null ||
+      typeof record !== "object" ||
+      typeof record.source !== "string" ||
+      typeof record.sessionId !== "string" ||
+      !OPAQUE_ID.test(record.source) ||
+      !OPAQUE_ID.test(record.sessionId) ||
+      !Number.isInteger(record.startIndex) ||
+      !Number.isInteger(record.endIndex) ||
+      (record.startIndex as number) < 0 ||
+      (record.endIndex as number) < 0 ||
+      (record.startIndex as number) > (record.endIndex as number)
+    ) {
+      throw new AppError("errors.distillation.invalidSelection");
+    }
+    return {
+      source: record.source,
+      sessionId: record.sessionId,
+      startIndex: record.startIndex as number,
+      endIndex: record.endIndex as number,
+    };
+  });
+  const keys = segments.map(
+    (segment) =>
+      `${segment.source}:${segment.sessionId}:${segment.startIndex}:${segment.endIndex}`,
+  );
+  if (new Set(keys).size !== keys.length)
+    throw new AppError("errors.distillation.invalidSelection");
+  return segments;
+}
+
+/**
+ * Normalize + validate the distillation start input. Exported for route
+ * tests (same pattern as `validateSessionsPageInput`); the server fn wraps it.
+ */
+export function validateStartDistillationInput(
+  input: unknown,
+): DistillationStartInput {
+  const refs = validateSessionRefs(
+    (input as { sessionRefs?: unknown })?.sessionRefs,
+  );
+  const segments = validateSegments(
+    (input as { segments?: unknown })?.segments,
+  );
+  const modelId =
+    typeof (input as { modelId?: unknown })?.modelId === "string" &&
+    (input as { modelId: string }).modelId.trim().length > 0
+      ? (input as { modelId: string }).modelId.trim()
+      : undefined;
+  const promptText =
+    typeof (input as { promptText?: unknown })?.promptText === "string" &&
+    (input as { promptText: string }).promptText.trim().length > 0
+      ? (input as { promptText: string }).promptText.trim().slice(0, 4_000)
+      : undefined;
+  return {
+    sessionRefs: refs,
+    ...(segments.length > 0 ? { segments } : {}),
+    ...(modelId ? { modelId } : {}),
+    ...(promptText ? { promptText } : {}),
+  };
+}
+
 /** Resolve the distillation read model on the server (route loader). */
 export const getDistillationQuery = createServerFn({ method: "GET" })
   .inputValidator((value: Locale) => value)
@@ -71,25 +159,9 @@ export const getDistillationQuery = createServerFn({ method: "GET" })
     return loadDistillation(data);
   });
 
-/** Start a distillation run from the selected session refs. */
+/** Start a distillation run from the selected session refs (+ optional segments). */
 export const startDistillation = createServerFn({ method: "POST" })
-  .validator((input: DistillationStartInput) => {
-    const refs = validateSessionRefs(input?.sessionRefs);
-    const modelId =
-      typeof input?.modelId === "string" && input.modelId.trim().length > 0
-        ? input.modelId.trim()
-        : undefined;
-    const promptText =
-      typeof input?.promptText === "string" &&
-      input.promptText.trim().length > 0
-        ? input.promptText.trim().slice(0, 4_000)
-        : undefined;
-    return {
-      sessionRefs: refs,
-      ...(modelId ? { modelId } : {}),
-      ...(promptText ? { promptText } : {}),
-    };
-  })
+  .validator(validateStartDistillationInput)
   .handler(async ({ data }): Promise<DistillationStartResponse> => {
     const { startDistillation: run } = await import("./api.server.ts");
     return run(data);

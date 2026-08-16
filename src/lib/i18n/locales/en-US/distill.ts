@@ -71,11 +71,6 @@ export const distill = {
   running: "Distilling…",
   runSummary: "{count} real sessions selected · recommended settings ready",
   selectionLimit: "8-session limit reached",
-  quotaLabel: "Official quota",
-  quotaRemaining: "{count} official-model runs left today",
-  quotaExhausted: "Today's official-model distillation quota is used up",
-  quotaManage: "Manage models",
-  quotaOffline: "Offline mode does not consume quota",
   resultsTitle: "Results",
   resultsSummary: "{count} total · {approved} approved",
   latestResult: "Latest result",
@@ -127,5 +122,10 @@ export const distill = {
       "Distill the {count} selected {noun} into a local Skill ({unit})",
     noun: "session(s)",
     unit: "in total",
+  },
+  segment: {
+    banner: "{count} message segment(s) carried over",
+    clear: "Clear",
+    origin: "From {source} · {sessionId}",
   },
 } as const;

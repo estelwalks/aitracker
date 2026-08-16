@@ -3,7 +3,10 @@ import type {
   AIExecutionResult,
   AIRequest,
 } from "../../ai-orchestration/contracts.ts";
-import type { SessionSummary } from "../../sessions/contracts.ts";
+import type {
+  SessionSummary,
+  SessionTranscript,
+} from "../../sessions/contracts.ts";
 import type {
   CandidateOutput,
   DistillationApplication,
@@ -11,27 +14,23 @@ import type {
   DistillationPorts,
   DistillationRequest,
   DistillationResult,
+  SegmentMaterial,
+  SegmentRef,
   SessionRef,
 } from "../contracts.ts";
 import {
   candidate,
   controlledContext,
   controlledSessionSummary,
+  extractSegmentMessages,
   isOpaqueSessionRef,
+  isValidSegmentRef,
+  segmentMarkdown,
 } from "../domain.ts";
-import { localDateKey, type DistillQuota } from "../quota.ts";
 
 const MAX_SELECTION = 8;
-
-/**
- * A real-model distillation call is one routed to a genuine model endpoint
- * (a saved S-500 profile or the env-configured LLM) rather than the
- * deterministic offline fallback. Only these calls consume the daily quota,
- * because only they can incur real provider cost.
- */
-function isRealModelRequest(request: DistillationRequest): boolean {
-  return request.modelId !== "offline";
-}
+/** Marker separating the controlled metadata context from user-picked segments. */
+const SEGMENT_SECTION = "--- 用户选择片段 ---";
 const fallbackExecution = (request: AIRequest): AIExecutionResult => ({
   summary: {
     requestId: request.requestId,
@@ -61,7 +60,26 @@ function validRequest(request: DistillationRequest): boolean {
   )
     return false;
   const keys = refs.map((ref) => `${ref.source}:${ref.sessionId}`);
-  return new Set(keys).size === keys.length;
+  if (new Set(keys).size !== keys.length) return false;
+
+  const segments = request.selection.segments;
+  if (segments == null || segments.length === 0) return true;
+  if (segments.length > MAX_SELECTION) return false;
+  if (segments.some((segment) => !isValidSegmentRef(segment))) return false;
+  // Every segment must point at a session that is part of the selection so
+  // the distilled material always carries its controlled metadata context.
+  const selectedKeys = new Set(keys);
+  if (
+    segments.some(
+      (segment) => !selectedKeys.has(`${segment.source}:${segment.sessionId}`),
+    )
+  )
+    return false;
+  const segmentKeys = segments.map(
+    (segment) =>
+      `${segment.source}:${segment.sessionId}:${segment.startIndex}:${segment.endIndex}`,
+  );
+  return new Set(segmentKeys).size === segmentKeys.length;
 }
 
 function findSession(sessions: readonly SessionSummary[], ref: SessionRef) {
@@ -69,6 +87,44 @@ function findSession(sessions: readonly SessionSummary[], ref: SessionRef) {
     (session) =>
       session.source === ref.source && session.sessionId === ref.sessionId,
   );
+}
+
+/**
+ * Load every user-selected transcript segment into memory and shape it into
+ * `SegmentMaterial`. Any failure (missing transcript, reader error, empty
+ * window) drops that segment rather than failing the distillation — matching
+ * the existing "session not found" degrade strategy.
+ */
+async function loadSegmentMaterials(
+  segments: readonly SegmentRef[] | undefined,
+  transcriptPort: DistillationPorts["transcriptPort"],
+  titles: ReadonlyMap<string, string>,
+): Promise<readonly SegmentMaterial[]> {
+  if (segments == null || segments.length === 0 || transcriptPort == null)
+    return [];
+  const materials: SegmentMaterial[] = [];
+  for (const segment of segments) {
+    let transcript: SessionTranscript | null = null;
+    try {
+      transcript = await transcriptPort.load({
+        source: segment.source,
+        sessionId: segment.sessionId,
+      });
+    } catch {
+      transcript = null;
+    }
+    if (transcript == null) continue;
+    const messages = extractSegmentMessages(transcript, segment);
+    if (messages.length === 0) continue;
+    const title = titles.get(`${segment.source}:${segment.sessionId}`);
+    materials.push({
+      source: segment.source,
+      sessionId: segment.sessionId,
+      ...(title ? { title } : {}),
+      messages,
+    });
+  }
+  return materials;
 }
 
 export function createDistillationApplication(
@@ -106,25 +162,6 @@ export function createDistillationApplication(
         return err("errors.distillation.invalidSelection");
       if (request.signal?.aborted) return err("errors.distillation.cancelled");
 
-      // B-600 server-side quota: a real-model request that has exhausted
-      // today's quota is rejected BEFORE the model is invoked. A missing or
-      // failing quota port degrades to unlimited — distillation must never be
-      // blocked by quota bookkeeping itself.
-      const realModel = isRealModelRequest(request);
-      let quotaState: DistillQuota | undefined;
-      if (realModel && ports.quota) {
-        try {
-          quotaState = await ports.quota.read();
-        } catch {
-          quotaState = undefined;
-        }
-        if (quotaState && quotaState.used >= quotaState.limit) {
-          return err("errors.distillation.quotaExceeded", {
-            limit: quotaState.limit,
-          });
-        }
-      }
-
       const page = await ports.sessions.query({
         page: 1,
         pageSize: 100,
@@ -139,12 +176,31 @@ export function createDistillationApplication(
       const controlled = rows.map((row, index) =>
         controlledSessionSummary(row!, request.selection.sessionRefs[index]!),
       );
+      const context = controlledContext(controlled);
+      // User-selected transcript segments are appended to the AI input only.
+      // The text lives in memory for this request — it never reaches the
+      // candidate, the persistence store, or any other durable output.
+      const titles = new Map(
+        controlled.map((row) => [
+          `${row.ref.source}:${row.ref.sessionId}`,
+          row.title,
+        ]),
+      );
+      const materials = await loadSegmentMaterials(
+        request.selection.segments,
+        ports.transcriptPort,
+        titles,
+      );
+      const segmentBlock =
+        materials.length > 0
+          ? `\n\n${SEGMENT_SECTION}\n${segmentMarkdown(materials)}`
+          : "";
       const aiRequest: AIRequest = {
         requestId: request.requestId,
         modelId: request.modelId,
         providerId: request.providerId,
         prompt: request.prompt,
-        input: { text: controlledContext(controlled) },
+        input: { text: `${context}${segmentBlock}` },
         budgetUsd: request.budgetUsd,
         timeoutMs: request.timeoutMs,
         signal: request.signal,
@@ -157,15 +213,6 @@ export function createDistillationApplication(
       }
       if (request.signal?.aborted || execution.summary.status === "cancelled")
         return err("errors.distillation.cancelled");
-      // Record one real-model call for today once the run actually completes.
-      // A failed write must never fail the run; offline runs never get here.
-      if (realModel && ports.quota) {
-        try {
-          await ports.quota.increment(localDateKey(now()));
-        } catch {
-          // Quota bookkeeping is best-effort; the run itself succeeded.
-        }
-      }
       const candidateOutput = candidate(
         nextId(),
         request.selection.sessionRefs,
