@@ -2,14 +2,10 @@
 export const memory = {
   metaDescription:
     "メモリーハブは蒸留で生まれたプロファイルとタスク記憶を管理：ソース別グループ、タイプ別フィルタ、手動追加・編集・削除に対応。",
-  placeholderTitle: "メモリーハブは準備中です",
-  placeholderDesc:
-    "メモリーハブページをプロトタイプに合わせて構築中です。まもなくローカルの記憶アセットを閲覧・編集できます。",
-  title: "メモリーハブ",
   empty: "メモリ項目はまだありません",
   emptyDesc:
     "蒸留ワークベンチで「プロファイル」または「タスク記憶」を選ぶと、成果物が自動的にここへ貯まります。手動で追加することもできます。",
-  searchPlaceholder: "メモリのタイトル・要約・ソースを検索",
+  searchPlaceholder: "メモリのタイトル・本文・ソースを検索",
   add: "メモリを追加",
   goDistill: "蒸留へ",
   source: "ソース",
@@ -30,6 +26,7 @@ export const memory = {
   originManual: "手動",
   sourceDistill: "蒸留",
   sourceUnknown: "不明なソース",
+  insightTitle: "今日のインサイト",
   insightEmpty:
     "メモリ項目はまだありません：蒸留を実行するか、手動で追加してください。",
   insightTotal:
