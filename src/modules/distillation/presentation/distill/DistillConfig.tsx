@@ -4,6 +4,7 @@ import {
   ChevronDown,
   FlaskConical,
   FolderOpen,
+  Info,
   Play,
   Search,
   Sparkles,
@@ -11,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
 import { Panel, TTButton } from "../../../../components/tt";
@@ -38,6 +40,58 @@ export interface DistillConfigModelOption {
   readonly id: string;
   readonly label: string;
   readonly offline?: boolean;
+}
+
+/** Renderer-safe projection of the server-side daily quota (Story B-600). */
+export interface DistillQuotaView {
+  readonly used: number;
+  readonly limit: number;
+  /** Calls still available today (`max(0, limit - used)`). */
+  readonly remaining: number;
+}
+
+/**
+ * One-line quota status for the config panel. Real-model runs consume the
+ * daily quota; offline runs are deterministic and never counted. An exhausted
+ * quota shows the warning copy plus a link into the model-profiles settings.
+ */
+function QuotaHint({
+  quota,
+  realModel,
+}: {
+  quota: DistillQuotaView | null;
+  realModel: boolean;
+}) {
+  const { t } = useI18n();
+  if (!quota || !realModel) {
+    return (
+      <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
+        <Info className="size-3" />
+        {t("distill.quotaOffline")}
+      </span>
+    );
+  }
+  if (quota.remaining <= 0) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1.5 font-mono text-[10.5px] text-warn">
+        <AlertTriangle className="size-3 shrink-0" />
+        {t("distill.quotaExhausted")}
+        <Link
+          to="/settings"
+          search={{ section: "model" }}
+          className="rounded bg-surface-2 px-1.5 py-0.5 text-primary hover:bg-accent"
+        >
+          {t("distill.quotaManage")}
+        </Link>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
+      <Sparkles className="size-3" />
+      {t("distill.quotaRemaining", { count: quota.remaining })}
+    </span>
+  );
 }
 
 function ConfigRow({
@@ -227,6 +281,8 @@ export function DistillConfig({
   modelId: string;
   onModelId: (value: string) => void;
   modelOptions: readonly DistillConfigModelOption[];
+  /** Server-side daily quota projection; `null` when the ledger is unavailable. */
+  quota: DistillQuotaView | null;
   promptPreset: string;
   onPromptPreset: (value: string) => void;
   promptText: string;
@@ -431,6 +487,13 @@ export function DistillConfig({
             </ConfigRow>
           </>
         )}
+
+        <ConfigRow label={t("distill.quotaLabel")}>
+          <QuotaHint
+            quota={quota}
+            realModel={mode === "pro" && modelId !== "offline"}
+          />
+        </ConfigRow>
 
         <ConfigRow label={t("distill.runLabel")}>
           <div className="flex flex-wrap items-center gap-3">
