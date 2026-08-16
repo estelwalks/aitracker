@@ -1095,9 +1095,19 @@ export function DashboardContribHeatmap({
     left: number;
     top: number;
   } | null>(null);
-  // Reference sizing: 10px cells with a 3px gap, chunked into 7-day columns.
-  const cellSize = 10;
-  const gap = 3;
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setBox(el.clientWidth));
+    observer.observe(el);
+    setBox(el.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+  // Adaptive sizing (reference): cells fill the panel width with a 10–18px
+  // floor/ceiling, so a fullscreen panel does not compress the calendar.
+  const GAP = 3;
   const columns = useMemo(() => {
     const out: DashboardV2CalendarPoint[][] = [];
     for (let index = 0; index < cells.length; index += 7) {
@@ -1105,6 +1115,13 @@ export function DashboardContribHeatmap({
     }
     return out;
   }, [cells]);
+  const cellSize = box
+    ? Math.max(
+        10,
+        Math.min(18, (box - (columns.length - 1) * GAP) / columns.length),
+      )
+    : 10;
+  const gap = GAP;
   const monthTicks = useMemo(() => {
     const ticks: { column: number; label: string }[] = [];
     let previousMonth = -1;
@@ -1143,6 +1160,7 @@ export function DashboardContribHeatmap({
         </div>
       </div>
       <div
+        ref={wrapRef}
         className="tt-xscroll mt-5 pb-1"
         aria-label={t("dashboard.v2.calendarTitle")}
       >
