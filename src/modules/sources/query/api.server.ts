@@ -4,15 +4,27 @@ import {
   type UsageSourcesSummary,
 } from "../../../lib/local-usage/get-usage-sources";
 import { getLocalSkills } from "../../../lib/local-skills/server-fns";
+import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
 import {
   toSourcesQuerySummary,
   type SourcesQuerySummary,
 } from "./presentation/model";
 
-function countSkillBindings(
+/**
+ * Skill-agent label of a tool id: the registry display name (`AI_TOOLS[].nameZh`)
+ * when it is one of the managed SKILL_AGENTS, else null (no Skill root).
+ */
+function skillAgentLabelFor(toolId: string): string | null {
+  const tool = AI_TOOLS.find((candidate) => candidate.id === toolId);
+  return tool != null && SKILL_AGENTS.includes(tool.nameZh)
+    ? tool.nameZh
+    : null;
+}
+
+function countSkillsByAgent(
   snapshot: Awaited<ReturnType<typeof getLocalSkills>>,
-): ReadonlyMap<string, number | null> {
+): Map<string, number> {
   const countByAgent = new Map<string, number>();
   for (const skill of snapshot.skills) {
     for (const installation of skill.installations) {
@@ -22,31 +34,28 @@ function countSkillBindings(
       );
     }
   }
-
-  // Skill scanner agent labels are registry-derived display names. Do not
-  // invent a name normalization: if there is no exact agent mapping, surface
-  // the count as unavailable instead of an unreliable zero.
-  return new Map(
-    AI_TOOLS.map((tool) => [
-      tool.id,
-      Object.hasOwn(snapshot.agents, tool.nameZh)
-        ? (countByAgent.get(tool.nameZh) ?? 0)
-        : null,
-    ]),
-  );
+  return countByAgent;
 }
 
 function projectSources(
   usage: UsageSourcesSummary,
   skills: Awaited<ReturnType<typeof getLocalSkills>>,
 ): SourcesQuerySummary {
-  const skillCounts = countSkillBindings(skills);
+  const countByAgent = countSkillsByAgent(skills);
   return toSourcesQuerySummary({
     ...usage,
-    entries: usage.entries.map((entry) => ({
-      ...entry,
-      skillCount: skillCounts.get(entry.id) ?? null,
-    })),
+    entries: usage.entries.map((entry) => {
+      // Skill scanner agent labels are registry-derived display names. Do not
+      // invent a name normalization: if there is no exact agent mapping, surface
+      // the count as unavailable instead of an unreliable zero.
+      const skillAgent = skillAgentLabelFor(entry.id);
+      return {
+        ...entry,
+        skillCount:
+          skillAgent == null ? null : (countByAgent.get(skillAgent) ?? 0),
+        skillAgent,
+      };
+    }),
   });
 }
 

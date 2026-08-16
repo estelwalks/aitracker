@@ -1,6 +1,9 @@
 // AI 翻訳稿、審校待ち (2026-08)
 export const errors = {
   generic: "操作に失敗しました。もう一度お試しください",
+  sources: {
+    migrateInvalid: "移行引数が不正です",
+  },
   security: {
     dailyLimitReached: "本日のローカルスキャン枠（{limit} 回）を使い切りました",
     fileRequired:
@@ -73,6 +76,8 @@ export const errors = {
     invalidName: "Skill 名が無効です",
     invalidAgent: "対象ツールが利用できません",
     skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
+    quotaExceeded:
+      "今日の公式モデル蒸留枠は使い切りました（1 日 {limit} 回）。明日以降に再試行するか、モデル管理をご確認ください",
   },
   modelProfile: {
     nameRequired: "設定名を入力してください",

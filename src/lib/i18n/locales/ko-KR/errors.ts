@@ -1,6 +1,9 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const errors = {
   generic: "작업에 실패했습니다. 다시 시도해 주세요",
+  sources: {
+    migrateInvalid: "마이그레이션 인자가 올바르지 않습니다",
+  },
   security: {
     dailyLimitReached: "오늘의 로컬 검사 할당량({limit}회)을 모두 사용했습니다",
     fileRequired: "SKILL.md 또는 이를 포함한 Skill 폴더를 선택하세요",
@@ -67,6 +70,8 @@ export const errors = {
     invalidName: "Skill 이름이 올바르지 않습니다",
     invalidAgent: "대상 도구를 사용할 수 없습니다",
     skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
+    quotaExceeded:
+      "오늘 공식 모델 증류 한도를 모두 사용했습니다(하루 {limit}회). 내일 다시 시도하거나 모델 관리를 확인하세요",
   },
   modelProfile: {
     nameRequired: "설정 이름을 입력하세요",

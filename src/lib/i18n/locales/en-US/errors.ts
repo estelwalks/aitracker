@@ -1,5 +1,8 @@
 export const errors = {
   generic: "Operation failed, please try again",
+  sources: {
+    migrateInvalid: "Invalid migration arguments",
+  },
   security: {
     dailyLimitReached: "Today's {limit} local scan quota is used up",
     fileRequired: "Select a SKILL.md file or a Skill folder containing it",
@@ -66,6 +69,8 @@ export const errors = {
     invalidName: "Skill name is invalid",
     invalidAgent: "Target tool is unavailable",
     skillExists: "A Skill with this name already exists; choose another",
+    quotaExceeded:
+      "Today's official-model distillation quota is used up ({limit} per day). Try again tomorrow or manage your models",
   },
   modelProfile: {
     nameRequired: "Enter a profile name",

@@ -20,6 +20,8 @@ export interface SourcesQueryEntry {
   readonly filesConsidered: number;
   /** Null means this source has no reliable Skill-agent mapping. */
   readonly skillCount: number | null;
+  /** Skill-agent label (SKILL_AGENTS) of this source, null when it has none. */
+  readonly skillAgent: string | null;
 }
 export interface SourcesQueryTotals {
   readonly toolCount: number;

@@ -58,9 +58,25 @@ export const sources = {
     skillsUnavailable: "関連 Skill は利用できません",
     lastScan: "最終スキャン {time}",
   },
-  migrate: "ワンクリック移行",
-  migrationUnavailable:
-    "検証済みのコンテキスト移行データソースがないため、移行パッケージを生成できません。",
+  migrate: {
+    button: "ワンクリック移行",
+    noSkills: "このツールには移行できる Skill がありません",
+    title: "Skill 移行 · {name}",
+    desc: "このツールの Skill を、選択したツールの skills ディレクトリへコピーします。",
+    chooseTarget: "対象ツールを選択",
+    selectAll: "すべて選択",
+    clearAll: "選択をクリア",
+    hint: "Skill（SKILL.md）仕様を実装したツールのみ表示します。ソースのツール自体は自動的に除外されます。",
+    overwrite: "同名の既存 Skill を上書きする",
+    count: "選択中 {selected} / {available} 個の対象ツール",
+    confirm: "移行を開始",
+    none: "このツールには移行できる Skill がありません",
+    selectTarget: "対象ツールを 1 つ以上選択してください",
+    done: "移行完了：成功 {succeeded} 件 / スキップ {skipped} 件",
+    doneFailed:
+      "移行完了：成功 {succeeded} 件 / スキップ {skipped} 件 / 失敗 {failed} 件",
+    failed: "移行に失敗しました",
+  },
   toast: {
     rescanDone: "再スキャンが完了しました",
   },
