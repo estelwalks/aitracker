@@ -107,4 +107,16 @@ export const distill = {
   guideStep4Desc:
     "Skill として保存し、「スキル」ページでインストール済みツールに同期します。",
   guideStart: "はじめる",
+  notify: {
+    title: "蒸留タスクを開始しました",
+    desc: "合計 {sessions} 件、所要時間は約 {minutes} 分の見込みです。タスクはバックグラウンドで実行されるため、アプリを閉じないでください。完了すると「ローカル蒸留」リストに表示されます。",
+    go: "今すぐ移動",
+  },
+  button: {
+    label: "選択した内容を蒸留",
+    tooltipEmpty: "蒸留する{noun}を先に選択してください",
+    tooltipReady: "選択した {count} {unit}{noun}をローカル Skill に蒸留します",
+    noun: "セッション",
+    unit: "件の",
+  },
 } as const;
