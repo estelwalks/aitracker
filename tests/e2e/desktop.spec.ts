@@ -25,9 +25,7 @@ const routes = [
 ] as const;
 
 /** Routes whose title is rendered by PageBar (a span, not a heading). */
-const textRoutes = [
-  { path: "/widget", text: "菜单栏小组件" },
-] as const;
+const textRoutes = [{ path: "/widget", text: "菜单栏小组件" }] as const;
 
 async function openRouteWithoutPageErrors(
   page: Page,
