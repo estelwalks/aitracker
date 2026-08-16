@@ -68,6 +68,8 @@ export const ENV = {
   HOME: `${APP_ID.toUpperCase()}_HOME`,
   RELEASE_OWNER: `${APP_ID.toUpperCase()}_RELEASE_OWNER`,
   RELEASE_REPO: `${APP_ID.toUpperCase()}_RELEASE_REPO`,
+  /** Overrides the default daily ceiling for real-model distillation calls. */
+  DISTILL_DAILY_QUOTA: `${APP_ID.toUpperCase()}_DISTILL_DAILY_QUOTA`,
 } as const;
 
 /** Params to pass to every `t()`/`getMessage()` call whose key contains `{appName}`. */

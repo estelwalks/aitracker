@@ -34,6 +34,18 @@ export interface DistillationViewModel {
     label: string;
     offline?: boolean;
   }[];
+  /**
+   * Server-side daily quota for real-model distillation calls (Story B-600).
+   * `null` when the quota ledger is unavailable; the UI then falls back to
+   * the "offline runs don't consume quota" hint. The count is authoritative
+   * on the server — the renderer only ever reads this projection.
+   */
+  readonly quota: {
+    readonly used: number;
+    readonly limit: number;
+    /** Calls still available today (`max(0, limit - used)`). */
+    readonly remaining: number;
+  } | null;
 }
 
 export interface DistillationStartInput {

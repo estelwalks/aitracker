@@ -144,8 +144,11 @@ function NumberField({
 export interface SettingsLoaderData {
   readonly storageUsage: StorageUsage | null;
   readonly storageError: string | null;
-  /** Deep-link target: `?section=scan` opens the 扫描配置 category. */
-  readonly section?: "scan";
+  /**
+   * Deep-link target: `?section=scan` opens the 扫描配置 category,
+   * `?section=model` opens the 模型配置 (model profiles) category.
+   */
+  readonly section?: "scan" | "model";
 }
 
 export function SettingsPage({
@@ -154,7 +157,11 @@ export function SettingsPage({
   readonly loaderData: SettingsLoaderData;
 }) {
   const [category, setCategory] = useState<Category>(() =>
-    loaderData.section === "scan" ? "扫描配置" : "通用",
+    loaderData.section === "scan"
+      ? "扫描配置"
+      : loaderData.section === "model"
+        ? "模型配置"
+        : "通用",
   );
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
   const [autoLaunchStatus, setAutoLaunchStatus] =
