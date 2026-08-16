@@ -134,8 +134,20 @@ export function DistillationPage({
     if (!selected.has(key)) setSegment(null);
   }, [selected, segment]);
   const selectionCount = selected.size;
+  // B-600: a real-model run whose daily quota is exhausted cannot start. The
+  // server re-checks the authoritative ledger on every start, so this only
+  // pre-empts the obvious case; a race is still rejected with
+  // `errors.distillation.quotaExceeded` and toasted by the error path below.
+  const quotaExhausted =
+    mode === "pro" &&
+    modelId !== "offline" &&
+    initial.quota != null &&
+    initial.quota.remaining <= 0;
   const canStart =
-    !busy && selectionCount > 0 && selectionCount <= MAX_SELECTION;
+    !busy &&
+    selectionCount > 0 &&
+    selectionCount <= MAX_SELECTION &&
+    !quotaExhausted;
   const waitingCount = candidates.filter(
     (item) => item.approvalState === "waiting-approval",
   ).length;
@@ -426,6 +438,7 @@ export function DistillationPage({
           modelId={modelId}
           onModelId={setModelId}
           modelOptions={initial.modelOptions}
+          quota={initial.quota}
           promptPreset={promptPreset}
           onPromptPreset={setPromptPreset}
           promptText={promptText}
