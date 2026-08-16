@@ -4,7 +4,7 @@ export const skills = {
   pageHeader: "Skill 管理",
   pageHeaderDesc: "共 {count} 个本地 Skill · 扫描于 {time}",
   pollingHint: "刷新会执行真实本地扫描；不会展示来源内容或本机位置。",
-  searchPlaceholder: "搜索名称或描述…",
+  searchPlaceholder: "搜索 Skill 名称、源路径或能力",
   filter: {
     agentAll: "安装位置：全部",
     source: "来源",

@@ -13,7 +13,7 @@ export const market = {
   },
   empty: {
     noMatch: "没有匹配的 Skill",
-    noMatchDesc: "换一个关键词重新搜索。",
+    noMatchDesc: "换个关键词试试。",
   },
   stats: {
     totalSkills: "上架 Skill",
@@ -26,7 +26,7 @@ export const market = {
     hintLocalInstalled: "本机已安装",
   },
   search: {
-    placeholder: "按名称或描述搜索真实 Skill…",
+    placeholder: "搜索 Skill 名称、源路径或能力",
     keyword: " · 关键词“{keyword}”",
     updatedAt: "数据更新于 {time}",
     perPage: "每页 {count} 条 · 第 {page} 页",
