@@ -5,6 +5,13 @@ export const sessions = {
   pageHeader: "세션 관리",
   pageHeaderDesc:
     "시간, 도구, 프로젝트별 로컬 세션을 탐색하고 사용 가능한 세션을 안전하게 복원합니다.",
+  insight: {
+    title: "Jarvis 세션 인사이트",
+    total: "총 {count}개 세션",
+    sources: "{count}개 도구에서",
+    turns: "총 {count}턴",
+    resumable: "{count}개 세션을 안전하게 복원 가능",
+  },
   range: {
     d7: "최근 7일",
     d30: "최근 30일",
