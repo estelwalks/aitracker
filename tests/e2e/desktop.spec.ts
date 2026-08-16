@@ -21,12 +21,12 @@ const routes = [
   { path: "/security", heading: "安全播报" },
   { path: "/settings", heading: "设置" },
   { path: "/memory", heading: "今日洞察" },
+  { path: "/chats", heading: "今日洞察" },
 ] as const;
 
 /** Routes whose title is rendered by PageBar (a span, not a heading). */
 const textRoutes = [
   { path: "/widget", text: "菜单栏小组件" },
-  { path: "/chats", text: "会话管理" },
 ] as const;
 
 async function openRouteWithoutPageErrors(
