@@ -430,9 +430,14 @@ export function DistillationPage({
             {t("distill.workflow")}
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <TTButton variant="ghost" onClick={() => setShowGuide(true)}>
+            {/* Prototype help control: icon only, title reveals 蒸馏是什么？ */}
+            <TTButton
+              variant="ghost"
+              title={t("distill.guideTitle")}
+              aria-label={t("distill.guideTitle")}
+              onClick={() => setShowGuide(true)}
+            >
               <HelpCircle className="size-3.5" />
-              {t("distill.help")}
             </TTButton>
             <TTButton
               variant="ghost"

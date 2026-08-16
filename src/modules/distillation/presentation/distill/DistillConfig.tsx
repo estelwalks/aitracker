@@ -359,67 +359,67 @@ export function DistillConfig({
     <Panel
       className="mb-5 overflow-visible"
       title={t("distill.configTitle")}
-      bodyClassName="pt-3"
-    >
-      {/* Header row: Quick/Pro switch + quota status + history + manage models
-          (prototype config-card header, lines 847-882). */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/40 pb-3">
-        <div className="inline-flex items-center gap-0.5 rounded-lg bg-surface-2 p-0.5">
-          {(
-            [
-              ["quick", t("common.distillation.modeQuick"), Zap],
-              ["pro", t("common.distillation.modePro"), FlaskConical],
-            ] as const
-          ).map(([key, label, Icon]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onMode(key)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
-                mode === key
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="size-3" /> {label}
-            </button>
-          ))}
-        </div>
-        <span
-          className="ml-auto min-w-0 truncate font-mono text-[11px] text-muted-foreground"
-          title={
-            quota != null && realModel
+      bodyClassName="pt-0"
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick/Pro mode switch (prototype config-card header, 847-882). */}
+          <div className="inline-flex items-center gap-0.5 rounded-lg bg-surface-2 p-0.5">
+            {(
+              [
+                ["quick", t("common.distillation.modeQuick"), Zap],
+                ["pro", t("common.distillation.modePro"), FlaskConical],
+              ] as const
+            ).map(([key, label, Icon]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onMode(key)}
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
+                  mode === key
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-3" /> {label}
+              </button>
+            ))}
+          </div>
+          <span
+            className="min-w-0 max-w-44 truncate font-mono text-[11px] text-muted-foreground"
+            title={
+              quota != null && realModel
+                ? t("distill.quotaHeader", { count: quota.remaining })
+                : hasRealModels
+                  ? t("distill.ownModelConnected")
+                  : t("distill.ownModelUnconfigured")
+            }
+          >
+            {quota != null && realModel
               ? t("distill.quotaHeader", { count: quota.remaining })
               : hasRealModels
                 ? t("distill.ownModelConnected")
-                : t("distill.ownModelUnconfigured")
-          }
-        >
-          {quota != null && realModel
-            ? t("distill.quotaHeader", { count: quota.remaining })
-            : hasRealModels
-              ? t("distill.ownModelConnected")
-              : t("distill.ownModelUnconfigured")}
-        </span>
-        <TTButton variant="ghost" onClick={onHistory} className="shrink-0">
-          <History className="size-3.5" />
-          {t("distill.historyHeader")}
-          {historyCount > 0 ? ` · ${historyCount}` : ""}
-        </TTButton>
-        <Link
-          to="/settings"
-          search={{ section: "model" }}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Settings2 className="size-3.5" />
-          {t("distill.manageModels")}
-        </Link>
-      </div>
-
+                : t("distill.ownModelUnconfigured")}
+          </span>
+          <TTButton variant="ghost" onClick={onHistory} className="shrink-0">
+            <History className="size-3.5" />
+            {t("distill.historyHeader")}
+            {historyCount > 0 ? ` · ${historyCount}` : ""}
+          </TTButton>
+          <Link
+            to="/settings"
+            search={{ section: "model" }}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Settings2 className="size-3.5" />
+            {t("distill.manageModels")}
+          </Link>
+        </div>
+      }
+    >
       {/* E-400: exhausted-quota banner with a one-click switch to the first
           own-model profile (prototype lines 884-903). */}
       {quotaExhausted && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] text-warn">
           <AlertTriangle className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1">{t("distill.quotaOutBanner")}</span>
           {switchTarget && (
