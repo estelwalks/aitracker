@@ -5,7 +5,7 @@ export const skills = {
   pageHeaderDesc: "{count} local skills · scanned at {time}",
   pollingHint:
     "Refresh runs a real local scan; source content and locations are never exposed.",
-  searchPlaceholder: "Search name or description…",
+  searchPlaceholder: "Search skill name, source path, or capability",
   filter: {
     agentAll: "Install location: All",
     source: "Source",

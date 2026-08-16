@@ -6,7 +6,7 @@ export const skills = {
   pageHeaderDesc: "로컬 Skill {count}개 · {time} 스캔됨",
   pollingHint:
     "새로 고침은 실제 로컬 스캔을 실행하며 콘텐츠와 로컬 위치는 노출하지 않습니다.",
-  searchPlaceholder: "이름 또는 설명 검색…",
+  searchPlaceholder: "Skill 이름, 소스 경로 또는 기능 검색",
   filter: {
     agentAll: "설치 위치: 전체",
     source: "소스",
