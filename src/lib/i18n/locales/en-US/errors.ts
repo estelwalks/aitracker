@@ -67,6 +67,22 @@ export const errors = {
     invalidAgent: "Target tool is unavailable",
     skillExists: "A Skill with this name already exists; choose another",
   },
+  modelProfile: {
+    nameRequired: "Enter a profile name",
+    nameTooLong: "Profile name must be 64 characters or fewer",
+    invalidMode: "Invalid profile mode",
+    invalidProtocol: "Invalid protocol",
+    invalidUrl: "Endpoint must be a valid http/https URL",
+    invalidModel:
+      "Invalid model name (letters/digits/._:/- only, up to 120 characters)",
+    apiKeyRequired: "Enter an API key",
+    apiKeyTooShort: "API key must be at least 8 characters",
+    apiKeyTooLong: "API key must be 512 characters or fewer",
+    notFound: "This model profile does not exist or was deleted",
+    testFailed:
+      "Connection test failed — check the endpoint, API key and network",
+    testTimeout: "Connection test timed out (5 seconds)",
+  },
   pricing: {
     modelListInvalid: "Invalid model list",
     rateResponseIncomplete: "Incomplete exchange-rate response",

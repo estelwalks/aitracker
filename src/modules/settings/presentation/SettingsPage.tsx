@@ -56,6 +56,7 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
 import { Field, Toggle } from "./fields";
+import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { SecurityModelConfigSection } from "./SecurityModelConfigSection";
 import { useSecurityClient } from "./use-security-client";
@@ -712,11 +713,14 @@ export function SettingsPage({
 
           {category === "模型配置" && (
             <div>
-              <SecurityModelConfigSection
-                client={securityClient}
-                status={securityStatus}
-                onRetry={() => void refreshSecurity()}
-              />
+              <ModelProfilesSection />
+              <div className="mb-3 mt-4 border-t border-border pt-4">
+                <SecurityModelConfigSection
+                  client={securityClient}
+                  status={securityStatus}
+                  onRetry={() => void refreshSecurity()}
+                />
+              </div>
               <div className="mb-3 mt-1 border-t border-border pt-3">
                 {llmStatus == null ? (
                   <Field label={t("settings.model.loading")}>

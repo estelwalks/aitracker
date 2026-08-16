@@ -68,6 +68,21 @@ export const errors = {
     invalidAgent: "대상 도구를 사용할 수 없습니다",
     skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
   },
+  modelProfile: {
+    nameRequired: "설정 이름을 입력하세요",
+    nameTooLong: "설정 이름은 64자 이하여야 합니다",
+    invalidMode: "설정 모드가 올바르지 않습니다",
+    invalidProtocol: "프로토콜이 올바르지 않습니다",
+    invalidUrl: "엔드포인트는 유효한 http/https URL이어야 합니다",
+    invalidModel:
+      "모델 이름이 올바르지 않습니다(영문/숫자/._:/-만, 최대 120자)",
+    apiKeyRequired: "API Key를 입력하세요",
+    apiKeyTooShort: "API Key는 8자 이상이어야 합니다",
+    apiKeyTooLong: "API Key는 512자 이하여야 합니다",
+    notFound: "이 모델 설정은 없거나 삭제되었습니다",
+    testFailed: "연결 테스트 실패. 엔드포인트, API Key, 네트워크를 확인하세요",
+    testTimeout: "연결 테스트 시간 초과(5초)",
+  },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",
     rateResponseIncomplete: "환율 응답이 불완전합니다",
