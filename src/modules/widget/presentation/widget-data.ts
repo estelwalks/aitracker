@@ -6,17 +6,16 @@ import type { UsagePeriod } from "../../../lib/local-usage/presentation";
 import { resolveUsageRange } from "../../../lib/local-usage/presentation";
 import type { LocalUsageEvent } from "../../../lib/local-usage/types";
 import { estimateUsageCost } from "../../../lib/pricing";
-import { createDashboardV2View } from "../../dashboard/application/v2";
+import { createDashboardV2View, getDashboardReadModel } from "../../dashboard";
 import type {
   DashboardReadModel,
   DashboardV2Event,
   DashboardV2Snapshot,
-} from "../../dashboard/contracts";
-import { getDashboardReadModel } from "../../dashboard/query";
+} from "../../dashboard";
 import {
   useSecurityScanOverview,
   type SecurityScanOverview,
-} from "../../security-assessment/query/use-security-scan-overview";
+} from "../../security-assessment";
 
 /** 与 dashboard 的 30s router.invalidate 节奏一致。 */
 const REFRESH_INTERVAL_MS = 30_000;

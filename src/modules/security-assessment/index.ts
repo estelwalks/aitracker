@@ -41,3 +41,7 @@ export {
   parseScanRequest,
 } from "./application/index";
 export type { SecurityAssessmentViewModel } from "./presentation";
+export {
+  useSecurityScanOverview,
+  type SecurityScanOverview,
+} from "./query/use-security-scan-overview";
