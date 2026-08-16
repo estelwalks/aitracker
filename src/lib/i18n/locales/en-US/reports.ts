@@ -43,9 +43,11 @@ export const reports = {
     weekly: "Weekly",
     monthly: "Monthly",
     save: "Save",
-    saved: "Saved",
+    enabled: "Scheduled generation enabled",
+    disabled: "Scheduled generation disabled",
+    syncFailed: "Failed to sync the schedule; local settings kept",
     editorNote:
-      "Scheduled generation activates once the desktop app wires a background scheduler; for now the config is persisted locally and generation stays manual.",
+      "Saved settings drive the background task scheduler; generation runs automatically while the app is running.",
     days: {
       mon: "Mon",
       tue: "Tue",

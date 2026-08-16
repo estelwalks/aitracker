@@ -43,9 +43,11 @@ export const reports = {
     weekly: "每周",
     monthly: "每月",
     save: "保存",
-    saved: "已保存",
+    enabled: "已启用定时生成",
+    disabled: "已关闭定时生成",
+    syncFailed: "定时调度同步失败，本地设置已保留",
     editorNote:
-      "定时调度将在桌面版接入后台调度器后生效；当前配置仅持久化到本机，生成仍需手动触发。",
+      "保存后同步到后台任务调度器；桌面版运行期间按设定节奏自动生成。",
     days: {
       mon: "周一",
       tue: "周二",
