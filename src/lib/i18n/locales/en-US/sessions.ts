@@ -4,6 +4,13 @@ export const sessions = {
   pageHeader: "Session Management",
   pageHeaderDesc:
     "Browse local sessions by time, tool, and project, then safely resume available sessions.",
+  insight: {
+    title: "Jarvis session insights",
+    total: "{count} sessions in total",
+    sources: "From {count} tools",
+    turns: "{count} turns in total",
+    resumable: "{count} sessions can be safely resumed",
+  },
   range: {
     d7: "Last 7 days",
     d30: "Last 30 days",

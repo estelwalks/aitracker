@@ -359,6 +359,20 @@ export const security = {
       emptyDesc:
         "There are no real interception events yet. Runtime defense is off by default; it only starts recording after you enable it in the desktop app. No simulated or placeholder data is shown before that.",
       settings: "Open scan settings",
+      monitoring: "Monitoring",
+      capabilityLabel: "Defense capability",
+      capabilityDetectionOnly:
+        "Detection only · does not block runtime behavior",
+      activeDefenseLabel: "Active blocking",
+      activeDefenseOff: "Disabled",
+      monitorLabel: "Monitor",
+      monitorOn: "Available",
+      cancellationLabel: "Cancellation point",
+      cancellationBetween: "Between skills",
+      dimensionsLabel: "Covered dimensions",
+      dimensionsValue: "{count} risk dimensions",
+      scannedLabel: "Static scans",
+      scannedValue: "{count} skills",
     },
     model: {
       title: "Deep-scan model configuration",

@@ -11,6 +11,7 @@ import {
 } from "../query/desktop-client";
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { AutoScanGuide } from "./components/AutoScanGuide";
+import { RuntimeBlockPanel } from "./components/RuntimeBlockPanel";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus, type ScanStatusNav } from "./components/ScanStatus";
 import { ScanTaskDetail } from "./components/ScanTaskDetail";
@@ -183,6 +184,9 @@ export function SecurityAssessmentPage() {
 
   const latest = latestHistory(history);
   const riskKinds = runtime?.riskKinds ?? SECURITY_RISK_KINDS;
+  // Deduplicated skills ever scanned in the real history (drives the runtime
+  // panel's honest "static scans" row — no fabricated runtime blocks).
+  const scannedSkills = summarizeReports(history).total;
   const latestEntries = useMemo(() => latestScanEntries(history), [history]);
   const latestTotals = useMemo(
     () => summarizeReports(latestEntries),
@@ -324,6 +328,11 @@ export function SecurityAssessmentPage() {
               />
             </div>
           )}
+          <RuntimeBlockPanel
+            runtime={runtime}
+            scannedSkills={scannedSkills}
+            riskKindCount={riskKinds.length}
+          />
           <div ref={historyRef}>
             <ScanHistory entries={history} onOpenTask={setSelectedTask} />
           </div>

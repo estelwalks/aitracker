@@ -12,6 +12,7 @@ import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import { getReportBody } from "../server-fns.ts";
 import type { ReportListItem, ReportUiStatus } from "./index.ts";
+import { MarkdownView } from "./markdown.tsx";
 import { useDraftAutosave, useReportActions } from "./report-actions.ts";
 
 const DRAFT_PREFIX = "tt.report.draft.";
@@ -220,9 +221,7 @@ export function ReportBodyCard({
         ) : (
           <div className="tt-md tt-scroll min-h-72 overflow-y-auto rounded-lg border border-border bg-surface-2/60 px-3 py-2.5">
             {body ? (
-              <pre className="font-mono text-[12.5px] leading-5 whitespace-pre-wrap">
-                {body}
-              </pre>
+              <MarkdownView source={body} />
             ) : (
               <p className="py-10 text-center text-[12px] text-muted-foreground">
                 {t("common.reports.editor.draftHint")}
