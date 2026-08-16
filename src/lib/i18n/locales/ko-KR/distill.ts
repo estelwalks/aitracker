@@ -107,4 +107,16 @@ export const distill = {
   guideStep4Desc:
     "Skill로 저장하고 '스킬' 페이지에서 설치된 도구에 동기화합니다.",
   guideStart: "시작하기",
+  notify: {
+    title: "증류 작업이 시작되었습니다",
+    desc: "총 {sessions}건, 약 {minutes}분이 소요될 예정입니다. 작업이 백그라운드에서 실행되므로 앱을 닫지 마세요. 완료되면 '로컬 증류' 목록에 표시됩니다.",
+    go: "지금 이동",
+  },
+  button: {
+    label: "선택 항목 증류",
+    tooltipEmpty: "먼저 증류할 {noun}을 선택하세요",
+    tooltipReady: "선택한 {count}{unit} {noun}을 로컬 Skill로 증류합니다",
+    noun: "세션",
+    unit: "개",
+  },
 } as const;

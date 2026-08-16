@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   Brain,
@@ -26,6 +26,10 @@ import {
   YAxis,
 } from "recharts";
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
+import {
+  DistillButton,
+  notifyDistillStarted,
+} from "../../../components/DistillButton.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
@@ -1076,6 +1080,7 @@ export function DashboardAgentWorkstreams({
   selectedTool: string;
 }) {
   const { format, t } = useI18n();
+  const navigate = useNavigate();
   const [open, setOpen] = useState<string | null>(
     selectedTool === "all" ? null : selectedTool,
   );
@@ -1102,32 +1107,47 @@ export function DashboardAgentWorkstreams({
           const live = tool.events > 0;
           return (
             <li key={tool.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 py-3 text-left"
-                onClick={() => setOpen(expanded ? null : tool.id)}
-              >
-                <BrandIcon
-                  name={tool.name}
-                  color={brandColorOf(tool.name)}
-                  className="size-5"
-                />
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {tool.name}
-                </span>
-                <span
-                  className={`font-mono text-[10px] ${live ? "text-[var(--color-ok)]" : "text-muted-foreground"}`}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left"
+                  onClick={() => setOpen(expanded ? null : tool.id)}
                 >
-                  {live ? "LIVE" : "IDLE"}
-                </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {format.formatTokens(tool.tokens)} ·{" "}
-                  {format.formatNumber(tool.events)}
-                </span>
-                <ChevronDown
-                  className={expanded ? "size-4 rotate-180" : "size-4"}
+                  <BrandIcon
+                    name={tool.name}
+                    color={brandColorOf(tool.name)}
+                    className="size-5"
+                  />
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {tool.name}
+                  </span>
+                  <span
+                    className={`font-mono text-[10px] ${live ? "text-[var(--color-ok)]" : "text-muted-foreground"}`}
+                  >
+                    {live ? "LIVE" : "IDLE"}
+                  </span>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {format.formatTokens(tool.tokens)} ·{" "}
+                    {format.formatNumber(tool.events)}
+                  </span>
+                  <ChevronDown
+                    className={expanded ? "size-4 rotate-180" : "size-4"}
+                  />
+                </button>
+                <DistillButton
+                  size="sm"
+                  count={1}
+                  className="shrink-0"
+                  onClick={() =>
+                    notifyDistillStarted({
+                      sessions: 1,
+                      minutes: 1,
+                      t,
+                      onGo: () => void navigate({ to: "/distill" }),
+                    })
+                  }
                 />
-              </button>
+              </div>
               {expanded ? (
                 <div className="dashboard-workflow-grid mt-0 mb-3">
                   <div>

@@ -98,4 +98,16 @@ export const distill = {
   guideStep4: "同步工具",
   guideStep4Desc: "保存为 Skill 并在「技能」页同步到已安装工具。",
   guideStart: "开始使用",
+  notify: {
+    title: "蒸馏任务已启动",
+    desc: "共 {sessions} 项内容，预计耗时约 {minutes} 分钟。任务在后台运行，期间请勿关闭应用；完成后会出现在「本地蒸馏」列表中。",
+    go: "立即前往",
+  },
+  button: {
+    label: "蒸馏所选",
+    tooltipEmpty: "请先勾选需要蒸馏的{noun}",
+    tooltipReady: "将已选的 {count} {unit}{noun} 蒸馏为本地 Skill",
+    noun: "会话",
+    unit: "场",
+  },
 } as const;
