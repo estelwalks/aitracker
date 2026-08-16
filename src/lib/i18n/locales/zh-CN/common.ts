@@ -54,6 +54,16 @@ export const common = {
     kindDaily: "日报",
     kindWeekly: "周报",
     updatedAt: "更新于 {time}",
+    editor: {
+      preview: "预览",
+      edit: "编辑",
+      exportMd: "导出 Markdown",
+      print: "打印 / 导出 PDF",
+      copy: "复制",
+      autosaved: "已自动保存草稿",
+      draftNote: "草稿保存在本机浏览器，未写入服务端。",
+      draftHint: "点击已生成简报可编辑草稿。",
+    },
   },
   distillation: {
     pageTitle: "蒸馏工作台",
@@ -71,5 +81,25 @@ export const common = {
     candidateNote:
       "候选项保存在服务端内存，刷新页面后不保留；完整审批 UI 在候选项持久化后提供。",
     selectedTurns: "{count} 轮",
+    modeQuick: "快速模式",
+    modePro: "高级配置",
+    metricMaterial: "已选素材",
+    metricTurns: "素材轮次",
+    metricRuns: "蒸馏次数",
+    metricApproved: "已审批",
+    openMaterial: "打开素材库",
+    materialDrawerTitle: "选择蒸馏素材",
+    materialSearch: "搜索会话 / 项目…",
+    materialSegmentUnavailable:
+      "当前版本仅支持按会话选择素材，不读取单条消息内容（隐私边界）。",
+    modelOffline: "离线回退",
+    modelNotConfigured: "未配置 LLM · 蒸馏结果将由离线确定性回退生成",
+    runHint: "选择至少一个会话后一键蒸馏。",
+    expMode: "模式",
+    expTime: "生成时间",
+    expOfflineNotice:
+      "该候选由离线确定性回退生成，配置 LLM 后可获得真实模型产出。",
+    saveAndManage: "保存并前往 Skill 管理",
+    estimatedTokens: "预估 {count} tokens",
   },
 } as const;

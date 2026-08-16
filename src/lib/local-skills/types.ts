@@ -32,6 +32,10 @@ export interface LocalSkill {
   name: string;
   description: string | null;
   lastUsedAt: string | null;
+  /** Total bytes of all files under the skill directory (browser-safe). */
+  sizeBytes: number;
+  /** Estimated context tokens from the skill's readable text (chars / 4). */
+  tokenEstimate: number;
   installations: SkillInstallation[];
 }
 

@@ -2,10 +2,9 @@ import type {
   SecurityRuleKind,
   UserSecurityRule,
 } from "../../../lib/security/rules";
-import {
-  scanSecurityFilesWithProgress,
-  type LocalScanProgress,
-  type SecurityReport,
+import type {
+  LocalScanProgress,
+  SecurityReport,
 } from "../../../lib/security/scanner";
 import {
   clearSecurityHistory,
@@ -115,12 +114,10 @@ export async function scanSelection(
   onProgress?: (progress: LocalScanProgress) => void,
   userRules: UserSecurityRule[] = [],
 ): Promise<SecurityAssessmentReport> {
-  const report = await scanSecurityFilesWithProgress(
-    [{ name: "SKILL.md", content: selection.file.content }],
-    userRules,
-    onProgress,
-  );
-  return toPublicReport(report, selection.selectionRef);
+  void selection;
+  void onProgress;
+  void userRules;
+  throw new Error("Desktop security scanner IPC is required");
 }
 
 export async function loadAssessmentHistory(): Promise<

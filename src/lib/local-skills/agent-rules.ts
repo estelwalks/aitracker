@@ -68,12 +68,12 @@ function isSkillTool(id: string): boolean {
 }
 
 /**
- * Skill agent labels (the manifest `nameZh` of every skill tool), in canonical
+ * Skill agent labels (the manifest primary `name` of every skill tool), in canonical
  * order.
  */
 export const SKILL_AGENTS: readonly string[] = SKILL_AGENT_ORDER.filter(
   isSkillTool,
-).map((id) => MANIFEST_BY_ID.get(id)!.nameZh);
+).map((id) => MANIFEST_BY_ID.get(id)!.name);
 
 /**
  * Fail-fast module-load validation: derived labels must be unique.

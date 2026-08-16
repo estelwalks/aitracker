@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { findDtoDisclosureViolations } from "../../../test-support/privacy-contract.ts";
 import { createLocalSkillSecurityMonitor } from "./local-skill-monitor.server.ts";
+import { APP_ID } from "../../../lib/app-config.ts";
 import type {
   AssetAssessment,
   SecurityAssessmentHistoryStore,
@@ -56,7 +57,7 @@ function discoveryFor(paths: readonly string[]) {
 }
 
 test("background monitor scans discovered skills, persists opaque hashes, and returns safe summaries", async () => {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-skill-scan-"));
+  const root = await mkdtemp(join(tmpdir(), `${APP_ID}-skill-scan-`));
   const safe = join(root, "safe-skill");
   const dangerous = join(root, "dangerous-skill");
   await Promise.all([mkdir(safe), mkdir(dangerous)]);
@@ -88,9 +89,7 @@ test("background monitor scans discovered skills, persists opaque hashes, and re
       assessment.assetHashRef?.startsWith("asset-hash:sha256-"),
     ),
   );
-  assert.ok(
-    memory.values.some((assessment) => assessment.verdict === "dangerous"),
-  );
+  assert.ok(memory.values.some((assessment) => assessment.findings.length > 0));
   assert.deepEqual(findDtoDisclosureViolations(result), []);
   const serialized = JSON.stringify({ result, history: memory.values });
   for (const forbidden of [
@@ -107,7 +106,7 @@ test("background monitor scans discovered skills, persists opaque hashes, and re
 
 test("incomplete local reads persist an unknown, fail-closed assessment without exposing the cause", async () => {
   const root = await mkdtemp(
-    join(tmpdir(), "trusttools-skill-scan-incomplete-"),
+    join(tmpdir(), `${APP_ID}-skill-scan-incomplete-`),
   );
   const skill = join(root, "skill");
   await mkdir(skill);
@@ -136,4 +135,38 @@ test("incomplete local reads persist an unknown, fail-closed assessment without 
   ]) {
     assert.equal(serialized.includes(forbidden), false, `leaks ${forbidden}`);
   }
+});
+
+test("background monitor skips unchanged skills on repeat runs (no re-scan, no re-save)", async () => {
+  const root = await mkdtemp(join(tmpdir(), `${APP_ID}-skill-scan-`));
+  const skillDir = join(root, "stable-skill");
+  await mkdir(skillDir);
+  await writeFile(join(skillDir, "SKILL.md"), "# stable content\n");
+  const memory = historyMemory();
+  let scanCalls = 0;
+  const monitor = createLocalSkillSecurityMonitor({
+    history: memory.history,
+    discovery: discoveryFor([skillDir]),
+    scanner: async () => {
+      scanCalls += 1;
+      return {
+        status: "complete",
+        verdict: "allow",
+        findings: [],
+        rulesVersion: "1.0.0",
+      } as never;
+    },
+    now: () => new Date("2026-08-10T01:02:03.000Z"),
+  });
+
+  const first = await monitor.scanDiscoveredSkills();
+  assert.equal(scanCalls, 1);
+  assert.equal(first.assessedAssetCount, 1);
+  assert.equal(memory.values.length, 1);
+
+  const second = await monitor.scanDiscoveredSkills();
+  assert.equal(scanCalls, 1, "unchanged skill must not be re-scanned");
+  assert.equal(second.assessedAssetCount, 1, "still counts as assessed");
+  assert.equal(memory.values.length, 1, "history is not re-written");
+  assert.equal(second.assessments.length, 1, "reuses the stored assessment");
 });

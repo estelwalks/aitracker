@@ -2,13 +2,18 @@ const { execFileSync } = require("node:child_process");
 const { join } = require("node:path");
 
 /**
- * Re-sign the whole .app ad-hoc after electron-builder unpacks it.
+ * Re-sign the whole .app after electron-builder unpacks it.
  *
- * The re-sign MUST preserve the hardened-runtime flag and re-apply the same
- * minimal entitlements as electron-builder:
- *   - `--options runtime` keeps `com.apple.security.cs.allow-jit` etc. active
- *     (a plain `--sign -` would drop the hardened-runtime flag and leave the
- *     signature inconsistent with the Info.plist declaration);
+ * macOS 15 (Sequoia) regression: an ad-hoc signed app (no Developer ID cert)
+ * that keeps the hardened-runtime flag (`--options runtime`) fails to launch —
+ * dyld refuses to load its own frameworks with "mapping process and mapped
+ * file (non-platform) have different Team IDs", because hardened runtime
+ * enables dyld's Team-ID check and every ad-hoc signature has its own implicit
+ * team. So when no Developer ID identity is available, the app is re-signed
+ * WITHOUT hardened runtime (the pre-46b9cdd behavior — launches fine once
+ * Gatekeeper is bypassed). With a real Developer ID certificate, the
+ * hardened-runtime flag and the minimal entitlements are preserved:
+ *   - `--options runtime` keeps `com.apple.security.cs.allow-jit` etc. active;
  *   - `--entitlements` re-applies build/entitlements.mac.plist — the minimal
  *     set (Chromium JIT only, no App Sandbox, no files.* directory grants).
  *
@@ -16,6 +21,18 @@ const { join } = require("node:path");
  * at the moment they pick/drop a file inside 文稿/桌面/下载, which is the
  * OS-mandated behavior for any non-sandboxed app.
  */
+function hasDeveloperIdIdentity() {
+  try {
+    const out = execFileSync(
+      "security",
+      ["find-identity", "-v", "-p", "codesigning"],
+      { stdio: "pipe", encoding: "utf8" },
+    );
+    return /Developer ID Application:/.test(out);
+  } catch {
+    return false;
+  }
+}
 // Electron 默认模板 Info.plist 自带、但本应用完全不使用的 TCC usage
 // descriptions —— 删除,确保"仅声明必要权限"(应用不使用摄像头/麦克风/
 // 蓝牙,也不请求任何目录权限)。
@@ -49,19 +66,16 @@ exports.default = async function afterPack(context) {
       // key already absent — fine
     }
   }
-  execFileSync(
-    "codesign",
-    [
-      "--force",
+  const hardenedRuntime = hasDeveloperIdIdentity();
+  const codesignArgs = ["--force", "--deep"];
+  if (hardenedRuntime) {
+    codesignArgs.push(
       "--options",
       "runtime",
       "--entitlements",
       entitlementsPath,
-      "--deep",
-      "--sign",
-      "-",
-      appPath,
-    ],
-    { stdio: "inherit" },
-  );
+    );
+  }
+  codesignArgs.push("--sign", "-", appPath);
+  execFileSync("codesign", codesignArgs, { stdio: "inherit" });
 };

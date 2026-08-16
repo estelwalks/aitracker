@@ -13,6 +13,7 @@ import type {
   ReportsApplication,
   ReportsModuleContract,
 } from "../contracts.ts";
+import type { SessionDensity } from "../period.ts";
 
 export type ReportsViewModel = ReportsModuleContract;
 
@@ -63,6 +64,16 @@ export interface ReportsFeed {
   readonly generatedAt: string;
   readonly offline: boolean;
   readonly disabled: boolean;
+  /**
+   * Real session density aggregated per day (from the composition root's
+   * sessions port). Drives the archive band, PeriodCalendar and report header
+   * stats. Empty when the sessions port is unavailable.
+   */
+  readonly density: SessionDensity;
+  /** Number of persisted report documents (newest-first list length). */
+  readonly reportCount: number;
+  /** Number of persisted generation runs (all attempts, incl. failed). */
+  readonly runCount: number;
 }
 
 export interface ReportQueryViewModel {
@@ -74,6 +85,12 @@ export interface ReportQueryViewModel {
 export interface ReportsQuerySource {
   listReports(): Promise<readonly ReportSummary[]>;
   listRuns(): Promise<readonly ReportRun[]>;
+  /**
+   * Optional real session density. The transport computes it by aggregating
+   * the composition root's sessions port; absent here the feed falls back to
+   * an empty density (no session dots, no coverage figures).
+   */
+  sessionMetrics?(): Promise<SessionDensity | null>;
 }
 
 export interface ReportsPresentationOptions {
@@ -196,10 +213,11 @@ export function createReportsPresentation(
   return {
     async query(input = {}) {
       try {
-        const [reports, runs, memories] = await Promise.all([
+        const [reports, runs, memories, density] = await Promise.all([
           options.source.listReports(),
           options.source.listRuns(),
           options.knowledge?.list(),
+          options.source.sessionMetrics?.(),
         ]);
         const definitions = options.reports.definitions;
         const byRun = new Map(runs.map((run) => [run.runId, run]));
@@ -257,6 +275,9 @@ export function createReportsPresentation(
               generatedAt: now().toISOString(),
               offline: options.offline ?? false,
               disabled: options.disabled ?? false,
+              density: density ?? { total: 0, days: {} },
+              reportCount: reports.length,
+              runCount: runs.length,
             },
             ...(selected
               ? {

@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,7 +40,9 @@ import {
 import {
   applyRetentionPolicyQuery,
   clearRegenerableCacheQuery,
+  getLLMConfigStatus,
   getStorageUsageQuery,
+  type LLMConfigStatus,
   type StorageUsage,
 } from "../query";
 import {
@@ -52,12 +55,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import { Field, Toggle } from "./fields";
+import { ScanScheduleSection } from "./ScanScheduleSection";
+import { SecurityModelConfigSection } from "./SecurityModelConfigSection";
+import { useSecurityClient } from "./use-security-client";
 
 // 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
-const categories = ["通用", "外观", "关于"] as const;
+const categories = ["通用", "扫描配置", "模型配置", "外观", "关于"] as const;
 type Category = (typeof categories)[number];
 const categoryKeys: Record<Category, MessageKey> = {
   通用: "settings.sections.general",
+  扫描配置: "settings.sections.scan",
+  模型配置: "settings.sections.model",
   外观: "settings.sections.appearance",
   关于: "settings.sections.about",
 };
@@ -94,54 +103,6 @@ const localeLabelKeys: Record<Locale, MessageKey> = {
 
 const retentionOptions = [30, 60, 90, 180, 0] as const;
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-      <div>
-        <div className="text-[13px]">{label}</div>
-        {hint && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
-        )}
-      </div>
-      <div className="flex items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-function Toggle({
-  value,
-  onChange,
-  disabled = false,
-}: {
-  value: boolean;
-  onChange: (value: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      disabled={disabled}
-      className={`h-5 w-9 rounded-full p-0.5 transition-colors ${
-        value ? "bg-primary" : "border border-border bg-surface-2"
-      } disabled:cursor-not-allowed disabled:opacity-50`}
-      aria-pressed={value}
-    >
-      <span
-        className="block size-4 rounded-full bg-background transition-transform"
-        style={{ transform: value ? "translateX(16px)" : "translateX(0)" }}
-      />
-    </button>
-  );
-}
-
 function NumberField({
   value,
   suffix,
@@ -173,6 +134,8 @@ function NumberField({
 export interface SettingsLoaderData {
   readonly storageUsage: StorageUsage | null;
   readonly storageError: string | null;
+  /** Deep-link target: `?section=scan` opens the 扫描配置 category. */
+  readonly section?: "scan";
 }
 
 export function SettingsPage({
@@ -180,10 +143,31 @@ export function SettingsPage({
 }: {
   readonly loaderData: SettingsLoaderData;
 }) {
-  const [category, setCategory] = useState<Category>("通用");
+  const [category, setCategory] = useState<Category>(() =>
+    loaderData.section === "scan" ? "扫描配置" : "通用",
+  );
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
   const [autoLaunchStatus, setAutoLaunchStatus] =
     useState<AutoLaunchStatus>("正在读取");
+  const [llmStatus, setLlmStatus] = useState<LLMConfigStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getLLMConfigStatus()
+      .then((status) => {
+        if (!cancelled) setLlmStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setLlmStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const {
+    client: securityClient,
+    status: securityStatus,
+    refresh: refreshSecurity,
+  } = useSecurityClient();
   const { settings, setSettings, loaded } = useAppSettings();
   const {
     locale,
@@ -508,6 +492,18 @@ export function SettingsPage({
                 </span>
               </Field>
               <Field
+                label={t("security.center.model.title")}
+                hint={t("security.center.model.desc")}
+              >
+                <Link
+                  to="/security"
+                  search={{ configureModel: "1" }}
+                  className="inline-flex h-8 items-center rounded-lg bg-surface-2 px-3 text-[12px] hover:bg-accent"
+                >
+                  {t("security.center.model.configure")}
+                </Link>
+              </Field>
+              <Field
                 label={t("settings.dataPath")}
                 hint={t("settings.dataPathHint", brandParams)}
               >
@@ -650,6 +646,107 @@ export function SettingsPage({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+            </div>
+          )}
+
+          {category === "扫描配置" && (
+            <div>
+              <ScanScheduleSection
+                client={securityClient}
+                status={securityStatus}
+                onRetry={() => void refreshSecurity()}
+              />
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                <Field
+                  label={t("settings.scan.onDemand")}
+                  hint={t("settings.scan.onDemandDesc")}
+                >
+                  <StatusBadge tone="ok">
+                    {t("common.status.fresh")}
+                  </StatusBadge>
+                </Field>
+                <Field
+                  label={t("settings.retention")}
+                  hint={`${t("settings.scan.retentionNote")} ${t("settings.retentionHint", brandParams)}`}
+                >
+                  <Segmented
+                    value={String(settings.retentionDays)}
+                    onChange={(value) =>
+                      void changeRetentionDays(Number(value))
+                    }
+                    options={retentionOptions.map((days) => ({
+                      value: String(days),
+                      label:
+                        days === 0
+                          ? t("settings.retentionForever")
+                          : t("settings.retentionDays", { count: days }),
+                    }))}
+                  />
+                </Field>
+                <Field label={t("settings.storage")}>
+                  {storageUsage ? (
+                    <span className="tt-num text-[13px]">
+                      {format.formatBytes(storageUsage.bytes)}
+                      {storageUsage.exceedsSoftCap
+                        ? t("settings.storageExceedsSoftCap")
+                        : ""}
+                    </span>
+                  ) : (
+                    <span className="text-[13px] text-muted-foreground">
+                      {t("common.loading")}
+                    </span>
+                  )}
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {category === "模型配置" && (
+            <div>
+              <SecurityModelConfigSection
+                client={securityClient}
+                status={securityStatus}
+                onRetry={() => void refreshSecurity()}
+              />
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                {llmStatus == null ? (
+                  <Field label={t("settings.model.loading")}>
+                    <span className="text-[13px] text-muted-foreground">
+                      {t("common.loading")}
+                    </span>
+                  </Field>
+                ) : llmStatus.configured ? (
+                  <>
+                    <Field
+                      label={t("settings.model.configured")}
+                      hint={t("settings.model.apiKeyMasked")}
+                    >
+                      <StatusBadge tone="ok">
+                        {t("common.status.fresh")}
+                      </StatusBadge>
+                    </Field>
+                    <Field label={t("settings.model.baseUrl")}>
+                      <code className="tt-num rounded-sm bg-surface-2 px-2 py-1 text-[12px]">
+                        {llmStatus.baseUrl}
+                      </code>
+                    </Field>
+                    <Field label={t("settings.model.model")}>
+                      <code className="tt-num rounded-sm bg-surface-2 px-2 py-1 text-[12px]">
+                        {llmStatus.model}
+                      </code>
+                    </Field>
+                  </>
+                ) : (
+                  <Field
+                    label={t("settings.model.notConfigured")}
+                    hint={t("settings.model.notConfiguredDesc")}
+                  >
+                    <StatusBadge tone="warn">
+                      {t("common.status.disabled")}
+                    </StatusBadge>
+                  </Field>
+                )}
+              </div>
             </div>
           )}
 

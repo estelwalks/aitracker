@@ -29,9 +29,9 @@ function makeEvent(
   };
 }
 
-test("sourceLabel projects the manifest nameZh for every catalog source (F6-T2)", () => {
+test("sourceLabel projects the manifest primary display name for every catalog source (F6-T2)", () => {
   for (const tool of PUBLIC_TOOL_MANIFEST.tools) {
-    assert.equal(sourceLabel(tool.id), tool.nameZh);
+    assert.equal(sourceLabel(tool.id), tool.name);
   }
 });
 
@@ -45,6 +45,22 @@ test("resolveUsageRange 支持本年范围", () => {
   assert.equal(range.valid, true);
   assert.equal(range.from, "2026-01-01");
   assert.equal(range.to, "2026-07-28");
+});
+
+test("resolveUsageRange supports prototype rolling range presets", () => {
+  const now = new Date("2026-08-10T12:00:00.000Z");
+  assert.equal(
+    resolveUsageRange("90d", undefined, undefined, now).from,
+    "2026-05-13",
+  );
+  assert.equal(
+    resolveUsageRange("180d", undefined, undefined, now).from,
+    "2026-02-12",
+  );
+  assert.equal(
+    resolveUsageRange("1y", undefined, undefined, now).from,
+    "2025-08-11",
+  );
 });
 
 test("filterDailyUsage 处理自定义边界缺失与反转", () => {

@@ -154,5 +154,19 @@ export function createAtomicReportStore(
       );
       return sorted[0];
     },
+    async listDocuments(): Promise<readonly ReportDocument[]> {
+      const file = await read();
+      return [...file.documents].sort((a, b) =>
+        b.generatedAt.localeCompare(a.generatedAt),
+      );
+    },
+    async listRuns(): Promise<readonly ReportRun[]> {
+      const file = await read();
+      // Runs are validated against ReportRunSchema on every write; the schema's
+      // widened errorCode is restored to the contract's branded union here.
+      return [...file.runs].sort((a, b) =>
+        b.startedAt.localeCompare(a.startedAt),
+      ) as readonly ReportRun[];
+    },
   };
 }

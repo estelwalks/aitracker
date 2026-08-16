@@ -1,8 +1,10 @@
-import { lstat } from "node:fs/promises";
-import { join } from "node:path";
+import { constants } from "node:fs";
+import { access, lstat } from "node:fs/promises";
+import { delimiter, join } from "node:path";
 
 import type { AiTool } from "./catalog.ts";
 import {
+  getTool,
   resolvePlatformPlan,
   type PlatformOs,
 } from "../tool-registry/registry.ts";
@@ -49,14 +51,66 @@ export function deriveToolInstallationFacts(
   existingPaths: ReadonlySet<string>,
   homeDirectory: string,
   os: PlatformOs = osFromProcess(process.platform),
+  executablePathsByTool: ReadonlyMap<string, readonly string[]> = new Map(),
 ): ToolInstallationFact[] {
   const rootsByTool = detectRootsForOs(tools, os);
   return tools.map((tool) => {
     const detectedPaths = (rootsByTool.get(tool.id) ?? [])
       .map((root) => join(homeDirectory, root))
       .filter((path) => existingPaths.has(path));
-    return { id: tool.id, installed: detectedPaths.length > 0, detectedPaths };
+    const executablePaths = executablePathsByTool.get(tool.id) ?? [];
+    const allEvidence = [...new Set([...detectedPaths, ...executablePaths])];
+    return {
+      id: tool.id,
+      installed: allEvidence.length > 0,
+      detectedPaths: allEvidence,
+    };
   });
+}
+
+async function executableEvidence(
+  tools: readonly AiTool[],
+  os: PlatformOs,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const pathDirectories = (process.env.PATH ?? "")
+    .split(delimiter)
+    .filter(Boolean);
+  const windowsExtensions = (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM")
+    .split(";")
+    .filter(Boolean);
+  const evidence = new Map<string, string[]>();
+  await Promise.all(
+    tools.map(async (tool) => {
+      const plan = resolvePlatformPlan(tool.id, "detection", os);
+      if (plan?.status !== "supported") return;
+      const executableNames = getTool(tool.id)?.detection.executable ?? [];
+      const candidates = executableNames.flatMap((name) =>
+        pathDirectories.flatMap((directory) =>
+          os === "windows"
+            ? windowsExtensions.map((extension) =>
+                join(directory, `${name}${extension.toLowerCase()}`),
+              )
+            : [join(directory, name)],
+        ),
+      );
+      const existing = await Promise.all(
+        candidates.map(async (candidate) => {
+          try {
+            await access(
+              candidate,
+              os === "windows" ? constants.F_OK : constants.X_OK,
+            );
+            return candidate;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const paths = existing.filter((value): value is string => value != null);
+      if (paths.length > 0) evidence.set(tool.id, paths);
+    }),
+  );
+  return evidence;
 }
 
 /** Probe all catalog roots without reading any log content. */
@@ -79,10 +133,12 @@ export async function detectToolInstallations(
       }
     }),
   );
+  const executables = await executableEvidence(tools, os);
   return deriveToolInstallationFacts(
     tools,
     new Set(inspected.filter((path): path is string => path !== null)),
     homeDirectory,
     os,
+    executables,
   );
 }

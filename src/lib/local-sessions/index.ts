@@ -1,6 +1,10 @@
 export { getLocalSessions, refreshLocalSessions } from "./server-fns.ts";
 export { scanLocalSessions } from "./scanner.server.ts";
-export { buildResumeCommand, isResumeSafeId } from "./resume-id.ts";
+export {
+  buildResumeCommand,
+  buildResumeCommandTokens,
+  isResumeSafeId,
+} from "./resume-id.ts";
 export type {
   SessionFilter,
   SessionRecord,

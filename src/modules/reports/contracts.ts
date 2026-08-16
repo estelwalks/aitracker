@@ -94,12 +94,31 @@ export interface ReportSummary {
   readonly assets: readonly AssetRef[];
 }
 
+/**
+ * Renderer-facing report body. The `body` is generated report content already
+ * redacted by `safeReportText` at persistence time (no paths, commands,
+ * secrets or raw conversation content) — safe to cross the transport boundary
+ * for inline preview/editing.
+ */
+export interface ReportContent {
+  readonly reportId: string;
+  readonly definitionId: string;
+  readonly kind: ReportKind;
+  readonly title: string;
+  readonly body: string;
+  readonly generatedAt: string;
+}
+
 export interface ReportStore {
   createRun(run: ReportRun): Promise<void>;
   updateRun(run: ReportRun): Promise<void>;
   saveDocument(document: ReportDocument): Promise<void>;
   getDocument(reportId: string): Promise<ReportDocument | undefined>;
   latest(definitionId: string): Promise<ReportDocument | undefined>;
+  /** Enumerate persisted report documents (newest first). */
+  listDocuments(): Promise<readonly ReportDocument[]>;
+  /** Enumerate persisted runs (newest first). */
+  listRuns(): Promise<readonly ReportRun[]>;
 }
 
 export interface ReportContext {
@@ -139,8 +158,16 @@ export interface ReportsApplication {
   }): Promise<Result<ReportSummary>>;
   generate(input: GenerateReportInput): Promise<Result<ReportSummary>>;
   get(reportId: string): Promise<Result<ReportSummary>>;
+  /** Redacted generated body for inline preview/editing (renderer-safe). */
+  readContent(reportId: string): Promise<Result<ReportContent>>;
   approve(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   archive(reportId: string, actor: string): Promise<Result<ReportSummary>>;
+  /** Enumerate persisted reports (newest first). */
+  list(): Promise<Result<readonly ReportSummary[]>>;
+  /** Enumerate persisted runs (newest first). */
+  listRuns(): Promise<Result<readonly ReportRun[]>>;
+  /** Number of persisted reports, or null when the store is unavailable. */
+  count(): Promise<number | null>;
 }
 
 export interface GenerateReportInput {

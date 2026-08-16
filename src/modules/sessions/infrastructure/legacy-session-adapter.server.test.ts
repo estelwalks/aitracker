@@ -85,6 +85,23 @@ test("legacy projection strips private session fields", () => {
   assert.equal(publicView.resumeAvailable, true);
 });
 
+test("legacy projection redacts unsafe title, project and malformed session id", () => {
+  const publicView = toPublicSession({
+    ...resumableRecord(),
+    sessionId: "/private/session.jsonl",
+    title: "resume /private/session.jsonl with token=secret-value",
+    projectKey: "/private/project",
+    resumeSafe: false,
+  });
+
+  const serialized = JSON.stringify(publicView);
+  assert.equal(publicView.sessionId, "unavailable");
+  assert.equal(publicView.title, "");
+  assert.equal(publicView.projectKey, "unknown");
+  assert.equal(publicView.resumeAvailable, false);
+  assert.doesNotMatch(serialized, /private|secret|jsonl/i);
+});
+
 test("resume maps executor failure and cancellation to stable codes", async () => {
   const scanner = { scan: async () => [resumableRecord()] };
   const failed = createLegacyResumeSessionPort(
@@ -109,4 +126,21 @@ test("resume maps executor failure and cancellation to stable codes", async () =
   assert.equal(isErr(cancelled), true);
   if (isErr(cancelled))
     assert.equal(cancelled.error.code, "errors.sessions.resumeCancelled");
+});
+
+test("resume delegates only a trusted source/session pair, never a command", async () => {
+  let received: unknown;
+  const port = createLegacyResumeSessionPort(
+    {
+      execute: async (request) => {
+        received = request;
+      },
+    },
+    { scanner: { scan: async () => [resumableRecord()] } },
+  );
+  const result = await port.resume({ source: "codex", sessionId: "abc" });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(received, { source: "codex", sessionId: "abc" });
+  assert.doesNotMatch(JSON.stringify(received), /command|path|cwd/i);
 });

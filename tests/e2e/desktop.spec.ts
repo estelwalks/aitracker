@@ -1,9 +1,5 @@
 import { expect, test, type Page } from "playwright/test";
 
-/** 安全扫描的 SKILL.md fixture：不含 `---` 等会命中注入规则的特征。 */
-const SAFE_SKILL_MD =
-  "# Safe fixture\n\nThis is a harmless skill fixture for the e2e test.\n";
-
 test.beforeEach(async ({ page }) => {
   // 固定浏览器系统语言为 zh-CN 且无存储偏好，保证默认语言为中文
   // （与 locale.spec.ts 的既有做法一致；否则 Playwright 默认 en-US 会在
@@ -19,10 +15,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 const routes = [
-  { path: "/", heading: "首页总览" },
+  { path: "/", heading: "今日洞察" },
   { path: "/agents", heading: "工具概览" },
-  { path: "/market", heading: "Skill 市场" },
-  { path: "/security", heading: "安全检测" },
+  { path: "/skills", heading: "Skill 资产管理" },
+  { path: "/security", heading: "安全与防御" },
   { path: "/settings", heading: "设置" },
 ] as const;
 
@@ -57,46 +53,48 @@ for (const route of routes) {
 test("首页展示真实数据", async ({ page }) => {
   await page.goto("/");
 
-  // 真实本地快照信号：统计区间带最近同步时间戳 + 已同步徽标
-  await expect(page.getByText(/统计区间：今日 · 最近同步/)).toBeVisible();
-  await expect(page.getByText("已同步", { exact: true })).toBeVisible();
+  // 新首页（V3.0）真实数据信号：洞察 heading + 指标卡 + 事件计数
+  await expect(
+    page.getByRole("heading", { name: "今日洞察", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("TOKEN 总量")).toBeVisible();
+  await expect(page.getByText(/已观测 [\d,]+ 条事件/).first()).toBeVisible();
+  await expect(
+    page.getByText(/概览\s*[\d.]+[KMB]? tokens/).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("按本地价格目录估算", { exact: true }),
+  ).toBeVisible();
+  // 「本地采集状态」已不在新首页（旧 UI 的采集状态卡片已移除）
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
 });
 
-test("首页展示 7 × 24 热力图与真实事件聚合", async ({ page }) => {
+test("首页展示活跃日历热力图与真实事件聚合", async ({ page }) => {
   await page.goto("/");
 
+  // 新首页热力图 = 「活跃日历 · 近 12 个月」；旧 UI 的 7 × 24 热力图已移除
   await expect(
-    page.getByText("7 × 24 消耗热力图", { exact: true }),
+    page.getByRole("heading", { name: "活跃日历 · 近 12 个月", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByText("按周导航 · 本机时区", { exact: true }),
-  ).toBeVisible();
-
-  const heatmapCells = page.getByLabel(
-    /周[一二三四五六日] \d+ 时，\d+ 个事件，\d+ Token/,
+  // 真实数据聚合摘要（如「4 个活跃日 · 合计 1.77B · 最长连续 4 天」）
+  await expect(page.getByText(/\d+ 个活跃日/).first()).toBeVisible();
+  // 热力图渲染近 12 个月逐日格子（每个格子 title 形如「YYYY-MM-DD · … 用量事件 …」）
+  expect(await page.locator('span[title*="用量事件"]').count()).toBeGreaterThan(
+    0,
   );
-  const emptyHeatmap = page.getByText("当前周无可用事件，热力图保持为空。", {
-    exact: true,
-  });
-  expect(
-    (await heatmapCells.count()) > 0 || (await emptyHeatmap.isVisible()),
-  ).toBe(true);
 });
 
-test("Skill 展示真实数量与轮询说明", async ({ page }) => {
-  await page.goto("/agents");
+test("Skill Hub 展示真实本地 Skill 数量", async ({ page }) => {
+  await page.goto("/skills");
 
-  await expect(page.getByText(/\d+ 个本地 Skill/)).toBeVisible();
-  await expect(
-    page.getByText("页面可见时每 5 秒按变更指纹轮询（非原生 watcher）", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // PageBar 摘要展示真实本地 Skill 数量（当前机器 13 个）。
+  // 旧 UI 的「每 5 秒轮询说明」在新 UI（V3.0 对齐）中已移除，故不再断言。
+  await expect(page.getByText(/\d+ 个本地 Skill/).first()).toBeVisible();
 });
 
 test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({ page }) => {
-  await page.goto("/agents");
+  // Skill 资产管理迁移到 /skills（local tab），而非旧 /agents 上的复选框列表
+  await page.goto("/skills");
 
   const skillCheckboxes = page.getByRole("checkbox", { name: /^选择 / });
   expect(await skillCheckboxes.count()).toBeGreaterThanOrEqual(2);
@@ -123,61 +121,86 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
 });
 
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
-  await page.goto("/market");
+  // 独立市场路由已删除，市场入口在 /skills 的 market tab（卡片网格）
+  await page.goto("/skills?tab=market");
+  // 等待 React 水合：搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，
+  // React 不会收到 input 事件，搜索不会触发（水合竞态）。
+  await page.waitForTimeout(1000);
 
   const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
   await search.fill("draw.io");
-  await expect(page.getByText(/关键词“draw\.io”/)).toBeVisible({
+  // 结果卡以真实名称/描述渲染 draw.io 文本（搜索框的 value 不参与 getByText 匹配）
+  await expect(page.getByText(/draw\.io/i).first()).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText(/数据更新于/)).toBeVisible();
-  await expect(
-    page
-      .locator("tbody tr")
-      .filter({ hasText: /draw.?io/i })
-      .first(),
-  ).toBeVisible();
 });
 
-test("安全页默认展示本机扫描额度且未执行扫描", async ({ page }) => {
-  await page.goto("/security");
+test("安全页浏览器下检测服务已连接", async ({ page }) => {
+  // 浏览器 e2e 运行在 http://127.0.0.1:41737，满足 companion client 的
+  // isCompanionOrigin 检查；Vite/Nitro dev server 提供 /api/security/*，
+  // 因此 /security 页以「companion」transport 连接检测服务，而非旧的不可
+  // 用引导态。绝不点击扫描按钮，避免触发真实本机 Skill I/O。
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  // 新会话默认额度：今日剩余 10 / 10 次，历史为空
+  await page.goto("/security", { waitUntil: "domcontentloaded" });
+
   await expect(
-    page.getByText("今日剩余 10 / 10 次", { exact: true }),
+    page.getByRole("heading", { name: "安全与防御", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("尚未执行扫描。", { exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
+
+  // 主 CTA 可见（但不点击）
+  await expect(
+    page.getByRole("button", { name: "开始全局检测" }),
+  ).toBeVisible();
+
+  // 旧的不可用引导态必须消失
+  await expect(
+    page.getByText("本机伴随服务不可用", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/不会读取本机 Skill/)).toHaveCount(0);
+
+  // 播报摘要（健康度）可见
+  await expect(page.getByText("健康度", { exact: true }).first()).toBeVisible();
+
+  // 短暂 settle 后不应有未捕获页面错误
+  await page.waitForTimeout(300);
+  expect(pageErrors, "/security 不应触发未捕获页面错误").toEqual([]);
 });
 
-test("安全页本机扫描 SKILL.md 运行时生成真实安全报告", async ({ page }) => {
-  await page.goto("/security");
+test("安全页连接检测服务且不自动触发扫描", async ({ page }) => {
+  // 浏览器连接检测服务（companion transport），但页面加载时绝不自动触发
+  // 扫描：不点击任何扫描按钮，扫描状态应保持 idle，不出现扫描中的 vortex
+  // 覆盖层（「检测进度：…」标记）。
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await page.goto("/security", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByText("今日剩余 10 / 10 次", { exact: true }),
+    page.getByRole("heading", { name: "安全与防御", exact: true }),
   ).toBeVisible();
 
-  await page.locator('input[type="file"][accept*=".md"]').setInputFiles({
-    name: "SKILL.md",
-    mimeType: "text/markdown",
-    buffer: Buffer.from(SAFE_SKILL_MD),
-  });
+  // 主 CTA 可见（但不点击）
+  await expect(
+    page.getByRole("button", { name: "开始全局检测" }),
+  ).toBeVisible();
 
+  // 播报摘要（健康度）可见
+  await expect(page.getByText("健康度", { exact: true }).first()).toBeVisible();
+
+  // 页面已连接（不展示旧的不可用引导态）
   await expect(
-    page.getByText("安全报告 · SKILL.md", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("综合判定：安全", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("11 个维度均未命中静态风险规则。", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("今日剩余 9 / 10 次", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("本地扫描完成：安全", { exact: true }),
-  ).toBeVisible();
-  // 检测历史写入真实扫描条目
-  await expect(page.getByText("展示 1 / 1 条", { exact: true })).toBeVisible();
+    page.getByText("本机伴随服务不可用", { exact: true }),
+  ).toHaveCount(0);
+
+  // 不点击扫描 CTA；settle 后断言没有扫描进行中的标记
+  await page.waitForTimeout(600);
+  await expect(page.getByText(/检测进度：/)).toHaveCount(0);
+  await expect(page.getByText("扫描中", { exact: true })).toHaveCount(0);
+
+  // 短暂 settle 后不应有未捕获页面错误
+  expect(pageErrors, "/security 不应触发未捕获页面错误").toEqual([]);
 });
 
 test("设置加载完成", async ({ page }) => {
@@ -197,7 +220,7 @@ test("本地采集状态仅在数据来源页展示真实结果", async ({ page 
 
   await page.goto("/sources");
   await expect(
-    page.getByRole("heading", { name: "数据来源", exact: true }),
+    page.getByRole("heading", { name: "Agent & Skill Hub", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("已接入 / 总探测", { exact: true }),
@@ -205,8 +228,10 @@ test("本地采集状态仅在数据来源页展示真实结果", async ({ page 
   await expect(page.getByText("采集事件总数", { exact: true })).toBeVisible();
   // 逐工具真实状态：存在有数据的工具与解析说明
   await expect(page.getByText("有数据", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/采集事件 \d+/).first()).toBeVisible();
+  await expect(page.getByText(/采集 [\d,]+ 事件/).first()).toBeVisible();
   await expect(page.getByText(/日志解析：/).first()).toBeVisible();
+  // 无数据工具与缺失日志状态（真实本地数据）
+  await expect(page.getByText("缺少日志文件", { exact: true })).toBeVisible();
 });
 
 test("设置页偏好可修改并在当前隔离上下文持久化", async ({ page }) => {

@@ -14,9 +14,9 @@ const genericDefaults = getGenericReaderDefaults();
 /**
  * Built-in usage adapters, derived from the tool-registry: one entry per tool
  * (including `catalogVisible=false` legacy sources aipy/cline) with a
- * non-unsupported `usage` capability. The scanner still dispatches native
- * readers (claude-code/codex/workbuddy) via hardcoded calls; this catalog feeds
- * the generic adapter pipeline and the source-id universe.
+ * non-unsupported `usage` capability. The scanner dispatches controlled native
+ * readers by this entry's registry-declared `reader` key; generic entries feed
+ * the field-mapping pipeline. The same catalog also defines the source universe.
  */
 const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
   .filter(
@@ -29,6 +29,7 @@ const REGISTRY_USAGE_ADAPTERS: UsageAdapterContract[] = listTools()
     const usage = def.capabilities.usage;
     const entry: UsageAdapterContract = {
       source: def.id,
+      reader: usage.reader!,
       paths: [...usage.paths!],
       // The loader fills these on every compiled definition; the shared-pack
       // fallback only guards a null policy getter (never in practice).
@@ -47,5 +48,6 @@ export const BUILTIN_USAGE_ADAPTERS: UsageAdapterContract[] = [
 ];
 
 export const GENERIC_BUILTIN_USAGE_ADAPTERS = BUILTIN_USAGE_ADAPTERS.filter(
-  (adapter) => adapter.source !== "claude-code" && adapter.source !== "codex",
+  (adapter) =>
+    adapter.reader === "generic" || adapter.reader.startsWith("generic-"),
 );

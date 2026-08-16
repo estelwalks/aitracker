@@ -60,9 +60,12 @@ function grainForPeriod(period: UsagePeriod): UsageTimeGrain | "month" {
       return "hour";
     case "7d":
     case "30d":
+    case "90d":
+    case "180d":
     case "month":
     case "custom":
       return "day";
+    case "1y":
     case "year":
     case "all":
       return "month";

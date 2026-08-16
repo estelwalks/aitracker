@@ -1,22 +1,20 @@
 import { createHash } from "node:crypto";
 import { lstat, opendir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { ScanSkillReport } from "skill-scanner";
 
 import { scanLocalSkills } from "../../../lib/local-skills/scanner.server.ts";
 import type {
   LocalSkill,
   SkillSnapshot,
 } from "../../../lib/local-skills/types.ts";
-import {
-  scanSecurityFiles,
-  type SecurityInputFile,
-  type SecurityReport,
-} from "../../../lib/security/scanner.ts";
+import type { SecurityInputFile } from "../../../lib/security/scanner.ts";
 import {
   assessmentHistorySummary,
   createAssetAssessment,
 } from "../application/index.ts";
-import { assessmentFromSecurityReport } from "./scanner.ts";
+import { assessmentFromSkillScannerReport } from "./scanner.ts";
+import { runQuickNodeSecurityEngine } from "./node-security-engine.server.ts";
 import type {
   AssetAssessment,
   AssetHashRef,
@@ -56,7 +54,9 @@ export interface LocalSkillDiscoveryPort {
 export interface CreateLocalSkillSecurityMonitorOptions {
   readonly history: SecurityAssessmentHistoryStore;
   readonly discovery?: LocalSkillDiscoveryPort;
-  readonly scanner?: (files: readonly SecurityInputFile[]) => SecurityReport;
+  readonly scanner?: (
+    files: readonly SecurityInputFile[],
+  ) => ScanSkillReport | Promise<ScanSkillReport>;
   readonly now?: () => Date;
 }
 
@@ -204,7 +204,16 @@ export function createLocalSkillSecurityMonitor(
   options: CreateLocalSkillSecurityMonitorOptions,
 ): BackgroundSkillSecurityScanPort {
   const discovery = options.discovery ?? { discover: () => scanLocalSkills() };
-  const scanner = options.scanner ?? ((files) => scanSecurityFiles([...files]));
+  const scanner =
+    options.scanner ??
+    ((files) =>
+      runQuickNodeSecurityEngine(
+        files.map((file, index) => ({
+          path: file.name || `file-${index + 1}`,
+          content: file.content,
+        })),
+        "zh-CN",
+      ));
   const now = options.now ?? (() => new Date());
 
   return {
@@ -226,6 +235,18 @@ export function createLocalSkillSecurityMonitor(
             files = { files: [], complete: false };
           }
           const assetHashRef = opaqueHash(files.files);
+          // Unchanged since the last scan: reuse the stored assessment for this
+          // run's summary without re-running the model scanner or re-writing
+          // history — avoids wasting tokens/time on identical content.
+          const previous = await options.history.latest(assetRef);
+          if (
+            files.complete &&
+            files.files.length > 0 &&
+            previous?.assetHashRef === assetHashRef
+          ) {
+            assessments.push(previous);
+            continue;
+          }
           let assessment: AssetAssessment;
           if (!files.complete || files.files.length === 0) {
             failedAssetCount += 1;
@@ -236,10 +257,11 @@ export function createLocalSkillSecurityMonitor(
             });
           } else {
             try {
-              assessment = assessmentFromSecurityReport({
+              assessment = assessmentFromSkillScannerReport({
                 assetRef,
                 assetKind: "skill",
-                report: scanner(files.files),
+                report: await scanner(files.files),
+                assessedAt,
               });
             } catch {
               failedAssetCount += 1;

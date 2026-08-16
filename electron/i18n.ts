@@ -50,6 +50,7 @@ export interface ElectronMessages {
   };
   menu: {
     open: string;
+    openBrowser: string;
     autoLaunch: string;
     quit: string;
   };
@@ -70,7 +71,12 @@ export interface ElectronMessages {
 const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
   "zh-CN": {
     tray: { tooltip: "{appName}" },
-    menu: { open: "打开 {appName}", autoLaunch: "开机自动启动", quit: "退出" },
+    menu: {
+      open: "打开 {appName}",
+      openBrowser: "在浏览器中打开",
+      autoLaunch: "开机自动启动",
+      quit: "退出",
+    },
     dialog: {
       closeHint: {
         message: "{appName} 将继续在菜单栏运行，可通过托盘图标重新打开",
@@ -89,6 +95,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "Open {appName}",
+      openBrowser: "Open in Browser",
       autoLaunch: "Launch at Login",
       quit: "Quit",
     },
@@ -111,6 +118,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} を開く",
+      openBrowser: "ブラウザーで開く",
       autoLaunch: "ログイン時に起動",
       quit: "終了",
     },
@@ -133,6 +141,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} 열기",
+      openBrowser: "브라우저에서 열기",
       autoLaunch: "로그인 시 실행",
       quit: "종료",
     },
@@ -318,10 +327,12 @@ export interface TrayTemplateItem {
 export interface TrayTemplateState {
   autoLaunchEnabled: boolean;
   autoLaunchSupported: boolean;
+  browserCompanionSupported: boolean;
 }
 
 export interface TrayTemplateCallbacks {
   onOpen(): void;
+  onOpenBrowser(): void;
   onToggleAutoLaunch(checked: boolean): void;
   onQuit(): void;
 }
@@ -335,6 +346,11 @@ export function createTrayTemplate(
   const t = electronMessages[locale];
   return [
     { label: t.menu.open, click: callbacks.onOpen },
+    {
+      label: t.menu.openBrowser,
+      enabled: state.browserCompanionSupported,
+      click: callbacks.onOpenBrowser,
+    },
     { type: "separator" },
     {
       label: t.menu.autoLaunch,

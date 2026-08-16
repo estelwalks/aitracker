@@ -3,6 +3,7 @@ export type {
   AssetRef,
   EvidenceRef,
   GenerateReportInput,
+  ReportContent,
   ReportDefinition,
   ReportDefinitionSummary,
   ReportKind,
@@ -18,9 +19,17 @@ export type {
   ScheduleRef,
   TemplateVersion,
 } from "./contracts";
+export { aggregateSessionDensity, sumPeriodDensity } from "./period.ts";
+export type {
+  PeriodGranularity,
+  SessionDayMetric,
+  SessionDensity,
+} from "./period.ts";
 export { BUILTIN_REPORT_DEFINITIONS } from "./domain.ts";
 export { createReportsApplication } from "./application/index.ts";
 export type { ReportsApplicationOptions } from "./application/index.ts";
+export { generateReportNow, getReportBody } from "./server-fns.ts";
+export type { GenerateReportNowResult } from "./server-fns.ts";
 export {
   createReportsPresentation,
   createTaskBackedReportsSource,

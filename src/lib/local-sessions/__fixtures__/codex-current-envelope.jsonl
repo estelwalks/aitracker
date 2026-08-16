@@ -1,0 +1,5 @@
+{"timestamp":"2026-08-01T10:00:00.000Z","type":"session_meta","payload":{"id":"__SESSION_ID__","cwd":"/Users/demo/codex-current"}}
+{"timestamp":"2026-08-01T10:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5-codex","model_provider":"OpenAI","cwd":"/Users/demo/codex-current"}}
+{"timestamp":"2026-08-01T10:00:02.000Z","type":"response_item","payload":{"type":"response_item","item":{"type":"custom_tool_call","name":"exec","input":"git status --short"}}}
+{"timestamp":"2026-08-01T10:00:03.000Z","type":"event_msg","payload":{"type":"patch_apply_end"}}
+{"timestamp":"2026-08-01T10:00:04.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":200,"cached_input_tokens":50,"output_tokens":40,"reasoning_output_tokens":15}}}}

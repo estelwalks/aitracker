@@ -38,6 +38,7 @@ export {
   querySkillAssets,
   toSkillAssetView,
 } from "./application/index.ts";
+export { SkillsPage } from "./presentation/SkillsPage.tsx";
 export type {
   AssetSortDirection,
   AssetSortKey,
@@ -61,6 +62,7 @@ export type {
 } from "./application/index.ts";
 export {
   getLocalSkills,
+  getSkillFiles,
   getSkillWorkspace,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
@@ -72,6 +74,8 @@ export type {
   BatchUninstallResult,
   LocalSkill,
   SkillAgent,
+  SkillFileEntry,
+  SkillFileList,
   SkillInstallation,
   SkillSnapshot,
   SkillSyncResult,

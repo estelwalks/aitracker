@@ -99,6 +99,16 @@ test("HOME-normalization: catalog relative path gets ~/, absolute scanner path r
   );
   const grok = outAbs.entries.find((e) => e.id === "grok")!;
   assert.ok(grok.paths.includes("~/.grok"));
+
+  const outExternal = deriveUsageSources(
+    AI_TOOLS,
+    [summary({ source: "grok", paths: ["/var/private/grok"] })],
+    installations(".grok"),
+    "t",
+    HOME,
+  );
+  const externalGrok = outExternal.entries.find((e) => e.id === "grok")!;
+  assert.equal(externalGrok.paths.includes("/var/private/grok"), false);
 });
 
 test("totals aggregate across multiple connected tools", () => {

@@ -24,10 +24,27 @@ export function buildResumeCommand(
   source: SessionSource,
   sessionId: string,
 ): string | null {
+  const command = buildResumeCommandTokens(source, sessionId);
+  return command?.join(" ") ?? null;
+}
+
+/**
+ * Server-side launch tokens for a trusted resume plan. This intentionally
+ * returns a token array rather than a shell string: callers must invoke the
+ * executable directly with `shell: false`. Do not export this through a
+ * browser-facing module or serialise its value to a renderer.
+ */
+export function buildResumeCommandTokens(
+  source: SessionSource,
+  sessionId: string,
+): readonly string[] | null {
   if (!isResumeSafeId(sessionId)) return null;
   const plan = getSessionPlan(source);
   if (!plan) return null;
-  return plan.command
-    .map((token) => (token === "{sessionId}" ? sessionId : token))
-    .join(" ");
+  const command = plan.command.map((token) =>
+    token === "{sessionId}" ? sessionId : token,
+  );
+  return command.length > 0 && command.every((token) => token.length > 0)
+    ? command
+    : null;
 }
