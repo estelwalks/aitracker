@@ -2,7 +2,7 @@
 /** /reports（ブリーフィング＆メモリ）V3.0 プロトタイプの文案。 */
 export const reports = {
   insight: {
-    title: "Jarvis ブリーフィング洞察",
+    title: "今日のインサイト",
     reports: "ブリーフィング {count} 件を生成",
     runs: "生成を {count} 回実行",
     sessions: "セッション {count} 件をカバー",
@@ -69,20 +69,28 @@ export const reports = {
     cost: "{cost}",
     generate: "今すぐ生成",
     generating: "生成中…",
+    goToday: "今日",
+    goWeek: "今週",
+    goMonth: "今月",
   },
   body: {
-    emptyTitle: "この期間のブリーフィングはありません",
-    emptyDesc: "「下書きを生成」でこの期間のブリーフィングを作成できます。",
-    draft: "下書きを生成",
+    emptyTitle: "この期間のレポートはありません",
+    emptyDesc: "「レポート下書きを生成」でこの期間のレポートを作成できます。",
+    draft: "レポート下書きを生成",
     save: "保存",
     regenerate: "再生成",
+    rewriteTitle: "レポートを再生成しますか？",
+    rewriteDesc:
+      "この期間の {count} 件のセッションに基づいて書き直し、現在編集した内容は上書きされます。",
+    rewriteConfirm: "再生成",
+    exportPdf: "PDF を書き出す",
     reportList: "すべてのブリーフィング",
     noReports: "生成されたブリーフィングはありません",
     noMatch: "一致するブリーフィングがありません",
   },
   notes: {
     title: "クイックメモ",
-    placeholder: "メモを追加…",
+    placeholder: "メモを入力して Enter で追加",
     add: "追加",
     empty: "メモはありません",
     chips: {

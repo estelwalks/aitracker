@@ -5,7 +5,7 @@
  */
 export const reports = {
   insight: {
-    title: "Jarvis 简报洞察",
+    title: "今日洞察",
     reports: "已生成 {count} 份简报",
     runs: "累计触发 {count} 次生成",
     sessions: "覆盖 {count} 场会话",
@@ -16,8 +16,8 @@ export const reports = {
   archive: {
     title: "历史归档",
     search: "搜索简报…",
-    prev: "上一批",
-    next: "下一批",
+    prev: "上一期",
+    next: "下一期",
     day: "日",
     week: "周",
     month: "月",
@@ -71,20 +71,28 @@ export const reports = {
     cost: "{cost}",
     generate: "立即生成",
     generating: "生成中…",
+    goToday: "今天",
+    goWeek: "本周",
+    goMonth: "本月",
   },
   body: {
-    emptyTitle: "本周期暂无简报",
-    emptyDesc: "点击「生成草稿」为本周期创建一份简报。",
-    draft: "生成草稿",
+    emptyTitle: "该周期暂无报告",
+    emptyDesc: "点击「生成报告草稿」为该周期创建一份报告。",
+    draft: "生成报告草稿",
     save: "保存",
     regenerate: "重新生成",
+    rewriteTitle: "重新生成报告？",
+    rewriteDesc:
+      "将依据该周期 {count} 场会话重新填写，当前已编辑的内容会被覆盖。",
+    rewriteConfirm: "重新生成",
+    exportPdf: "导出 PDF",
     reportList: "全部简报",
     noReports: "暂无已生成的简报",
     noMatch: "未找到匹配的简报",
   },
   notes: {
     title: "快捷批注",
-    placeholder: "添加一条批注…",
+    placeholder: "写一条批注，回车添加",
     add: "添加",
     empty: "暂无批注",
     chips: {
