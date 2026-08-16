@@ -29,6 +29,11 @@ import {
   createRegistryRouter,
   offlineProvider,
 } from "../modules/ai-orchestration/provider-registry.ts";
+import {
+  createProfileBackedProvider,
+  getModelProfileRepository,
+  type ModelProfileRepository,
+} from "../modules/ai-orchestration/model-profile.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
 import type { ReportsApplication } from "../modules/reports/index.ts";
@@ -108,6 +113,13 @@ export interface CompositionRoot {
    * response until a real provider is registered.
    */
   readonly aiExecutor: AIExecutorPort;
+  /**
+   * Multi-profile model configuration store (S-500). Profiles persist under
+   * `~/.trusttools/tasks/model-profiles.v1.json` (0600 perms); renderer-facing
+   * reads return key-free projections. The registry's `profile` provider
+   * resolves executions through this repository.
+   */
+  readonly modelProfiles: ModelProfileRepository;
   /**
    * Reports application. Backed by an AtomicJsonStore-backed report store, the
    * AI generation adapter (using `aiExecutor`) and the offline context port.
@@ -254,9 +266,17 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // through the desktop security IPC boundary.
 
   // AI orchestration: register the deterministic offline provider by default so
-  // distillation/reports get a stable fallback. A real provider can be
-  // registered later without touching this wiring.
+  // distillation/reports get a stable fallback. The S-500 profile store backs a
+  // `profile` provider that resolves a saved profile by `modelId` at invoke
+  // time — distillation selects a profile by its id and routes here, giving it
+  // a real model call while every renderer-facing read stays key-free.
+  const modelProfiles = getModelProfileRepository();
   const aiRegistry = createProviderRegistry([offlineProvider]);
+  aiRegistry.register(
+    createProfileBackedProvider({
+      resolve: (profileId) => modelProfiles.getProfileForExecution(profileId),
+    }),
+  );
   const aiExecutor = createAiExecutor({
     router: createRegistryRouter(aiRegistry),
     offlineFallback: deterministicOfflineFallback,
@@ -366,6 +386,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     preferences,
     runs,
     aiExecutor,
+    modelProfiles,
     reports,
     distillation,
     knowledge,

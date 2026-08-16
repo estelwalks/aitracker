@@ -10,3 +10,15 @@ export {
   type LLMEnvConfig,
   type LLMConfigStatus,
 } from "./config.ts";
+export * from "./model-profile.ts";
+export {
+  deleteModelProfile,
+  listModelProfiles,
+  setActiveModelProfile,
+  testModelProfile,
+  upsertModelProfile,
+} from "./model-profile.server-fns.ts";
+export type {
+  ModelProfileActionResult,
+  ModelProfileListResult,
+} from "./model-profile.server-fns.ts";

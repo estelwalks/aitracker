@@ -112,6 +112,7 @@ export function createDistillationApplication(
       const aiRequest: AIRequest = {
         requestId: request.requestId,
         modelId: request.modelId,
+        providerId: request.providerId,
         prompt: request.prompt,
         input: { text: controlledContext(controlled) },
         budgetUsd: request.budgetUsd,
