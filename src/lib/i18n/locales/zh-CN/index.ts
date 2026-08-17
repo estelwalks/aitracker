@@ -5,6 +5,7 @@ import { errors } from "./errors";
 import { exportMessages } from "./export";
 import { insights } from "./insights";
 import { market } from "./market";
+import { memory } from "./memory";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
@@ -16,6 +17,7 @@ import { sources } from "./sources";
 import { settings } from "./settings";
 import { theme } from "./theme";
 import { tracker } from "./tracker";
+import { widget } from "./widget";
 
 /**
  * 简体中文主字典 —— 消息 key、参数名与形状的单一事实来源。
@@ -37,6 +39,8 @@ export const zh = {
   settings,
   market,
   tracker,
+  memory,
+  widget,
   meta,
   errors,
   export: exportMessages,

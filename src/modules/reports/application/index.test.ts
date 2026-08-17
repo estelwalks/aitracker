@@ -85,6 +85,24 @@ test("manual and scheduled generation share the same use case and produce equiva
   }
 });
 
+test("generate forwards an explicit modelId to the generation port", async () => {
+  const calls: Array<{ modelId?: string }> = [];
+  const state = app({
+    generation: {
+      generate: async (input: { modelId?: string }) => {
+        calls.push({ modelId: input.modelId });
+        return { status: "succeeded" as const, body: "A safe report body." };
+      },
+    },
+  });
+  await state.app.generate({
+    definitionId: "reports.daily",
+    trigger: "manual",
+    modelId: "m-profile-1",
+  });
+  assert.deepEqual(calls, [{ modelId: "m-profile-1" }]);
+});
+
 test("failed and budget-exceeded generation preserves the previous report", async () => {
   const first = app();
   await first.app.generate({

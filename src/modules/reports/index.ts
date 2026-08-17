@@ -46,3 +46,7 @@ export type {
   ReportsViewModel,
   ReportUiStatus,
 } from "./presentation/index.ts";
+export {
+  useReportActions,
+  useDraftAutosave,
+} from "./presentation/report-actions";

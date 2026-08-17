@@ -21,6 +21,7 @@ test("sources query projection keeps only HOME-relative display paths", () => {
         filesRead: 2,
         filesConsidered: 3,
         skillCount: 1,
+        skillAgent: "Codex",
       },
     ],
     totals: {

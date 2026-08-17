@@ -27,6 +27,7 @@ import type {
   SourcesQueryStatus,
   SourcesQuerySummary,
 } from "./model";
+import { SourceMigrationModal } from "./SourceMigrationModal";
 export type {
   SourcesQueryEntry,
   SourcesQueryStatus,
@@ -83,6 +84,8 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const { t, format, locale } = useI18n();
   const [summary, setSummary] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
+  const [migrationSource, setMigrationSource] =
+    useState<SourcesQueryEntry | null>(null);
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
@@ -250,11 +253,23 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
             {filtered.map((entry) => (
-              <SourceCard key={entry.id} entry={entry} />
+              <SourceCard
+                key={entry.id}
+                entry={entry}
+                onMigrate={() => setMigrationSource(entry)}
+              />
             ))}
           </div>
         )}
       </section>
+
+      {migrationSource !== null && (
+        <SourceMigrationModal
+          source={migrationSource}
+          onClose={() => setMigrationSource(null)}
+          onDone={handleRefresh}
+        />
+      )}
     </div>
   );
 }
@@ -288,10 +303,18 @@ function SummaryCard({
   );
 }
 
-function SourceCard({ entry }: { entry: SourcesQueryEntry }) {
+function SourceCard({
+  entry,
+  onMigrate,
+}: {
+  entry: SourcesQueryEntry;
+  onMigrate: () => void;
+}) {
   const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
   const hasPaths = entry.paths.length > 0;
+  // 迁移按钮仅在工具确实有 Skill 根且存在 Skill 时可用。
+  const canMigrate = entry.skillCount !== null && entry.skillCount > 0;
 
   return (
     <article className="rounded-xl bg-surface-2/60 p-3.5 transition-colors hover:bg-surface-2">
@@ -356,12 +379,13 @@ function SourceCard({ entry }: { entry: SourcesQueryEntry }) {
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled
-          title={t("sources.migrationUnavailable")}
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-sm bg-foreground px-2.5 py-1.5 font-mono text-[11px] font-semibold text-background opacity-40"
+          disabled={!canMigrate}
+          title={canMigrate ? undefined : t("sources.migrate.noSkills")}
+          onClick={onMigrate}
+          className={`inline-flex items-center gap-1.5 rounded-sm bg-foreground px-2.5 py-1.5 font-mono text-[11px] font-semibold text-background ${canMigrate ? "transition-opacity hover:opacity-90" : "cursor-not-allowed opacity-40"}`}
         >
           <ArrowLeftRight className="size-3.5" strokeWidth={2} />
-          {t("sources.migrate")}
+          {t("sources.migrate.button")}
         </button>
         <span className="tt-num text-[10px] text-muted-foreground">
           {t("sources.row.parsing", {

@@ -30,6 +30,14 @@ export const ScheduleSchema = z.discriminatedUnion("kind", [
       localTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal("monthly"),
+      // Calendar day 1–31; the scheduler clamps to the last day of short months.
+      dayOfMonth: z.number().int().min(1).max(31),
+      localTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+    })
+    .strict(),
 ]);
 export type Schedule = z.infer<typeof ScheduleSchema>;
 

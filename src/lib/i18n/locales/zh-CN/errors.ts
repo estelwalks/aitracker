@@ -1,5 +1,8 @@
 export const errors = {
   generic: "操作失败，请重试",
+  sources: {
+    migrateInvalid: "迁移参数不合法",
+  },
   security: {
     dailyLimitReached: "今日 {limit} 次本地扫描额度已用完",
     fileRequired: "请选择 SKILL.md 或包含它的 Skill 文件夹",
@@ -43,6 +46,14 @@ export const errors = {
     resumeInvalid: "会话恢复请求无效",
     resumeCancelled: "会话恢复已取消",
     resumeFailed: "无法启动本地会话恢复",
+    transcriptUnavailable: "会话正文读取失败，请重试",
+  },
+  memory: {
+    invalidInput: "记忆内容不合法",
+    notFound: "记忆条目不存在",
+    conflict: "记忆条目已被其他操作修改",
+    invalidTransition: "记忆条目状态不允许该操作",
+    writeFailed: "记忆写入失败，请重试",
   },
   distillation: {
     invalidSelection: "请选择 1 至 8 个不重复的会话",
@@ -56,6 +67,22 @@ export const errors = {
     invalidName: "Skill 名称不合法",
     invalidAgent: "目标工具不可用",
     skillExists: "同名 Skill 已存在，请更换名称",
+    quotaExceeded:
+      "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
+  },
+  modelProfile: {
+    nameRequired: "请输入配置名称",
+    nameTooLong: "配置名称不能超过 64 个字符",
+    invalidMode: "配置模式不合法",
+    invalidProtocol: "协议类型不合法",
+    invalidUrl: "服务地址必须是合法的 http/https URL",
+    invalidModel: "模型名不合法（仅限字母/数字/._:/-，最多 120 字符）",
+    apiKeyRequired: "请输入 API Key",
+    apiKeyTooShort: "API Key 至少 8 个字符",
+    apiKeyTooLong: "API Key 不能超过 512 个字符",
+    notFound: "该模型配置不存在或已被删除",
+    testFailed: "连接测试失败，请检查服务地址、API Key 与网络",
+    testTimeout: "连接测试超时（5 秒）",
   },
   pricing: {
     modelListInvalid: "模型列表不合法",

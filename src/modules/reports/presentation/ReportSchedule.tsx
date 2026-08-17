@@ -8,6 +8,7 @@ import { useI18n } from "../../../lib/i18n/context";
 import {
   useReportSchedule,
   type ReportScheduleConfig,
+  type ReportScheduleSyncResult,
   type ScheduleGranularity,
 } from "./report-schedule.ts";
 
@@ -32,10 +33,10 @@ function summaryFor(
  * 自动定时生成 (ReportSchedule). When never configured it renders the first-run
  * guide card ("开启自动定时生成"); once saved it shows a status bar + switch +
  * cadence/time/weekday settings. Persistence is `tt.report.schedule` (Electron
- * prefs when available, else localStorage) — see `report-schedule.ts`. The
- * actual background scheduler is an Electron follow-up; today the config only
- * persists and generation stays manual (honest boundary, also called out in
- * the settings editor note).
+ * prefs when available, else localStorage) and every save/toggle syncs the
+ * config into the task scheduler's `reports.generate` preference (Story B-200)
+ * — see `report-schedule.ts`. A sync failure shows an error toast but never
+ * blocks the local save.
  */
 export function ReportSchedule() {
   const { t } = useI18n();
@@ -50,10 +51,30 @@ export function ReportSchedule() {
     setEditing(true);
   };
 
+  const showSyncToast = (
+    result: ReportScheduleSyncResult,
+    enabled: boolean,
+  ) => {
+    if (result.ok) {
+      toast.success(
+        enabled
+          ? t("reports.schedule.enabled")
+          : t("reports.schedule.disabled"),
+      );
+    } else {
+      toast.error(t("reports.schedule.syncFailed"));
+    }
+  };
+
   const handleSave = async () => {
-    await save(draft);
+    const result = await save(draft);
     setEditing(false);
-    toast.success(t("reports.schedule.saved"));
+    showSyncToast(result, draft.enabled);
+  };
+
+  const handleToggle = async (next: boolean) => {
+    const result = await setEnabled(next);
+    showSyncToast(result, next);
   };
 
   // First-run guide card.
@@ -112,7 +133,7 @@ export function ReportSchedule() {
         <div className="flex items-center gap-2">
           <Switch
             checked={schedule.enabled}
-            onCheckedChange={(next) => void setEnabled(next)}
+            onCheckedChange={(next) => void handleToggle(next)}
             aria-label={t("reports.schedule.enable")}
           />
           <TTButton

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Flame, Minus } from "lucide-react";
 
+import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
 import { ChipTabs, EmptyState, Panel } from "../../../../components/tt";
-import { BrandIcon } from "../../../../components/BrandIcon";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import type {
@@ -14,10 +14,23 @@ import { WasteDetail } from "./WasteDetail.tsx";
 
 const DIMENSIONS: RoastDimension[] = ["skill", "project", "session"];
 
+const SUGGEST_KEY: Record<RoastRow["suggestion"], MessageKey> = {
+  cache: "tracker.suggest.cache",
+  output: "tracker.suggest.output",
+  volume: "tracker.suggest.volume",
+  none: "tracker.suggest.none",
+};
+
 const DIMENSION_KEY: Record<RoastDimension, MessageKey> = {
   skill: "tracker.board.skill",
   project: "tracker.board.project",
   session: "tracker.board.session",
+};
+
+const DIMENSION_SUB_KEY: Record<RoastDimension, MessageKey> = {
+  skill: "tracker.board.skillSub",
+  project: "tracker.board.projectSub",
+  session: "tracker.board.sessionSub",
 };
 
 const TREND_KEY: Record<NonNullable<RoastRow["trend"]>, MessageKey> = {
@@ -26,10 +39,11 @@ const TREND_KEY: Record<NonNullable<RoastRow["trend"]>, MessageKey> = {
   flat: "tracker.row.trendFlat",
 };
 
-function wasteTone(waste: number): { text: string; bar: string } {
-  if (waste >= 60) return { text: "text-danger", bar: "bg-danger/70" };
-  if (waste >= 30) return { text: "text-warn", bar: "bg-warn/70" };
-  return { text: "text-ok", bar: "bg-ok/70" };
+/** 浪费指数徽标配色：越高越危险（与原型阈值一致）。 */
+function wasteBadge(waste: number): string {
+  if (waste >= 45) return "bg-danger/15 text-danger";
+  if (waste >= 28) return "bg-warn/15 text-warn";
+  return "bg-ok/15 text-ok";
 }
 
 function TrendBadge({ row }: { row: RoastRow }) {
@@ -72,56 +86,112 @@ export function RoastBoard({
     value,
     label: t(DIMENSION_KEY[value]),
   }));
+  const maxTok = Math.max(...rows.map((row) => row.tokens), 1);
 
   return (
     <Panel
-      title={t("tracker.title")}
-      action={
-        <ChipTabs value={dimension} onChange={setDimension} options={options} />
+      title={
+        <span className="flex items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-warn/15">
+            <Flame className="size-4 text-warn" strokeWidth={2} />
+          </span>
+          <span className="text-[13px] font-semibold tracking-tight">
+            {t(DIMENSION_KEY[dimension])}
+          </span>
+          <span className="font-mono text-[10.5px] text-muted-foreground">
+            {t(DIMENSION_SUB_KEY[dimension])}
+          </span>
+        </span>
       }
     >
+      <ChipTabs
+        value={dimension}
+        onChange={setDimension}
+        options={options}
+        className="mb-3"
+      />
       {rows.length === 0 ? (
         <EmptyState title={t("tracker.empty")} desc={t("tracker.emptyDesc")} />
       ) : (
-        <ul className="divide-y divide-border">
+        <ol className="space-y-2">
           {rows.map((row, index) => {
-            const tone = wasteTone(row.waste);
+            const top = index < 3;
+            const pct = Math.max(6, Math.round((row.tokens / maxTok) * 100));
+            const badge = wasteBadge(row.waste);
+            const agent = row.source ?? row.name;
             return (
               <li key={row.key}>
                 <button
                   type="button"
                   onClick={() => setSelected(row)}
-                  className="relative flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 overflow-hidden px-3 py-3 text-left transition-colors hover:bg-surface-2/60"
+                  className={`relative w-full cursor-pointer overflow-hidden rounded-xl px-3.5 py-3 text-left transition-colors ${
+                    top ? "bg-surface-2" : "bg-surface"
+                  } hover:bg-accent/40`}
                 >
                   <span
-                    className="absolute inset-y-0 left-0 bg-foreground/[0.04]"
-                    style={{ width: `${Math.min(100, row.waste)}%` }}
+                    className="pointer-events-none absolute inset-y-0 left-0 bg-gradient-to-r from-primary/10 to-transparent"
+                    style={{ width: `${pct}%` }}
                     aria-hidden="true"
                   />
-                  <span className="tt-num w-6 shrink-0 font-mono text-[13px] font-black text-muted-foreground/60">
-                    {index + 1}
-                  </span>
-                  <BrandIcon
-                    name={row.source ?? row.name}
-                    className="size-4 shrink-0"
-                  />
-                  <span className="min-w-[120px] flex-1 truncate text-[13px] font-medium">
-                    {row.name}
-                  </span>
-                  <TrendBadge row={row} />
-                  <span
-                    className={`tt-num w-12 text-right font-mono text-[13px] font-black ${tone.text}`}
-                  >
-                    {row.waste.toFixed(1)}
-                  </span>
-                  <span className="tt-num w-24 text-right font-mono text-[11px] text-muted-foreground">
-                    {format.formatNumber(row.tokens)}
-                  </span>
+                  <div className="relative flex items-center gap-3">
+                    <span
+                      className={`tt-num w-7 shrink-0 text-center font-mono font-black leading-none ${
+                        top
+                          ? "text-2xl text-primary"
+                          : "text-lg text-muted-foreground/60"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-[12.5px] font-semibold">
+                          {row.name}
+                        </span>
+                        <BrandIcon
+                          name={agent}
+                          className="size-3 shrink-0"
+                          color={brandColorOf(agent)}
+                        />
+                        {row.source && (
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {row.source}
+                          </span>
+                        )}
+                        <span
+                          className={`ml-1 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-semibold ${badge}`}
+                        >
+                          {row.waste.toFixed(1)}%
+                        </span>
+                        <TrendBadge row={row} />
+                      </div>
+
+                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
+                        {t("tracker.row.calls", { count: row.calls })}
+                        {" · "}
+                        {t("tracker.row.tokens", {
+                          count: format.formatTokens(row.tokens),
+                        })}
+                        {" · "}
+                        {t(SUGGEST_KEY[row.suggestion])}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="tt-num font-mono text-[13px] font-black text-foreground">
+                        {format.formatTokens(row.tokens)}
+                      </div>
+                      <div className="font-mono text-[10px] text-muted-foreground">
+                        {t("tracker.row.suggest")}
+                      </div>
+                    </div>
+                  </div>
                 </button>
               </li>
             );
           })}
-        </ul>
+        </ol>
       )}
       {selected && (
         <WasteDetail row={selected} onClose={() => setSelected(null)} />

@@ -124,8 +124,21 @@ function nanoToUsd(nano: bigint): number {
  *
  * Evidence: `LocalUsageEvent` carries no endpoint/provider fields today, so
  * local events always resolve via the reference-route path (estimated).
+ *
+ * Memoization: the result is cached per event object. Events are immutable
+ * parsed records and both registries (pricing + tool) are compiled once per
+ * process and never reset at runtime (the `__reset*` hooks are unused by tests
+ * and app code), so the function is effectively pure. A single dashboard
+ * render re-aggregates the same snapshot across source/model/project/tokenType
+ * plus the grand total — caching turns those repeated passes into O(1) lookups
+ * (~4× fewer rule-matching calls on a 10万-event snapshot, NFR-001).
  */
+const eventCostCache = new WeakMap<LocalUsageEvent, CostEstimate>();
+
 export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
+  const cached = eventCostCache.get(event);
+  if (cached) return cached;
+
   const registry = getDefaultPricingRegistry();
   const observation = getTool(event.source)?.modelObservation ?? null;
   const usagePlan = getUsagePlan(event.source);
@@ -154,10 +167,11 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
     },
   );
 
+  let cost: CostEstimate;
   switch (resolution.confidence) {
     case "exact": {
       const known = resolution.knownUsdNano ?? 0n;
-      return {
+      cost = {
         knownUsd: nanoToUsd(known),
         estimatedUsd: 0,
         cacheSavingsUsd:
@@ -170,10 +184,11 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
         unknownModels: [],
         complete: true,
       };
+      break;
     }
     case "estimated": {
       const estimated = resolution.knownUsdNano ?? 0n;
-      return {
+      cost = {
         knownUsd: 0,
         estimatedUsd: nanoToUsd(estimated),
         cacheSavingsUsd:
@@ -186,13 +201,18 @@ export function estimateEventCost(event: LocalUsageEvent): CostEstimate {
         unknownModels: [],
         complete: true,
       };
+      break;
     }
     case "not-billable":
       // Explicitly not charged: no cost, no unknown (complete answer).
-      return emptyCost();
+      cost = emptyCost();
+      break;
     case "unpriced":
-      return unknownCost(event.model);
+      cost = unknownCost(event.model);
+      break;
   }
+  eventCostCache.set(event, cost);
+  return cost;
 }
 
 export function estimateUsageCost(events: LocalUsageEvent[]): CostEstimate {
@@ -202,20 +222,187 @@ export function estimateUsageCost(events: LocalUsageEvent[]): CostEstimate {
   );
 }
 
+/**
+ * Per-(source, model, day) cost bucket for the tokenType dimension.
+ *
+ * A tokenType row's cost is a linear function of each event's token counts for
+ * a fixed resolution (price lookups are day-granular: `occurredAt` is sliced
+ * to its date in resolve.ts). Bucketing events by (source, model, day) lets us
+ * run `estimateEventCost` once per bucket on the aggregated tokens and scale
+ * the result by the bucket's event count — identical numbers, without
+ * materializing up to 5 full event copies per input event (10万事件 → ~50万
+ * objects).
+ */
+interface TokenCountFields {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+}
+
+interface TokenTypeBucket extends TokenCountFields {
+  source: LocalUsageSource;
+  model: string;
+  timestamp: string;
+  count: number;
+}
+
+function emptyBucket(
+  source: LocalUsageSource,
+  model: string,
+  timestamp: string,
+): TokenTypeBucket {
+  return {
+    source,
+    model,
+    timestamp,
+    count: 0,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens: 0,
+  };
+}
+
+/**
+ * Scale the event-count fields of a bucket's aggregated cost estimate.
+ *
+ * The aggregated synthetic event already carries the bucket's summed token
+ * counts, so the USD fields need no scaling (calculate.ts is purely linear in
+ * tokens — no fixed per-event fees). Only the per-event counters
+ * (`pricedEvents`/`estimatedEvents`/`unknownEvents`) must be multiplied by the
+ * bucket's event count; `complete` and `unknownModels` are identical for every
+ * event in the bucket because they share source/model/day.
+ */
+function scaleCostCounts(cost: CostEstimate, factor: number): CostEstimate {
+  return {
+    knownUsd: cost.knownUsd,
+    estimatedUsd: cost.estimatedUsd,
+    cacheSavingsUsd: cost.cacheSavingsUsd,
+    pricedEvents: cost.pricedEvents * factor,
+    estimatedEvents: cost.estimatedEvents * factor,
+    unknownEvents: cost.unknownEvents * factor,
+    unknownModels: cost.unknownModels,
+    complete: cost.complete,
+  };
+}
+
+const TOKEN_TYPE_SOURCES: readonly [TokenTypeKey, keyof LocalTokenCounts][] = [
+  ["input", "inputTokens"],
+  ["output", "outputTokens"],
+  ["cacheRead", "cachedInputTokens"],
+  ["cacheWrite", "cacheCreationInputTokens"],
+  ["reasoning", "reasoningOutputTokens"],
+] as const;
+
+function addTokenCounts(
+  target: TokenCountFields,
+  key: TokenTypeKey,
+  value: number,
+): void {
+  switch (key) {
+    case "input":
+      target.inputTokens += value;
+      break;
+    case "output":
+      target.outputTokens += value;
+      break;
+    case "cacheRead":
+      target.cachedInputTokens += value;
+      break;
+    case "cacheWrite":
+      target.cacheCreationInputTokens += value;
+      break;
+    case "reasoning":
+      target.reasoningOutputTokens += value;
+      break;
+  }
+  target.totalTokens += value;
+}
+
+function aggregateTokenTypeRows(events: LocalUsageEvent[]): PricedUsageRow[] {
+  const rows = new Map<
+    TokenTypeKey,
+    { totals: LocalUsageTotals; buckets: Map<string, TokenTypeBucket> }
+  >();
+
+  for (const event of events) {
+    for (const [key, field] of TOKEN_TYPE_SOURCES) {
+      const value = event[field];
+      if (value <= 0) continue;
+      let row = rows.get(key);
+      if (!row) {
+        row = { totals: emptyTotals(), buckets: new Map() };
+        rows.set(key, row);
+      }
+      // A tokenType row aggregates only its own token type (the old
+      // implementation pushed single-type synthetic events; totals here mirror
+      // that: `totalTokens` is the sum of this type's tokens, not the sum of
+      // the source events' total tokens).
+      row.totals.events += 1;
+      addTokenCounts(row.totals, key, value);
+
+      const bucketKey = `${event.source}\u0000${event.model}\u0000${localDateKey(
+        new Date(event.timestamp),
+      )}`;
+      const bucket =
+        row.buckets.get(bucketKey) ??
+        emptyBucket(event.source, event.model, event.timestamp);
+      bucket.count += 1;
+      addTokenCounts(bucket, key, value);
+      row.buckets.set(bucketKey, bucket);
+    }
+  }
+
+  return [...rows.entries()]
+    .map(([key, row]) => {
+      let cost = emptyCost();
+      for (const bucket of row.buckets.values()) {
+        const synthetic: LocalUsageEvent = {
+          source: bucket.source,
+          timestamp: bucket.timestamp,
+          model: bucket.model,
+          project: "",
+          inputTokens: key === "input" ? bucket.inputTokens : 0,
+          cachedInputTokens: key === "cacheRead" ? bucket.cachedInputTokens : 0,
+          cacheCreationInputTokens:
+            key === "cacheWrite" ? bucket.cacheCreationInputTokens : 0,
+          outputTokens: key === "output" ? bucket.outputTokens : 0,
+          reasoningOutputTokens:
+            key === "reasoning" ? bucket.reasoningOutputTokens : 0,
+          totalTokens: bucket.totalTokens,
+        };
+        cost = mergeCosts(
+          cost,
+          scaleCostCounts(estimateEventCost(synthetic), bucket.count),
+        );
+      }
+      return { key, ...row.totals, cost };
+    })
+    .sort(
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        left.key.localeCompare(right.key),
+    );
+}
+
 export function aggregatePricedUsage(
   events: LocalUsageEvent[],
   dimension: UsageDimension,
 ): PricedUsageRow[] {
+  if (dimension === "tokenType") {
+    return aggregateTokenTypeRows(events);
+  }
   const rows = new Map<
     string,
     { events: LocalUsageEvent[]; totals: LocalUsageTotals }
   >();
 
   for (const event of events) {
-    if (dimension === "tokenType") {
-      addTokenTypeRows(rows, event);
-      continue;
-    }
     const key =
       dimension === "source"
         ? event.source
@@ -406,33 +593,6 @@ function addEventToRow(
   row.totals.reasoningOutputTokens += event.reasoningOutputTokens;
   row.totals.totalTokens += event.totalTokens;
   rows.set(key, row);
-}
-
-function addTokenTypeRows(
-  rows: Map<string, { events: LocalUsageEvent[]; totals: LocalUsageTotals }>,
-  event: LocalUsageEvent,
-) {
-  const tokens: [TokenTypeKey, number][] = [
-    ["input", event.inputTokens],
-    ["output", event.outputTokens],
-    ["cacheRead", event.cachedInputTokens],
-    ["cacheWrite", event.cacheCreationInputTokens],
-    ["reasoning", event.reasoningOutputTokens],
-  ];
-
-  for (const [key, value] of tokens) {
-    if (value <= 0) continue;
-    const tokenEvent: LocalUsageEvent = {
-      ...event,
-      inputTokens: key === "input" ? value : 0,
-      outputTokens: key === "output" ? value : 0,
-      cachedInputTokens: key === "cacheRead" ? value : 0,
-      cacheCreationInputTokens: key === "cacheWrite" ? value : 0,
-      reasoningOutputTokens: key === "reasoning" ? value : 0,
-      totalTokens: value,
-    };
-    addEventToRow(rows, key, tokenEvent);
-  }
 }
 
 function addDays(value: Date, days: number) {

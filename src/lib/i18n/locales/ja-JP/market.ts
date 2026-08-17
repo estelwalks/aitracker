@@ -17,7 +17,7 @@ export const market = {
   },
   empty: {
     noMatch: "一致する Skill がありません",
-    noMatchDesc: "別のキーワードで再検索してください。",
+    noMatchDesc: "別のキーワードを試してみてください。",
   },
   stats: {
     totalSkills: "掲載 Skill",
@@ -30,7 +30,7 @@ export const market = {
     hintLocalInstalled: "この端末にインストール済み",
   },
   search: {
-    placeholder: "名前または説明で実際の Skill を検索…",
+    placeholder: "Skill 名、ソースパス、または機能を検索",
     keyword: " · キーワード「{keyword}」",
     updatedAt: "データ更新 {time}",
     perPage: "1 ページ {count} 件 · {page} ページ目",

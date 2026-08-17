@@ -1,5 +1,8 @@
 export const errors = {
   generic: "Operation failed, please try again",
+  sources: {
+    migrateInvalid: "Invalid migration arguments",
+  },
   security: {
     dailyLimitReached: "Today's {limit} local scan quota is used up",
     fileRequired: "Select a SKILL.md file or a Skill folder containing it",
@@ -45,6 +48,14 @@ export const errors = {
     resumeInvalid: "Invalid session resume request",
     resumeCancelled: "Session resume was cancelled",
     resumeFailed: "Could not start local session recovery",
+    transcriptUnavailable: "Failed to read the session transcript",
+  },
+  memory: {
+    invalidInput: "Invalid memory content",
+    notFound: "Memory entry not found",
+    conflict: "Memory entry was modified by another operation",
+    invalidTransition: "Memory entry state does not allow this operation",
+    writeFailed: "Could not save the memory; try again",
   },
   distillation: {
     invalidSelection: "Select 1 to 8 distinct sessions",
@@ -58,6 +69,24 @@ export const errors = {
     invalidName: "Skill name is invalid",
     invalidAgent: "Target tool is unavailable",
     skillExists: "A Skill with this name already exists; choose another",
+    quotaExceeded:
+      "Today's official-model distillation quota is used up ({limit} per day). Try again tomorrow or manage your models",
+  },
+  modelProfile: {
+    nameRequired: "Enter a profile name",
+    nameTooLong: "Profile name must be 64 characters or fewer",
+    invalidMode: "Invalid profile mode",
+    invalidProtocol: "Invalid protocol",
+    invalidUrl: "Endpoint must be a valid http/https URL",
+    invalidModel:
+      "Invalid model name (letters/digits/._:/- only, up to 120 characters)",
+    apiKeyRequired: "Enter an API key",
+    apiKeyTooShort: "API key must be at least 8 characters",
+    apiKeyTooLong: "API key must be 512 characters or fewer",
+    notFound: "This model profile does not exist or was deleted",
+    testFailed:
+      "Connection test failed — check the endpoint, API key and network",
+    testTimeout: "Connection test timed out (5 seconds)",
   },
   pricing: {
     modelListInvalid: "Invalid model list",

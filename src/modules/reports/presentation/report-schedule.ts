@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { syncReportScheduleToTasks } from "../server-fns.ts";
+
 /**
- * ReportSchedule configuration persistence.
+ * ReportSchedule configuration persistence + scheduler sync.
  *
- * Honest boundary: there is no background scheduler in the browser SSR runtime
- * (that is an Electron follow-up), so this config is persisted only — the
- * "定时" behavior stays a manual "立即生成" until the desktop main process wires
- * a scheduler. Persistence mirrors `src/lib/settings/store.ts`'s pattern: write
- * to the Electron preference store when `window.desktopApi` is present (key
- * `tt.report.schedule`, matching the prototype), and always mirror to
- * localStorage so browser dev mode behaves the same.
+ * The config persists to the Electron preference store (key `tt.report.schedule`,
+ * matching the prototype) when `window.desktopApi` is present and always mirrors
+ * to localStorage so browser dev mode behaves the same. Every save additionally
+ * syncs the config into the task scheduler's `reports.generate` preference via
+ * `syncReportScheduleToTasks` (Story B-200), so the persisted config actually
+ * drives scheduled generation — a sync failure never blocks the local save.
  */
 export type ScheduleGranularity = "daily" | "weekly" | "monthly";
 
@@ -24,6 +25,12 @@ export interface ReportScheduleConfig {
   readonly dayOfWeek: number;
   /** 1–31; only used for monthly granularity. */
   readonly dayOfMonth: number;
+}
+
+/** Outcome of syncing the config into the task scheduler. */
+export interface ReportScheduleSyncResult {
+  readonly ok: boolean;
+  readonly errorCode?: string;
 }
 
 export const DEFAULT_REPORT_SCHEDULE: ReportScheduleConfig = {
@@ -110,15 +117,33 @@ async function saveToPlatform(serialized: string): Promise<void> {
 }
 
 /**
+ * Push the current config into the task scheduler's `reports.generate`
+ * preference. A transport/validation failure degrades to `{ ok: false }` and
+ * never blocks the local save — the scheduler state simply stays as it was.
+ */
+async function syncScheduleToTasks(
+  config: ReportScheduleConfig,
+): Promise<ReportScheduleSyncResult> {
+  try {
+    const result = await syncReportScheduleToTasks({ data: config });
+    return result.ok
+      ? { ok: true }
+      : { ok: false, errorCode: result.errorCode };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
  * Read the schedule once (Electron prefs first, then localStorage) and keep a
  * latest-saved mirror so prefs/localStorage stay in sync across runtimes.
  */
 export function useReportSchedule(): {
   schedule: ReportScheduleConfig;
-  /** Persist a full config (marks it configured). */
-  save: (next: ReportScheduleConfig) => Promise<void>;
-  /** Toggle enabled without flipping the "configured" flag. */
-  setEnabled: (enabled: boolean) => Promise<void>;
+  /** Persist a full config (marks it configured) and sync it to the task scheduler. */
+  save: (next: ReportScheduleConfig) => Promise<ReportScheduleSyncResult>;
+  /** Toggle enabled without flipping the "configured" flag; syncs to the scheduler. */
+  setEnabled: (enabled: boolean) => Promise<ReportScheduleSyncResult>;
   loaded: boolean;
 } {
   const [schedule, setSchedule] = useState<ReportScheduleConfig>(
@@ -154,21 +179,25 @@ export function useReportSchedule(): {
     };
   }, []);
 
-  const persist = useCallback(async (next: ReportScheduleConfig) => {
-    const serialized = serializeReportSchedule(next);
-    lastSavedRef.current = serialized;
-    setSchedule(next);
-    void saveToPlatform(serialized);
-    try {
-      window.localStorage.setItem(SCHEDULE_KEY, serialized);
-    } catch {
-      // localStorage unavailable — best-effort
-    }
-  }, []);
+  const persist = useCallback(
+    async (next: ReportScheduleConfig): Promise<ReportScheduleSyncResult> => {
+      const serialized = serializeReportSchedule(next);
+      lastSavedRef.current = serialized;
+      setSchedule(next);
+      void saveToPlatform(serialized);
+      try {
+        window.localStorage.setItem(SCHEDULE_KEY, serialized);
+      } catch {
+        // localStorage unavailable — best-effort
+      }
+      return syncScheduleToTasks(next);
+    },
+    [],
+  );
 
   const save = useCallback(
     async (next: ReportScheduleConfig) => {
-      await persist({ ...next, configured: true });
+      return persist({ ...next, configured: true });
     },
     [persist],
   );
@@ -179,7 +208,7 @@ export function useReportSchedule(): {
         lastSavedRef.current.length > 0
           ? parseReportSchedule(lastSavedRef.current)
           : schedule;
-      await persist({ ...current, enabled });
+      return persist({ ...current, enabled });
     },
     [persist, schedule],
   );

@@ -58,9 +58,25 @@ export const sources = {
     skillsUnavailable: "연결된 Skill을 사용할 수 없음",
     lastScan: "최근 검사 {time}",
   },
-  migrate: "원클릭 마이그레이션",
-  migrationUnavailable:
-    "검증된 컨텍스트 마이그레이션 데이터 소스가 없어 마이그레이션 패키지를 생성할 수 없습니다.",
+  migrate: {
+    button: "원클릭 마이그레이션",
+    noSkills: "이 도구에는 마이그레이션할 Skill이 없습니다",
+    title: "Skill 마이그레이션 · {name}",
+    desc: "이 도구의 Skill을 선택한 도구의 skills 디렉터리로 복사합니다.",
+    chooseTarget: "대상 도구 선택",
+    selectAll: "모두 선택",
+    clearAll: "선택 해제",
+    hint: "Skill(SKILL.md) 규격을 구현한 도구만 표시합니다. 소스 도구 자체는 자동으로 제외됩니다.",
+    overwrite: "동일한 이름의 기존 Skill 덮어쓰기",
+    count: "선택됨 {selected} / {available}개 대상 도구",
+    confirm: "마이그레이션 시작",
+    none: "이 도구에는 마이그레이션할 Skill이 없습니다",
+    selectTarget: "대상 도구를 하나 이상 선택하세요",
+    done: "마이그레이션 완료: 성공 {succeeded}건 / 건너뜀 {skipped}건",
+    doneFailed:
+      "마이그레이션 완료: 성공 {succeeded}건 / 건너뜀 {skipped}건 / 실패 {failed}건",
+    failed: "마이그레이션 실패",
+  },
   toast: {
     rescanDone: "다시 검사가 완료되었습니다",
   },

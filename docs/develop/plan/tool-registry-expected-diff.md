@@ -65,3 +65,20 @@
 
 - 影响：产品目录 27 → **29**；public manifest 与 AI_TOOLS 含 aipy/cline（display 仅 nameZh，路径/reader 仍不外泄）；baseline 冻结的 27 工具语义不变（前 27 顺序匹配）。
 - 保留约束：schema 防御性校验（catalogVisible=false 仅允许 legacy 来源）不变，当前无工具使用 false。
+
+## D-G：注册表演进后的冻结基线同步（2026-08-16）
+
+注册表在基线冻结（2026-08-05）之后发生了三次真实演进，冻结基线
+`__baseline__/baseline.ts` 与 tools-count/pricing 断言随之更新（非测试掩盖，
+为「迁移后派生值应与注册表一致」的基线维护）：
+
+| 项                     | 旧基线                     | 新基线（对齐注册表）                                                                     | 批准             |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
+| codex 展示名           | "Codex CLI"                | "Codex"（definitions/codex.tool.json display.name）                                      | caows 2026-08-16 |
+| antigravity usage      | unsupported                | native（`antigravity-transcript-v1` reader，3 条 transcript.jsonl 路径）                 | caows 2026-08-16 |
+| openclaw usage adapter | 基线外「+1 native source」 | 纳入基线（`openclaw-session-v1` reader，2 条路径）；adapters 断言改为一一对应（14 = 14） | caows 2026-08-16 |
+
+- 影响：`BASELINE_TOOLS` codex nameZh、`NATIVE_USAGE` + antigravity、
+  `BASELINE_USAGE_ADAPTERS` + openclaw/antigravity（14 条）、
+  `tools-count.test.ts` BASELINE_USAGE_NATIVE + antigravity（7 native）、
+  `pricing.test.ts` F6-T3 sourceName("codex") → "Codex"。

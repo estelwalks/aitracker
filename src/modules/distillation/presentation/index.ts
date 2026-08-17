@@ -34,6 +34,18 @@ export interface DistillationViewModel {
     label: string;
     offline?: boolean;
   }[];
+  /**
+   * Server-side daily quota for real-model distillation calls (Story B-600).
+   * `null` when the quota ledger is unavailable; the UI then falls back to
+   * the "offline runs don't consume quota" hint. The count is authoritative
+   * on the server — the renderer only ever reads this projection.
+   */
+  readonly quota: {
+    readonly used: number;
+    readonly limit: number;
+    /** Calls still available today (`max(0, limit - used)`). */
+    readonly remaining: number;
+  } | null;
 }
 
 export interface DistillationStartInput {
@@ -41,6 +53,18 @@ export interface DistillationStartInput {
   readonly sessionRefs: ReadonlyArray<{
     readonly source: string;
     readonly sessionId: string;
+  }>;
+  /**
+   * Optional user-selected transcript segments (Story B-100). Each segment
+   * references a session already present in `sessionRefs` plus an inclusive
+   * 0-based message window; the referenced text is used only for the current
+   * AI request (in memory) and never persisted.
+   */
+  readonly segments?: ReadonlyArray<{
+    readonly source: string;
+    readonly sessionId: string;
+    readonly startIndex: number;
+    readonly endIndex: number;
   }>;
   /** Optional model id; defaults to the offline model when omitted. */
   readonly modelId?: string;
