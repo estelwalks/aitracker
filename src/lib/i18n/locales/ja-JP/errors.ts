@@ -1,6 +1,9 @@
 // AI 翻訳稿、審校待ち (2026-08)
 export const errors = {
   generic: "操作に失敗しました。もう一度お試しください",
+  sources: {
+    migrateInvalid: "移行引数が不正です",
+  },
   security: {
     dailyLimitReached: "本日のローカルスキャン枠（{limit} 回）を使い切りました",
     fileRequired:
@@ -52,6 +55,14 @@ export const errors = {
     resumeInvalid: "セッション復元リクエストが無効です",
     resumeCancelled: "セッション復元はキャンセルされました",
     resumeFailed: "ローカルセッション復元を開始できませんでした",
+    transcriptUnavailable: "セッションの会話を読み取れませんでした",
+  },
+  memory: {
+    invalidInput: "メモリ内容が不正です",
+    notFound: "メモリ項目が見つかりません",
+    conflict: "メモリ項目が他の操作によって変更されました",
+    invalidTransition: "メモリ項目の状態ではこの操作は実行できません",
+    writeFailed: "メモリの保存に失敗しました。再試行してください",
   },
   distillation: {
     invalidSelection: "1〜8 個の重複しないセッションを選択してください",
@@ -65,6 +76,23 @@ export const errors = {
     invalidName: "Skill 名が無効です",
     invalidAgent: "対象ツールが利用できません",
     skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
+    quotaExceeded:
+      "今日の公式モデル蒸留枠は使い切りました（1 日 {limit} 回）。明日以降に再試行するか、モデル管理をご確認ください",
+  },
+  modelProfile: {
+    nameRequired: "設定名を入力してください",
+    nameTooLong: "設定名は 64 文字以内にしてください",
+    invalidMode: "設定モードが不正です",
+    invalidProtocol: "プロトコルが不正です",
+    invalidUrl: "エンドポイントは有効な http/https URL にしてください",
+    invalidModel: "モデル名が不正です（英数字/._:/- のみ、最大 120 文字）",
+    apiKeyRequired: "API Key を入力してください",
+    apiKeyTooShort: "API Key は 8 文字以上にしてください",
+    apiKeyTooLong: "API Key は 512 文字以内にしてください",
+    notFound: "このモデル設定は存在しないか、削除されました",
+    testFailed:
+      "接続テストに失敗しました。エンドポイント・API Key・ネットワークを確認してください",
+    testTimeout: "接続テストがタイムアウトしました（5 秒）",
   },
   pricing: {
     modelListInvalid: "モデルリストが不正です",

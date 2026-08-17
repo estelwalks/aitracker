@@ -56,18 +56,28 @@ import {
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
 import { Field, Toggle } from "./fields";
+import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { SecurityModelConfigSection } from "./SecurityModelConfigSection";
 import { useSecurityClient } from "./use-security-client";
+import { WidgetConfigPanel } from "../../widget";
 
 // 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
-const categories = ["通用", "扫描配置", "模型配置", "外观", "关于"] as const;
+const categories = [
+  "通用",
+  "扫描配置",
+  "模型配置",
+  "外观",
+  "小组件",
+  "关于",
+] as const;
 type Category = (typeof categories)[number];
 const categoryKeys: Record<Category, MessageKey> = {
   通用: "settings.sections.general",
   扫描配置: "settings.sections.scan",
   模型配置: "settings.sections.model",
   外观: "settings.sections.appearance",
+  小组件: "settings.sections.widget",
   关于: "settings.sections.about",
 };
 
@@ -134,8 +144,11 @@ function NumberField({
 export interface SettingsLoaderData {
   readonly storageUsage: StorageUsage | null;
   readonly storageError: string | null;
-  /** Deep-link target: `?section=scan` opens the 扫描配置 category. */
-  readonly section?: "scan";
+  /**
+   * Deep-link target: `?section=scan` opens the 扫描配置 category,
+   * `?section=model` opens the 模型配置 (model profiles) category.
+   */
+  readonly section?: "scan" | "model";
 }
 
 export function SettingsPage({
@@ -144,7 +157,11 @@ export function SettingsPage({
   readonly loaderData: SettingsLoaderData;
 }) {
   const [category, setCategory] = useState<Category>(() =>
-    loaderData.section === "scan" ? "扫描配置" : "通用",
+    loaderData.section === "scan"
+      ? "扫描配置"
+      : loaderData.section === "model"
+        ? "模型配置"
+        : "通用",
   );
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
   const [autoLaunchStatus, setAutoLaunchStatus] =
@@ -703,11 +720,14 @@ export function SettingsPage({
 
           {category === "模型配置" && (
             <div>
-              <SecurityModelConfigSection
-                client={securityClient}
-                status={securityStatus}
-                onRetry={() => void refreshSecurity()}
-              />
+              <ModelProfilesSection />
+              <div className="mb-3 mt-4 border-t border-border pt-4">
+                <SecurityModelConfigSection
+                  client={securityClient}
+                  status={securityStatus}
+                  onRetry={() => void refreshSecurity()}
+                />
+              </div>
               <div className="mb-3 mt-1 border-t border-border pt-3">
                 {llmStatus == null ? (
                   <Field label={t("settings.model.loading")}>
@@ -790,6 +810,12 @@ export function SettingsPage({
                   </span>
                 </Field>
               </div>
+            </div>
+          )}
+
+          {category === "小组件" && (
+            <div className="pt-1">
+              <WidgetConfigPanel />
             </div>
           )}
 

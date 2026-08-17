@@ -65,6 +65,7 @@ const developmentUrl = process.env[ENV.DEV_URL];
 const isDevelopment = Boolean(developmentUrl);
 
 let mainWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
@@ -95,17 +96,34 @@ function markCloseHintShown(): void {
   writePrefs(prefsPath(), prefs);
 }
 
+/**
+ * WebContents ids allowed to invoke IPC handlers: the main window plus the
+ * floating widget window (created lazily). Both load the same sandboxed
+ * preload and run same-origin pages, so they share the trusted-sender set.
+ */
+function trustedWebContentsIds(): number[] {
+  const ids: number[] = [];
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    ids.push(mainWindow.webContents.id);
+  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    ids.push(widgetWindow.webContents.id);
+  }
+  return ids;
+}
+
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
   const mainFrame = event.sender.mainFrame;
   if (
     !event.senderFrame ||
     !mainFrame ||
+    // The window-level membership check is done here (multiple windows are
+    // allowed); `isTrustedIpcSender` then re-verifies frame identity and the
+    // same-origin URL against `allowedOrigin`.
+    !trustedWebContentsIds().includes(event.sender.id) ||
     !isTrustedIpcSender({
       senderWebContentsId: event.sender.id,
-      expectedWebContentsId:
-        mainWindow == null || mainWindow.isDestroyed()
-          ? null
-          : mainWindow.webContents.id,
+      expectedWebContentsId: event.sender.id,
       senderFrameRoutingId: event.senderFrame.routingId,
       mainFrameRoutingId: mainFrame.routingId,
       senderFrameUrl: event.senderFrame.url,
@@ -159,6 +177,84 @@ function openBrowserCompanion(): void {
     `/security?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
   );
   void shell.openExternal(url);
+}
+
+/**
+ * Show the floating widget window (420×640, frameless, always-on-top, hidden
+ * from the taskbar/dock). Created lazily on first use and reused afterwards:
+ * closing hides it instead of destroying it so widget state/prefs survive.
+ * Security hardening mirrors the main window: sandboxed preload, same-origin
+ * navigation guard and external links handed to the OS browser.
+ */
+async function showWidgetWindow(): Promise<void> {
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    if (widgetWindow.isMinimized()) widgetWindow.restore();
+    widgetWindow.show();
+    widgetWindow.focus();
+    return;
+  }
+
+  widgetWindow = new BrowserWindow({
+    width: 420,
+    height: 640,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    title: APP_NAME,
+    webPreferences: {
+      preload: join(currentDirectory, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  if (process.platform === "darwin") {
+    // macOS 菜单栏小组件惯例：浮于所有桌面空间（含全屏 Space）之上。
+    widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    widgetWindow.setAlwaysOnTop(true, "floating");
+  }
+
+  widgetWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      void shell.openExternal(url);
+    }
+    return { action: "deny" };
+  });
+  widgetWindow.webContents.on("will-navigate", (event, url) => {
+    if (new URL(url).origin !== allowedOrigin) {
+      event.preventDefault();
+    }
+  });
+
+  widgetWindow.once("ready-to-show", () => widgetWindow?.show());
+  widgetWindow.on("close", (event) => {
+    if (isQuitting) {
+      return;
+    }
+    event.preventDefault();
+    widgetWindow?.hide();
+  });
+  widgetWindow.on("closed", () => {
+    widgetWindow = null;
+  });
+
+  const widgetUrl = localWebServer
+    ? localWebServer.createBrowserBootstrapUrl(
+        `/widget?mode=float&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
+      )
+    : `${allowedOrigin}/widget?mode=float&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
+  try {
+    await widgetWindow.loadURL(widgetUrl);
+  } catch (error) {
+    // A transient load failure (e.g. dev server not yet up) must not surface
+    // as an unhandled rejection in the renderer; the next open recreates the
+    // window and retries.
+    console.warn("Widget window failed to load", error);
+    widgetWindow?.destroy();
+  }
 }
 
 const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
@@ -371,6 +467,10 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     showMainWindow();
   });
+  ipcMain.handle(desktopIpc.openWidgetWindow, (event): void => {
+    assertTrustedSender(event);
+    void showWidgetWindow();
+  });
 
   ipcMain.handle(
     desktopIpc.getPreferences,
@@ -558,6 +658,10 @@ function applyPreferences(prefs: Record<string, unknown>): void {
     mainWindow.webContents.send(desktopIpc.localeChanged, resolved.locale);
     mainWindow.webContents.send(desktopIpc.preferencesChanged, resolved);
   }
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.webContents.send(desktopIpc.localeChanged, resolved.locale);
+    widgetWindow.webContents.send(desktopIpc.preferencesChanged, resolved);
+  }
 }
 
 /**
@@ -584,6 +688,7 @@ function rebuildTray(): void {
     },
     {
       onOpen: showMainWindow,
+      onOpenWidget: showWidgetWindow,
       onOpenBrowser: openBrowserCompanion,
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
@@ -780,6 +885,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.showWindow);
+    ipcMain.removeHandler(desktopIpc.openWidgetWindow);
     ipcMain.removeHandler(desktopIpc.getPreferences);
     ipcMain.removeHandler(desktopIpc.setPreference);
     ipcMain.removeHandler(desktopIpc.resetPreferences);

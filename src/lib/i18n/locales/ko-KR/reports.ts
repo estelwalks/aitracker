@@ -2,12 +2,13 @@
 /** /reports(브리핑 & 메모리) V3.0 프로토타입 정렬 문구. */
 export const reports = {
   insight: {
-    title: "Jarvis 브리핑 인사이트",
+    title: "오늘의 인사이트",
     reports: "브리핑 {count}개 생성됨",
     runs: "생성 {count}회 실행됨",
     sessions: "세션 {count}개 커버",
     empty: "아직 브리핑이 없습니다. 모델을 설정하면 생성할 수 있습니다.",
-    modelNotConfigured: "모델이 설정되지 않아 생성을 사용할 수 없습니다.",
+    modelNotConfigured:
+      "모델(Profile 또는 환경 변수)이 설정되지 않아 생성을 사용할 수 없습니다.",
   },
   archive: {
     title: "히스토리 아카이브",
@@ -39,9 +40,11 @@ export const reports = {
     weekly: "매주",
     monthly: "매월",
     save: "저장",
-    saved: "저장됨",
+    enabled: "정기 생성이 활성화되었습니다",
+    disabled: "정기 생성이 비활성화되었습니다",
+    syncFailed: "일정 동기화에 실패했습니다. 로컬 설정은 유지됩니다",
     editorNote:
-      "정기 실행은 데스크톱 앱에 백그라운드 스케줄러가 연결된 후 활성화됩니다. 현재는 설정만 로컬에 저장되며 생성은 수동으로 진행됩니다.",
+      "저장 시 백그라운드 작업 스케줄러에 동기화되며, 앱 실행 중에는 설정한 주기로 자동 생성됩니다.",
     days: {
       mon: "월",
       tue: "화",
@@ -65,20 +68,28 @@ export const reports = {
     cost: "{cost}",
     generate: "지금 생성",
     generating: "생성 중…",
+    goToday: "오늘",
+    goWeek: "이번 주",
+    goMonth: "이번 달",
   },
   body: {
-    emptyTitle: "이 기간의 브리핑이 없습니다",
-    emptyDesc: "「초안 생성」을 눌러 이 기간의 브리핑을 만드세요.",
-    draft: "초안 생성",
+    emptyTitle: "이 기간의 보고서가 없습니다",
+    emptyDesc: "「보고서 초안 생성」을 눌러 이 기간의 보고서를 만드세요.",
+    draft: "보고서 초안 생성",
     save: "저장",
     regenerate: "다시 생성",
+    rewriteTitle: "보고서를 다시 생성할까요?",
+    rewriteDesc:
+      "이 기간의 세션 {count}개를 기준으로 다시 작성하며, 현재 편집한 내용은 덮어씁니다.",
+    rewriteConfirm: "다시 생성",
+    exportPdf: "PDF 내보내기",
     reportList: "전체 브리핑",
     noReports: "생성된 브리핑이 없습니다",
     noMatch: "일치하는 브리핑이 없습니다",
   },
   notes: {
     title: "빠른 메모",
-    placeholder: "메모 추가…",
+    placeholder: "메모를 입력하고 Enter로 추가",
     add: "추가",
     empty: "메모가 없습니다",
     chips: {

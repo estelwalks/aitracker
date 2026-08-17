@@ -5,18 +5,19 @@
  */
 export const reports = {
   insight: {
-    title: "Jarvis briefing insights",
+    title: "Today's insight",
     reports: "{count} briefings generated",
     runs: "{count} generation runs triggered",
     sessions: "covers {count} sessions",
     empty: "No briefings yet — configure a model to generate one.",
-    modelNotConfigured: "No model configured yet; generation is unavailable.",
+    modelNotConfigured:
+      "No model configured (profile or environment variables); generation is unavailable.",
   },
   archive: {
     title: "History archive",
     search: "Search briefings…",
-    prev: "Earlier batch",
-    next: "Later batch",
+    prev: "Previous period",
+    next: "Next period",
     day: "Day",
     week: "Week",
     month: "Month",
@@ -42,9 +43,11 @@ export const reports = {
     weekly: "Weekly",
     monthly: "Monthly",
     save: "Save",
-    saved: "Saved",
+    enabled: "Scheduled generation enabled",
+    disabled: "Scheduled generation disabled",
+    syncFailed: "Failed to sync the schedule; local settings kept",
     editorNote:
-      "Scheduled generation activates once the desktop app wires a background scheduler; for now the config is persisted locally and generation stays manual.",
+      "Saved settings drive the background task scheduler; generation runs automatically while the app is running.",
     days: {
       mon: "Mon",
       tue: "Tue",
@@ -68,20 +71,29 @@ export const reports = {
     cost: "{cost}",
     generate: "Generate now",
     generating: "Generating…",
+    goToday: "Today",
+    goWeek: "This week",
+    goMonth: "This month",
   },
   body: {
-    emptyTitle: "No briefing for this period",
-    emptyDesc: "Click “Generate draft” to create one for this period.",
-    draft: "Generate draft",
+    emptyTitle: "No report for this period",
+    emptyDesc:
+      "Click “Generate report draft” to create a report for this period.",
+    draft: "Generate report draft",
     save: "Save",
     regenerate: "Regenerate",
+    rewriteTitle: "Regenerate report?",
+    rewriteDesc:
+      "It will be rewritten from the {count} sessions in this period; your current edits will be overwritten.",
+    rewriteConfirm: "Regenerate",
+    exportPdf: "Export PDF",
     reportList: "All briefings",
     noReports: "No briefings generated yet",
     noMatch: "No matching briefings",
   },
   notes: {
     title: "Quick notes",
-    placeholder: "Add a note…",
+    placeholder: "Write a note, press Enter to add",
     add: "Add",
     empty: "No notes yet",
     chips: {

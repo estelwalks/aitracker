@@ -1,7 +1,8 @@
 import { useMemo } from "react";
+import { Boxes, Flame, FolderKanban, MessagesSquare } from "lucide-react";
 
 import { JarvisInsight } from "../../../components/JarvisInsight";
-import { MetricGrid, PageHeader } from "../../../components/tt";
+import { MetricGrid } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
 import {
   composeTrackerInsights,
@@ -16,24 +17,36 @@ import { RoastBoard } from "./roast/RoastBoard.tsx";
  */
 export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
   const { t, format, locale } = useI18n();
-  const { boards, totals, generatedAt } = initial;
+  const { boards, totals } = initial;
 
   const metrics = useMemo(
     () => [
       {
+        icon: Flame,
         label: t("tracker.metric.tokens"),
         v: format.formatTokens(totals.tokens),
+        sub: t("tracker.desc"),
       },
       {
-        label: t("tracker.metric.events"),
-        v: format.formatNumber(totals.events),
+        icon: FolderKanban,
+        label: t("tracker.metric.projects"),
+        v: format.formatNumber(boards.project.rows.length),
+        sub: t("tracker.metric.sortedBy"),
       },
       {
-        label: t("tracker.metric.entries"),
-        v: format.formatNumber(totals.entries),
+        icon: Boxes,
+        label: t("tracker.metric.skills"),
+        v: format.formatNumber(boards.skill.rows.length),
+        sub: t("tracker.metric.sortedBy"),
+      },
+      {
+        icon: MessagesSquare,
+        label: t("tracker.metric.sessions"),
+        v: format.formatNumber(boards.session.rows.length),
+        sub: t("tracker.metric.sortedBy"),
       },
     ],
-    [t, format, totals],
+    [t, format, boards, totals],
   );
   const insightLines = useMemo(
     () => resolveInsightLines(t, composeTrackerInsights(initial, locale)),
@@ -41,20 +54,14 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
   );
 
   return (
-    <div>
-      <PageHeader title={t("tracker.title")} desc={t("tracker.desc")} />
+    <div className="space-y-4 pb-12">
       <JarvisInsight
-        title={t("insights.title")}
+        title={t("tracker.insightTitle")}
         lines={insightLines}
         rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
-      <MetricGrid items={metrics} className="mb-3" />
-      <p className="mb-3 text-[11px] text-muted-foreground">
-        {generatedAt
-          ? `updated ${format.formatDateTime(generatedAt, false)}`
-          : ""}
-      </p>
+      <MetricGrid items={metrics} />
       <RoastBoard boards={boards} />
     </div>
   );

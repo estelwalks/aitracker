@@ -7,7 +7,6 @@ import { JarvisInsight } from "../../../components/JarvisInsight";
 import {
   Dot,
   EmptyState,
-  PageHeader,
   Panel,
   StatusBadge,
   TTButton,
@@ -69,10 +68,10 @@ function definitionFor(
 }
 
 /**
- * /reports (简报与记忆) aligned with the V3.0 prototype: PageBar → Jarvis
- * insight card → sticky history archive band → ReportSchedule → report header
- * (period label + real session/token/cost stats + "立即生成" + PeriodCalendar)
- * → inline body card → quick notes.
+ * /reports (简报与记忆) aligned with the V3.0 prototype: Jarvis insight card →
+ * sticky history archive band → ReportSchedule → report header (period label +
+ * real session/token/cost stats + today/week/month shortcut + "立即生成" +
+ * PeriodCalendar) → inline body card → quick notes.
  *
  * All figures come from the server read model: `feed.density` aggregates real
  * sessions by day (via the composition root's sessions port), report/run counts
@@ -268,11 +267,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
   return (
     <>
-      <PageHeader
-        title={t("common.reports.pageTitle")}
-        desc={t("common.reports.pageDesc")}
-      />
-
       <div className="mb-3">
         <JarvisInsight
           title={t("reports.insight.title")}
@@ -335,6 +329,17 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
             >
               <CalendarDays className="size-3.5" />
             </button>
+            <button
+              type="button"
+              onClick={() => selectPeriod(periodKeyOf(granularity, now))}
+              className="rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
+            >
+              {granularity === "day"
+                ? t("reports.header.goToday")
+                : granularity === "week"
+                  ? t("reports.header.goWeek")
+                  : t("reports.header.goMonth")}
+            </button>
             <TTButton
               variant="primary"
               disabled={generateBlocked || generating}
@@ -385,6 +390,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         <>
           <ReportBodyCard
             report={activeReport}
+            sessionCount={periodMetric.count}
             generateBlocked={generateBlocked}
             generateHint={generateHint}
             onGenerate={() => void handleGenerate()}

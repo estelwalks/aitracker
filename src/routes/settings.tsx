@@ -13,7 +13,12 @@ function SettingsRouteComponent() {
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     const search = location.search as Record<string, unknown>;
-    const section = search.section === "scan" ? "scan" : undefined;
+    const section =
+      search.section === "scan"
+        ? "scan"
+        : search.section === "model"
+          ? "model"
+          : undefined;
     try {
       const usage = await getStorageUsageQuery();
       return {

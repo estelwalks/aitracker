@@ -5,18 +5,19 @@
  */
 export const reports = {
   insight: {
-    title: "Jarvis 简报洞察",
+    title: "今日洞察",
     reports: "已生成 {count} 份简报",
     runs: "累计触发 {count} 次生成",
     sessions: "覆盖 {count} 场会话",
     empty: "暂无简报，配置模型后即可生成。",
-    modelNotConfigured: "尚未配置模型，生成按钮暂不可用。",
+    modelNotConfigured:
+      "尚未配置模型（Profile 或环境变量），生成按钮暂不可用。",
   },
   archive: {
     title: "历史归档",
     search: "搜索简报…",
-    prev: "上一批",
-    next: "下一批",
+    prev: "上一期",
+    next: "下一期",
     day: "日",
     week: "周",
     month: "月",
@@ -42,9 +43,11 @@ export const reports = {
     weekly: "每周",
     monthly: "每月",
     save: "保存",
-    saved: "已保存",
+    enabled: "已启用定时生成",
+    disabled: "已关闭定时生成",
+    syncFailed: "定时调度同步失败，本地设置已保留",
     editorNote:
-      "定时调度将在桌面版接入后台调度器后生效；当前配置仅持久化到本机，生成仍需手动触发。",
+      "保存后同步到后台任务调度器；桌面版运行期间按设定节奏自动生成。",
     days: {
       mon: "周一",
       tue: "周二",
@@ -68,20 +71,28 @@ export const reports = {
     cost: "{cost}",
     generate: "立即生成",
     generating: "生成中…",
+    goToday: "今天",
+    goWeek: "本周",
+    goMonth: "本月",
   },
   body: {
-    emptyTitle: "本周期暂无简报",
-    emptyDesc: "点击「生成草稿」为本周期创建一份简报。",
-    draft: "生成草稿",
+    emptyTitle: "该周期暂无报告",
+    emptyDesc: "点击「生成报告草稿」为该周期创建一份报告。",
+    draft: "生成报告草稿",
     save: "保存",
     regenerate: "重新生成",
+    rewriteTitle: "重新生成报告？",
+    rewriteDesc:
+      "将依据该周期 {count} 场会话重新填写，当前已编辑的内容会被覆盖。",
+    rewriteConfirm: "重新生成",
+    exportPdf: "导出 PDF",
     reportList: "全部简报",
     noReports: "暂无已生成的简报",
     noMatch: "未找到匹配的简报",
   },
   notes: {
     title: "快捷批注",
-    placeholder: "添加一条批注…",
+    placeholder: "写一条批注，回车添加",
     add: "添加",
     empty: "暂无批注",
     chips: {

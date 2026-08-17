@@ -1,10 +1,13 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  AppWindowMac,
   BookHeart,
+  FileText,
   Flame,
   FlaskConical,
   IdCard,
   LayoutDashboard,
+  MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -23,18 +26,20 @@ type NavItem = {
     | "/agents"
     | "/distill"
     | "/reports"
+    | "/memory"
     | "/security"
     | "/tracker"
-    | "/skills";
+    | "/skills"
+    | "/chats"
+    | "/widget";
   label: MessageKey;
   icon: typeof LayoutDashboard;
 };
 
 /**
  * Sidebar mirrors the V3.0 prototype tiering: Workspace (home/tools/distill/
- * reports), Insights & Security (guard/tracker) and Skill Library (skill hub).
- * Session management and agent orchestration stay reachable via in-page links,
- * not the sidebar.
+ * reports/memory), Insights & Security (guard/tracker) and Skill Library
+ * (skill hub / session resume / widgets).
  */
 const navTiers: ReadonlyArray<{
   label: MessageKey;
@@ -46,7 +51,8 @@ const navTiers: ReadonlyArray<{
       { to: "/", label: "nav.home", icon: LayoutDashboard },
       { to: "/agents", label: "nav.agents", icon: IdCard },
       { to: "/distill", label: "nav.distill", icon: FlaskConical },
-      { to: "/reports", label: "nav.memory", icon: BookHeart },
+      { to: "/reports", label: "nav.reports", icon: FileText },
+      { to: "/memory", label: "nav.memoryHub", icon: BookHeart },
     ],
   },
   {
@@ -58,7 +64,11 @@ const navTiers: ReadonlyArray<{
   },
   {
     label: "nav.tier3",
-    items: [{ to: "/skills", label: "nav.skillHub", icon: Store }],
+    items: [
+      { to: "/skills", label: "nav.skillHub", icon: Store },
+      { to: "/chats", label: "nav.resume", icon: MessagesSquare },
+      { to: "/widget", label: "nav.widget", icon: AppWindowMac },
+    ],
   },
 ];
 

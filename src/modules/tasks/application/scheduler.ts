@@ -98,6 +98,30 @@ export function nextRunAt(schedule: Schedule, from: Date): Date {
     if (candidate <= from) candidate.setDate(candidate.getDate() + 1);
     return candidate;
   }
+  if (schedule.kind === "monthly") {
+    // Local calendar semantics: a day-of-month beyond the target month's length
+    // clamps to its last day (31st fires on Feb 28/29), matching how a user
+    // reads "每月 31 号" rather than rolling into the following month.
+    const clamp = (day: number, year: number, monthIndex: number) =>
+      Math.min(day, new Date(year, monthIndex + 1, 0).getDate());
+    candidate.setDate(
+      clamp(schedule.dayOfMonth, candidate.getFullYear(), candidate.getMonth()),
+    );
+    if (candidate <= from) {
+      // Normalize to the 1st before shifting months so a clamped/short month
+      // never rolls the date twice (e.g. Jan 31 → Feb has no 31st).
+      candidate.setDate(1);
+      candidate.setMonth(candidate.getMonth() + 1);
+      candidate.setDate(
+        clamp(
+          schedule.dayOfMonth,
+          candidate.getFullYear(),
+          candidate.getMonth(),
+        ),
+      );
+    }
+    return candidate;
+  }
   const weekday = schedule.weekday;
   const current = candidate.getDay() === 0 ? 7 : candidate.getDay();
   let delta = (weekday - current + 7) % 7;

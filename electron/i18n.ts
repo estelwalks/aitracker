@@ -50,6 +50,7 @@ export interface ElectronMessages {
   };
   menu: {
     open: string;
+    widget: string;
     openBrowser: string;
     autoLaunch: string;
     quit: string;
@@ -73,6 +74,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "打开 {appName}",
+      widget: "小组件",
       openBrowser: "在浏览器中打开",
       autoLaunch: "开机自动启动",
       quit: "退出",
@@ -95,6 +97,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "Open {appName}",
+      widget: "Widgets",
       openBrowser: "Open in Browser",
       autoLaunch: "Launch at Login",
       quit: "Quit",
@@ -118,6 +121,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} を開く",
+      widget: "ウィジェット",
       openBrowser: "ブラウザーで開く",
       autoLaunch: "ログイン時に起動",
       quit: "終了",
@@ -141,6 +145,7 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} 열기",
+      widget: "위젯",
       openBrowser: "브라우저에서 열기",
       autoLaunch: "로그인 시 실행",
       quit: "종료",
@@ -332,6 +337,11 @@ export interface TrayTemplateState {
 
 export interface TrayTemplateCallbacks {
   onOpen(): void;
+  /**
+   * Optional — when provided, a 「小组件」 item is inserted right after
+   * 「打开」 so the floating widget window can be opened straight from the tray.
+   */
+  onOpenWidget?(): void;
   onOpenBrowser(): void;
   onToggleAutoLaunch(checked: boolean): void;
   onQuit(): void;
@@ -346,6 +356,9 @@ export function createTrayTemplate(
   const t = electronMessages[locale];
   return [
     { label: t.menu.open, click: callbacks.onOpen },
+    ...(callbacks.onOpenWidget
+      ? [{ label: t.menu.widget, click: callbacks.onOpenWidget }]
+      : []),
     {
       label: t.menu.openBrowser,
       enabled: state.browserCompanionSupported,

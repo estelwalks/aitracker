@@ -25,18 +25,23 @@ export function WasteDetail({
   onClose: () => void;
 }) {
   const { t, format } = useI18n();
+  // 无效消耗与浪费指数同源：tokens × waste/100（见 wasteIndex 公式），
+  // 全部来自真实缓存/输出字段，不额外估算。
+  const wastedTokens = Math.round((row.tokens * row.waste) / 100);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
+            {t("tracker.detail.wasteDetail", { waste: row.waste.toFixed(1) })}
+          </DialogTitle>
+          <DialogDescription>
             <span className="tt-num font-mono text-[13px] text-muted-foreground">
               {row.name}
             </span>
-          </DialogTitle>
-          <DialogDescription>
-            {t("tracker.detail.wasteDetail")}
+            {" · "}
+            {t("tracker.detail.wasteExplain")}
           </DialogDescription>
         </DialogHeader>
 
@@ -97,6 +102,12 @@ export function WasteDetail({
               </div>
             )}
           </dl>
+
+          <p className="rounded-lg bg-surface-2/70 px-3 py-2.5 font-mono text-[12.5px] text-muted-foreground">
+            {t("tracker.detail.wastedTotal", {
+              tokens: format.formatTokens(wastedTokens),
+            })}
+          </p>
 
           <div className="rounded-lg bg-surface-2/70 px-3 py-2.5 text-[12.5px] text-muted-foreground">
             {t(SUGGEST_KEY[row.suggestion])}

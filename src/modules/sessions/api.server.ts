@@ -7,6 +7,7 @@ import type {
   SessionSortDirection,
   SessionSortField,
   SessionSummary,
+  SessionTranscript,
 } from "./contracts.ts";
 
 /** Renderer-safe page request after the transport validator has normalized it. */
@@ -26,6 +27,12 @@ export interface SessionDetailInput {
 }
 
 export interface ResumeSessionInput {
+  readonly source: string;
+  readonly sessionId: string;
+}
+
+/** Transcript lookup — source + sessionId only, validated by the transport. */
+export interface TranscriptInput {
   readonly source: string;
   readonly sessionId: string;
 }
@@ -105,5 +112,24 @@ export async function resumeLocalSession(
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("errors.sessions.resumeFailed");
+  }
+}
+
+/**
+ * Loads one session's local transcript for the CURRENT page render only.
+ * The transcript reader runs server-side; messages are held in memory and
+ * serialized into this page's response — they are never persisted to any
+ * store and never uploaded (S-300 privacy boundary).
+ */
+export async function loadSessionTranscript(
+  input: TranscriptInput,
+): Promise<SessionTranscript> {
+  try {
+    const { loadSessionTranscript: readTranscript } =
+      await import("./infrastructure/transcript-reader.server.ts");
+    return await readTranscript(input);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("errors.sessions.transcriptUnavailable");
   }
 }

@@ -146,6 +146,11 @@ export interface ReportGenerationPort {
     readonly definition: ReportDefinition;
     readonly context: ReportContext;
     readonly budgetUsd?: number;
+    /**
+     * Explicit model id (an S-500 profile id). When absent the adapter falls
+     * back to its injected `resolveModelId` and then to the default model id.
+     */
+    readonly modelId?: string;
   }): Promise<ReportGenerationResult>;
 }
 
@@ -174,6 +179,8 @@ export interface GenerateReportInput {
   readonly definitionId: string;
   readonly trigger: ReportTrigger;
   readonly budgetUsd?: number;
+  /** Active S-500 model profile id; routes generation to the real model. */
+  readonly modelId?: string;
 }
 
 export interface ReportsModuleContract {

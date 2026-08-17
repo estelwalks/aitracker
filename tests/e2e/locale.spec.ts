@@ -14,10 +14,11 @@ test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page 
   });
 
   await page.goto("/");
-  // 新首页（V3.0）英文标题是「Today's insight」，不再是旧 UI 的「Dashboard」
+  // 新首页（V3.0）英文标题是「Today's insight」，不再是旧 UI 的「Dashboard」。
+  // 首页 SSR 需扫描本地日志（本机高负载下首屏可能接近 10s），放宽断言超时。
   await expect(
     page.getByRole("heading", { name: "Today's insight", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
   // 导航已英文化
   await expect(
     page.getByRole("link", { name: "Settings", exact: true }),
@@ -47,6 +48,9 @@ test("设置页切换 ja-JP 即时生效并跨刷新保持", async ({ page }) =>
   });
 
   await page.goto("/settings");
+  // 等待 React hydration 完成（URL 出现 locale 参数即 search-param 同步已
+  // 接管）：否则点击会命中 SSR 静态按钮（无事件处理器），切换不生效。
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
 
   // 默认中文
   await expect(
@@ -85,6 +89,7 @@ test("切回中文并校验 ?locale 同步", async ({ page }) => {
     window.localStorage.setItem("tt-locale-mode", "manual");
   });
   await page.goto("/settings");
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
@@ -114,6 +119,7 @@ test("展示货币手动切换 JPY 并校验汇率区与 ?currency 同步", asyn
   });
 
   await page.goto("/settings");
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
 
   // 默认:展示货币跟随系统(zh-CN → CNY),汇率区显示 CNY
   await page.getByRole("button", { name: "JPY", exact: true }).click();

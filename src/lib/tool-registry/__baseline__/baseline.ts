@@ -71,7 +71,7 @@ export const BASELINE_TOOLS: readonly BaselineTool[] = [
     nameZh: "Claude Code",
     detectRoots: [".claude", "Library/Application Support/Claude"],
   },
-  { id: "codex", nameZh: "Codex CLI", detectRoots: [".codex"] },
+  { id: "codex", nameZh: "Codex", detectRoots: [".codex"] },
   {
     id: "cursor",
     nameZh: "Cursor",
@@ -146,7 +146,7 @@ export const BASELINE_TOOLS: readonly BaselineTool[] = [
   },
 ];
 
-const NATIVE_USAGE = new Set(["claude-code", "codex"]);
+const NATIVE_USAGE = new Set(["claude-code", "codex", "antigravity"]);
 const ADAPTER_USAGE = new Set([
   "cursor",
   "gemini-cli",
@@ -410,6 +410,47 @@ export const BASELINE_USAGE_ADAPTERS: readonly BaselineUsageAdapter[] = [
       { root: ".workbuddy/projects", glob: "**/*.jsonl", format: "jsonl" },
     ],
     customMapping: true,
+    hasSqliteQuery: false,
+    maxFileSizeBytes: GENERIC_MAX,
+  },
+  {
+    source: "openclaw",
+    paths: [
+      {
+        root: ".openclaw/agents",
+        glob: "*/sessions/**/*.jsonl*",
+        format: "jsonl",
+      },
+      {
+        root: ".openclaw/agents",
+        glob: "*/session-sqlite-import-archive/**/*.jsonl*",
+        format: "jsonl",
+      },
+    ],
+    customMapping: false,
+    hasSqliteQuery: false,
+    maxFileSizeBytes: GENERIC_MAX,
+  },
+  {
+    source: "antigravity",
+    paths: [
+      {
+        root: ".gemini/antigravity",
+        glob: "**/.system_generated/logs/transcript.jsonl",
+        format: "jsonl",
+      },
+      {
+        root: ".gemini/antigravity-ide",
+        glob: "**/.system_generated/logs/transcript.jsonl",
+        format: "jsonl",
+      },
+      {
+        root: ".gemini/antigravity-cli",
+        glob: "**/.system_generated/logs/transcript.jsonl",
+        format: "jsonl",
+      },
+    ],
+    customMapping: false,
     hasSqliteQuery: false,
     maxFileSizeBytes: GENERIC_MAX,
   },
