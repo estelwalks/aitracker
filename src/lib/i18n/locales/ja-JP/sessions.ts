@@ -5,6 +5,13 @@ export const sessions = {
   pageHeader: "セッション管理",
   pageHeaderDesc:
     "時刻・ツール・プロジェクトでローカルセッションを閲覧し、利用可能なセッションを安全に復元します。",
+  insight: {
+    title: "Jarvis セッション洞察",
+    total: "合計 {count} セッション",
+    sources: "{count} ツール由来",
+    turns: "合計 {count} ターン",
+    resumable: "{count} セッションを安全に復元可能",
+  },
   range: {
     d7: "過去 7 日間",
     d30: "過去 30 日間",
@@ -25,18 +32,27 @@ export const sessions = {
   },
   panelTitle: "ローカルセッション",
   hint: "現在は Claude Code、Codex、Grok のみ復元可能です。費用はローカルのモデル価格表で見積り、未知の価格は明示されます。",
-  searchPlaceholder: "タイトル / プロジェクト / モデル / sessionId を検索",
+  searchPlaceholder: "タイトル / プロジェクト / セッション ID を検索",
   summary: {
     count: "セッション数",
     tokens: "Token 合計",
     cost: "費用合計",
-    turns: "ターン数合計",
+    tools: "セッションツール数",
+    turns: "会話ターン数",
+    countHint: "{range}内のセッション",
+    toolsHint: "対象の AI ツール",
+    turnsHint: "累計の往復ターン",
   },
   empty: {
     title: "一致するセッションがありません",
-    desc: "フィルター条件や検索キーワードを調整して再試行してください。",
+    desc: "検索キーワード、ツール、時間範囲を調整して再試行してください。",
   },
   refreshing: "更新中",
+  group: {
+    today: "今日",
+    yesterday: "昨日",
+    count: "{count} 件",
+  },
   detail: {
     back: "セッション一覧に戻る",
     title: "セッション詳細",
@@ -62,6 +78,8 @@ export const sessions = {
   },
   row: {
     untitled: "(名前のないセッション)",
+    copyHash: "ID をコピー",
+    copiedHash: "コピー済み",
     copy: "セッションを復元",
     copied: "開始済み",
     copyUnsafe: "このセッション ID は安全でないため、復元できません",
@@ -78,6 +96,67 @@ export const sessions = {
   },
   toast: {
     refreshed: "セッション一覧を更新しました",
+    hashCopied: "セッション ID をコピーしました",
     copied: "ローカル復元リクエストを開始しました",
+  },
+  transcript: {
+    loading: "ローカルセッションの会話を読み込み中…",
+    empty: "このセッションのローカル会話記録が見つかりません",
+    error: "会話の読み込みに失敗しました",
+    retry: "再試行",
+    localOnly:
+      "会話はこのマシンのメモリ上でのみ読み取られ、永続化もアップロードもされません",
+    messageCount: "{count} 件のメッセージ",
+    startHint:
+      "メッセージをクリックして起点を設定し、2 件目をクリックして範囲を選択",
+    anchorSet: "起点: {index} 件目 · 終点を選択",
+    selectedRange: "{count} 件を選択（{start}–{end} 件目）",
+    allAbove: "起点より前をすべて選択",
+    allBelow: "起点より後をすべて選択",
+    selectAll: "すべて選択",
+    reset: "リセット",
+    distillSelected: "選択を蒸留",
+    distillToast:
+      "選択した {count} 件のメッセージ断片をコピーしました。蒸留ワークベンチに貼り付けてください",
+    generateReport: "簡報を生成",
+    thinking: "thinking",
+    anchorMark: "起点",
+    selectedMark: "選択中",
+    historyTitle: "セッション履歴",
+    historySearch: "タイトル / プロジェクト / ツールを検索",
+    historyEmpty: "一致するセッションがありません",
+    historyLoading: "読み込み中…",
+    historyUnavailable: "セッション履歴を読み込めませんでした",
+    cliResumable: "CLI で復元可能",
+    cliHint:
+      "セッション ID でローカルに再開します。復元コマンドは管理されたローカル処理でのみ実行されます",
+    clientSession: "クライアントセッション",
+    clientHint:
+      "{source} は GUI クライアントのため、コマンドラインでの復元はありません",
+    sessionId: "セッション ID",
+    reportTitle: "セッション簡報",
+    reportOverview: "概要",
+    reportHighlights: "メッセージ要点",
+    reportConclusions: "結論",
+    reportReasoning: "推論の手がかり",
+    reportExperience: "再利用可能な教訓",
+    reportNoConclusions: "このセッションにモデルの返答はありません",
+    reportNoReasoning: "このセッションに推論過程はありません",
+    reportStatSessions: "セッション",
+    reportStatTools: "ツール",
+    reportStatProjects: "プロジェクト",
+    reportStatMessages: "メッセージ",
+    reportStatTokens: "Token",
+    ask: "質問",
+    answer: "返答",
+    segmentTitle: "断片蒸留",
+    segmentScope:
+      "このセッションの {count} 件のメッセージ断片（質問 {asks} · 返答 {answers}）",
+    expItem1:
+      "問題の特定: まずコンテキストと影響範囲を確認し、最小限の変更を行う",
+    expItem2:
+      "納品の習慣: 外部インターフェースのシグネチャを変更せず、実装内部に変更を閉じ込める",
+    expItem3:
+      "検証方法: 境界ケースを追加し、型チェックとビルドの成功を確認する",
   },
 } as const;

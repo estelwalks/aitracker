@@ -78,13 +78,14 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
   ];
-  // 13 tools carry a usage capability: 6 native + 5 catalog adapter + 2 extension adapter.
+  // 14 tools carry a usage capability: 7 native + 5 catalog adapter + 2 extension adapter.
   const BASELINE_USAGE_NATIVE = new Set([
     "claude-code",
     "codex",
     "gemini-cli",
     "grok",
     "openclaw",
+    "antigravity",
     "workbuddy",
   ]);
   const BASELINE_USAGE_ADAPTER = new Set([

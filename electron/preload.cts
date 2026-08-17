@@ -31,6 +31,8 @@ const desktopApi: DesktopApi = Object.freeze({
       enabled,
     ) as Promise<AutoLaunchState>,
   showWindow: () => ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
+  openWidgetWindow: () =>
+    ipcRenderer.invoke(desktopIpc.openWidgetWindow) as Promise<void>,
   getPreferences: () =>
     ipcRenderer.invoke(desktopIpc.getPreferences) as Promise<
       Record<string, unknown>

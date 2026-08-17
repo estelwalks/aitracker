@@ -5,6 +5,9 @@ export type {
   DashboardQuery,
   DashboardReadModel,
   DashboardSelection,
+  DashboardV2Event,
+  DashboardV2Snapshot,
+  DashboardV2Tool,
 } from "./contracts";
 export {
   createDashboardApplication,
@@ -17,3 +20,4 @@ export {
   type DashboardViewModel,
 } from "./presentation";
 export { DashboardPage } from "./presentation/DashboardPage";
+export { getDashboardReadModel } from "./query";

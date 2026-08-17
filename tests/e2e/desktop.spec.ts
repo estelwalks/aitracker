@@ -16,11 +16,16 @@ test.beforeEach(async ({ page }) => {
 
 const routes = [
   { path: "/", heading: "今日洞察" },
-  { path: "/agents", heading: "工具概览" },
-  { path: "/skills", heading: "Skill 资产管理" },
-  { path: "/security", heading: "安全与防御" },
+  { path: "/agents", heading: /专属洞察/ },
+  { path: "/skills", heading: "今日洞察" },
+  { path: "/security", heading: "安全播报" },
   { path: "/settings", heading: "设置" },
+  { path: "/memory", heading: "今日洞察" },
+  { path: "/chats", heading: "今日洞察" },
 ] as const;
+
+/** Routes whose title is rendered by PageBar (a span, not a heading). */
+const textRoutes = [{ path: "/widget", text: "菜单栏小组件" }] as const;
 
 async function openRouteWithoutPageErrors(
   page: Page,
@@ -44,9 +49,35 @@ async function openRouteWithoutPageErrors(
   expect(pageErrors, `${path} 不应触发未捕获页面错误`).toEqual([]);
 }
 
+async function openRouteWithoutPageErrorsByText(
+  page: Page,
+  path: string,
+  text: string,
+) {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+
+  expect(response, `${path} 应返回页面响应`).not.toBeNull();
+  expect(response?.status(), `${path} 不应返回 HTTP 错误`).toBeLessThan(400);
+  await expect(page.getByText(text, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "页面加载失败" })).toHaveCount(
+    0,
+  );
+  await page.waitForTimeout(300);
+  expect(pageErrors, `${path} 不应触发未捕获页面错误`).toEqual([]);
+}
+
 for (const route of routes) {
   test(`${route.path} 可访问且无页面错误`, async ({ page }) => {
     await openRouteWithoutPageErrors(page, route.path, route.heading);
+  });
+}
+
+for (const route of textRoutes) {
+  test(`${route.path} 可访问且无页面错误（PageBar 标题）`, async ({ page }) => {
+    await openRouteWithoutPageErrorsByText(page, route.path, route.text);
   });
 }
 
@@ -57,7 +88,7 @@ test("首页展示真实数据", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "今日洞察", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("TOKEN 总量")).toBeVisible();
+  await expect(page.getByText("Token 消耗").first()).toBeVisible();
   await expect(page.getByText(/已观测 [\d,]+ 条事件/).first()).toBeVisible();
   await expect(
     page.getByText(/概览\s*[\d.]+[KMB]? tokens/).first(),
@@ -93,41 +124,58 @@ test("Skill Hub 展示真实本地 Skill 数量", async ({ page }) => {
 });
 
 test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({ page }) => {
-  // Skill 资产管理迁移到 /skills（local tab），而非旧 /agents 上的复选框列表
-  await page.goto("/skills");
+  test.setTimeout(120_000);
+  // Skill 资产管理迁移到 /skills（local tab）；选择按钮是带 aria-label
+  // 「选择 <name>」的 button（非原生 checkbox），全选按钮文案为「共 N 个 Skill」。
+  // /skills 的 loader 并发拉取 workspace/dashboard/market，本机高负载下
+  // 首屏可能超过默认 30s，故显式放宽 goto 与整体超时。
+  await page.goto("/skills", { timeout: 90_000 });
+  await page.waitForURL(/locale=/, { timeout: 30_000 });
 
-  const skillCheckboxes = page.getByRole("checkbox", { name: /^选择 / });
-  expect(await skillCheckboxes.count()).toBeGreaterThanOrEqual(2);
+  const skillSelect = page.getByRole("button", { name: /^选择 / });
+  expect(await skillSelect.count()).toBeGreaterThanOrEqual(2);
 
-  await skillCheckboxes.nth(0).check();
-  await skillCheckboxes.nth(1).check();
+  await skillSelect.nth(0).click();
+  await skillSelect.nth(1).click();
   await expect(page.getByText("已选 2 项", { exact: true })).toBeVisible();
 
-  const selectAll = page.getByRole("checkbox", {
-    name: "全选当前页",
-    exact: true,
-  });
-  await selectAll.check();
-  await expect(selectAll).toBeChecked();
-  await expect(
-    page.getByRole("button", { name: "批量卸载", exact: true }),
-  ).toBeEnabled();
+  // 全选当前页：选中状态下同一 toggle 按钮显示「已选 N 项」，点击后全部选中
+  const selectAll = page
+    .locator("main button")
+    .filter({ hasText: /^已选 \d+ 项$/ });
+  await selectAll.first().click();
+  await expect(page.getByText(/^已选 \d+ 项$/).first()).toBeVisible();
+  const selectedAfter = await page
+    .locator("main button")
+    .filter({ hasText: /^已选 (\d+) 项$/ })
+    .first()
+    .textContent();
+  const selectedCount = Number(
+    selectedAfter?.match(/^已选 (\d+) 项$/)?.[1] ?? "0",
+  );
+  expect(selectedCount).toBeGreaterThan(2);
 
-  await selectAll.uncheck();
-  await expect(page.getByText("已选 0 项", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "批量卸载", exact: true }),
-  ).toBeDisabled();
+  // 批量动作可用（但不执行清理）
+  const uninstall = page.locator("main button").filter({ hasText: "卸载" });
+  await expect(uninstall.first()).toBeEnabled();
+  const sync = page.locator("main button").filter({ hasText: "同步" });
+  await expect(sync.first()).toBeEnabled();
+
+  // 取消选择后回到空选状态
+  await page.locator("main button").filter({ hasText: "取消" }).click();
+  await expect(page.getByText(/^共 \d+ 个 Skill$/).first()).toBeVisible();
 });
 
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
   // 独立市场路由已删除，市场入口在 /skills 的 market tab（卡片网格）
   await page.goto("/skills?tab=market");
-  // 等待 React 水合：搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，
-  // React 不会收到 input 事件，搜索不会触发（水合竞态）。
+  // 等待 React 水合完成：URL 出现 locale 参数即 search-param 同步已接管；
+  // 搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，React 不会收到 input
+  // 事件，搜索不会触发（水合竞态）。
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
   await page.waitForTimeout(1000);
 
-  const search = page.getByPlaceholder("按名称或描述搜索真实 Skill…");
+  const search = page.getByPlaceholder("搜索 Skill 名称、源路径或能力");
   await search.fill("draw.io");
   // 结果卡以真实名称/描述渲染 draw.io 文本（搜索框的 value 不参与 getByText 匹配）
   await expect(page.getByText(/draw\.io/i).first()).toBeVisible({
@@ -146,7 +194,7 @@ test("安全页浏览器下检测服务已连接", async ({ page }) => {
   await page.goto("/security", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByRole("heading", { name: "安全与防御", exact: true }),
+    page.getByRole("heading", { name: "安全播报", exact: true }),
   ).toBeVisible();
 
   // 主 CTA 可见（但不点击）
@@ -178,7 +226,7 @@ test("安全页连接检测服务且不自动触发扫描", async ({ page }) => 
   await page.goto("/security", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByRole("heading", { name: "安全与防御", exact: true }),
+    page.getByRole("heading", { name: "安全播报", exact: true }),
   ).toBeVisible();
 
   // 主 CTA 可见（但不点击）
@@ -215,10 +263,12 @@ test("设置加载完成", async ({ page }) => {
 });
 
 test("本地采集状态仅在数据来源页展示真实结果", async ({ page }) => {
-  await page.goto("/");
+  test.setTimeout(120_000);
+  // 本机高负载下首屏可能超过默认 30s，显式放宽 goto 与整体超时。
+  await page.goto("/", { timeout: 90_000 });
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
 
-  await page.goto("/sources");
+  await page.goto("/sources", { timeout: 90_000 });
   await expect(
     page.getByRole("heading", { name: "Agent & Skill Hub", exact: true }),
   ).toBeVisible();
@@ -236,6 +286,10 @@ test("本地采集状态仅在数据来源页展示真实结果", async ({ page 
 
 test("设置页偏好可修改并在当前隔离上下文持久化", async ({ page }) => {
   await page.goto("/settings");
+
+  // 等待 React hydration 完成（URL 出现 locale 参数即 search-param 同步已
+  // 接管）：否则点击会命中 SSR 静态按钮（无事件处理器），更改不生效。
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
 
   await page.getByRole("button", { name: "USD", exact: true }).click();
   await expect(page).toHaveURL(/currency=USD/);

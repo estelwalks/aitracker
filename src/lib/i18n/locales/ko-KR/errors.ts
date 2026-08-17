@@ -1,6 +1,9 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const errors = {
   generic: "작업에 실패했습니다. 다시 시도해 주세요",
+  sources: {
+    migrateInvalid: "마이그레이션 인자가 올바르지 않습니다",
+  },
   security: {
     dailyLimitReached: "오늘의 로컬 검사 할당량({limit}회)을 모두 사용했습니다",
     fileRequired: "SKILL.md 또는 이를 포함한 Skill 폴더를 선택하세요",
@@ -46,6 +49,14 @@ export const errors = {
     resumeInvalid: "세션 복원 요청이 올바르지 않습니다",
     resumeCancelled: "세션 복원이 취소되었습니다",
     resumeFailed: "로컬 세션 복원을 시작할 수 없습니다",
+    transcriptUnavailable: "세션 대화를 읽지 못했습니다",
+  },
+  memory: {
+    invalidInput: "메모리 내용이 올바르지 않습니다",
+    notFound: "메모리 항목을 찾을 수 없습니다",
+    conflict: "메모리 항목이 다른 작업에 의해 변경되었습니다",
+    invalidTransition: "메모리 항목 상태에서 이 작업을 수행할 수 없습니다",
+    writeFailed: "메모리 저장에 실패했습니다. 다시 시도하세요",
   },
   distillation: {
     invalidSelection: "1~8개의 중복 없는 세션을 선택하세요",
@@ -59,6 +70,23 @@ export const errors = {
     invalidName: "Skill 이름이 올바르지 않습니다",
     invalidAgent: "대상 도구를 사용할 수 없습니다",
     skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
+    quotaExceeded:
+      "오늘 공식 모델 증류 한도를 모두 사용했습니다(하루 {limit}회). 내일 다시 시도하거나 모델 관리를 확인하세요",
+  },
+  modelProfile: {
+    nameRequired: "설정 이름을 입력하세요",
+    nameTooLong: "설정 이름은 64자 이하여야 합니다",
+    invalidMode: "설정 모드가 올바르지 않습니다",
+    invalidProtocol: "프로토콜이 올바르지 않습니다",
+    invalidUrl: "엔드포인트는 유효한 http/https URL이어야 합니다",
+    invalidModel:
+      "모델 이름이 올바르지 않습니다(영문/숫자/._:/-만, 최대 120자)",
+    apiKeyRequired: "API Key를 입력하세요",
+    apiKeyTooShort: "API Key는 8자 이상이어야 합니다",
+    apiKeyTooLong: "API Key는 512자 이하여야 합니다",
+    notFound: "이 모델 설정은 없거나 삭제되었습니다",
+    testFailed: "연결 테스트 실패. 엔드포인트, API Key, 네트워크를 확인하세요",
+    testTimeout: "연결 테스트 시간 초과(5초)",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",

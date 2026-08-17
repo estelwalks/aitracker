@@ -44,7 +44,7 @@ function harness() {
   return { runs, prefs, repository };
 }
 
-test("calculates interval, daily and weekly schedules in local time", () => {
+test("calculates interval, daily, weekly and monthly schedules in local time", () => {
   const from = new Date(2026, 0, 5, 10, 0);
   assert.equal(
     nextRunAt({ kind: "interval", minutes: 5 }, from).getTime(),
@@ -61,6 +61,48 @@ test("calculates interval, daily and weekly schedules in local time", () => {
     ).getDate(),
     5,
   );
+  // Monthly: same day later in the month (from is Jan 5).
+  assert.equal(
+    nextRunAt(
+      { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
+      from,
+    ).getDate(),
+    15,
+  );
+});
+
+test("monthly schedules roll to the next month and clamp short months", () => {
+  const monthly = {
+    kind: "monthly",
+    dayOfMonth: 15,
+    localTime: "09:00",
+  } as const;
+  // Candidate is already in the past → next month, same clamped day.
+  const from = new Date(2026, 0, 15, 10, 0);
+  const next = nextRunAt(monthly, from);
+  assert.equal(next.getMonth(), 1); // February
+  assert.equal(next.getDate(), 15);
+  assert.equal(next.getHours(), 9);
+
+  // dayOfMonth 31 from a 31-day month rolls to the last day of the next
+  // (short) month — 2026 is not a leap year, so February has 28 days.
+  const fromJan31 = new Date(2026, 0, 31, 10, 0);
+  const afterJan31 = nextRunAt(
+    { kind: "monthly", dayOfMonth: 31, localTime: "09:00" },
+    fromJan31,
+  );
+  assert.equal(afterJan31.getMonth(), 1); // February
+  assert.equal(afterJan31.getDate(), 28);
+
+  // From within a short month the 31st lands on the last day of that month
+  // when it is still in the future, then rolls forward with clamping.
+  const fromFeb28 = new Date(2026, 1, 28, 10, 0);
+  const clamped = nextRunAt(
+    { kind: "monthly", dayOfMonth: 31, localTime: "09:00" },
+    fromFeb28,
+  );
+  assert.equal(clamped.getMonth(), 2); // March
+  assert.equal(clamped.getDate(), 31);
 });
 
 test("uses the effective schedule and last successful completion for freshness", () => {

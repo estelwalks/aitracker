@@ -2,12 +2,13 @@
 /** /reports（ブリーフィング＆メモリ）V3.0 プロトタイプの文案。 */
 export const reports = {
   insight: {
-    title: "Jarvis ブリーフィング洞察",
+    title: "今日のインサイト",
     reports: "ブリーフィング {count} 件を生成",
     runs: "生成を {count} 回実行",
     sessions: "セッション {count} 件をカバー",
     empty: "まだブリーフィングはありません。モデルを設定すると生成できます。",
-    modelNotConfigured: "モデルが未設定のため、生成は利用できません。",
+    modelNotConfigured:
+      "モデル（Profile または環境変数）が未設定のため、生成は利用できません。",
   },
   archive: {
     title: "履歴アーカイブ",
@@ -39,9 +40,12 @@ export const reports = {
     weekly: "毎週",
     monthly: "毎月",
     save: "保存",
-    saved: "保存しました",
+    enabled: "定期生成を有効にしました",
+    disabled: "定期生成を無効にしました",
+    syncFailed:
+      "スケジュールの同期に失敗しました。ローカル設定は保持されています",
     editorNote:
-      "定期実行はデスクトップ版でバックグラウンドスケジューラを組み込んだ後に有効になります。現時点では設定をローカルに保存するだけで、生成は手動のままです。",
+      "保存するとバックグラウンドタスクスケジューラに同期され、アプリ実行中は設定した間隔で自動生成されます。",
     days: {
       mon: "月",
       tue: "火",
@@ -65,20 +69,28 @@ export const reports = {
     cost: "{cost}",
     generate: "今すぐ生成",
     generating: "生成中…",
+    goToday: "今日",
+    goWeek: "今週",
+    goMonth: "今月",
   },
   body: {
-    emptyTitle: "この期間のブリーフィングはありません",
-    emptyDesc: "「下書きを生成」でこの期間のブリーフィングを作成できます。",
-    draft: "下書きを生成",
+    emptyTitle: "この期間のレポートはありません",
+    emptyDesc: "「レポート下書きを生成」でこの期間のレポートを作成できます。",
+    draft: "レポート下書きを生成",
     save: "保存",
     regenerate: "再生成",
+    rewriteTitle: "レポートを再生成しますか？",
+    rewriteDesc:
+      "この期間の {count} 件のセッションに基づいて書き直し、現在編集した内容は上書きされます。",
+    rewriteConfirm: "再生成",
+    exportPdf: "PDF を書き出す",
     reportList: "すべてのブリーフィング",
     noReports: "生成されたブリーフィングはありません",
     noMatch: "一致するブリーフィングがありません",
   },
   notes: {
     title: "クイックメモ",
-    placeholder: "メモを追加…",
+    placeholder: "メモを入力して Enter で追加",
     add: "追加",
     empty: "メモはありません",
     chips: {

@@ -200,6 +200,63 @@ test("the AI request carries the definition template and context summary", async
   assert.ok(captured.request?.requestId, "requestId must be populated");
 });
 
+test("resolveModelId routes generation to the profile-backed provider", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok") },
+      captured,
+    ),
+    resolveModelId: async () => "m-profile-1",
+  });
+  await generation.generate({
+    definition: definition(),
+    context: context(),
+  });
+  assert.ok(captured.request);
+  assert.equal(captured.request?.modelId, "m-profile-1");
+  // The registry routes by providerId; a non-default model id is a saved
+  // profile id, so the request must target the `profile` provider.
+  assert.equal(captured.request?.providerId, "profile");
+});
+
+test("resolveModelId returning null keeps the default offline model id", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok") },
+      captured,
+    ),
+    resolveModelId: async () => null,
+  });
+  await generation.generate({
+    definition: definition(),
+    context: context(),
+  });
+  assert.ok(captured.request);
+  assert.equal(captured.request?.modelId, "report-generator");
+  assert.equal(captured.request?.providerId, undefined);
+});
+
+test("an explicit input modelId wins over resolveModelId", async () => {
+  const captured: { request?: AIRequest } = {};
+  const generation = createReportGenerationPort({
+    ai: fake(
+      { summary: summary("completed"), response: response("ok") },
+      captured,
+    ),
+    resolveModelId: async () => "m-resolved",
+  });
+  await generation.generate({
+    definition: definition(),
+    context: context(),
+    modelId: "m-explicit",
+  });
+  assert.ok(captured.request);
+  assert.equal(captured.request?.modelId, "m-explicit");
+  assert.equal(captured.request?.providerId, "profile");
+});
+
 test("privacy: context is a fixed summary with no session/path/token data", async () => {
   const captured: { request?: AIRequest } = {};
   const generation = createReportGenerationPort({

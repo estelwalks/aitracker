@@ -9,6 +9,8 @@ import type { Clock } from "../platform/persistence/contracts.ts";
 import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
 import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
+import { createTaskApi } from "../modules/tasks/application/task-api.ts";
+import type { TaskApi } from "../modules/tasks/application/task-api.ts";
 import {
   DEFAULT_TASK_PREFERENCES,
   DEFAULT_TASK_RUNS,
@@ -29,6 +31,11 @@ import {
   createRegistryRouter,
   offlineProvider,
 } from "../modules/ai-orchestration/provider-registry.ts";
+import {
+  createProfileBackedProvider,
+  getModelProfileRepository,
+  type ModelProfileRepository,
+} from "../modules/ai-orchestration/model-profile.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
 import type { ReportsApplication } from "../modules/reports/index.ts";
@@ -40,6 +47,7 @@ import {
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import { createKnowledgeRepository } from "../modules/knowledge/application/index.ts";
+import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
 import {
   DEFAULT_KNOWLEDGE_DOCUMENT,
   knowledgeDocumentSchema,
@@ -52,6 +60,13 @@ import {
   createAtomicCandidateStore,
   distillCandidateStoreSchema,
 } from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
+import {
+  DEFAULT_DISTILL_QUOTA_FILE,
+  createAtomicDistillQuotaStore,
+  distillDailyQuotaLimit,
+  distillQuotaStoreSchema,
+  type DistillQuotaPort,
+} from "../modules/distillation/quota.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
 import type {
   ResumeSessionPort,
@@ -102,11 +117,25 @@ export interface CompositionRoot {
   readonly preferences: TaskPreferenceRepository;
   readonly runs: TaskRunRepository;
   /**
+   * Task use-case API (preferences, definitions, runs). Exposed so feature
+   * server functions can drive the scheduler through the same validated
+   * application layer the UI uses — e.g. the reports schedule sync writes the
+   * `reports.generate` preference here.
+   */
+  readonly taskApi: TaskApi;
+  /**
    * AI executor for distillation/reports. Backed by the provider registry with
    * the offline provider registered, so consumers get a deterministic fallback
    * response until a real provider is registered.
    */
   readonly aiExecutor: AIExecutorPort;
+  /**
+   * Multi-profile model configuration store (S-500). Profiles persist under
+   * `~/.trusttools/tasks/model-profiles.v1.json` (0600 perms); renderer-facing
+   * reads return key-free projections. The registry's `profile` provider
+   * resolves executions through this repository.
+   */
+  readonly modelProfiles: ModelProfileRepository;
   /**
    * Reports application. Backed by an AtomicJsonStore-backed report store, the
    * AI generation adapter (using `aiExecutor`) and the offline context port.
@@ -122,6 +151,21 @@ export interface CompositionRoot {
    * that writes to the knowledge repository.
    */
   readonly distillation: DistillationApplication;
+  /**
+   * Server-side daily quota ledger for real-model distillation calls (Story
+   * B-600). Persists only `{ date, used }` under
+   * `~/.trusttools/tasks/distill-quota.v1.json`; the daily limit is a
+   * constant/env value, so the count cannot be raised from the renderer.
+   */
+  readonly distillQuota: DistillQuotaPort;
+  /**
+   * Knowledge repository backing the memory hub and distillation approval
+   * writes. Persists only privacy-filtered metadata — asset ids, kinds,
+   * titles, opaque content hashes and provenance summaries — never
+   * conversation content (the content itself is only hashed, see
+   * `createDraft` in the knowledge application layer).
+   */
+  readonly knowledge: KnowledgeRepository;
   /**
    * Session query port shared by the distillation workbench. Backed by the
    * same legacy local-sessions scanner as `/sessions`. Exposed so the
@@ -245,9 +289,17 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // through the desktop security IPC boundary.
 
   // AI orchestration: register the deterministic offline provider by default so
-  // distillation/reports get a stable fallback. A real provider can be
-  // registered later without touching this wiring.
+  // distillation/reports get a stable fallback. The S-500 profile store backs a
+  // `profile` provider that resolves a saved profile by `modelId` at invoke
+  // time — distillation selects a profile by its id and routes here, giving it
+  // a real model call while every renderer-facing read stays key-free.
+  const modelProfiles = getModelProfileRepository();
   const aiRegistry = createProviderRegistry([offlineProvider]);
+  aiRegistry.register(
+    createProfileBackedProvider({
+      resolve: (profileId) => modelProfiles.getProfileForExecution(profileId),
+    }),
+  );
   const aiExecutor = createAiExecutor({
     router: createRegistryRouter(aiRegistry),
     offlineFallback: deterministicOfflineFallback,
@@ -265,7 +317,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const reports = createReportsApplication({
     store: createAtomicReportStore({ store: reportsStore }),
     context: createReportContextPort(),
-    generation: createReportGenerationPort({ ai: aiExecutor }),
+    generation: createReportGenerationPort({
+      ai: aiExecutor,
+      // B-400: reports reuse the active S-500 profile (a real model call via
+      // the `profile` provider); without one the adapter keeps the default
+      // offline model id. `null` here lets the adapter apply its own default.
+      resolveModelId: async () =>
+        (await modelProfiles.getActiveView())?.id ?? null,
+    }),
     now: () => new Date(),
     createId: (prefix) => `${prefix}:${randomUUID()}`,
   });
@@ -308,11 +367,45 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     schema: distillCandidateStoreSchema(),
     clock,
   });
+  // B-600 server-side daily quota ledger for real-model distillation calls.
+  // The file stores only `{ date, used }`; the limit is a constant/env value
+  // (`TRUSTTOOLS_DISTILL_DAILY_QUOTA`, default 20), so the renderer can never
+  // tamper with either the count or the ceiling. Increments serialise through
+  // the same file lock as the other task stores.
+  const distillQuotaStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, "distill-quota.v1.json"),
+    defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
+    schema: distillQuotaStoreSchema(),
+    clock,
+  });
+  const distillQuota = createAtomicDistillQuotaStore({
+    store: distillQuotaStore,
+    limit: distillDailyQuotaLimit(),
+  });
   const distillation = createDistillationApplication({
     sessions,
     ai: aiExecutor,
     knowledge,
     persistence: createAtomicCandidateStore({ store: candidateStore }),
+    quota: distillQuota,
+    // Story B-100: user-selected transcript segments. The adapter stays
+    // behind a dynamic import of the sessions transport so this composition
+    // root never forms a static cycle with the sessions module; reads are
+    // in-memory only and failures degrade to metadata-only distillation.
+    transcriptPort: {
+      async load(ref) {
+        try {
+          const { loadSessionTranscript } =
+            await import("../modules/sessions/api.server.ts");
+          return await loadSessionTranscript({
+            source: ref.source,
+            sessionId: ref.sessionId,
+          });
+        } catch {
+          return null;
+        }
+      },
+    },
     now: () => new Date(),
     createCandidateId: () => `candidate:${randomUUID()}`,
   });
@@ -352,13 +445,19 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     executors: executorRegistry.executors,
   });
 
+  const taskApi = createTaskApi({ scheduler, preferences, runs });
+
   return {
     scheduler,
     preferences,
     runs,
+    taskApi,
     aiExecutor,
+    modelProfiles,
     reports,
     distillation,
+    distillQuota,
+    knowledge,
     sessions,
     resumeSession,
     usage,

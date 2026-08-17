@@ -84,11 +84,11 @@ test("baseline skill agents match the live SKILL_AGENT_RULES (9 agents)", () => 
   }
 });
 
-test("baseline usage adapters remain represented and OpenClaw adds one native source", () => {
-  assert.equal(
-    BUILTIN_USAGE_ADAPTERS.length,
-    BASELINE_USAGE_ADAPTERS.length + 1,
-  );
+test("baseline usage adapters remain represented (native sources included)", () => {
+  // The baseline now reflects the registry post-migration: OpenClaw and
+  // Antigravity contribute native usage adapters inside the frozen set, so the
+  // live catalog matches it one-for-one (no extra "+1 extension").
+  assert.equal(BUILTIN_USAGE_ADAPTERS.length, BASELINE_USAGE_ADAPTERS.length);
   for (const expected of BASELINE_USAGE_ADAPTERS) {
     const live = BUILTIN_USAGE_ADAPTERS.find(
       (adapter) => adapter.source === expected.source,

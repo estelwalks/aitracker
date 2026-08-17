@@ -1,14 +1,11 @@
-import { useRouter } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import {
   createDashboardV2HeroView,
   createDashboardV2View,
 } from "../application/v2.ts";
-import { refreshDashboardAIInsight } from "../ai-insight.query.ts";
 import type { DashboardReadModel } from "../contracts.ts";
-import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -34,8 +31,7 @@ function localDateDaysAgo(days: number): string {
  * usage estimate can enter the dashboard from this presentation boundary.
  */
 export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
-  const { format, locale, t } = useI18n();
-  const router = useRouter();
+  const { format, t } = useI18n();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   // Date-only range inputs must use the same local calendar convention as
   // resolveUsageRange. Serialising with toISOString() would move the default
@@ -44,19 +40,6 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
   const [from, setFrom] = useState(localDateDaysAgo(29));
   const [to, setTo] = useState(localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
-  const [aiInsight, setAiInsight] = useState(data.aiInsight);
-  const [generatingAIInsight, setGeneratingAIInsight] = useState(false);
-  const {
-    summary: securitySummary,
-    runCount: securityRunCount,
-    coverage: securityCoverage,
-  } = useSecurityScanOverview();
-
-  useEffect(() => {
-    const refresh = window.setInterval(() => void router.invalidate(), 30_000);
-    return () => window.clearInterval(refresh);
-  }, [router]);
-  useEffect(() => setAiInsight(data.aiInsight), [data.aiInsight]);
 
   const scopedSnapshot = useMemo(
     () =>
@@ -100,29 +83,41 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       }),
     [data.activeInsightCount, data.monitoring, data.v2],
   );
-  async function generateAIInsight() {
-    if (!aiInsight?.configured || generatingAIInsight) return;
-    setGeneratingAIInsight(true);
-    try {
-      setAiInsight(await refreshDashboardAIInsight({ data: locale }));
-    } finally {
-      setGeneratingAIInsight(false);
+  const rangeLabel = useMemo(() => {
+    switch (period) {
+      case "today":
+        return t("dashboard.period.today");
+      case "7d":
+        return t("dashboard.period.lastNDays", { count: 7 });
+      case "30d":
+        return t("dashboard.period.lastNDays", { count: 30 });
+      case "all":
+        return t("dashboard.period.all");
+      default:
+        return `${from.slice(5)} → ${to.slice(5)}`;
     }
-  }
+  }, [from, period, t, to]);
+  const baselineLabel = useMemo(() => {
+    switch (period) {
+      case "today":
+        return t("dashboard.v2.baselineToday");
+      case "7d":
+        return t("dashboard.v2.baselineLastNDays", { count: 7 });
+      case "30d":
+        return t("dashboard.v2.baselineLastNDays", { count: 30 });
+      default:
+        return t("dashboard.v2.baselinePrevious");
+    }
+  }, [period, t]);
 
   return (
     <div className="dashboard-v3 space-y-6 pb-12">
-      <DashboardJarvisInsight
-        hero={hero}
-        aiInsight={aiInsight}
-        onGenerateAIInsight={generateAIInsight}
-        generatingAIInsight={generatingAIInsight}
-      />
+      <DashboardJarvisInsight hero={hero} rangeLabel={rangeLabel} />
       <DashboardTrustHero
         view={allToolsView}
         today={today}
         hero={hero}
-        security={securitySummary ?? data.monitoring?.security}
+        security={data.monitoring?.security}
       />
       <div className="dashboard-range-bar sticky top-14 z-20">
         <div className="min-w-0">
@@ -154,8 +149,7 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
       <DashboardMetricGrid
         view={allToolsView}
         monitoring={hero.monitoring}
-        securityRunsCount={securityRunCount > 0 ? securityRunCount : null}
-        securityCoverage={securityCoverage > 0 ? securityCoverage : null}
+        baselineLabel={baselineLabel}
       />
       <DashboardToolSwitcher
         tools={allToolsView.tools}
@@ -169,7 +163,11 @@ export function DashboardV2Page({ data }: { data: DashboardReadModel }) {
         points={view.calendar}
         summary={view.calendarSummary}
       />
-      <DashboardAgentWorkstreams view={view} selectedTool={selectedTool} />
+      {/* The workstream panel appears only for a picked tool (reference:
+          `agent !== "全部"`), not for the all-tools overview. */}
+      {selectedTool !== "all" ? (
+        <DashboardAgentWorkstreams view={view} selectedTool={selectedTool} />
+      ) : null}
     </div>
   );
 }
