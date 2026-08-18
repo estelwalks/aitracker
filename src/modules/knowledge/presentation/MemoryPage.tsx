@@ -74,6 +74,10 @@ function sourceLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
 export function MemoryPage() {
   const { t, format } = useI18n();
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
+  // P4-T4-03: counts come from the server projection (single store read),
+  // never recomputed from a partial first screen.
+  const [counts, setCounts] = useState({ total: 0, profile: 0, task: 0 });
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [type, setType] = useState<TypeFilter>("all");
@@ -85,7 +89,9 @@ export function MemoryPage() {
   const reload = useCallback(async () => {
     try {
       const rows = await getMemoryAssets();
-      setEntries(rows);
+      setEntries([...rows.entries]);
+      setCounts(rows.counts);
+      setHasMore(rows.hasMore);
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
@@ -97,15 +103,6 @@ export function MemoryPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  const counts = useMemo(
-    () => ({
-      total: entries.length,
-      profile: entries.filter((item) => item.type === "profile").length,
-      task: entries.filter((item) => item.type === "task").length,
-    }),
-    [entries],
-  );
 
   const sources = useMemo(() => {
     const map = new Map<string, { label: string; count: number }>();
@@ -162,6 +159,11 @@ export function MemoryPage() {
         return;
       }
       setEntries((prev) => [result.entry!, ...prev]);
+      setCounts((prev) => ({
+        total: prev.total + 1,
+        profile: prev.profile + (input.type === "profile" ? 1 : 0),
+        task: prev.task + (input.type === "task" ? 1 : 0),
+      }));
       setEditing(null);
       toast.success(t("memory.added"));
     } catch (error) {
@@ -201,7 +203,18 @@ export function MemoryPage() {
         toast.error(errorMessage(result.errorCode));
         return;
       }
+      const deletedType = entries.find(
+        (item) => item.assetId === assetId,
+      )?.type;
       setEntries((prev) => prev.filter((item) => item.assetId !== assetId));
+      setCounts((prev) => ({
+        total: Math.max(0, prev.total - 1),
+        profile: Math.max(
+          0,
+          prev.profile - (deletedType === "profile" ? 1 : 0),
+        ),
+        task: Math.max(0, prev.task - (deletedType === "task" ? 1 : 0)),
+      }));
       setConfirmDel(null);
       toast.success(t("memory.removed"));
     } catch (error) {
@@ -310,17 +323,27 @@ export function MemoryPage() {
             desc={t("memory.emptyDesc")}
           />
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {list.map((item) => (
-              <MemoryCard
-                key={item.assetId}
-                item={item}
-                busy={busy}
-                onEdit={() => setEditing(item)}
-                onDelete={() => setConfirmDel(item)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-3 md:grid-cols-2">
+              {list.map((item) => (
+                <MemoryCard
+                  key={item.assetId}
+                  item={item}
+                  busy={busy}
+                  onEdit={() => setEditing(item)}
+                  onDelete={() => setConfirmDel(item)}
+                />
+              ))}
+            </div>
+            {hasMore && (
+              <p className="mt-2 px-1 font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground/60">
+                {t("memory.hasMore", {
+                  total: counts.total,
+                  limit: 50,
+                })}
+              </p>
+            )}
+          </>
         )}
       </div>
 

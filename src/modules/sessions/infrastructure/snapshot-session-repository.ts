@@ -22,6 +22,14 @@ export interface SessionSnapshotReader {
     readonly generatedAt: string | null;
   };
   refreshNow(signal?: AbortSignal): Promise<unknown>;
+  /**
+   * P3-T3-11: routes an empty-state refresh through the unified task runtime
+   * (single-flight against scheduled runs, run records, heavy budget).
+   */
+  requestRefresh(request: {
+    reason: "startup" | "schedule" | "manual" | "event" | "empty";
+    signal?: AbortSignal;
+  }): Promise<void>;
 }
 
 export function createSnapshotSessionRepository(
@@ -33,8 +41,8 @@ export function createSnapshotSessionRepository(
       await reader.ensureHydrated();
       const latest = reader.readLatest();
       if (latest.data == null) {
-        // Empty snapshot: fire-and-forget refresh, never block the page.
-        void reader.refreshNow(signal).catch(() => {});
+        // Empty snapshot: fire-and-forget task-runtime refresh, never block.
+        void reader.requestRefresh({ reason: "empty", signal }).catch(() => {});
         return [];
       }
       return [...latest.data.sessions];

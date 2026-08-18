@@ -70,7 +70,14 @@ export function createInstallationSnapshotRuntime(
       const { detectToolInstallations } =
         await import("../../lib/tools/detection.server.ts");
       const homeDirectory = options.homeDirectory?.() ?? homedir();
-      const facts = await detectToolInstallations(AI_TOOLS, homeDirectory);
+      // P5-T5-03: the signal travels into the probe loop so a cancelled
+      // refresh stops starting new PATH/root probes.
+      const facts = await detectToolInstallations(
+        AI_TOOLS,
+        homeDirectory,
+        undefined,
+        signal,
+      );
       return {
         data: {
           generatedAt: new Date().toISOString(),

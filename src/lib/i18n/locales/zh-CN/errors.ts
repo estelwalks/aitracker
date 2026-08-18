@@ -88,6 +88,7 @@ export const errors = {
     modelListInvalid: "模型列表不合法",
     rateResponseIncomplete: "汇率响应不完整",
     rateMissingCurrency: "汇率响应缺少币种",
+    rateRefreshFailed: "汇率刷新失败，请稍后重试",
   },
   market: {
     fieldInvalid: "市场接口字段 {field} 无效",

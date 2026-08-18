@@ -99,6 +99,16 @@ export interface KnowledgeListResult {
   readonly revision: number;
 }
 
+/**
+ * P4-T4-03: an asset paired with its current version, produced by a single
+ * store read. Lets transports build list read models without an N+1 of
+ * per-asset `get()` calls.
+ */
+export interface KnowledgeVersionedEntry {
+  readonly asset: KnowledgeAsset;
+  readonly version: KnowledgeVersion;
+}
+
 export interface DedupeSuggestion {
   readonly assetId: string;
   readonly version: number;
@@ -145,6 +155,14 @@ export interface KnowledgeRepository {
   listLatest(
     cursor?: KnowledgeListCursor,
   ): Promise<Result<KnowledgeListResult>>;
+  /**
+   * P4-T4-03: lists matching assets together with their current version from
+   * ONE store read — transports must never loop `get()` per asset (N+1).
+   * Ordered by `updatedAt` descending (newest first).
+   */
+  listVersions(
+    filter?: KnowledgeFilter,
+  ): Promise<Result<readonly KnowledgeVersionedEntry[]>>;
   get(assetId: string, version?: number): Promise<Result<KnowledgeVersion>>;
   suggestDuplicates(
     contentHash: ContentHash,

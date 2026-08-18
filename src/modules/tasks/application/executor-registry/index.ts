@@ -32,6 +32,10 @@ export interface RefreshExchangePort {
   refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
+export interface RefreshInstallationPort {
+  refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
+}
+
 export interface ApplyRetentionPort {
   apply(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
@@ -41,6 +45,7 @@ export interface ExecutorRegistryOptions {
   readonly sessions?: RefreshSessionsPort;
   readonly skills?: RefreshSkillsPort;
   readonly exchange?: RefreshExchangePort;
+  readonly installation?: RefreshInstallationPort;
   readonly retention?: ApplyRetentionPort;
   readonly reports?: ReportsApplication;
   readonly security?: BackgroundSkillSecurityScanPort;
@@ -224,6 +229,11 @@ export function createExecutorRegistry(
     "refresh-exchange-v1": monitored(
       "exchange",
       bindPort(options.exchange),
+      options.monitoring,
+    ),
+    "refresh-installation-v1": monitored(
+      "installation",
+      bindPort(options.installation),
       options.monitoring,
     ),
     "monitor-security-v1": monitored(

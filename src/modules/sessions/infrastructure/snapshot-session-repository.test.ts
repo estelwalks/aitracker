@@ -73,6 +73,11 @@ function readerWith(
       state.refreshCalls += 1;
       return refresh();
     },
+    // P3-T3-11: empty-state refreshes route through the unified task runtime.
+    async requestRefresh() {
+      state.refreshCalls += 1;
+      return refresh();
+    },
   };
 }
 

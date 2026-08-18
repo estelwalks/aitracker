@@ -77,6 +77,15 @@ export interface TaskApi {
   runNow(
     request: unknown,
   ): Promise<Result<TaskRunSummaryPublic, TaskApiErrorCode>>;
+  /**
+   * P3-T3-11: waits (bounded polling) until the given run reaches a terminal
+   * state — used by manual refresh commands that must return the refreshed
+   * result, while still going through the unified task runtime (single-flight,
+   * budget, run records). Times out with `errors.tasks.executionFailed`.
+   */
+  awaitRun(
+    request: unknown,
+  ): Promise<Result<TaskRunSummaryPublic, TaskApiErrorCode>>;
   cancel(
     request: unknown,
   ): Promise<Result<{ runId: string }, TaskApiErrorCode>>;
@@ -100,6 +109,12 @@ const listRunsRequestSchema = z
   .strict();
 const taskIdRequestSchema = z.object({ taskId: z.string() }).strict();
 const runNowRequestSchema = z.object({ taskId: z.string() }).strict();
+const awaitRunRequestSchema = z
+  .object({
+    runId: z.string(),
+    timeoutMs: z.number().int().min(1000).max(300_000).optional(),
+  })
+  .strict();
 const updatePreferenceRequestSchema = z
   .object({
     taskId: z.string(),
@@ -107,6 +122,15 @@ const updatePreferenceRequestSchema = z
     schedule: ScheduleSchema.optional(),
   })
   .strict();
+
+/** Terminal run states (mirrors scheduler.ts; kept local to avoid coupling). */
+const TERMINAL_RUN_STATUSES = new Set<JobRun["status"]>([
+  "succeeded",
+  "failed",
+  "cancelled",
+  "skipped",
+  "abandoned",
+]);
 
 function publicDefinition(definition: JobTypeDefinition): TaskDefinitionPublic {
   return {
@@ -254,6 +278,26 @@ export function createTaskApi(options: CreateTaskApiOptions): TaskApi {
         );
       } catch {
         return err("errors.tasks.executionFailed");
+      }
+    },
+    async awaitRun(request) {
+      const parsed = awaitRunRequestSchema.safeParse(request);
+      if (!parsed.success || !isRunId(parsed.data.runId))
+        return err("errors.tasks.invalidRunId");
+      const timeoutMs = parsed.data.timeoutMs ?? 60_000;
+      const deadline = Date.now() + timeoutMs;
+      try {
+        for (;;) {
+          const runs = await options.runs.list({});
+          const run = runs.find((item) => item.runId === parsed.data.runId);
+          if (run && TERMINAL_RUN_STATUSES.has(run.status))
+            return ok(publicRun(run));
+          if (Date.now() >= deadline)
+            return err("errors.tasks.executionFailed");
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      } catch {
+        return err("errors.tasks.persistenceFailed");
       }
     },
     async cancel(request) {

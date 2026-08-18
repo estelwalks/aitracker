@@ -37,6 +37,7 @@ export const memory = {
     "蒸留ワークベンチで「プロファイル」または「タスク記憶」を選ぶと、成果物が自動的にここへ貯まります。",
   insightRotate: "次のインサイト",
   insightDots: "インサイトカルーセル",
+  hasMore: "メモリは全 {total} 件、直近 {limit} 件のみ表示しています。",
   form: {
     type: "タイプ",
     title: "タイトル",

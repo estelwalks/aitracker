@@ -37,6 +37,7 @@ export const memory = {
     "증류 작업대에서 '프로필' 또는 '작업 메모리'를 선택하면 결과물이 자동으로 여기에 쌓입니다.",
   insightRotate: "다음 인사이트",
   insightDots: "인사이트 캐러셀",
+  hasMore: "메모리 총 {total}개, 최근 {limit}개만 표시합니다.",
   form: {
     type: "유형",
     title: "제목",

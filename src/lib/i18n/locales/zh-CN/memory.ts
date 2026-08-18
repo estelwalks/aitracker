@@ -35,6 +35,7 @@ export const memory = {
     "在蒸馏工作台选择「画像」或「任务记忆」，产物会自动沉淀到这里。",
   insightRotate: "下一条洞察",
   insightDots: "洞察轮播",
+  hasMore: "共 {total} 条记忆，仅显示最近 {limit} 条。",
   form: {
     type: "类型",
     title: "标题",

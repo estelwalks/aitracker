@@ -98,7 +98,8 @@ async function readSkillSnapshot(): Promise<SkillSnapshotData> {
   await skillSnapshot.ensureHydrated();
   let latest = skillSnapshot.readLatest();
   if (latest.data == null) {
-    void skillSnapshot.refreshNow().catch(() => {});
+    // T3-11: empty-state refresh through the unified task runtime.
+    void skillSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
     latest = skillSnapshot.readLatest();
   }
   return latest.data ?? EMPTY_SKILL_SNAPSHOT;

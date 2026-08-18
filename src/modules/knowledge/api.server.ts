@@ -23,6 +23,7 @@ import type {
   MemoryActionResponse,
   MemoryCreateInput,
   MemoryEntry,
+  MemoryListResult,
   MemoryUpdateInput,
 } from "./presentation/index.ts";
 
@@ -35,6 +36,7 @@ export type {
   MemoryActionResponse,
   MemoryCreateInput,
   MemoryEntry,
+  MemoryListResult,
   MemoryUpdateInput,
 };
 
@@ -134,26 +136,40 @@ export function toMemoryEntry(version: KnowledgeVersion): MemoryEntry {
 }
 
 /**
- * List memory-kind assets with their latest versions, newest first. Archived
+ * P4-T4-03: list memory-kind assets with their latest versions, newest
+ * first, from ONE repository read (no per-asset `get()` N+1). Archived
  * (soft-deleted) assets and never-approved drafts are excluded so the hub
- * only shows live memories.
+ * only shows live memories. The first screen is capped at 50 entries; the
+ * DTO reports the exact totals so the UI never re-counts a partial page.
  */
+export const MEMORY_FIRST_SCREEN_LIMIT = 50;
+
 export async function listMemoryAssetsFrom(
   scope: KnowledgeScope,
-): Promise<MemoryEntry[]> {
-  const listed = await scope.knowledge.list({ kind: "memory" });
-  if (!listed.ok) return [];
-  const entries: MemoryEntry[] = [];
-  for (const asset of listed.value) {
-    if (asset.status === "archived" || asset.status === "draft") continue;
-    const version = await scope.knowledge.get(
-      asset.assetId,
-      asset.currentVersion,
-    );
-    if (version.ok) entries.push(toMemoryEntry(version.value));
-  }
-  entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return entries;
+): Promise<MemoryListResult & { hasMore: boolean }> {
+  const listed = await scope.knowledge.listVersions({ kind: "memory" });
+  if (!listed.ok)
+    return {
+      entries: [],
+      counts: { total: 0, profile: 0, task: 0 },
+      hasMore: false,
+    };
+  const live = listed.value
+    .filter(
+      ({ asset }) => asset.status !== "archived" && asset.status !== "draft",
+    )
+    .map(({ version }) => toMemoryEntry(version))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const counts = {
+    total: live.length,
+    profile: live.filter((item) => item.type === "profile").length,
+    task: live.filter((item) => item.type === "task").length,
+  };
+  return {
+    entries: live.slice(0, MEMORY_FIRST_SCREEN_LIMIT),
+    counts,
+    hasMore: live.length > MEMORY_FIRST_SCREEN_LIMIT,
+  };
 }
 
 /**
@@ -234,7 +250,9 @@ export async function archiveMemoryEntry(
 }
 
 /** Fetch the composition root and list all memory entries (route/UI entry). */
-export async function listMemoryAssets(): Promise<MemoryEntry[]> {
+export async function listMemoryAssets(): Promise<
+  MemoryListResult & { hasMore: boolean }
+> {
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   return listMemoryAssetsFrom(await getCompositionRoot());

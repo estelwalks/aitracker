@@ -98,6 +98,8 @@ export const errors = {
     modelListInvalid: "モデルリストが不正です",
     rateResponseIncomplete: "為替レートの応答が不完全です",
     rateMissingCurrency: "為替レートの応答に通貨がありません",
+    rateRefreshFailed:
+      "為替レートの更新に失敗しました。後でもう一度お試しください",
   },
   market: {
     fieldInvalid: "マーケットのフィールド {field} が無効です",

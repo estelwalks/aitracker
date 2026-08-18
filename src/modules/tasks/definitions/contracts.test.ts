@@ -10,7 +10,7 @@ const raw = {
 
 test("job catalog accepts the embedded catalog", () => {
   assertSafeStaticCatalog(raw);
-  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 7);
+  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 8);
 });
 
 test("job catalog rejects duplicate ids and invalid schedules", () => {

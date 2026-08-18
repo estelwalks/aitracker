@@ -92,6 +92,7 @@ export const errors = {
     modelListInvalid: "모델 목록이 올바르지 않습니다",
     rateResponseIncomplete: "환율 응답이 불완전합니다",
     rateMissingCurrency: "환율 응답에 통화가 없습니다",
+    rateRefreshFailed: "환율 새로고침에 실패했습니다. 잠시 후 다시 시도하세요",
   },
   market: {
     fieldInvalid: "마켓 필드 {field}이(가) 유효하지 않습니다",

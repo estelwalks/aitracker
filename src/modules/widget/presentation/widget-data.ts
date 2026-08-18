@@ -104,6 +104,9 @@ export function useWidgetData(): WidgetDataModel {
     // （refetchIntervalInBackground 默认 false）。
     refetchInterval: STATUS_INTERVAL_MS,
     staleTime: STATUS_INTERVAL_MS - 5_000,
+    // P4-T4-06: 恢复可见时立即校验 revision（无论隐藏多久），保证
+    // 回到窗口后 status/model 与后台刷新保持一致。
+    refetchOnWindowFocus: "always",
   });
   const status = statusQuery.data;
 
@@ -147,7 +150,7 @@ export function useWidgetData(): WidgetDataModel {
         memory:
           memoryQuery.data == null
             ? null
-            : countApprovedMemories(memoryQuery.data),
+            : countApprovedMemories(memoryQuery.data.entries),
       },
     };
   }, [model, memoryQuery.data]);

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
+import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
 import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
 import {
@@ -92,7 +93,6 @@ import {
 } from "../modules/usage/infrastructure/usage-envelope.server.ts";
 import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
 import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
-import { scanLocalSkills } from "../lib/local-skills/scanner.server.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
 import { createMonitoringRuntime } from "../modules/monitoring/application/index.ts";
 import {
@@ -176,7 +176,8 @@ export interface CompositionRoot {
   readonly knowledge: KnowledgeRepository;
   /**
    * Session query port shared by the distillation workbench. Backed by the
-   * same legacy local-sessions scanner as `/sessions`. Exposed so the
+   * SessionSnapshot coordinator (P3-T3-01, O(1) read); the legacy scanner
+   * remains only as the snapshot collector adapter. Exposed so the
    * distillation transport can render the session picker without reaching
    * into the application's private ports.
    */
@@ -204,6 +205,8 @@ export interface CompositionRoot {
   readonly classificationService: import("../modules/dashboard/classification-service.server.ts").ClassificationService;
   /** Renderer-safe heartbeat for the desktop background listener. */
   readonly monitoring: MonitoringRuntime;
+  /** In-memory read-model metrics sink (P0-T0-09; observe-only). */
+  readonly metrics: import("../platform/observability/contracts.ts").MetricSink;
   /**
    * Local performance-rollout state (P0-T0-08). Persists the monotonic stage
    * and the emergency kill switch under `~/.trusttools/tasks/performance-rollout.v1.json`.
@@ -343,25 +346,83 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     }),
   });
 
+  // P3-T3-04: WSL topology snapshot. Enumerates distro/home at most once per
+  // freshness window (6h from the runtime policy) and persists it; usage
+  // collection reads this coordinator instead of invoking `wsl.exe` on every
+  // refresh.
+  const { createSnapshotEnvelopeRepository } =
+    await import("../platform/snapshot-runtime/envelope-repository.ts");
+  const { createWslSnapshotRuntime } =
+    await import("../platform/discovery/wsl-snapshot-runtime.server.ts");
+  type Envelope<T> =
+    import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<T>;
+  const emptyWslEnvelope: Envelope<
+    import("../platform/discovery/wsl-topology.server.ts").WslTopology
+  > = {
+    schemaVersion: 1,
+    revision: "empty",
+    generatedAt: null,
+    sourceFingerprint: null,
+    status: "empty",
+    data: null,
+    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+  };
+  const wslSnapshotStore = new NodeAtomicJsonStore<
+    Envelope<import("../platform/discovery/wsl-topology.server.ts").WslTopology>
+  >({
+    filePath: join(tasksDir, "wsl-topology-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: { currentVersion: 1, parse: (value) => value as never },
+    clock,
+  });
+  const wslSnapshot = createWslSnapshotRuntime({
+    repository: createSnapshotEnvelopeRepository({
+      store: wslSnapshotStore,
+      emptyEnvelope: emptyWslEnvelope,
+      schema: { currentVersion: 1, parse: (value) => value as never },
+    }),
+    now: () => clock.now().getTime(),
+  });
+
+  // P3-T3-11: page-triggered refreshes (empty/stale/manual/mutation) go
+  // through the unified task runtime. The ports are bound lazily after the
+  // task API is constructed below; until then a request is a no-op, which is
+  // safe because the scheduler itself drives startup/scheduled refreshes.
+  const refreshPorts: {
+    usage?: SnapshotRefreshPort;
+    sessions?: SnapshotRefreshPort;
+    skills?: SnapshotRefreshPort;
+    installation?: SnapshotRefreshPort;
+  } = {};
+
   const usageSnapshot = createUsageSnapshotRuntime({
     repository: createUsageEnvelopeRepository({
       envelopeStore: usageEnvelopeStore,
       legacyStore: usageSnapshotStore,
     }),
     now: () => clock.now().getTime(),
+    requestRefresh: refreshPorts.usage,
     // T3-06: after each Usage refresh, feed observed project refs to the
     // incremental classifier so the index stays fresh without blocking the
     // query path.
     collect: async (request) => {
       const collector = createLegacyUsageCollector();
-      // P3-T3-04: share one WSL topology with the scanner instead of letting
-      // each provider probe separately. The topology is enumerated once here
-      // (with cancellation) and injected into the scan.
-      const { enumerateWslTopology } =
-        await import("../platform/discovery/wsl-topology.server.ts");
-      const wslTopology = await enumerateWslTopology({
-        signal: request.signal,
-      });
+      // P3-T3-04: reuse the shared WSL topology snapshot instead of re-running
+      // `wsl.exe` on every usage refresh. The coordinator hydrates the
+      // persisted topology once; a missing/stale snapshot triggers exactly one
+      // bounded enumeration (with cancellation) and the result is injected
+      // into the scan and shared by every provider.
+      await wslSnapshot.ensureHydrated();
+      let latest = wslSnapshot.readLatest();
+      if (latest.data == null || latest.status === "stale") {
+        latest = await wslSnapshot.refreshNow(request.signal);
+      }
+      const wslTopology = latest.data ?? {
+        distros: [],
+        enumeratedAt: null,
+        failed: true,
+        warningCodes: ["wsl-unavailable"],
+      };
       const result = await collector.collect({
         signal: request.signal,
         budget: {
@@ -377,7 +438,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       });
       const refs = result.snapshot.details.map((event) => event.project);
       if (refs.length > 0) {
-        await classificationService.classifyIncrementally(refs).catch(() => {});
+        await classificationService
+          .classifyIncrementally(refs, request.signal)
+          .catch(() => {});
       }
       return {
         data: result.snapshot,
@@ -391,16 +454,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // Each has its own sibling file; pages read the coordinator (O(1)) instead
   // of re-scanning. The shared envelope repository handles corrupt fallback
   // and last-known-good.
-  const { createSnapshotEnvelopeRepository } =
-    await import("../platform/snapshot-runtime/envelope-repository.ts");
   const { createSessionSnapshotRuntime } =
     await import("../modules/sessions/infrastructure/session-snapshot-runtime.server.ts");
   const { createSkillSnapshotRuntime } =
     await import("../modules/skill-catalog/infrastructure/skill-snapshot-runtime.server.ts");
   const { createInstallationSnapshotRuntime } =
     await import("../platform/discovery/installation-snapshot-runtime.server.ts");
-  type Envelope<T> =
-    import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<T>;
 
   const emptySessionEnvelope: Envelope<
     import("../modules/sessions/infrastructure/session-snapshot.contracts.ts").SessionSnapshotData
@@ -430,6 +489,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
+    requestRefresh: refreshPorts.sessions,
   });
 
   const emptySkillEnvelope: Envelope<
@@ -460,6 +520,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
+    requestRefresh: refreshPorts.skills,
   });
 
   const emptyInstallationEnvelope: Envelope<
@@ -490,39 +551,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
-  });
-
-  // P3-T3-04: WSL topology snapshot. Enumerates distro/home once per refresh
-  // and persists it; usage/session scanners read this coordinator instead of
-  // invoking `wsl.exe` on every scan.
-  const { createWslSnapshotRuntime } =
-    await import("../platform/discovery/wsl-snapshot-runtime.server.ts");
-  const emptyWslEnvelope: Envelope<
-    import("../platform/discovery/wsl-topology.server.ts").WslTopology
-  > = {
-    schemaVersion: 1,
-    revision: "empty",
-    generatedAt: null,
-    sourceFingerprint: null,
-    status: "empty",
-    data: null,
-    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
-  };
-  const wslSnapshotStore = new NodeAtomicJsonStore<
-    Envelope<import("../platform/discovery/wsl-topology.server.ts").WslTopology>
-  >({
-    filePath: join(tasksDir, "wsl-topology-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: { currentVersion: 1, parse: (value) => value as never },
-    clock,
-  });
-  const wslSnapshot = createWslSnapshotRuntime({
-    repository: createSnapshotEnvelopeRepository({
-      store: wslSnapshotStore,
-      emptyEnvelope: emptyWslEnvelope,
-      schema: { currentVersion: 1, parse: (value) => value as never },
-    }),
-    now: () => clock.now().getTime(),
+    requestRefresh: refreshPorts.installation,
   });
 
   const monitoringStore = new NodeAtomicJsonStore<
@@ -542,6 +571,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     store: createAtomicMonitoringStatusStore(monitoringStore),
     now: () => clock.now(),
   });
+
+  // P0-T0-09: in-memory read-model metrics sink. Loader/projector adapters
+  // observe durations and DTO bytes here; nothing sensitive is ever recorded.
+  const { createInMemoryMetrics } =
+    await import("../platform/observability/metrics.ts");
+  const metrics = createInMemoryMetrics();
 
   // Automatic security assessment intentionally remains unavailable here.
   // The Electron service owns the trusted-directory, O_NOFOLLOW/realpath and
@@ -595,9 +630,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // Distillation: assemble after reports and knowledge so it can depend on
   // both. The knowledge repository persists distilled drafts (only after
   // explicit approval in the distillation application). The sessions port is
-  // backed by the legacy local-sessions scanner — the same source the
-  // `/sessions` route reads. `dataRoot` mirrors the scanner's `$HOME`-relative
-  // storage.
+  // backed by the SessionSnapshot coordinator (P3-T3-01) — the same O(1)
+  // source the `/sessions` route reads. `dataRoot` mirrors the scanner's
+  // `$HOME`-relative storage.
   //
   // TODO(security-gate): `gateForDistillationCandidate` could not be wired
   // here this round — the distillation application keeps no `AssetAssessment`,
@@ -721,6 +756,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         }
       },
     },
+    // P3-T3-03: installation refresh runs through the shared snapshot
+    // coordinator (6h freshness, single-flight, timeout from the policy).
+    installation: {
+      async refresh({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        await installationSnapshot.refreshNow(signal);
+      },
+    },
     reports,
     monitoring,
   });
@@ -740,6 +783,31 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });
+
+  // P3-T3-11: bind the snapshot refresh ports to the unified task runtime so
+  // page-triggered refreshes (empty/stale/manual/mutation) are single-flighted
+  // against scheduled runs, recorded in the run store and subject to the
+  // heavy-collector budget.
+  refreshPorts.usage = {
+    requestRefresh: async () => {
+      await taskApi.runNow({ taskId: "usage.refresh" }).catch(() => {});
+    },
+  };
+  refreshPorts.sessions = {
+    requestRefresh: async () => {
+      await taskApi.runNow({ taskId: "sessions.refresh" }).catch(() => {});
+    },
+  };
+  refreshPorts.skills = {
+    requestRefresh: async () => {
+      await taskApi.runNow({ taskId: "skills.refresh" }).catch(() => {});
+    },
+  };
+  refreshPorts.installation = {
+    requestRefresh: async () => {
+      await taskApi.runNow({ taskId: "installation.refresh" }).catch(() => {});
+    },
+  };
 
   return {
     scheduler,
@@ -761,6 +829,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     wslSnapshot,
     classificationService,
     monitoring,
+    metrics,
     performanceRollout,
     dataRoot,
   };

@@ -53,3 +53,40 @@ export const getRatesSnapshot = createServerFn({ method: "POST" })
     ratesCache = { at: Date.now(), value };
     return value;
   });
+
+/**
+ * P3-T3-11: manual exchange-rate refresh goes through the unified task
+ * runtime (`exchange.refresh`): the network attempt is single-flighted
+ * against scheduled runs, subject to the policy timeout, and recorded in the
+ * run store. The handler waits for the run to finish (bounded) and then
+ * returns the freshly cached snapshot so the settings-page UX is unchanged —
+ * only the execution path changed.
+ */
+export const refreshExchangeRates = createServerFn({ method: "POST" }).handler(
+  async (): Promise<RatesSnapshot> => {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const { taskApi } = await getCompositionRoot();
+    const queued = await taskApi.runNow({ taskId: "exchange.refresh" });
+    if (!queued.ok) throw new AppError("errors.pricing.rateRefreshFailed");
+    const awaited = await taskApi.awaitRun({
+      runId: queued.value.runId,
+      timeoutMs: 25_000,
+    });
+    if (!awaited.ok || awaited.value.status !== "succeeded")
+      throw new AppError("errors.pricing.rateRefreshFailed");
+    // The task wrote the fresh cache file; bypass the in-memory TTL and read
+    // the file-backed snapshot so the caller sees the new rates immediately.
+    const { buildPricingSnapshot } = await import("./dynamic.server.ts");
+    const snapshot = await buildPricingSnapshot([], {
+      refreshExchange: false,
+    });
+    const value: RatesSnapshot = {
+      rates: snapshot.exchangeRates as Record<Currency, number>,
+      date: snapshot.exchangeRateDate,
+      source: snapshot.exchangeRateSource,
+    };
+    ratesCache = { at: Date.now(), value };
+    return value;
+  },
+);

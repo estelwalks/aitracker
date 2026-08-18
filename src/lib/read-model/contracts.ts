@@ -58,4 +58,5 @@ export const READ_MODEL_BUDGETS = {
   dashboardFirstScreenBytes: 250 * 1024,
   otherRouteFirstScreenBytes: 150 * 1024,
   widgetModelBytes: 50 * 1024,
+  widgetStatusBytes: 2 * 1024,
 } as const;
