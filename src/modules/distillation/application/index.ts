@@ -36,9 +36,9 @@ const SEGMENT_SECTION = "--- 用户选择片段 ---";
 
 /**
  * A real-model distillation call is one routed to a genuine model endpoint
- * (a saved S-500 profile or the env-configured LLM) rather than the
- * deterministic offline fallback. Only these calls consume the daily quota,
- * because only they can incur real provider cost.
+ * (a saved S-500 model profile) rather than the deterministic offline
+ * fallback. Only these calls consume the daily quota, because only they can
+ * incur real provider cost.
  */
 function isRealModelRequest(request: DistillationRequest): boolean {
   return request.modelId !== "offline";
