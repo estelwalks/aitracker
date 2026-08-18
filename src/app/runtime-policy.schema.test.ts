@@ -38,7 +38,7 @@ test("runtime policy accepts the embedded source", () => {
     maxProjectClassifiers: 8,
   });
   assert.equal(parsed.rollout.defaultStage, "new-default");
-  assert.equal(parsed.scheduledJobs.tasks.length, 7);
+  assert.equal(parsed.scheduledJobs.tasks.length, 8);
 });
 
 test("every snapshot policy key is present and has positive values", () => {

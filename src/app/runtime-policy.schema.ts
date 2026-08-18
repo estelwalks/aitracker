@@ -65,6 +65,7 @@ export const SNAPSHOT_TO_JOB: Readonly<
   sessions: "sessions.refresh",
   skills: "skills.refresh",
   exchangeRates: "exchange.refresh",
+  toolInstallations: "installation.refresh",
 };
 
 export const resourceBudgetsSchema = z

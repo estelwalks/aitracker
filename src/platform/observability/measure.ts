@@ -34,6 +34,12 @@ const FORBIDDEN_DTO_FIELD_NAMES = new Set([
   "authorization",
   "password",
   "secret",
+  // Must stay in sync with `READ_MODEL_FORBIDDEN_FIELDS` in
+  // src/lib/read-model/contracts.ts and `FORBIDDEN_KEYS` in
+  // scripts/verify-read-model-budgets.mts.
+  "path",
+  "root",
+  "home",
 ]);
 
 /** Walks object keys (shallow-ish) and reports any forbidden field name. */

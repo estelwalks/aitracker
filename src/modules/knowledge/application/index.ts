@@ -261,6 +261,35 @@ export function createKnowledgeRepository(
           revision: doc.revision,
         });
       }),
+    // P4-T4-03: ONE store read for the whole filtered list (asset + current
+    // version). Transports must not loop `get()` per asset afterwards — that
+    // would re-read and re-parse the store file N times.
+    listVersions: (filter?: KnowledgeFilter) =>
+      serial(async () => {
+        const doc = await read();
+        const rows = doc.assets
+          .filter(
+            (item) =>
+              (!filter?.status || item.status === filter.status) &&
+              (!filter?.kind || item.kind === filter.kind),
+          )
+          .map((asset) => ({
+            asset,
+            version: findVersion(doc, asset.assetId, asset.currentVersion),
+          }))
+          .filter(
+            (
+              row,
+            ): row is { asset: KnowledgeAsset; version: KnowledgeVersion } =>
+              row.version !== undefined,
+          )
+          .sort(
+            (left, right) =>
+              right.asset.updatedAt.localeCompare(left.asset.updatedAt) ||
+              left.asset.assetId.localeCompare(right.asset.assetId),
+          );
+        return ok(clone(rows));
+      }),
     get: (assetId, version) =>
       serial(async () => {
         const row = findVersion(await read(), assetId, version);

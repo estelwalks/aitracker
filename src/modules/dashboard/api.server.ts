@@ -505,16 +505,17 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   readonly error: string | null;
 }> {
   // T7-08: read the unified Usage snapshot (O(1), never scans on the query
-  // path). Empty state triggers a NON-BLOCKING background refresh: the loader
-  // returns the shell immediately while the collector runs (design §4.3 and
-  // loader rule 4 — an empty snapshot must not stall the first response).
+  // path). Empty state triggers a NON-BLOCKING background refresh through the
+  // unified task runtime (T3-11): the loader returns the shell immediately
+  // while the collector runs (design §4.3 and loader rule 4 — an empty
+  // snapshot must not stall the first response).
   const { getCompositionRoot: getRootForUsage } =
     await import("../../app/composition.server.ts");
   const { usageSnapshot } = await getRootForUsage();
   await usageSnapshot.ensureHydrated();
   let latest = usageSnapshot.readLatest();
   if (latest.data == null) {
-    void usageSnapshot.refreshNow().catch(() => {});
+    void usageSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
     latest = usageSnapshot.readLatest();
   }
   const usageResult =

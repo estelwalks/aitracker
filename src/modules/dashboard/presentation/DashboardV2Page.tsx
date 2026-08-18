@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import { resolveUsageRange } from "../../../lib/local-usage/presentation.ts";
@@ -216,9 +217,13 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
         selected={selectedTool}
         onChange={setSelectedTool}
       />
-      <Suspense fallback={<div className="dashboard-panel h-[280px]" />}>
-        <DashboardTrendPanel view={view} baselineLabel={baselineLabel} />
-      </Suspense>
+      {/* P6-T6-05: on-demand Recharts panel; the boundary keeps the page
+          usable if the chunk fails to load. */}
+      <ChunkErrorBoundary>
+        <Suspense fallback={<div className="dashboard-panel h-[280px]" />}>
+          <DashboardTrendPanel view={view} baselineLabel={baselineLabel} />
+        </Suspense>
+      </ChunkErrorBoundary>
       <DashboardModelDonut view={view} baselineLabel={baselineLabel} />
       <DashboardProjectOverview view={view} baselineLabel={baselineLabel} />
       <DashboardContribHeatmap

@@ -27,8 +27,13 @@ import type {
  * `DashboardUsageSnapshot.details`) and any server-only type. All four
  * standard windows (today / 7d / 30d / all) are pre-aggregated on the server
  * by the summary projector; the renderer never re-aggregates raw events.
- * Custom date ranges are served as an additional window projection over the
- * same daily buckets (T1-05).
+ *
+ * Custom date ranges (T1-05) are projected server-side over the same
+ * event-derived aggregates with a bounded 366-day range and per-revision
+ * memoization. The per-day `daily` buckets below are carried for lightweight
+ * window math and diagnostics; dimension rows (models/projects/tools Top N)
+ * are not representable from buckets alone, so custom windows are built by
+ * the server projector from the snapshot — never on the browser.
  *
  * Budget: serialized JSON ≤ 250 KB (see `tests/performance/budgets.v1.json`
  * and `scripts/verify-read-model-budgets.mts`).

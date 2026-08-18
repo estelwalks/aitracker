@@ -312,10 +312,14 @@ export function I18nProvider({
     });
   }, []);
 
-  /** Startup silent rate refresh (TTL-gated server-side; never blocks UI). */
+  /**
+   * Startup silent rate read — cache-only (T3-05/T3-11): automatic network
+   * refreshes belong to the `exchange.refresh` background task, never to a
+   * page-load path. The root loader has already seeded the cache.
+   */
   useEffect(() => {
     let cancelled = false;
-    void getRatesSnapshot({ data: true })
+    void getRatesSnapshot({ data: false })
       .then((snapshot) => {
         if (!cancelled) setRates(snapshot);
       })
@@ -372,7 +376,10 @@ export function I18nProvider({
   const refreshRates = useCallback(async () => {
     setRatesLoading(true);
     try {
-      const snapshot = await getRatesSnapshot({ data: true });
+      // T3-11: the manual refresh goes through the unified `exchange.refresh`
+      // task (single-flight, policy timeout, run record) and waits for it.
+      const { refreshExchangeRates } = await import("../pricing/server-fns");
+      const snapshot = await refreshExchangeRates();
       setRates(snapshot);
     } finally {
       setRatesLoading(false);

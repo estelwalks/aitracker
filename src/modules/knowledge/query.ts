@@ -18,6 +18,7 @@ import type {
   MemoryActionResponse,
   MemoryCreateInput,
   MemoryEntry,
+  MemoryListResult,
   MemoryUpdateInput,
 } from "./presentation/index.ts";
 
@@ -25,6 +26,7 @@ export type {
   MemoryActionResponse,
   MemoryCreateInput,
   MemoryEntry,
+  MemoryListResult,
   MemoryUpdateInput,
 };
 
@@ -115,7 +117,7 @@ export function validateArchiveMemoryInput(value: unknown): {
 
 /** Load the memory hub read model (route loader / page refresh). */
 export const getMemoryAssets = createServerFn({ method: "GET" }).handler(
-  async (): Promise<MemoryEntry[]> => {
+  async (): Promise<MemoryListResult & { hasMore: boolean }> => {
     const { listMemoryAssets } = await import("./api.server.ts");
     return listMemoryAssets();
   },

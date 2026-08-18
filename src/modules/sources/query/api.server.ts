@@ -83,7 +83,8 @@ async function readSkillsFromSnapshot(): Promise<SkillSnapshotData> {
   await skillSnapshot.ensureHydrated();
   let latest = skillSnapshot.readLatest();
   if (latest.data == null) {
-    void skillSnapshot.refreshNow().catch(() => {});
+    // T3-11: empty-state refresh through the unified task runtime.
+    void skillSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
     latest = skillSnapshot.readLatest();
   }
   return (
@@ -136,6 +137,11 @@ async function refreshSourcesFromSnapshot(): Promise<void> {
   const { getCompositionRoot } =
     await import("../../../app/composition.server.ts");
   const { usageSnapshot, installationSnapshot } = await getCompositionRoot();
-  void usageSnapshot.refreshNow().catch(() => {});
-  void installationSnapshot.refreshNow().catch(() => {});
+  // P3-T3-11: manual refresh goes through the unified task runtime so it is
+  // single-flighted against scheduled runs, recorded in the run store and
+  // subject to the heavy-collector budget.
+  void usageSnapshot.requestRefresh({ reason: "manual" }).catch(() => {});
+  void installationSnapshot
+    .requestRefresh({ reason: "manual" })
+    .catch(() => {});
 }

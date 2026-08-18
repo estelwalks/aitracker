@@ -16,18 +16,7 @@ export type {
   DashboardWindowSummary,
 } from "./summary-contracts";
 export { windowToView } from "./summary-contracts";
-export {
-  createDashboardApplication,
-  createDashboardV2View,
-} from "./application";
-export {
-  buildDashboardPosterData,
-  buildDashboardExport,
-  type DashboardPosterData,
-  type DashboardViewModel,
-} from "./presentation";
 export { DashboardPage } from "./presentation/DashboardPage";
-export { getDashboardReadModel } from "./query";
 export {
   getDashboardCustomWindow,
   getDashboardSummaryReadModel,
