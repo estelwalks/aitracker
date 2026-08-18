@@ -9,9 +9,9 @@ import type {
 /**
  * Story B-600 — server-side daily quota for real-model distillation calls.
  *
- * Only genuine model calls (a saved S-500 profile or the env-configured LLM)
- * consume quota, because only they can incur real provider cost. Offline
- * distillation is deterministic and free, so it is never counted.
+ * Only genuine model calls (a saved S-500 model profile) consume quota,
+ * because only they can incur real provider cost. Offline distillation is
+ * deterministic and free, so it is never counted.
  *
  * The ledger is authoritative on the server: it persists under
  * `~/.trusttools/tasks/distill-quota.v1.json` and the renderer only ever
