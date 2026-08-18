@@ -425,6 +425,152 @@ test("testModelProfile: editing with a blank key reuses the stored secret", asyn
   });
 });
 
+// ── Remote model list (mocked) ──────────────────────────────────────────────
+
+test("listModels: remote list succeeds and is sorted", async () => {
+  let seenUrl = "";
+  let seenHeaders: Record<string, string> = {};
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async (url, init) => {
+        seenUrl = url;
+        seenHeaders = (init.headers as Record<string, string>) ?? {};
+        return jsonResponse({
+          data: [{ id: "deepseek-reasoner" }, { id: "deepseek-chat" }],
+        });
+      }),
+    });
+    const result = await repo.listModels({
+      mode: "custom",
+      protocol: "openai",
+      apiKey: VALID_KEY,
+      endpoint: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "remote");
+    assert.deepEqual(result.models, ["deepseek-chat", "deepseek-reasoner"]);
+    assert.match(seenUrl, /\/models$/);
+    assert.equal(seenHeaders.authorization, `Bearer ${VALID_KEY}`);
+  });
+});
+
+test("listModels: anthropic protocol uses x-api-key and anthropic-version", async () => {
+  let seenHeaders: Record<string, string> = {};
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async (_url, init) => {
+        seenHeaders = (init.headers as Record<string, string>) ?? {};
+        return jsonResponse({ data: [{ id: "claude-sonnet-4" }] });
+      }),
+    });
+    const result = await repo.listModels({
+      mode: "custom",
+      protocol: "anthropic",
+      apiKey: "sk-ant-0987654321",
+      endpoint: "https://api.anthropic.com/v1",
+      model: "claude-sonnet-4",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "remote");
+    assert.equal(seenHeaders["x-api-key"], "sk-ant-0987654321");
+    assert.equal(seenHeaders["anthropic-version"], "2023-06-01");
+  });
+});
+
+test("listModels: HTTP 403 falls back to the provider default list", async () => {
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async () => jsonResponse({ error: "forbidden" }, 403)),
+    });
+    const result = await repo.listModels({
+      mode: "custom",
+      protocol: "openai",
+      apiKey: VALID_KEY,
+      endpoint: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "fallback");
+    assert.ok(result.models?.includes("deepseek-chat"));
+    assert.ok(result.models?.includes("deepseek-reasoner"));
+  });
+});
+
+test("listModels: unknown host falls back to the protocol default list", async () => {
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async () => jsonResponse({ error: "nope" }, 500)),
+    });
+    const result = await repo.listModels({
+      mode: "custom",
+      protocol: "openai",
+      apiKey: VALID_KEY,
+      endpoint: "https://example.com/v1",
+      model: "gpt-4o",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "fallback");
+    assert.ok(result.models?.includes("gpt-4o"));
+    assert.ok(result.models?.includes("o4-mini"));
+  });
+});
+
+test("listModels: editing with a blank key reuses the stored secret", async () => {
+  let seenAuth = "";
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async (_url, init) => {
+        seenAuth =
+          (init.headers as Record<string, string>)?.authorization ?? "";
+        return jsonResponse({ data: [{ id: "deepseek-chat" }] });
+      }),
+    });
+    const created = await repo.upsert(VALID_CUSTOM);
+    const result = await repo.listModels({
+      id: created.id,
+      mode: "custom",
+      protocol: "openai",
+      apiKey: "",
+      endpoint: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "remote");
+    assert.equal(seenAuth, `Bearer ${VALID_KEY}`);
+  });
+});
+
+test("listModels: no key returns listFailed without calling fetch", async () => {
+  let calls = 0;
+  await withTempStore(async (store) => {
+    const repo = createModelProfileRepository({
+      store,
+      fetchFn: mockFetch(async () => {
+        calls += 1;
+        return jsonResponse({ data: [] });
+      }),
+    });
+    const result = await repo.listModels({
+      mode: "custom",
+      protocol: "openai",
+      apiKey: "",
+      name: "x",
+      model: "y",
+    });
+    assert.deepEqual(result, {
+      ok: false,
+      errorCode: "errors.modelProfile.listFailed",
+    });
+  });
+  assert.equal(calls, 0);
+});
+
 // ── Profile-backed provider (mocked) ────────────────────────────────────────
 
 test("createProfileBackedProvider: resolves profile and parses OpenAI response", async () => {
