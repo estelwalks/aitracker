@@ -20,8 +20,6 @@ export const desktopIpc = {
   getSecurityScanStatus: "security:get-scan-status",
   getSecurityScanHistory: "security:get-scan-history",
   cancelSecurityScan: "security:cancel-scan",
-  getSecurityModelConfig: "security:get-model-config",
-  setSecurityModelConfig: "security:set-model-config",
   getSecurityScanSchedule: "security:get-scan-schedule",
   setSecurityScanSchedule: "security:set-scan-schedule",
   getSecurityRuntimeCapability: "security:get-runtime-capability",
@@ -153,32 +151,6 @@ export interface SecurityScanSchedule {
   readonly dir: string | null;
   /** Fire an alert notification when a scheduled scan finds risks. */
   readonly notify: boolean;
-}
-
-export interface SecurityModelConfigInput {
-  provider: "openai" | "anthropic";
-  endpoint: string;
-  /** Omit to retain the encrypted key; null explicitly clears it. */
-  apiKey?: string | null;
-  liteModel: string;
-  proModel: string;
-  timeoutMs?: number;
-  contextWindowTokens?: number;
-  maxAgentTurns?: number;
-}
-
-/** API key material never crosses from main to renderer. */
-export interface SecurityModelConfigView {
-  configured: boolean;
-  provider: "openai" | "anthropic";
-  endpoint: string;
-  liteModel: string;
-  proModel: string;
-  timeoutMs: number;
-  contextWindowTokens?: number;
-  maxAgentTurns: number;
-  apiKeyConfigured: boolean;
-  encryptionAvailable: boolean;
 }
 
 export interface SecurityFindingDto {
@@ -339,10 +311,6 @@ export interface DesktopApi {
   getSecurityScanStatus(): Promise<SecurityScanState>;
   getSecurityScanHistory(): Promise<SecurityScanHistoryEntry[]>;
   cancelSecurityScan(): Promise<{ cancelled: boolean }>;
-  getSecurityModelConfig(): Promise<SecurityModelConfigView>;
-  setSecurityModelConfig(
-    config: SecurityModelConfigInput,
-  ): Promise<SecurityModelConfigView>;
   getSecurityScanSchedule(): Promise<SecurityScanSchedule>;
   setSecurityScanSchedule(
     schedule: SecurityScanSchedule,

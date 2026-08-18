@@ -159,19 +159,6 @@ export interface SecurityHistoryView {
   readonly errorCode?: string;
 }
 
-export interface SecurityModelConfigView {
-  readonly configured: boolean;
-  readonly provider: "openai" | "anthropic";
-  readonly endpoint: string;
-  readonly apiKeyConfigured: boolean;
-  readonly liteModel: string;
-  readonly proModel: string;
-  readonly timeoutMs: number;
-  readonly contextWindowTokens?: number;
-  readonly maxAgentTurns: number;
-  readonly encryptionAvailable: boolean;
-}
-
 export interface SecurityRuntimeCapabilityView {
   readonly activeDefense: false;
   readonly capability: "detection-only";

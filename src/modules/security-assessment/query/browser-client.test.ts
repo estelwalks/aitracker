@@ -168,34 +168,6 @@ test("browser client never calls the native directory picker endpoint", async ()
   assert.equal(calls, 1);
 });
 
-test("model config response rejects leaked API key material", async () => {
-  const client = await connectBrowserSecurityClient({
-    location,
-    fetchFn: async (input) => {
-      if (input.endsWith("/capability")) return jsonResponse(capability);
-      return jsonResponse({
-        configured: true,
-        provider: "openai",
-        endpoint: "https://example.invalid/v1",
-        liteModel: "lite",
-        proModel: "pro",
-        timeoutMs: 120_000,
-        maxAgentTurns: 12,
-        apiKeyConfigured: true,
-        encryptionAvailable: true,
-        apiKey: "must-not-cross-boundary",
-      });
-    },
-  });
-  assert.ok(client);
-  await assert.rejects(
-    client.getModelConfig(),
-    (error: unknown) =>
-      error instanceof CompanionSecurityClientError &&
-      error.code === "security.http.invalid_response",
-  );
-});
-
 test("automatic scans are rejected at the browser boundary", async () => {
   const client = await connectBrowserSecurityClient({
     location,

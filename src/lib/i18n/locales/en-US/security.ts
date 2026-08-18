@@ -96,7 +96,7 @@ export const security = {
       "{skills} Skills · {dimensions} scan dimensions · {health}% health",
     devBanner: {
       title: "Dev mode · scan service connected",
-      desc: "Scans use the real local Skill root; history and model config are stored in isolation under ~/.trusttools/security-dev/.",
+      desc: "Scans use the real local Skill root; history is stored in isolation under ~/.trusttools/security-dev/.",
     },
     unavailable: {
       title: "Local companion service unavailable",
@@ -375,40 +375,8 @@ export const security = {
       scannedValue: "{count} skills",
     },
     model: {
-      title: "Deep-scan model configuration",
-      desc: "Electron safeStorage encrypts the API key in the main process. It is never returned to this page or written to ordinary preferences.",
-      devModeNote:
-        "Dev-only: the API key is stored in plaintext in the isolated dev directory ~/.trusttools/security-dev/ (0600, local dev only).",
-      provider: "API protocol",
-      openai: "OpenAI compatible",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API key",
-      apiKeyConfigured: "Securely stored; leave blank to keep it",
-      apiKeyMissing: "Not configured",
-      liteModel: "Lite model",
-      proModel: "Pro model",
-      timeoutMs: "Timeout (ms)",
-      contextWindowTokens: "Context window tokens",
-      maxAgentTurns: "Maximum Agent turns",
-      save: "Save configuration",
-      saving: "Saving",
-      cancel: "Cancel",
-      configure: "Configure model",
-      update: "Update model configuration",
-      configuredState:
-        "Model credentials are stored securely and manual deep scans are available.",
-      missingState:
-        "Model setup is incomplete; quick scans remain fully available.",
-      requiredTitle: "Model configuration required",
-      requiredDesc:
-        "Save a valid endpoint, API key, lite model, and pro model before starting a deep scan.",
       requiredSettings:
-        "Full scan requires configuring a model interface in Settings first.",
-      encryptionUnavailable:
-        "Secure key encryption is unavailable on this system, so an API key cannot be saved.",
-      encryptionAvailable:
-        "Secure key encryption is available; the API key will be encrypted in the main process only.",
+        "Deep scans require configuring a model in Settings → Model configuration first.",
     },
     verdict: {
       allow: "Allow",

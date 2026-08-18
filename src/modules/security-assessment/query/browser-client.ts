@@ -2,8 +2,6 @@ import { z } from "zod";
 
 import { SECURITY_CSRF_HEADER } from "../../../lib/app-config";
 import type {
-  SecurityModelConfigInput,
-  SecurityModelConfigView as SecurityModelConfigDto,
   SecurityRuntimeCapability,
   SecurityScanHistoryEntry,
   SecurityScanReportDto,
@@ -12,7 +10,6 @@ import type {
   SecuritySkillTarget,
 } from "../../../../electron/contracts";
 import type {
-  SecurityModelConfigView,
   SecurityRuntimeCapabilityView,
   SecurityScanScheduleView,
 } from "../presentation/security-view";
@@ -228,34 +225,6 @@ const historySchema = z.array(
     .strict(),
 );
 
-const modelConfigSchema = z
-  .object({
-    configured: z.boolean(),
-    provider: z.enum(["openai", "anthropic"]),
-    endpoint: z.string(),
-    liteModel: z.string(),
-    proModel: z.string(),
-    timeoutMs: z.number().int().positive(),
-    contextWindowTokens: z.number().int().positive().optional(),
-    maxAgentTurns: z.number().int().positive(),
-    apiKeyConfigured: z.boolean(),
-    encryptionAvailable: z.boolean(),
-  })
-  .strict();
-
-const modelConfigInputSchema = z
-  .object({
-    provider: z.enum(["openai", "anthropic"]),
-    endpoint: z.string(),
-    apiKey: z.string().nullable().optional(),
-    liteModel: z.string(),
-    proModel: z.string(),
-    timeoutMs: z.number().optional(),
-    contextWindowTokens: z.number().optional(),
-    maxAgentTurns: z.number().optional(),
-  })
-  .strict();
-
 const scanCycleSchema = z.enum(["hourly", "daily", "weekly"]);
 
 const scanScheduleSchema = z
@@ -437,24 +406,6 @@ function createCompanionClient(
           {},
         )
       ).cancelled;
-    },
-    async getModelConfig() {
-      return {
-        ...((await request(
-          "/model-config",
-          modelConfigSchema,
-        )) as SecurityModelConfigDto),
-      } satisfies SecurityModelConfigView;
-    },
-    async setModelConfig(input: SecurityModelConfigInput) {
-      const requestBody = modelConfigInputSchema.parse(input);
-      return {
-        ...((await request(
-          "/model-config",
-          modelConfigSchema,
-          requestBody,
-        )) as SecurityModelConfigDto),
-      } satisfies SecurityModelConfigView;
     },
     async getScanSchedule() {
       return (await request(

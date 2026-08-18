@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import type { ScanSkillReport } from "skill-scanner";
@@ -80,6 +80,45 @@ const unavailableStorage: SecretStoragePort = {
     throw new Error("must not decrypt");
   },
 };
+
+/**
+ * Write the shared model-profile store (S-500 shape, maintained by the
+ * settings page) under the fixture home root. Full scans resolve their model
+ * from the active profile here; no security-specific config file exists.
+ */
+async function writeModelProfile(
+  home: string,
+  profile: {
+    mode?: "official" | "custom";
+    protocol?: "openai" | "anthropic";
+    apiKey?: string;
+    endpoint?: string;
+    model?: string;
+  },
+): Promise<void> {
+  const file = join(home, ".trusttools", "tasks", "model-profiles.v1.json");
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(
+    file,
+    JSON.stringify({
+      profiles: [
+        {
+          id: "m-test",
+          name: "Test Profile",
+          mode: profile.mode ?? "custom",
+          protocol: profile.protocol ?? "openai",
+          ...(profile.apiKey ? { apiKey: profile.apiKey } : {}),
+          ...(profile.endpoint ? { endpoint: profile.endpoint } : {}),
+          ...(profile.model ? { model: profile.model } : {}),
+          createdAt: "2025-01-01T00:00:00.000Z",
+          updatedAt: "2025-01-01T00:00:00.000Z",
+        },
+      ],
+      activeProfileId: "m-test",
+    }),
+    "utf8",
+  );
+}
 
 async function waitForTerminal(service: SecurityScannerService): Promise<void> {
   for (let index = 0; index < 100; index += 1) {
@@ -191,6 +230,23 @@ test("requires a model for full scans and automatic full scans report model-requ
     trigger: "automatic",
   });
   assert.equal(automatic.status, "model-required");
+
+  // A corrupt profile store also yields model-required (any parse failure
+  // resolves to "no model available").
+  const profileFile = join(
+    home,
+    ".trusttools",
+    "tasks",
+    "model-profiles.v1.json",
+  );
+  await mkdir(dirname(profileFile), { recursive: true });
+  await writeFile(profileFile, "{ not json", "utf8");
+  const corrupt = await service.start({
+    scope: "single",
+    skillRef: target.skillRef,
+    mode: "full",
+  });
+  assert.equal(corrupt.status, "model-required");
 });
 
 test("automatic scans default to quick when no model is configured", async () => {
@@ -226,31 +282,31 @@ test("automatic scans use full model-aware analysis when a model is configured",
     dataDirectory: data,
     locale: () => "ko-KR",
     env: {},
-    secretStorage: {
-      isEncryptionAvailable: () => true,
-      encrypt: (value) => Buffer.from(value).toString("base64"),
-      decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
-    },
+    secretStorage: unavailableStorage,
     scanner: (async (request: unknown) => {
       captured = request as Record<string, unknown>;
       return report({ locale: "ko-KR" as never, mode: "full" });
     }) as never,
   });
-  await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
+  await writeModelProfile(home, {
+    protocol: "openai",
     apiKey: "automatic-full-key",
-    liteModel: "lite",
-    proModel: "pro",
+    endpoint: "https://example.invalid/v1",
+    model: "test-model",
   });
   await service.startAutomaticScan();
   await waitForTerminal(service);
   assert.equal(captured?.mode, "full");
   assert.equal(captured?.locale, "ko-KR");
-  assert.equal(
-    (captured?.model as { apiKey?: string } | undefined)?.apiKey,
-    "automatic-full-key",
-  );
+  assert.deepEqual(captured?.model, {
+    provider: "openai",
+    endpoint: "https://example.invalid/v1",
+    apiKey: "automatic-full-key",
+    liteModel: "test-model",
+    proModel: "test-model",
+    timeoutMs: 120_000,
+    maxAgentTurns: 12,
+  });
   const persisted = JSON.parse(
     await readFile(join(data, "security-scan-history.json"), "utf8"),
   ) as { entries: Array<{ trigger: string; mode: string }> };
@@ -574,90 +630,25 @@ test("automatic scans with dir scope scan only skills under the directory prefix
   );
 });
 
-test("stores API keys only through encryption and never returns plaintext", async () => {
+test("resolves the active model profile only for an explicit full scan and redacts it from history", async () => {
   const { home, data } = await fixture();
-  const encryptedStorage: SecretStoragePort = {
-    isEncryptionAvailable: () => true,
-    encrypt: (value) =>
-      Buffer.from(`sealed:${value}`, "utf8").toString("base64"),
-    decrypt: (value) =>
-      Buffer.from(value, "base64")
-        .toString("utf8")
-        .replace(/^sealed:/u, ""),
-  };
-  const service = new SecurityScannerService({
-    homeDirectory: home,
-    dataDirectory: data,
-    locale: () => "zh-CN",
-    env: {},
-    secretStorage: encryptedStorage,
-  });
-  const view = await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
-    apiKey: "super-secret-key",
-    liteModel: "lite",
-    proModel: "pro",
-  });
-  assert.equal(view.apiKeyConfigured, true);
-  assert.equal("apiKey" in view, false);
-  const persisted = await readFile(
-    join(data, "security-model-config.json"),
-    "utf8",
-  );
-  assert.equal(persisted.includes("super-secret-key"), false);
-  assert.equal(
-    JSON.stringify(await service.getModelConfig()).includes("super-secret-key"),
-    false,
-  );
-
-  const unavailable = new SecurityScannerService({
-    homeDirectory: home,
-    dataDirectory: join(data, "unavailable"),
-    locale: () => "zh-CN",
-    env: {},
-    secretStorage: unavailableStorage,
-  });
-  await assert.rejects(
-    unavailable.setModelConfig({
-      provider: "anthropic",
-      endpoint: "https://api.anthropic.com/v1",
-      apiKey: "must-not-write",
-      liteModel: "lite",
-      proModel: "pro",
-    }),
-    /Secure model key storage is unavailable/u,
-  );
-});
-
-test("decrypts ModelConfig only for an explicit full scan and redacts it from history", async () => {
-  const { home, data } = await fixture();
-  const encryptedStorage: SecretStoragePort = {
-    isEncryptionAvailable: () => true,
-    encrypt: (value) => Buffer.from(value, "utf8").toString("base64"),
-    decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
-  };
   let captured: Record<string, unknown> | undefined;
   const service = new SecurityScannerService({
     homeDirectory: home,
     dataDirectory: data,
     locale: () => "en-US",
     env: {},
-    secretStorage: encryptedStorage,
+    secretStorage: unavailableStorage,
     scanner: (async (request: unknown) => {
       captured = request as Record<string, unknown>;
       return report({ locale: "en-US", mode: "full" });
     }) as never,
   });
-  await service.setModelConfig({
-    provider: "anthropic",
-    endpoint: "https://api.anthropic.com/v1",
+  await writeModelProfile(home, {
+    protocol: "anthropic",
     apiKey: "sk-test-full-only",
-    liteModel: "lite-model",
-    proModel: "pro-model",
-    timeoutMs: 1_000,
-    contextWindowTokens: 200_000,
-    maxAgentTurns: 5,
+    endpoint: "https://api.anthropic.com/v1",
+    model: "test-model",
   });
   const [target] = await service.listSkills();
   await service.start({
@@ -670,11 +661,10 @@ test("decrypts ModelConfig only for an explicit full scan and redacts it from hi
     provider: "anthropic",
     endpoint: "https://api.anthropic.com/v1",
     apiKey: "sk-test-full-only",
-    liteModel: "lite-model",
-    proModel: "pro-model",
-    timeoutMs: 1_000,
-    contextWindowTokens: 200_000,
-    maxAgentTurns: 5,
+    liteModel: "test-model",
+    proModel: "test-model",
+    timeoutMs: 120_000,
+    maxAgentTurns: 12,
   });
   assert.equal(
     JSON.stringify(await service.history()).includes("sk-test-full-only"),
@@ -850,11 +840,6 @@ test("does not follow a file exchanged for a symlink after directory enumeration
 test("sanitizes every free-text report field with exact key and path redaction", async () => {
   const { home, data } = await fixture();
   const apiKey = "canary-api-key-value-123456";
-  const storage: SecretStoragePort = {
-    isEncryptionAvailable: () => true,
-    encrypt: (value) => Buffer.from(value).toString("base64"),
-    decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
-  };
   const tainted = report({ mode: "full" });
   const poison = `CANARY ${apiKey} path=/Users/alice/private file:///Users/alice/private C:\\Users\\alice\\private https://hooks.slack.com/services/T000/B000/SECRET123 sk-secret-12345678\u0000`;
   tainted.summary = poison;
@@ -900,15 +885,13 @@ test("sanitizes every free-text report field with exact key and path redaction",
     dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
-    secretStorage: storage,
+    secretStorage: unavailableStorage,
     scanner: (async () => tainted) as never,
   });
-  await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
+  await writeModelProfile(home, {
     apiKey,
-    liteModel: "lite",
-    proModel: "pro",
+    endpoint: "https://example.invalid/v1",
+    model: "test-model",
   });
   const [target] = await service.listSkills();
   await service.start({
@@ -943,26 +926,14 @@ test("sanitizes every free-text report field with exact key and path redaction",
   assert.equal(reread.includes("/Users/alice"), false);
 });
 
-test("clear removes encrypted model configuration and scan history", async () => {
+test("clear removes scan history and resets the scanner state", async () => {
   const { home, data } = await fixture();
-  const storage: SecretStoragePort = {
-    isEncryptionAvailable: () => true,
-    encrypt: (value) => Buffer.from(value).toString("base64"),
-    decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
-  };
   const service = new SecurityScannerService({
     homeDirectory: home,
     dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
-    secretStorage: storage,
-  });
-  await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
-    apiKey: "clear-me-secret",
-    liteModel: "lite",
-    proModel: "pro",
+    secretStorage: unavailableStorage,
   });
   const [target] = await service.listSkills();
   await service.start({
@@ -971,30 +942,22 @@ test("clear removes encrypted model configuration and scan history", async () =>
     mode: "quick",
   });
   await waitForTerminal(service);
-  const savingDuringReset = service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://new.invalid/v1",
-    apiKey: "NEW-AFTER-CLEAR",
-    liteModel: "new-lite",
-    proModel: "new-pro",
-  });
   const clearing = service.clear();
-  await Promise.all([savingDuringReset, clearing]);
-  assert.equal((await service.getModelConfig()).configured, false);
+  await assert.rejects(
+    service.start({ scope: "all", mode: "quick", trigger: "automatic" }),
+    /being cleared/u,
+  );
+  await clearing;
+  assert.equal(service.getStatus().status, "idle");
   assert.deepEqual(await service.history(), []);
   await assert.rejects(
-    readFile(join(data, "security-model-config.json")),
+    readFile(join(data, "security-scan-history.json"), "utf8"),
     /ENOENT/u,
   );
 });
 
 test("clear invalidates a deferred full run before it can restore history", async () => {
   const { home, data } = await fixture();
-  const storage: SecretStoragePort = {
-    isEncryptionAvailable: () => true,
-    encrypt: (value) => Buffer.from(value).toString("base64"),
-    decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
-  };
   let releaseScanner!: (value: ScanSkillReport) => void;
   let markEntered!: () => void;
   const entered = new Promise<void>((resolve) => {
@@ -1008,18 +971,16 @@ test("clear invalidates a deferred full run before it can restore history", asyn
     dataDirectory: data,
     locale: () => "ja-JP",
     env: {},
-    secretStorage: storage,
+    secretStorage: unavailableStorage,
     scanner: (async () => {
       markEntered();
       return deferred;
     }) as never,
   });
-  await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
+  await writeModelProfile(home, {
     apiKey: "CLEAR-RACE-API-KEY-CANARY",
-    liteModel: "lite",
-    proModel: "pro",
+    endpoint: "https://example.invalid/v1",
+    model: "test-model",
   });
   const [target] = await service.listSkills();
   await service.start({
@@ -1034,12 +995,14 @@ test("clear invalidates a deferred full run before it can restore history", asyn
     /being cleared/u,
   );
   await assert.rejects(
-    service.setModelConfig({
-      provider: "openai",
-      endpoint: "https://example.invalid/v1",
-      apiKey: "NEW-AFTER-CLEAR",
-      liteModel: "lite",
-      proModel: "pro",
+    service.setScanSchedule({
+      enabled: true,
+      cycle: "daily",
+      time: "03:00",
+      scope: "all",
+      agents: [],
+      dir: null,
+      notify: false,
     }),
     /being cleared/u,
   );
@@ -1053,10 +1016,6 @@ test("clear invalidates a deferred full run before it can restore history", asyn
   assert.deepEqual(await service.history(), []);
   await assert.rejects(
     readFile(join(data, "security-scan-history.json"), "utf8"),
-    /ENOENT/u,
-  );
-  await assert.rejects(
-    readFile(join(data, "security-model-config.json"), "utf8"),
     /ENOENT/u,
   );
 });

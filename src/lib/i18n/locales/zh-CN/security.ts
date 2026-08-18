@@ -90,7 +90,7 @@ export const security = {
     summary: "{skills} 个 Skill · {dimensions} 个检测维度 · 健康度 {health}%",
     devBanner: {
       title: "开发模式 · 检测服务已连接",
-      desc: "扫描使用真实本机 Skill 根目录；检测历史与模型配置隔离保存在 ~/.trusttools/security-dev/。",
+      desc: "扫描使用真实本机 Skill 根目录；检测历史隔离保存在 ~/.trusttools/security-dev/。",
     },
     unavailable: {
       title: "本机伴随服务不可用",
@@ -361,37 +361,7 @@ export const security = {
       scannedValue: "{count} 个 Skill",
     },
     model: {
-      title: "深度扫描模型配置",
-      desc: "API Key 由 Electron safeStorage 加密保存在主进程，不会返回页面或写入普通偏好设置。",
-      devModeNote:
-        "仅开发模式：API Key 以明文保存于隔离开发目录 ~/.trusttools/security-dev/（0600，仅本机开发用）。",
-      provider: "API 协议",
-      openai: "OpenAI 兼容",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API Key",
-      apiKeyConfigured: "已安全保存；留空表示保持不变",
-      apiKeyMissing: "尚未配置",
-      liteModel: "轻量模型",
-      proModel: "高级模型",
-      timeoutMs: "超时（毫秒）",
-      contextWindowTokens: "上下文窗口 Token",
-      maxAgentTurns: "最大 Agent 轮次",
-      save: "保存配置",
-      saving: "正在保存",
-      cancel: "取消",
-      configure: "配置模型",
-      update: "更新模型配置",
-      configuredState: "模型凭据已安全保存，可运行手动深度检测。",
-      missingState: "尚未完成模型配置；快速检测仍可正常运行。",
-      requiredTitle: "需要模型配置",
-      requiredDesc:
-        "请先保存有效的 Endpoint、API Key、轻量模型和高级模型，再开始深度检测。",
-      requiredSettings: "全量检测需先在设置中配置模型接口",
-      encryptionUnavailable:
-        "当前系统无法使用安全密钥加密，因此不能保存 API Key。",
-      encryptionAvailable:
-        "系统安全密钥加密可用，API Key 将仅在主进程加密保存。",
+      requiredSettings: "深度检测需先在设置-模型配置中配置模型",
     },
     verdict: {
       allow: "允许",
