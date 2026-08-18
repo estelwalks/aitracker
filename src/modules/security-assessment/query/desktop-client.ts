@@ -1,6 +1,5 @@
 import type {
   DesktopApi,
-  SecurityModelConfigInput,
   SecurityScanHistoryEntry,
   SecurityScanReportDto,
   SecurityScanStartRequest,
@@ -8,15 +7,12 @@ import type {
 } from "../../../../electron/contracts";
 import type {
   SecurityHistoryView,
-  SecurityModelConfigView,
   SecurityReportView,
   SecurityRuntimeCapabilityView,
   SecurityScanScheduleView,
   SecurityScanStateView,
   SecuritySkillView,
 } from "../presentation/security-view";
-
-export type SecurityModelConfigUpdate = SecurityModelConfigInput;
 
 export interface SecurityClient {
   readonly transport: "desktop" | "companion";
@@ -27,10 +23,6 @@ export interface SecurityClient {
   getStatus(): Promise<SecurityScanStateView>;
   getHistory(): Promise<readonly SecurityHistoryView[]>;
   cancelScan(): Promise<boolean>;
-  getModelConfig(): Promise<SecurityModelConfigView>;
-  setModelConfig(
-    config: SecurityModelConfigUpdate,
-  ): Promise<SecurityModelConfigView>;
   getScanSchedule(): Promise<SecurityScanScheduleView>;
   setScanSchedule(
     schedule: SecurityScanScheduleView,
@@ -123,12 +115,6 @@ export function getDesktopSecurityClient(): SecurityClient | null {
     },
     async cancelScan() {
       return (await api.cancelSecurityScan()).cancelled;
-    },
-    async getModelConfig() {
-      return { ...(await api.getSecurityModelConfig()) };
-    },
-    async setModelConfig(config) {
-      return { ...(await api.setSecurityModelConfig(config)) };
     },
     async getScanSchedule() {
       return { ...(await api.getSecurityScanSchedule()) };

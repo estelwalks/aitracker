@@ -124,7 +124,7 @@ async function waitForTerminal(service: SecurityScannerService): Promise<void> {
   throw new Error("scan did not finish");
 }
 
-test("isolates dev scan history and model config from the client data directory", async () => {
+test("isolates dev scan history from the client data directory", async () => {
   const { home, data, client } = await fixture();
   const sentinel = JSON.stringify({ version: 1, entries: [] });
   await mkdir(client, { recursive: true });
@@ -158,27 +158,6 @@ test("isolates dev scan history and model config from the client data directory"
   assert.equal(history[0]?.skillName, "demo");
   assert.equal(JSON.stringify(history).includes(home), false);
   assert.equal(JSON.stringify(history).includes(data), false);
-
-  // Model config lands under dataDirectory, never the client dir.
-  await service.setModelConfig({
-    provider: "openai",
-    endpoint: "https://example.invalid/v1",
-    apiKey: "dev-model-key-canary",
-    liteModel: "lite",
-    proModel: "pro",
-  });
-  assert.ok(
-    (await readFile(join(data, "security-model-config.json"), "utf8")).includes(
-      "encryptedApiKey",
-    ),
-  );
-  await assert.rejects(
-    readFile(join(client, "security-model-config.json"), "utf8"),
-    /ENOENT/u,
-  );
-  const view = await service.getModelConfig();
-  assert.equal(view.configured, true);
-  assert.equal(view.apiKeyConfigured, true);
 });
 
 test("dev secret storage round-trips and persists the key with mode 0o600", async () => {
@@ -266,8 +245,6 @@ function stubService(
     getStatus: () => ({ status: "idle" }),
     history: async () => [],
     cancel: () => ({ cancelled: false }),
-    getModelConfig: async () => ({ configured: false }),
-    setModelConfig: async () => ({ configured: true, apiKeyConfigured: true }),
     start: async (input: unknown) => ({ status: "running", input }),
     ...overrides,
   } as unknown as SecurityScannerService;

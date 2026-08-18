@@ -733,19 +733,6 @@ function registerIpcHandlers(): void {
     if (!securityScanner) throw new Error("Security scanner is unavailable");
     return securityScanner.cancel();
   });
-  ipcMain.handle(desktopIpc.getSecurityModelConfig, async (event) => {
-    assertTrustedSender(event);
-    if (!securityScanner) throw new Error("Security scanner is unavailable");
-    return securityScanner.getModelConfig();
-  });
-  ipcMain.handle(
-    desktopIpc.setSecurityModelConfig,
-    async (event, config: unknown) => {
-      assertTrustedSender(event);
-      if (!securityScanner) throw new Error("Security scanner is unavailable");
-      return securityScanner.setModelConfig(config);
-    },
-  );
   ipcMain.handle(desktopIpc.getSecurityScanSchedule, async (event) => {
     assertTrustedSender(event);
     if (!securityScanner) throw new Error("Security scanner is unavailable");
@@ -1027,8 +1014,6 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getSecurityScanStatus);
     ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);
     ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
-    ipcMain.removeHandler(desktopIpc.getSecurityModelConfig);
-    ipcMain.removeHandler(desktopIpc.setSecurityModelConfig);
     ipcMain.removeHandler(desktopIpc.getSecurityScanSchedule);
     ipcMain.removeHandler(desktopIpc.setSecurityScanSchedule);
     ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);

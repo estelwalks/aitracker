@@ -90,7 +90,6 @@ export {
   type SecuritySkippedReasonCode,
   type SecurityReportView,
   type SecurityHistoryView,
-  type SecurityModelConfigView,
   type SecurityRuntimeCapabilityView,
   type SecurityTotals,
   type SecurityTaskFindingView,
@@ -103,7 +102,6 @@ export {
   historyView,
   type SecurityClient,
   type DesktopSecurityClient,
-  type SecurityModelConfigUpdate,
 } from "./query/desktop-client";
 export {
   getBrowserSecurityClient,

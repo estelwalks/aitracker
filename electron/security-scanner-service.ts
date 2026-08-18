@@ -14,6 +14,8 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
+import { APP_DATA_DIR } from "./app-config.js";
+
 import {
   ModelConfigSchema,
   RISK_KINDS,
@@ -27,8 +29,6 @@ import {
   SECURITY_SCAN_CYCLES,
   SECURITY_SCAN_SCOPES,
   type DesktopLocale,
-  type SecurityModelConfigInput,
-  type SecurityModelConfigView,
   type SecurityRuntimeCapability,
   type SecurityScanCycle,
   type SecurityScanHistoryEntry,
@@ -48,7 +48,6 @@ const MAX_FILE_BYTES = 1_000_000;
 const MAX_TOTAL_BYTES = 20_000_000;
 const MAX_HISTORY = 200;
 const HISTORY_VERSION = 1;
-const CONFIG_VERSION = 1;
 
 interface SkillFile {
   path: string;
@@ -88,18 +87,6 @@ interface HistoryDocument {
   entries: SecurityScanHistoryEntry[];
 }
 
-interface EncryptedConfigDocument {
-  version: 1;
-  provider: "openai" | "anthropic";
-  endpoint: string;
-  encryptedApiKey?: string;
-  liteModel: string;
-  proModel: string;
-  timeoutMs: number;
-  contextWindowTokens?: number;
-  maxAgentTurns: number;
-}
-
 export interface SecretStoragePort {
   isEncryptionAvailable(): boolean;
   encrypt(value: string): string;
@@ -121,67 +108,6 @@ export interface SecurityScannerServiceOptions {
 interface CollectedSkill {
   files: SkillFile[];
   hostSkipped: SecurityScanReportDto["skippedFiles"];
-}
-
-function cleanText(value: unknown, field: string, max: number): string {
-  if (typeof value !== "string")
-    throw new TypeError(`${field} must be a string`);
-  const text = value.trim();
-  if (!text || text.length > max || text.includes("\0"))
-    throw new TypeError(`${field} is invalid`);
-  return text;
-}
-
-function parseConfig(input: unknown): SecurityModelConfigInput {
-  if (input == null || typeof input !== "object" || Array.isArray(input))
-    throw new TypeError("Model configuration is required");
-  const value = input as Record<string, unknown>;
-  const allowed = new Set([
-    "provider",
-    "endpoint",
-    "apiKey",
-    "liteModel",
-    "proModel",
-    "timeoutMs",
-    "contextWindowTokens",
-    "maxAgentTurns",
-  ]);
-  if (Object.keys(value).some((key) => !allowed.has(key)))
-    throw new TypeError("Model configuration contains unsupported fields");
-  if (value.provider !== "openai" && value.provider !== "anthropic")
-    throw new TypeError("Unsupported model provider");
-  const endpoint = cleanText(value.endpoint, "endpoint", 2048);
-  const url = new URL(endpoint);
-  if (url.protocol !== "https:" && url.protocol !== "http:")
-    throw new TypeError("Model endpoint must use HTTP or HTTPS");
-  const result: SecurityModelConfigInput = {
-    provider: value.provider,
-    endpoint,
-    liteModel: cleanText(value.liteModel, "liteModel", 256),
-    proModel: cleanText(value.proModel, "proModel", 256),
-  };
-  if (value.apiKey === null) result.apiKey = null;
-  else if (value.apiKey !== undefined)
-    result.apiKey = cleanText(value.apiKey, "apiKey", 8192);
-  const numeric = (
-    name: "timeoutMs" | "contextWindowTokens" | "maxAgentTurns",
-    minimum: number,
-    maximum: number,
-  ) => {
-    const candidate = value[name];
-    if (candidate === undefined) return;
-    if (
-      !Number.isInteger(candidate) ||
-      (candidate as number) < minimum ||
-      (candidate as number) > maximum
-    )
-      throw new TypeError(`${name} is invalid`);
-    result[name] = candidate as never;
-  };
-  numeric("timeoutMs", 100, 120_000);
-  numeric("contextWindowTokens", 1, 10_000_000);
-  numeric("maxAgentTurns", 1, 100);
-  return result;
 }
 
 /** Default automatic-scan schedule (also the migration target for the legacy `{ enabled, cycle }` shape). */
@@ -590,14 +516,12 @@ function cloneState(state: SecurityScanState): SecurityScanState {
 export class SecurityScannerService {
   readonly #options: SecurityScannerServiceOptions;
   readonly #historyPath: string;
-  readonly #configPath: string;
   readonly #schedulePath: string;
   readonly #trusted = new Map<string, TrustedSkill>();
   #state = emptyState();
   #cancelRequested = false;
   #epoch = 0;
   #historyQueue: Promise<void> = Promise.resolve();
-  #configQueue: Promise<void> = Promise.resolve();
   #scheduleQueue: Promise<void> = Promise.resolve();
   #activeRun: Promise<void> | null = null;
   #clearing = false;
@@ -607,10 +531,6 @@ export class SecurityScannerService {
     this.#historyPath = join(
       options.dataDirectory,
       "security-scan-history.json",
-    );
-    this.#configPath = join(
-      options.dataDirectory,
-      "security-model-config.json",
     );
     this.#schedulePath = join(
       options.dataDirectory,
@@ -848,24 +768,6 @@ export class SecurityScannerService {
     );
   }
 
-  async getModelConfig(): Promise<SecurityModelConfigView> {
-    const config = await this.#readConfig();
-    return config == null
-      ? {
-          configured: false,
-          provider: "openai",
-          endpoint: "",
-          liteModel: "",
-          proModel: "",
-          timeoutMs: 120_000,
-          maxAgentTurns: 12,
-          apiKeyConfigured: false,
-          encryptionAvailable:
-            this.#options.secretStorage.isEncryptionAvailable(),
-        }
-      : this.#configView(config);
-  }
-
   async clear(): Promise<void> {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     this.#clearing = true;
@@ -874,52 +776,15 @@ export class SecurityScannerService {
       this.#cancelRequested = true;
       this.#state = emptyState();
       await this.#activeRun?.catch(() => undefined);
-      await Promise.all([
-        this.#withHistoryLock(() =>
-          unlink(this.#historyPath).catch((error: NodeJS.ErrnoException) => {
-            if (error.code !== "ENOENT") throw error;
-          }),
-        ),
-        this.#withConfigLock(() =>
-          unlink(this.#configPath).catch((error: NodeJS.ErrnoException) => {
-            if (error.code !== "ENOENT") throw error;
-          }),
-        ),
-      ]);
+      await this.#withHistoryLock(() =>
+        unlink(this.#historyPath).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") throw error;
+        }),
+      );
       if (this.#epoch === clearEpoch) this.#cancelRequested = false;
     } finally {
       this.#clearing = false;
     }
-  }
-
-  async setModelConfig(input: unknown): Promise<SecurityModelConfigView> {
-    if (this.#clearing) throw new Error("Security scanner is being cleared");
-    return this.#withConfigLock(async () => {
-      const parsed = parseConfig(input);
-      const existing = await this.#readConfig();
-      let encryptedApiKey = existing?.encryptedApiKey;
-      if (parsed.apiKey === null) encryptedApiKey = undefined;
-      else if (parsed.apiKey !== undefined) {
-        if (!this.#options.secretStorage.isEncryptionAvailable())
-          throw new Error("Secure model key storage is unavailable");
-        encryptedApiKey = this.#options.secretStorage.encrypt(parsed.apiKey);
-      }
-      const document: EncryptedConfigDocument = {
-        version: CONFIG_VERSION,
-        provider: parsed.provider,
-        endpoint: parsed.endpoint,
-        ...(encryptedApiKey ? { encryptedApiKey } : {}),
-        liteModel: parsed.liteModel,
-        proModel: parsed.proModel,
-        timeoutMs: parsed.timeoutMs ?? 120_000,
-        ...(parsed.contextWindowTokens == null
-          ? {}
-          : { contextWindowTokens: parsed.contextWindowTokens }),
-        maxAgentTurns: parsed.maxAgentTurns ?? 12,
-      };
-      await atomicWrite(this.#configPath, document);
-      return this.#configView(document);
-    });
   }
 
   async getScanSchedule(): Promise<SecurityScanSchedule> {
@@ -1374,15 +1239,6 @@ export class SecurityScannerService {
     return result;
   }
 
-  #withConfigLock<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.#configQueue.then(operation, operation);
-    this.#configQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
-
   #withScheduleLock<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#scheduleQueue.then(operation, operation);
     this.#scheduleQueue = result.then(
@@ -1404,66 +1260,63 @@ export class SecurityScannerService {
     }
   }
 
-  async #readConfig(): Promise<EncryptedConfigDocument | null> {
+  /**
+   * Resolve the model to use for a full scan from the shared model-profile
+   * store maintained by the settings page (S-500). The active profile (or the
+   * first profile when none is marked) supplies the provider/endpoint/apiKey
+   * and the single model id — security scans no longer carry their own model
+   * configuration. Any read/parse/mapping failure yields `undefined`, which
+   * callers treat as "no model available" (full scans become model-required).
+   */
+  async #modelConfig(): Promise<ModelConfig | undefined> {
     try {
       const value = JSON.parse(
-        await readFile(this.#configPath, "utf8"),
-      ) as EncryptedConfigDocument;
-      if (value.version !== CONFIG_VERSION) return null;
-      parseConfig({
-        provider: value.provider,
-        endpoint: value.endpoint,
-        liteModel: value.liteModel,
-        proModel: value.proModel,
-        timeoutMs: value.timeoutMs,
-        contextWindowTokens: value.contextWindowTokens,
-        maxAgentTurns: value.maxAgentTurns,
-      });
-      return value;
-    } catch {
-      return null;
-    }
-  }
-
-  #configView(config: EncryptedConfigDocument): SecurityModelConfigView {
-    return {
-      configured: true,
-      provider: config.provider,
-      endpoint: config.endpoint,
-      liteModel: config.liteModel,
-      proModel: config.proModel,
-      timeoutMs: config.timeoutMs,
-      ...(config.contextWindowTokens == null
-        ? {}
-        : { contextWindowTokens: config.contextWindowTokens }),
-      maxAgentTurns: config.maxAgentTurns,
-      apiKeyConfigured: Boolean(config.encryptedApiKey),
-      encryptionAvailable: this.#options.secretStorage.isEncryptionAvailable(),
-    };
-  }
-
-  async #modelConfig(): Promise<ModelConfig | undefined> {
-    const config = await this.#readConfig();
-    if (
-      !config?.encryptedApiKey ||
-      !this.#options.secretStorage.isEncryptionAvailable()
-    )
-      return undefined;
-    try {
-      const apiKey = this.#options.secretStorage.decrypt(
-        config.encryptedApiKey,
-      );
+        await readFile(
+          join(
+            this.#options.homeDirectory,
+            APP_DATA_DIR,
+            "tasks",
+            "model-profiles.v1.json",
+          ),
+          "utf8",
+        ),
+      ) as {
+        profiles?: Array<{
+          id: string;
+          mode: "official" | "custom";
+          protocol: "openai" | "anthropic";
+          apiKey?: string;
+          endpoint?: string;
+          model?: string;
+        }>;
+        activeProfileId?: string | null;
+      };
+      const profile =
+        value.profiles?.find((item) => item.id === value.activeProfileId) ??
+        value.profiles?.[0];
+      if (!profile) return undefined;
+      const apiKey = profile.apiKey?.trim();
+      if (!apiKey) return undefined;
+      const provider: "openai" | "anthropic" =
+        profile.mode === "official" ? "openai" : profile.protocol;
+      const endpoint =
+        profile.mode === "official"
+          ? "https://api.deepseek.com/v1"
+          : profile.endpoint?.trim() ||
+            (profile.protocol === "anthropic"
+              ? "https://api.anthropic.com/v1"
+              : "https://api.openai.com/v1");
+      // One model for everything: the light and advanced tiers are unified.
+      const model =
+        profile.mode === "official" ? "deepseek-chat" : profile.model?.trim();
+      if (!model) return undefined;
       return ModelConfigSchema.parse({
-        provider: config.provider,
-        endpoint: config.endpoint,
+        provider,
+        endpoint,
         apiKey,
-        liteModel: config.liteModel,
-        proModel: config.proModel,
-        timeoutMs: config.timeoutMs,
-        ...(config.contextWindowTokens == null
-          ? {}
-          : { contextWindowTokens: config.contextWindowTokens }),
-        maxAgentTurns: config.maxAgentTurns,
+        liteModel: model,
+        proModel: model,
+        timeoutMs: 120_000,
       });
     } catch {
       return undefined;
