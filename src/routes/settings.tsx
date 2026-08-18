@@ -4,12 +4,8 @@ import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { brandParams } from "../lib/app-config";
 import { getStorageUsageQuery } from "../modules/settings";
-import { SettingsPage } from "../modules/settings/presentation";
 
-function SettingsRouteComponent() {
-  return <SettingsPage loaderData={Route.useLoaderData()} />;
-}
-
+// The page component lives in settings.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     const search = location.search as Record<string, unknown>;
@@ -57,5 +53,4 @@ export const Route = createFileRoute("/settings")({
       },
     ],
   }),
-  component: SettingsRouteComponent,
 });

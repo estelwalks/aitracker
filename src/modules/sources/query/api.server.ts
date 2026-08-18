@@ -1,16 +1,11 @@
-import {
-  getUsageSources,
-  refreshUsageSources,
-  type UsageSourcesSummary,
-} from "../../../lib/local-usage/get-usage-sources";
-import { getLocalSkills } from "../../../lib/local-skills/server-fns";
+import type { UsageSourcesSummary } from "../../../lib/local-usage/get-usage-sources";
+import type { SkillSnapshotData } from "../../skill-catalog";
 import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
 import {
   toSourcesQuerySummary,
   type SourcesQuerySummary,
 } from "./presentation/model";
-
 /**
  * Skill-agent label of a tool id: the registry display name (`AI_TOOLS[].nameZh`)
  * when it is one of the managed SKILL_AGENTS, else null (no Skill root).
@@ -22,9 +17,7 @@ function skillAgentLabelFor(toolId: string): string | null {
     : null;
 }
 
-function countSkillsByAgent(
-  snapshot: Awaited<ReturnType<typeof getLocalSkills>>,
-): Map<string, number> {
+function countSkillsByAgent(snapshot: SkillSnapshotData): Map<string, number> {
   const countByAgent = new Map<string, number>();
   for (const skill of snapshot.skills) {
     for (const installation of skill.installations) {
@@ -39,7 +32,7 @@ function countSkillsByAgent(
 
 function projectSources(
   usage: UsageSourcesSummary,
-  skills: Awaited<ReturnType<typeof getLocalSkills>>,
+  skills: SkillSnapshotData,
 ): SourcesQuerySummary {
   const countByAgent = countSkillsByAgent(skills);
   return toSourcesQuerySummary({
@@ -61,16 +54,88 @@ function projectSources(
 
 export async function getSourcesQuery(): Promise<SourcesQuerySummary> {
   const [usage, skills] = await Promise.all([
-    getUsageSources(),
-    getLocalSkills(),
+    readSourcesFromSnapshot(),
+    readSkillsFromSnapshot(),
   ]);
   return projectSources(usage, skills);
 }
 
+/**
+ * T4-01 (fix): non-blocking refresh command. The Usage/Installation snapshot
+ * coordinators run the scans in the background (single-flight); the response
+ * returns the latest known projection immediately so the page never waits for
+ * a scan. The list becomes eventually consistent once the refresh commits.
+ */
 export async function refreshSourcesQuery(): Promise<SourcesQuerySummary> {
-  const [usage, skills] = await Promise.all([
-    refreshUsageSources(),
-    getLocalSkills(),
-  ]);
-  return projectSources(usage, skills);
+  void refreshSourcesFromSnapshot().catch(() => {});
+  return getSourcesQuery();
+}
+
+/**
+ * T7-08: Skills read the O(1) skill snapshot (never a scan on the page path).
+ * An empty snapshot triggers one NON-BLOCKING background refresh, then
+ * degrades to an empty view (design §4.3 / G4).
+ */
+async function readSkillsFromSnapshot(): Promise<SkillSnapshotData> {
+  const { getCompositionRoot } =
+    await import("../../../app/composition.server.ts");
+  const { skillSnapshot } = await getCompositionRoot();
+  await skillSnapshot.ensureHydrated();
+  let latest = skillSnapshot.readLatest();
+  if (latest.data == null) {
+    void skillSnapshot.refreshNow().catch(() => {});
+    latest = skillSnapshot.readLatest();
+  }
+  return (
+    latest.data ?? {
+      generatedAt: new Date(0).toISOString(),
+      fingerprint: "",
+      roots: {},
+      agents: {},
+      skills: [],
+      blacklist: [],
+    }
+  );
+}
+
+/**
+ * P4-T4-01 / P3-T3-03: Sources reads the unified Usage + Installation
+ * snapshots (O(1), never scans and never re-probes tool roots). Snapshot
+ * absence degrades to an empty summary.
+ */
+async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
+  const { getCompositionRoot } =
+    await import("../../../app/composition.server.ts");
+  const { usageSnapshot, installationSnapshot } = await getCompositionRoot();
+  await usageSnapshot.ensureHydrated();
+  await installationSnapshot.ensureHydrated();
+  const latest = usageSnapshot.readLatest();
+  const installations = installationSnapshot.readLatest();
+  const { deriveUsageSources } =
+    await import("../../../lib/local-usage/get-usage-sources");
+  const { homedir } = await import("node:os");
+  const homeDirectory = homedir();
+  // InstallationSnapshot facts use `~/`-relative display paths; deriveUsageSources
+  // normalizes them again idempotently, so the snapshot's paths feed directly.
+  const installationFacts = (installations.data?.facts ?? []).map((fact) => ({
+    id: fact.id,
+    installed: fact.installed,
+    detectedPaths: [...fact.paths],
+  }));
+  return deriveUsageSources(
+    AI_TOOLS,
+    latest.data?.sources ?? [],
+    installationFacts,
+    latest.generatedAt ?? latest.lastSuccessAt ?? new Date(0).toISOString(),
+    homeDirectory,
+  );
+}
+
+/** Fire-and-forget refresh of the Usage + Installation snapshots. */
+async function refreshSourcesFromSnapshot(): Promise<void> {
+  const { getCompositionRoot } =
+    await import("../../../app/composition.server.ts");
+  const { usageSnapshot, installationSnapshot } = await getCompositionRoot();
+  void usageSnapshot.refreshNow().catch(() => {});
+  void installationSnapshot.refreshNow().catch(() => {});
 }

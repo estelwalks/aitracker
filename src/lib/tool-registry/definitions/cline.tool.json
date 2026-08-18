@@ -4,7 +4,9 @@
   "id": "cline",
   "display": {
     "name": "Cline",
-    "nameZh": "Cline"
+    "nameZh": "Cline",
+    "icon": "other",
+    "color": "#5b8def"
   },
   "platforms": {
     "macos": "supported",
@@ -14,17 +16,25 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Code/User/globalStorage/saoudrizwan.claude-dev"
       },
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "configHome",
         "path": "Code/User/globalStorage/saoudrizwan.claude-dev"
       },
       {
-        "targets": ["windows10", "windows11"],
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
         "base": "appDataRoaming",
         "path": "Code/User/globalStorage/saoudrizwan.claude-dev"
       }
@@ -36,21 +46,29 @@
       "reader": "generic-json",
       "paths": [
         {
-          "targets": ["macos"],
+          "targets": [
+            "macos"
+          ],
           "base": "appData",
           "path": "Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
           "glob": "**/*.json",
           "format": "json"
         },
         {
-          "targets": ["macos", "linux"],
+          "targets": [
+            "macos",
+            "linux"
+          ],
           "base": "configHome",
           "path": "Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
           "glob": "**/*.json",
           "format": "json"
         },
         {
-          "targets": ["windows10", "windows11"],
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
           "base": "appDataRoaming",
           "path": "Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
           "glob": "**/*.json",

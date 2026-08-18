@@ -9,6 +9,13 @@ export type {
   DashboardV2Snapshot,
   DashboardV2Tool,
 } from "./contracts";
+export type {
+  DashboardCustomWindowResult,
+  DashboardSummaryQueryInput,
+  DashboardSummaryReadModel,
+  DashboardWindowSummary,
+} from "./summary-contracts";
+export { windowToView } from "./summary-contracts";
 export {
   createDashboardApplication,
   createDashboardV2View,
@@ -21,3 +28,7 @@ export {
 } from "./presentation";
 export { DashboardPage } from "./presentation/DashboardPage";
 export { getDashboardReadModel } from "./query";
+export {
+  getDashboardCustomWindow,
+  getDashboardSummaryReadModel,
+} from "./summary-query";

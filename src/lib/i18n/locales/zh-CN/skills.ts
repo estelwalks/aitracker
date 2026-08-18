@@ -121,7 +121,7 @@ export const skills = {
     version: "版本证据",
   },
   agentOverview: {
-    title: "工具概览 · AITracker",
+    title: "Agent概览 · AITracker",
     insightTitle: "今日洞察",
     dedicatedInsight: "专属洞察",
     insightDescription:

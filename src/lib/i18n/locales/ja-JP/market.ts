@@ -2,11 +2,20 @@
 export const market = {
   pageHeader: "Skill マーケット",
   pageHeaderDesc: "セキュリティスキャンを通過した Skill のみ収録",
+  strip: {
+    subtitle:
+      "セキュリティスキャンを通過した Skill のみ · ワンクリックでローカル Agent に配布",
+  },
   meta: {
     description:
       "{appName} Skill マーケットの実インデックスを閲覧できます。セキュリティスキャンを通過した Skill のみ収録しています。",
   },
   notProvided: "未提供",
+  jarvis: {
+    available:
+      "市場には {total} 個の Skill、うち {official} 個が公式リリースです。",
+    installed: "この端末に市場 Skill を {count} 個インストール済みです。",
+  },
   network: {
     loadFailed:
       "ネットワークを利用できません：Skill マーケットの読み込みに失敗しました",
@@ -28,6 +37,9 @@ export const market = {
     totalDownloads: "総ダウンロード",
     hintCurrentPage: "現在のページの集計",
     hintLocalInstalled: "この端末にインストール済み",
+    hintOfficial: "公式チームがメンテナンス",
+    hintDomains: "{count} カテゴリ",
+    hintDownloads: "総ダウンロード {count}",
   },
   search: {
     placeholder: "Skill 名、ソースパス、または機能を検索",
@@ -38,12 +50,16 @@ export const market = {
   sort: {
     hot: "人気",
     latest: "最新",
+    rating: "評価が高い",
+    tokens: "Token 使用量",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
     downloads: "ダウンロード数",
   },
   list: {
     title: "Skill 一覧（{count}）",
+    count: "合計 {count} 個の Skill",
+    allSafe: "すべてセキュリティスキャン通過",
   },
   table: {
     rank: "順位",
@@ -86,6 +102,8 @@ export const market = {
   },
   install: {
     button: "インストール",
+    expandAll: "すべて表示 {count}",
+    expandMore: "あと {count} 個",
     toSelected: "選択したツールにインストール",
     target: "インストール先",
     notDetected: "未検出",

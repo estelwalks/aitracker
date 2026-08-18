@@ -17,7 +17,7 @@ http://127.0.0.1:8080
 
 端口由现有 Vite 配置决定。
 
-> **国内网络：** 项目已配置 `ELECTRON_MIRROR` 环境变量使用 npmmirror.com 镜像，首次 `npm install` 后自动通过 `postinstall` 脚本下载 Electron 二进制文件。
+> **国内网络：** 项目已在 `package.json` 的 `config` 字段中配置 `electron_mirror` 使用 npmmirror.com 镜像（跨平台，Windows/macOS/Linux 均生效），首次 `npm install` 后自动通过 `postinstall` 脚本下载 Electron 二进制文件。
 
 ## Electron 桌面运行
 
@@ -83,7 +83,7 @@ npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifes
 
 ## 工具注册表（tool-registry）
 
-每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格策略）收敛为 `src/lib/tool-registry/definitions/<id>.tool.json`（v1.5 JSON，29 个：27 个产品目录工具 + aipy/cline 遗留采集源）；业务模块只消费注册表的派生结果，不维护自己的工具名单。
+每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格策略）收敛为 `src/lib/tool-registry/definitions/<id>.tool.json`（v1.5 JSON，30 个：27 个产品目录工具 + DeepSeek Harness/DSH + aipy/cline 遗留采集源）；业务模块只消费注册表的派生结果，不维护自己的工具名单。
 
 - 注册表内核（contracts/schema/loader/validate/registry/manifest）见 `src/lib/tool-registry/`：JSON 仅在构建期由 `scripts/generate-tool-imports.mjs` 读取并嵌入 `definitions.generated.ts`，**运行时不扫描目录、不加载外部 JSON**。
 - 平台模型：`macos/windows10/windows11/linux` targets + `windows` group（`_shared/platform-profiles.json`）；`resolvePlatformPlan()` 按 OS 解析探测/扫描路径；Linux 首期仅 `planned` 状态，不触发扫描。
@@ -101,6 +101,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 - Codex 归档：`~/.codex/archived_sessions/rollout-*.jsonl`
 - Aipy：macOS `~/Library/Application Support/aipy-pro/aipy`，Windows `%APPDATA%/aipy-pro/aipy`
 - WorkBuddy：`~/.workbuddy/projects/**/*.jsonl`
+- DeepSeek Harness / DSH：`~/.dsh/sessions/**/session.jsonl.zstd`（zstd 帧容器，自动识别明文 `.jsonl`）
 - 同时自动探测 Cursor、Gemini CLI、Kimi Code、OpenCode、Grok、GitHub Copilot、Cline、Roo Code
 
 无需预先安装 Claude Code 或 Codex；应用会独立探测每个受支持客户端，并区分“未发现客户端”“已发现但暂无日志”和“已有可解析数据”。
@@ -109,7 +110,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 
 首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会在 `~/.trusttools/cache/local-usage-index-v10.json` 建立仅包含结构化 Token 事件的文件级索引。后续按增量游标和文件变化刷新，缓存使用临时文件加原子重命名写入。
 
-采集范围覆盖 27 个产品目录工具，并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel 和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex 和 WorkBuddy 同时保留 AITracker 原生 reader 作为校验与降级路径。
+采集范围覆盖 28 个产品目录工具（含 DeepSeek Harness/DSH，读取 `~/.dsh/sessions/**/session.jsonl.zstd` 的 zstd 会话日志），并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel、zstd 帧容器和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex、WorkBuddy 和 DSH 同时保留 AITracker 原生 reader 作为校验与降级路径。
 
 真实采集实现位于：
 

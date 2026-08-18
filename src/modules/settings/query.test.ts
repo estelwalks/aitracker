@@ -25,10 +25,16 @@ test("settings route delegates rendering to the module presentation", () => {
     new URL("../../routes/settings.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(source, /SettingsPage/);
   assert.ok(source.split("\n").length < 80);
+  // The lazy chunk (P6-T6-04 split) renders the module presentation
+  // without redefining it.
+  const lazySource = readFileSync(
+    new URL("../../routes/settings.lazy.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(lazySource, /SettingsPage/);
   assert.doesNotMatch(
-    source,
+    lazySource,
     /function SettingsPage|useAppSettings|AlertDialog/,
   );
 });

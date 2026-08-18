@@ -1,11 +1,18 @@
 export const market = {
   pageHeader: "Skill 市场",
   pageHeaderDesc: "仅收录通过安全扫描的 Skill",
+  strip: {
+    subtitle: "仅收录通过安全扫描的 Skill · 一键分发到本地Agent",
+  },
   meta: {
     description:
       "浏览 {appName} Skill 市场真实索引，仅收录通过安全扫描的 Skill。",
   },
   notProvided: "未提供",
+  jarvis: {
+    available: "市场当前可安装 {total} 个 Skill，其中 {official} 个官方发布。",
+    installed: "本机已从市场安装 {count} 个 Skill。",
+  },
   network: {
     loadFailed: "网络不可用：Skill 市场加载失败",
     unavailableTitle: "网络不可用，Skill 市场暂不可访问",
@@ -24,6 +31,9 @@ export const market = {
     totalDownloads: "总下载",
     hintCurrentPage: "当前页统计",
     hintLocalInstalled: "本机已安装",
+    hintOfficial: "由官方团队维护",
+    hintDomains: "{count} 个领域分类",
+    hintDownloads: "总下载 {count}",
   },
   search: {
     placeholder: "搜索 Skill 名称、源路径或能力",
@@ -34,12 +44,16 @@ export const market = {
   sort: {
     hot: "热门",
     latest: "最新",
+    rating: "评分最高",
+    tokens: "Token 占用",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
     downloads: "下载量",
   },
   list: {
     title: "Skill 列表（{count}）",
+    count: "共 {count} 个 Skill",
+    allSafe: "全部通过安全扫描",
   },
   table: {
     rank: "排名",
@@ -82,6 +96,8 @@ export const market = {
   },
   install: {
     button: "安装",
+    expandAll: "展开全部 {count}",
+    expandMore: "还有 {count} 个",
     toSelected: "安装到所选工具",
     success: "已安装到 {agent}",
     downloading: "下载并扫描中…",

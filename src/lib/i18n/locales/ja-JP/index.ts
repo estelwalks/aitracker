@@ -12,6 +12,7 @@ import { memory } from "./memory";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
+import { privacy } from "./privacy";
 import { reports } from "./reports";
 import { tracker } from "./tracker";
 import { skills } from "./skills";
@@ -29,6 +30,7 @@ export const ja = {
   insights,
   reports,
   pricing,
+  privacy,
 
   nav,
   skills,

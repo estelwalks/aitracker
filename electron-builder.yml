@@ -53,3 +53,6 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  # 选择任意目录时自动安装到 <所选目录>\AITracker 子目录
+  # （覆盖静默安装等内置 sanitize 不生效的场景）
+  include: build/installer.nsh

@@ -3,9 +3,9 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { brandParams } from "../lib/app-config.ts";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale.ts";
 import { catalogs, getMessage } from "../lib/i18n/messages.ts";
-import { SessionDetailPage } from "../modules/sessions/presentation/SessionDetailPage.tsx";
 import { getSessionDetailQuery } from "../modules/sessions/query.ts";
 
+// The page component lives in chats.$id.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/chats/$id")({
   loader: async ({ params, location }) => {
     const session = await getSessionDetailQuery({
@@ -41,9 +41,4 @@ export const Route = createFileRoute("/chats/$id")({
       },
     ],
   }),
-  component: ChatDetailRoute,
 });
-
-function ChatDetailRoute() {
-  return <SessionDetailPage session={Route.useLoaderData().session} />;
-}

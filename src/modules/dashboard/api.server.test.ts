@@ -114,7 +114,10 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
     outputAvailability: {
       securityRuns: { count: null, available: false },
       distillationOutputs: { count: null, available: false },
+      distillationBreakdown: { capability: null, memory: null },
       dailyReports: { count: null, available: false },
+      weeklyReports: { count: null, available: false },
+      monthlyReports: { count: null, available: false },
     },
   });
 
@@ -139,11 +142,14 @@ test("dashboard V2 projection contains only aggregate-safe context and no sessio
   assert.deepEqual(result.outputAvailability, {
     securityRuns: { count: null, available: false },
     distillationOutputs: { count: null, available: false },
+    distillationBreakdown: { capability: null, memory: null },
     dailyReports: { count: null, available: false },
+    weeklyReports: { count: null, available: false },
+    monthlyReports: { count: null, available: false },
   });
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport !== "unsupported").length,
-    14,
+    15,
   );
   assert.equal(
     result.tools.filter((tool) => tool.usageSupport === "unsupported").length,
@@ -230,7 +236,10 @@ test("dashboard V2 keeps installation detection when Claude has no usage events"
     outputAvailability: {
       securityRuns: { count: null, available: false },
       distillationOutputs: { count: null, available: false },
+      distillationBreakdown: { capability: null, memory: null },
       dailyReports: { count: null, available: false },
+      weeklyReports: { count: null, available: false },
+      monthlyReports: { count: null, available: false },
     },
   });
 
@@ -238,6 +247,8 @@ test("dashboard V2 keeps installation detection when Claude has no usage events"
   assert.deepEqual(claude, {
     id: "claude-code",
     name: "Claude Code",
+    icon: "claude",
+    color: "#d97757",
     available: false,
     detected: true,
     usageSupport: "native",

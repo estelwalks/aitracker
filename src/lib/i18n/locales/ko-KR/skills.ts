@@ -124,7 +124,7 @@ export const skills = {
     version: "버전 근거",
   },
   agentOverview: {
-    title: "도구 개요 · AITracker",
+    title: "Agent 개요 · AITracker",
     insightTitle: "오늘의 인사이트",
     dedicatedInsight: "전용 인사이트",
     insightDescription:

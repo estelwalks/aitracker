@@ -107,6 +107,16 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
     },
   );
   assert.deepEqual(
+    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "tokens" }),
+    {
+      page: 1,
+      limit: 14,
+      search: "",
+      sort: "tokens",
+      tags: [],
+    },
+  );
+  assert.deepEqual(
     parseMarketQuery({
       page: 1,
       limit: 20,

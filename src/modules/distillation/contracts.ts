@@ -205,6 +205,12 @@ export interface DistillationApplication {
    * candidates), or null when the knowledge repository is unavailable.
    */
   count(): Promise<number | null>;
+  /**
+   * Distilled asset counts by type: capability assets (skills etc., every
+   * non-memory knowledge kind) vs memory assets. Null when the knowledge
+   * repository is unavailable.
+   */
+  counts(): Promise<DistillationAssetCounts>;
   /** Enumerate candidates awaiting approval (newest first). */
   listWaiting(): Promise<CandidateOutput[]>;
   /** Enumerate all persisted candidates across approval states (newest first). */
@@ -215,6 +221,13 @@ export interface DistillationApplication {
    * writing it as a local Skill.
    */
   get(candidateId: string): Promise<CandidateOutput | undefined>;
+}
+
+export interface DistillationAssetCounts {
+  /** 能力资产：skill 类蒸馏产物（知识库 kind 非 memory）。 */
+  readonly capability: number | null;
+  /** 记忆资产：知识库 kind = memory。 */
+  readonly memory: number | null;
 }
 
 export interface DistillationModuleContract {

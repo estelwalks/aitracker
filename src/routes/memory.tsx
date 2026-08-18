@@ -3,12 +3,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { brandParams } from "../lib/app-config";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import { MemoryPage } from "../modules/knowledge/presentation/MemoryPage";
 
+// The page component lives in memory.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/memory")({
-  loader: async ({ location }) => ({
-    locale: resolveLocaleFromSearch(location.search),
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
+  loader: async ({ deps }) => ({
+    locale: deps.locale,
+  }),
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -28,9 +34,4 @@ export const Route = createFileRoute("/memory")({
       },
     ],
   }),
-  component: MemoryRoutePage,
 });
-
-function MemoryRoutePage() {
-  return <MemoryPage />;
-}

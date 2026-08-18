@@ -78,6 +78,8 @@ export const sources = {
     failed: "Migration failed",
   },
   toast: {
+    rescanStarted:
+      "Background rescan started; the list refreshes when it finishes",
     rescanDone: "Rescan complete",
   },
 } as const;

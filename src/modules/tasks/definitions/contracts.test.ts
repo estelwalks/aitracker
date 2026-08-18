@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import raw from "./job-catalog.json";
+import rawPolicy from "../../../app/runtime-policy.source.json";
 import { assertSafeStaticCatalog, JobCatalogSchema } from "./contracts";
+
+const raw = {
+  schemaVersion: rawPolicy.scheduledJobs.schemaVersion,
+  tasks: rawPolicy.scheduledJobs.tasks,
+};
 
 test("job catalog accepts the embedded catalog", () => {
   assertSafeStaticCatalog(raw);
-  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 6);
+  assert.equal(JobCatalogSchema.parse(raw).tasks.length, 7);
 });
 
 test("job catalog rejects duplicate ids and invalid schedules", () => {

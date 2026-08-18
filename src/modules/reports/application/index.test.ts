@@ -165,3 +165,22 @@ test("approval lifecycle and public DTO reject sensitive content", async () => {
     true,
   );
 });
+
+test("countByKind buckets persisted reports by cadence", async () => {
+  const state = app();
+  const daily = await state.app.createDraft({
+    definitionId: "reports.daily",
+    actor: "operator",
+  });
+  const weekly = await state.app.createDraft({
+    definitionId: "reports.weekly",
+    actor: "operator",
+  });
+  assert.equal(daily.ok && weekly.ok, true);
+  assert.deepEqual(await state.app.countByKind(), {
+    daily: 1,
+    weekly: 1,
+    monthly: 0,
+  });
+  assert.equal(await state.app.count(), 2);
+});

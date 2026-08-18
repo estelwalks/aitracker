@@ -45,6 +45,7 @@ const validResponse = {
       repo_path: "skills/market-test-skill/SKILL.md",
       install_count: 100,
       is_official: true,
+      token_estimate: { total_tokens: 5000 },
     },
     {
       id: 2,
@@ -55,6 +56,7 @@ const validResponse = {
       repo_path: "skills/another-skill/SKILL.md",
       install_count: 50,
       is_official: false,
+      token_estimate: { total_tokens: 1000 },
     },
   ],
   pagination: { page: 1, limit: 20, total: 2, pages: 1 },
@@ -180,7 +182,50 @@ test("fetchMarketSkills sorts by downloads descending", async () => {
   assert.equal(result.skills[1]?.name, "another-skill");
 });
 
+test("fetchMarketSkills sorts by tokens locally without sending an unknown sort to the API", async () => {
+  let requestedBody: Record<string, unknown> = {};
+  const result = await fetchMarketSkills(
+    { page: 1, limit: 20, search: "", sort: "tokens" },
+    {
+      ...noScan(),
+      fetcher: async (input, init) => {
+        if (init?.method === "POST") {
+          requestedBody = JSON.parse(String(init.body)) as Record<
+            string,
+            unknown
+          >;
+        }
+        return new Response(JSON.stringify(validResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    },
+  );
+
+  // 上游不识别 tokens 排序：请求体不携带 sort/sort_by，顺序由本地 sortSkills 决定。
+  assert.equal("sort" in requestedBody, false);
+  assert.equal("sort_by" in requestedBody, false);
+  assert.equal(result.skills[0]?.name, "market-test-skill");
+  assert.equal(result.skills[0]?.tokens, 5000);
+  assert.equal(result.skills[1]?.name, "another-skill");
+  assert.equal(result.skills[1]?.tokens, 1000);
+});
+
 test("fetchMarketSkills falls back to the query cache when network fails", async () => {
+  // 先以同一查询成功请求一次，写入缓存，使回退断言不依赖外部缓存状态。
+  await fetchMarketSkills(
+    { page: 1, limit: 20, search: "测试", sort: "downloads" },
+    {
+      ...noScan(),
+      fetcher: async () =>
+        new Response(JSON.stringify(validResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    },
+  );
+
   const result = await fetchMarketSkills(
     { page: 1, limit: 20, search: "测试", sort: "downloads" },
     {

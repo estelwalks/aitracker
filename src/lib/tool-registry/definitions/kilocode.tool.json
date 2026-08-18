@@ -4,7 +4,9 @@
   "id": "kilocode",
   "display": {
     "name": "Kilo Code",
-    "nameZh": "Kilo Code"
+    "nameZh": "Kilo Code",
+    "icon": "other",
+    "color": "#eab308"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,9 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Code/User/globalStorage/kilocode.kilo-code"
       }

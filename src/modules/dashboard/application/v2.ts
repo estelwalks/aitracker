@@ -13,12 +13,18 @@ import type {
   DashboardV2ContextCounts,
   DashboardV2ContextAvailability,
   DashboardV2Event,
+  DashboardV2SessionDelta,
   DashboardV2Snapshot,
   DashboardV2TrendPoint,
   DashboardV2View,
 } from "../contracts.ts";
 import type { MonitoringStatus } from "../../monitoring/index.ts";
 
+// Window definitions for the dashboard presentation ("recent/live" and
+// "heartbeat" buckets). These are view semantics, NOT freshness policies —
+// per the runtime-policy governance rule (§3.4 规则 7) view parameters stay
+// in their module; snapshot freshness lives in
+// `runtime-policy.source.json` -> snapshotPolicies.usage.
 const liveWindowMs = 15 * 60 * 1000;
 const heartbeatWindowMs = 20 * 60 * 1000;
 /** Avoid presenting a one-event fluctuation as a meaningful period comparison. */
@@ -90,6 +96,7 @@ function ranked(
       estimatedCostIsPartial: false,
       previousTokens: null,
       deltaPercent: null,
+      absoluteDelta: null,
       sessions: null,
     }));
 }
@@ -276,6 +283,11 @@ function enrichRows(
             previousTotals.totalTokens) *
           100
         : null,
+      // 上一区间无该模型用量时百分比无定义，用绝对新增量兜底（0 → N）。
+      absoluteDelta:
+        !comparable && previousTotals.totalTokens === 0 && row.tokens > 0
+          ? row.tokens
+          : null,
       sessions: projectSessions?.get(row.key) ?? null,
     };
   });
@@ -339,6 +351,7 @@ function topWithRest(
       ),
       previousTokens: null,
       deltaPercent: null,
+      absoluteDelta: null,
       sessions: nullableSum(tail.map((row) => row.sessions)),
     },
   ];
@@ -531,9 +544,19 @@ function selectedSessions(
   if (!snapshot.sessions.available) return null;
   const range = resolveUsageRange(period, from, to);
   if (!range.valid || !range.fromDate || !range.toDate) return null;
+  return sessionCountBetween(snapshot, range.fromDate, range.toDate);
+}
+
+/** 统计 [fromDate, toDate] 内的会话数（用于当前区间与上一区间对比）。 */
+function sessionCountBetween(
+  snapshot: DashboardV2Snapshot,
+  fromDate: Date | null,
+  toDate: Date | null,
+): number | null {
+  if (!snapshot.sessions.available || !fromDate || !toDate) return null;
   return snapshot.sessions.bySourceDay.reduce((total, session) => {
     const startedAt = new Date(`${session.date}T00:00:00`);
-    return startedAt >= range.fromDate! && startedAt <= range.toDate!
+    return startedAt >= fromDate && startedAt <= toDate
       ? total + session.count
       : total;
   }, 0);
@@ -784,6 +807,26 @@ export function createDashboardV2View(
         previousTotals.events,
       )
     : { previous: null, deltaPercent: null };
+  const currentSessions = selectedSessions(snapshot, period, from, to);
+  const previousSessions = previousRange
+    ? sessionCountBetween(
+        snapshot,
+        previousRange.fromDate,
+        previousRange.toDate,
+      )
+    : null;
+  // 上一周期为 0 时百分比无定义，改用绝对新增数（0 → N）展示。
+  const sessionsComparison: DashboardV2SessionDelta =
+    currentSessions != null && previousSessions != null && currentSessions > 0
+      ? previousSessions > 0
+        ? {
+            previous: previousSessions,
+            deltaPercent:
+              ((currentSessions - previousSessions) / previousSessions) * 100,
+            absoluteDelta: null,
+          }
+        : { previous: 0, deltaPercent: null, absoluteDelta: currentSessions }
+      : { previous: null, deltaPercent: null, absoluteDelta: null };
 
   return {
     period,
@@ -793,10 +836,12 @@ export function createDashboardV2View(
     totals,
     estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
     estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
+    cacheSavingsUsd: cost ? cost.cacheSavingsUsd : null,
     cacheRate: currentCacheRate,
     comparison: {
       tokens: tokenComparison,
       events: eventComparison,
+      sessions: sessionsComparison,
       cost: costComparison,
       cacheRate: {
         previous: cacheComparable ? previousCacheRate : null,
@@ -806,7 +851,7 @@ export function createDashboardV2View(
           : null,
       },
     },
-    sessions: selectedSessions(snapshot, period, from, to),
+    sessions: currentSessions,
     skills: snapshot.skills.available ? snapshot.skills.count : null,
     activeTools,
     usageSupportedToolCount: snapshot.tools.filter(

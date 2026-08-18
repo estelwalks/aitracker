@@ -4,7 +4,9 @@
   "id": "codex",
   "display": {
     "name": "Codex",
-    "nameZh": "Codex"
+    "nameZh": "Codex",
+    "icon": "codex",
+    "color": "#10a37f"
   },
   "platforms": {
     "macos": "supported",
@@ -14,13 +16,20 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".codex"
       }
     ],
     "executable": {
-      "shared": ["codex"]
+      "shared": [
+        "codex"
+      ]
     }
   },
   "storage": {
@@ -32,7 +41,10 @@
         }
       ],
       "envHome": "CODEX_HOME",
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -42,14 +54,24 @@
       "reader": "codex-rollout-v1",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".codex/sessions",
           "glob": "**/rollout-*.jsonl",
           "format": "jsonl"
         },
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".codex/archived_sessions",
           "glob": "**/rollout-*.jsonl",
@@ -60,14 +82,24 @@
     "context": {
       "mode": "native",
       "reader": "codex-context-v1",
-      "dimensions": ["tools", "skills", "commands", "mcp", "toolOutputs"]
+      "dimensions": [
+        "tools",
+        "skills",
+        "commands",
+        "mcp",
+        "toolOutputs"
+      ]
     },
     "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
       "mode": "resume",
       "reader": "codex-session-v1",
-      "command": ["codex", "resume", "{sessionId}"]
+      "command": [
+        "codex",
+        "resume",
+        "{sessionId}"
+      ]
     },
     "market": "install-target",
     "security": "unsupported"

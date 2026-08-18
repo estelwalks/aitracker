@@ -4,7 +4,9 @@
   "id": "github-copilot",
   "display": {
     "name": "GitHub Copilot",
-    "nameZh": "GitHub Copilot"
+    "nameZh": "GitHub Copilot",
+    "icon": "other",
+    "color": "#6e7681"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,10 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "configHome",
         "path": "github-copilot"
       }
@@ -26,21 +31,29 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": ["macos", "linux"],
+          "targets": [
+            "macos",
+            "linux"
+          ],
           "base": "configHome",
           "path": "github-copilot",
           "glob": "**/*usage*.jsonl",
           "format": "jsonl"
         },
         {
-          "targets": ["macos"],
+          "targets": [
+            "macos"
+          ],
           "base": "appData",
           "path": "github-copilot",
           "glob": "**/*usage*.json",
           "format": "json"
         },
         {
-          "targets": ["windows10", "windows11"],
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
           "base": "appDataRoaming",
           "path": "github-copilot",
           "glob": "**/*usage*.json",

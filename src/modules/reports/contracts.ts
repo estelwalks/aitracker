@@ -173,6 +173,14 @@ export interface ReportsApplication {
   listRuns(): Promise<Result<readonly ReportRun[]>>;
   /** Number of persisted reports, or null when the store is unavailable. */
   count(): Promise<number | null>;
+  /** Per-cadence counts (daily/weekly/monthly); null when the store is unavailable. */
+  countByKind(): Promise<ReportCountsByKind>;
+}
+
+export interface ReportCountsByKind {
+  readonly daily: number | null;
+  readonly weekly: number | null;
+  readonly monthly: number | null;
 }
 
 export interface GenerateReportInput {

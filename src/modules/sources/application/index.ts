@@ -9,6 +9,14 @@ import type {
   SourcesApplicationErrorCode,
 } from "../contracts.ts";
 
+/**
+ * Display-only freshness label for the Sources health view ("fresh" vs
+ * "stale" badge on the page). This is a presentation heuristic, NOT a
+ * snapshot freshness or refresh cycle — per the runtime-policy governance
+ * rule (设计文档 §3.4 规则 7) local UI parameters stay in their module;
+ * the underlying data freshness comes from
+ * `runtime-policy.source.json` -> snapshotPolicies.
+ */
 const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
 
 function freshness(

@@ -17,7 +17,9 @@ export function createLegacySessionRepository(): SessionRepository {
   return {
     async list(signal) {
       if (signal?.aborted) return [];
-      const summary = await scanLocalSessions();
+      // P5-T5-03: propagate the signal into the scanner so directory loops and
+      // file reads stop promptly on cancellation.
+      const summary = await scanLocalSessions({ signal });
       return summary.sessions.map(toPublicSession);
     },
   };

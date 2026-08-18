@@ -71,3 +71,41 @@ export type SkillSyncResult = Omit<
     readonly agent: string;
   })[];
 };
+
+/**
+ * T7-08: the persisted skill-snapshot DTO (P3-T3-02). Paths and detected
+ * roots are stripped at collection time; pages read this shape instead of
+ * scanning. Defined here so the public query facade and the server-side
+ * snapshot infrastructure share one contract without a public->server edge.
+ */
+export interface SkillSnapshotInstallation {
+  readonly agent: string;
+  readonly installedAt: string;
+  readonly modifiedAt: string;
+  readonly version: string | null;
+  readonly source: {
+    readonly kind: "frontmatter" | "market";
+    readonly label: string;
+  } | null;
+  readonly updateStatus: "current" | "available" | "unknown";
+  readonly updateReason: string;
+}
+
+export interface SkillSnapshotSkill {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly lastUsedAt: string | null;
+  readonly sizeBytes: number;
+  readonly tokenEstimate: number;
+  readonly installations: readonly SkillSnapshotInstallation[];
+}
+
+export interface SkillSnapshotData {
+  readonly generatedAt: string;
+  readonly fingerprint: string;
+  readonly roots: Record<string, { readonly count: number }>;
+  readonly agents: Record<string, { readonly installed: boolean }>;
+  readonly skills: readonly SkillSnapshotSkill[];
+  readonly blacklist: readonly string[];
+}

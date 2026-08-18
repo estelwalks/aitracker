@@ -6,13 +6,18 @@
 // Run: npm run verify:tool-registry
 import { readFileSync, readdirSync } from "node:fs";
 import { tsImport } from "tsx/esm/api";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
+// Windows: tsImport/ESM loaders reject bare drive-letter paths ("d:...");
+// import specifiers must be file:// URLs.
 const imp = (rel) =>
-  tsImport(join(root, `src/lib/tool-registry/${rel}`), import.meta.url);
+  tsImport(
+    pathToFileURL(join(root, `src/lib/tool-registry/${rel}`)).href,
+    import.meta.url,
+  );
 
 const b = await imp("__baseline__/baseline.ts");
 const reg = await imp("registry.ts");
@@ -103,7 +108,7 @@ if (ids.size !== tools.length) {
   process.exit(1);
 }
 
-// TC-REG-006: the fixed import list is exactly the 29 definitions dir entries;
+// TC-REG-006: the fixed import list is exactly the 30 definitions dir entries;
 // no legacy *.config.ts is referenced anywhere in tool-registry sources.
 const manifest = JSON.parse(
   readFileSync(
@@ -111,7 +116,7 @@ const manifest = JSON.parse(
     "utf8",
   ),
 );
-if (manifest.tools.length !== 29) {
+if (manifest.tools.length !== 30) {
   console.error(
     `\nFAIL: manifest lists ${manifest.tools.length} tools, expected 29.`,
   );
@@ -219,5 +224,5 @@ for (const script of [
 }
 
 console.log(
-  "\nOK: registry valid; manifest safe + in sync; fixed import list intact (29 JSON, no config.ts).",
+  "\nOK: registry valid; manifest safe + in sync; fixed import list intact (30 JSON, no config.ts).",
 );

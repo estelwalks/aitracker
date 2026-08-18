@@ -12,6 +12,7 @@ import {
   toPublicUsageSnapshot,
   type LegacyUsageScanner,
 } from "./legacy-usage-adapter.server.ts";
+import { isCancellation } from "../../../platform/runtime/abort.ts";
 
 export interface LegacyUsageCollectorOptions {
   readonly scanner?: LegacyUsageScanner;
@@ -71,40 +72,66 @@ function abortError(): Error {
   return new Error("usage:cancelled");
 }
 
+/**
+ * P5-T5-02: real budget enforcement. The scanner receives the caller's signal
+ * (so directory loops and file reads can stop), and a timeout signal aborts
+ * the same operation. `Promise.race` would leave the scan running — it is
+ * deliberately not used here.
+ */
 function withBudget<T>(
-  operation: Promise<T>,
+  operation: (signal: AbortSignal) => Promise<T>,
   request: UsageCollectionRequest,
 ): Promise<{ value?: T; budgetExhausted: boolean; cancelled: boolean }> {
   const signal = request.signal;
   if (signal?.aborted) return Promise.reject(abortError());
   const maxDurationMs = request.budget?.maxDurationMs;
   if (maxDurationMs == null || maxDurationMs <= 0) {
-    return operation.then((value) => ({
+    return operation(signal ?? new AbortController().signal).then((value) => ({
       value,
       budgetExhausted: false,
       cancelled: false,
     }));
   }
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => resolve({ budgetExhausted: true, cancelled: false }),
-      maxDurationMs,
-    );
-    const onAbort = () => {
+    const controller = new AbortController();
+    let budgetExhausted = false;
+    const onParentAbort = () => {
       clearTimeout(timeout);
-      reject(abortError());
+      controller.abort();
     };
-    signal?.addEventListener("abort", onAbort, { once: true });
-    operation.then(
+    const onTimeout = () => {
+      budgetExhausted = true;
+      controller.abort();
+    };
+    const timeout = setTimeout(onTimeout, maxDurationMs);
+    signal?.addEventListener("abort", onParentAbort, { once: true });
+    controller.signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", onParentAbort);
+        if (budgetExhausted)
+          resolve({ budgetExhausted: true, cancelled: false });
+        else reject(abortError());
+      },
+      { once: true },
+    );
+    operation(controller.signal).then(
       (value) => {
         clearTimeout(timeout);
-        signal?.removeEventListener("abort", onAbort);
-        resolve({ value, budgetExhausted: false, cancelled: false });
+        signal?.removeEventListener("abort", onParentAbort);
+        if (budgetExhausted)
+          resolve({ budgetExhausted: true, cancelled: false });
+        else resolve({ value, budgetExhausted: false, cancelled: false });
       },
       (error) => {
         clearTimeout(timeout);
-        signal?.removeEventListener("abort", onAbort);
-        reject(error);
+        signal?.removeEventListener("abort", onParentAbort);
+        if (isCancellation(error) || budgetExhausted) {
+          if (budgetExhausted)
+            resolve({ budgetExhausted: true, cancelled: false });
+          else reject(error);
+        } else reject(error);
       },
     );
   });
@@ -131,12 +158,18 @@ export function createLegacyUsageCollector(
         lookbackDays: scanInput?.lookbackDays,
         cacheDirectory: scanInput?.cacheDirectory,
         disablePersistentCache: scanInput?.disablePersistentCache,
+        ...(scanInput?.wslTopology
+          ? { wslTopology: scanInput.wslTopology }
+          : {}),
         ...(request.budget?.maxFilesPerSource == null
           ? {}
           : { maxFilesPerSource: request.budget.maxFilesPerSource }),
       };
       try {
-        const outcome = await withBudget(scanner.scan(scannerOptions), request);
+        const outcome = await withBudget(
+          (signal) => scanner.scan({ ...scannerOptions, signal }),
+          request,
+        );
         if (outcome.budgetExhausted || outcome.value == null) {
           const previous = (await options.repository?.load()) ?? EMPTY_SNAPSHOT;
           return {

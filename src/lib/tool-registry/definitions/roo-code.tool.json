@@ -4,7 +4,9 @@
   "id": "roo-code",
   "display": {
     "name": "Roo Code",
-    "nameZh": "Roo Code"
+    "nameZh": "Roo Code",
+    "icon": "other",
+    "color": "#f0524d"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,9 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline"
       }
@@ -26,21 +30,29 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": ["macos"],
+          "targets": [
+            "macos"
+          ],
           "base": "appData",
           "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
           "glob": "**/*.json",
           "format": "json"
         },
         {
-          "targets": ["macos", "linux"],
+          "targets": [
+            "macos",
+            "linux"
+          ],
           "base": "configHome",
           "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
           "glob": "**/*.json",
           "format": "json"
         },
         {
-          "targets": ["windows10", "windows11"],
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
           "base": "appDataRoaming",
           "path": "Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks",
           "glob": "**/*.json",

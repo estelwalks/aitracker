@@ -4,7 +4,9 @@
   "id": "aipy",
   "display": {
     "name": "AiPy",
-    "nameZh": "AiPy"
+    "nameZh": "AiPy",
+    "icon": "https://www.aipyaipy.com/image/logo.webp",
+    "color": "#14b8a6"
   },
   "platforms": {
     "macos": "supported",
@@ -14,12 +16,17 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "aipy-pro"
       },
       {
-        "targets": ["windows10", "windows11"],
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
         "base": "appDataRoaming",
         "path": "aipy-pro"
       }
@@ -31,14 +38,19 @@
       "reader": "generic-sqlite",
       "paths": [
         {
-          "targets": ["macos"],
+          "targets": [
+            "macos"
+          ],
           "base": "appData",
           "path": "aipy-pro",
           "glob": "aipy",
           "format": "sqlite"
         },
         {
-          "targets": ["windows10", "windows11"],
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
           "base": "appDataRoaming",
           "path": "aipy-pro",
           "glob": "aipy",
@@ -46,14 +58,30 @@
         }
       ],
       "mapping": {
-        "timestamp": ["timestamp"],
-        "sessionId": ["sessionId"],
-        "model": ["model"],
-        "project": ["project"],
-        "inputTokens": ["inputTokens"],
-        "outputTokens": ["outputTokens"],
-        "reasoningOutputTokens": ["reasoningOutputTokens"],
-        "totalTokens": ["totalTokens"]
+        "timestamp": [
+          "timestamp"
+        ],
+        "sessionId": [
+          "sessionId"
+        ],
+        "model": [
+          "model"
+        ],
+        "project": [
+          "project"
+        ],
+        "inputTokens": [
+          "inputTokens"
+        ],
+        "outputTokens": [
+          "outputTokens"
+        ],
+        "reasoningOutputTokens": [
+          "reasoningOutputTokens"
+        ],
+        "totalTokens": [
+          "totalTokens"
+        ]
       },
       "maxFileSizeBytes": 536870912,
       "query": "SELECT\n  e.time AS timestamp,\n  e.task_id AS sessionId,\n  COALESCE(NULLIF(e.model, ''), NULLIF(t.model, ''), 'unknown') AS model,\n  COALESCE(NULLIF(t.workdir, ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(e.usage, '$.input_tokens'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.output_tokens'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.reasoning_tokens'), 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.total_tokens'), 0) AS INTEGER) AS totalTokens\nFROM task_event e\nLEFT JOIN task t ON t.id = e.task_id\nWHERE e.usage IS NOT NULL AND e.usage <> ''"

@@ -29,6 +29,7 @@
     { "id": "mimo", "path": "mimo.tool.json" },
     { "id": "zcode", "path": "zcode.tool.json" },
     { "id": "anythingllm", "path": "anythingllm.tool.json" },
+    { "id": "dsh", "path": "dsh.tool.json" },
     { "id": "aipy", "path": "aipy.tool.json" },
     { "id": "cline", "path": "cline.tool.json" }
   ]

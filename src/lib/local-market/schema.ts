@@ -15,6 +15,7 @@ const VALID_SORTS: readonly MarketSort[] = [
   "name_asc",
   "name_desc",
   "downloads",
+  "tokens",
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

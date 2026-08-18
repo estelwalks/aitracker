@@ -4,7 +4,9 @@
   "id": "opencode",
   "display": {
     "name": "OpenCode",
-    "nameZh": "OpenCode"
+    "nameZh": "OpenCode",
+    "icon": "other",
+    "color": "#f59e0b"
   },
   "platforms": {
     "macos": "supported",
@@ -14,12 +16,18 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "configHome",
         "path": "opencode"
       },
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "dataHome",
         "path": "opencode"
       }
@@ -33,7 +41,10 @@
           "path": ".config/opencode/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -43,14 +54,22 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": ["macos", "linux"],
+          "targets": [
+            "macos",
+            "linux"
+          ],
           "base": "dataHome",
           "path": "opencode/storage/message",
           "glob": "**/*.json",
           "format": "json"
         },
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".opencode",
           "glob": "**/*.jsonl",

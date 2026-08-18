@@ -19,7 +19,7 @@ import {
 } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
-import type { DashboardReadModel } from "../../dashboard/contracts";
+import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import {
   getLocalSkills,
   requestApprovedBatchUninstall,
@@ -44,7 +44,8 @@ import { ToolOverview } from "./ToolOverview";
 
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
-  usage: DashboardReadModel;
+  /** Compact agent-overview projection; never raw events (P1-T1-06/07). */
+  usage: AgentUsageOverviewReadModel;
   showWorkspace?: boolean;
   showToolOverview?: boolean;
   /** Real security-detection summary (skill name → risk-finding count). */
@@ -522,7 +523,7 @@ export function SkillsPage({
                   <Link to="/settings">
                     <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
                   </Link>
-                  <Link to="/skills" search={{ tab: "market" }}>
+                  <Link to="/market">
                     <TTButton>{t("skills.actions.goMarket")}</TTButton>
                   </Link>
                 </>

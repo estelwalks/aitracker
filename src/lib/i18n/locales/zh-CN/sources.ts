@@ -76,6 +76,7 @@ export const sources = {
     failed: "迁移失败",
   },
   toast: {
+    rescanStarted: "后台重新扫描已开始，完成后自动刷新",
     rescanDone: "重新扫描完成",
   },
 } as const;

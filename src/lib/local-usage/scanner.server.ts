@@ -28,6 +28,8 @@ import {
   consumeCodexPendingContext,
   createCodexPendingContext,
 } from "./codex-context.ts";
+import { readDshSessionLog } from "./dsh-zstd.ts";
+import { normalizeProjectPath } from "./project-path.ts";
 import {
   collectClaudeContext,
   collectClaudeToolResults,
@@ -124,55 +126,37 @@ export interface LocalUsageScanOptions {
   maxFilesPerSource?: number;
   cacheDirectory?: string;
   disablePersistentCache?: boolean;
+  /** Shared WSL topology (P3-T3-04); when absent the scanner enumerates once. */
+  wslTopology?: import("../wsl-topology-types.ts").WslTopologyInput;
+  /** P5-T5-02: real cancellation; directory loops and file reads check it. */
+  signal?: AbortSignal;
 }
 
 async function discoverWindowsWslHomes(
   providerDirectory: string,
+  topology?: import("../wsl-topology-types.ts").WslTopologyInput | undefined,
 ): Promise<string[]> {
   if (process.platform !== "win32") return [];
-
-  let stdout: string | Buffer;
-  try {
-    ({ stdout } = await execFileAsync("wsl.exe", ["-l", "-q"], {
-      encoding: "buffer",
-      timeout: 5_000,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024,
-    }));
-  } catch {
-    return [];
-  }
-
-  const raw = Buffer.isBuffer(stdout) ? stdout.toString("utf16le") : stdout;
-  const distributions = raw
-    .split(/\r?\n/)
-    .map((value) => value.replace(/\0/g, "").trim())
-    .filter(Boolean);
-  const homes: string[] = [];
-
-  for (const distribution of distributions) {
-    try {
-      const result = await execFileAsync(
-        "wsl.exe",
-        ["-d", distribution, "-e", "sh", "-lc", 'printf %s "$HOME"'],
-        {
-          encoding: "utf8",
-          timeout: 5_000,
-          windowsHide: true,
-          maxBuffer: 1024 * 1024,
-        },
-      );
-      const linuxHome = result.stdout.trim();
-      if (!linuxHome.startsWith("/")) continue;
-      const suffix = `${linuxHome.replaceAll("/", "\\")}\\${providerDirectory}`;
-      homes.push(`\\\\wsl.localhost\\${distribution}${suffix}`);
-      homes.push(`\\\\wsl$\\${distribution}${suffix}`);
-    } catch {
-      continue;
+  if (topology && topology.distros.length > 0) {
+    const homes: string[] = [];
+    for (const distro of topology.distros) {
+      const suffix = `${distro.home.replaceAll("/", "\\")}\\${providerDirectory}`;
+      homes.push(`\\\\wsl.localhost\\${distro.distribution}${suffix}`);
+      homes.push(`\\\\wsl$\\${distro.distribution}${suffix}`);
     }
+    return homes;
   }
 
-  return homes;
+  const { enumerateWslTopology } =
+    await import("../../platform/discovery/wsl-topology.server.ts");
+  const local = await enumerateWslTopology();
+  return local.distros.flatMap(({ distribution, home }) => {
+    const suffix = `${home.replaceAll("/", "\\")}\\${providerDirectory}`;
+    return [
+      `\\\\wsl.localhost\\${distribution}${suffix}`,
+      `\\\\wsl$\\${distribution}${suffix}`,
+    ];
+  });
 }
 
 interface CachedClaudeEvent {
@@ -204,7 +188,7 @@ interface PersistentCodexFileEntry extends PersistentFileEntryBase {
 }
 
 interface PersistentStructuredFileEntry extends PersistentFileEntryBase {
-  source: "gemini-cli" | "grok" | "openclaw" | "antigravity";
+  source: "gemini-cli" | "grok" | "openclaw" | "antigravity" | "dsh";
   identifiedEvents: CachedIdentifiedEvent[];
   diagnostics: LocalUsageDiagnostic[];
 }
@@ -435,7 +419,8 @@ function persistentFileEntry(value: unknown): PersistentFileEntry | undefined {
     source === "gemini-cli" ||
     source === "grok" ||
     source === "openclaw" ||
-    source === "antigravity"
+    source === "antigravity" ||
+    source === "dsh"
   ) {
     if (!Array.isArray(entry.identifiedEvents)) return undefined;
     const identifiedEvents: CachedIdentifiedEvent[] = [];
@@ -586,12 +571,14 @@ async function collectRecentJsonlFiles(
   cutoffTime: number,
   maxFiles: number,
   fileMatches: (name: string) => boolean,
+  signal?: AbortSignal,
 ): Promise<{ available: boolean; files: FileCandidate[] }> {
   const candidates: FileCandidate[] = [];
   let available = false;
   let discoveredEntries = 0;
 
   for (const root of roots) {
+    signal?.throwIfAborted();
     try {
       const rootStat = await stat(root);
       if (!rootStat.isDirectory()) {
@@ -607,6 +594,8 @@ async function collectRecentJsonlFiles(
       pendingDirectories.length > 0 &&
       discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE
     ) {
+      // P5-T5-02: abort promptly between directory entries.
+      signal?.throwIfAborted();
       const directoryPath = pendingDirectories.pop();
       if (directoryPath == null) {
         break;
@@ -620,6 +609,7 @@ async function collectRecentJsonlFiles(
       }
 
       for await (const entry of directory) {
+        signal?.throwIfAborted();
         discoveredEntries += 1;
         if (discoveredEntries >= MAX_DISCOVERED_ENTRIES_PER_SOURCE) {
           break;
@@ -875,12 +865,14 @@ async function scanClaude(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
 ): Promise<SourceScanResult> {
   const selected = await collectRecentJsonlFiles(
     roots,
     cutoffTime,
     maxFiles,
     (name) => name.endsWith(".jsonl"),
+    signal,
   );
   const byMessageId = new Map<string, LocalUsageEvent>();
   let filesRead = 0;
@@ -1044,23 +1036,6 @@ function codexSessionIdFromRecord(record: JsonObject): string | undefined {
   return undefined;
 }
 
-function normalizeProjectPath(project: string, homeDirectory: string): string {
-  if (project === homeDirectory) {
-    return "~";
-  }
-
-  const relativeProject = relative(homeDirectory, project);
-  if (
-    isAbsolute(project) &&
-    relativeProject !== ".." &&
-    !relativeProject.startsWith(`..${sep}`)
-  ) {
-    return `~/${relativeProject.split(sep).join("/")}`;
-  }
-
-  return isAbsolute(project) ? "external" : project;
-}
-
 function codexEventFromRecord(
   record: JsonObject,
   context: { model: string; project: string; sessionId: string },
@@ -1142,12 +1117,14 @@ async function scanCodex(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
 ): Promise<SourceScanResult> {
   const selected = await collectRecentJsonlFiles(
     roots,
     cutoffTime,
     maxFiles,
     (name) => name.endsWith(".jsonl"),
+    signal,
   );
   const events: LocalUsageEvent[] = [];
   let filesRead = 0;
@@ -1326,6 +1303,7 @@ async function scanWorkbuddy(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
 ): Promise<SourceScanResult> {
   const workbuddyRoot = join(homeDirectory, ".workbuddy");
   const projectsRoot = join(workbuddyRoot, "projects");
@@ -1335,6 +1313,7 @@ async function scanWorkbuddy(
     cutoffTime,
     maxFiles,
     (name) => name.endsWith(".jsonl"),
+    signal,
   );
   const events: LocalUsageEvent[] = [];
   const cacheEntries: PersistentGenericFileEntry[] = [];
@@ -1897,6 +1876,123 @@ async function parseAntigravityUsageFile(
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
+/**
+ * DeepSeek Harness (DSH) session-log reader. DSH persists one append-only log
+ * per agent session at `~/.dsh/sessions/<workspace>/<session-id>/` — a
+ * concatenated-frame zstd container of JSONL event records (plaintext `.jsonl`
+ * with compression "none" is also accepted). The first record is the session
+ * header (id/cwd); later `assistant/message` records carry the provider's
+ * final usage sample per turn/step. Only stats are extracted: message content,
+ * system prompts and tool payloads are read transiently and never cached.
+ */
+async function parseDshUsageFile(
+  file: FileCandidate & { format: UsageAdapterPath["format"] },
+  fallbackSessionId: string,
+): Promise<{
+  identifiedEvents: CachedIdentifiedEvent[];
+  malformedLines: number;
+  diagnostics: LocalUsageDiagnostic[];
+}> {
+  const identifiedEvents: CachedIdentifiedEvent[] = [];
+  let content: string;
+  try {
+    content = await readDshSessionLog(file.path);
+  } catch {
+    return {
+      identifiedEvents,
+      malformedLines: 1,
+      diagnostics: [
+        {
+          source: "dsh",
+          code: "malformed-json",
+          path: file.path,
+          count: 1,
+          message: "DSH 会话日志无法解码，已跳过。",
+        },
+      ],
+    };
+  }
+  let sessionId = fallbackSessionId;
+  let project = "unknown";
+  let model = "unknown";
+  let malformedLines = 0;
+  let recordIndex = 0;
+  for (const line of content.split("\n")) {
+    if (line.trim().length === 0) continue;
+    let record: JsonObject;
+    try {
+      record = asObject(JSON.parse(line) as unknown) ?? {};
+    } catch {
+      malformedLines += 1;
+      continue;
+    }
+    recordIndex += 1;
+    if (recordIndex === 1) {
+      // Header record: {"type":"session","id":...,"createdAt":...,"cwd":...}
+      const headerId = stringValue(record.id);
+      if (record.type === "session" && headerId != null) {
+        sessionId =
+          sessionIdFromStructuredValue("dsh", headerId) ?? fallbackSessionId;
+        project = stringValue(record.cwd) ?? project;
+      }
+      continue;
+    }
+    if (record.type === "request/header") {
+      const header = asObject(asObject(record.data)?.header);
+      model = stringValue(asObject(header?.config)?.model) ?? model;
+      continue;
+    }
+    if (record.type === "request/context") {
+      model = stringValue(asObject(record.data)?.model) ?? model;
+      continue;
+    }
+    if (record.type !== "assistant/message") continue;
+    const usage = asObject(asObject(record.data)?.usage);
+    if (usage == null) continue;
+    const inputTokens = tokenValue(
+      usage.inputTokens ?? usage.uncachedInputTokens,
+    );
+    const cachedInputTokens = tokenValue(
+      usage.cacheReadTokens ?? usage.cachedInputTokens,
+    );
+    const cacheCreationInputTokens = tokenValue(
+      usage.cacheWriteTokens ??
+        usage.cacheCreationInputTokens ??
+        usage.cache_creation_input_tokens,
+    );
+    const outputTokens = tokenValue(usage.outputTokens);
+    const reasoningOutputTokens = tokenValue(
+      usage.reasoningTokens ?? usage.reasoningOutputTokens,
+    );
+    const totalTokens =
+      inputTokens +
+      cachedInputTokens +
+      cacheCreationInputTokens +
+      outputTokens +
+      reasoningOutputTokens;
+    const timestamp = timestampValue(record.time);
+    const seq = typeof record.seq === "number" ? record.seq : recordIndex;
+    if (timestamp == null || totalTokens === 0) continue;
+    identifiedEvents.push({
+      identity: privacyFingerprint("dsh", [sessionId, seq]),
+      event: {
+        source: "dsh",
+        timestamp: timestamp.toISOString(),
+        sessionId,
+        model,
+        project,
+        inputTokens,
+        cachedInputTokens,
+        cacheCreationInputTokens,
+        outputTokens,
+        reasoningOutputTokens,
+        totalTokens,
+      },
+    });
+  }
+  return { identifiedEvents, malformedLines, diagnostics: [] };
+}
+
 type StructuredParser = typeof parseGeminiUsageFile;
 
 async function scanStructuredAdapter(
@@ -2375,10 +2471,23 @@ export async function scanLocalUsage(
       ...windowsEnvironmentHomes,
     ].filter((value): value is string => Boolean(value?.trim())),
   );
-  const [wslClaudeHomes, wslCodexHomes] = await Promise.all([
-    discoverWindowsWslHomes(".claude"),
-    discoverWindowsWslHomes(".codex"),
-  ]);
+  const [wslClaudeHomes, wslCodexHomes] = await (async () => {
+    // P3-T3-04: enumerate WSL topology once per scan and share it between
+    // providers. An injected topology (from the shared WSL fact snapshot)
+    // skips the local enumeration entirely.
+    const topology =
+      options.wslTopology && options.wslTopology.distros.length > 0
+        ? options.wslTopology
+        : await (async () => {
+            const { enumerateWslTopology } =
+              await import("../../platform/discovery/wsl-topology.server.ts");
+            return enumerateWslTopology();
+          })();
+    return [
+      await discoverWindowsWslHomes(".claude", topology),
+      await discoverWindowsWslHomes(".codex", topology),
+    ];
+  })();
   const claudeRoots = uniqueRoots([
     join(
       configuredRoot(
@@ -2424,12 +2533,15 @@ export async function scanLocalUsage(
   const genericAdapters = GENERIC_BUILTIN_USAGE_ADAPTERS.filter(
     (adapter) => adapter.source !== "workbuddy",
   );
+  // P5-T5-02: check the caller's signal before starting any source I/O.
+  options.signal?.throwIfAborted();
   const structuredReader = (
     reader:
       | "gemini-session-v1"
       | "grok-turn-v1"
       | "openclaw-session-v1"
-      | "antigravity-transcript-v1",
+      | "antigravity-transcript-v1"
+      | "dsh-session-v1",
     parser: StructuredParser,
     mergeMode: "unique" | "multiset",
   ) => {
@@ -2458,6 +2570,7 @@ export async function scanLocalUsage(
     grok,
     openclaw,
     antigravity,
+    dsh,
     ...genericResults
   ] = await Promise.all([
     scanClaude(
@@ -2467,6 +2580,7 @@ export async function scanLocalUsage(
       nowTime,
       maxFiles,
       cachedFiles,
+      options.signal,
     ).catch((error) => sourceFailure("claude-code", error)),
     scanCodex(
       codexRoots,
@@ -2475,6 +2589,7 @@ export async function scanLocalUsage(
       nowTime,
       maxFiles,
       cachedFiles,
+      options.signal,
     ).catch((error) => sourceFailure("codex", error)),
     scanWorkbuddy(
       homeDirectory,
@@ -2482,6 +2597,7 @@ export async function scanLocalUsage(
       nowTime,
       maxFiles,
       cachedFiles,
+      options.signal,
     ).catch((error) => sourceFailure("workbuddy", error)),
     structuredReader("gemini-session-v1", parseGeminiUsageFile, "unique").catch(
       (error) => sourceFailure("gemini-cli", error),
@@ -2499,6 +2615,9 @@ export async function scanLocalUsage(
       parseAntigravityUsageFile,
       "unique",
     ).catch((error) => sourceFailure("antigravity", error)),
+    structuredReader("dsh-session-v1", parseDshUsageFile, "unique").catch(
+      (error) => sourceFailure("dsh", error),
+    ),
     ...genericAdapters.map((adapter) =>
       scanGenericAdapter(
         adapter,
@@ -2520,6 +2639,7 @@ export async function scanLocalUsage(
     ...grok.cacheEntries,
     ...openclaw.cacheEntries,
     ...antigravity.cacheEntries,
+    ...dsh.cacheEntries,
     ...genericResults.flatMap((result) => result.cacheEntries),
   ].sort((left, right) => left.path.localeCompare(right.path));
   const shouldWritePersistentIndex =
@@ -2532,6 +2652,7 @@ export async function scanLocalUsage(
       grok.summary.filesParsed > 0 ||
       openclaw.summary.filesParsed > 0 ||
       antigravity.summary.filesParsed > 0 ||
+      dsh.summary.filesParsed > 0 ||
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
@@ -2558,6 +2679,7 @@ export async function scanLocalUsage(
     ...grok.events,
     ...openclaw.events,
     ...antigravity.events,
+    ...dsh.events,
     ...genericResults.flatMap((result) => result.events),
   ];
   const events = nativeEvents.map((event) => ({
@@ -2573,6 +2695,7 @@ export async function scanLocalUsage(
     grok.summary,
     openclaw.summary,
     antigravity.summary,
+    dsh.summary,
     ...genericResults.map((result) => result.summary),
   ]) {
     if (summary.events > 0 || !summaryBySource.has(summary.source)) {

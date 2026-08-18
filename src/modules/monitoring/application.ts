@@ -17,6 +17,7 @@ const collectorIds: readonly MonitoringCollectorId[] = [
   "skills",
   "sessions",
   "security",
+  "exchange",
 ];
 
 function freshStatus(now: Date): MonitoringStatus {

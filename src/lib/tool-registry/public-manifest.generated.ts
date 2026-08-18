@@ -8,6 +8,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "claude-code",
       "name": "Claude Code",
       "nameZh": "Claude Code",
+      "icon": "claude",
+      "color": "#d97757",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -27,6 +29,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "codex",
       "name": "Codex",
       "nameZh": "Codex",
+      "icon": "codex",
+      "color": "#10a37f",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -46,6 +50,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cursor",
       "name": "Cursor",
       "nameZh": "Cursor",
+      "icon": "cursor",
+      "color": "#cfcfcf",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -65,6 +71,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kiro",
       "name": "Kiro",
       "nameZh": "Kiro",
+      "icon": "other",
+      "color": "#01a4ff",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -84,6 +92,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "gemini-cli",
       "name": "Gemini CLI",
       "nameZh": "Gemini CLI",
+      "icon": "gemini",
+      "color": "#4285f4",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -103,6 +113,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "opencode",
       "name": "OpenCode",
       "nameZh": "OpenCode",
+      "icon": "other",
+      "color": "#f59e0b",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -122,6 +134,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "openclaw",
       "name": "OpenClaw",
       "nameZh": "OpenClaw",
+      "icon": "other",
+      "color": "#ff5543",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -141,6 +155,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "every-code",
       "name": "Every Code",
       "nameZh": "Every Code",
+      "icon": "other",
+      "color": "#00c2a8",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -160,6 +176,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "hermes",
       "name": "Hermes Agent",
       "nameZh": "Hermes Agent",
+      "icon": "other",
+      "color": "#a78bfa",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -179,6 +197,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "github-copilot",
       "name": "GitHub Copilot",
       "nameZh": "GitHub Copilot",
+      "icon": "other",
+      "color": "#6e7681",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -198,6 +218,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kimi-code",
       "name": "Kimi Code",
       "nameZh": "Kimi Code",
+      "icon": "kimi",
+      "color": "#7c5cff",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -217,6 +239,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "omp",
       "name": "oh-my-pi",
       "nameZh": "oh-my-pi",
+      "icon": "other",
+      "color": "#00b3ff",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -236,6 +260,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "codebuddy",
       "name": "CodeBuddy",
       "nameZh": "CodeBuddy",
+      "icon": "other",
+      "color": "#0052d9",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -255,6 +281,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "workbuddy",
       "name": "WorkBuddy",
       "nameZh": "WorkBuddy",
+      "icon": "other",
+      "color": "#22d3ee",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -274,6 +302,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "grok",
       "name": "Grok Build",
       "nameZh": "Grok Build",
+      "icon": "other",
+      "color": "#d1d5db",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -293,6 +323,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kilo-cli",
       "name": "Kilo CLI",
       "nameZh": "Kilo CLI",
+      "icon": "other",
+      "color": "#eab308",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -312,6 +344,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kilocode",
       "name": "Kilo Code",
       "nameZh": "Kilo Code",
+      "icon": "other",
+      "color": "#eab308",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -331,6 +365,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "antigravity",
       "name": "Antigravity",
       "nameZh": "Antigravity",
+      "icon": "gemini",
+      "color": "#4285f4",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -350,6 +386,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "pi",
       "name": "pi",
       "nameZh": "pi",
+      "icon": "other",
+      "color": "#fe2857",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -369,6 +407,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "craft",
       "name": "Craft Agents",
       "nameZh": "Craft Agents",
+      "icon": "other",
+      "color": "#f97316",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -388,6 +428,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "roo-code",
       "name": "Roo Code",
       "nameZh": "Roo Code",
+      "icon": "other",
+      "color": "#f0524d",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -407,6 +449,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "zed",
       "name": "Zed Agent",
       "nameZh": "Zed Agent",
+      "icon": "other",
+      "color": "#3b82f6",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -426,6 +470,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "goose",
       "name": "Goose",
       "nameZh": "Goose",
+      "icon": "other",
+      "color": "#22c55e",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -445,6 +491,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "droid",
       "name": "Droid",
       "nameZh": "Droid",
+      "icon": "other",
+      "color": "#1f6feb",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -464,6 +512,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "mimo",
       "name": "Mimo Code",
       "nameZh": "Mimo Code",
+      "icon": "other",
+      "color": "#ff6900",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -483,6 +533,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "zcode",
       "name": "ZCode",
       "nameZh": "ZCode",
+      "icon": "other",
+      "color": "#10b981",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -502,6 +554,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "anythingllm",
       "name": "AnythingLLM Desktop",
       "nameZh": "AnythingLLM Desktop",
+      "icon": "other",
+      "color": "#8b5cf6",
       "platforms": {
         "macos": "supported",
         "windows10": "supported",
@@ -518,9 +572,32 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       }
     },
     {
+      "id": "dsh",
+      "name": "DeepSeek Harness",
+      "nameZh": "DeepSeek Harness",
+      "icon": "deepseek",
+      "color": "#4d6bfe",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "native",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
       "id": "aipy",
       "name": "AiPy",
       "nameZh": "AiPy",
+      "icon": "https://www.aipyaipy.com/image/logo.webp",
+      "color": "#14b8a6",
       "legacy": true,
       "platforms": {
         "macos": "supported",
@@ -541,6 +618,8 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cline",
       "name": "Cline",
       "nameZh": "Cline",
+      "icon": "other",
+      "color": "#5b8def",
       "legacy": true,
       "platforms": {
         "macos": "supported",

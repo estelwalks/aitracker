@@ -6,6 +6,8 @@ import type {
   KnowledgeAsset,
   KnowledgeDocument,
   KnowledgeFilter,
+  KnowledgeListCursor,
+  KnowledgeListResult,
   KnowledgeRepository,
   KnowledgeRepositoryOptions,
   KnowledgeStatus,
@@ -232,6 +234,32 @@ export function createKnowledgeRepository(
             ),
           ),
         );
+      }),
+    // P4-T4-03: single store read per page; cursor = last updatedAt.
+    listLatest: (cursor = {}) =>
+      serial(async () => {
+        const doc = await read();
+        const limit = Math.min(Math.max(cursor.limit ?? 50, 1), 100);
+        const sorted = [...doc.assets].sort(
+          (left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt) ||
+            left.assetId.localeCompare(right.assetId),
+        );
+        const startIndex = cursor.cursor
+          ? sorted.findIndex((item) => item.updatedAt === cursor.cursor)
+          : -1;
+        const from = startIndex >= 0 ? startIndex + 1 : 0;
+        const page = sorted.slice(from, from + limit);
+        const nextCursor =
+          from + page.length < sorted.length
+            ? page[page.length - 1]?.updatedAt
+            : undefined;
+        return ok({
+          entries: clone(page),
+          ...(nextCursor ? { nextCursor } : {}),
+          total: sorted.length,
+          revision: doc.revision,
+        });
       }),
     get: (assetId, version) =>
       serial(async () => {

@@ -251,7 +251,10 @@ test("allowlist projection strips an unexpected path-like project label", () => 
     outputAvailability: {
       securityRuns: { available: false, count: null },
       distillationOutputs: { available: false, count: null },
+      distillationBreakdown: { capability: null, memory: null },
       dailyReports: { available: false, count: null },
+      weeklyReports: { available: false, count: null },
+      monthlyReports: { available: false, count: null },
     },
   } as DashboardV2Snapshot;
   const aggregate = toDashboardAIInsightInput({ snapshot, monitoring: null });

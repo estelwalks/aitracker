@@ -20,7 +20,10 @@ import type {
 import type { CostEstimate, PricingSnapshot } from "../../lib/pricing";
 import type { Locale } from "../../lib/i18n/locale";
 import type { MonitoringStatus } from "../monitoring/index.ts";
-import type { DashboardProjectKind } from "./project-classification.server.ts";
+
+/** Server-decided project classification label kind (P6-T6-01: browser-safe). */
+export type DashboardProjectKind =
+  "workspace" | "quick-conversation" | "unknown";
 
 /** Browser-safe usage event. Raw commands and filesystem references are omitted. */
 export interface DashboardUsageEvent extends LocalTokenCounts {
@@ -150,6 +153,10 @@ export interface DashboardV2ContextAvailability {
 export interface DashboardV2Tool {
   readonly id: string;
   readonly name: string;
+  /** BrandIcon kind key from the tool-registry display config. */
+  readonly icon?: string;
+  /** Brand color from the tool-registry display config. */
+  readonly color?: string;
   readonly available: boolean;
   readonly detected: boolean;
   readonly usageSupport: "native" | "adapter" | "unsupported";
@@ -160,10 +167,20 @@ export interface DashboardV2AvailabilityMetric {
   readonly available: boolean;
 }
 
+export interface DashboardV2DistillationBreakdown {
+  /** 能力资产（skill 类蒸馏产物）。 */
+  readonly capability: number | null;
+  /** 记忆资产。 */
+  readonly memory: number | null;
+}
+
 export interface DashboardV2OutputAvailability {
   readonly securityRuns: DashboardV2AvailabilityMetric;
   readonly distillationOutputs: DashboardV2AvailabilityMetric;
+  readonly distillationBreakdown: DashboardV2DistillationBreakdown;
   readonly dailyReports: DashboardV2AvailabilityMetric;
+  readonly weeklyReports: DashboardV2AvailabilityMetric;
+  readonly monthlyReports: DashboardV2AvailabilityMetric;
 }
 
 /**
@@ -237,6 +254,11 @@ export interface DashboardV2BreakdownRow {
   readonly previousTokens: number | null;
   /** Percent change against previousTokens; null means not comparable. */
   readonly deltaPercent: number | null;
+  /**
+   * Absolute token increase when the previous window had none (0 → N); a
+   * percentage is undefined there, so the chip shows "+N" instead.
+   */
+  readonly absoluteDelta: number | null;
   /** Present for projects only, aggregated on the server without session ids. */
   readonly sessions: number | null;
   /**
@@ -251,6 +273,14 @@ export interface DashboardV2MetricDelta {
   readonly deltaPercent: number | null;
 }
 
+export interface DashboardV2SessionDelta extends DashboardV2MetricDelta {
+  /**
+   * Absolute session increase when the previous window had none (0 → N);
+   * a percentage is undefined there, so the chip shows "+N" instead.
+   */
+  readonly absoluteDelta: number | null;
+}
+
 export interface DashboardV2CacheDelta extends DashboardV2MetricDelta {
   /** Cache rate is compared in percentage points, rather than token volume. */
   readonly deltaPoints: number | null;
@@ -259,6 +289,7 @@ export interface DashboardV2CacheDelta extends DashboardV2MetricDelta {
 export interface DashboardV2Comparison {
   readonly tokens: DashboardV2MetricDelta;
   readonly events: DashboardV2MetricDelta;
+  readonly sessions: DashboardV2SessionDelta;
   readonly cost: DashboardV2MetricDelta;
   readonly cacheRate: DashboardV2CacheDelta;
 }
@@ -316,6 +347,8 @@ export interface DashboardV2View {
   readonly totals: LocalUsageTotals;
   readonly estimatedCostUsd: number | null;
   readonly estimatedCostIsPartial: boolean;
+  /** Notional saving from cache reads (real pricing); null when unpriced. */
+  readonly cacheSavingsUsd: number | null;
   /** Null when the selected events do not expose any input-token denominator. */
   readonly cacheRate: number | null;
   /** Only emitted when an equal-length prior window has sufficient evidence. */

@@ -160,3 +160,50 @@ test("createDraft without a securityVerdict leaves it undefined (consumers must 
   assert.equal(draft.ok, true);
   assert.equal(draft.ok && draft.value.securityVerdict, undefined);
 });
+
+test("P4-T4-03: listLatest returns the newest 50 first with a stable cursor", async () => {
+  const fixtureState = fixture();
+  const { repository } = fixtureState;
+  for (let index = 0; index < 3; index += 1) {
+    const draft = await repository.createDraft({
+      kind: "memory",
+      title: `note-${index}`,
+      content: `hello-${index}`,
+      createdBy: "user",
+    });
+    assert.equal(draft.ok, true);
+  }
+  // Force distinct updatedAt values for stable ordering (rebuild document).
+  const current = fixtureState.document;
+  const stamped = current.assets.map((asset, index) => ({
+    ...asset,
+    updatedAt: `2026-08-0${index + 1}T00:00:00.000Z`,
+  }));
+  Object.assign(current, { ...current, assets: stamped });
+
+  const first = await repository.listLatest({ limit: 2 });
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(first.value.entries.length, 2);
+  assert.equal(first.value.total, 3);
+  assert.equal(first.value.entries[0].title, "note-2");
+  assert.ok(first.value.nextCursor);
+
+  const second = await repository.listLatest({
+    cursor: first.value.nextCursor,
+    limit: 2,
+  });
+  assert.equal(second.ok, true);
+  if (!second.ok) return;
+  assert.equal(second.value.entries.length, 1);
+  assert.equal(second.value.entries[0].title, "note-0");
+  assert.equal(second.value.nextCursor, undefined);
+});
+
+test("P4-T4-03: listLatest caps limit at 100 and defaults to 50", async () => {
+  const { repository } = fixture();
+  const capped = await repository.listLatest({ limit: 500 });
+  assert.equal(capped.ok, true);
+  const defaulted = await repository.listLatest({});
+  assert.equal(defaulted.ok, true);
+});

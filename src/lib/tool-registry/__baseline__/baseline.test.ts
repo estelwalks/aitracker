@@ -36,12 +36,13 @@ test("baseline tools match the live AI_TOOLS catalog (27 baseline + aipy/cline)"
         : [...expected.detectRoots],
     );
   }
-  // The 27 baseline tools come first in canonical order; the extensions follow.
+  // The 27 baseline tools come first in canonical order; dsh and the
+  // extensions follow.
   assert.deepEqual(
     AI_TOOLS.slice(0, 27).map((t) => t.id),
     BASELINE_TOOLS.map((t) => t.id),
   );
-  assert.equal(AI_TOOLS.length, 29);
+  assert.equal(AI_TOOLS.length, 30);
 });
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
@@ -87,8 +88,9 @@ test("baseline skill agents match the live SKILL_AGENT_RULES (9 agents)", () => 
 test("baseline usage adapters remain represented (native sources included)", () => {
   // The baseline now reflects the registry post-migration: OpenClaw and
   // Antigravity contribute native usage adapters inside the frozen set, so the
-  // live catalog matches it one-for-one (no extra "+1 extension").
-  assert.equal(BUILTIN_USAGE_ADAPTERS.length, BASELINE_USAGE_ADAPTERS.length);
+  // live catalog matches it one-for-one (no extra "+1 extension"). dsh is a
+  // deliberate post-baseline addition and is asserted separately below.
+  assert.ok(BUILTIN_USAGE_ADAPTERS.length >= BASELINE_USAGE_ADAPTERS.length);
   for (const expected of BASELINE_USAGE_ADAPTERS) {
     const live = BUILTIN_USAGE_ADAPTERS.find(
       (adapter) => adapter.source === expected.source,
@@ -138,6 +140,24 @@ test("baseline usage adapters remain represented (native sources included)", () 
     BUILTIN_USAGE_ADAPTERS.find((adapter) => adapter.source === "openclaw")
       ?.reader,
     "openclaw-session-v1",
+  );
+  // Deliberate post-baseline addition: dsh (DeepSeek Harness) contributes a
+  // native reader over its zstd session logs.
+  const dsh = BUILTIN_USAGE_ADAPTERS.find(
+    (adapter) => adapter.source === "dsh",
+  );
+  assert.ok(dsh, "dsh usage adapter missing");
+  assert.equal(dsh.reader, "dsh-session-v1");
+  assert.deepEqual(
+    dsh.paths.map((path) => ({
+      root: path.root,
+      glob: path.glob,
+      format: path.format,
+    })),
+    [
+      { root: ".dsh/sessions", glob: "**/session.jsonl.zstd", format: "jsonl" },
+      { root: ".dsh/sessions", glob: "**/session.jsonl", format: "jsonl" },
+    ],
   );
 });
 

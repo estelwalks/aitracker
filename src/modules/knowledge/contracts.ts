@@ -80,6 +80,25 @@ export interface KnowledgeFilter {
   readonly kind?: KnowledgeAssetKind;
 }
 
+/**
+ * P4-T4-03: batch list summary. One AtomicJsonStore read produces the page —
+ * never a per-asset read (no N+1). `cursor` is the last `updatedAt` value of
+ * the previous page; pass it back to fetch the next page (stable order).
+ */
+export interface KnowledgeListCursor {
+  readonly cursor?: string;
+  readonly limit?: number;
+}
+
+export interface KnowledgeListResult {
+  readonly entries: readonly KnowledgeAsset[];
+  /** Stable continuation cursor; undefined when there are no more entries. */
+  readonly nextCursor?: string;
+  readonly total: number;
+  /** Document revision the page was projected from. */
+  readonly revision: number;
+}
+
 export interface DedupeSuggestion {
   readonly assetId: string;
   readonly version: number;
@@ -119,6 +138,13 @@ export interface KnowledgeRepository {
     expectedRevision?: number,
   ): Promise<Result<KnowledgeVersion>>;
   list(filter?: KnowledgeFilter): Promise<Result<readonly KnowledgeAsset[]>>;
+  /**
+   * Batch list with cursor pagination from a single store read. Defaults to
+   * the first 50 entries (latest-updated first) on the first page.
+   */
+  listLatest(
+    cursor?: KnowledgeListCursor,
+  ): Promise<Result<KnowledgeListResult>>;
   get(assetId: string, version?: number): Promise<Result<KnowledgeVersion>>;
   suggestDuplicates(
     contentHash: ContentHash,

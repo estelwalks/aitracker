@@ -26,6 +26,7 @@ import type { LocalUsageEvent } from "../local-usage/types.ts";
 import { APP_DATA_DIR, MARKET_API_BASE } from "../app-config";
 import { AppError } from "../errors";
 import { AI_TOOLS } from "../tools/catalog.ts";
+import { RUNTIME_POLICY } from "../../app/runtime-policy.generated.ts";
 import {
   detectToolInstallations,
   type ToolInstallationFact,
@@ -86,7 +87,13 @@ const DATA_DIR = join(homedir(), APP_DATA_DIR);
 const BLACKLIST_FILE = join(DATA_DIR, "skill-blacklist.json");
 const ORIGINS_FILE = join(DATA_DIR, "skill-origins.json");
 const MARKET_API = `${MARKET_API_BASE}/skills`;
-const MARKET_EVIDENCE_TTL_MS = 5 * 60 * 1_000;
+// Market-evidence freshness comes from the public runtime policy source
+// (`skillMarketEvidence.freshForMinutes`); the old 5-minute magic constant
+// has been removed (T0-05).
+const MARKET_EVIDENCE_TTL_MS =
+  RUNTIME_POLICY.snapshotPolicies.skillMarketEvidence.freshForMinutes *
+  60 *
+  1_000;
 
 /** Text-ish extensions whose content counts toward the token estimate. */
 const TEXT_EXTENSIONS = new Set([
@@ -204,6 +211,8 @@ interface ScanOptions {
   dataDirectory?: string;
   usageEvents?: LocalUsageEvent[];
   env?: Record<string, string | undefined>;
+  /** P5-T5-03: real cancellation; checked before and during scans. */
+  signal?: AbortSignal;
 }
 
 function agentInstallationFacts(
@@ -467,6 +476,9 @@ function isPathInside(root: string, candidate: string): boolean {
   return (
     pathFromRoot !== "" &&
     pathFromRoot !== ".." &&
+    // Cross-drive paths: `relative()` returns the absolute target path on a
+    // different drive (e.g. `D:\…` from `C:\…`), which is never inside.
+    !isAbsolute(pathFromRoot) &&
     !pathFromRoot.startsWith(`..${sep}`)
   );
 }
@@ -489,6 +501,9 @@ async function assertManagedSkillPath(
       if (
         pathFromRoot === "" ||
         pathFromRoot === ".." ||
+        // Cross-drive candidates (e.g. `D:\…` vs a `C:\…` root) produce an
+        // absolute relative() result that must never count as "inside".
+        isAbsolute(pathFromRoot) ||
         pathFromRoot.startsWith(`..${sep}`) ||
         pathFromRoot.split(sep).includes("..")
       ) {
@@ -818,6 +833,7 @@ async function writeBlacklist(
 export async function scanLocalSkills(
   options: ScanOptions = {},
 ): Promise<SkillSnapshot> {
+  options.signal?.throwIfAborted();
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
   const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
@@ -851,8 +867,10 @@ export async function scanLocalSkills(
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // Measure each skill's directory from its first installation copy.
+  // P5-T5-03: stop launching further directory I/O when cancelled.
   const measures = await Promise.all(
     skills.map(async (skill) => {
+      options.signal?.throwIfAborted();
       const firstPath = skill.installations[0]?.path;
       if (!firstPath) return { sizeBytes: 0, tokenEstimate: 0 };
       const { sizeBytes, chars } = await measureSkillDirectory(firstPath);

@@ -12,7 +12,7 @@
 // Run: npm run generate:pricing-imports   (also runs in prebuild)
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute } from "node:path";
 import { tsImport } from "tsx/esm/api";
 
@@ -31,7 +31,10 @@ const {
   RouteSelectionRulesFileSchema,
   RatePackSchema,
   FallbackProfilesFileSchema,
-} = await tsImport(join(root, "src/lib/pricing/contracts.ts"), import.meta.url);
+} = await tsImport(
+  pathToFileURL(join(root, "src/lib/pricing/contracts.ts")).href,
+  import.meta.url,
+);
 
 function fail(msg) {
   console.error(`generate-pricing-imports: ${msg}`);
@@ -217,7 +220,9 @@ const profiles = packs.reduce(
   0,
 );
 console.log("generate-pricing-imports");
-console.log("─────────────────────────────────────────");
+console.log(
+  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+);
 console.log(`packs:              ${packs.length}`);
 console.log(`  conversion rules: ${rules}`);
 console.log(`  rates:            ${rates}`);

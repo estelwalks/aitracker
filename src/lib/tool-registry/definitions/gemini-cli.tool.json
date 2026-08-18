@@ -4,7 +4,9 @@
   "id": "gemini-cli",
   "display": {
     "name": "Gemini CLI",
-    "nameZh": "Gemini CLI"
+    "nameZh": "Gemini CLI",
+    "icon": "gemini",
+    "color": "#4285f4"
   },
   "platforms": {
     "macos": "supported",
@@ -14,13 +16,20 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".gemini/tmp"
       }
     ],
     "executable": {
-      "shared": ["gemini"]
+      "shared": [
+        "gemini"
+      ]
     }
   },
   "storage": {
@@ -31,7 +40,10 @@
           "path": ".gemini/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -41,7 +53,12 @@
       "reader": "gemini-session-v1",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".gemini/tmp",
           "glob": "**/chats/session-*.json",
