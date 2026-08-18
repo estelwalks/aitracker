@@ -87,6 +87,8 @@ export const errors = {
     testFailed:
       "Connection test failed — check the endpoint, API key and network",
     testTimeout: "Connection test timed out (5 seconds)",
+    listFailed:
+      "Failed to fetch the model list. Check the endpoint, API key and network",
   },
   pricing: {
     modelListInvalid: "Invalid model list",
