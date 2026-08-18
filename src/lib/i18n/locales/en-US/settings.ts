@@ -24,23 +24,13 @@ export const settings = {
     retentionNote:
       "The retention period below also applies to usage and scan caches:",
   },
-  model: {
-    notConfigured: "LLM not configured",
-    notConfiguredDesc:
-      "No environment-variable LLM is configured. Distillation and reports can be enabled through the model profiles below; AI insights still require the TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
-    configured: "LLM configured",
-    baseUrl: "Endpoint",
-    model: "Model",
-    apiKeyMasked: "API key configured (masked)",
-    loading: "Reading…",
-  },
   modelProfiles: {
     title: "General AI model profiles",
-    desc: "Manage multiple named model configurations and switch per Profile during distillation; API keys are stored server-side only and never reach the browser.",
+    desc: "Manage multiple named model configurations. All AI features (security scans / daily & weekly reports / distillation / today's insights) use the active profile; API keys are stored server-side only and never reach the browser.",
     storageNote:
       "API keys are stored only in a server-side file (mode 0600); the UI only shows whether one is configured.",
     reportsUseEnv:
-      "Report generation prefers the active model profile (a real model call); without a profile it falls back to the TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL environment variables.",
+      "Security scans, daily/weekly reports, distillation, and today's insights all use the active model profile for real model calls; features show an offline state when no profile is configured.",
     count: "{count} profiles",
     empty: "No profiles yet",
     emptyHint: "Click “Add” to create your first model profile",
@@ -87,31 +77,8 @@ export const settings = {
   security: {
     unavailable: {
       title: "Security scan service unavailable",
-      desc: "No security scan service is available (not connected to the desktop app or the local companion). Model configuration and the auto-scan schedule need that service to be saved.",
+      desc: "No security scan service is available (not connected to the desktop app or the local companion). The auto-scan schedule needs that service to be saved.",
       retry: "Reconnect",
-    },
-    model: {
-      title: "Security detection model",
-      desc: "Used for model review and behavior analysis in deep scans; the API key is encrypted with system secure storage and kept only in the main process.",
-      provider: "API protocol",
-      openai: "OpenAI compatible",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API key",
-      apiKeyConfigured: "Stored securely; leave blank to keep it",
-      apiKeyMissing: "Not configured",
-      liteModel: "Lite model",
-      proModel: "Pro model",
-      timeoutMs: "Timeout (ms)",
-      save: "Save configuration",
-      saving: "Saving",
-      saved: "Security detection model saved",
-      saveFailed: "Failed to save model configuration",
-      loadFailed: "Failed to read model configuration",
-      encryptionAvailable:
-        "Secure key encryption is available; the API key will be encrypted in the main process only.",
-      encryptionUnavailable:
-        "Secure key encryption is unavailable on this system, so an API key cannot be saved.",
     },
     schedule: {
       title: "Scan schedule",

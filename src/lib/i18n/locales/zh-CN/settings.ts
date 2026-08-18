@@ -22,23 +22,13 @@ export const settings = {
     onDemandDesc: "扫描按需触发，读取本机受支持 AI 工具日志并建立增量索引。",
     retentionNote: "以下保留期同样作用于用量与扫描缓存：",
   },
-  model: {
-    notConfigured: "未配置 LLM",
-    notConfiguredDesc:
-      "环境变量 LLM 未配置。蒸馏与报告可通过下方「通用 AI 模型 Profile」启用；AI 洞察仍需 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 环境变量。",
-    configured: "已配置 LLM",
-    baseUrl: "服务地址",
-    model: "模型",
-    apiKeyMasked: "API Key 已配置（掩码显示）",
-    loading: "读取中…",
-  },
   modelProfiles: {
     title: "通用 AI 模型 Profile",
-    desc: "管理多套可命名的大模型配置，蒸馏等场景按 Profile 切换；API Key 仅保存在服务端，绝不进入浏览器。",
+    desc: "管理多套可命名的大模型配置，全部 AI 功能（安全检测 / 日报周报 / 蒸馏 / 今日洞察）统一使用「生效中」的配置；API Key 仅保存在服务端，绝不进入浏览器。",
     storageNote:
       "API Key 仅保存于本机服务端文件（权限 0600），界面只显示是否已配置。",
     reportsUseEnv:
-      "报告生成优先使用「生效中」的模型 Profile（真实模型调用）；未设置 Profile 时回退环境变量 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL。",
+      "安全检测、日报周报、蒸馏与今日洞察统一使用「生效中」的模型 Profile 进行真实模型调用；未配置 Profile 时相关功能显示离线状态。",
     count: "{count} 个配置",
     empty: "暂无配置",
     emptyHint: "点击「新增」创建第一套模型配置",
@@ -82,31 +72,8 @@ export const settings = {
   security: {
     unavailable: {
       title: "安全检测服务不可用",
-      desc: "当前没有可用的安全检测服务（未连接桌面端或本机伴随服务）。模型配置与自动扫描计划需要该服务才能保存。",
+      desc: "当前没有可用的安全检测服务（未连接桌面端或本机伴随服务）。自动扫描计划需要该服务才能保存。",
       retry: "重新连接",
-    },
-    model: {
-      title: "安全检测模型",
-      desc: "用于深度检测中的模型复核与行为分析；API Key 由系统安全存储加密，仅保存在主进程。",
-      provider: "API 协议",
-      openai: "OpenAI 兼容",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API Key",
-      apiKeyConfigured: "已安全保存；留空表示保持不变",
-      apiKeyMissing: "尚未配置",
-      liteModel: "轻量模型",
-      proModel: "高级模型",
-      timeoutMs: "超时（毫秒）",
-      save: "保存配置",
-      saving: "正在保存",
-      saved: "安全检测模型已保存",
-      saveFailed: "保存模型配置失败",
-      loadFailed: "读取模型配置失败",
-      encryptionAvailable:
-        "系统安全密钥加密可用，API Key 将仅在主进程加密保存。",
-      encryptionUnavailable:
-        "当前系统无法使用安全密钥加密，因此不能保存 API Key。",
     },
     schedule: {
       title: "扫描计划",
