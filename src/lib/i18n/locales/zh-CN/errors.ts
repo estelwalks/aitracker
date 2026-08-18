@@ -83,6 +83,7 @@ export const errors = {
     notFound: "该模型配置不存在或已被删除",
     testFailed: "连接测试失败，请检查服务地址、API Key 与网络",
     testTimeout: "连接测试超时（5 秒）",
+    listFailed: "获取模型列表失败，请检查服务地址、API Key 与网络",
   },
   pricing: {
     modelListInvalid: "模型列表不合法",
