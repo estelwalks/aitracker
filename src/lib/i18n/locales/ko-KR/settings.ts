@@ -24,23 +24,13 @@ export const settings = {
       "스캔은 요청 시 실행되며, 지원되는 로컬 AI 도구 로그를 읽고 증분 인덱스를 구축합니다.",
     retentionNote: "아래 보존 기간은 사용량 및 스캔 캐시에도 적용됩니다:",
   },
-  model: {
-    notConfigured: "LLM 미설정",
-    notConfiguredDesc:
-      "환경 변수 LLM이 설정되지 않았습니다. 증류와 보고서는 아래의 '일반 AI 모델 Profile'로 사용할 수 있으며, AI 인사이트에는 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수가 필요합니다.",
-    configured: "LLM 구성됨",
-    baseUrl: "엔드포인트",
-    model: "모델",
-    apiKeyMasked: "API Key 구성됨(마스킹 표시)",
-    loading: "읽는 중…",
-  },
   modelProfiles: {
     title: "일반 AI 모델 Profile",
-    desc: "이름 있는 모델 설정을 여러 개 관리하고 증류 등 시나리오에서 Profile을 전환합니다. API Key는 서버 측에만 저장되며 브라우저로 전달되지 않습니다.",
+    desc: "이름 있는 모델 설정을 여러 개 관리할 수 있습니다. 모든 AI 기능(보안 검사 / 일일·주간 보고서 / 증류 / 오늘의 인사이트)은 '활성 중'인 Profile을 일괄 사용합니다. API Key는 서버 측에만 저장되며 브라우저로 전달되지 않습니다.",
     storageNote:
       "API Key는 서버 측 파일(권한 0600)에만 저장되며, UI에는 설정 여부만 표시됩니다.",
     reportsUseEnv:
-      "보고서 생성은 활성 모델 Profile(실제 모델 호출)을 우선 사용하며, Profile이 없으면 TRUSTTOOLS_LLM_BASE_URL / TRUSTTOOLS_LLM_API_KEY / TRUSTTOOLS_LLM_MODEL 환경 변수로 대체됩니다.",
+      "보안 검사, 일일·주간 보고서, 증류, 오늘의 인사이트는 모두 '활성 중'인 모델 Profile로 실제 모델 호출을 수행합니다. Profile이 설정되지 않으면 관련 기능은 오프라인 상태로 표시됩니다.",
     count: "{count}개 설정",
     empty: "아직 설정이 없습니다",
     emptyHint: "「추가」를 클릭하여 첫 번째 모델 설정을 만드세요",
@@ -86,31 +76,8 @@ export const settings = {
   security: {
     unavailable: {
       title: "보안 검사 서비스를 사용할 수 없습니다",
-      desc: "사용 가능한 보안 검사 서비스가 없습니다(데스크톱 앱 또는 로컬 컴패니언 미연결). 모델 구성과 자동 검사 일정을 저장하려면 해당 서비스가 필요합니다.",
+      desc: "사용 가능한 보안 검사 서비스가 없습니다(데스크톱 앱 또는 로컬 컴패니언 미연결). 자동 검사 일정을 저장하려면 해당 서비스가 필요합니다.",
       retry: "다시 연결",
-    },
-    model: {
-      title: "보안 검사 모델",
-      desc: "심층 검사의 모델 검토 및 동작 분석에 사용됩니다. API Key는 시스템 보안 저장소로 암호화되며 메인 프로세스에만 보관됩니다.",
-      provider: "API 프로토콜",
-      openai: "OpenAI 호환",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API Key",
-      apiKeyConfigured: "안전하게 저장됨. 비워두면 유지됩니다",
-      apiKeyMissing: "미구성",
-      liteModel: "라이트 모델",
-      proModel: "프로 모델",
-      timeoutMs: "타임아웃(밀리초)",
-      save: "구성 저장",
-      saving: "저장 중",
-      saved: "보안 검사 모델을 저장했습니다",
-      saveFailed: "모델 구성을 저장하지 못했습니다",
-      loadFailed: "모델 구성을 읽지 못했습니다",
-      encryptionAvailable:
-        "시스템 보안 키 암호화를 사용할 수 있습니다. API Key는 메인 프로세스에서만 암호화됩니다.",
-      encryptionUnavailable:
-        "이 시스템에서는 보안 키 암호화를 사용할 수 없어 API Key를 저장할 수 없습니다.",
     },
     schedule: {
       title: "검사 일정",

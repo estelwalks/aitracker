@@ -3,5 +3,4 @@ export type SettingsViewModel = SettingsModuleContract;
 export { SettingsPage } from "./SettingsPage";
 export type { SettingsLoaderData } from "./SettingsPage";
 export { ScanScheduleSection } from "./ScanScheduleSection";
-export { SecurityModelConfigSection } from "./SecurityModelConfigSection";
 export type { SecurityConnectionStatus } from "./use-security-client";
