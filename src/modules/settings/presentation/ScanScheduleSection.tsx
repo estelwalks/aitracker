@@ -278,9 +278,6 @@ export function ScanScheduleSection({
       <SectionHeading icon={<CalendarClock className="size-3.5" />}>
         {t("settings.security.schedule.title")}
       </SectionHeading>
-      <p className="mb-3 text-[11px] text-muted-foreground">
-        {t("settings.security.schedule.desc")}
-      </p>
       {content}
     </div>
   );
