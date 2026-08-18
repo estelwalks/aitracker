@@ -4,16 +4,22 @@
 // frozen tool-registry baseline prices.
 // Run: npm run verify:pricing-rules
 import { tsImport } from "tsx/esm/api";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
+// Windows: tsImport/ESM loaders reject bare drive-letter paths ("d:...");
+// import specifiers must be file:// URLs.
 const imp = (rel) =>
-  tsImport(join(root, `src/lib/pricing/${rel}`), import.meta.url);
-const impRoot = (rel) => tsImport(join(root, rel), import.meta.url);
+  tsImport(
+    pathToFileURL(join(root, `src/lib/pricing/${rel}`)).href,
+    import.meta.url,
+  );
+const impRoot = (rel) =>
+  tsImport(pathToFileURL(join(root, rel)).href, import.meta.url);
 
 const { PRICING_PACKS, PRICING_REGISTRY_VERSION } = await imp(
   "pricing-definitions.generated.ts",
@@ -27,7 +33,9 @@ const registry = compilePricingRegistry(
 );
 
 console.log("pricing-rules verify");
-console.log("─────────────────────────────────────────");
+console.log(
+  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+);
 console.log(`packs:              ${PRICING_PACKS.length}`);
 console.log(`  conversion rules: ${registry.rules.length}`);
 console.log(`  rates:            ${registry.rates.size}`);

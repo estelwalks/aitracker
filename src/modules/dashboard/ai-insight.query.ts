@@ -9,7 +9,7 @@ import type { DashboardAIInsightView } from "./contracts.ts";
  * code path that can make a provider request.
  */
 export const refreshDashboardAIInsight = createServerFn({ method: "POST" })
-  .inputValidator((value: Locale) => value)
+  .validator((value: Locale) => value)
   .handler(async ({ data }): Promise<DashboardAIInsightView> => {
     const [{ loadDashboardReadModel }, insight] = await Promise.all([
       import("./api.server.ts"),

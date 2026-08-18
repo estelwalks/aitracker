@@ -4,7 +4,9 @@
   "id": "hermes",
   "display": {
     "name": "Hermes Agent",
-    "nameZh": "Hermes Agent"
+    "nameZh": "Hermes Agent",
+    "icon": "other",
+    "color": "#a78bfa"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".hermes"
       }
@@ -28,7 +35,10 @@
           "path": ".hermes/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },

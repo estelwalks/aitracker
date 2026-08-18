@@ -4,7 +4,9 @@
   "id": "zcode",
   "display": {
     "name": "ZCode",
-    "nameZh": "ZCode"
+    "nameZh": "ZCode",
+    "icon": "other",
+    "color": "#10b981"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".zcode"
       }

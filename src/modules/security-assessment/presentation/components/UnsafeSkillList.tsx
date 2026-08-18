@@ -55,7 +55,7 @@ export function UnsafeSkillList({
                   <th>{t("security.center.result.skill")}</th>
                   <th>{t("security.center.result.verdict")}</th>
                   <th>{t("security.center.result.hitDimensions")}</th>
-                  <th className="text-right">
+                  <th style={{ textAlign: "right" }}>
                     {t("security.center.unsafe.report")}
                   </th>
                 </tr>

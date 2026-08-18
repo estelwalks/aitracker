@@ -12,12 +12,12 @@ import {
 } from "../../../components/ui/dialog";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import { getBrowserSecurityClient } from "../../security-assessment/query/browser-client";
-import { getDesktopSecurityClient } from "../../security-assessment/query/desktop-client";
-import type {
-  SecurityHistoryView,
-  SecurityVerdict,
-} from "../../security-assessment/presentation/security-view";
+import {
+  getBrowserSecurityClient,
+  getDesktopSecurityClient,
+  type SecurityHistoryView,
+  type SecurityVerdict,
+} from "../../security-assessment/index";
 
 /** Verdict → label key + tone, matching the card KPI / security page source. */
 function verdictDisplay(verdict: SecurityVerdict): {

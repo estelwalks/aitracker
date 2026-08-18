@@ -89,12 +89,19 @@ test("首页展示真实数据", async ({ page }) => {
     page.getByRole("heading", { name: "今日洞察", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Token 消耗").first()).toBeVisible();
-  await expect(page.getByText(/已观测 [\d,]+ 条事件/).first()).toBeVisible();
+  // 第一个指标卡（Token 消耗）副文案：真实成本金额 · 较前 N 天
+  // （价格目录未知时回退为「已观测 N 条事件」）
+  await expect(
+    page.getByText(/(¥[\d.,]+|已观测 [\d,]+ 条事件)/).first(),
+  ).toBeVisible();
   await expect(
     page.getByText(/概览\s*[\d.]+[KMB]? tokens/).first(),
   ).toBeVisible();
+  // 费用估算卡副文案：日均 / 预计本月投影（价格未知时回退为「部分模型价格未知…」）
   await expect(
-    page.getByText("按本地价格目录估算", { exact: true }),
+    page
+      .getByText(/(日均 .*预计本月|部分模型价格未知，金额为已知下限)/)
+      .first(),
   ).toBeVisible();
   // 「本地采集状态」已不在新首页（旧 UI 的采集状态卡片已移除）
   await expect(page.getByText("本地采集状态", { exact: true })).toHaveCount(0);
@@ -125,9 +132,10 @@ test("Skill Hub 展示真实本地 Skill 数量", async ({ page }) => {
 
 test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({ page }) => {
   test.setTimeout(120_000);
-  // Skill 资产管理迁移到 /skills（local tab）；选择按钮是带 aria-label
-  // 「选择 <name>」的 button（非原生 checkbox），全选按钮文案为「共 N 个 Skill」。
-  // /skills 的 loader 并发拉取 workspace/dashboard/market，本机高负载下
+  // Skill 资产管理在 /skills（拆分后仅本地工作区，市场在独立 /market）；
+  // 选择按钮是带 aria-label「选择 <name>」的 button（非原生 checkbox），
+  // 全选按钮文案为「共 N 个 Skill」。
+  // /skills 的 loader 并发拉取 workspace/dashboard/distillation，本机高负载下
   // 首屏可能超过默认 30s，故显式放宽 goto 与整体超时。
   await page.goto("/skills", { timeout: 90_000 });
   await page.waitForURL(/locale=/, { timeout: 30_000 });
@@ -167,8 +175,8 @@ test("Skill 当前筛选结果支持多选和全选但不执行清理", async ({
 });
 
 test("市场搜索 draw.io 后展示真实结果", async ({ page }) => {
-  // 独立市场路由已删除，市场入口在 /skills 的 market tab（卡片网格）
-  await page.goto("/skills?tab=market");
+  // V3.0 拆分后市场为独立 /market 路由（安全市场，列表样式）
+  await page.goto("/market");
   // 等待 React 水合完成：URL 出现 locale 参数即 search-param 同步已接管；
   // 搜索框由 SSR 先渲染，若在 onChange 挂载前 fill，React 不会收到 input
   // 事件，搜索不会触发（水合竞态）。

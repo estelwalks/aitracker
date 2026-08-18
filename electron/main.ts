@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, renameSync } from "node:fs";
-import { readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -335,6 +335,120 @@ function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
   );
 }
 
+/**
+ * Sync the latest desktop security scan into the web-side monitoring store
+ * (`~/.trusttools/tasks/monitoring.v1.json`). The dashboard reads that file
+ * to render the "security posture" card; without this, packaged builds always
+ * show "unknown / not scanned" even after manual or automatic scans.
+ */
+async function syncMonitoringSecuritySummary(): Promise<void> {
+  try {
+    const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
+    const dataDir = join(homeDir, APP_DATA_DIR);
+    const historyRaw = await readFile(
+      join(dataDir, "security-scan-history.json"),
+      "utf8",
+    ).catch(() => null);
+    if (historyRaw == null) return;
+    const history = JSON.parse(historyRaw) as {
+      entries?: SecurityScanHistoryEntry[];
+    };
+    const entries = history.entries ?? [];
+    const last = entries[entries.length - 1];
+    if (last == null) return;
+    const scanEntries = entries.filter((entry) => entry.scanId === last.scanId);
+    const counts = { clean: 0, suspicious: 0, dangerous: 0, unknown: 0 };
+    let assessed = 0;
+    let failed = 0;
+    for (const entry of scanEntries) {
+      if (
+        entry.status === "failed" ||
+        entry.status === "skipped" ||
+        entry.status === "cancelled"
+      ) {
+        failed += 1;
+        continue;
+      }
+      assessed += 1;
+      const verdict = entry.report?.verdict ?? "unknown";
+      if (verdict === "allow") counts.clean += 1;
+      else if (verdict === "warn") counts.suspicious += 1;
+      else if (verdict === "block") counts.dangerous += 1;
+      else counts.unknown += 1;
+    }
+    const nowIso = new Date().toISOString();
+    const summary = {
+      assessedAt: last.finishedAt,
+      discoveredAssetCount: scanEntries.length,
+      assessedAssetCount: assessed,
+      failedAssetCount: failed,
+      cleanCount: counts.clean,
+      suspiciousCount: counts.suspicious,
+      dangerousCount: counts.dangerous,
+      unknownCount: counts.unknown,
+    };
+
+    const monitorPath = join(dataDir, "tasks", "monitoring.v1.json");
+    const existingRaw = await readFile(monitorPath, "utf8").catch(() => null);
+    // The web store wraps values as { schemaVersion, data } (NodeAtomicJsonStore).
+    const existingDoc = existingRaw ? JSON.parse(existingRaw) : null;
+    const existing =
+      existingDoc &&
+      typeof existingDoc === "object" &&
+      "data" in existingDoc &&
+      existingDoc.data != null
+        ? (existingDoc.data as Record<string, unknown>)
+        : existingDoc && typeof existingDoc === "object"
+          ? (existingDoc as Record<string, unknown>)
+          : null;
+    const status: Record<string, unknown> = existing ?? {
+      module: "monitoring",
+      running: false,
+      pendingCount: 0,
+      collectors: [{ id: "security", state: "healthy", pending: false }],
+    };
+    status.security = summary;
+    status.heartbeatAt = nowIso;
+    const collectors = status.collectors as
+      | {
+          id: string;
+          state: string;
+          pending: boolean;
+          lastSucceededAt?: string;
+        }[]
+      | undefined;
+    if (Array.isArray(collectors)) {
+      const security = collectors.find(
+        (collector) => collector.id === "security",
+      );
+      if (security) {
+        security.state = "healthy";
+        security.pending = false;
+        security.lastSucceededAt = nowIso;
+      } else {
+        collectors.push({
+          id: "security",
+          state: "healthy",
+          pending: false,
+          lastSucceededAt: nowIso,
+        });
+      }
+    }
+    await mkdir(join(dataDir, "tasks"), { recursive: true });
+    const tmpPath = `${monitorPath}.tmp`;
+    const document =
+      existingDoc &&
+      typeof existingDoc === "object" &&
+      "schemaVersion" in existingDoc
+        ? { schemaVersion: 1, data: status }
+        : status;
+    await writeFile(tmpPath, JSON.stringify(document, null, 2), "utf8");
+    await rename(tmpPath, monitorPath);
+  } catch (error) {
+    console.warn("Failed to sync security monitoring summary", error);
+  }
+}
+
 async function runAutomaticSecurityScan(
   schedule?: SecurityScanSchedule,
 ): Promise<void> {
@@ -350,6 +464,9 @@ async function runAutomaticSecurityScan(
     // automatic pass. The next run retries through the same safe service.
     return;
   }
+  void waitForAutomaticScanSettled(scanner, state.scanId).then(() => {
+    void syncMonitoringSecuritySummary();
+  });
   if (schedule?.notify !== true) return;
   await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
 }
@@ -591,7 +708,14 @@ function registerIpcHandlers(): void {
     async (event, request: unknown) => {
       assertTrustedSender(event);
       if (!securityScanner) throw new Error("Security scanner is unavailable");
-      return securityScanner.start(request);
+      const state = await securityScanner.start(request);
+      // Keep the dashboard posture card in sync once the scan settles.
+      void waitForAutomaticScanSettled(securityScanner, state.scanId).then(
+        () => {
+          void syncMonitoringSecuritySummary();
+        },
+      );
+      return state;
     },
   );
   ipcMain.handle(desktopIpc.getSecurityScanStatus, (event) => {
@@ -715,7 +839,10 @@ async function createMainWindow(): Promise<void> {
     height: 940,
     minWidth: 1100,
     minHeight: 720,
-    show: false,
+    // 立即显示窗口（深色底避免白屏闪烁）：首次完整扫描可能耗时较久，
+    // 等待 ready-to-show 会让用户以为应用没有启动。
+    show: true,
+    backgroundColor: "#0b0b10",
     title: APP_NAME,
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
@@ -972,9 +1099,12 @@ if (!hasSingleInstanceLock) {
     }
 
     allowedOrigin = await resolveApplicationOrigin();
-    await prewarmLocalData(allowedOrigin);
     registerIpcHandlers();
     rebuildTray();
+    // 先创建主窗口（立即反馈启动），本地数据预热改为并行执行——
+    // 首次完整用量扫描可能耗时数十秒甚至数分钟，不应阻塞窗口出现。
+    // 扫描器对并发请求去重，预热与窗口首屏共享同一次扫描。
+    void prewarmLocalData(allowedOrigin);
     await createMainWindow();
     await scheduleAutomaticSecurityScan();
   });

@@ -30,6 +30,8 @@ export interface UsageCollectionRequest {
     readonly lookbackDays?: number;
     readonly cacheDirectory?: string;
     readonly disablePersistentCache?: boolean;
+    /** P3-T3-04: shared WSL topology injected by the refresh path. */
+    readonly wslTopology?: import("../../lib/wsl-topology-types.ts").WslTopologyInput;
   };
 }
 
@@ -72,4 +74,31 @@ export interface TrackerReadModel {
 export interface SnapshotRepository {
   load(): Promise<UsageSnapshotDto | undefined>;
   save(snapshot: UsageSnapshotDto): Promise<void>;
+}
+
+/** Browser-safe view of the unified Usage snapshot runtime (P2). */
+export interface UsageSnapshotReadView {
+  readonly data: UsageSnapshotDto | null;
+  readonly status: "empty" | "fresh" | "stale" | "refreshing" | "failed";
+  readonly revision: string | null;
+  readonly generatedAt: string | null;
+  readonly ageMs: number | null;
+  readonly lastSuccessAt: string | null;
+  readonly lastAttemptAt: string | null;
+  readonly warningCodes: readonly string[];
+  readonly staleReadable: boolean;
+}
+
+/** Framework-neutral facade of the Usage snapshot coordinator (P2). */
+export interface UsageSnapshotRuntime {
+  ensureHydrated(): Promise<void>;
+  readLatest(): UsageSnapshotReadView;
+  refreshNow(signal?: AbortSignal): Promise<UsageSnapshotReadView>;
+  requestRefresh(request: {
+    reason: "startup" | "schedule" | "manual" | "event" | "empty";
+    signal?: AbortSignal;
+  }): Promise<void>;
+  invalidate(): Promise<void>;
+  clear(): Promise<void>;
+  readonly refreshing: boolean;
 }

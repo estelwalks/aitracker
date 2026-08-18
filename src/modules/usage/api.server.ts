@@ -7,18 +7,21 @@ export type UsageApiResponse = UsageModuleContract;
  * Load the Token burn leaderboard read model. Runs server-side so the full
  * event set is aggregated into compact, ranked boards before anything reaches
  * the renderer — no raw event arrays cross this boundary.
+ *
+ * T7-08: reads the unified Usage snapshot (O(1), never scans on the query
+ * path); an absent snapshot degrades to the empty read model.
  */
 export async function loadTrackerReadModel(): Promise<TrackerReadModel> {
-  const { getLocalUsageSnapshot } =
-    await import("../../lib/local-usage/get-local-usage.ts");
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
   const { createEmptyUsageSnapshot } =
     await import("../../lib/local-usage/presentation.ts");
   const { buildBoard, trackerTotalsFromEvents } =
     await import("./application/tracker.ts");
-  const snapshot = await getLocalUsageSnapshot().then(
-    (value) => value,
-    () => createEmptyUsageSnapshot(),
-  );
+  const { usageSnapshot } = await getCompositionRoot();
+  await usageSnapshot.ensureHydrated();
+  const latest = usageSnapshot.readLatest();
+  const snapshot = latest.data ?? createEmptyUsageSnapshot();
   const events: readonly LocalUsageEvent[] = snapshot.details ?? [];
   const boards = {
     skill: buildBoard(events, "skill"),

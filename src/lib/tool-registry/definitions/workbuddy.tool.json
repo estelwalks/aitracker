@@ -4,7 +4,9 @@
   "id": "workbuddy",
   "display": {
     "name": "WorkBuddy",
-    "nameZh": "WorkBuddy"
+    "nameZh": "WorkBuddy",
+    "icon": "other",
+    "color": "#22d3ee"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".workbuddy"
       }
@@ -26,7 +33,12 @@
       "reader": "workbuddy-native",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".workbuddy/projects",
           "glob": "**/*.jsonl",

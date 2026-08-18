@@ -7,6 +7,16 @@ import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
+import {
+  DEFAULT_PERFORMANCE_ROLLOUT_STATE,
+  PERFORMANCE_ROLLOUT_FILE,
+  createPerformanceRolloutRepository,
+  performanceRolloutSchema,
+  type PerformanceRolloutRepository,
+  type PerformanceRolloutState,
+  type PerformanceRolloutStage,
+} from "./performance-rollout.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
 import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
 import { createTaskApi } from "../modules/tasks/application/task-api.ts";
@@ -72,18 +82,16 @@ import type {
   ResumeSessionPort,
   SessionQueryPort,
 } from "../modules/sessions/contracts.ts";
-import {
-  createLegacyResumeSessionPort,
-  createLegacySessionRepository,
-} from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import { createLegacyResumeSessionPort } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
 import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
-import {
-  createUsageApplication,
-  type UsageApplication,
-  type UsageSnapshotDto,
-} from "../modules/usage/index.ts";
-import { createNullableAtomicSnapshotRepository } from "../modules/usage/infrastructure/atomic-snapshot-repository.ts";
+import type { UsageSnapshotDto } from "../modules/usage/contracts.ts";
 import { createLegacyUsageCollector } from "../modules/usage/infrastructure/legacy-usage-collector.server.ts";
+import {
+  createUsageEnvelopeRepository,
+  usageEnvelopeSchema,
+} from "../modules/usage/infrastructure/usage-envelope.server.ts";
+import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
+import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
 import { scanLocalSkills } from "../lib/local-skills/scanner.server.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
 import { createMonitoringRuntime } from "../modules/monitoring/application/index.ts";
@@ -178,10 +186,29 @@ export interface CompositionRoot {
    * launches only a registry-owned tokenized command without a shell.
    */
   readonly resumeSession: ResumeSessionPort;
-  /** Local-only usage application used by the collector scheduler. */
-  readonly usage: UsageApplication;
+  /**
+   * Local-only usage application used by the collector scheduler.
+   */
+  /** Unified Usage snapshot runtime (P2); pages + the usage.refresh task read
+   * and refresh this coordinator. */
+  readonly usageSnapshot: UsageSnapshotRuntime;
+  /** Session snapshot runtime (P3-T3-01); Reports/Sessions read this. */
+  readonly sessionSnapshot: import("../modules/sessions/infrastructure/session-snapshot-runtime.server.ts").SessionSnapshotRuntime;
+  /** Skill snapshot runtime (P3-T3-02); Skills/Sources read this. */
+  readonly skillSnapshot: import("../modules/skill-catalog/infrastructure/skill-snapshot-runtime.server.ts").SkillSnapshotRuntime;
+  /** Installation snapshot runtime (P3-T3-03); Sources/Usage share facts. */
+  readonly installationSnapshot: import("../platform/discovery/installation-snapshot-runtime.server.ts").InstallationSnapshotRuntime;
+  /** WSL topology snapshot runtime (P3-T3-04); scanners read this once. */
+  readonly wslSnapshot: import("../platform/discovery/wsl-snapshot-runtime.server.ts").WslSnapshotRuntime;
+  /** Project classification service (P3-T3-06); queries read the index. */
+  readonly classificationService: import("../modules/dashboard/classification-service.server.ts").ClassificationService;
   /** Renderer-safe heartbeat for the desktop background listener. */
   readonly monitoring: MonitoringRuntime;
+  /**
+   * Local performance-rollout state (P0-T0-08). Persists the monotonic stage
+   * and the emergency kill switch under `~/.trusttools/tasks/performance-rollout.v1.json`.
+   */
+  readonly performanceRollout: PerformanceRolloutRepository;
   /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -232,10 +259,28 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
   const runs = createTaskRunRepository({ store: runsStore, clock });
 
-  // Usage snapshots are a sanitized feature DTO: legacy adapters remove
-  // paths, command arguments and raw diagnostic locations before this store
-  // is written. Keep the parser deliberately narrow at the persistence seam;
-  // the collector remains the owner of the full structural contract.
+  // Performance-rollout local state (P0-T0-08). A corrupt file safely falls
+  // back to legacy defaults; the repository is read-only in query paths.
+  const performanceRolloutStore = new NodeAtomicJsonStore({
+    filePath: join(tasksDir, PERFORMANCE_ROLLOUT_FILE),
+    defaultValue: DEFAULT_PERFORMANCE_ROLLOUT_STATE,
+    schema: {
+      currentVersion: 1,
+      parse(value: unknown): PerformanceRolloutState {
+        return performanceRolloutSchema.parse(value);
+      },
+    },
+    clock,
+  });
+  const performanceRollout = createPerformanceRolloutRepository({
+    store: performanceRolloutStore,
+    clock,
+  });
+
+  // Legacy usage snapshot store. Read-only compatibility source: never
+  // written by the new pipeline (the copy-forward adapter in
+  // `createUsageEnvelopeRepository` reads it only when the envelope file is
+  // missing), so older app versions keep reading it unchanged (T7-05/08).
   const usageSnapshotStore = new NodeAtomicJsonStore<UsageSnapshotDto | null>({
     filePath: join(tasksDir, "usage-snapshot.v1.json"),
     defaultValue: null,
@@ -254,12 +299,230 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     },
     clock,
   });
-  const usageSnapshotRepository =
-    createNullableAtomicSnapshotRepository(usageSnapshotStore);
-  const usage = createUsageApplication({
-    collector: createLegacyUsageCollector(),
-    repository: usageSnapshotRepository,
-    clock: { now: () => clock.now().getTime() },
+
+  // P2-T2-05/06: unified snapshot runtime for Usage. New snapshots live in the
+  // sibling `usage-snapshot-envelope.v1.json`; the legacy `usage-snapshot.v1.json`
+  // is never overwritten and serves as the copy-forward fallback.
+  const usageEnvelopeStore = new NodeAtomicJsonStore<
+    import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<UsageSnapshotDto>
+  >({
+    filePath: join(tasksDir, "usage-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: usageEnvelopeSchema,
+    clock,
+  });
+
+  // P3-T3-06: project classification index. Dashboard queries resolve from
+  // this persisted index (O(1)); the Usage refresh collector feeds observed
+  // refs through the incremental classifier in the background.
+  const {
+    createClassificationIndexRepository,
+    DEFAULT_CLASSIFICATION_INDEX,
+    classificationIndexSchema,
+  } = await import("../modules/dashboard/classification-index.server.ts");
+  const { createIncrementalClassifier } =
+    await import("../modules/dashboard/incremental-classifier.server.ts");
+  const { createClassificationService } =
+    await import("../modules/dashboard/classification-service.server.ts");
+  const classificationIndexStore = new NodeAtomicJsonStore<
+    import("../modules/dashboard/classification-index.server.ts").ClassificationIndex
+  >({
+    filePath: join(tasksDir, "project-classification-index.v1.json"),
+    defaultValue: DEFAULT_CLASSIFICATION_INDEX,
+    schema: classificationIndexSchema,
+    clock,
+  });
+  const classificationRepository = createClassificationIndexRepository(
+    classificationIndexStore,
+  );
+  const classificationService = createClassificationService({
+    repository: classificationRepository,
+    classifier: createIncrementalClassifier({
+      repository: classificationRepository,
+      homeDirectory: dataRoot,
+    }),
+  });
+
+  const usageSnapshot = createUsageSnapshotRuntime({
+    repository: createUsageEnvelopeRepository({
+      envelopeStore: usageEnvelopeStore,
+      legacyStore: usageSnapshotStore,
+    }),
+    now: () => clock.now().getTime(),
+    // T3-06: after each Usage refresh, feed observed project refs to the
+    // incremental classifier so the index stays fresh without blocking the
+    // query path.
+    collect: async (request) => {
+      const collector = createLegacyUsageCollector();
+      // P3-T3-04: share one WSL topology with the scanner instead of letting
+      // each provider probe separately. The topology is enumerated once here
+      // (with cancellation) and injected into the scan.
+      const { enumerateWslTopology } =
+        await import("../platform/discovery/wsl-topology.server.ts");
+      const wslTopology = await enumerateWslTopology({
+        signal: request.signal,
+      });
+      const result = await collector.collect({
+        signal: request.signal,
+        budget: {
+          maxDurationMs: RUNTIME_POLICY.snapshotPolicies.usage.timeoutMs,
+        },
+        scannerOptions: {
+          wslTopology: {
+            distros: wslTopology.distros,
+            enumeratedAt: wslTopology.enumeratedAt,
+            failed: wslTopology.failed,
+          },
+        },
+      });
+      const refs = result.snapshot.details.map((event) => event.project);
+      if (refs.length > 0) {
+        await classificationService.classifyIncrementally(refs).catch(() => {});
+      }
+      return {
+        data: result.snapshot,
+        sourceFingerprint: result.snapshot.generatedAt,
+        scannedItems: result.snapshot.events,
+      };
+    },
+  });
+
+  // P3-T3-01/02/03: domain snapshots for Sessions, Skills and Installations.
+  // Each has its own sibling file; pages read the coordinator (O(1)) instead
+  // of re-scanning. The shared envelope repository handles corrupt fallback
+  // and last-known-good.
+  const { createSnapshotEnvelopeRepository } =
+    await import("../platform/snapshot-runtime/envelope-repository.ts");
+  const { createSessionSnapshotRuntime } =
+    await import("../modules/sessions/infrastructure/session-snapshot-runtime.server.ts");
+  const { createSkillSnapshotRuntime } =
+    await import("../modules/skill-catalog/infrastructure/skill-snapshot-runtime.server.ts");
+  const { createInstallationSnapshotRuntime } =
+    await import("../platform/discovery/installation-snapshot-runtime.server.ts");
+  type Envelope<T> =
+    import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<T>;
+
+  const emptySessionEnvelope: Envelope<
+    import("../modules/sessions/infrastructure/session-snapshot.contracts.ts").SessionSnapshotData
+  > = {
+    schemaVersion: 1,
+    revision: "empty",
+    generatedAt: null,
+    sourceFingerprint: null,
+    status: "empty",
+    data: null,
+    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+  };
+  const sessionSnapshotStore = new NodeAtomicJsonStore<
+    Envelope<
+      import("../modules/sessions/infrastructure/session-snapshot.contracts.ts").SessionSnapshotData
+    >
+  >({
+    filePath: join(tasksDir, "session-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: { currentVersion: 1, parse: (value) => value as never },
+    clock,
+  });
+  const sessionSnapshot = createSessionSnapshotRuntime({
+    repository: createSnapshotEnvelopeRepository({
+      store: sessionSnapshotStore,
+      emptyEnvelope: emptySessionEnvelope,
+      schema: { currentVersion: 1, parse: (value) => value as never },
+    }),
+    now: () => clock.now().getTime(),
+  });
+
+  const emptySkillEnvelope: Envelope<
+    import("../modules/skill-catalog/infrastructure/skill-snapshot.contracts.ts").SkillSnapshotData
+  > = {
+    schemaVersion: 1,
+    revision: "empty",
+    generatedAt: null,
+    sourceFingerprint: null,
+    status: "empty",
+    data: null,
+    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+  };
+  const skillSnapshotStore = new NodeAtomicJsonStore<
+    Envelope<
+      import("../modules/skill-catalog/infrastructure/skill-snapshot.contracts.ts").SkillSnapshotData
+    >
+  >({
+    filePath: join(tasksDir, "skill-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: { currentVersion: 1, parse: (value) => value as never },
+    clock,
+  });
+  const skillSnapshot = createSkillSnapshotRuntime({
+    repository: createSnapshotEnvelopeRepository({
+      store: skillSnapshotStore,
+      emptyEnvelope: emptySkillEnvelope,
+      schema: { currentVersion: 1, parse: (value) => value as never },
+    }),
+    now: () => clock.now().getTime(),
+  });
+
+  const emptyInstallationEnvelope: Envelope<
+    import("../platform/discovery/installation-snapshot.contracts.ts").InstallationSnapshotData
+  > = {
+    schemaVersion: 1,
+    revision: "empty",
+    generatedAt: null,
+    sourceFingerprint: null,
+    status: "empty",
+    data: null,
+    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+  };
+  const installationSnapshotStore = new NodeAtomicJsonStore<
+    Envelope<
+      import("../platform/discovery/installation-snapshot.contracts.ts").InstallationSnapshotData
+    >
+  >({
+    filePath: join(tasksDir, "installation-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: { currentVersion: 1, parse: (value) => value as never },
+    clock,
+  });
+  const installationSnapshot = createInstallationSnapshotRuntime({
+    repository: createSnapshotEnvelopeRepository({
+      store: installationSnapshotStore,
+      emptyEnvelope: emptyInstallationEnvelope,
+      schema: { currentVersion: 1, parse: (value) => value as never },
+    }),
+    now: () => clock.now().getTime(),
+  });
+
+  // P3-T3-04: WSL topology snapshot. Enumerates distro/home once per refresh
+  // and persists it; usage/session scanners read this coordinator instead of
+  // invoking `wsl.exe` on every scan.
+  const { createWslSnapshotRuntime } =
+    await import("../platform/discovery/wsl-snapshot-runtime.server.ts");
+  const emptyWslEnvelope: Envelope<
+    import("../platform/discovery/wsl-topology.server.ts").WslTopology
+  > = {
+    schemaVersion: 1,
+    revision: "empty",
+    generatedAt: null,
+    sourceFingerprint: null,
+    status: "empty",
+    data: null,
+    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
+  };
+  const wslSnapshotStore = new NodeAtomicJsonStore<
+    Envelope<import("../platform/discovery/wsl-topology.server.ts").WslTopology>
+  >({
+    filePath: join(tasksDir, "wsl-topology-snapshot-envelope.v1.json"),
+    defaultValue: null as never,
+    schema: { currentVersion: 1, parse: (value) => value as never },
+    clock,
+  });
+  const wslSnapshot = createWslSnapshotRuntime({
+    repository: createSnapshotEnvelopeRepository({
+      store: wslSnapshotStore,
+      emptyEnvelope: emptyWslEnvelope,
+      schema: { currentVersion: 1, parse: (value) => value as never },
+    }),
+    now: () => clock.now().getTime(),
   });
 
   const monitoringStore = new NodeAtomicJsonStore<
@@ -353,7 +616,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     clock,
     hash: createSha256HashPort(),
   });
-  const sessions = createSessionQueryService(createLegacySessionRepository());
+  // P3-T3-01 (fix): the sessions page and distillation read the SessionSnapshot
+  // index (O(1)) instead of re-scanning local session logs on every query; the
+  // legacy scanner remains only as the snapshot collector adapter.
+  const { createSnapshotSessionRepository } =
+    await import("../modules/sessions/infrastructure/snapshot-session-repository.ts");
+  const sessions = createSessionQueryService(
+    createSnapshotSessionRepository(sessionSnapshot),
+  );
   const resumeSession = createLegacyResumeSessionPort(
     createNodeResumeExecutor(),
   );
@@ -411,38 +681,62 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   // Refresh adapters deliberately invoke feature ports rather than exposing a
-  // scanner or filesystem path to the task module. Their output is discarded:
-  // each feature keeps its own read cache/privacy projection, while the
-  // monitoring runtime records only success/failure heartbeats.
+  // scanner or filesystem path to the task module. P3-T3-08/09: sessions and
+  // skills executors refresh through their snapshot coordinators so the task
+  // runtime is the single refresh entry and pages only read snapshots.
+  //
+  // T2-07 (fix): the usage.refresh executor refreshes the unified Usage
+  // snapshot coordinator — the same object pages read — so a scheduled
+  // refresh commits to `usage-snapshot-envelope.v1.json` and the legacy
+  // `usage-snapshot.v1.json` stays untouched as a read-only downgrade source.
   const executorRegistry = createExecutorRegistry({
-    usage,
+    usage: {
+      async refresh({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        await usageSnapshot.refreshNow(signal);
+      },
+    },
     sessions: {
       async refresh({ signal }) {
-        const result = await sessions.query({ pageSize: 1, signal });
-        if (!result.ok) throw new Error(result.error.code);
+        await sessionSnapshot.refreshNow(signal);
       },
     },
     skills: {
       async refresh({ signal }) {
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
-        const current = await usage.getUsageSnapshot({
-          maxAgeMs: Number.MAX_SAFE_INTEGER,
-        });
-        if (!current.ok) throw new Error(current.error.code);
-        await scanLocalSkills({
-          usageEvents: current.value.snapshot?.details ?? [],
-        });
+        await skillSnapshot.refreshNow(signal);
+      },
+    },
+    // P3-T3-09: exchange refresh uses the network-allowed policy task; the
+    // repository keeps last-known-good on failure (never throws).
+    exchange: {
+      async refresh({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        const { createExchangeRateRepository } =
+          await import("../platform/snapshot-runtime/exchange-rate.server.ts");
+        const repository = createExchangeRateRepository();
+        const result = await repository.refresh();
+        if (result.source === "fallback") {
+          throw new Error("errors.pricing.rateUnavailable");
+        }
       },
     },
     reports,
     monitoring,
   });
 
+  // P5-T5-06: the scheduler's heavy collectors share the global resource
+  // budget (maxHeavyCollectors = 1 from the runtime policy).
+  const { createResourceBudget } =
+    await import("../platform/runtime/resource-budget.ts");
+  const resourceBudget = createResourceBudget();
+
   const scheduler = createTaskScheduler({
     preferences,
     runs,
     clock,
     executors: executorRegistry.executors,
+    resourceBudget,
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });
@@ -460,8 +754,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     knowledge,
     sessions,
     resumeSession,
-    usage,
+    usageSnapshot,
+    sessionSnapshot,
+    skillSnapshot,
+    installationSnapshot,
+    wslSnapshot,
+    classificationService,
     monitoring,
+    performanceRollout,
     dataRoot,
   };
 }

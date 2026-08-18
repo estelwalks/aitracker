@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getBrowserSecurityClient } from "../../security-assessment/query/browser-client";
 import {
+  getBrowserSecurityClient,
   getDesktopSecurityClient,
   type SecurityClient,
-} from "../../security-assessment/query/desktop-client";
+} from "../../security-assessment/index";
 
 export type SecurityConnectionStatus =
   "connecting" | "available" | "unavailable";

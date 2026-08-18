@@ -78,6 +78,8 @@ export const sources = {
     failed: "마이그레이션 실패",
   },
   toast: {
+    rescanStarted:
+      "백그라운드 재검사를 시작했습니다. 완료되면 자동으로 갱신됩니다",
     rescanDone: "다시 검사가 완료되었습니다",
   },
 } as const;

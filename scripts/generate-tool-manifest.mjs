@@ -6,20 +6,18 @@
 // Run: npm run generate:manifest   (also runs in prebuild and verify:tool-registry)
 import { tsImport } from "tsx/esm/api";
 import { writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
+// Windows: tsImport/ESM loaders reject bare drive-letter paths ("d:...");
+// import specifiers must be file:// URLs.
+const imp = (relativePath) =>
+  tsImport(pathToFileURL(join(root, relativePath)).href, import.meta.url);
 
-const registryMod = await tsImport(
-  join(root, "src/lib/tool-registry/registry.ts"),
-  import.meta.url,
-);
-const manifestMod = await tsImport(
-  join(root, "src/lib/tool-registry/manifest.ts"),
-  import.meta.url,
-);
+const registryMod = await imp("src/lib/tool-registry/registry.ts");
+const manifestMod = await imp("src/lib/tool-registry/manifest.ts");
 
 const { getDefaultRegistry } = registryMod;
 const { generatePublicManifest, manifestIsSafe } = manifestMod;
@@ -33,10 +31,7 @@ if (registry.diagnostics.length > 0) {
   process.exit(1);
 }
 
-const { loadBuiltinDefinitions } = await tsImport(
-  join(root, "src/lib/tool-registry/loader.ts"),
-  import.meta.url,
-);
+const { loadBuiltinDefinitions } = await imp("src/lib/tool-registry/loader.ts");
 const builtin = loadBuiltinDefinitions();
 const manifest = generatePublicManifest(
   registry.definitions,

@@ -10,6 +10,7 @@ import type {
 import type {
   CandidateOutput,
   DistillationApplication,
+  DistillationAssetCounts,
   DistillationErrorCode,
   DistillationPorts,
   DistillationRequest,
@@ -362,6 +363,19 @@ export function createDistillationApplication(
       if (!ports.knowledge) return null;
       const result = await ports.knowledge.list();
       return isOk(result) ? result.value.length : null;
+    },
+
+    async counts(): Promise<DistillationAssetCounts> {
+      if (!ports.knowledge) return { capability: null, memory: null };
+      const result = await ports.knowledge.list();
+      if (!isOk(result)) return { capability: null, memory: null };
+      let capability = 0;
+      let memory = 0;
+      for (const asset of result.value) {
+        if (asset.kind === "memory") memory += 1;
+        else capability += 1;
+      }
+      return { capability, memory };
     },
   };
 }

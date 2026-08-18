@@ -4,7 +4,9 @@
   "id": "claude-code",
   "display": {
     "name": "Claude Code",
-    "nameZh": "Claude Code"
+    "nameZh": "Claude Code",
+    "icon": "claude",
+    "color": "#d97757"
   },
   "platforms": {
     "macos": "supported",
@@ -14,18 +16,27 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".claude"
       },
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Claude"
       }
     ],
     "executable": {
-      "shared": ["claude"]
+      "shared": [
+        "claude"
+      ]
     }
   },
   "storage": {
@@ -36,7 +47,10 @@
           "path": ".claude/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -46,7 +60,12 @@
       "reader": "claude-rollout-v1",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".claude/projects",
           "glob": "**/*.jsonl",
@@ -57,14 +76,24 @@
     "context": {
       "mode": "native",
       "reader": "claude-context-v1",
-      "dimensions": ["tools", "skills", "commands", "mcp", "toolOutputs"]
+      "dimensions": [
+        "tools",
+        "skills",
+        "commands",
+        "mcp",
+        "toolOutputs"
+      ]
     },
     "skills": "read-write",
     "agents": "unsupported",
     "sessions": {
       "mode": "resume",
       "reader": "claude-session-v1",
-      "command": ["claude", "--resume", "{sessionId}"]
+      "command": [
+        "claude",
+        "--resume",
+        "{sessionId}"
+      ]
     },
     "market": "install-target",
     "security": "unsupported"

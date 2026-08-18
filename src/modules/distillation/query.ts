@@ -153,7 +153,7 @@ export function validateStartDistillationInput(
 
 /** Resolve the distillation read model on the server (route loader). */
 export const getDistillationQuery = createServerFn({ method: "GET" })
-  .inputValidator((value: Locale) => value)
+  .validator((value: Locale) => value)
   .handler(async ({ data }): Promise<DistillationViewModel> => {
     const { loadDistillation } = await import("./api.server.ts");
     return loadDistillation(data);

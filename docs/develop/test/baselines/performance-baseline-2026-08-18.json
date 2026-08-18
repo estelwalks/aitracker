@@ -1,0 +1,64 @@
+{
+  "reportVersion": 1,
+  "generatedAt": "2026-08-18T06:04:13.431Z",
+  "gitSha": "12bacfbcd1c1fea8e0a1a07fa88904709477c3b7",
+  "environment": {
+    "node": "v24.9.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "fixtures": {
+    "empty": {
+      "events": 0,
+      "fixtureBytes": 2,
+      "fixtureHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "dtoBytes": 211,
+      "requestCount": 1,
+      "durationMs": {
+        "p50": 0.03,
+        "p95": 0.51,
+        "p99": 0.51,
+        "runs": 3
+      }
+    },
+    "small": {
+      "events": 120,
+      "fixtureBytes": 31984,
+      "fixtureHash": "d7b703e4664af795719fe47f4da3cd91db6bb0c1f1f15e7e2bf2a6599fe3346e",
+      "dtoBytes": 239,
+      "requestCount": 1,
+      "durationMs": {
+        "p50": 0.62,
+        "p95": 12.42,
+        "p99": 12.42,
+        "runs": 3
+      }
+    },
+    "current-scale": {
+      "events": 6227,
+      "fixtureBytes": 1668868,
+      "fixtureHash": "2da716c3103903f11d4c346fb1fad9779e8d0e0d0c9f555e7f9e69f7795dcc02",
+      "dtoBytes": 251,
+      "requestCount": 1,
+      "durationMs": {
+        "p50": 20.87,
+        "p95": 34.54,
+        "p99": 34.54,
+        "runs": 3
+      }
+    },
+    "10x": {
+      "events": 62270,
+      "fixtureBytes": 16688988,
+      "fixtureHash": "d31322dba41396d32a1f342c736330e645ea7baf015e2116efa8607e6bd7cf0e",
+      "dtoBytes": 259,
+      "requestCount": 1,
+      "durationMs": {
+        "p50": 348.94,
+        "p95": 367.74,
+        "p99": 367.74,
+        "runs": 3
+      }
+    }
+  }
+}

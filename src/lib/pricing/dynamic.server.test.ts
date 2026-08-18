@@ -11,7 +11,7 @@ import { buildPricingSnapshot } from "./dynamic.server.ts";
  * this snapshot only carries exchange rates + the rule-pack version stamp. The
  * frankfurter mock uses the real response shape `{ date, rates: { CNY, JPY, KRW } }`.
  */
-test("loads latest exchange rate and stamps the offline rule-pack version", async () => {
+test("refresh loads latest exchange rate and stamps the offline rule-pack version", async () => {
   const homeDirectory = await mkdtemp(join(tmpdir(), "tt-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
@@ -26,10 +26,12 @@ test("loads latest exchange rate and stamps the offline rule-pack version", asyn
   };
 
   try {
+    // 后台/手动刷新路径显式请求网络（T3-05：页面读取永不联网）。
     const snapshot = await buildPricingSnapshot([], {
       homeDirectory,
       now: new Date("2026-07-28T12:00:00.000Z"),
       fetcher,
+      refreshExchange: true,
     });
     assert.equal(snapshot.exchangeRateSource, "live");
     assert.equal(snapshot.usdToCny, 8);

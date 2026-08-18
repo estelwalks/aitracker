@@ -17,6 +17,9 @@ export type ToolOverviewState =
 const registryNameById = new Map(
   PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool.name]),
 );
+const registryDisplayById = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool]),
+);
 
 /** The aggregate can be mixed only when the source itself has mixed records. */
 export type ToolOverviewMeasurement =
@@ -25,6 +28,10 @@ export type ToolOverviewMeasurement =
 export interface ToolOverviewCard {
   readonly id: string;
   readonly name: string;
+  /** BrandIcon kind key from the registry display config. */
+  readonly icon?: string;
+  /** Brand color from the registry display config. */
+  readonly color?: string;
   readonly detected: boolean;
   readonly available: boolean;
   readonly active: boolean;
@@ -537,6 +544,8 @@ export function buildToolOverview(
       // The generated manifest is a browser-safe projection of `display.name`.
       // It remains the fallback while scanner data is unavailable.
       name: scannedTool?.name ?? registryNameById.get(toolId) ?? toolId,
+      icon: registryDisplayById.get(toolId)?.icon,
+      color: registryDisplayById.get(toolId)?.color,
       available: scannedTool?.available ?? false,
       detected: scannedTool?.detected ?? false,
     };

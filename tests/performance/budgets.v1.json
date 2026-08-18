@@ -1,0 +1,42 @@
+{
+  "budgetsVersion": 1,
+  "scope": "Performance budgets for the page-performance optimization (P0-T0-07). Structural budgets are blocking; latency budgets are layered per environment (T7-03).",
+  "dtoBytes": {
+    "dashboardFirstScreen": 262144,
+    "otherRouteFirstScreen": 157286,
+    "widgetModel": 52429,
+    "widgetStatus": 2048
+  },
+  "clientSyncComputationMs": {
+    "dashboardSingleViewP95": 50,
+    "custom365DayQueryP95": 100
+  },
+  "loaderMs": {
+    "withSnapshotP95": 150,
+    "withSnapshotP99": 500,
+    "noSnapshotReturn": 300,
+    "widgetStatusP95": 50
+  },
+  "requestCounts": {
+    "widgetHidden5Min": 0,
+    "skillsDashboardQuery": 0,
+    "scannerCallsPerPageQuery": 0,
+    "knowledgeListStoreReads": 1,
+    "wslExePerRefresh": 1
+  },
+  "concurrency": {
+    "maxHeavyCollectors": 1,
+    "maxFileOperations": 16,
+    "maxProjectClassifiers": 8
+  },
+  "bundleGzip": {
+    "initialSharedJs": 262144,
+    "singleRouteIncrementalJs": 125829,
+    "css": 41943
+  },
+  "buildBoundary": {
+    "publicServerChunks": 0,
+    "nodeExternalizations": 0,
+    "architectureBlockingFindings": 0
+  }
+}

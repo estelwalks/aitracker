@@ -1,11 +1,20 @@
 export const market = {
   pageHeader: "Skill Market",
   pageHeaderDesc: "Only Skills that passed security scanning are listed",
+  strip: {
+    subtitle:
+      "Only Skills that passed security scanning · one-click install to local agents",
+  },
   meta: {
     description:
       "Browse the real {appName} Skill Market index — only Skills that passed security scanning are included.",
   },
   notProvided: "Not provided",
+  jarvis: {
+    available:
+      "The market currently offers {total} Skills, {official} of which are official releases.",
+    installed: "{count} market Skills installed on this machine.",
+  },
   network: {
     loadFailed: "Network unavailable: failed to load the Skill Market",
     unavailableTitle:
@@ -26,6 +35,9 @@ export const market = {
     totalDownloads: "Total downloads",
     hintCurrentPage: "Current page stats",
     hintLocalInstalled: "Installed on this machine",
+    hintOfficial: "Maintained by the official team",
+    hintDomains: "{count} categories",
+    hintDownloads: "Total downloads {count}",
   },
   search: {
     placeholder: "Search skill name, source path, or capability",
@@ -36,12 +48,16 @@ export const market = {
   sort: {
     hot: "Popular",
     latest: "Latest",
+    rating: "Top rated",
+    tokens: "Token usage",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
     downloads: "Downloads",
   },
   list: {
     title: "Skill list ({count})",
+    count: "{count} Skills total",
+    allSafe: "All passed security scanning",
   },
   table: {
     rank: "Rank",
@@ -84,6 +100,8 @@ export const market = {
   },
   install: {
     button: "Install",
+    expandAll: "Show all {count}",
+    expandMore: "{count} more",
     toSelected: "Install to selected tool",
     target: "Install target",
     notDetected: "Not detected",

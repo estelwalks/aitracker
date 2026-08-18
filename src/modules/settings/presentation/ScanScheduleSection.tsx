@@ -3,12 +3,12 @@ import { CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "../../../lib/i18n/context";
-import type { SecurityClient } from "../../security-assessment/query/desktop-client";
 import type {
+  SecurityClient,
   SecurityScanCycle,
   SecurityScanScheduleView,
   SecurityScanScope,
-} from "../../security-assessment/presentation/security-view";
+} from "../../security-assessment/index";
 import {
   Field,
   SectionHeading,

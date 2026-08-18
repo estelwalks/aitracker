@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { CalendarDays, FileText } from "lucide-react";
 import { toast } from "sonner";
 
+import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { JarvisInsight } from "../../../components/JarvisInsight";
 import {
   Dot,
@@ -25,7 +26,6 @@ import {
 } from "../period.ts";
 import { generateReportNow } from "../server-fns.ts";
 import { ArchiveBand, type ArchiveBlock } from "./ArchiveBand.tsx";
-import { PeriodCalendar } from "./PeriodCalendar.tsx";
 import { QuickNotes } from "./QuickNotes.tsx";
 import { ReportBodyCard } from "./ReportBodyCard.tsx";
 import { ReportSchedule } from "./ReportSchedule.tsx";
@@ -34,6 +34,14 @@ import type {
   ReportQueryViewModel,
   ReportUiStatus,
 } from "./index.ts";
+
+// P6-T6-05: the period calendar only renders when the user expands it, so it
+// is an on-demand chunk with an error fallback.
+const PeriodCalendar = lazy(() =>
+  import("./PeriodCalendar.tsx").then((module) => ({
+    default: module.PeriodCalendar,
+  })),
+);
 
 const TIMELINE_WINDOW = 8;
 const GRANULARITIES: readonly PeriodGranularity[] = ["day", "week", "month"];
@@ -356,13 +364,21 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
         {showCalendar && (
           <div className="relative mt-3 z-10">
-            <PeriodCalendar
-              granularity={granularity}
-              selectedKey={selectedKey}
-              density={feed.density}
-              now={now}
-              onSelect={selectPeriod}
-            />
+            <ChunkErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="h-40 animate-pulse rounded-sm bg-surface" />
+                }
+              >
+                <PeriodCalendar
+                  granularity={granularity}
+                  selectedKey={selectedKey}
+                  density={feed.density}
+                  now={now}
+                  onSelect={selectPeriod}
+                />
+              </Suspense>
+            </ChunkErrorBoundary>
           </div>
         )}
       </section>

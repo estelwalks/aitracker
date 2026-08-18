@@ -10,11 +10,11 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import { createAiExecutor } from "../ai-orchestration/ai-executor.ts";
+import { createAiExecutor } from "../ai-orchestration/index.ts";
 import {
   createProviderRegistry,
   createRegistryRouter,
-} from "../ai-orchestration/provider-registry.ts";
+} from "../ai-orchestration/index.ts";
 import type {
   AIModelProvider,
   AIProviderRequest,
@@ -34,6 +34,11 @@ const DASHBOARD_INSIGHT_PROMPT = {
   template: `You are ${APP_NAME}' local dashboard analyst. Analyze only the supplied aggregate JSON. Do not infer hidden activity, identifiers, paths, prompts, commands, or source content. Return JSON only with this exact shape: {"headline":"...","insights":[{"title":"...","detail":"...","severity":"info|attention|risk"}]}. Provide at most 3 concise, actionable observations. If data quality is incomplete, say so plainly.`,
 } as const;
 
+// Interaction-level cache for the dashboard AI insight card (POST-only
+// refresh path). Not a snapshot freshness/refresh cycle — per the
+// runtime-policy governance rule (§3.4 规则 7) local interaction parameters
+// stay in their module; Usage freshness lives in
+// `runtime-policy.source.json` -> snapshotPolicies.usage.
 const INSIGHT_TTL_MS = 5 * 60 * 1000;
 const INSIGHT_TIMEOUT_MS = 20_000;
 const MAX_LABEL_LENGTH = 80;
@@ -80,7 +85,7 @@ export interface DashboardAIInsightInput {
     readonly running: boolean;
     readonly pendingCount: number;
     readonly collectorHealth: readonly {
-      readonly id: "usage" | "skills" | "sessions" | "security";
+      readonly id: import("../monitoring/contracts.ts").MonitoringCollectorId;
       readonly state: "idle" | "running" | "healthy" | "degraded" | "failed";
     }[];
   };

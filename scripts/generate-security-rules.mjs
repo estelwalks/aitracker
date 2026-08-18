@@ -8,7 +8,7 @@
 // Run: npm run generate:security-rules
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import { tsImport } from "tsx/esm/api";
 
@@ -17,8 +17,10 @@ const root = join(here, "..");
 const jsonPath = join(root, "src/lib/security/security-rules.json");
 const outPath = join(root, "src/lib/security/security-rules.generated.ts");
 
+// Windows: tsImport/ESM loaders reject bare drive-letter paths ("d:...");
+// import specifiers must be file:// URLs.
 const schemaMod = await tsImport(
-  join(root, "src/lib/security/security-rules.schema.ts"),
+  pathToFileURL(join(root, "src/lib/security/security-rules.schema.ts")).href,
   import.meta.url,
 );
 const { SecurityRulesFileSchema, isSafeSecurityPattern, detectReDoS } =
@@ -66,7 +68,9 @@ export const SECURITY_RULES_VERSION: string = ${JSON.stringify(version)};
 await writeFile(outPath, banner + body, "utf8");
 
 console.log("generate-security-rules");
-console.log("─────────────────────────────────────────");
+console.log(
+  "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€",
+);
 console.log(`rules:   ${parsed.data.rules.length}`);
 console.log(`version: ${version}`);
 console.log(`wrote ${join("src/lib/security", "security-rules.generated.ts")}`);

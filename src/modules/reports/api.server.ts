@@ -17,7 +17,6 @@
  * rather than a fake success.
  */
 import type { Locale } from "../../lib/i18n/locale";
-import type { SessionQueryPort } from "../sessions/contracts.ts";
 import type {
   ReportQueryViewModel,
   ReportsQuerySource,
@@ -29,56 +28,41 @@ import type {
   ReportSummary,
   ReportsApplication,
 } from "./contracts.ts";
-import { aggregateSessionDensity } from "./period.ts";
-
-/** Cap on sessions loaded for density (10 pages of 100) to bound scan cost. */
-const DENSITY_MAX_SESSIONS = 1_000;
 
 /**
- * Load real session density via the composition root's sessions port. The port
- * paginates at 100/page and each page triggers one local scan, so we page to
- * `total` but hard-cap the loop to `DENSITY_MAX_SESSIONS` (a fresh install with
- * huge history still bounds the first paint). On any failure the page degrades
- * to empty density instead of surfacing a raw error.
+ * T4-02: Session density now comes from the SessionSnapshot (one O(1) read),
+ * not from paging `sessions.query()` (which re-scanned per page). The
+ * snapshot's pre-aggregated density rows map directly to the reports
+ * `SessionDensity` shape; a stale/empty snapshot degrades to empty density.
  */
-async function loadSessionDensity(
-  sessions: SessionQueryPort,
+async function loadSessionDensityFromSnapshot(
+  getSnapshot: () => Promise<{
+    readonly density?: readonly {
+      readonly date: string;
+      readonly count: number;
+      readonly totalTokens: number;
+      readonly knownUsd: number;
+    }[];
+    readonly total?: number;
+  } | null>,
 ): Promise<ReportQueryViewModel["feed"]["density"]> {
   try {
-    const collected: Array<{
-      startedAt: string;
-      totals?: { totalTokens?: number };
-      cost?: { knownUsd?: number };
-    }> = [];
-    // The query port reports the true total even when pages are capped, so the
-    // coverage figure stays honest for histories larger than the density window.
-    let realTotal = 0;
-    for (let page = 1; page <= DENSITY_MAX_SESSIONS / 100; page += 1) {
-      const result = await sessions.query({
-        page,
-        pageSize: 100,
-        sort: { field: "startedAt", direction: "desc" },
-      });
-      if (!result.ok) break;
-      realTotal = result.value.total;
-      for (const session of result.value.sessions) {
-        collected.push({
-          startedAt: session.startedAt,
-          totals: session.totals,
-          cost: session.cost,
-        });
-      }
-      if (
-        collected.length >= realTotal ||
-        collected.length >= DENSITY_MAX_SESSIONS
-      )
-        break;
+    const snapshot = await getSnapshot();
+    if (!snapshot) return { total: 0, days: {} };
+    const days: Record<
+      string,
+      { count: number; tokens: number; knownUsd: number }
+    > = {};
+    let total = 0;
+    for (const row of snapshot.density ?? []) {
+      total += row.count;
+      const existing = days[row.date] ?? { count: 0, tokens: 0, knownUsd: 0 };
+      existing.count += row.count;
+      existing.tokens += row.totalTokens;
+      existing.knownUsd += row.knownUsd;
+      days[row.date] = existing;
     }
-    const density = aggregateSessionDensity(collected);
-    return {
-      ...density,
-      total: realTotal > density.total ? realTotal : density.total,
-    };
+    return { total, days };
   } catch {
     return { total: 0, days: {} };
   }
@@ -87,7 +71,7 @@ async function loadSessionDensity(
 /** Reads persisted reports/runs/density from the composition root. */
 function compositionReportsSource(
   reports: ReportsApplication,
-  sessions: SessionQueryPort,
+  getSessionSnapshot: Parameters<typeof loadSessionDensityFromSnapshot>[0],
 ): ReportsQuerySource {
   return {
     async listReports(): Promise<readonly ReportSummary[]> {
@@ -98,7 +82,7 @@ function compositionReportsSource(
       const result = await reports.listRuns();
       return result.ok ? result.value : [];
     },
-    sessionMetrics: () => loadSessionDensity(sessions),
+    sessionMetrics: () => loadSessionDensityFromSnapshot(getSessionSnapshot),
   };
 }
 
@@ -121,9 +105,36 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
   const { isLLMConfigured } = await import("../ai-orchestration/config.ts");
   const root = await getCompositionRoot();
   const reports: ReportsApplication = root.reports;
+  // T4-02: session density is projected from the SessionSnapshot (O(1)); the
+  // snapshot's own density rows already aggregate count/tokens/cost per day.
+  const getSessionSnapshot = async () => {
+    const { sessionSnapshot } = root as {
+      sessionSnapshot: {
+        ensureHydrated(): Promise<void>;
+        readLatest(): {
+          data: {
+            density?: readonly {
+              date: string;
+              count: number;
+              totalTokens: number;
+              knownUsd: number;
+            }[];
+            sessions?: readonly unknown[];
+          } | null;
+        };
+      };
+    };
+    await sessionSnapshot.ensureHydrated();
+    const latest = sessionSnapshot.readLatest();
+    if (!latest.data) return null;
+    return {
+      density: latest.data.density,
+      total: latest.data.sessions?.length ?? 0,
+    };
+  };
   const presentation = createReportsPresentation({
     reports,
-    source: compositionReportsSource(reports, root.sessions),
+    source: compositionReportsSource(reports, getSessionSnapshot),
     // Generation runs when an S-500 model profile is active OR the legacy
     // environment-variable LLM is configured; without either the page shows
     // the honest offline state so it disables generation instead of faking it.

@@ -57,6 +57,8 @@ export interface ScanLocalSessionsOptions {
    * (P1-3). Defaults to the built-in default registry.
    */
   registry?: CompiledRegistry;
+  /** P5-T5-03: real cancellation; checked before and during tool scans. */
+  signal?: AbortSignal;
 }
 
 interface JsonObject {
@@ -1176,6 +1178,8 @@ export async function scanLocalSessions(
   options: ScanLocalSessionsOptions = {},
 ): Promise<SessionSummary> {
   const now = options.now ?? new Date();
+  // P5-T5-03: stop before starting any per-tool I/O when cancelled.
+  options.signal?.throwIfAborted();
   const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
     options.homeDirectory ??
@@ -1188,6 +1192,7 @@ export async function scanLocalSessions(
 
   const perTool = await Promise.all(
     listSessionTools(registry).map(async (toolId) => {
+      options.signal?.throwIfAborted();
       const def = registry.byId.get(toolId);
       const plan = def ? getSessionPlanFor(def) : null;
       if (!plan) return [] as SessionRecord[];

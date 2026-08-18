@@ -4,7 +4,9 @@
   "id": "omp",
   "display": {
     "name": "oh-my-pi",
-    "nameZh": "oh-my-pi"
+    "nameZh": "oh-my-pi",
+    "icon": "other",
+    "color": "#00b3ff"
   },
   "platforms": {
     "macos": "supported",
@@ -14,12 +16,22 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".omp"
       },
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".oh-my-pi"
       }

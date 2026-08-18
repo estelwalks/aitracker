@@ -29,11 +29,11 @@ const EXPECTED_SKILL_TOOL_IDS = [
   "antigravity",
 ] as const;
 
-test("AI_TOOLS catalogs all 29 tools with stable ids (27 baseline + aipy/cline)", () => {
-  assert.equal(AI_TOOLS.length, 29);
-  assert.equal(AI_TOOL_IDS.length, 29);
+test("AI_TOOLS catalogs all 30 tools with stable ids (27 baseline + dsh + aipy/cline)", () => {
+  assert.equal(AI_TOOLS.length, 30);
+  assert.equal(AI_TOOL_IDS.length, 30);
   // ids are unique, lowercase-kebab.
-  assert.equal(new Set(AI_TOOL_IDS).size, 29);
+  assert.equal(new Set(AI_TOOL_IDS).size, 30);
   for (const id of AI_TOOL_IDS) {
     assert.match(id, /^[a-z][a-z0-9-]*$/u);
   }

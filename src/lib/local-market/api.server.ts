@@ -72,6 +72,9 @@ function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
     case "stars":
       sorted.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
       break;
+    case "tokens":
+      sorted.sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0));
+      break;
     case "name_asc":
       sorted.sort((a, b) => a.name.localeCompare(b.name));
       break;
@@ -164,7 +167,13 @@ export async function fetchMarketSkills(
         safety_level: null,
         status: null,
         language: null,
-        ...(sort === "downloads" ? { sort } : { sort_by: sort }),
+        // 上游接口不识别 tokens 排序；交由本地 sortSkills 重排（downloads 亦走
+        // 上游专用字段，其余排序按 sort_by 透传）。
+        ...(sort === "downloads"
+          ? { sort }
+          : sort === "tokens"
+            ? {}
+            : { sort_by: sort }),
       }),
       signal: controller.signal,
     });

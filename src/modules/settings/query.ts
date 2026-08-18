@@ -23,7 +23,7 @@ export const getStorageUsageQuery = createServerFn({ method: "GET" }).handler(
 );
 
 export const applyRetentionPolicyQuery = createServerFn({ method: "POST" })
-  .inputValidator((value: unknown): { retentionDays: number } => {
+  .validator((value: unknown): { retentionDays: number } => {
     if (
       typeof value !== "object" ||
       value === null ||

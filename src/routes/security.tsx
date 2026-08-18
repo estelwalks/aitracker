@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import { SecurityAssessmentPage } from "../modules/security-assessment/presentation/SecurityAssessmentPage";
 
+// The page component lives in security.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/security")({
   loader: ({ location }) => ({
     locale: resolveLocaleFromSearch(location.search),
@@ -26,5 +26,4 @@ export const Route = createFileRoute("/security")({
       },
     ],
   }),
-  component: SecurityAssessmentPage,
 });

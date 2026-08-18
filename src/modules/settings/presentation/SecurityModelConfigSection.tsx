@@ -7,8 +7,8 @@ import { useI18n } from "../../../lib/i18n/context";
 import type {
   SecurityClient,
   SecurityModelConfigUpdate,
-} from "../../security-assessment/query/desktop-client";
-import type { SecurityModelConfigView } from "../../security-assessment/presentation/security-view";
+  SecurityModelConfigView,
+} from "../../security-assessment/index";
 import {
   Field,
   SectionHeading,

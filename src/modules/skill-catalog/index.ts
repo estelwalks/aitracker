@@ -78,6 +78,13 @@ export type {
   SkillFileList,
   SkillInstallation,
   SkillSnapshot,
+  SkillSnapshotData,
   SkillSyncResult,
   SkillWorkspaceSnapshot,
 } from "./query.ts";
+export { compactNumber, formatSizeBytes } from "./presentation/skill-format.ts";
+export type {
+  AgentUsageOverviewReadModel,
+  AgentUsageOverviewQueryInput,
+} from "./usage-overview-contracts.ts";
+export { getAgentUsageOverview } from "./usage-overview-query.ts";

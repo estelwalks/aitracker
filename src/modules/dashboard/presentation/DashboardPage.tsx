@@ -1,7 +1,7 @@
-import type { DashboardReadModel } from "../contracts.ts";
+import type { DashboardSummaryReadModel } from "../summary-contracts.ts";
 import { DashboardV2Page } from "./DashboardV2Page.tsx";
 
-/** Public presentation boundary for the renderer-safe dashboard V2. */
-export function DashboardPage({ data }: { data: DashboardReadModel }) {
+/** Public presentation boundary for the compact dashboard summary (P1-T1-04). */
+export function DashboardPage({ data }: { data: DashboardSummaryReadModel }) {
   return <DashboardV2Page data={data} />;
 }

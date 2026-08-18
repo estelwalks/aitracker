@@ -377,6 +377,23 @@ export const RawModelObservationSchema = z
   });
 
 /**
+ * display.icon: a built-in BrandIcon kind key or an http(s) logo URL. URL icons
+ * are rendered as a remote <img> by BrandIcon; unknown kind keys fall back to
+ * the generic icon.
+ */
+export const ToolIconSchema = z.union([
+  z.enum(["claude", "codex", "cursor", "gemini", "kimi", "deepseek", "other"], {
+    errorMap: () => ({
+      message:
+        "display.icon must be one of claude | codex | cursor | gemini | kimi | deepseek | other, or an http(s) logo URL",
+    }),
+  }),
+  z.string().regex(/^https?:\/\/\S+$/i, {
+    message: "display.icon URL must start with http:// or https://",
+  }),
+]);
+
+/**
  * Strict v1.5 tool definition (the JSON world). `catalogVisible=false` is only
  * allowed for legacy collection sources (docs §6); the current catalog has no
  * such sources - aipy/cline are user-added extensions and visible (true).
@@ -392,7 +409,11 @@ export const RawToolDefinitionSchema = z
     display: z.object({
       name: z.string().min(1),
       nameZh: z.string().min(1),
-      icon: z.string().min(1).optional(),
+      icon: ToolIconSchema.optional(),
+      color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/, "display.color must be #rrggbb")
+        .optional(),
     }),
     platforms: ToolPlatformsSchema,
     detection: z

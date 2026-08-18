@@ -3,21 +3,27 @@ import { createFileRoute } from "@tanstack/react-router";
 import { brandParams } from "../lib/app-config";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import { JarvisWidget } from "../modules/widget/presentation/JarvisWidget";
-import { WidgetPage } from "../modules/widget/presentation/WidgetPage";
 
 interface WidgetSearchParams {
   /** Electron 浮窗加载本页时传入：只渲染浮窗面板，不带 PageBar/三个 Section。 */
   readonly mode?: "float" | null;
 }
 
+// The page component lives in widget.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/widget")({
   validateSearch: (search: Record<string, unknown>): WidgetSearchParams => ({
     mode: search.mode === "float" ? "float" : null,
   }),
-  loader: async ({ location }) => ({
-    locale: resolveLocaleFromSearch(location.search),
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
+    mode: (search as Record<string, unknown>).mode === "float" ? "float" : null,
   }),
+  loader: async ({ deps }) => ({
+    locale: deps.locale,
+  }),
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -37,17 +43,4 @@ export const Route = createFileRoute("/widget")({
       },
     ],
   }),
-  component: WidgetRoutePage,
 });
-
-function WidgetRoutePage() {
-  const { mode } = Route.useSearch();
-  if (mode === "float") {
-    return (
-      <div className="tt-xscroll py-1">
-        <JarvisWidget className="mx-auto" />
-      </div>
-    );
-  }
-  return <WidgetPage />;
-}

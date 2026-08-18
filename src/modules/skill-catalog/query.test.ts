@@ -14,7 +14,15 @@ test("skills route consumes opaque installation refs only", () => {
   assert.match(source, /installationRef/);
   assert.doesNotMatch(source, /source:\s*\{[^}]*label/);
   assert.match(source, /getSkillWorkspace/);
-  assert.match(source, /showWorkspace=\{false\}/);
+});
+
+test("skills lazy chunk renders the workspace hidden (P6-T6-04 split)", () => {
+  const lazySource = readFileSync(
+    new URL("../../routes/agents.lazy.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(lazySource, /showWorkspace=\{false\}/);
+  assert.match(lazySource, /SkillsPage/);
 });
 
 test("operations workspace does not render paths, roots, or raw source labels", () => {

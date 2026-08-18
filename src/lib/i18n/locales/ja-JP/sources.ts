@@ -78,6 +78,8 @@ export const sources = {
     failed: "移行に失敗しました",
   },
   toast: {
+    rescanStarted:
+      "バックグラウンドで再スキャンを開始しました。完了後に自動更新されます",
     rescanDone: "再スキャンが完了しました",
   },
 } as const;

@@ -1,6 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
   Brain,
   Boxes,
   CalendarRange,
@@ -11,29 +14,22 @@ import {
   CircleDollarSign,
   Coins,
   FileText,
+  LayoutGrid,
+  Minus,
   Shield,
   ShieldCheck,
-  Sparkles,
   Wrench,
   Zap,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
 import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
+import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,
@@ -45,14 +41,35 @@ import type {
 } from "../contracts.ts";
 import type { MonitoringStatus } from "../../monitoring/contracts.ts";
 
+/** 注册表工具 id → 展示配置（icon kind + 品牌色），浏览器安全投影。 */
+const toolDisplayById = new Map(
+  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool]),
+);
+
 export function DashboardDeltaChip({
   value,
   points = false,
+  absolute = null,
+  className = "",
 }: {
-  value: number | null;
+  value?: number | null;
   points?: boolean;
+  /** 上一周期为 0 时的绝对新增数（百分比无定义，显示 "+N"） */
+  absolute?: number | null;
+  className?: string;
 }) {
   const { format, t } = useI18n();
+  if (absolute != null && Number.isFinite(absolute)) {
+    return (
+      <span
+        className={`inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--color-ok)] ${className}`}
+        title={t("dashboard.kpi.vsPrevious")}
+      >
+        <ArrowUpRight className="size-3" strokeWidth={2.2} />+
+        {format.formatNumber(absolute)}
+      </span>
+    );
+  }
   if (value == null || !Number.isFinite(value)) {
     return (
       <span className="font-mono text-[10px] text-muted-foreground">
@@ -60,14 +77,37 @@ export function DashboardDeltaChip({
       </span>
     );
   }
+  const dir = value > 0 ? 1 : value < 0 ? -1 : 0;
+  const ArrowIcon = dir > 0 ? ArrowUpRight : dir < 0 ? ArrowDownRight : Minus;
+  const tone =
+    dir === 0
+      ? "text-muted-foreground"
+      : dir > 0
+        ? "text-[var(--color-ok)]"
+        : "text-[var(--color-warn)]";
   return (
     <span
-      className={`font-mono text-[10px] ${value >= 0 ? "text-[var(--color-ok)]" : "text-[var(--color-warning)]"}`}
+      className={`inline-flex items-center gap-0.5 font-mono text-[10px] ${tone} ${className}`}
       title={t("dashboard.kpi.vsPrevious")}
     >
+      <ArrowIcon className="size-3" strokeWidth={2.2} />
       {value > 0 ? "+" : ""}
       {format.formatPercent(value)}
       {points ? " pt" : ""}
+    </span>
+  );
+}
+
+/** 上一区间无用量时的「新增」标记（0 → N，百分比无定义）。 */
+function DashboardNewChip({ className = "" }: { className?: string }) {
+  const { t } = useI18n();
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--color-ok)] ${className}`}
+      title={t("dashboard.kpi.vsPrevious")}
+    >
+      <ArrowUpRight className="size-3" strokeWidth={2.2} />
+      {t("dashboard.v2.newLabel")}
     </span>
   );
 }
@@ -122,102 +162,28 @@ export function DashboardJarvisInsight({
   rangeLabel: string;
 }) {
   const { t, format } = useI18n();
-  const [index, setIndex] = useState(0);
-  const insight = hero.insights[index % Math.max(1, hero.insights.length)];
-  const completeMessage = insight
-    ? insightMessage(insight, t, format, {
-        range: rangeLabel,
-        live: hero.monitoring.liveTools,
-      })
-    : t("dashboard.v2.insights.empty");
-  const [typedMessage, setTypedMessage] = useState(completeMessage);
-  useEffect(() => setIndex(0), [hero.insights]);
-  useEffect(() => {
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setTypedMessage(completeMessage);
-      return;
-    }
-    setTypedMessage("");
-    let cursor = 0;
-    const timer = window.setInterval(() => {
-      cursor += 1;
-      setTypedMessage(completeMessage.slice(0, cursor));
-      if (cursor >= completeMessage.length) window.clearInterval(timer);
-    }, 18);
-    return () => window.clearInterval(timer);
-  }, [completeMessage]);
-  // The reference hero auto-rotates its broadcast; the manual button is a
-  // quick skip, not the only way to advance.
-  useEffect(() => {
-    if (hero.insights.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setIndex((current) => (current + 1) % hero.insights.length);
-    }, 9_000);
-    return () => window.clearInterval(timer);
-  }, [hero.insights.length]);
+  // Thin wrapper over the shared Jarvis insight card: every dashboard
+  // insight is composed server-side, then rendered with the hero variant.
+  const lines = useMemo(
+    () =>
+      hero.insights.length
+        ? hero.insights.map((insight) =>
+            insightMessage(insight, t, format, {
+              range: rangeLabel,
+              live: hero.monitoring.liveTools,
+            }),
+          )
+        : [t("dashboard.v2.insights.empty")],
+    [format, hero, rangeLabel, t],
+  );
   return (
-    <section
-      className="dashboard-insight-hero"
-      aria-label={t("dashboard.v2.heroTitle")}
-    >
-      <div className="relative flex min-w-0 gap-5">
-        <span className="dashboard-insight-orb tt-breathe">
-          <Sparkles className="size-6" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[15px] font-semibold tracking-tight">
-              {t("dashboard.v2.heroTitle")}
-            </h1>
-            <button
-              type="button"
-              onClick={() =>
-                setIndex((current) =>
-                  hero.insights.length
-                    ? (current + 1) % hero.insights.length
-                    : 0,
-                )
-              }
-              className="dashboard-hero-refresh ml-auto"
-            >
-              {t("dashboard.v2.rotateInsight")}
-            </button>
-          </div>
-          <p
-            className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]"
-            aria-label={completeMessage}
-          >
-            {typedMessage}
-          </p>
-          <div
-            className="mt-5 flex gap-1.5"
-            role="tablist"
-            aria-label={t("dashboard.v2.insightDotsAria")}
-          >
-            {hero.insights.map((item, itemIndex) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={itemIndex === index}
-                aria-label={t("dashboard.v2.insightDot", {
-                  index: itemIndex + 1,
-                })}
-                onClick={() => setIndex(itemIndex)}
-                className={
-                  itemIndex === index
-                    ? "dashboard-insight-dot dashboard-insight-dot-active"
-                    : "dashboard-insight-dot"
-                }
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
+    <JarvisInsight
+      variant="hero"
+      title={t("dashboard.v2.heroTitle")}
+      lines={lines}
+      rotateLabel={t("dashboard.v2.rotateInsight")}
+      dotsLabel={t("dashboard.v2.insightDotsAria")}
+    />
   );
 }
 
@@ -248,11 +214,11 @@ export function DashboardTrustHero({
       : t("dashboard.v2.assetMemoryCount", { count: view.memoryCount });
   const securityValue =
     security == null
-      ? t("dashboard.kpi.unavailable")
+      ? t("common.unknown")
       : `${format.formatNumber(security.cleanCount)}/${format.formatNumber(security.assessedAssetCount)}`;
   const securitySub =
     security == null
-      ? t("dashboard.v2.outputUnavailableHint")
+      ? t("dashboard.v2.securityNotScanned")
       : t("dashboard.v2.securityScanSummary", {
           assessed: security.assessedAssetCount,
           discovered: security.discoveredAssetCount,
@@ -311,12 +277,16 @@ export function DashboardTrustHero({
             <div className="dashboard-spotlight-card-heading">
               <p>{label}</p>
               <Icon
-                className={accent ? "size-4 text-[var(--color-ok)]" : "size-4"}
+                className={
+                  accent
+                    ? "size-4 text-[var(--color-ok)]"
+                    : "size-3.5 text-muted-foreground"
+                }
                 strokeWidth={1.8}
               />
             </div>
             <strong className="tt-num">{value}</strong>
-            <small>{sub}</small>
+            <small title={sub}>{sub}</small>
             <Link to={to}>{action}</Link>
           </article>
         ))}
@@ -334,10 +304,12 @@ export function DashboardTrustHero({
 export function DashboardMetricGrid({
   view,
   monitoring,
+  security,
   baselineLabel,
 }: {
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
+  security?: MonitoringStatus["security"];
   /**
    * Comparison-baseline label for cards that show a delta (e.g. "较前 30 天").
    * Only delta cards append it to their hint line, matching the reference.
@@ -346,6 +318,52 @@ export function DashboardMetricGrid({
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
+  // 休眠 = 已检测 − 本周期活跃（与系统快照卡 toolCountHint 口径一致，
+  // 保证「活跃 + 休眠 = 已检测」自洽；不用实时 liveTools，避免口径打架）
+  const dormantTools = Math.max(0, monitoring.detectedTools - view.activeTools);
+  const reportMetrics = view.outputAvailability;
+  const anyReportsAvailable =
+    reportMetrics.dailyReports.available ||
+    reportMetrics.weeklyReports.available ||
+    reportMetrics.monthlyReports.available;
+  const reportTotal = anyReportsAvailable
+    ? (reportMetrics.dailyReports.count ?? 0) +
+      (reportMetrics.weeklyReports.count ?? 0) +
+      (reportMetrics.monthlyReports.count ?? 0)
+    : null;
+  /**
+   * 区间天数（原型 rangeDays 语义）：自定义区间按真实日期跨度，其余按预设；
+   * "all" 固定为 90，避免用 1970 哨兵起点算出的虚假日均。
+   */
+  const days = useMemo(() => {
+    if (view.period === "all") return 90;
+    if (view.from && view.to) {
+      const start = new Date(`${view.from}T00:00:00`).getTime();
+      const end = new Date(`${view.to}T00:00:00`).getTime();
+      if (Number.isFinite(start) && Number.isFinite(end) && end >= start) {
+        return Math.max(1, Math.round((end - start) / 86400000) + 1);
+      }
+    }
+    switch (view.period) {
+      case "today":
+        return 1;
+      case "7d":
+      case "week":
+        return 7;
+      case "30d":
+      case "month":
+        return 30;
+      case "90d":
+        return 90;
+      case "180d":
+        return 180;
+      case "1y":
+      case "year":
+        return 365;
+      default:
+        return 90;
+    }
+  }, [view.from, view.period, view.to]);
   const availabilityValue = (value: {
     available: boolean;
     count: number | null;
@@ -362,7 +380,10 @@ export function DashboardMetricGrid({
       icon: Coins,
       label: t("dashboard.kpi.tokens"),
       value: format.formatTokens(view.totals.totalTokens),
-      hint: t("dashboard.v2.eventCount", { count: view.totals.events }),
+      hint:
+        view.estimatedCostUsd == null
+          ? t("dashboard.v2.eventCount", { count: view.totals.events })
+          : format.formatUsd(view.estimatedCostUsd),
       delta: view.comparison.tokens.deltaPercent,
     },
     {
@@ -373,13 +394,12 @@ export function DashboardMetricGrid({
           ? unavailable
           : format.formatUsd(view.estimatedCostUsd),
       hint:
-        view.estimatedCostUsd == null
+        view.estimatedCostUsd == null || view.estimatedCostIsPartial
           ? t("dashboard.kpi.costUnknownHint")
-          : t(
-              view.estimatedCostIsPartial
-                ? "dashboard.kpi.costUnknownHint"
-                : "dashboard.v2.estimatedCost",
-            ),
+          : t("dashboard.v2.costDailyProjection", {
+              daily: format.formatUsd(view.estimatedCostUsd / days),
+              month: format.formatUsd((view.estimatedCostUsd / days) * 30),
+            }),
       delta: view.comparison.cost.deltaPercent,
     },
     {
@@ -392,8 +412,14 @@ export function DashboardMetricGrid({
       hint:
         view.sessions == null
           ? t("dashboard.kpi.sessionUnavailableHint")
-          : t("dashboard.v2.selectedRange"),
-      delta: null,
+          : t("dashboard.v2.sessionAvgTokens", {
+              tokens: format.formatTokens(
+                view.sessions > 0 ? view.totals.totalTokens / view.sessions : 0,
+              ),
+            }),
+      delta: view.comparison.sessions.deltaPercent,
+      absoluteDelta: view.comparison.sessions.absoluteDelta,
+      alwaysBaseline: true,
     },
     {
       icon: Zap,
@@ -402,7 +428,12 @@ export function DashboardMetricGrid({
         view.cacheRate == null
           ? unavailable
           : format.formatPercent(Math.round(view.cacheRate)),
-      hint: t("dashboard.v2.cacheHint"),
+      hint:
+        view.cacheSavingsUsd == null
+          ? t("dashboard.v2.cacheHint")
+          : t("dashboard.v2.cacheSavingsAmount", {
+              amount: format.formatUsd(view.cacheSavingsUsd),
+            }),
       delta: view.comparison.cacheRate.deltaPoints,
       deltaPoints: true,
     },
@@ -410,31 +441,61 @@ export function DashboardMetricGrid({
       icon: Wrench,
       label: t("dashboard.v2.agentActivityLabel"),
       value: format.formatNumber(view.activeTools),
-      hint: t("dashboard.v2.agentsLive", {
-        live: monitoring.liveTools,
-        detected: monitoring.detectedTools,
+      hint: t("dashboard.v2.agentsDormantHint", {
+        count: format.formatNumber(dormantTools),
       }),
       delta: null,
     },
     {
       icon: ShieldCheck,
       label: t("dashboard.v2.securityRunsLabel"),
-      value: availabilityValue(view.outputAvailability.securityRuns),
-      hint: availabilityHint(view.outputAvailability.securityRuns),
+      value:
+        security == null
+          ? t("common.unknown")
+          : availabilityValue(view.outputAvailability.securityRuns),
+      hint:
+        security == null
+          ? t("dashboard.v2.securityNotScanned")
+          : t("dashboard.v2.securityCoverage", {
+              count: format.formatNumber(security.cleanCount),
+            }),
       delta: null,
     },
     {
       icon: Brain,
       label: t("dashboard.v2.distillationOutputsLabel"),
       value: availabilityValue(view.outputAvailability.distillationOutputs),
-      hint: availabilityHint(view.outputAvailability.distillationOutputs),
+      hint:
+        view.outputAvailability.distillationBreakdown.capability == null ||
+        view.outputAvailability.distillationBreakdown.memory == null
+          ? availabilityHint(view.outputAvailability.distillationOutputs)
+          : t("dashboard.v2.distillAssetCounts", {
+              skill: format.formatNumber(
+                view.outputAvailability.distillationBreakdown.capability,
+              ),
+              memory: format.formatNumber(
+                view.outputAvailability.distillationBreakdown.memory,
+              ),
+            }),
       delta: null,
     },
     {
       icon: FileText,
       label: t("dashboard.v2.dailyReportsLabel"),
-      value: availabilityValue(view.outputAvailability.dailyReports),
-      hint: availabilityHint(view.outputAvailability.dailyReports),
+      value:
+        reportTotal == null ? unavailable : format.formatNumber(reportTotal),
+      hint:
+        reportTotal == null
+          ? availabilityHint(reportMetrics.dailyReports)
+          : t("dashboard.v2.reportCounts", {
+              daily: format.formatNumber(reportMetrics.dailyReports.count ?? 0),
+              weekly: format.formatNumber(
+                reportMetrics.weeklyReports.count ?? 0,
+              ),
+              monthly: format.formatNumber(
+                reportMetrics.monthlyReports.count ?? 0,
+              ),
+            }),
       delta: null,
     },
   ] as const;
@@ -445,29 +506,36 @@ export function DashboardMetricGrid({
     >
       {cards.map((card) => {
         const Icon = card.icon;
-        const hintLine =
-          card.delta != null && baselineLabel
-            ? `${card.hint} · ${baselineLabel}`
-            : card.hint;
+        // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
+        const showBaseline =
+          baselineLabel &&
+          (card.delta != null ||
+            ("alwaysBaseline" in card && card.alwaysBaseline === true));
+        const hintLine = showBaseline
+          ? `${card.hint} · ${baselineLabel}`
+          : card.hint;
         return (
           <article key={card.label} className="dashboard-metric-card">
-            <div className="flex items-center justify-between gap-2 text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Icon className="size-3 shrink-0" />
-                <span className="truncate">{card.label}</span>
-              </span>
-              {card.delta != null ? (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+              <Icon className="size-3 shrink-0" strokeWidth={1.8} />
+              <span className="truncate">{card.label}</span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <strong className="tt-num min-w-0 flex-1 truncate text-[22px] leading-none font-black tracking-tight">
+                {card.value}
+              </strong>
+              {card.delta != null ||
+              ("absoluteDelta" in card && card.absoluteDelta != null) ? (
                 <DashboardDeltaChip
                   value={card.delta}
+                  absolute={"absoluteDelta" in card ? card.absoluteDelta : null}
                   points={"deltaPoints" in card && card.deltaPoints === true}
+                  className="shrink-0"
                 />
               ) : null}
             </div>
-            <strong className="tt-num mt-2 block truncate text-[25px] leading-none font-black tracking-tight">
-              {card.value}
-            </strong>
             <p
-              className="mt-2 truncate font-mono text-[10px] text-muted-foreground"
+              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
               title={hintLine}
             >
               {hintLine}
@@ -506,7 +574,7 @@ export function DashboardRangePicker({
   ];
   return (
     <div
-      className="relative flex items-center gap-1"
+      className="relative flex items-center gap-1 rounded-xl bg-surface p-1"
       role="group"
       aria-label={t("dashboard.v2.rangeLabel")}
     >
@@ -539,11 +607,11 @@ export function DashboardRangePicker({
         aria-pressed={period === "custom"}
         className={
           period === "custom"
-            ? "dashboard-range-active inline-flex items-center gap-1"
-            : "inline-flex items-center gap-1"
+            ? "dashboard-range-active inline-flex items-center gap-1.5"
+            : "inline-flex items-center gap-1.5"
         }
       >
-        <CalendarRange className="size-3" />
+        <CalendarRange className="size-3.5" strokeWidth={1.8} />
         {period === "custom"
           ? `${from.slice(5)} → ${to.slice(5)}`
           : t("dashboard.period.custom")}
@@ -687,10 +755,12 @@ export function DashboardToolSwitcher({
           aria-pressed={selected === "all"}
           className={selected === "all" ? "dashboard-tool-active" : ""}
         >
+          <LayoutGrid className="size-4" strokeWidth={1.8} />
           {t("dashboard.context.allTools")}
         </button>
         {tools.map((tool) => {
-          const color = brandColorOf(tool.name);
+          // 优先使用工具注册表配置的品牌图标/配色，未配置时回退名称启发式
+          const color = tool.color ?? brandColorOf(tool.name);
           return (
             <button
               key={tool.id}
@@ -700,7 +770,11 @@ export function DashboardToolSwitcher({
               className={selected === tool.id ? "dashboard-tool-active" : ""}
               style={{ "--dashboard-tool-color": color } as React.CSSProperties}
             >
-              <BrandIcon name={tool.name} className="size-3.5" color={color} />
+              <BrandIcon
+                name={tool.icon ?? tool.name}
+                className="size-4"
+                color={color}
+              />
               {tool.name}
             </button>
           );
@@ -730,135 +804,6 @@ export function DashboardToolSwitcher({
   );
 }
 
-export function DashboardTrendPanel({ view }: { view: DashboardV2View }) {
-  const { format, t } = useI18n();
-  const points = view.trend;
-  return (
-    <section className="dashboard-panel">
-      <div className="dashboard-panel-head">
-        <div>
-          <h2>{t("dashboard.v2.trendTitle")}</h2>
-          <p>
-            {t("dashboard.v2.dailyAverage", {
-              tokens: format.formatTokens(
-                points.length
-                  ? Math.round(view.totals.totalTokens / points.length)
-                  : 0,
-              ),
-            })}
-          </p>
-        </div>
-        <DashboardDeltaChip value={view.comparison.tokens.deltaPercent} />
-      </div>
-      {points.length === 0 ? (
-        <p className="py-10 text-sm text-muted-foreground">
-          {t("dashboard.v2.noData")}
-        </p>
-      ) : (
-        <>
-          <div className="mt-4 h-[230px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={[...points]}
-                margin={{ top: 8, right: 4, bottom: 0, left: -18 }}
-              >
-                <CartesianGrid
-                  vertical={false}
-                  stroke="var(--color-border)"
-                  strokeOpacity={0.55}
-                />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={20}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                  tickFormatter={(value: number) => format.formatTokens(value)}
-                  tickLine={false}
-                  axisLine={false}
-                  width={54}
-                />
-                <Tooltip
-                  cursor={{
-                    fill: "var(--color-foreground)",
-                    fillOpacity: 0.04,
-                  }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const point = payload[0]
-                      .payload as DashboardV2View["trend"][number];
-                    return (
-                      <div className="rounded-xl bg-card px-3 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
-                        <div className="font-mono text-[11px] font-semibold">
-                          {point.date}
-                        </div>
-                        <div className="mt-1 space-y-0.5 font-mono text-[10.5px] text-muted-foreground">
-                          <div>
-                            {t("dashboard.kpi.tokens")}{" "}
-                            {format.formatTokens(point.tokens)}
-                          </div>
-                          <div>
-                            {t("dashboard.tokens.cacheRead")}{" "}
-                            {format.formatTokens(point.cacheTokens)}
-                          </div>
-                          <div>
-                            {t("dashboard.tokens.input")}{" "}
-                            {format.formatTokens(point.netInputTokens)}
-                          </div>
-                          <div>
-                            {t("dashboard.kpi.sessions")}{" "}
-                            {point.sessions == null
-                              ? t("dashboard.kpi.unavailable")
-                              : format.formatNumber(point.sessions)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="cacheTokens"
-                  stackId="input"
-                  fill="var(--color-chart-1)"
-                  radius={[0, 0, 3, 3]}
-                  maxBarSize={26}
-                />
-                <Bar
-                  dataKey="netInputTokens"
-                  stackId="input"
-                  fill="var(--color-chart-2)"
-                  radius={[3, 3, 0, 0]}
-                  maxBarSize={26}
-                />
-                {points.some((point) => point.previousTokens != null) ? (
-                  <Line
-                    type="monotone"
-                    dataKey="previousTokens"
-                    stroke="var(--color-chart-3)"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.6}
-                    dot={false}
-                  />
-                ) : null}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-2 flex gap-3 font-mono text-[10px] text-muted-foreground">
-            <span>■ {t("dashboard.tokens.cacheRead")}</span>
-            <span>■ {t("dashboard.tokens.input")}</span>
-            {points.some((point) => point.previousTokens != null) ? (
-              <span>┈ {t("dashboard.kpi.vsPrevious")}</span>
-            ) : null}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
 const modelColors = [
   "var(--color-chart-1)",
   "var(--color-chart-2)",
@@ -866,7 +811,13 @@ const modelColors = [
   "var(--color-chart-4)",
   "var(--color-chart-5)",
 ];
-export function DashboardModelDonut({ view }: { view: DashboardV2View }) {
+export function DashboardModelDonut({
+  view,
+  baselineLabel,
+}: {
+  view: DashboardV2View;
+  baselineLabel?: string;
+}) {
   const { format, t } = useI18n();
   const [restOpen, setRestOpen] = useState(false);
   const top = view.models.slice(0, 8);
@@ -875,24 +826,28 @@ export function DashboardModelDonut({ view }: { view: DashboardV2View }) {
   const row = (item: DashboardV2BreakdownRow, index: number) => (
     <div key={item.key} className="space-y-1.5">
       <div className="flex items-end gap-3">
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-semibold">
+        <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] font-semibold">
           {item.key}
         </span>
         {item.tools?.length ? (
           <div className="hidden shrink-0 items-center gap-1 sm:flex">
-            {item.tools.map((tool) => (
-              <span
-                key={tool}
-                title={tool}
-                className="grid size-4 place-items-center rounded-full bg-surface-2"
-              >
-                <BrandIcon
-                  name={tool}
-                  className="size-2.5"
-                  color={brandColorOf(tool)}
-                />
-              </span>
-            ))}
+            {item.tools.map((tool) => {
+              const display = toolDisplayById.get(tool);
+              const color = display?.color ?? brandColorOf(tool);
+              return (
+                <span
+                  key={tool}
+                  title={tool}
+                  className="grid size-4 place-items-center rounded-full bg-surface-2"
+                >
+                  <BrandIcon
+                    name={display?.icon ?? tool}
+                    className="size-2.5"
+                    color={color}
+                  />
+                </span>
+              );
+            })}
           </div>
         ) : null}
         <span className="tt-num shrink-0 font-mono text-[11px] text-muted-foreground">
@@ -912,8 +867,12 @@ export function DashboardModelDonut({ view }: { view: DashboardV2View }) {
           {format.formatPercent(item.share)}
         </span>
         {item.deltaPercent != null ? (
-          <span className="hidden shrink-0 lg:block">
+          <span className="shrink-0">
             <DashboardDeltaChip value={item.deltaPercent} />
+          </span>
+        ) : item.absoluteDelta != null && item.absoluteDelta > 0 ? (
+          <span className="shrink-0">
+            <DashboardNewChip />
           </span>
         ) : null}
       </div>
@@ -936,7 +895,12 @@ export function DashboardModelDonut({ view }: { view: DashboardV2View }) {
           <h2>{t("dashboard.v2.modelsTitle")}</h2>
           <p>{t("dashboard.v2.modelHint", { count: view.modelCount })}</p>
         </div>
-        <DashboardDeltaChip value={view.comparison.tokens.deltaPercent} />
+        <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-muted-foreground">
+          <DashboardDeltaChip value={view.comparison.tokens.deltaPercent} />
+          {view.comparison.tokens.deltaPercent != null && baselineLabel ? (
+            <span>{baselineLabel}</span>
+          ) : null}
+        </span>
       </div>
       <div className="mt-4 space-y-4">
         {top.map(row)}
@@ -1003,95 +967,241 @@ function ThinRing({ rows }: { rows: readonly DashboardV2BreakdownRow[] }) {
   );
 }
 
-export function DashboardProjectOverview({ view }: { view: DashboardV2View }) {
+export function DashboardProjectOverview({
+  view,
+  baselineLabel,
+}: {
+  view: DashboardV2View;
+  baselineLabel?: string;
+}) {
   const { format, t } = useI18n();
   const [topN, setTopN] = useState<3 | 5 | 10>(5);
   const named = view.projects.filter((item) => item.key !== "other");
   const top = named.slice(0, topN);
   const share = top.reduce((sum, item) => sum + item.share, 0);
+  const totalTokens = view.projects.reduce((sum, item) => sum + item.tokens, 0);
+  const rest = named.slice(topN);
+  const restShare = Math.max(0, Math.round((100 - share) * 10) / 10);
   return (
-    <section className="dashboard-panel">
-      <div className="dashboard-panel-head">
-        <div>
-          <h2>{t("dashboard.v2.projectsTitle")}</h2>
-          <p>{t("dashboard.v2.projectHint")}</p>
+    <section className="dashboard-panel dashboard-projects-panel">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-[13px] font-semibold tracking-tight">
+            {t("dashboard.v2.projectsTitle")}
+          </h2>
+          <span className="rounded-md bg-ok/10 px-1.5 py-0.5 font-mono text-[9.5px] text-ok">
+            {t("dashboard.v2.projectActive")}
+          </span>
         </div>
-        <div className="flex rounded-full bg-surface-1 p-0.5">
-          {([3, 5, 10] as const).map((count) => (
-            <button
-              key={count}
-              type="button"
-              onClick={() => setTopN(count)}
-              className={`rounded-full px-2.5 py-1 font-mono text-[10px] ${topN === count ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
-            >
-              TOP {count}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mt-4 flex flex-col overflow-hidden rounded-xl bg-surface-1/30 md:flex-row">
-        <div className="flex min-w-56 flex-col items-center justify-center gap-2 px-6 py-5">
-          <div className="relative">
-            <ThinRing rows={top} />
-            <div className="absolute inset-0 grid place-items-center text-center">
-              <div>
-                <strong className="tt-num block font-mono text-[22px] leading-none">
-                  {format.formatNumber(view.projectCount)}
-                </strong>
-                <span className="mt-1 block font-mono text-[9.5px] uppercase tracking-widest text-muted-foreground">
-                  {t("dashboard.v2.projectCountLabel")}
-                </span>
-              </div>
-            </div>
-          </div>
-          <p className="font-mono text-[10px] text-muted-foreground">
-            TOP {topN} · {format.formatPercent(share)}
-          </p>
-        </div>
-        <div className="min-w-0 flex-1 bg-card px-4 py-2">
-          <div className="space-y-2">
-            {top.map((item, index) => (
-              <div
-                key={item.key}
-                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2 text-[12px]"
+        <div className="flex items-center gap-3">
+          {baselineLabel && (
+            <span className="hidden font-mono text-[10.5px] text-muted-foreground lg:inline">
+              {t("dashboard.v2.projectComparePeriod", {
+                baseline: baselineLabel,
+              })}
+            </span>
+          )}
+          <div className="flex items-center gap-0.5 rounded-full bg-surface-1 p-0.5">
+            {([3, 5, 10] as const).map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => setTopN(count)}
+                className={`rounded-full px-2.5 py-1 font-mono text-[10px] tracking-wider transition-colors ${
+                  topN === count
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <span className="min-w-0 truncate">
-                  <i
-                    className="mr-2 inline-block h-[3px] w-3"
-                    style={{
-                      background: modelColors[index % modelColors.length],
-                    }}
-                  />
-                  {item.key}
-                </span>
-                <span className="font-mono text-muted-foreground">
-                  {format.formatTokens(item.tokens)} /{" "}
-                  {item.sessions == null
-                    ? t("dashboard.kpi.unavailable")
-                    : format.formatNumber(item.sessions)}
-                </span>
-                <DashboardDeltaChip value={item.deltaPercent} />
-              </div>
+                TOP {count}
+              </button>
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row">
+        <div className="flex min-w-[220px] flex-col items-center justify-center gap-5 bg-surface-1/40 px-6 py-5">
+          <div className="relative flex items-center justify-center">
+            <ThinRing rows={top} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="tt-num font-mono text-[22px] leading-none font-black">
+                {format.formatNumber(view.projectCount)}
+              </span>
+              <span className="mt-1 font-mono text-[9.5px] tracking-widest text-muted-foreground uppercase">
+                {t("dashboard.v2.projectCountLabel")}
+              </span>
+            </div>
+          </div>
+          <div className="w-full space-y-1.5">
+            <div className="flex items-center justify-between font-mono text-[10.5px] text-muted-foreground">
+              <span>{t("dashboard.v2.projectTotalQuota")}</span>
+              <span className="tt-num text-foreground">
+                {format.formatTokens(totalTokens)}
+              </span>
+            </div>
+            <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full bg-ok/60"
+                style={{ width: `${Math.min(100, share)}%` }}
+              />
+            </div>
+            <div className="font-mono text-[9.5px] text-muted-foreground">
+              {t("dashboard.v2.projectTopShare", {
+                count: topN,
+                share: format.formatPercent(share),
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 tt-xscroll">
+          <table className="tt-table w-full">
+            <thead>
+              <tr className="font-mono text-[9.5px] tracking-wider text-muted-foreground uppercase">
+                <th className="px-4 py-2.5 text-left font-medium">
+                  {t("dashboard.v2.projectNameCol")}
+                </th>
+                <th
+                  className="px-3 py-2.5 font-medium"
+                  style={{ textAlign: "right" }}
+                >
+                  {t("dashboard.v2.projectShareCol")}
+                </th>
+                <th
+                  className="px-3 py-2.5 font-medium"
+                  style={{ textAlign: "right" }}
+                >
+                  {t("dashboard.v2.projectPerSessionCol")}
+                </th>
+                <th
+                  className="px-4 py-2.5 font-medium"
+                  style={{ textAlign: "right" }}
+                >
+                  {t("dashboard.v2.projectDeltaCol")}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="font-mono text-[12px]">
+              {top.map((item, index) => (
+                <tr
+                  key={item.key}
+                  className="transition-colors hover:bg-surface-1/60"
+                >
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <i
+                        className="h-[3px] w-3 shrink-0"
+                        style={{
+                          background: modelColors[index % modelColors.length],
+                        }}
+                      />
+                      <span className="truncate font-sans text-[12.5px] font-medium">
+                        {item.key}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="tt-num px-3 py-3 text-right font-semibold">
+                    {format.formatPercent(item.share)}
+                  </td>
+                  <td className="tt-num px-3 py-3 text-right text-muted-foreground">
+                    {format.formatTokens(item.tokens)}{" "}
+                    <span className="opacity-40">/</span>{" "}
+                    {item.sessions == null
+                      ? t("dashboard.kpi.unavailable")
+                      : format.formatNumber(item.sessions)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {item.deltaPercent != null ? (
+                      <DashboardDeltaChip
+                        value={item.deltaPercent}
+                        className="justify-end"
+                      />
+                    ) : item.absoluteDelta != null && item.absoluteDelta > 0 ? (
+                      <DashboardNewChip />
+                    ) : (
+                      <DashboardDeltaChip
+                        value={null}
+                        className="justify-end"
+                      />
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {restShare > 0 && (
+                <tr className="text-muted-foreground">
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2.5 opacity-70">
+                      <i className="h-[3px] w-3 shrink-0 bg-surface-2" />
+                      <span className="font-sans text-[12px]">
+                        {t("dashboard.v2.projectOther", {
+                          count: rest.length,
+                        })}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="tt-num px-3 py-2.5 text-right">
+                    {format.formatPercent(restShare)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right opacity-50">--</td>
+                  <td className="px-4 py-2.5 text-right opacity-50">--</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between bg-surface-1/40 px-4 py-2.5 font-mono text-[10.5px] text-muted-foreground">
+        <span>
+          {t("dashboard.v2.projectTotal", { count: view.projectCount })}
+        </span>
+        <Link
+          to="/tracker"
+          className="group inline-flex items-center gap-1.5 text-foreground transition-opacity hover:opacity-70"
+        >
+          {t("dashboard.v2.projectViewDetail")}
+          <ArrowRight
+            className="size-3 transition-transform group-hover:translate-x-0.5"
+            strokeWidth={2}
+          />
+        </Link>
       </div>
     </section>
   );
 }
 
+/** 本地日期 +N 天（避免 UTC 时区偏移）。 */
+function addLocalDays(date: Date, amount: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export function DashboardContribHeatmap({
   points,
-  summary,
+  focusFrom,
+  focusTo,
+  periodLabel,
 }: {
   points: readonly DashboardV2CalendarPoint[];
-  summary: DashboardV2View["calendarSummary"];
+  /** 统计周期窗口起点（该窗口内高亮，其余淡出）；null = 整图高亮。 */
+  focusFrom?: Date | null;
+  /** 统计周期窗口终点。 */
+  focusTo?: Date | null;
+  /** 周期文案（如「近 30 天」），在标题中高亮展示。 */
+  periodLabel?: string;
 }) {
   const { format, t } = useI18n();
   const cells = points.slice(-365);
   const max = Math.max(...cells.map((point) => point.tokens), 1);
   const [hover, setHover] = useState<{
-    index: number;
+    key: string;
+    point: DashboardV2CalendarPoint;
     left: number;
     top: number;
   } | null>(null);
@@ -1100,26 +1210,114 @@ export function DashboardContribHeatmap({
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setBox(el.clientWidth));
+    // 直接量滚动容器自身：clientWidth 含水平内边距（getComputedStyle 取真实
+    // padding 值扣除）。容器宽度由父级布局决定、不受内容溢出影响，因此不会
+    // 像「量内容元素」那样在溢出后锁死在旧宽度上——浏览器缩放/客户端窗口
+    // 变化后立即自适应，无需刷新。scrollbar-gutter 已在本容器上关闭，
+    // clientWidth - paddingX 即真实可用宽度。
+    const measure = () => {
+      const style = getComputedStyle(el);
+      const padX =
+        parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      setBox(el.clientWidth - padX);
+    };
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    setBox(el.clientWidth);
-    return () => observer.disconnect();
+    // 浏览器缩放（Ctrl+滚轮 / Ctrl+±）改变视口 CSS 尺寸时，部分浏览器/
+    // 窗口环境不触发 ResizeObserver —— 用 resize 与 visualViewport 兜底。
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
   }, []);
-  // Adaptive sizing: cells fill the panel width (10px floor, no ceiling), so
-  // a fullscreen panel stretches the calendar edge-to-edge instead of
-  // compressing or leaving a right-hand gap.
+  // 高亮窗口（日期键比较，避免时区偏移）。
+  const focusStartKey = focusFrom ? localDayKey(focusFrom) : null;
+  const focusEndKey = focusTo ? localDayKey(focusTo) : null;
+  const inFocus = (point: DashboardV2CalendarPoint) =>
+    (focusStartKey == null || point.date >= focusStartKey) &&
+    (focusEndKey == null || point.date <= focusEndKey);
+  // 头部统计跟随统计周期（高亮窗口），与「近 7 天 / 近 30 天」联动。
+  const focusStats = useMemo(() => {
+    const window = cells.filter(inFocus);
+    let streak = 0;
+    let longestStreak = 0;
+    for (const point of window) {
+      streak = point.events > 0 ? streak + 1 : 0;
+      longestStreak = Math.max(longestStreak, streak);
+    }
+    return {
+      activeDays: window.filter((point) => point.events > 0).length,
+      totalTokens: window.reduce((sum, point) => sum + point.tokens, 0),
+      longestStreak,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cells, focusStartKey, focusEndKey]);
+  // 随容器宽度自适应：单元格恰好铺满可用宽度，任何缩放/窗口尺寸都无横向
+  // 滚动（不设下限，避免窄容器下锁死为可拖动状态）。
   const GAP = 3;
-  const columns = useMemo(() => {
-    const out: DashboardV2CalendarPoint[][] = [];
-    for (let index = 0; index < cells.length; index += 7) {
-      out.push(cells.slice(index, index + 7));
+  const LABEL_W = 26;
+  type GridCell = DashboardV2CalendarPoint & { future: boolean };
+  // 自然周网格（周日 → 周六）：窗口首日前补空、末日后标为 future（透明），
+  // 与原型一致——周日是一周的开始，纵坐标标注周一/周三/周五。
+  const grid = useMemo<GridCell[][]>(() => {
+    const first = cells[0];
+    const last = cells[cells.length - 1];
+    if (!first || !last) return [];
+    const byDate = new Map(cells.map((point) => [point.date, point]));
+    const windowEnd = new Date(`${last.date}T00:00:00`);
+    const start = new Date(`${first.date}T00:00:00`);
+    start.setDate(start.getDate() - start.getDay());
+    const end = new Date(windowEnd);
+    end.setDate(end.getDate() + (6 - end.getDay()));
+    const out: GridCell[][] = [];
+    for (
+      let week = new Date(start);
+      week <= end;
+      week = addLocalDays(week, 7)
+    ) {
+      const column: GridCell[] = [];
+      for (let day = 0; day < 7; day++) {
+        const date = addLocalDays(week, day);
+        const key = localDayKey(date);
+        const observed = byDate.get(key);
+        column.push({
+          date: key,
+          tokens: observed?.tokens ?? 0,
+          events: observed?.events ?? 0,
+          cacheTokens: observed?.cacheTokens ?? 0,
+          netInputTokens: observed?.netInputTokens ?? 0,
+          outputTokens: observed?.outputTokens ?? 0,
+          sessions: null,
+          previousTokens: null,
+          active: observed?.active ?? false,
+          future: date.getTime() > windowEnd.getTime(),
+        });
+      }
+      out.push(column);
     }
     return out;
   }, [cells]);
-  const cellSize = box
-    ? Math.max(10, (box - (columns.length - 1) * GAP) / columns.length)
-    : 10;
+  const columns = grid;
+  // 随容器宽度自适应：单元格恰好铺满可用宽度，任何缩放/窗口尺寸都无横向
+  // 滚动（无 10px 下限，避免窄容器下锁死为可拖动状态）。
+  const cellSize =
+    box > 0 && columns.length > 0
+      ? (box - LABEL_W - (columns.length - 1) * GAP) / columns.length
+      : 10;
   const gap = GAP;
+  const weekdayLabels = [
+    "",
+    t("dashboard.heatmap.monday"),
+    "",
+    t("dashboard.heatmap.wednesday"),
+    "",
+    t("dashboard.heatmap.friday"),
+    "",
+  ];
   const monthTicks = useMemo(() => {
     const ticks: { column: number; label: string }[] = [];
     let previousMonth = -1;
@@ -1132,6 +1330,8 @@ export function DashboardContribHeatmap({
           column: columnIndex,
           label: format.formatDate(`${first.date}T00:00:00`, {
             month: "short",
+            year: undefined,
+            day: undefined,
           }),
         });
         previousMonth = month;
@@ -1144,82 +1344,128 @@ export function DashboardContribHeatmap({
       ? 0
       : Math.min(4, Math.max(1, Math.ceil((point.tokens / max) * 4)));
   return (
-    <section className="dashboard-panel">
-      <div className="dashboard-panel-head">
-        <div>
-          <h2>{t("dashboard.v2.calendarTitle")}</h2>
-          <p>
-            {t("dashboard.v2.calendarHint", {
-              count: summary.activeDays,
-              tokens: format.formatTokens(summary.totalTokens),
-            })}{" "}
-            · {t("dashboard.v2.streakHint", { count: summary.longestStreak })}
-          </p>
-        </div>
-      </div>
+    <section className="dashboard-panel dashboard-calendar-panel">
+      <header className="dashboard-calendar-head">
+        <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {t("dashboard.v2.calendarTitle")}
+          {periodLabel ? (
+            <span className="rounded-md bg-primary/15 px-1.5 py-0.5 font-mono text-[9.5px] font-normal text-primary">
+              {periodLabel}
+            </span>
+          ) : null}
+        </h2>
+        <p>
+          {t("dashboard.v2.calendarHint", {
+            count: focusStats.activeDays,
+            tokens: format.formatTokens(focusStats.totalTokens),
+          })}{" "}
+          · {t("dashboard.v2.streakHint", { count: focusStats.longestStreak })}
+        </p>
+      </header>
       <div
         ref={wrapRef}
-        className="tt-xscroll mt-5 pb-1"
+        className="tt-xscroll px-4 pt-4 pb-1"
+        style={{ scrollbarGutter: "auto" }}
         aria-label={t("dashboard.v2.calendarTitle")}
       >
         <div className="inline-block min-w-full">
-          <div className="relative h-[14px]">
-            {monthTicks.map((tick) => (
-              <span
-                key={`${tick.column}-${tick.label}`}
-                className="tt-num absolute top-0 text-[10px] leading-none text-muted-foreground"
-                style={{ left: tick.column * (cellSize + gap) }}
-              >
-                {tick.label}
-              </span>
-            ))}
+          <div className="flex">
+            <div style={{ width: LABEL_W }} />
+            <div className="relative h-[14px] flex-1">
+              {monthTicks.map((tick) => (
+                <span
+                  key={`${tick.column}-${tick.label}`}
+                  className="tt-num absolute top-0 text-[10px] leading-none text-muted-foreground"
+                  style={{ left: tick.column * (cellSize + gap) }}
+                >
+                  {tick.label}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="mt-1.5 flex" style={{ gap }}>
-            {columns.map((column, columnIndex) => (
-              <div key={columnIndex} className="flex flex-col" style={{ gap }}>
-                {column.map((point, rowIndex) => {
-                  const index = columnIndex * 7 + rowIndex;
-                  const level = levelOf(point);
-                  return (
-                    <span
-                      key={point.date}
-                      title={`${point.date} · ${format.formatTokens(point.tokens)} · ${format.formatNumber(point.events)} ${t("dashboard.v2.eventShort")}`}
-                      onMouseEnter={(event) => {
-                        const rect =
-                          event.currentTarget.getBoundingClientRect();
-                        setHover({
-                          index,
-                          left: rect.left + rect.width / 2,
-                          top: rect.top,
-                        });
-                      }}
-                      onMouseLeave={() => setHover(null)}
-                      className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level} ${
-                        hover?.index === index ? "ring-1 ring-primary" : ""
-                      }`}
-                      style={{ width: cellSize, height: cellSize }}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+          {/* 标签列与网格之间不加 gap（与原型一致），保证总宽恰好等于容器 */}
+          <div className="mt-1.5 flex">
+            <div
+              className="tt-num flex shrink-0 flex-col text-[10px] leading-none text-muted-foreground"
+              style={{ width: LABEL_W, gap }}
+            >
+              {weekdayLabels.map((label, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className="flex items-center"
+                  style={{ height: cellSize }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div className="flex" style={{ gap }}>
+              {columns.map((column, columnIndex) => (
+                <div
+                  key={columnIndex}
+                  className="flex flex-col"
+                  style={{ gap }}
+                >
+                  {column.map((point, rowIndex) => {
+                    const level = point.future ? 0 : levelOf(point);
+                    return (
+                      <span
+                        key={point.date}
+                        title={
+                          point.future
+                            ? undefined
+                            : `${point.date} · ${format.formatTokens(point.tokens)} · ${format.formatNumber(point.events)} ${t("dashboard.v2.eventShort")}`
+                        }
+                        onMouseEnter={
+                          point.future
+                            ? undefined
+                            : (event) => {
+                                const rect =
+                                  event.currentTarget.getBoundingClientRect();
+                                setHover({
+                                  key: point.date,
+                                  point,
+                                  left: rect.left + rect.width / 2,
+                                  top: rect.top,
+                                });
+                              }
+                        }
+                        onMouseLeave={() => setHover(null)}
+                        className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level} ${
+                          hover?.key === point.date ? "ring-1 ring-primary" : ""
+                        }`}
+                        style={{
+                          width: cellSize,
+                          height: cellSize,
+                          // 未来日期透明；统计周期窗口外淡出，窗口内高亮
+                          opacity: point.future ? 0 : inFocus(point) ? 1 : 0.22,
+                          background: point.future ? "transparent" : undefined,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
-        <span>{t("dashboard.heatmap.low")}</span>
-        {[0, 1, 2, 3, 4].map((level) => (
-          <span
-            key={level}
-            className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level}`}
-          />
-        ))}
-        <span>{t("dashboard.heatmap.high")}</span>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-4 pb-4 text-[10px] text-muted-foreground">
+        <span>{t("dashboard.heatmap.legendNote")}</span>
+        <span className="flex items-center gap-1.5">
+          {t("dashboard.heatmap.low")}
+          {[0, 1, 2, 3, 4].map((level) => (
+            <span
+              key={level}
+              className={`dashboard-calendar-cell dashboard-calendar-cell-level-${level}`}
+            />
+          ))}
+          {t("dashboard.heatmap.high")}
+        </span>
       </div>
       {hover != null
         ? (() => {
-            const point = cells[hover.index];
-            if (!point) return null;
+            const point = hover.point;
             const level = levelOf(point);
             return (
               <div
@@ -1296,7 +1542,7 @@ export function DashboardAgentWorkstreams({
       : view.tools.filter((tool) => tool.id === selectedTool);
   if (!tools.length) return null;
   return (
-    <section className="dashboard-panel">
+    <section className="dashboard-panel dashboard-workstream-panel">
       <div className="dashboard-panel-head">
         <div>
           <h2>{t("dashboard.v2.contextTitle")}</h2>
@@ -1327,8 +1573,8 @@ export function DashboardAgentWorkstreams({
                   onClick={() => setOpen(expanded ? null : tool.id)}
                 >
                   <BrandIcon
-                    name={tool.name}
-                    color={brandColorOf(tool.name)}
+                    name={tool.icon ?? tool.name}
+                    color={tool.color ?? brandColorOf(tool.name)}
                     className="size-5"
                   />
                   <span className="min-w-0 flex-1 truncate font-medium">

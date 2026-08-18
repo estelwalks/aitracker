@@ -1,16 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardPage } from "../modules/dashboard/presentation/DashboardPage";
-import { getDashboardReadModel } from "../modules/dashboard/query";
-import type { DashboardReadModel } from "../modules/dashboard/contracts";
+import { getDashboardSummaryReadModel } from "../modules/dashboard/summary-query";
+import type { DashboardSummaryReadModel } from "../modules/dashboard/summary-contracts";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { brandParams } from "../lib/app-config";
 
 export const Route = createFileRoute("/")({
-  loader: async ({ location }): Promise<DashboardReadModel> =>
-    getDashboardReadModel({
-      data: resolveLocaleFromSearch(location.search),
-    }),
+  // P4-T4-07: locale is part of the loader cache key; cached navigations reuse
+  // the projection while the snapshot revision is unchanged.
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
+  }),
+  loader: async ({ deps }): Promise<DashboardSummaryReadModel> =>
+    getDashboardSummaryReadModel({ data: deps.locale }),
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {

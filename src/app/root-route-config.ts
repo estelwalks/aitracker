@@ -57,11 +57,9 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
-      },
+      // P4-T4-08: Google Fonts removed from the first-screen path. The CSS
+      // font stacks already fall back to system fonts (PingFang/Hiragino/…),
+      // so offline and DNS failures no longer affect shell visibility.
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],

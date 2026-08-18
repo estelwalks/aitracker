@@ -2,15 +2,17 @@ import { RefreshCw, Sparkles, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 /**
- * Shared Jarvis insight card: a big rounded hero with an orb, a typewriter
+ * Shared Jarvis insight card: a rounded hero with an orb, a typewriter
  * message, a dot carousel and a rotate control. Visually mirrors the V3.0
- * prototype and the dashboard's `DashboardJarvisInsight` (same CSS classes),
- * but stays i18n-free — callers pass fully localized `lines` and labels.
+ * prototype. The shared page-level default is `variant="hero"`; the compact
+ * `variant="inline"` remains available only for embedded surfaces. The
+ * component stays i18n-free — callers pass fully localized `lines` and labels.
  *
  * `lines` are short, real-data-derived insights; the card types the active
- * one character-by-character and auto-rotates every 6s (reduced-motion aware).
+ * one character-by-character and auto-rotates (hero: 9s, inline: 6s;
+ * reduced-motion aware).
  *
- * Two optional extensions keep every existing caller unchanged:
+ * Optional extensions keep every existing caller unchanged:
  * - `icon` swaps the orb glyph (defaults to Sparkles).
  * - `actions` renders into the right-hand action column (before the rotate
  *   button), mirroring the dashboard's `flex shrink-0 flex-col items-end`
@@ -20,6 +22,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
  */
 const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 6000;
+const HERO_TYPE_INTERVAL_MS = 22;
+const HERO_ROTATE_AFTER_MS = 9000;
 
 export function JarvisInsight({
   title,
@@ -32,6 +36,7 @@ export function JarvisInsight({
   icon: Icon = Sparkles,
   actions,
   pills,
+  variant = "hero",
 }: {
   title?: string;
   lines: readonly string[];
@@ -50,7 +55,10 @@ export function JarvisInsight({
   actions?: ReactNode;
   /** Extra chips rendered in the title row, after the title. */
   pills?: ReactNode;
+  /** hero = the shared page-level prototype card; inline = compact embedding. */
+  variant?: "hero" | "inline";
 }) {
+  const hero = variant === "hero";
   const safeLines = useMemo(
     () => lines.filter((line) => line.length > 0),
     [lines],
@@ -76,21 +84,27 @@ export function JarvisInsight({
     }
     setTyped("");
     let cursor = 0;
-    const typer = window.setInterval(() => {
-      cursor += 1;
-      setTyped(line.slice(0, cursor));
-      if (cursor >= line.length) window.clearInterval(typer);
-    }, TYPE_INTERVAL_MS);
-    const rotate = window.setTimeout(() => {
-      setIndex((current) =>
-        safeLines.length ? (current + 1) % safeLines.length : 0,
-      );
-    }, ROTATE_AFTER_MS);
+    const typer = window.setInterval(
+      () => {
+        cursor += 1;
+        setTyped(line.slice(0, cursor));
+        if (cursor >= line.length) window.clearInterval(typer);
+      },
+      hero ? HERO_TYPE_INTERVAL_MS : TYPE_INTERVAL_MS,
+    );
+    const rotate = window.setTimeout(
+      () => {
+        setIndex((current) =>
+          safeLines.length ? (current + 1) % safeLines.length : 0,
+        );
+      },
+      hero ? HERO_ROTATE_AFTER_MS : ROTATE_AFTER_MS,
+    );
     return () => {
       window.clearInterval(typer);
       window.clearTimeout(rotate);
     };
-  }, [line, safeLines.length]);
+  }, [hero, line, safeLines.length]);
 
   if (safeLines.length === 0) return null;
 
@@ -131,15 +145,36 @@ export function JarvisInsight({
   );
 
   return (
-    <section className="dashboard-insight-hero" aria-label={title}>
-      <div className="relative flex min-w-0 gap-5">
-        <span className="dashboard-insight-orb tt-breathe" style={orbStyle}>
-          <Icon className="size-6" />
+    <section
+      className={`dashboard-insight-hero${hero ? "" : " dashboard-insight-inline"}`}
+      aria-label={title}
+    >
+      <div className={`relative flex min-w-0 ${hero ? "gap-4" : "gap-3"}`}>
+        <span className="relative mt-0.5 shrink-0">
+          <span
+            className={`dashboard-insight-logo-shell tt-breathe relative flex shrink-0 ${
+              hero ? "size-10" : "size-8"
+            }`}
+          >
+            <span className="dashboard-insight-logo-halo absolute inset-0 rounded-full" />
+            <span
+              className="dashboard-insight-logo relative flex size-full items-center justify-center rounded-full bg-surface-2"
+              style={orbStyle}
+            >
+              <Icon
+                className={hero ? "size-5" : "size-4"}
+                style={hero ? { color: "var(--color-ok)" } : undefined}
+                strokeWidth={1.7}
+              />
+            </span>
+          </span>
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {title ? (
-              <h1 className="text-[15px] font-semibold tracking-tight">
+              <h1
+                className={`${hero ? "text-[15px]" : "text-[13px]"} font-semibold tracking-tight`}
+              >
                 {title}
               </h1>
             ) : null}
@@ -152,14 +187,24 @@ export function JarvisInsight({
             ) : null}
           </div>
           <p
-            className="mt-3 min-h-20 max-w-5xl text-[19px] leading-[1.7] font-medium tracking-tight md:text-[22px]"
+            className={
+              hero
+                ? "mt-2 min-h-[62px] text-[17px] leading-[1.65] font-medium tracking-tight text-foreground/90 md:text-[19px]"
+                : "mt-2 min-h-[42px] text-[14px] leading-relaxed text-foreground/90"
+            }
             aria-label={line}
           >
             {typed}
-            <span className="tt-breathe ml-1 inline-block h-[15px] w-[7px] translate-y-[2px] bg-foreground/60" />
+            <span
+              className={`ml-1 inline-block bg-foreground/60 ${
+                hero
+                  ? "h-[17px] w-[8px] translate-y-[3px]"
+                  : "h-[15px] w-[7px] translate-y-[2px]"
+              }`}
+            />
           </p>
           <div
-            className="mt-5 flex gap-1.5"
+            className={`flex gap-1.5 ${hero ? "mt-3.5" : "mt-3"}`}
             role="tablist"
             aria-label={dotsLabel}
           >

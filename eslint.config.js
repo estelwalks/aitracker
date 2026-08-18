@@ -21,6 +21,7 @@ export default tseslint.config(
       "src/lib/pricing/pricing-definitions.generated.ts", // 生成产物,由 generate:pricing-imports 重建
       "src/lib/security/security-rules.generated.ts", // 生成产物,由 generate:security-rules 重建
       "src/modules/tasks/definitions/job-catalog.generated.ts", // 生成产物,由 generate:job-imports 重建
+      "src/routeTree.gen.ts", // 生成产物,由 TanStack Router 插件重建
     ],
   },
   {

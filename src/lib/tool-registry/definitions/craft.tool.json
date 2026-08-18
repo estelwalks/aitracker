@@ -4,7 +4,9 @@
   "id": "craft",
   "display": {
     "name": "Craft Agents",
-    "nameZh": "Craft Agents"
+    "nameZh": "Craft Agents",
+    "icon": "other",
+    "color": "#f97316"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".craft-agent"
       }
