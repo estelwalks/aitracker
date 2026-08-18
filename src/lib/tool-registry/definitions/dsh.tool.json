@@ -1,0 +1,73 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "dsh",
+  "display": {
+    "name": "DeepSeek Harness",
+    "nameZh": "DeepSeek Harness",
+    "icon": "deepseek",
+    "color": "#4d6bfe"
+  },
+  "platforms": {
+    "macos": "supported",
+    "windows": "supported",
+    "linux": "planned"
+  },
+  "detection": {
+    "locations": [
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".dsh"
+      }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "native",
+      "reader": "dsh-session-v1",
+      "paths": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".dsh/sessions",
+          "glob": "**/session.jsonl.zstd",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".dsh/sessions",
+          "glob": "**/session.jsonl",
+          "format": "jsonl"
+        }
+      ],
+      "maxFileSizeBytes": 67108864
+    },
+    "skills": "unsupported",
+    "agents": "unsupported",
+    "sessions": {
+      "mode": "unsupported"
+    },
+    "market": "unsupported",
+    "security": "unsupported"
+  },
+  "modelObservation": {
+    "modelField": "model"
+  }
+}

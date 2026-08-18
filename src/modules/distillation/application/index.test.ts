@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AIExecutionResult } from "../../ai-orchestration/contracts.ts";
 import type {
+  KnowledgeAsset,
+  KnowledgeAssetKind,
   KnowledgeRepository,
   KnowledgeVersion,
 } from "../../knowledge/contracts.ts";
@@ -90,6 +92,7 @@ function setup(
   transcriptPort?: {
     load(ref: SessionRef): Promise<SessionTranscript | null>;
   },
+  knowledgeAssets: readonly KnowledgeAsset[] = [],
 ) {
   const calls: string[] = [];
   const knowledge = {
@@ -133,6 +136,9 @@ function setup(
         audit: { action: "approved", actor: "user" },
       };
       return { ok: true, value: version } as const;
+    },
+    async list() {
+      return { ok: true, value: knowledgeAssets } as const;
     },
   } as unknown as KnowledgeRepository;
   const app = createDistillationApplication({
@@ -630,4 +636,26 @@ test("invalid segments are rejected before the model runs", async () => {
   );
   assert.equal(overLimit.ok, false);
   assert.equal(invoked, false);
+});
+
+test("counts() buckets distilled knowledge assets into capability and memory", async () => {
+  const asset = (
+    kind: KnowledgeAssetKind,
+    assetId: string,
+  ): KnowledgeAsset => ({
+    assetId,
+    kind,
+    title: assetId,
+    currentVersion: 1,
+    status: "approved",
+    createdAt: "2026-08-07T00:00:00.000Z",
+    updatedAt: "2026-08-07T00:00:00.000Z",
+  });
+  const { app } = setup(execution(), [], undefined, undefined, [
+    asset("snippet", "a1"), // skill/prompt/persona 蒸馏产物 → 能力资产
+    asset("brief", "a2"), // workflow 蒸馏产物 → 能力资产
+    asset("memory", "a3"), // task 蒸馏产物 → 记忆资产
+  ]);
+  assert.deepEqual(await app.counts(), { capability: 2, memory: 1 });
+  assert.equal(await app.count(), 3);
 });

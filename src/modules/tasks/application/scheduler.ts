@@ -57,6 +57,17 @@ export interface SchedulerOptions {
     delay: number,
   ) => ReturnType<typeof setTimeout>;
   readonly clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
+  /**
+   * P5-T5-06: global resource budget. Collection tasks acquire the "heavy"
+   * permit before running so at most one heavy collector executes at a time.
+   * Manual triggers raise queue priority but never bypass the budget.
+   */
+  readonly resourceBudget?: {
+    acquire(
+      resource: "heavy" | "file" | "classifier",
+      signal?: AbortSignal,
+    ): Promise<() => void>;
+  };
 }
 
 export interface TaskScheduler {
@@ -190,7 +201,19 @@ function taskErrorCode(error: TaskExecutionError): `errors.${string}` {
     : "errors.tasks.execution-failed";
 }
 
-const DEFAULT_ENABLED_TASK_IDS = new Set(["security.monitor"]);
+/**
+ * Default-enabled tasks when the user has no persisted preference (P3-T3-10).
+ * Snapshot-refresh tasks are on by default so data never goes stale just
+ * because a preference file was never written. Business plan tasks
+ * (retention/reports) stay opt-in.
+ */
+const DEFAULT_ENABLED_TASK_IDS = new Set([
+  "security.monitor",
+  "usage.refresh",
+  "skills.refresh",
+  "sessions.refresh",
+  "exchange.refresh",
+]);
 
 export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const clock = options.clock ?? new SystemClock();
@@ -287,6 +310,16 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       () => controller.abort(),
       definition.timeoutMs,
     );
+    // P5-T5-06: heavy collectors (category "collection") share the global
+    // heavy permit; the release is idempotent and always runs, so cancelled
+    // or failed tasks can never leak a permit. Manual triggers raise queue
+    // priority (runNow) but never bypass this budget.
+    const isHeavy = definition.category === "collection";
+    const releaseHeavy = isHeavy
+      ? await options.resourceBudget
+          ?.acquire("heavy", controller.signal)
+          .catch(() => undefined)
+      : undefined;
     try {
       if (!executor)
         throw Object.assign(new Error("Executor unavailable"), {
@@ -345,6 +378,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         });
     } finally {
       clearTimer(timeoutTimer);
+      releaseHeavy?.();
       active.delete(run.taskId);
     }
   };

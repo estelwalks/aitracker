@@ -4,7 +4,9 @@
   "id": "mimo",
   "display": {
     "name": "Mimo Code",
-    "nameZh": "Mimo Code"
+    "nameZh": "Mimo Code",
+    "icon": "other",
+    "color": "#ff6900"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,10 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "dataHome",
         "path": "mimocode"
       }

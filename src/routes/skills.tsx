@@ -4,21 +4,18 @@ import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
-import { getDashboardReadModel } from "../modules/dashboard/query";
+import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
 import { getDistillationQuery } from "../modules/distillation/query";
-import { getMarketSkills } from "../modules/skill-distribution/query";
-import type {
-  SkillHubData,
-  SkillHubTab,
-} from "../modules/skill-distribution/presentation/SkillHubPage";
-import { SkillHubPage } from "../modules/skill-distribution/presentation/SkillHubPage";
+import type { SkillHubData } from "../modules/skill-distribution/presentation/SkillHubPage";
 
-type SkillsSearchParams = { tab?: SkillHubTab };
+/** 兼容拆分前的 `?tab=market` 直达链接：市场已迁至独立 /market 路由。 */
+type SkillsSearchParams = { tab?: "market" | "local" };
 
 interface SkillsLoader extends SkillHubData {
   readonly locale: Locale;
 }
 
+// The page component lives in skills.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/skills")({
   validateSearch: (search: Record<string, unknown>): SkillsSearchParams => ({
     tab:
@@ -28,17 +25,18 @@ export const Route = createFileRoute("/skills")({
           ? "local"
           : undefined,
   }),
-  loader: async ({ location }): Promise<SkillsLoader> => {
-    const locale = resolveLocaleFromSearch(location.search);
-    const [workspace, usage, market, distillation] = await Promise.all([
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
+  }),
+  loader: async ({ deps }): Promise<SkillsLoader> => {
+    const [workspace, usage, distillation] = await Promise.all([
       getSkillWorkspace(),
-      getDashboardReadModel({ data: locale }),
-      getMarketSkills({
-        data: { page: 1, limit: 12, search: "", sort: "downloads" },
-      }),
+      // Compact agent-overview projection (P1-T1-07); the full dashboard DTO is
+      // no longer loaded by the skills route.
+      getAgentUsageOverview({ data: { locale: deps.locale } }),
       // Real distillation activity from the composition root; never breaks the
       // page when the workbench is unavailable.
-      getDistillationQuery({ data: locale })
+      getDistillationQuery({ data: deps.locale })
         .then((view) => ({
           approved: view.stats.approved,
           waiting: view.candidates.filter(
@@ -47,8 +45,11 @@ export const Route = createFileRoute("/skills")({
         }))
         .catch(() => null),
     ]);
-    return { locale, workspace, usage, market, distillation };
+    return { locale: deps.locale, workspace, usage, distillation };
   },
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -59,11 +60,4 @@ export const Route = createFileRoute("/skills")({
       },
     ],
   }),
-  component: SkillsRoute,
 });
-
-function SkillsRoute() {
-  const { tab } = Route.useSearch();
-  const initial = Route.useLoaderData();
-  return <SkillHubPage initial={initial} initialTab={tab ?? "local"} />;
-}

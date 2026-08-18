@@ -4,7 +4,9 @@
   "id": "anythingllm",
   "display": {
     "name": "AnythingLLM Desktop",
-    "nameZh": "AnythingLLM Desktop"
+    "nameZh": "AnythingLLM Desktop",
+    "icon": "other",
+    "color": "#8b5cf6"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,9 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "anythingllm-desktop"
       }

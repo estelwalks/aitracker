@@ -21,7 +21,7 @@ import {
   resolveInsightLines,
 } from "../../../../lib/page-insights";
 import type { UsageLogParsing } from "../../../../lib/tools/catalog";
-import { refreshSourcesQuery } from "../api.server";
+import { getSourcesQuery, refreshSourcesQuery } from "../server-fns";
 import type {
   SourcesQueryEntry,
   SourcesQueryStatus,
@@ -34,7 +34,7 @@ export type {
   SourcesQuerySummary,
 } from "./model";
 export { toSourcesQuerySummary } from "./model";
-export { getSourcesQuery } from "../api.server";
+export { getSourcesQuery };
 
 const STATUS_META: Record<
   SourcesQueryStatus,
@@ -118,8 +118,28 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
     if (refreshing) return;
     setRefreshing(true);
     try {
+      const before = summary.generatedAt;
+      // T4-01 (fix): the refresh command is non-blocking — the server fires
+      // the snapshot refresh in the background and returns the latest known
+      // projection; poll until the snapshot revision lands, then update.
       setSummary(await refreshSourcesQuery());
-      toast.success(t("sources.toast.rescanDone"));
+      toast.success(t("sources.toast.rescanStarted"));
+      const startedAt = Date.now();
+      const poll = async () => {
+        if (Date.now() - startedAt > 120_000) return;
+        try {
+          const next = await getSourcesQuery();
+          if (next.generatedAt !== before) {
+            setSummary(next);
+            toast.success(t("sources.toast.rescanDone"));
+            return;
+          }
+        } catch {
+          // transient; retry on the next tick
+        }
+        window.setTimeout(() => void poll(), 15_000);
+      };
+      window.setTimeout(() => void poll(), 15_000);
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.error"));

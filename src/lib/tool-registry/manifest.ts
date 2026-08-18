@@ -36,6 +36,7 @@ export interface PublicTool {
   name: string;
   nameZh: string;
   icon?: string;
+  color?: string;
   /**
    * True for legacy collection sources (docs §6) that stay in the usage
    * source universe even if they leave the product catalog. Consumers
@@ -76,6 +77,7 @@ export function generatePublicManifest(
         name: def.display.name,
         nameZh: def.display.nameZh,
         ...(def.display.icon ? { icon: def.display.icon } : {}),
+        ...(def.display.color ? { color: def.display.color } : {}),
         ...(LEGACY_TOOL_IDS.includes(def.id) ? { legacy: true } : {}),
         platforms: projectPublicPlatforms(def, sharedPacks?.platformProfiles),
         capabilities: {

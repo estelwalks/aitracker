@@ -6,19 +6,24 @@ import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import type { TrackerReadModel } from "../modules/usage/contracts";
 import { getTrackerQuery } from "../modules/usage/query";
-import { TrackerPage } from "../modules/usage/presentation/TrackerPage";
 
 interface TrackerLoader {
   readonly locale: Locale;
   readonly model: TrackerReadModel;
 }
 
+// The page component lives in tracker.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/tracker")({
-  loader: async ({ location }): Promise<TrackerLoader> => {
-    const locale = resolveLocaleFromSearch(location.search);
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
+  }),
+  loader: async ({ deps }): Promise<TrackerLoader> => {
     const model = await getTrackerQuery();
-    return { locale, model };
+    return { locale: deps.locale, model };
   },
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -30,10 +35,4 @@ export const Route = createFileRoute("/tracker")({
       },
     ],
   }),
-  component: TrackerRoutePage,
 });
-
-function TrackerRoutePage() {
-  const { model } = Route.useLoaderData();
-  return <TrackerPage initial={model} />;
-}

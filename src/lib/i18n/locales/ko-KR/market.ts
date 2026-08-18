@@ -2,11 +2,19 @@
 export const market = {
   pageHeader: "Skill 마켓",
   pageHeaderDesc: "보안 스캔을 통과한 Skill만 수록",
+  strip: {
+    subtitle: "보안 스캔을 통과한 Skill만 수록 · 원클릭으로 로컬 Agent에 배포",
+  },
   meta: {
     description:
       "{appName} Skill 마켓의 실제 인덱스를 탐색합니다. 보안 스캔을 통과한 Skill만 수록됩니다.",
   },
   notProvided: "제공되지 않음",
+  jarvis: {
+    available:
+      "마켓에 {total}개의 Skill, 그중 {official}개가 공식 릴리스입니다.",
+    installed: "이 기기에 마켓 Skill {count}개를 설치했습니다.",
+  },
   network: {
     loadFailed:
       "네트워크를 사용할 수 없습니다: Skill 마켓을 불러오지 못했습니다",
@@ -28,6 +36,9 @@ export const market = {
     totalDownloads: "총 다운로드",
     hintCurrentPage: "현재 페이지 통계",
     hintLocalInstalled: "이 기기에 설치됨",
+    hintOfficial: "공식 팀 유지관리",
+    hintDomains: "{count}개 분류",
+    hintDownloads: "총 다운로드 {count}",
   },
   search: {
     placeholder: "Skill 이름, 소스 경로 또는 기능 검색",
@@ -38,12 +49,16 @@ export const market = {
   sort: {
     hot: "인기",
     latest: "최신",
+    rating: "평점 높은 순",
+    tokens: "Token 사용량",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
     downloads: "다운로드 수",
   },
   list: {
     title: "Skill 목록 ({count})",
+    count: "총 {count}개 Skill",
+    allSafe: "모두 보안 스캔 통과",
   },
   table: {
     rank: "순위",
@@ -86,6 +101,8 @@ export const market = {
   },
   install: {
     button: "설치",
+    expandAll: "모두 표시 {count}",
+    expandMore: "{count}개 더",
     toSelected: "선택한 도구에 설치",
     target: "설치 대상",
     notDetected: "미감지",

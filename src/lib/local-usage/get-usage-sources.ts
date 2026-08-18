@@ -1,6 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
-import { homedir } from "node:os";
-
 import {
   AI_TOOLS,
   type AiTool,
@@ -159,36 +156,3 @@ export function deriveUsageSources(
     },
   };
 }
-
-export const getUsageSources = createServerFn({ method: "GET" }).handler(
-  async (): Promise<UsageSourcesSummary> => {
-    const { getCachedLocalUsageSnapshot } =
-      await import("./snapshot.server.ts");
-    const snapshot = await getCachedLocalUsageSnapshot();
-    const installations = await detectToolInstallations(AI_TOOLS, homedir());
-    return deriveUsageSources(
-      AI_TOOLS,
-      snapshot.sources,
-      installations,
-      snapshot.generatedAt,
-      homedir(),
-    );
-  },
-);
-
-export const refreshUsageSources = createServerFn({ method: "POST" }).handler(
-  async (): Promise<UsageSourcesSummary> => {
-    const { clearLocalUsageSnapshotCache, getCachedLocalUsageSnapshot } =
-      await import("./snapshot.server.ts");
-    clearLocalUsageSnapshotCache();
-    const snapshot = await getCachedLocalUsageSnapshot();
-    const installations = await detectToolInstallations(AI_TOOLS, homedir());
-    return deriveUsageSources(
-      AI_TOOLS,
-      snapshot.sources,
-      installations,
-      snapshot.generatedAt,
-      homedir(),
-    );
-  },
-);

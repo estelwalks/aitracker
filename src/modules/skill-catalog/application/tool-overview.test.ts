@@ -23,7 +23,10 @@ const input: DashboardV2Snapshot = {
   outputAvailability: {
     securityRuns: { count: null, available: false },
     distillationOutputs: { count: null, available: false },
+    distillationBreakdown: { capability: null, memory: null },
     dailyReports: { count: null, available: false },
+    weeklyReports: { count: null, available: false },
+    monthlyReports: { count: null, available: false },
   },
   skills: { available: true, count: 2, generatedAt: null },
   sessions: {
@@ -197,6 +200,8 @@ test("installed Claude with zero events is detected, not an unavailable tool", (
   assert.deepEqual(view.selected, {
     id: "claude-code",
     name: "Claude Code",
+    icon: "claude",
+    color: "#d97757",
     available: false,
     detected: true,
     active: false,

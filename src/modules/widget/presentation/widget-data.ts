@@ -1,25 +1,31 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useI18n } from "../../../lib/i18n/context";
 import type { Locale } from "../../../lib/i18n/locale";
-import type { UsagePeriod } from "../../../lib/local-usage/presentation";
-import { resolveUsageRange } from "../../../lib/local-usage/presentation";
-import type { LocalUsageEvent } from "../../../lib/local-usage/types";
-import { estimateUsageCost } from "../../../lib/pricing";
-import { createDashboardV2View, getDashboardReadModel } from "../../dashboard";
-import type {
-  DashboardReadModel,
-  DashboardV2Event,
-  DashboardV2Snapshot,
-} from "../../dashboard";
+import {
+  getWidgetReadModel,
+  getWidgetStatusReadModel,
+  type WidgetPeriodStats,
+  type WidgetReadModel,
+} from "../read-model";
 import { getMemoryAssets } from "../../knowledge";
 import {
   useSecurityScanOverview,
   type SecurityScanOverview,
 } from "../../security-assessment";
 
-/** 与 dashboard 的 30s router.invalidate 节奏一致。 */
-const REFRESH_INTERVAL_MS = 30_000;
+/**
+ * P4-T4-06: Widget revision protocol (Query-owned).
+ *
+ * The widget polls a ≤2 KB status probe every 60s via React Query
+ * (refetchInterval pauses automatically while the document is hidden) and
+ * only fetches the ≤50 KB pre-aggregated model when the snapshot revision
+ * changes — the model query key embeds the revision. No raw events ever cross
+ * this boundary and no client-side re-aggregation happens. Query caching
+ * deduplicates the read model across widget previews within one renderer;
+ * cross-renderer reads hit the same server-side projection.
+ */
 
 export interface WidgetToolStat {
   readonly id: string;
@@ -28,17 +34,6 @@ export interface WidgetToolStat {
   readonly events: number;
   /** null 表示定价不可用（与 dashboard 的 estimatedCostUsd 语义一致）。 */
   readonly costUsd: number | null;
-}
-
-export interface WidgetPeriodStats {
-  readonly tokens: number;
-  readonly events: number;
-  readonly sessions: number | null;
-  readonly activeTools: number;
-  readonly costUsd: number | null;
-  readonly cacheRate: number | null;
-  readonly trend: readonly { date: string; tokens: number }[];
-  readonly topTools: readonly WidgetToolStat[];
 }
 
 export interface WidgetDataModel {
@@ -61,11 +56,13 @@ export interface WidgetDataModel {
     readonly memory: number | null;
   };
   readonly security: SecurityScanOverview;
-  /** 手动重新拉取 dashboard 读模型。 */
+  /** 手动重新拉取（status + model + memory 失效）。 */
   readonly refresh: () => void;
 }
 
 export type WidgetMood = "idle" | "live" | "warn" | "danger";
+
+const STATUS_INTERVAL_MS = 60_000;
 
 const emptyPeriod = (): WidgetPeriodStats => ({
   tokens: 0,
@@ -78,124 +75,6 @@ const emptyPeriod = (): WidgetPeriodStats => ({
   topTools: [],
 });
 
-/** DashboardV2Event → 定价层需要的 LocalUsageEvent 投影（只取计费字段）。 */
-function toLocalUsageEvent(event: DashboardV2Event): LocalUsageEvent {
-  return {
-    source: event.source,
-    timestamp: event.timestamp,
-    model: event.model,
-    project: event.project,
-    inputTokens: event.inputTokens,
-    cachedInputTokens: event.cachedInputTokens,
-    cacheCreationInputTokens: event.cacheCreationInputTokens,
-    outputTokens: event.outputTokens,
-    reasoningOutputTokens: event.reasoningOutputTokens,
-    totalTokens: event.totalTokens,
-  };
-}
-
-function eventsInRange(
-  events: readonly DashboardV2Event[],
-  from: Date,
-  to: Date,
-): DashboardV2Event[] {
-  return events.filter((event) => {
-    const timestamp = new Date(event.timestamp);
-    if (Number.isNaN(timestamp.getTime())) return false;
-    return timestamp >= from && timestamp <= to;
-  });
-}
-
-function buildPeriod(
-  snapshot: DashboardV2Snapshot,
-  period: UsagePeriod,
-  withTrend = period === "today" || period === "7d",
-): WidgetPeriodStats {
-  const view = createDashboardV2View(snapshot, period);
-  const range = resolveUsageRange(period);
-  const rangeEvents =
-    range.fromDate != null && range.toDate != null
-      ? eventsInRange(snapshot.events, range.fromDate, range.toDate)
-      : [];
-
-  const toolNames = new Map(view.tools.map((tool) => [tool.id, tool.name]));
-  const groups = new Map<string, DashboardV2Event[]>();
-  for (const event of rangeEvents) {
-    const group = groups.get(event.source) ?? [];
-    group.push(event);
-    groups.set(event.source, group);
-  }
-  const topTools: WidgetToolStat[] = [...groups.entries()]
-    .map(([id, events]) => {
-      const tokens = events.reduce((sum, event) => sum + event.totalTokens, 0);
-      const cost = snapshot.pricingAvailable
-        ? estimateUsageCost(events.map(toLocalUsageEvent))
-        : null;
-      return {
-        id,
-        name: toolNames.get(id) ?? id,
-        tokens,
-        events: events.length,
-        costUsd: cost == null ? null : cost.knownUsd + cost.estimatedUsd,
-      };
-    })
-    .sort((left, right) => right.tokens - left.tokens)
-    .slice(0, 5);
-
-  return {
-    tokens: view.totals.totalTokens,
-    events: view.totals.events,
-    sessions: view.sessions,
-    activeTools: view.activeTools,
-    costUsd: view.estimatedCostUsd,
-    cacheRate: view.cacheRate,
-    trend: withTrend
-      ? view.trend.map((point) => ({
-          date: point.date,
-          tokens: point.tokens,
-        }))
-      : [],
-    topTools,
-  };
-}
-
-interface SharedReadModel {
-  readonly data: DashboardReadModel | null;
-  /** 知识库已批准记忆资产数；null = 拉取失败/未提供（独立于 dashboard 失败）。 */
-  readonly memory: number | null;
-  readonly loading: boolean;
-  readonly failed: boolean;
-  readonly locale: Locale;
-}
-
-const initialShared: SharedReadModel = {
-  data: null,
-  memory: null,
-  loading: true,
-  failed: false,
-  locale: "zh-CN",
-};
-
-/**
- * 多个小组件（浮窗/托盘/桌面/菜单栏）共享同一份 dashboard 读模型：
- * 模块级 store + useSyncExternalStore，首次订阅即拉取，30s 轮询去重，
- * 避免每个预览实例各自重复请求。知识库记忆计数并入同一刷新周期，不额外轮询。
- */
-let shared: SharedReadModel = initialShared;
-const listeners = new Set<() => void>();
-let busy = false;
-
-function emitShared(): void {
-  for (const listener of listeners) listener();
-}
-
-function subscribeShared(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
 /** 知识库已批准（approved/published）的记忆资产数；拉取失败返回 null。 */
 function countApprovedMemories(entries: readonly { status: string }[]): number {
   return entries.filter(
@@ -203,68 +82,48 @@ function countApprovedMemories(entries: readonly { status: string }[]): number {
   ).length;
 }
 
-function loadShared(locale: Locale): void {
-  if (busy) return;
-  busy = true;
-  // Promise.allSettled：dashboard 与记忆计数互相独立，一方失败不阻塞另一方。
-  void Promise.allSettled([
-    getDashboardReadModel({ data: locale }),
-    getMemoryAssets(),
-  ])
-    .then(([dashboardResult, memoryResult]) => {
-      const dashboardOk = dashboardResult.status === "fulfilled";
-      shared = {
-        ...shared,
-        data: dashboardOk ? dashboardResult.value : shared.data,
-        memory:
-          memoryResult.status === "fulfilled"
-            ? countApprovedMemories(memoryResult.value)
-            : null,
-        loading: false,
-        failed: !dashboardOk,
-        locale,
-      };
-    })
-    .catch(() => {
-      shared = { ...shared, loading: false, failed: true };
-    })
-    .finally(() => {
-      busy = false;
-      emitShared();
-    });
-}
+const STATUS_KEY = (locale: Locale) => ["widget-status", locale] as const;
+const MODEL_KEY = (locale: Locale, revision: string | null) =>
+  ["widget-model", locale, revision ?? null] as const;
+const MEMORY_KEY = ["widget-memory"] as const;
 
 /**
- * 小组件页统一数据源：dashboard 读模型（含会话/定价/产出可用性）+ 安全扫描概览。
- *
- * 仅客户端拉取（首次订阅在 useEffect 中触发），SSR/首帧渲染看到 loading
- * 初始态，避免水合不一致；所有值来自真实数据，无 mock 回退。
+ * 小组件页统一数据源：紧凑 Widget 读模型（服务端预聚合四周期）+ 安全扫描概览。
+ * 首次渲染看到 loading 初始态（与 SSR 保持一致）；status 为空（无快照）时
+ * 保持空态，后台刷新完成后 status 的 revision 变化会自动触发 model 拉取。
  */
 export function useWidgetData(): WidgetDataModel {
   const { locale, t } = useI18n();
+  const queryClient = useQueryClient();
   const security = useSecurityScanOverview();
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    // 拉取总是执行：首次订阅与手动刷新（refreshKey 变化）都会真实重新拉取
-    // dashboard 读模型；`busy` 去重避免并发重复请求。
-    loadShared(locale);
-    const timer = window.setInterval(
-      () => loadShared(locale),
-      REFRESH_INTERVAL_MS,
-    );
-    return () => window.clearInterval(timer);
-  }, [locale, refreshKey]);
+  const statusQuery = useQuery({
+    queryKey: STATUS_KEY(locale),
+    queryFn: () => getWidgetStatusReadModel({ data: locale }),
+    // 可见时每 60 秒轮询；document 隐藏时 React Query 自动暂停
+    // （refetchIntervalInBackground 默认 false）。
+    refetchInterval: STATUS_INTERVAL_MS,
+    staleTime: STATUS_INTERVAL_MS - 5_000,
+  });
+  const status = statusQuery.data;
 
-  const sharedModel = useSyncExternalStore(
-    subscribeShared,
-    () => shared,
-    () => initialShared,
-  );
+  const modelQuery = useQuery({
+    queryKey: MODEL_KEY(locale, status?.revision ?? null),
+    queryFn: () => getWidgetReadModel({ data: locale }),
+    enabled: status != null && status.revision != null,
+    staleTime: 5 * 60_000,
+  });
 
-  const model = useMemo(() => {
-    const readModel = sharedModel.data;
-    if (readModel == null) {
+  const memoryQuery = useQuery({
+    queryKey: MEMORY_KEY,
+    queryFn: () => getMemoryAssets(),
+    staleTime: 5 * 60_000,
+  });
+
+  const model: WidgetReadModel | undefined = modelQuery.data;
+
+  const view = useMemo(() => {
+    if (model == null) {
       return {
         hasData: false,
         generatedAt: null,
@@ -276,26 +135,43 @@ export function useWidgetData(): WidgetDataModel {
       };
     }
     return {
-      hasData: readModel.v2.events.length > 0,
-      generatedAt: readModel.v2.generatedAt,
-      today: buildPeriod(readModel.v2, "today"),
-      week: buildPeriod(readModel.v2, "7d"),
-      month: buildPeriod(readModel.v2, "30d"),
-      total: buildPeriod(readModel.v2, "all"),
+      hasData: model.hasData,
+      generatedAt: model.generatedAt,
+      today: model.today,
+      week: model.week,
+      month: model.month,
+      total: model.total,
       outputs: {
-        distilled: readModel.v2.outputAvailability.distillationOutputs.count,
-        reports: readModel.v2.outputAvailability.dailyReports.count,
-        memory: sharedModel.memory,
+        distilled: model.outputs.distilled,
+        reports: model.outputs.reports,
+        memory:
+          memoryQuery.data == null
+            ? null
+            : countApprovedMemories(memoryQuery.data),
       },
     };
-  }, [sharedModel]);
+  }, [model, memoryQuery.data]);
+
+  const loading =
+    statusQuery.isPending ||
+    (status?.revision != null && modelQuery.isPending) ||
+    security.loading;
+
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["widget-status"] });
+    void queryClient.invalidateQueries({ queryKey: ["widget-model"] });
+    void queryClient.invalidateQueries({ queryKey: ["widget-memory"] });
+  };
 
   return {
-    loading: sharedModel.loading,
-    error: sharedModel.failed ? t("widget.loadFailed") : null,
-    refresh: () => setRefreshKey((key) => key + 1),
+    loading,
+    error:
+      modelQuery.isError || (statusQuery.isError && modelQuery.data == null)
+        ? t("widget.loadFailed")
+        : null,
     security,
-    ...model,
+    refresh,
+    ...view,
   };
 }
 

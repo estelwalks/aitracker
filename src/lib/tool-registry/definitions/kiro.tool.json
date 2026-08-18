@@ -4,7 +4,9 @@
   "id": "kiro",
   "display": {
     "name": "Kiro",
-    "nameZh": "Kiro"
+    "nameZh": "Kiro",
+    "icon": "other",
+    "color": "#01a4ff"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".kiro"
       }

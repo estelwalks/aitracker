@@ -4,7 +4,9 @@
   "id": "zed",
   "display": {
     "name": "Zed Agent",
-    "nameZh": "Zed Agent"
+    "nameZh": "Zed Agent",
+    "icon": "other",
+    "color": "#3b82f6"
   },
   "platforms": {
     "macos": "supported",
@@ -14,12 +16,17 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Zed"
       },
       {
-        "targets": ["macos", "linux"],
+        "targets": [
+          "macos",
+          "linux"
+        ],
         "base": "dataHome",
         "path": "zed"
       }

@@ -127,7 +127,7 @@ export const skills = {
     version: "Version evidence",
   },
   agentOverview: {
-    title: "Tool overview · TrustTools",
+    title: "Agent overview · TrustTools",
     insightTitle: "Today's insight",
     dedicatedInsight: "Dedicated insight",
     insightDescription:

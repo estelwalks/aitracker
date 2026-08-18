@@ -94,7 +94,7 @@ export interface SessionSummary {
   total: number;
 }
 
-/** Filter shape accepted by `getLocalSessions`. */
+/** Filter shape used by the sessions query service. */
 export interface SessionFilter {
   source?: SessionSource;
   projectId?: string;

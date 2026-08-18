@@ -4,7 +4,9 @@
   "id": "openclaw",
   "display": {
     "name": "OpenClaw",
-    "nameZh": "OpenClaw"
+    "nameZh": "OpenClaw",
+    "icon": "other",
+    "color": "#ff5543"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".openclaw"
       }
@@ -28,7 +35,10 @@
           "path": ".openclaw/workspace/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -38,14 +48,24 @@
       "reader": "openclaw-session-v1",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".openclaw/agents",
           "glob": "*/sessions/**/*.jsonl*",
           "format": "jsonl"
         },
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".openclaw/agents",
           "glob": "*/session-sqlite-import-archive/**/*.jsonl*",

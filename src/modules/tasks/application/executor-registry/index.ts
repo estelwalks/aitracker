@@ -5,7 +5,6 @@ import type {
   TaskExecutionResult,
   TaskExecutor,
 } from "../scheduler.ts";
-import type { UsageApplication } from "../../../usage/index.ts";
 import type { ReportsApplication } from "../../../reports/contracts.ts";
 import type { BackgroundSkillSecurityScanPort } from "../../../security-assessment/contracts.ts";
 import type {
@@ -17,6 +16,10 @@ import type {
  * Application ports used by task executors. The registry deliberately accepts
  * ports rather than scanners, server functions, or filesystem paths.
  */
+export interface RefreshUsagePort {
+  refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
+}
+
 export interface RefreshSessionsPort {
   refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
@@ -25,14 +28,19 @@ export interface RefreshSkillsPort {
   refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
+export interface RefreshExchangePort {
+  refresh(request: { readonly signal: AbortSignal }): Promise<unknown>;
+}
+
 export interface ApplyRetentionPort {
   apply(request: { readonly signal: AbortSignal }): Promise<unknown>;
 }
 
 export interface ExecutorRegistryOptions {
-  readonly usage?: UsageApplication;
+  readonly usage?: RefreshUsagePort;
   readonly sessions?: RefreshSessionsPort;
   readonly skills?: RefreshSkillsPort;
+  readonly exchange?: RefreshExchangePort;
   readonly retention?: ApplyRetentionPort;
   readonly reports?: ReportsApplication;
   readonly security?: BackgroundSkillSecurityScanPort;
@@ -64,32 +72,15 @@ class ControlledExecutorError extends Error {
   }
 }
 
-function summaryFromUsage(
-  value: Awaited<ReturnType<UsageApplication["refreshUsage"]>>,
-): TaskExecutionResult {
-  if (!value.ok) throw new ControlledExecutorError(value.error.code);
-  const snapshot = value.value.snapshot;
-  return {
-    summary: {
-      ...(snapshot == null ? {} : { scanned: snapshot.events }),
-      diagnosticCount: snapshot?.sources.reduce(
-        (count, source) => count + (source.diagnostics?.length ?? 0),
-        0,
-      ),
-    },
-  };
-}
-
 function unavailable(): never {
   throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.unavailable);
 }
 
-function bindUsage(usage: UsageApplication | undefined): TaskExecutor {
+function bindUsage(usage: RefreshUsagePort | undefined): TaskExecutor {
   return async (context) => {
     if (!usage) return unavailable();
-    return summaryFromUsage(
-      await usage.refreshUsage({ signal: context.signal }),
-    );
+    await usage.refresh({ signal: context.signal });
+    return {};
   };
 }
 
@@ -228,6 +219,11 @@ export function createExecutorRegistry(
     "refresh-sessions-v1": monitored(
       "sessions",
       bindPort(options.sessions),
+      options.monitoring,
+    ),
+    "refresh-exchange-v1": monitored(
+      "exchange",
+      bindPort(options.exchange),
       options.monitoring,
     ),
     "monitor-security-v1": monitored(

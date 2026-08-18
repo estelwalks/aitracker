@@ -4,10 +4,10 @@ import { toast } from "sonner";
 import { useI18n } from "../../../lib/i18n/context";
 
 /**
- * Shared report body actions (copy / print / export-markdown) extracted from
- * `ReportEditor` so the inline body card reuses them instead of duplicating
- * the clipboard / print-window / Blob logic. `body` is user-authored markdown
- * or a persisted report body — nothing here touches the network.
+ * Shared report body actions (copy / print / export-markdown) extracted so
+ * the inline body card reuses them instead of duplicating the clipboard /
+ * print-window / Blob logic. `body` is user-authored markdown or a persisted
+ * report body — nothing here touches the network.
  */
 export function useReportActions(
   body: string,

@@ -5,6 +5,7 @@ import {
   type SkillWorkspace,
 } from "./application/asset-view.ts";
 
+import type { SkillSnapshotData } from "./query/contracts.ts";
 import type { SkillSnapshot as LegacySkillSnapshot } from "../../lib/local-skills/types.ts";
 import type {
   BatchUninstallResult,
@@ -25,6 +26,7 @@ export type {
   SkillSnapshot,
   SkillSyncResult,
 } from "./query/contracts.ts";
+export type { SkillSnapshotData } from "./query/contracts.ts";
 /** Server query result consumed by the Skill operations workspace route. */
 export interface SkillWorkspaceSnapshot {
   readonly snapshot: SkillSnapshot;
@@ -35,14 +37,14 @@ export { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 const refFor = (skillId: string, agent: string, index: number) =>
   `installation:${encodeURIComponent(skillId)}:${encodeURIComponent(agent)}:${index}`;
 
-function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
+function projectSnapshot(value: SkillSnapshotData): SkillSnapshot {
   return {
     generatedAt: value.generatedAt,
     fingerprint: value.fingerprint,
     roots: Object.fromEntries(
       Object.entries(value.roots).map(([agent, roots]) => [
         agent,
-        { count: roots.length },
+        { count: roots.count },
       ]),
     ) as SkillSnapshot["roots"],
     agents: Object.fromEntries(
@@ -51,7 +53,7 @@ function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
         { installed: probe.installed },
       ]),
     ) as SkillSnapshot["agents"],
-    blacklist: value.blacklist,
+    blacklist: [...value.blacklist],
     skills: value.skills.map((skill) => ({
       id: skill.id,
       name: skill.name,
@@ -75,10 +77,42 @@ function projectSnapshot(value: LegacySkillSnapshot): SkillSnapshot {
   };
 }
 
-async function legacySnapshot() {
-  const { getLocalSkills } =
-    await import("../../lib/local-skills/server-fns.ts");
-  return getLocalSkills();
+const EMPTY_SKILL_SNAPSHOT: SkillSnapshotData = {
+  generatedAt: new Date(0).toISOString(),
+  fingerprint: "",
+  roots: {},
+  agents: {},
+  skills: [],
+  blacklist: [],
+};
+
+/**
+ * T7-08: page read path — the O(1) skill snapshot, never a scan. An empty
+ * snapshot triggers one NON-BLOCKING background refresh, then degrades to an
+ * empty view so the loader never waits for a scan (design §4.3 / G4).
+ */
+async function readSkillSnapshot(): Promise<SkillSnapshotData> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const { skillSnapshot } = await getCompositionRoot();
+  await skillSnapshot.ensureHydrated();
+  let latest = skillSnapshot.readLatest();
+  if (latest.data == null) {
+    void skillSnapshot.refreshNow().catch(() => {});
+    latest = skillSnapshot.readLatest();
+  }
+  return latest.data ?? EMPTY_SKILL_SNAPSHOT;
+}
+
+/**
+ * Operation path (uninstall/install/sync): these server-side actions resolve
+ * an opaque installation ref to its real path, so they scan on demand without
+ * any read-path cache (T7-08). Low frequency, never part of page rendering.
+ */
+async function scanSkillSnapshot(): Promise<LegacySkillSnapshot> {
+  const { scanLocalSkills } =
+    await import("../../lib/local-skills/scanner.server.ts");
+  return scanLocalSkills();
 }
 
 function resolveInstallation(value: LegacySkillSnapshot, ref: string) {
@@ -95,7 +129,8 @@ function resolveInstallation(value: LegacySkillSnapshot, ref: string) {
 }
 
 export const getLocalSkills = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SkillSnapshot> => projectSnapshot(await legacySnapshot()),
+  async (): Promise<SkillSnapshot> =>
+    projectSnapshot(await readSkillSnapshot()),
 );
 
 /**
@@ -105,7 +140,7 @@ export const getLocalSkills = createServerFn({ method: "GET" }).handler(
  */
 export const getSkillWorkspace = createServerFn({ method: "GET" }).handler(
   async (): Promise<SkillWorkspaceSnapshot> => {
-    const snapshot = projectSnapshot(await legacySnapshot());
+    const snapshot = projectSnapshot(await readSkillSnapshot());
     return { snapshot, workspace: buildSkillWorkspace(snapshot) };
   },
 );
@@ -115,7 +150,7 @@ export const requestApprovedSkillUninstall = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.confirmed !== true)
       throw new Error("errors.skillDistribution.notApproved");
-    const snapshot = await legacySnapshot();
+    const snapshot = await scanSkillSnapshot();
     const { installation } = resolveInstallation(
       snapshot,
       data.installationRef,
@@ -136,7 +171,7 @@ export const requestApprovedSkillInstall = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.confirmed !== true)
       throw new Error("errors.skillDistribution.notApproved");
-    const snapshot = await legacySnapshot();
+    const snapshot = await scanSkillSnapshot();
     const { installation } = resolveInstallation(
       snapshot,
       data.installationRef,
@@ -155,7 +190,7 @@ export const requestApprovedBatchUninstall = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<BatchUninstallResult> => {
     if (data.confirmed !== true)
       throw new Error("errors.skillDistribution.notApproved");
-    const snapshot = await legacySnapshot();
+    const snapshot = await scanSkillSnapshot();
     const resolved = data.installationRefs.map((ref) =>
       resolveInstallation(snapshot, ref),
     );
@@ -197,7 +232,7 @@ export const requestApprovedSkillSync = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<SkillSyncResult> => {
     if (data.confirmed !== true)
       throw new Error("errors.skillDistribution.notApproved");
-    const snapshot = await legacySnapshot();
+    const snapshot = await scanSkillSnapshot();
     const { installation } = resolveInstallation(
       snapshot,
       data.installationRef,

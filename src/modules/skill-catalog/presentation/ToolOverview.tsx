@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   CartesianGrid,
@@ -9,26 +10,21 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  ChevronDown,
-  ChevronRight,
-  Info,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Info } from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
+import { JarvisInsight } from "../../../components/JarvisInsight";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
 import type { LocalUsageToolCategory } from "../../../lib/local-usage/types";
 import { cn } from "../../../lib/utils";
-import type { DashboardReadModel } from "../../dashboard/contracts";
-import {
-  buildToolOverview,
-  type ToolOverviewBreakdownRow,
-  type ToolOverviewCard,
-  type ToolOverviewView,
+import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
+import { getAgentUsageOverview } from "../usage-overview-query";
+import type {
+  ToolOverviewBreakdownRow,
+  ToolOverviewCard,
+  ToolOverviewView,
 } from "../application";
 
 const DASH = "—";
@@ -118,7 +114,7 @@ function ToolBadgeWall({
         className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {cards.map((card) => {
-          const color = brandColorOf(card.name);
+          const color = card.color ?? brandColorOf(card.name);
           const on = selectedId === card.id;
           const statusLabel = card.active
             ? t("skills.agentOverview.active")
@@ -159,7 +155,7 @@ function ToolBadgeWall({
                 style={{ background: `${color}1f` }}
               >
                 <BrandIcon
-                  name={card.name}
+                  name={card.icon ?? card.name}
                   className="size-3.5"
                   color={color}
                 />
@@ -224,6 +220,8 @@ function ToolBadgeWall({
 /** 消耗趋势：柱状 + 趋势线，支持时间筛选（对齐原型 AgentTrendPanel）。 */
 function TrendPanel({
   name,
+  brandColor,
+  brandIcon,
   trend,
   totalTokens,
   avgTokens,
@@ -232,6 +230,10 @@ function TrendPanel({
   onRangeChange,
 }: {
   name: string;
+  /** 注册表 display.color（可空，回退名称启发式）。 */
+  brandColor?: string;
+  /** 注册表 display.icon（可空，回退名称匹配）。 */
+  brandIcon?: string;
   trend: readonly { date: string; tokens: number }[];
   totalTokens: number;
   avgTokens: number;
@@ -240,7 +242,7 @@ function TrendPanel({
   onRangeChange: (value: RangeValue) => void;
 }) {
   const { t, format } = useI18n();
-  const color = brandColorOf(name);
+  const color = brandColor ?? brandColorOf(name);
 
   return (
     <section className="rounded-xl bg-card p-4">
@@ -431,13 +433,17 @@ function ContextRow({
 /** 上下文构成：缓存条 + 可展开树（对齐原型 ContextTree）。 */
 function ContextTreePanel({
   name,
+  brandColor,
+  brandIcon,
   view,
 }: {
   name: string;
+  brandColor?: string;
+  brandIcon?: string;
   view: ToolOverviewView;
 }) {
   const { t, format } = useI18n();
-  const color = brandColorOf(name);
+  const color = brandColor ?? brandColorOf(name);
 
   /** 工具调用类别中文映射（对齐原型 ContextTree 的 CN 映射语义）。 */
   const categoryLabel = (category: LocalUsageToolCategory): string => {
@@ -588,7 +594,11 @@ function ContextTreePanel({
           className="flex size-7 items-center justify-center rounded-lg"
           style={{ background: `${color}1f` }}
         >
-          <BrandIcon name={name} className="size-3.5" color={color} />
+          <BrandIcon
+            name={brandIcon ?? name}
+            className="size-3.5"
+            color={color}
+          />
         </span>
         <h3 className="flex-1 truncate text-[13px] font-semibold tracking-tight">
           {t("skills.agentOverview.contextTreeTitle")}
@@ -640,6 +650,8 @@ function ContextTreePanel({
 /** 消耗明细：模型 / 项目 维度 tab 切换 + 时间筛选（对齐原型 ToolModelPanel）。 */
 function ToolModelPanel({
   name,
+  brandColor,
+  brandIcon,
   mode,
   onModeChange,
   rows,
@@ -649,6 +661,8 @@ function ToolModelPanel({
   onRangeChange,
 }: {
   name: string;
+  brandColor?: string;
+  brandIcon?: string;
   mode: "models" | "projects";
   onModeChange: (mode: "models" | "projects") => void;
   rows: readonly ToolOverviewBreakdownRow[];
@@ -658,7 +672,7 @@ function ToolModelPanel({
   onRangeChange: (value: RangeValue) => void;
 }) {
   const { t, format } = useI18n();
-  const color = brandColorOf(name);
+  const color = brandColor ?? brandColorOf(name);
   const max = rows[0]?.tokens || 1;
   const emptyLabel =
     mode === "models"
@@ -786,10 +800,15 @@ function ToolModelPanel({
 }
 
 /**
- * 工具概览（原型对齐）。`/agents` 只渲染这段；Skill 工作区由 `SkillsPage`
- * 在 `showWorkspace` 时追加渲染。
+ * Agent概览（原型对齐）。`/agents` 只渲染这段；Skill 工作区由 `SkillsPage`
+ * 在 `showWorkspace` 时追加渲染。服务端预构建紧凑视图（P1-T1-06），交互
+ * （工具/周期切换）通过同一 server fn 获取新投影；renderer 不接收原始事件。
  */
-export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
+export function ToolOverview({
+  usage,
+}: {
+  usage: AgentUsageOverviewReadModel;
+}) {
   const { t, format } = useI18n();
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [toolPeriod, setToolPeriod] = useState<UsagePeriod>("30d");
@@ -799,32 +818,56 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
   const [detailFrom, setDetailFrom] = useState(daysAgo(29));
   const [detailTo, setDetailTo] = useState(daysAgo(0));
   const [detailMode, setDetailMode] = useState<"models" | "projects">("models");
-  const [insightIndex, setInsightIndex] = useState(0);
-  const [typed, setTyped] = useState("");
 
-  const toolOverview = useMemo(
-    () =>
-      buildToolOverview(usage.v2, selectedToolId, toolPeriod, toolFrom, toolTo),
-    [selectedToolId, toolFrom, toolPeriod, toolTo, usage.v2],
-  );
-  const detailOverview = useMemo(
-    () =>
-      buildToolOverview(
-        usage.v2,
-        selectedToolId ?? toolOverview.selected?.id ?? null,
-        detailPeriod,
-        detailFrom,
-        detailTo,
-      ),
-    [
-      detailFrom,
-      detailPeriod,
-      detailTo,
-      selectedToolId,
-      toolOverview.selected?.id,
-      usage.v2,
+  const { data: toolQuery } = useQuery({
+    queryKey: [
+      "agent-usage-overview",
+      usage.locale,
+      selectedToolId ?? "",
+      toolPeriod,
+      toolFrom,
+      toolTo,
     ],
-  );
+    queryFn: () =>
+      getAgentUsageOverview({
+        data: {
+          locale: usage.locale,
+          toolId: selectedToolId,
+          period: toolPeriod,
+          from: toolFrom,
+          to: toolTo,
+        },
+      }),
+    initialData: usage,
+    staleTime: 30_000,
+  });
+  const toolOverview: ToolOverviewView = toolQuery.view;
+
+  const selectedId = selectedToolId ?? toolOverview.selected?.id ?? null;
+  const { data: detailQuery } = useQuery({
+    queryKey: [
+      "agent-usage-overview",
+      usage.locale,
+      selectedId ?? "",
+      detailPeriod,
+      detailFrom,
+      detailTo,
+    ],
+    queryFn: () =>
+      getAgentUsageOverview({
+        data: {
+          locale: usage.locale,
+          toolId: selectedId,
+          period: detailPeriod,
+          from: detailFrom,
+          to: detailTo,
+        },
+      }),
+    enabled: selectedId != null,
+    initialData: selectedId == null ? undefined : usage,
+    staleTime: 30_000,
+  });
+  const detailOverview: ToolOverviewView = detailQuery?.view ?? toolOverview;
 
   const selected = toolOverview.selected;
   const selectedName = selected?.name ?? DASH;
@@ -856,7 +899,6 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
         setToolTo(next.to);
       }
     }
-    if (!isDetail) setInsightIndex(0);
   };
 
   const averageTrendTokens =
@@ -942,119 +984,33 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
           },
         ]),
   ];
-  const insightIndexSafe = insights.length ? insightIndex % insights.length : 0;
-  const line = insights[insightIndexSafe]?.description ?? "";
-
   const heroTitle =
     selected == null
       ? t("skills.agentOverview.insightTitle")
       : `${selected.name} · ${t("skills.agentOverview.dedicatedInsight")}`;
 
-  // 打字机效果：逐字显示当前洞察，9 秒后轮换下一条（对齐原型 JarvisInsight hero）。
-  useEffect(() => {
-    setTyped("");
-    let n = 0;
-    const typer = setInterval(() => {
-      n += 1;
-      setTyped(line.slice(0, n));
-      if (n >= line.length) clearInterval(typer);
-    }, 22);
-    const next = setTimeout(
-      () =>
-        setInsightIndex((v) =>
-          insights.length ? (v + 1) % insights.length : 0,
-        ),
-      9000,
-    );
-    return () => {
-      clearInterval(typer);
-      clearTimeout(next);
-    };
-  }, [line, insightIndexSafe, insights.length]);
-
   return (
     <section className="space-y-5 pb-12">
-      <section className="relative overflow-hidden rounded-2xl bg-card p-5 md:p-6">
-        <span
-          className="pointer-events-none absolute -top-32 -right-20 size-96 rounded-full opacity-[0.16] blur-3xl"
-          style={{ background: "var(--ok)" }}
-        />
-        <span
-          className="pointer-events-none absolute -bottom-28 -left-16 size-72 rounded-full opacity-[0.10] blur-3xl"
-          style={{ background: "var(--primary)" }}
-        />
-
-        <div className="relative flex items-start gap-4">
-          <span className="relative mt-0.5 shrink-0">
-            <span
-              className="tt-breathe absolute inset-0 rounded-full blur-md"
-              style={{ background: "var(--ok)", opacity: 0.5 }}
-            />
-            <span className="tt-breathe relative flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2">
-              <Sparkles
-                className="size-5"
-                style={{ color: "var(--ok)" }}
-                strokeWidth={1.7}
-              />
-            </span>
-          </span>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-semibold tracking-tight">
-                {heroTitle}
-              </h2>
-              <button
-                type="button"
-                disabled={insights.length < 2}
-                onClick={() =>
-                  setInsightIndex((v) =>
-                    insights.length ? (v + 1) % insights.length : 0,
-                  )
-                }
-                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 font-mono text-[10.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <RefreshCw className="size-3" strokeWidth={2} />
-                {t("skills.agentOverview.rotateInsight")}
-              </button>
-            </div>
-            <p className="mt-2 min-h-[62px] text-[17px] leading-[1.65] font-medium tracking-tight text-foreground/90 md:text-[19px]">
-              {typed}
-              <span className="tt-breathe ml-1 inline-block h-[17px] w-[8px] translate-y-[3px] bg-foreground/60" />
-            </p>
-            <div className="mt-3.5 flex items-center gap-1.5">
-              {insights.map((item, index) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-label={t("skills.agentOverview.insightDot", {
-                    index: format.formatNumber(index + 1),
-                  })}
-                  onClick={() => setInsightIndex(index)}
-                  className={cn(
-                    "h-[4px] rounded-full transition-all duration-500",
-                    index === insightIndexSafe
-                      ? "w-9 bg-foreground/70"
-                      : "w-2.5 bg-foreground/15",
-                  )}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <JarvisInsight
+        variant="hero"
+        title={heroTitle}
+        lines={insights.map((item) => item.description)}
+        rotateLabel={t("skills.agentOverview.rotateInsight")}
+        dotsLabel={t("insights.dots")}
+      />
 
       <ToolBadgeWall
         cards={toolOverview.cards}
         selectedId={selected?.id ?? null}
         onPick={(id) => {
           setSelectedToolId(id);
-          setInsightIndex(0);
         }}
       />
 
       <TrendPanel
         name={selectedName}
+        brandColor={selected?.color}
+        brandIcon={selected?.icon}
         trend={toolOverview.trend}
         totalTokens={toolOverview.totalTokens}
         avgTokens={averageTrendTokens}
@@ -1063,10 +1019,17 @@ export function ToolOverview({ usage }: { usage: DashboardReadModel }) {
         onRangeChange={(value) => applyRange(value, false)}
       />
 
-      <ContextTreePanel name={selectedName} view={toolOverview} />
+      <ContextTreePanel
+        name={selectedName}
+        brandColor={selected?.color}
+        brandIcon={selected?.icon}
+        view={toolOverview}
+      />
 
       <ToolModelPanel
         name={selectedName}
+        brandColor={selected?.color}
+        brandIcon={selected?.icon}
         mode={detailMode}
         onModeChange={setDetailMode}
         rows={detailRows}

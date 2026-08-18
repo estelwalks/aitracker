@@ -4,7 +4,9 @@
   "id": "cursor",
   "display": {
     "name": "Cursor",
-    "nameZh": "Cursor"
+    "nameZh": "Cursor",
+    "icon": "cursor",
+    "color": "#cfcfcf"
   },
   "platforms": {
     "macos": "supported",
@@ -14,12 +16,19 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos"],
+        "targets": [
+          "macos"
+        ],
         "base": "appData",
         "path": "Cursor"
       },
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".cursor"
       }
@@ -33,7 +42,10 @@
           "path": ".cursor/skills"
         }
       ],
-      "markers": ["SKILL.md", "skill.md"],
+      "markers": [
+        "SKILL.md",
+        "skill.md"
+      ],
       "maxDepth": 3
     }
   },
@@ -43,21 +55,31 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": ["macos"],
+          "targets": [
+            "macos"
+          ],
           "base": "appData",
           "path": "Cursor/User/globalStorage",
           "glob": "**/*usage*.json",
           "format": "json"
         },
         {
-          "targets": ["windows10", "windows11"],
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
           "base": "appDataRoaming",
           "path": "Cursor/User/globalStorage",
           "glob": "**/*usage*.json",
           "format": "json"
         },
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".cursor",
           "glob": "**/*usage*.jsonl",

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { checkForUpdates } from "./version-check.server";
+// P6-T6-01 (fix): the server-fn value import is loaded dynamically so this
+// browser-safe module never statically reaches the `.server` module; the
+// type-only import is erased at compile time.
 import type { VersionCheckResult } from "./version-check.server";
 
 /**
@@ -79,6 +81,7 @@ export function useVersionCheck(): UpdateState {
   const runCheck = async () => {
     setLoading(true);
     try {
+      const { checkForUpdates } = await import("./version-check.server");
       const next = await checkForUpdates();
       setResult(next);
       const api = desktopApi();

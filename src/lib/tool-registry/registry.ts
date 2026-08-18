@@ -653,6 +653,7 @@ export interface ToolDisplayInfo {
   name: string;
   nameZh: string;
   icon?: string;
+  color?: string;
 }
 
 export function getToolDisplay(
@@ -666,6 +667,7 @@ export function getToolDisplay(
     name: def.display.name,
     nameZh: def.display.nameZh,
     ...(def.display.icon ? { icon: def.display.icon } : {}),
+    ...(def.display.color ? { color: def.display.color } : {}),
   };
 }
 

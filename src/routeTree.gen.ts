@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as DistillRouteImport } from './routes/distill'
+import { Route as MarketRouteImport } from './routes/market'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SecurityRouteImport } from './routes/security'
@@ -33,32 +34,37 @@ const AgentsRoute = AgentsRouteImport.update({
   id: '/agents',
   path: '/agents',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/agents.lazy').then((d) => d.Route))
 const DistillRoute = DistillRouteImport.update({
   id: '/distill',
   path: '/distill',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/distill.lazy').then((d) => d.Route))
+const MarketRoute = MarketRouteImport.update({
+  id: '/market',
+  path: '/market',
+  getParentRoute: () => rootRouteImport,
+} as any).lazy(() => import('./routes/market.lazy').then((d) => d.Route))
 const MemoryRoute = MemoryRouteImport.update({
   id: '/memory',
   path: '/memory',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/memory.lazy').then((d) => d.Route))
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/reports.lazy').then((d) => d.Route))
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/security.lazy').then((d) => d.Route))
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -68,37 +74,38 @@ const SkillsRoute = SkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/skills.lazy').then((d) => d.Route))
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/sources.lazy').then((d) => d.Route))
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
   path: '/tracker',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/tracker.lazy').then((d) => d.Route))
 const WidgetRoute = WidgetRouteImport.update({
   id: '/widget',
   path: '/widget',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/widget.lazy').then((d) => d.Route))
 const ChatsIndexRoute = ChatsIndexRouteImport.update({
   id: '/chats/',
   path: '/chats/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/chats.index.lazy').then((d) => d.Route))
 const ChatsIdRoute = ChatsIdRouteImport.update({
   id: '/chats/$id',
   path: '/chats/$id',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/chats.$id.lazy').then((d) => d.Route))
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/market': typeof MarketRoute
   '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/market': typeof MarketRoute
   '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/agents': typeof AgentsRoute
   '/distill': typeof DistillRoute
+  '/market': typeof MarketRoute
   '/memory': typeof MemoryRoute
   '/reports': typeof ReportsRoute
   '/security': typeof SecurityRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/market'
     | '/memory'
     | '/reports'
     | '/security'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/market'
     | '/memory'
     | '/reports'
     | '/security'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '/'
     | '/agents'
     | '/distill'
+    | '/market'
     | '/memory'
     | '/reports'
     | '/security'
@@ -199,6 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AgentsRoute: typeof AgentsRoute
   DistillRoute: typeof DistillRoute
+  MarketRoute: typeof MarketRoute
   MemoryRoute: typeof MemoryRoute
   ReportsRoute: typeof ReportsRoute
   SecurityRoute: typeof SecurityRoute
@@ -233,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/distill'
       fullPath: '/distill'
       preLoaderRoute: typeof DistillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/market': {
+      id: '/market'
+      path: '/market'
+      fullPath: '/market'
+      preLoaderRoute: typeof MarketRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/memory': {
@@ -319,6 +339,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AgentsRoute: AgentsRoute,
   DistillRoute: DistillRoute,
+  MarketRoute: MarketRoute,
   MemoryRoute: MemoryRoute,
   ReportsRoute: ReportsRoute,
   SecurityRoute: SecurityRoute,

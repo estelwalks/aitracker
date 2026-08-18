@@ -8,7 +8,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "claude-code",
     "display": {
       "name": "Claude Code",
-      "nameZh": "Claude Code"
+      "nameZh": "Claude Code",
+      "icon": "claude",
+      "color": "#d97757"
     },
     "platforms": {
       "macos": "supported",
@@ -110,7 +112,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "codex",
     "display": {
       "name": "Codex",
-      "nameZh": "Codex"
+      "nameZh": "Codex",
+      "icon": "codex",
+      "color": "#10a37f"
     },
     "platforms": {
       "macos": "supported",
@@ -221,7 +225,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "cursor",
     "display": {
       "name": "Cursor",
-      "nameZh": "Cursor"
+      "nameZh": "Cursor",
+      "icon": "cursor",
+      "color": "#cfcfcf"
     },
     "platforms": {
       "macos": "supported",
@@ -320,7 +326,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "kiro",
     "display": {
       "name": "Kiro",
-      "nameZh": "Kiro"
+      "nameZh": "Kiro",
+      "icon": "other",
+      "color": "#01a4ff"
     },
     "platforms": {
       "macos": "supported",
@@ -363,7 +371,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "gemini-cli",
     "display": {
       "name": "Gemini CLI",
-      "nameZh": "Gemini CLI"
+      "nameZh": "Gemini CLI",
+      "icon": "gemini",
+      "color": "#4285f4"
     },
     "platforms": {
       "macos": "supported",
@@ -441,7 +451,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "opencode",
     "display": {
       "name": "OpenCode",
-      "nameZh": "OpenCode"
+      "nameZh": "OpenCode",
+      "icon": "other",
+      "color": "#f59e0b"
     },
     "platforms": {
       "macos": "supported",
@@ -530,7 +542,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "openclaw",
     "display": {
       "name": "OpenClaw",
-      "nameZh": "OpenClaw"
+      "nameZh": "OpenClaw",
+      "icon": "other",
+      "color": "#ff5543"
     },
     "platforms": {
       "macos": "supported",
@@ -615,7 +629,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "every-code",
     "display": {
       "name": "Every Code",
-      "nameZh": "Every Code"
+      "nameZh": "Every Code",
+      "icon": "other",
+      "color": "#00c2a8"
     },
     "platforms": {
       "macos": "supported",
@@ -658,7 +674,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "hermes",
     "display": {
       "name": "Hermes Agent",
-      "nameZh": "Hermes Agent"
+      "nameZh": "Hermes Agent",
+      "icon": "other",
+      "color": "#a78bfa"
     },
     "platforms": {
       "macos": "supported",
@@ -716,7 +734,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "github-copilot",
     "display": {
       "name": "GitHub Copilot",
-      "nameZh": "GitHub Copilot"
+      "nameZh": "GitHub Copilot",
+      "icon": "other",
+      "color": "#6e7681"
     },
     "platforms": {
       "macos": "supported",
@@ -789,7 +809,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "kimi-code",
     "display": {
       "name": "Kimi Code",
-      "nameZh": "Kimi Code"
+      "nameZh": "Kimi Code",
+      "icon": "kimi",
+      "color": "#7c5cff"
     },
     "platforms": {
       "macos": "supported",
@@ -859,7 +881,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "omp",
     "display": {
       "name": "oh-my-pi",
-      "nameZh": "oh-my-pi"
+      "nameZh": "oh-my-pi",
+      "icon": "other",
+      "color": "#00b3ff"
     },
     "platforms": {
       "macos": "supported",
@@ -912,7 +936,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "codebuddy",
     "display": {
       "name": "CodeBuddy",
-      "nameZh": "CodeBuddy"
+      "nameZh": "CodeBuddy",
+      "icon": "other",
+      "color": "#0052d9"
     },
     "platforms": {
       "macos": "supported",
@@ -955,7 +981,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "workbuddy",
     "display": {
       "name": "WorkBuddy",
-      "nameZh": "WorkBuddy"
+      "nameZh": "WorkBuddy",
+      "icon": "other",
+      "color": "#22d3ee"
     },
     "platforms": {
       "macos": "supported",
@@ -1013,7 +1041,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "grok",
     "display": {
       "name": "Grok Build",
-      "nameZh": "Grok Build"
+      "nameZh": "Grok Build",
+      "icon": "other",
+      "color": "#d1d5db"
     },
     "platforms": {
       "macos": "supported",
@@ -1098,7 +1128,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "kilo-cli",
     "display": {
       "name": "Kilo CLI",
-      "nameZh": "Kilo CLI"
+      "nameZh": "Kilo CLI",
+      "icon": "other",
+      "color": "#eab308"
     },
     "platforms": {
       "macos": "supported",
@@ -1149,7 +1181,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "kilocode",
     "display": {
       "name": "Kilo Code",
-      "nameZh": "Kilo Code"
+      "nameZh": "Kilo Code",
+      "icon": "other",
+      "color": "#eab308"
     },
     "platforms": {
       "macos": "supported",
@@ -1189,7 +1223,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "antigravity",
     "display": {
       "name": "Antigravity",
-      "nameZh": "Antigravity"
+      "nameZh": "Antigravity",
+      "icon": "gemini",
+      "color": "#4285f4"
     },
     "platforms": {
       "macos": "supported",
@@ -1297,7 +1333,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "pi",
     "display": {
       "name": "pi",
-      "nameZh": "pi"
+      "nameZh": "pi",
+      "icon": "other",
+      "color": "#fe2857"
     },
     "platforms": {
       "macos": "supported",
@@ -1340,7 +1378,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "craft",
     "display": {
       "name": "Craft Agents",
-      "nameZh": "Craft Agents"
+      "nameZh": "Craft Agents",
+      "icon": "other",
+      "color": "#f97316"
     },
     "platforms": {
       "macos": "supported",
@@ -1383,7 +1423,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "roo-code",
     "display": {
       "name": "Roo Code",
-      "nameZh": "Roo Code"
+      "nameZh": "Roo Code",
+      "icon": "other",
+      "color": "#f0524d"
     },
     "platforms": {
       "macos": "supported",
@@ -1455,7 +1497,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "zed",
     "display": {
       "name": "Zed Agent",
-      "nameZh": "Zed Agent"
+      "nameZh": "Zed Agent",
+      "icon": "other",
+      "color": "#3b82f6"
     },
     "platforms": {
       "macos": "supported",
@@ -1503,7 +1547,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "goose",
     "display": {
       "name": "Goose",
-      "nameZh": "Goose"
+      "nameZh": "Goose",
+      "icon": "other",
+      "color": "#22c55e"
     },
     "platforms": {
       "macos": "supported",
@@ -1554,7 +1600,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "droid",
     "display": {
       "name": "Droid",
-      "nameZh": "Droid"
+      "nameZh": "Droid",
+      "icon": "other",
+      "color": "#1f6feb"
     },
     "platforms": {
       "macos": "supported",
@@ -1597,7 +1645,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "mimo",
     "display": {
       "name": "Mimo Code",
-      "nameZh": "Mimo Code"
+      "nameZh": "Mimo Code",
+      "icon": "other",
+      "color": "#ff6900"
     },
     "platforms": {
       "macos": "supported",
@@ -1638,7 +1688,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "zcode",
     "display": {
       "name": "ZCode",
-      "nameZh": "ZCode"
+      "nameZh": "ZCode",
+      "icon": "other",
+      "color": "#10b981"
     },
     "platforms": {
       "macos": "supported",
@@ -1681,7 +1733,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "anythingllm",
     "display": {
       "name": "AnythingLLM Desktop",
-      "nameZh": "AnythingLLM Desktop"
+      "nameZh": "AnythingLLM Desktop",
+      "icon": "other",
+      "color": "#8b5cf6"
     },
     "platforms": {
       "macos": "supported",
@@ -1718,10 +1772,85 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
   {
     "$schema": "../tool-definition.schema.json",
     "configVersion": 1,
+    "id": "dsh",
+    "display": {
+      "name": "DeepSeek Harness",
+      "nameZh": "DeepSeek Harness",
+      "icon": "deepseek",
+      "color": "#4d6bfe"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".dsh"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "native",
+        "reader": "dsh-session-v1",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".dsh/sessions",
+            "glob": "**/session.jsonl.zstd",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".dsh/sessions",
+            "glob": "**/session.jsonl",
+            "format": "jsonl"
+          }
+        ],
+        "maxFileSizeBytes": 67108864
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
     "id": "aipy",
     "display": {
       "name": "AiPy",
-      "nameZh": "AiPy"
+      "nameZh": "AiPy",
+      "icon": "https://www.aipyaipy.com/image/logo.webp",
+      "color": "#14b8a6"
     },
     "platforms": {
       "macos": "supported",
@@ -1819,7 +1948,9 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "id": "cline",
     "display": {
       "name": "Cline",
-      "nameZh": "Cline"
+      "nameZh": "Cline",
+      "icon": "other",
+      "color": "#5b8def"
     },
     "platforms": {
       "macos": "supported",
@@ -2240,6 +2371,10 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
         "path": "anythingllm.tool.json"
       },
       {
+        "id": "dsh",
+        "path": "dsh.tool.json"
+      },
+      {
         "id": "aipy",
         "path": "aipy.tool.json"
       },
@@ -2251,4 +2386,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "72debb1d528006d6";
+export const TOOL_REGISTRY_VERSION: string = "753dfd0d004bf445";

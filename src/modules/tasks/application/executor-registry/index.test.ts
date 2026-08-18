@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JOB_EXECUTOR_KEYS } from "../../definitions/contracts.ts";
 import { createExecutorRegistry } from "./index.ts";
-import type { UsageApplication } from "../../../usage/index.ts";
+import type { RefreshUsagePort } from "./index.ts";
 import type { TaskExecutionContext } from "../scheduler.ts";
 
 function context(): TaskExecutionContext {
@@ -15,44 +15,14 @@ function context(): TaskExecutionContext {
   };
 }
 
-function usageApplication(): UsageApplication {
+function usagePort(): RefreshUsagePort {
   return {
-    contract: { module: "usage", schemaVersion: 1 },
-    getUsageSnapshot: async () => ({ ok: true, value: { state: "empty" } }),
-    refreshUsage: async () => ({
-      ok: true,
-      value: {
-        state: "fresh",
-        committed: true,
-        retainedPreviousSnapshot: false,
-        snapshot: {
-          generatedAt: "2026-01-01T00:00:00.000Z",
-          mode: "empty",
-          sources: [],
-          events: 7,
-          totals: {
-            events: 7,
-            inputTokens: 0,
-            cachedInputTokens: 0,
-            cacheCreationInputTokens: 0,
-            outputTokens: 0,
-            reasoningOutputTokens: 0,
-            totalTokens: 0,
-          },
-          bySource: [],
-          byModel: [],
-          byProject: [],
-          daily: [],
-          details: [],
-          recent: [],
-        },
-      },
-    }),
-  } as UsageApplication;
+    refresh: async () => undefined,
+  };
 }
 
 test("registry binds every catalog key with a static function", () => {
-  const registry = createExecutorRegistry({ usage: usageApplication() });
+  const registry = createExecutorRegistry({ usage: usagePort() });
   assert.deepEqual(
     Object.keys(registry.executors).sort(),
     [...JOB_EXECUTOR_KEYS].sort(),
@@ -73,23 +43,36 @@ test("unknown executor keys fail with a stable, non-sensitive error", () => {
   );
 });
 
-test("usage executor delegates to the application use case", async () => {
+test("usage executor delegates to the snapshot refresh port", async () => {
   let calls = 0;
-  const app = usageApplication();
-  const usage = {
-    ...app,
-    refreshUsage: async (
-      request?: Parameters<UsageApplication["refreshUsage"]>[0],
-    ) => {
+  const usage: RefreshUsagePort = {
+    refresh: async () => {
       calls += 1;
-      return app.refreshUsage(request);
     },
-  } satisfies UsageApplication;
+  };
   const result = await createExecutorRegistry({ usage }).executors[
     "refresh-usage-v1"
   ](context());
   assert.equal(calls, 1);
-  assert.deepEqual(result, { summary: { scanned: 7, diagnosticCount: 0 } });
+  assert.deepEqual(result, {});
+});
+
+test("a cancelled usage executor propagates the abort", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const usage: RefreshUsagePort = {
+    refresh: async ({ signal }) => {
+      if (signal?.aborted) throw new Error("errors.tasks.cancelled");
+    },
+  };
+  await assert.rejects(
+    () =>
+      createExecutorRegistry({ usage }).executors["refresh-usage-v1"]({
+        ...context(),
+        signal: controller.signal,
+      }),
+    /errors\.tasks\.cancelled/,
+  );
 });
 
 test("unconfigured adapters return controlled availability errors", async () => {

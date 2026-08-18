@@ -8,7 +8,7 @@
 // Run: npm run generate:tool-imports   (also runs in prebuild)
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join, relative, isAbsolute } from "node:path";
 import { tsImport } from "tsx/esm/api";
 
@@ -18,8 +18,10 @@ const defsDir = join(root, "src/lib/tool-registry/definitions");
 const manifestPath = join(defsDir, "manifest.json");
 const outPath = join(root, "src/lib/tool-registry/definitions.generated.ts");
 
+// Windows: tsImport/ESM loaders reject bare drive-letter paths ("d:...");
+// import specifiers must be file:// URLs.
 const { RawToolDefinitionSchema, SharedPolicyPackSchema } = await tsImport(
-  join(root, "src/lib/tool-registry/schema.ts"),
+  pathToFileURL(join(root, "src/lib/tool-registry/schema.ts")).href,
   import.meta.url,
 );
 
@@ -93,8 +95,8 @@ for (const entry of manifest.tools) {
   }
   defs.push(parsed.data);
 }
-if (defs.length !== 29) {
-  fail(`expected exactly 29 definitions, got ${defs.length}`);
+if (defs.length !== 30) {
+  fail(`expected exactly 30 definitions, got ${defs.length}`);
 }
 
 // Canonical hash input: manifest + shared packs + definitions, deterministic

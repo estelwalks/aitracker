@@ -1,0 +1,51 @@
+{
+  "manifestVersion": 1,
+  "generator": "scripts/performance/generate-fixtures.mjs",
+  "generatedAt": "FIXED",
+  "sizes": {
+    "empty": 0,
+    "small": 120,
+    "current-scale": 6227,
+    "10x": 62270
+  },
+  "files": [
+    {
+      "file": "fixture-empty.events.json",
+      "events": 0,
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "file": "fixture-small.events.json",
+      "events": 120,
+      "bytes": 31984,
+      "sha256": "d7b703e4664af795719fe47f4da3cd91db6bb0c1f1f15e7e2bf2a6599fe3346e"
+    },
+    {
+      "file": "fixture-current-scale.events.json",
+      "events": 6227,
+      "bytes": 1668868,
+      "sha256": "2da716c3103903f11d4c346fb1fad9779e8d0e0d0c9f555e7f9e69f7795dcc02"
+    },
+    {
+      "file": "fixture-10x.events.json",
+      "events": 62270,
+      "bytes": 16688988,
+      "sha256": "d31322dba41396d32a1f342c736330e645ea7baf015e2116efa8607e6bd7cf0e"
+    }
+  ],
+  "privacy": {
+    "declaration": "Synthetic data only: no real paths, prompts, commands, API keys or conversation content.",
+    "forbiddenTokens": [
+      "c:\\",
+      "/users/",
+      "home/",
+      ".claude",
+      ".codex",
+      "api_key",
+      "sk-",
+      "prompt",
+      "bearer"
+    ]
+  }
+}

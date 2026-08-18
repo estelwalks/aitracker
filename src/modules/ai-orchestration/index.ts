@@ -22,3 +22,10 @@ export type {
   ModelProfileActionResult,
   ModelProfileListResult,
 } from "./model-profile.server-fns.ts";
+export { createAiExecutor, type AIExecutorPort } from "./ai-executor.ts";
+export {
+  createProviderRegistry,
+  createRegistryRouter,
+  offlineProvider,
+  type AIProviderRegistry,
+} from "./provider-registry.ts";

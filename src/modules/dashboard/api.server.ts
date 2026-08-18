@@ -5,9 +5,6 @@ import type {
   DashboardUsageSnapshot,
 } from "./contracts";
 import { createEmptyUsageSnapshot } from "../../lib/local-usage/presentation.ts";
-import { getLocalUsageSnapshot } from "../../lib/local-usage/get-local-usage.ts";
-import { getLocalSessions } from "../../lib/local-sessions/server-fns.ts";
-import { getLocalSkills } from "../../lib/local-skills/server-fns.ts";
 import { getPricingSnapshot } from "../../lib/pricing/server-fns.ts";
 import { catalogs, getMessage } from "../../lib/i18n/messages.ts";
 import { brandParams } from "../../lib/app-config.ts";
@@ -24,14 +21,8 @@ import type {
 } from "./contracts.ts";
 import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
-import { AI_TOOLS } from "../../lib/tools/catalog.ts";
-import { detectToolInstallations } from "../../lib/tools/detection.server.ts";
-import { homedir } from "node:os";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
-import {
-  classifyDashboardProjectRefs,
-  type DashboardProjectClassification,
-} from "./project-classification.server.ts";
+import type { DashboardProjectClassification } from "./project-classification.server.ts";
 
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
@@ -328,6 +319,8 @@ export function toDashboardV2Snapshot(input: {
     return {
       id: tool.id,
       name: tool.name,
+      ...(tool.icon ? { icon: tool.icon } : {}),
+      ...(tool.color ? { color: tool.color } : {}),
       available: source?.available ?? false,
       usageSupport: tool.capabilities.usage,
       // Usage-log roots and installation roots are intentionally separate:
@@ -401,10 +394,12 @@ async function resolveOutputAvailability(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const [distillationCount, reportsCount] = await Promise.allSettled([
-    root.distillation.count(),
-    root.reports.count(),
-  ]);
+  const [distillationCount, distillationBreakdown, reportsCount] =
+    await Promise.allSettled([
+      root.distillation.count(),
+      root.distillation.counts(),
+      root.reports.countByKind(),
+    ]);
   return {
     securityRuns: {
       count: securitySummary?.assessedAssetCount ?? null,
@@ -419,10 +414,35 @@ async function resolveOutputAvailability(
         distillationCount.status === "fulfilled" &&
         distillationCount.value != null,
     },
+    distillationBreakdown: {
+      capability:
+        distillationBreakdown.status === "fulfilled"
+          ? distillationBreakdown.value.capability
+          : null,
+      memory:
+        distillationBreakdown.status === "fulfilled"
+          ? distillationBreakdown.value.memory
+          : null,
+    },
     dailyReports: {
-      count: reportsCount.status === "fulfilled" ? reportsCount.value : null,
+      count:
+        reportsCount.status === "fulfilled" ? reportsCount.value.daily : null,
       available:
-        reportsCount.status === "fulfilled" && reportsCount.value != null,
+        reportsCount.status === "fulfilled" && reportsCount.value.daily != null,
+    },
+    weeklyReports: {
+      count:
+        reportsCount.status === "fulfilled" ? reportsCount.value.weekly : null,
+      available:
+        reportsCount.status === "fulfilled" &&
+        reportsCount.value.weekly != null,
+    },
+    monthlyReports: {
+      count:
+        reportsCount.status === "fulfilled" ? reportsCount.value.monthly : null,
+      available:
+        reportsCount.status === "fulfilled" &&
+        reportsCount.value.monthly != null,
     },
   };
 }
@@ -431,42 +451,8 @@ async function resolveOutputAvailability(
 export async function loadDashboardReadModel(
   locale: Locale,
 ): Promise<DashboardReadModel> {
-  const usageResult = await Promise.resolve(getLocalUsageSnapshot()).then(
-    (value) => ({ status: "fulfilled" as const, value }),
-    (reason) => ({ status: "rejected" as const, reason }),
-  );
-  const rawSnapshot =
-    usageResult.status === "fulfilled"
-      ? usageResult.value
-      : createEmptyUsageSnapshot();
-  const [
-    skillsResult,
-    pricingResult,
-    sessionsResult,
-    monitoringResult,
-    installationsResult,
-  ] = await Promise.allSettled([
-    getLocalSkills(),
-    getPricingSnapshot({
-      data: [...new Set(rawSnapshot.details.map((event) => event.model))],
-    }),
-    getLocalSessions({ data: {} }),
-    getMonitoringStatus(),
-    // This probes declared installation roots only; it neither reads usage
-    // logs nor allows concrete filesystem paths past this server adapter.
-    detectToolInstallations(AI_TOOLS, homedir()),
-  ]);
-  const projectRefs = [
-    ...rawSnapshot.details.map((event) => event.project),
-    ...(sessionsResult.status === "fulfilled"
-      ? sessionsResult.value.sessions.map(
-          (session) => session.projectRef ?? session.projectKey,
-        )
-      : []),
-  ];
-  const projectClassifications =
-    await classifyDashboardProjectRefs(projectRefs);
-  const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
+  const { snapshot, pricing, skills, sessions, monitoring, v2, error } =
+    await buildDashboardV2Snapshot(locale);
   const projectModel = createProjectUsageReadModel(
     {
       events: snapshot.details.filter(
@@ -484,6 +470,136 @@ export async function loadDashboardReadModel(
       totalTokens: snapshot.totals.totalTokens,
     },
   });
+  // Reading this service is strictly cache-only. No provider call can occur
+  // during route loading; the POST insight action is the only refresh path.
+  const aiInsight = getDashboardAIInsightService().read();
+  return createDashboardApplication().read({
+    snapshot,
+    error,
+    skills,
+    sessions,
+    monitoring,
+    pricing,
+    locale,
+    projectCount: projectModel.projects.length,
+    activeInsightCount: insightSnapshot.insights.filter(
+      (insight) => insight.status === "active",
+    ).length,
+    aiInsight,
+    v2,
+  });
+}
+
+/**
+ * Builds the browser-safe V2 snapshot once, sharing the heavy scan between the
+ * legacy read model and the compact summary projector (P1-T1-03). No scanner,
+ * pricing rules, or filesystem details cross this boundary.
+ */
+export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
+  readonly v2: DashboardV2Snapshot;
+  readonly snapshot: import("./contracts.ts").DashboardUsageSnapshot;
+  readonly pricing: import("../../lib/pricing/types.ts").PricingSnapshot | null;
+  readonly skills: import("./contracts.ts").DashboardSkillSummary;
+  readonly sessions: import("./contracts.ts").DashboardSessionsSummary;
+  readonly monitoring: MonitoringStatus | null;
+  readonly error: string | null;
+}> {
+  // T7-08: read the unified Usage snapshot (O(1), never scans on the query
+  // path). Empty state triggers a NON-BLOCKING background refresh: the loader
+  // returns the shell immediately while the collector runs (design §4.3 and
+  // loader rule 4 — an empty snapshot must not stall the first response).
+  const { getCompositionRoot: getRootForUsage } =
+    await import("../../app/composition.server.ts");
+  const { usageSnapshot } = await getRootForUsage();
+  await usageSnapshot.ensureHydrated();
+  let latest = usageSnapshot.readLatest();
+  if (latest.data == null) {
+    void usageSnapshot.refreshNow().catch(() => {});
+    latest = usageSnapshot.readLatest();
+  }
+  const usageResult =
+    latest.data != null
+      ? { status: "fulfilled" as const, value: latest.data }
+      : {
+          status: "rejected" as const,
+          reason: new Error("empty usage snapshot"),
+        };
+  const rawSnapshot =
+    usageResult.status === "fulfilled"
+      ? usageResult.value
+      : createEmptyUsageSnapshot();
+  const [pricingResult, monitoringResult] = await Promise.allSettled([
+    getPricingSnapshot({
+      data: [...new Set(rawSnapshot.details.map((event) => event.model))],
+    }),
+    getMonitoringStatus(),
+  ]);
+
+  // T4-00: sessions/skills/installations read the shared domain snapshots
+  // (O(1) — no scanner, no wsl.exe, no PATH probing on the query path).
+  const { sessionSnapshot, skillSnapshot, installationSnapshot } =
+    await getRootForUsage();
+  const [sessionLatest, skillLatest, installationLatest] = await Promise.all([
+    sessionSnapshot.ensureHydrated().then(() => sessionSnapshot.readLatest()),
+    skillSnapshot.ensureHydrated().then(() => skillSnapshot.readLatest()),
+    installationSnapshot
+      .ensureHydrated()
+      .then(() => installationSnapshot.readLatest()),
+  ]);
+  const sessionSummaries = sessionLatest.data?.sessions ?? [];
+  const skillsResult = {
+    status: "fulfilled" as const,
+    value: {
+      skills:
+        skillLatest.data?.skills.map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          lastUsedAt: skill.lastUsedAt,
+          sizeBytes: skill.sizeBytes,
+          tokenEstimate: skill.tokenEstimate,
+          installations: skill.installations.map((installation) => ({
+            agent: installation.agent,
+            installedAt: installation.installedAt,
+            modifiedAt: installation.modifiedAt,
+            version: installation.version,
+            source: installation.source,
+            updateStatus: installation.updateStatus,
+            updateReason: installation.updateReason,
+          })),
+        })) ?? [],
+      generatedAt: skillLatest.data?.generatedAt ?? null,
+    },
+  };
+  const sessionsResult = {
+    status: "fulfilled" as const,
+    value: {
+      sessions: sessionSummaries,
+      generatedAt: sessionLatest.generatedAt ?? null,
+    },
+  };
+  const installationsResult = {
+    status: "fulfilled" as const,
+    value: (installationLatest.data?.facts ?? []).map((fact) => ({
+      id: fact.id,
+      installed: fact.installed,
+      detectedPaths: fact.paths,
+    })),
+  };
+  const projectRefs = [
+    ...rawSnapshot.details.map((event) => event.project),
+    ...(sessionsResult.status === "fulfilled"
+      ? sessionsResult.value.sessions.map((session) => session.projectKey)
+      : []),
+  ];
+  // P3-T3-06: resolve from the persisted classification index (O(1), no
+  // filesystem probing on the query path).
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const { classificationService } = await getCompositionRoot();
+  const projectClassifications =
+    await classificationService.resolve(projectRefs);
+  const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
   const skills =
     skillsResult.status === "fulfilled"
       ? {
@@ -533,11 +649,14 @@ export async function loadDashboardReadModel(
         : undefined,
     ),
   });
-  // Reading this service is strictly cache-only. No provider call can occur
-  // during route loading; the POST insight action is the only refresh path.
-  const aiInsight = getDashboardAIInsightService().read();
-  return createDashboardApplication().read({
+  return {
+    v2,
     snapshot,
+    pricing,
+    skills,
+    sessions,
+    monitoring:
+      monitoringResult.status === "fulfilled" ? monitoringResult.value : null,
     error:
       usageResult.status === "rejected"
         ? usageResult.reason instanceof Error
@@ -548,17 +667,5 @@ export async function loadDashboardReadModel(
               brandParams,
             )
         : null,
-    skills,
-    sessions,
-    monitoring:
-      monitoringResult.status === "fulfilled" ? monitoringResult.value : null,
-    pricing,
-    locale,
-    projectCount: projectModel.projects.length,
-    activeInsightCount: insightSnapshot.insights.filter(
-      (insight) => insight.status === "active",
-    ).length,
-    aiInsight,
-    v2,
-  });
+  };
 }

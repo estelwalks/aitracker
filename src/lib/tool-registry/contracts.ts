@@ -73,6 +73,7 @@ export type UsageReaderKey =
   | "grok-turn-v1"
   | "openclaw-session-v1"
   | "antigravity-transcript-v1"
+  | "dsh-session-v1"
   | (string & {});
 
 export type SessionReaderKey =
@@ -159,7 +160,14 @@ export interface ToolStorage {
 export interface ToolDisplay {
   name: string;
   nameZh: string;
+  /**
+   * BrandIcon kind key (claude/codex/cursor/gemini/kimi/deepseek/other) or an
+   * http(s) logo URL (rendered as a remote <img>). Unknown values fall back to
+   * the generic icon; the UI prefers this over name-based heuristics.
+   */
   icon?: string;
+  /** Brand primary color (#rrggbb); the UI falls back to heuristics when unset. */
+  color?: string;
 }
 
 export interface ToolDetection {

@@ -4,7 +4,9 @@
   "id": "kimi-code",
   "display": {
     "name": "Kimi Code",
-    "nameZh": "Kimi Code"
+    "nameZh": "Kimi Code",
+    "icon": "kimi",
+    "color": "#7c5cff"
   },
   "platforms": {
     "macos": "supported",
@@ -14,7 +16,12 @@
   "detection": {
     "locations": [
       {
-        "targets": ["macos", "windows10", "windows11", "linux"],
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
         "base": "home",
         "path": ".kimi"
       }
@@ -26,14 +33,24 @@
       "reader": "generic",
       "paths": [
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".kimi/sessions",
           "glob": "**/*.jsonl",
           "format": "jsonl"
         },
         {
-          "targets": ["macos", "windows10", "windows11", "linux"],
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
           "base": "home",
           "path": ".kimi/logs",
           "glob": "**/*.jsonl",

@@ -14,19 +14,19 @@ import {
  */
 const EXTENSION_IDS = ["aipy", "cline"];
 
-test("the registry compiles all 29 tool definitions with no diagnostics", () => {
+test("the registry compiles all 30 tool definitions with no diagnostics", () => {
   const registry = getDefaultRegistry();
   const errors = registry.diagnostics.filter((d) => d.severity === "error");
   assert.deepEqual(errors, []);
-  assert.equal(registry.definitions.length, 29);
+  assert.equal(registry.definitions.length, 30);
 });
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
   const registry = getDefaultRegistry();
-  // All 29 tools are visible now (aipy/cline are user extensions, not hidden).
+  // All 30 tools are visible now (aipy/cline are user extensions, not hidden).
   assert.equal(
     registry.definitions.filter((def) => def.catalogVisible !== false).length,
-    29,
+    30,
   );
   // The frozen 27-tool baseline matches the first 27 definitions in order.
   const ids = registry.definitions.map((def) => def.id);
@@ -57,12 +57,13 @@ test("each config id equals its filename stem", () => {
   const registry = getDefaultRegistry();
   const ids = registry.ids;
   assert.equal(new Set(ids).size, ids.length, "config ids must be unique");
-  // 27 baseline ids + aipy/cline extensions.
+  // 27 baseline ids + dsh + aipy/cline extensions.
   assert.deepEqual(
     [...ids].slice(0, 27),
     BASELINE_TOOLS.map((t) => t.id),
   );
-  assert.deepEqual(ids.slice(27), EXTENSION_IDS);
+  assert.equal(ids[27], "dsh");
+  assert.deepEqual(ids.slice(28), EXTENSION_IDS);
 });
 
 test("skill/market/usage capabilities match the frozen baseline sets", () => {
@@ -78,7 +79,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
   ];
-  // 14 tools carry a usage capability: 7 native + 5 catalog adapter + 2 extension adapter.
+  // 15 tools carry a usage capability: 8 native + 5 catalog adapter + 2 extension adapter.
   const BASELINE_USAGE_NATIVE = new Set([
     "claude-code",
     "codex",
@@ -87,6 +88,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
     "workbuddy",
+    "dsh",
   ]);
   const BASELINE_USAGE_ADAPTER = new Set([
     "cursor",
@@ -125,9 +127,9 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
   }
 });
 
-test("public manifest mirrors all 29 visible tools", () => {
+test("public manifest mirrors all 30 visible tools", () => {
   const registry = getDefaultRegistry();
-  assert.equal(registry.publicManifest.tools.length, 29);
+  assert.equal(registry.publicManifest.tools.length, 30);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
     registry.definitions.map((d) => d.id),

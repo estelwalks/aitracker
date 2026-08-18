@@ -4,7 +4,6 @@ import {
   SKILL_AGENTS,
   type BatchUninstallResult,
   type SkillAgent,
-  type SkillSnapshot,
   type SkillSyncResult,
 } from "./types.ts";
 import type { SkillFileList } from "./scanner.server.ts";
@@ -27,18 +26,6 @@ const batchPathsInput = (value: unknown): string[] => {
   }
   return [...new Set(value)];
 };
-
-export const getLocalSkills = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SkillSnapshot> => {
-    const [{ scanLocalSkills }, { getCachedLocalUsageSnapshot }] =
-      await Promise.all([
-        import("./scanner.server.ts"),
-        import("../local-usage/snapshot.server.ts"),
-      ]);
-    const usage = await getCachedLocalUsageSnapshot();
-    return scanLocalSkills({ usageEvents: usage.details });
-  },
-);
 
 export const refreshSkillMarketEvidence = createServerFn({
   method: "POST",

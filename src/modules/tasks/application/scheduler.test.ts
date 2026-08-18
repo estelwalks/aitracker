@@ -261,3 +261,103 @@ test("does not expose execution error details in JobRun", async () => {
   assert.equal(JSON.stringify(h.runs).includes("/Users/alice"), false);
   assert.equal(JSON.stringify(h.runs).includes("secret"), false);
 });
+
+test("T5-06: heavy collectors share the global heavy permit (max 1 concurrent)", async () => {
+  const h = harness();
+  let activeHeavy = 0;
+  let peakHeavy = 0;
+  let releaseFirst!: () => void;
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  // A counting resource budget that tracks heavy concurrency.
+  let heavyInFlight = 0;
+  const budget = {
+    async acquire(resource: "heavy" | "file" | "classifier") {
+      if (resource !== "heavy") return () => undefined;
+      while (heavyInFlight >= 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      }
+      heavyInFlight += 1;
+      activeHeavy += 1;
+      peakHeavy = Math.max(peakHeavy, activeHeavy);
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        activeHeavy -= 1;
+        heavyInFlight -= 1;
+      };
+    },
+  };
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    resourceBudget: budget,
+    executors: {
+      "refresh-usage-v1": async () => {
+        await firstGate;
+      },
+      "refresh-sessions-v1": async () => {
+        // Would run concurrently with usage if the budget leaked.
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+    },
+  });
+  const first = await scheduler.runNow({
+    taskId: createTaskId("usage.refresh"),
+    reason: "manual",
+  });
+  const second = await scheduler.runNow({
+    taskId: createTaskId("sessions.refresh"),
+    reason: "manual",
+  });
+  assert.equal(first.status, "queued");
+  assert.equal(second.status, "queued");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The second heavy task must wait for the first permit.
+  assert.equal(activeHeavy, 1);
+  assert.equal(peakHeavy, 1);
+  releaseFirst();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  // Both completed; no permit leaked.
+  assert.equal(activeHeavy, 0);
+  assert.equal(peakHeavy, 1);
+});
+
+test("T5-06: cancelled heavy task releases its permit (no leak)", async () => {
+  const h = harness();
+  let permits = 0;
+  let released = 0;
+  const budget = {
+    async acquire() {
+      permits += 1;
+      let done = false;
+      return () => {
+        if (!done) {
+          done = true;
+          released += 1;
+        }
+      };
+    },
+  };
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    resourceBudget: budget,
+    executors: {
+      "refresh-usage-v1": async ({ signal }) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        signal.throwIfAborted();
+      },
+    },
+  });
+  const run = await scheduler.runNow({
+    taskId: createTaskId("usage.refresh"),
+    reason: "manual",
+  });
+  await scheduler.cancel(run.runId);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(permits, 1);
+  assert.equal(released, 1); // permit released on cancellation
+});

@@ -3,7 +3,6 @@ import { catalogs, getMessage } from "../lib/i18n/messages";
 import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { decodeSegmentRef } from "../lib/distill-segment";
-import { DistillationPage } from "../modules/distillation/presentation/DistillationPage";
 import { getDistillationQuery } from "../modules/distillation/query";
 
 interface DistillSearchParams {
@@ -11,6 +10,7 @@ interface DistillSearchParams {
   readonly segment?: string | null;
 }
 
+// The page component lives in distill.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/distill")({
   validateSearch: (search: Record<string, unknown>): DistillSearchParams => ({
     segment: typeof search.segment === "string" ? search.segment : null,
@@ -40,16 +40,4 @@ export const Route = createFileRoute("/distill")({
       },
     ],
   }),
-  component: DistillationRoutePage,
 });
-
-function DistillationRoutePage() {
-  const data = Route.useLoaderData();
-  const { segment } = Route.useSearch();
-  return (
-    <DistillationPage
-      initial={data}
-      initialSegment={segment ? decodeSegmentRef(segment) : null}
-    />
-  );
-}

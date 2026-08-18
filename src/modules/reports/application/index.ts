@@ -9,6 +9,7 @@ import {
 import type {
   GenerateReportInput,
   ReportContent,
+  ReportCountsByKind,
   ReportDefinition,
   ReportDocument,
   ReportRun,
@@ -258,6 +259,25 @@ export function createReportsApplication(
     }
   };
 
+  const countByKind = async (): Promise<ReportCountsByKind> => {
+    try {
+      const documents = await options.store.listDocuments();
+      const counts: { daily: number; weekly: number; monthly: number } = {
+        daily: 0,
+        weekly: 0,
+        monthly: 0,
+      };
+      for (const document of documents) {
+        if (document.definitionId === "reports.daily") counts.daily += 1;
+        else if (document.definitionId === "reports.weekly") counts.weekly += 1;
+        else counts.monthly += 1;
+      }
+      return counts;
+    } catch {
+      return { daily: null, weekly: null, monthly: null };
+    }
+  };
+
   return {
     definitions: definitions.map(toDefinitionSummary),
     createDraft,
@@ -269,5 +289,6 @@ export function createReportsApplication(
     list,
     listRuns,
     count,
+    countByKind,
   };
 }

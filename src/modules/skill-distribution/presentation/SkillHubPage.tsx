@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Store } from "lucide-react";
 
 import { JarvisInsight } from "../../../components/JarvisInsight";
 import { useI18n } from "../../../lib/i18n/context";
-import { getBrowserSecurityClient } from "../../security-assessment/query/browser-client";
-import { getDesktopSecurityClient } from "../../security-assessment/query/desktop-client";
-import type { SecurityHistoryView } from "../../security-assessment/presentation/security-view";
+import {
+  getBrowserSecurityClient,
+  getDesktopSecurityClient,
+  type SecurityHistoryView,
+} from "../../security-assessment/index";
 import { SkillsPage } from "../../skill-catalog/index.ts";
 import type { SkillWorkspaceSnapshot } from "../../skill-catalog/index.ts";
-import type { DashboardReadModel } from "../../dashboard/contracts.ts";
-import type { MarketListResult } from "../query.ts";
-import { MarketPanel } from "./MarketPanel.tsx";
-
-export type SkillHubTab = "local" | "market";
+import type { AgentUsageOverviewReadModel } from "../../skill-catalog/index.ts";
 
 /** Real distillation activity surfaced by the composition root. */
 export interface SkillsDistillationView {
@@ -22,36 +19,24 @@ export interface SkillsDistillationView {
 
 export interface SkillHubData {
   readonly workspace: SkillWorkspaceSnapshot;
-  readonly usage: DashboardReadModel;
-  readonly market: MarketListResult;
+  /** Compact agent-overview projection; never raw events (P1-T1-07). */
+  readonly usage: AgentUsageOverviewReadModel;
   /** Real distillation counters; null when the workbench is unavailable. */
   readonly distillation: SkillsDistillationView | null;
 }
 
 /**
- * Skill Hub (prototype `/skills`): hero Jarvis insight card over two real
- * tabs (local card grid + market catalog). All insight/KPI figures are derived
- * from real loader data and a real client-side security-history read — nothing
- * is mocked.
+ * Skill 管理（prototype `/skills`）：hero Jarvis insight card over the local
+ * skill workspace (card grid + distribution). The market catalog lives on its
+ * own `/market` route (安全市场) since the V3.0 split. All insight/KPI figures
+ * are derived from real loader data and a real client-side security-history
+ * read — nothing is mocked.
  */
-export function SkillHubPage({
-  initial,
-  initialTab = "local",
-}: {
-  initial: SkillHubData;
-  initialTab?: SkillHubTab;
-}) {
+export function SkillHubPage({ initial }: { initial: SkillHubData }) {
   const { t, format } = useI18n();
-  const [tab, setTab] = useState<SkillHubTab>(initialTab);
   const [securityHistory, setSecurityHistory] = useState<
     readonly SecurityHistoryView[]
   >([]);
-
-  // Keep the active tab in sync when the route's `?tab=` search param changes
-  // (e.g. the local empty-state "去市场" link navigates to /skills?tab=market).
-  useEffect(() => {
-    setTab(initialTab);
-  }, [initialTab]);
 
   // Real security-detection history from the same Security & Defense client the
   // /security page uses (automatic/monitor scans included). Client-side only;
@@ -124,34 +109,11 @@ export function SkillHubPage({
           risk: format.formatNumber(riskCount),
         }),
       );
-    }
-    const stats = initial.market.stats;
-    if (stats) {
-      lines.push(
-        t("skills.jarvis.marketAvailable", {
-          total: format.formatNumber(stats.totalSkills),
-          official: format.formatNumber(stats.officialCount),
-        }),
-      );
-      if (stats.installedCount > 0) {
-        lines.push(
-          t("skills.jarvis.marketInstalled", {
-            count: format.formatNumber(stats.installedCount),
-          }),
-        );
-      }
+    } else if (localSkillNames.size > 0) {
+      lines.push(t("skills.jarvis.securityClean"));
     }
     return lines;
-  }, [t, format, summary, securityView, initial.market.stats]);
-
-  const TABS = [
-    {
-      id: "local",
-      label: t("skills.agentOverview.workspaceTitle"),
-      icon: Boxes,
-    },
-    { id: "market", label: t("market.pageHeader"), icon: Store },
-  ] as const;
+  }, [t, format, summary, securityView, localSkillNames]);
 
   return (
     <div className="space-y-4">
@@ -162,41 +124,14 @@ export function SkillHubPage({
         dotsLabel={t("insights.dots")}
       />
 
-      {/* Prototype pill tab bar */}
-      <div className="flex items-center gap-1 rounded-xl bg-surface-2/60 p-1">
-        {TABS.map((tabItem) => {
-          const on = tab === tabItem.id;
-          const Icon = tabItem.icon;
-          return (
-            <button
-              key={tabItem.id}
-              type="button"
-              onClick={() => setTab(tabItem.id)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-medium transition-colors ${
-                on
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
-              <span className="truncate">{tabItem.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {tab === "local" ? (
-        <SkillsPage
-          initial={initial.workspace}
-          usage={initial.usage}
-          showWorkspace
-          showToolOverview={false}
-          security={securityView}
-          distillation={initial.distillation ?? undefined}
-        />
-      ) : (
-        <MarketPanel initial={initial.market} />
-      )}
+      <SkillsPage
+        initial={initial.workspace}
+        usage={initial.usage}
+        showWorkspace
+        showToolOverview={false}
+        security={securityView}
+        distillation={initial.distillation ?? undefined}
+      />
     </div>
   );
 }

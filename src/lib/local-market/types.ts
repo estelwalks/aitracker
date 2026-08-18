@@ -48,7 +48,7 @@ export interface MarketPagination {
 }
 
 export type MarketSort =
-  "stars" | "created_at" | "name_asc" | "name_desc" | "downloads";
+  "stars" | "created_at" | "name_asc" | "name_desc" | "downloads" | "tokens";
 
 export interface MarketStats {
   totalSkills: number;

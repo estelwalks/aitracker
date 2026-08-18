@@ -22,7 +22,10 @@ const snapshot: DashboardV2Snapshot = {
   outputAvailability: {
     securityRuns: { count: null, available: false },
     distillationOutputs: { count: null, available: false },
+    distillationBreakdown: { capability: null, memory: null },
     dailyReports: { count: null, available: false },
+    weeklyReports: { count: null, available: false },
+    monthlyReports: { count: null, available: false },
   },
   skills: { available: true, count: 2, generatedAt: null },
   sessions: {
@@ -354,7 +357,10 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.comparison.tokens.previous, 400);
   assert.equal(view.comparison.tokens.deltaPercent, 50);
   assert.equal(view.comparison.events.previous, 4);
+  assert.equal(view.comparison.sessions.previous, 2);
+  assert.equal(view.comparison.sessions.deltaPercent, 50);
   assert.equal(view.comparison.cacheRate.deltaPoints, -6.666666666666666);
+  assert.equal(view.cacheSavingsUsd != null && view.cacheSavingsUsd > 0, true);
   assert.equal(view.models[0]?.estimatedCostUsd != null, true);
   assert.equal(view.models[0]?.events, 2);
   assert.equal(view.models[0]?.share, (400 / 600) * 100);
@@ -364,6 +370,29 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.projects[0]?.deltaPercent, 100);
   assert.equal(view.modelCount, 2);
   assert.equal(view.projectCount, 2);
+});
+
+test("sessions comparison falls back to absolute delta when the previous window had none", () => {
+  const noPreviousSessions: DashboardV2Snapshot = {
+    ...snapshot,
+    sessions: {
+      available: true,
+      generatedAt: null,
+      byProjectDay: [],
+      bySourceDay: [
+        { source: "codex", date: "2026-08-10", count: 4, ...emptyWorkflow },
+      ],
+    },
+  };
+  const view = createDashboardV2View(
+    noPreviousSessions,
+    "custom",
+    "2026-08-10",
+    "2026-08-11",
+  );
+  assert.equal(view.comparison.sessions.previous, 0);
+  assert.equal(view.comparison.sessions.deltaPercent, null);
+  assert.equal(view.comparison.sessions.absoluteDelta, 4);
 });
 
 test("Dashboard V2 keeps unavailable context distinct from an observed zero", () => {

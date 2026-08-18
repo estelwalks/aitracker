@@ -7,6 +7,7 @@ export const JOB_EXECUTOR_KEYS = [
   "monitor-security-v1",
   "apply-retention-v1",
   "generate-report-v1",
+  "refresh-exchange-v1",
 ] as const;
 export const JOB_I18N_KEYS = [
   "tasks.usageRefresh",

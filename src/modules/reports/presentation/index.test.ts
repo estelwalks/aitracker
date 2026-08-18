@@ -68,6 +68,7 @@ const app = (): ReportsApplication => ({
     throw new Error("unused");
   },
   count: async () => null,
+  countByKind: async () => ({ daily: null, weekly: null, monthly: null }),
 });
 
 const run = (overrides: Partial<ReportRun> = {}): ReportRun => ({

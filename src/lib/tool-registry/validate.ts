@@ -31,6 +31,7 @@ export const BUILTIN_USAGE_READERS: ReadonlySet<string> = new Set([
   "openclaw-session-v1",
   "antigravity-transcript-v1",
   "workbuddy-native",
+  "dsh-session-v1",
 ]);
 
 export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([

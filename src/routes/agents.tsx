@@ -1,22 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
-import { SkillsPage } from "../modules/skill-catalog/presentation";
-import { getDashboardReadModel } from "../modules/dashboard/query";
+import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
 // The route forwards opaque installationRef values from the public query facade;
-// filesystem paths remain confined to server-side adapters.
+// filesystem paths remain confined to server-side adapters. Usage data arrives
+// as the compact agent-overview projection (P1-T1-06) — never raw events.
+// The page component lives in agents.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/agents")({
-  loader: async ({ location }) => {
-    const locale = resolveLocaleFromSearch(location.search);
+  loaderDeps: ({ search }) => ({
+    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
+  }),
+  loader: async ({ deps }) => {
     const [data, usage] = await Promise.all([
       getSkillWorkspace(),
-      getDashboardReadModel({ data: locale }),
+      getAgentUsageOverview({ data: { locale: deps.locale } }),
     ]);
-    return { ...data, usage, locale };
+    return { ...data, usage, locale: deps.locale };
   },
+  staleTime: 30_000,
+  gcTime: 5 * 60_000,
+  preloadStaleTime: 0,
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -34,10 +40,4 @@ export const Route = createFileRoute("/agents")({
       },
     ],
   }),
-  component: AgentsRoute,
 });
-
-function AgentsRoute() {
-  const { usage, ...initial } = Route.useLoaderData();
-  return <SkillsPage initial={initial} usage={usage} showWorkspace={false} />;
-}

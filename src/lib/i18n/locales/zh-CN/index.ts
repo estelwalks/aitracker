@@ -9,6 +9,7 @@ import { memory } from "./memory";
 import { meta } from "./meta";
 import { nav } from "./nav";
 import { pricing } from "./pricing";
+import { privacy } from "./privacy";
 import { reports } from "./reports";
 import { skills } from "./skills";
 import { security } from "./security";
@@ -30,6 +31,7 @@ export const zh = {
   insights,
   reports,
   pricing,
+  privacy,
 
   nav,
   skills,
