@@ -92,6 +92,7 @@ export const errors = {
     modelListInvalid: "Invalid model list",
     rateResponseIncomplete: "Incomplete exchange-rate response",
     rateMissingCurrency: "Exchange-rate response is missing a currency",
+    rateRefreshFailed: "Exchange-rate refresh failed; please try again later",
   },
   market: {
     fieldInvalid: "Invalid market field: {field}",

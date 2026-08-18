@@ -395,6 +395,19 @@ git diff --check
 > - T7-06 ✅ 已执行：`runtime-policy.source.json` 的 `rollout.defaultStage` 由 `legacy` 推进为 `new-default`（新链路已全量接线，阶段推进即策略默认切换；`TRUSTTOOLS_FORCE_LEGACY_READ_PATH` kill switch 保留为紧急开关）。
 > - T7-07 🔶 部分完成：损坏新快照、写失败、collector 卡死、kill switch 优先级均有自动化单测/集成测试覆盖；"旧版本 downgrade 发布演练"需正式发布版本执行（恢复旧安装包即可，旧数据文件只读兼容已保持）。
 > - T7-08 ✅ 已执行：删除 legacy 30 秒缓存（`local-usage/snapshot.server.ts`）、页面直连 scanner 的旧 server-fn（`get-local-usage.ts`、`get-usage-sources.ts` 的 server-fn、`local-skills/server-fns.ts` 的 `getLocalSkills`）与兼容 barrel；Dashboard/Tracker/Sources/Skills 读路径全部切换到统一快照；旧数据文件（`usage-snapshot.v1.json` 等）保持只读兼容（copy-forward 保留）。
+>
+> **执行状态（审查修复轮）：** 针对 2026 性能审查报告待修复清单的收尾：
+> - Knowledge 列表 N+1 根除：`listMemoryAssetsFrom` 改为一次 `listVersions()` 读取（`contracts.ts` 新增 `KnowledgeVersionedEntry`/`listVersions`），首屏截断 50 条并携带服务端精确 counts（T4-03 验收"读取次数 ≤1"达成）。
+> - WSL 快照接线：usage collect 改经 `wslSnapshot` 协调器（360min 新鲜度），`wsl.exe` 从每 15 分钟一次降为每 6 小时至多一次；scanner fallback 枚举绑定 signal。
+> - Installation 任务化（T3-03/T3-11）：新增 `installation.refresh` 任务（360min、if-stale、single-flight）与 `refresh-installation-v1` executor；`detectToolInstallations` 接受 AbortSignal 并贯穿探测循环。
+> - 统一刷新入口（T3-11）：composition 为 usage/sessions/skills/installation 快照运行时接线 `requestRefresh` 端口到任务 API；Dashboard/Sources/Skills/Sessions 的空态与手动刷新、设置页汇率手动刷新（新增 `refreshExchangeRates` server-fn + `taskApi.awaitRun`）全部经统一任务运行时；汇率启动调用改纯缓存读取，移除页面路径的网络旁路。
+> - 真实取消（T5-02/03/04）：`readJsonLines`/`collectAdapterFiles`/五个 structured parser/`parseGenericFile`/`loadPersistentIndex` 全部接收 AbortSignal；分类器 `classify(refs, signal)` 贯穿。
+> - 资源预算（T5-06/07）：分类指纹 stat 经 `acquire("file")` 有界池；generic 适配器扫描改 8 路 worker 池（合计并发文件读 ≤16 与 `maxFileOperations` 对齐）。
+> - Widget（T4-05/06）：status/model 序列化字节硬断言（≤2KB/≤50KB，超预算抛错）；恢复可见立即校验 revision（`refetchOnWindowFocus: "always"`）；Dashboard 懒加载面板包 ChunkErrorBoundary。
+> - 可观测（T0-09）：composition 暴露 in-memory `metrics` sink，`measureReadModel` 接入 dashboard summary 投影。
+> - 清理：删除死代码（`getDashboardReadModel`、`buildDashboardPosterData`/`buildDashboardExport`、`UsageTrendChart`、scanner `execFileAsync`、composition 死 import）；禁词表三处统一（补 path/root/home）；DTO 预算常量统一为 250/150/50/2 KiB；收窄 dashboard/knowledge barrel；修正 sessions 注释。
+> - E2E（T7-04 补充）：新增 stale 快照、离线汇率回退、多窗口 Widget、WSL 不可用降级场景（`tests/e2e/performance-stale-offline.spec.ts` + `playwright.config.stale-home.ts`/`offline.ts` + stale-home fixture）。
+> - 门禁复核：`tsc`、`lint`、`verify:architecture:blocking`（0 违规）、`verify:browser-server-boundary`、`verify:runtime-policy`、`verify:job-catalog`、`verify:read-model-budgets`、`verify:bundle-budget`（初始共享 JS 231KB ≤ 250KB、CSS 26.4KB、server chunk 0、Node externalization 0）与空 home E2E 全部通过；`local-usage/scanner.server.test.ts` 的 3 个缓存/Codex 用例在本机 Windows 环境（真实 `USERPROFILE` 数据）预先失败，与本次改动无关。
 
 **Gate G7：** P0/P1 风险覆盖 100%；RC 预算通过；shadow 无未解释差异；kill switch、损坏快照和 downgrade 演练通过；原始日志及旧快照从未被不可逆修改。
 

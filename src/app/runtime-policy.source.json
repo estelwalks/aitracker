@@ -141,6 +141,24 @@
         "ui": { "settingsVisible": true, "i18nKey": "tasks.sessionsRefresh" }
       },
       {
+        "id": "installation.refresh",
+        "executorKey": "refresh-installation-v1",
+        "category": "collection",
+        "defaultSchedule": { "kind": "interval", "minutes": 360 },
+        "constraints": {
+          "minMinutes": 60,
+          "maxMinutes": 10080,
+          "singleFlight": true
+        },
+        "startupPolicy": "if-stale",
+        "retry": { "maxAttempts": 1, "backoffSeconds": [120] },
+        "timeoutMs": 60000,
+        "queue": "background",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": { "settingsVisible": true, "i18nKey": "tasks.installationsRefresh" }
+      },
+      {
         "id": "security.monitor",
         "executorKey": "monitor-security-v1",
         "category": "collection",

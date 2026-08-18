@@ -17,7 +17,10 @@ export interface ClassificationService {
     refs: readonly string[],
   ): Promise<ReadonlyMap<string, DashboardProjectClassification>>;
   /** Incremental background classification (Usage refresh path). */
-  classifyIncrementally(refs: readonly string[]): Promise<{
+  classifyIncrementally(
+    refs: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<{
     readonly probed: number;
     readonly reused: number;
     readonly failed: number;
@@ -45,8 +48,8 @@ export function createClassificationService(options: {
       }
       return result;
     },
-    async classifyIncrementally(refs) {
-      return options.classifier.classify(refs);
+    async classifyIncrementally(refs, signal) {
+      return options.classifier.classify(refs, signal);
     },
   };
 }

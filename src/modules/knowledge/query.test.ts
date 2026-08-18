@@ -67,7 +67,7 @@ test("distilled versions project to origin distill with a provenance-only summar
   if (!draft.ok) return;
   await repository.approve(draft.value.assetId, "user");
 
-  const entries = await listMemoryAssetsFrom(scope);
+  const entries = (await listMemoryAssetsFrom(scope)).entries;
   assert.equal(entries.length, 1);
   const entry = entries[0];
   assert.equal(entry.assetId, draft.value.assetId);
@@ -103,7 +103,7 @@ test("manual entries keep the decoded source/type/project and truncated summary"
   );
   assert.equal(created.entry?.status, "approved");
 
-  const entries = await listMemoryAssetsFrom(scope);
+  const entries = (await listMemoryAssetsFrom(scope)).entries;
   assert.equal(entries.length, 1);
   assert.equal(entries[0].type, "task");
 });
@@ -142,7 +142,7 @@ test("update creates the next version with edited metadata and re-hashed body", 
   assert.equal(updated.entry?.project, "sparkle");
   assert.equal(updated.entry?.summary, "edited body text");
 
-  const entries = await listMemoryAssetsFrom(scope);
+  const entries = (await listMemoryAssetsFrom(scope)).entries;
   assert.equal(entries.length, 1);
   assert.equal(entries[0].title, "Edited title");
 });
@@ -159,7 +159,7 @@ test("archive soft-deletes the entry so it disappears from the memory list", asy
 
   const archived = await archiveMemoryEntry(assetId, scope);
   assert.equal(archived.ok, true);
-  const entries = await listMemoryAssetsFrom(scope);
+  const entries = (await listMemoryAssetsFrom(scope)).entries;
   assert.equal(entries.length, 0);
 });
 

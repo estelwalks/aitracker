@@ -9,6 +9,8 @@ import { buildDashboardV2Snapshot } from "./api.server.ts";
 import { createDashboardV2HeroView } from "./application/v2.ts";
 import { createInsightsApplication } from "../insights/index.ts";
 import type { MonitoringStatus } from "../monitoring/contracts.ts";
+import { measureReadModel } from "../../platform/observability/measure.ts";
+import type { MetricSink } from "../../platform/observability/contracts.ts";
 
 /**
  * P1-T1-04: Server adapter for the compact dashboard summary read model.
@@ -21,6 +23,22 @@ import type { MonitoringStatus } from "../monitoring/contracts.ts";
  */
 
 const projector = createDashboardSummaryProjector();
+
+// P0-T0-09: observe projection duration + DTO bytes into the composition
+// metrics sink (lazily resolved; never blocks the query when unavailable).
+let metricSink: MetricSink | null | undefined;
+async function getMetricSink(): Promise<MetricSink | undefined> {
+  if (metricSink === undefined) {
+    try {
+      const { getCompositionRoot } =
+        await import("../../app/composition.server.ts");
+      metricSink = (await getCompositionRoot()).metrics;
+    } catch {
+      metricSink = null;
+    }
+  }
+  return metricSink ?? undefined;
+}
 
 function activeInsightCount(snapshot: {
   generatedAt: string;
@@ -44,11 +62,17 @@ export async function loadDashboardSummaryReadModel(
   monitoringOverride?: MonitoringStatus | null,
 ): Promise<DashboardSummaryReadModel> {
   const { v2, monitoring, error } = await buildDashboardV2Snapshot(locale);
-  const summary = projector.build({
-    snapshot: v2,
-    locale,
-    status: error == null ? "fresh" : "failed",
-  });
+  // P0-T0-09: record projection duration + DTO bytes into the metrics sink.
+  const summary = measureReadModel(
+    "dashboard.summary",
+    () =>
+      projector.build({
+        snapshot: v2,
+        locale,
+        status: error == null ? "fresh" : "failed",
+      }),
+    { metrics: await getMetricSink(), metricPrefix: "read-model" },
+  ).value;
   const hero = createDashboardV2HeroView({
     snapshot: v2,
     monitoring: monitoringOverride ?? monitoring,

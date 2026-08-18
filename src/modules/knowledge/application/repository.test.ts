@@ -207,3 +207,50 @@ test("P4-T4-03: listLatest caps limit at 100 and defaults to 50", async () => {
   const defaulted = await repository.listLatest({});
   assert.equal(defaulted.ok, true);
 });
+
+test("P4-T4-03: listVersions returns asset+current-version pairs from ONE store read", async () => {
+  let value: KnowledgeDocument = {
+    schemaVersion: 1,
+    revision: 0,
+    assets: [],
+    versions: [],
+  };
+  let reads = 0;
+  const store: AtomicJsonStore<KnowledgeDocument> = {
+    async read(): Promise<AtomicJsonReadResult<KnowledgeDocument>> {
+      reads += 1;
+      return { value, source: "stored", schemaVersion: 1 };
+    },
+    async write(next) {
+      value = next;
+    },
+  };
+  const clock: Clock = { now: () => new Date("2026-08-07T00:00:00.000Z") };
+  const repository = createKnowledgeRepository({
+    store,
+    clock,
+    hash: { hash: (text) => `hash-${text}` as never },
+  });
+  const draft = await repository.createDraft({
+    kind: "memory",
+    title: "Note",
+    content: "body",
+    createdBy: "user",
+  });
+  assert.equal(draft.ok, true);
+  if (!draft.ok) return;
+  await repository.approve(draft.value.assetId, "user");
+
+  reads = 0;
+  const listed = await repository.listVersions({ kind: "memory" });
+  assert.equal(listed.ok, true);
+  if (!listed.ok) return;
+  // The whole filtered list comes from one store read (no per-asset N+1).
+  assert.equal(reads, 1);
+  assert.equal(listed.value.length, 1);
+  assert.equal(listed.value[0].asset.assetId, draft.value.assetId);
+  assert.equal(listed.value[0].version.status, "approved");
+
+  const briefs = await repository.listVersions({ kind: "brief" });
+  assert.equal(briefs.ok && briefs.value.length, 0);
+});

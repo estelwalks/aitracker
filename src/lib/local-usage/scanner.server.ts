@@ -1,6 +1,5 @@
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import {
   mkdir,
   opendir,
@@ -14,7 +13,6 @@ import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
-import { promisify } from "node:util";
 
 import { APP_DATA_DIR, ENV } from "../app-config";
 import {
@@ -98,7 +96,6 @@ const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
   "local-usage-index-v8.json",
   "local-usage-index-v9.json",
 ];
-const execFileAsync = promisify(execFile);
 
 interface JsonObject {
   [key: string]: unknown;
@@ -135,6 +132,7 @@ export interface LocalUsageScanOptions {
 async function discoverWindowsWslHomes(
   providerDirectory: string,
   topology?: import("../wsl-topology-types.ts").WslTopologyInput | undefined,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   if (process.platform !== "win32") return [];
   if (topology && topology.distros.length > 0) {
@@ -149,7 +147,8 @@ async function discoverWindowsWslHomes(
 
   const { enumerateWslTopology } =
     await import("../../platform/discovery/wsl-topology.server.ts");
-  const local = await enumerateWslTopology();
+  // P5-T5-04: the fallback enumeration is cancelled together with the scan.
+  const local = await enumerateWslTopology({ signal });
   return local.distros.flatMap(({ distribution, home }) => {
     const suffix = `${home.replaceAll("/", "\\")}\\${providerDirectory}`;
     return [
@@ -499,9 +498,12 @@ function isCachedDiagnostic(value: unknown): value is LocalUsageDiagnostic {
 
 async function loadPersistentIndex(
   cacheFilePath: string,
+  signal?: AbortSignal,
 ): Promise<PersistentUsageIndex | undefined> {
   try {
+    signal?.throwIfAborted();
     const raw = JSON.parse(await readFile(cacheFilePath, "utf8")) as unknown;
+    signal?.throwIfAborted();
     const index = asObject(raw);
     if (
       index?.version !== PERSISTENT_CACHE_VERSION ||
@@ -680,6 +682,7 @@ async function collectAdapterFiles(
   pathConfigs: UsageAdapterPath[],
   cutoffTime: number,
   maxFiles: number,
+  signal?: AbortSignal,
 ): Promise<{
   detected: boolean;
   files: Array<FileCandidate & { format: UsageAdapterPath["format"] }>;
@@ -692,6 +695,7 @@ async function collectAdapterFiles(
   let detected = false;
 
   for (const pathConfig of pathConfigs) {
+    signal?.throwIfAborted();
     const root = join(homeDirectory, pathConfig.root);
     let rootStat;
     try {
@@ -708,6 +712,8 @@ async function collectAdapterFiles(
       pendingDirectories.length > 0 &&
       discoveredEntries < MAX_DISCOVERED_ENTRIES_PER_SOURCE
     ) {
+      // P5-T5-03: stop walking the directory tree once cancelled.
+      signal?.throwIfAborted();
       const directoryPath = pendingDirectories.pop();
       if (directoryPath == null) break;
       let directory;
@@ -718,6 +724,7 @@ async function collectAdapterFiles(
       }
 
       for await (const entry of directory) {
+        signal?.throwIfAborted();
         discoveredEntries += 1;
         if (discoveredEntries >= MAX_DISCOVERED_ENTRIES_PER_SOURCE) break;
         const entryPath = join(directoryPath, entry.name);
@@ -755,6 +762,7 @@ async function collectAdapterFiles(
 async function readJsonLines(
   filePath: string,
   onRecord: (record: JsonObject) => void,
+  signal?: AbortSignal,
 ): Promise<number> {
   let malformedLines = 0;
   const input = createReadStream(filePath, {
@@ -765,6 +773,8 @@ async function readJsonLines(
 
   try {
     for await (const line of lines) {
+      // P5-T5-02/03: stop parsing promptly once the refresh is cancelled.
+      signal?.throwIfAborted();
       if (line.length === 0 || line.length > MAX_JSONL_LINE_LENGTH) {
         if (line.length > MAX_JSONL_LINE_LENGTH) {
           malformedLines += 1;
@@ -882,6 +892,7 @@ async function scanClaude(
   const cacheEntries: PersistentClaudeFileEntry[] = [];
 
   for (const file of selected.files) {
+    signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentClaudeFileEntry;
     if (fileSignatureMatches(file, cached, "claude-code")) {
@@ -899,35 +910,40 @@ async function scanClaude(
         "claude-code",
         `${basename(root)}:${relative(root, file.path)}`,
       );
-      const fileMalformedLines = await readJsonLines(file.path, (record) => {
-        const parsed = claudeEventFromRecord(
-          record,
-          fallbackSessionId,
-          homeDirectory,
-        );
-        if (parsed != null) {
-          claudeEvents.push({ messageId: parsed.id, event: parsed.event });
-          for (const toolUseId of collectClaudeToolUseIds(record.message)) {
-            toolUseEventById.set(toolUseId, parsed.event);
+      const fileMalformedLines = await readJsonLines(
+        file.path,
+        (record) => {
+          const parsed = claudeEventFromRecord(
+            record,
+            fallbackSessionId,
+            homeDirectory,
+          );
+          if (parsed != null) {
+            claudeEvents.push({ messageId: parsed.id, event: parsed.event });
+            for (const toolUseId of collectClaudeToolUseIds(record.message)) {
+              toolUseEventById.set(toolUseId, parsed.event);
+            }
           }
-        }
-        for (const result of collectClaudeToolResults(record.message)) {
-          const event = toolUseEventById.get(result.toolUseId);
-          if (event == null) continue;
-          const previous = event.context?.toolOutputs;
-          event.context = {
-            ...event.context,
-            toolOutputs: {
-              characters:
-                (previous?.characters ?? 0) + result.summary.characters,
-              lines: (previous?.lines ?? 0) + result.summary.lines,
-              completed:
-                (previous?.completed ?? true) && result.summary.completed,
-              calls: (previous?.calls ?? 0) + result.summary.calls,
-            },
-          };
-        }
-      });
+          for (const result of collectClaudeToolResults(record.message)) {
+            const event = toolUseEventById.get(result.toolUseId);
+            if (event == null) continue;
+            const previous = event.context?.toolOutputs;
+            event.context = {
+              ...event.context,
+              toolOutputs: {
+                characters:
+                  (previous?.characters ?? 0) + result.summary.characters,
+                lines: (previous?.lines ?? 0) + result.summary.lines,
+                completed:
+                  (previous?.completed ?? true) && result.summary.completed,
+                calls: (previous?.calls ?? 0) + result.summary.calls,
+              },
+            };
+          }
+        },
+        signal,
+      );
+      signal?.throwIfAborted();
       entry = {
         source: "claude-code",
         path: file.path,
@@ -1134,6 +1150,7 @@ async function scanCodex(
   const cacheEntries: PersistentCodexFileEntry[] = [];
 
   for (const file of selected.files) {
+    signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentCodexFileEntry;
     if (fileSignatureMatches(file, cached, "codex")) {
@@ -1154,44 +1171,49 @@ async function scanCodex(
       const fileEvents: LocalUsageEvent[] = [];
       let pendingContext = createCodexPendingContext();
       let previousTotalUsage: JsonObject | undefined;
-      const fileMalformedLines = await readJsonLines(file.path, (record) => {
-        context.sessionId =
-          codexSessionIdFromRecord(record) ?? context.sessionId;
-        const nextContext = codexContextFromRecord(record);
-        if (nextContext != null) {
-          context.model = nextContext.model ?? context.model;
-          context.project =
-            nextContext.project == null
-              ? context.project
-              : normalizeProjectPath(nextContext.project, homeDirectory);
-          return;
-        }
+      const fileMalformedLines = await readJsonLines(
+        file.path,
+        (record) => {
+          context.sessionId =
+            codexSessionIdFromRecord(record) ?? context.sessionId;
+          const nextContext = codexContextFromRecord(record);
+          if (nextContext != null) {
+            context.model = nextContext.model ?? context.model;
+            context.project =
+              nextContext.project == null
+                ? context.project
+                : normalizeProjectPath(nextContext.project, homeDirectory);
+            return;
+          }
 
-        const event = codexEventFromRecord(
-          record,
-          context,
-          consumeCodexPendingContext(pendingContext),
-          previousTotalUsage,
-        );
-        const payload = asObject(record.payload);
-        const nestedMessage = asObject(payload?.msg);
-        const tokenPayload =
-          stringValue(payload?.type) === "token_count"
-            ? payload
-            : stringValue(nestedMessage?.type) === "token_count"
-              ? nestedMessage
-              : undefined;
-        const totalUsage = asObject(
-          asObject(tokenPayload?.info)?.total_token_usage,
-        );
-        if (totalUsage != null) previousTotalUsage = totalUsage;
-        if (event != null) {
-          fileEvents.push(event);
-          pendingContext = createCodexPendingContext();
-          return;
-        }
-        collectCodexContextRecord(pendingContext, record);
-      });
+          const event = codexEventFromRecord(
+            record,
+            context,
+            consumeCodexPendingContext(pendingContext),
+            previousTotalUsage,
+          );
+          const payload = asObject(record.payload);
+          const nestedMessage = asObject(payload?.msg);
+          const tokenPayload =
+            stringValue(payload?.type) === "token_count"
+              ? payload
+              : stringValue(nestedMessage?.type) === "token_count"
+                ? nestedMessage
+                : undefined;
+          const totalUsage = asObject(
+            asObject(tokenPayload?.info)?.total_token_usage,
+          );
+          if (totalUsage != null) previousTotalUsage = totalUsage;
+          if (event != null) {
+            fileEvents.push(event);
+            pendingContext = createCodexPendingContext();
+            return;
+          }
+          collectCodexContextRecord(pendingContext, record);
+        },
+        signal,
+      );
+      signal?.throwIfAborted();
       entry = {
         source: "codex",
         path: file.path,
@@ -1325,6 +1347,7 @@ async function scanWorkbuddy(
   let malformedLines = 0;
 
   for (const file of selected.files) {
+    signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentGenericFileEntry;
     if (fileSignatureMatches(file, cached, "workbuddy")) {
@@ -1336,24 +1359,29 @@ async function scanWorkbuddy(
         "workbuddy",
         relative(projectsRoot, file.path),
       );
-      const fileMalformedLines = await readJsonLines(file.path, (record) => {
-        const providerData = asObject(record.providerData);
-        if (asObject(providerData?.rawUsage) == null) return;
-        const responseId =
-          stringValue(record.id) ??
-          stringValue(providerData?.messageId) ??
-          `${stringValue(record.sessionId) ?? relative(projectsRoot, file.path)}:${String(record.timestamp)}`;
-        if (seenResponseIds.has(responseId)) return;
-        const event = workbuddyEventFromRecord(
-          record,
-          fallbackSessionId,
-          homeDirectory,
-        );
-        if (event != null) {
-          seenResponseIds.add(responseId);
-          fileEvents.push(event);
-        }
-      });
+      const fileMalformedLines = await readJsonLines(
+        file.path,
+        (record) => {
+          const providerData = asObject(record.providerData);
+          if (asObject(providerData?.rawUsage) == null) return;
+          const responseId =
+            stringValue(record.id) ??
+            stringValue(providerData?.messageId) ??
+            `${stringValue(record.sessionId) ?? relative(projectsRoot, file.path)}:${String(record.timestamp)}`;
+          if (seenResponseIds.has(responseId)) return;
+          const event = workbuddyEventFromRecord(
+            record,
+            fallbackSessionId,
+            homeDirectory,
+          );
+          if (event != null) {
+            seenResponseIds.add(responseId);
+            fileEvents.push(event);
+          }
+        },
+        signal,
+      );
+      signal?.throwIfAborted();
       entry = {
         source: "workbuddy",
         path: file.path,
@@ -1534,17 +1562,20 @@ function diffGeminiSnapshot(
 async function parseGeminiUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
+  signal?.throwIfAborted();
   let session: JsonObject | undefined;
   try {
     session = asObject(JSON.parse(await readFile(file.path, "utf8")));
   } catch {
     return { identifiedEvents: [], malformedLines: 1, diagnostics: [] };
   }
+  signal?.throwIfAborted();
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const sessionId =
     sessionIdFromStructuredValue(
@@ -1556,6 +1587,7 @@ async function parseGeminiUsageFile(
   let model = "unknown";
 
   for (let index = 0; index < messages.length; index += 1) {
+    signal?.throwIfAborted();
     const message = asObject(messages[index]);
     if (message == null) continue;
     model = stringValue(message.model) ?? model;
@@ -1631,46 +1663,51 @@ function grokTokenCounts(usage: JsonObject): LocalTokenCounts | undefined {
 async function parseGrokUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
-  const malformedLines = await readJsonLines(file.path, (record) => {
-    const params = asObject(record.params);
-    const update = asObject(params?.update);
-    if (stringValue(update?.sessionUpdate) !== "turn_completed") return;
-    const usage = asObject(update?.usage);
-    const modelUsage = asObject(usage?.modelUsage);
-    const meta = asObject(params?._meta);
-    const timestamp = grokTimestamp(record, meta);
-    if (modelUsage == null || timestamp == null) return;
-    const sessionId =
-      sessionIdFromStructuredValue("grok", params?.sessionId) ??
-      fallbackSessionId;
-    const eventId = stringValue(meta?.eventId);
+  const malformedLines = await readJsonLines(
+    file.path,
+    (record) => {
+      const params = asObject(record.params);
+      const update = asObject(params?.update);
+      if (stringValue(update?.sessionUpdate) !== "turn_completed") return;
+      const usage = asObject(update?.usage);
+      const modelUsage = asObject(usage?.modelUsage);
+      const meta = asObject(params?._meta);
+      const timestamp = grokTimestamp(record, meta);
+      if (modelUsage == null || timestamp == null) return;
+      const sessionId =
+        sessionIdFromStructuredValue("grok", params?.sessionId) ??
+        fallbackSessionId;
+      const eventId = stringValue(meta?.eventId);
 
-    for (const [model, rawModelUsage] of Object.entries(modelUsage)) {
-      const counts = grokTokenCounts(asObject(rawModelUsage) ?? {});
-      if (counts == null) continue;
-      const identityMaterial =
-        eventId == null
-          ? [timestamp.toISOString(), sessionId, model, counts]
-          : [eventId, model];
-      identifiedEvents.push({
-        identity: privacyFingerprint("grok", identityMaterial),
-        event: {
-          source: "grok",
-          timestamp: timestamp.toISOString(),
-          sessionId,
-          model,
-          project: "unknown",
-          ...counts,
-        },
-      });
-    }
-  });
+      for (const [model, rawModelUsage] of Object.entries(modelUsage)) {
+        const counts = grokTokenCounts(asObject(rawModelUsage) ?? {});
+        if (counts == null) continue;
+        const identityMaterial =
+          eventId == null
+            ? [timestamp.toISOString(), sessionId, model, counts]
+            : [eventId, model];
+        identifiedEvents.push({
+          identity: privacyFingerprint("grok", identityMaterial),
+          event: {
+            source: "grok",
+            timestamp: timestamp.toISOString(),
+            sessionId,
+            model,
+            project: "unknown",
+            ...counts,
+          },
+        });
+      }
+    },
+    signal,
+  );
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
@@ -1694,62 +1731,70 @@ function openclawUsage(value: unknown): JsonObject | undefined {
 async function parseOpenclawUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
   const identifiedEvents: CachedIdentifiedEvent[] = [];
-  const malformedLines = await readJsonLines(file.path, (record) => {
-    if (record.type !== "message") return;
-    const message = asObject(record.message);
-    if (message?.role !== "assistant") return;
-    const usage = openclawUsage(message.usage);
-    const timestamp = timestampValue(record.timestamp);
-    if (usage == null || timestamp == null) return;
-    const rawInputTokens = tokenValue(usage.input);
-    const cachedInputTokens = tokenValue(usage.cacheRead);
-    const inputTokens = Math.max(0, rawInputTokens - cachedInputTokens);
-    const cacheCreationInputTokens = tokenValue(usage.cacheWrite);
-    const outputTokens = tokenValue(usage.output);
-    const totalTokens =
-      inputTokens + cachedInputTokens + cacheCreationInputTokens + outputTokens;
-    if (totalTokens === 0) return;
-    const model = stringValue(message.model) ?? "unknown";
-    const stableId = stringValue(record.id);
-    const identityMaterial =
-      stableId == null
-        ? {
-            timestamp: record.timestamp,
-            messageTimestamp: message.timestamp,
-            responseId: stringValue(message.responseId) ?? null,
-            model,
-            provider: stringValue(message.provider) ?? null,
-            api: stringValue(message.api) ?? null,
-            inputTokens,
-            cachedInputTokens,
-            cacheCreationInputTokens,
-            outputTokens,
-            totalTokens,
-          }
-        : { stableId };
-    identifiedEvents.push({
-      identity: privacyFingerprint("openclaw", identityMaterial),
-      event: {
-        source: "openclaw",
-        timestamp: timestamp.toISOString(),
-        sessionId: fallbackSessionId,
-        model,
-        project: "unknown",
-        inputTokens,
-        cachedInputTokens,
-        cacheCreationInputTokens,
-        outputTokens,
-        reasoningOutputTokens: 0,
-        totalTokens,
-      },
-    });
-  });
+  const malformedLines = await readJsonLines(
+    file.path,
+    (record) => {
+      if (record.type !== "message") return;
+      const message = asObject(record.message);
+      if (message?.role !== "assistant") return;
+      const usage = openclawUsage(message.usage);
+      const timestamp = timestampValue(record.timestamp);
+      if (usage == null || timestamp == null) return;
+      const rawInputTokens = tokenValue(usage.input);
+      const cachedInputTokens = tokenValue(usage.cacheRead);
+      const inputTokens = Math.max(0, rawInputTokens - cachedInputTokens);
+      const cacheCreationInputTokens = tokenValue(usage.cacheWrite);
+      const outputTokens = tokenValue(usage.output);
+      const totalTokens =
+        inputTokens +
+        cachedInputTokens +
+        cacheCreationInputTokens +
+        outputTokens;
+      if (totalTokens === 0) return;
+      const model = stringValue(message.model) ?? "unknown";
+      const stableId = stringValue(record.id);
+      const identityMaterial =
+        stableId == null
+          ? {
+              timestamp: record.timestamp,
+              messageTimestamp: message.timestamp,
+              responseId: stringValue(message.responseId) ?? null,
+              model,
+              provider: stringValue(message.provider) ?? null,
+              api: stringValue(message.api) ?? null,
+              inputTokens,
+              cachedInputTokens,
+              cacheCreationInputTokens,
+              outputTokens,
+              totalTokens,
+            }
+          : { stableId };
+      identifiedEvents.push({
+        identity: privacyFingerprint("openclaw", identityMaterial),
+        event: {
+          source: "openclaw",
+          timestamp: timestamp.toISOString(),
+          sessionId: fallbackSessionId,
+          model,
+          project: "unknown",
+          inputTokens,
+          cachedInputTokens,
+          cacheCreationInputTokens,
+          outputTokens,
+          reasoningOutputTokens: 0,
+          totalTokens,
+        },
+      });
+    },
+    signal,
+  );
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
@@ -1816,6 +1861,7 @@ function antigravityContextTokens(record: JsonObject): number {
 async function parseAntigravityUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
@@ -1826,53 +1872,57 @@ async function parseAntigravityUsageFile(
   let contextTokens = 0;
   let previousContextTokens = 0;
   let index = 0;
-  const malformedLines = await readJsonLines(file.path, (record) => {
-    index += 1;
-    if (
-      record.type === "USER_INPUT" ||
-      record.type === "USER_SETTINGS_CHANGE"
-    ) {
-      model = antigravityModelFromSelection(record.content) ?? model;
-    }
-    const eventContextTokens = antigravityContextTokens(record);
-    if (record.type !== "PLANNER_RESPONSE") {
+  const malformedLines = await readJsonLines(
+    file.path,
+    (record) => {
+      index += 1;
+      if (
+        record.type === "USER_INPUT" ||
+        record.type === "USER_SETTINGS_CHANGE"
+      ) {
+        model = antigravityModelFromSelection(record.content) ?? model;
+      }
+      const eventContextTokens = antigravityContextTokens(record);
+      if (record.type !== "PLANNER_RESPONSE") {
+        contextTokens += eventContextTokens;
+        return;
+      }
+      const timestamp = timestampValue(record.created_at);
+      const inputTokens = Math.max(0, contextTokens - previousContextTokens);
+      const outputTokens =
+        estimateAntigravityTokens(record.content) +
+        estimateAntigravityTokens(record.tool_calls);
+      const reasoningOutputTokens = estimateAntigravityTokens(record.thinking);
+      const totalTokens = inputTokens + outputTokens + reasoningOutputTokens;
+      previousContextTokens = contextTokens;
       contextTokens += eventContextTokens;
-      return;
-    }
-    const timestamp = timestampValue(record.created_at);
-    const inputTokens = Math.max(0, contextTokens - previousContextTokens);
-    const outputTokens =
-      estimateAntigravityTokens(record.content) +
-      estimateAntigravityTokens(record.tool_calls);
-    const reasoningOutputTokens = estimateAntigravityTokens(record.thinking);
-    const totalTokens = inputTokens + outputTokens + reasoningOutputTokens;
-    previousContextTokens = contextTokens;
-    contextTokens += eventContextTokens;
-    if (timestamp == null || totalTokens === 0) return;
-    identifiedEvents.push({
-      identity: privacyFingerprint("antigravity", [
-        fallbackSessionId,
-        index,
-        timestamp.toISOString(),
-        model,
-        totalTokens,
-      ]),
-      event: {
-        source: "antigravity",
-        timestamp: timestamp.toISOString(),
-        sessionId: fallbackSessionId,
-        model,
-        project: "unknown",
-        inputTokens,
-        cachedInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        outputTokens,
-        reasoningOutputTokens,
-        totalTokens,
-        measurement: "estimated",
-      },
-    });
-  });
+      if (timestamp == null || totalTokens === 0) return;
+      identifiedEvents.push({
+        identity: privacyFingerprint("antigravity", [
+          fallbackSessionId,
+          index,
+          timestamp.toISOString(),
+          model,
+          totalTokens,
+        ]),
+        event: {
+          source: "antigravity",
+          timestamp: timestamp.toISOString(),
+          sessionId: fallbackSessionId,
+          model,
+          project: "unknown",
+          inputTokens,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          outputTokens,
+          reasoningOutputTokens,
+          totalTokens,
+          measurement: "estimated",
+        },
+      });
+    },
+    signal,
+  );
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
@@ -1888,11 +1938,13 @@ async function parseAntigravityUsageFile(
 async function parseDshUsageFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   identifiedEvents: CachedIdentifiedEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
+  signal?.throwIfAborted();
   const identifiedEvents: CachedIdentifiedEvent[] = [];
   let content: string;
   try {
@@ -1912,12 +1964,14 @@ async function parseDshUsageFile(
       ],
     };
   }
+  signal?.throwIfAborted();
   let sessionId = fallbackSessionId;
   let project = "unknown";
   let model = "unknown";
   let malformedLines = 0;
   let recordIndex = 0;
   for (const line of content.split("\n")) {
+    signal?.throwIfAborted();
     if (line.trim().length === 0) continue;
     let record: JsonObject;
     try {
@@ -2004,12 +2058,14 @@ async function scanStructuredAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
 ): Promise<SourceScanResult> {
   const selected = await collectAdapterFiles(
     homeDirectory,
     adapter.paths,
     cutoffTime,
     maxFiles,
+    signal,
   );
   const cacheEntries: PersistentStructuredFileEntry[] = [];
   const diagnostics: LocalUsageDiagnostic[] = [];
@@ -2019,6 +2075,7 @@ async function scanStructuredAdapter(
   let malformedLines = 0;
 
   for (const file of selected.files) {
+    signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentStructuredFileEntry;
     if (fileSignatureMatches(file, cached, adapter.source)) {
@@ -2049,6 +2106,7 @@ async function scanStructuredAdapter(
           adapter.source,
           relative(homeDirectory, file.path),
         ),
+        signal,
       );
       entry = {
         source: adapter.source as PersistentStructuredFileEntry["source"],
@@ -2156,11 +2214,13 @@ async function parseGenericFile(
   file: FileCandidate & { format: UsageAdapterPath["format"] },
   adapter: UsageAdapterContract,
   fallbackSessionId: string,
+  signal?: AbortSignal,
 ): Promise<{
   events: LocalUsageEvent[];
   malformedLines: number;
   diagnostics: LocalUsageDiagnostic[];
 }> {
+  signal?.throwIfAborted();
   if (file.size > adapter.maxFileSizeBytes) {
     return {
       events: [],
@@ -2236,11 +2296,15 @@ async function parseGenericFile(
     }
   }
   if (file.format === "jsonl") {
-    const malformedLines = await readJsonLines(file.path, (record) => {
-      const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
-      if (event == null) mismatches += 1;
-      else events.push(event);
-    });
+    const malformedLines = await readJsonLines(
+      file.path,
+      (record) => {
+        const event = eventFromMappedRecord(record, adapter, fallbackSessionId);
+        if (event == null) mismatches += 1;
+        else events.push(event);
+      },
+      signal,
+    );
     const diagnostics: LocalUsageDiagnostic[] = [];
     if (malformedLines > 0) {
       diagnostics.push(
@@ -2297,6 +2361,49 @@ async function parseGenericFile(
   }
 }
 
+/**
+ * P5-T5-07: runs the generic usage adapters through a bounded worker pool
+ * (max GENERIC_ADAPTER_CONCURRENCY). Together with the 8 native readers this
+ * keeps concurrent file reads within the `maxFileOperations: 16` runtime
+ * budget instead of fanning out one worker per adapter.
+ */
+const GENERIC_ADAPTER_CONCURRENCY = 8;
+
+async function runBoundedGenericAdapters(
+  adapters: readonly UsageAdapterContract[],
+  homeDirectory: string,
+  cutoffTime: number,
+  nowTime: number,
+  maxFiles: number,
+  cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
+): Promise<SourceScanResult[]> {
+  const results: SourceScanResult[] = new Array(adapters.length);
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(adapters.length, GENERIC_ADAPTER_CONCURRENCY) },
+    async () => {
+      while (cursor < adapters.length) {
+        signal?.throwIfAborted();
+        const index = cursor++;
+        const adapter = adapters[index];
+        if (adapter == null) continue;
+        results[index] = await scanGenericAdapter(
+          adapter,
+          homeDirectory,
+          cutoffTime,
+          nowTime,
+          maxFiles,
+          cachedFiles,
+          signal,
+        ).catch((error) => sourceFailure(adapter.source, error));
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 async function scanGenericAdapter(
   adapter: UsageAdapterContract,
   homeDirectory: string,
@@ -2304,12 +2411,14 @@ async function scanGenericAdapter(
   nowTime: number,
   maxFiles: number,
   cachedFiles: Map<string, PersistentFileEntry>,
+  signal?: AbortSignal,
 ): Promise<SourceScanResult> {
   const selected = await collectAdapterFiles(
     homeDirectory,
     adapter.paths,
     cutoffTime,
     maxFiles,
+    signal,
   );
   const events: LocalUsageEvent[] = [];
   const cacheEntries: PersistentGenericFileEntry[] = [];
@@ -2320,6 +2429,7 @@ async function scanGenericAdapter(
   let malformedLines = 0;
 
   for (const file of selected.files) {
+    signal?.throwIfAborted();
     const cached = cachedFiles.get(file.path);
     let entry: PersistentGenericFileEntry;
     if (fileSignatureMatches(file, cached, adapter.source)) {
@@ -2333,6 +2443,7 @@ async function scanGenericAdapter(
           adapter.source,
           relative(homeDirectory, file.path),
         ),
+        signal,
       );
       parsed.events = parsed.events.map((event) => ({
         ...event,
@@ -2481,11 +2592,12 @@ export async function scanLocalUsage(
         : await (async () => {
             const { enumerateWslTopology } =
               await import("../../platform/discovery/wsl-topology.server.ts");
-            return enumerateWslTopology();
+            // P5-T5-04: the fallback enumeration is cancelled with the scan.
+            return enumerateWslTopology({ signal: options.signal });
           })();
     return [
-      await discoverWindowsWslHomes(".claude", topology),
-      await discoverWindowsWslHomes(".codex", topology),
+      await discoverWindowsWslHomes(".claude", topology, options.signal),
+      await discoverWindowsWslHomes(".codex", topology, options.signal),
     ];
   })();
   const claudeRoots = uniqueRoots([
@@ -2522,7 +2634,7 @@ export async function scanLocalUsage(
   );
   const persistentIndex = options.disablePersistentCache
     ? undefined
-    : await loadPersistentIndex(cacheFilePath);
+    : await loadPersistentIndex(cacheFilePath, options.signal);
   const cachedFiles = new Map(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );
@@ -2560,6 +2672,7 @@ export async function scanLocalUsage(
       nowTime,
       maxFiles,
       cachedFiles,
+      options.signal,
     );
   };
   const [
@@ -2618,16 +2731,15 @@ export async function scanLocalUsage(
     structuredReader("dsh-session-v1", parseDshUsageFile, "unique").catch(
       (error) => sourceFailure("dsh", error),
     ),
-    ...genericAdapters.map((adapter) =>
-      scanGenericAdapter(
-        adapter,
-        homeDirectory,
-        cutoffTime,
-        nowTime,
-        maxFiles,
-        cachedFiles,
-      ).catch((error) => sourceFailure(adapter.source, error)),
-    ),
+    ...(await runBoundedGenericAdapters(
+      genericAdapters,
+      homeDirectory,
+      cutoffTime,
+      nowTime,
+      maxFiles,
+      cachedFiles,
+      options.signal,
+    )),
   ]);
 
   // The snapshot is built exclusively from the native adapters above.

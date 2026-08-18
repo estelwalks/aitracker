@@ -36,6 +36,7 @@ export const memory = {
     'Pick "Profile" or "Task Memory" in the Distill Studio and the output lands here automatically.',
   insightRotate: "Next insight",
   insightDots: "Insight carousel",
+  hasMore: "{total} memories total; showing the most recent {limit}.",
   form: {
     type: "Type",
     title: "Title",

@@ -71,7 +71,9 @@ export function deriveToolInstallationFacts(
 async function executableEvidence(
   tools: readonly AiTool[],
   os: PlatformOs,
+  signal?: AbortSignal,
 ): Promise<ReadonlyMap<string, readonly string[]>> {
+  signal?.throwIfAborted();
   const pathDirectories = (process.env.PATH ?? "")
     .split(delimiter)
     .filter(Boolean);
@@ -79,22 +81,25 @@ async function executableEvidence(
     .split(";")
     .filter(Boolean);
   const evidence = new Map<string, string[]>();
-  await Promise.all(
-    tools.map(async (tool) => {
-      const plan = resolvePlatformPlan(tool.id, "detection", os);
-      if (plan?.status !== "supported") return;
-      const executableNames = getTool(tool.id)?.detection.executable ?? [];
-      const candidates = executableNames.flatMap((name) =>
-        pathDirectories.flatMap((directory) =>
-          os === "windows"
-            ? windowsExtensions.map((extension) =>
-                join(directory, `${name}${extension.toLowerCase()}`),
-              )
-            : [join(directory, name)],
-        ),
-      );
-      const existing = await Promise.all(
+  for (const tool of tools) {
+    // P5-T5-03: stop starting new probes once the refresh is cancelled.
+    signal?.throwIfAborted();
+    const plan = resolvePlatformPlan(tool.id, "detection", os);
+    if (plan?.status !== "supported") continue;
+    const executableNames = getTool(tool.id)?.detection.executable ?? [];
+    const candidates = executableNames.flatMap((name) =>
+      pathDirectories.flatMap((directory) =>
+        os === "windows"
+          ? windowsExtensions.map((extension) =>
+              join(directory, `${name}${extension.toLowerCase()}`),
+            )
+          : [join(directory, name)],
+      ),
+    );
+    const existing = (
+      await Promise.all(
         candidates.map(async (candidate) => {
+          signal?.throwIfAborted();
           try {
             await access(
               candidate,
@@ -105,11 +110,10 @@ async function executableEvidence(
             return null;
           }
         }),
-      );
-      const paths = existing.filter((value): value is string => value != null);
-      if (paths.length > 0) evidence.set(tool.id, paths);
-    }),
-  );
+      )
+    ).filter((value): value is string => value != null);
+    if (existing.length > 0) evidence.set(tool.id, existing);
+  }
   return evidence;
 }
 
@@ -118,25 +122,30 @@ export async function detectToolInstallations(
   tools: readonly AiTool[],
   homeDirectory: string,
   os: PlatformOs = osFromProcess(process.platform),
+  signal?: AbortSignal,
 ): Promise<ToolInstallationFact[]> {
+  signal?.throwIfAborted();
   const rootsByTool = detectRootsForOs(tools, os);
   const candidatePaths = tools.flatMap((tool) =>
     (rootsByTool.get(tool.id) ?? []).map((root) => join(homeDirectory, root)),
   );
-  const inspected = await Promise.all(
-    candidatePaths.map(async (path) => {
-      try {
-        await lstat(path);
-        return path;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const executables = await executableEvidence(tools, os);
+  const inspected = (
+    await Promise.all(
+      candidatePaths.map(async (path) => {
+        signal?.throwIfAborted();
+        try {
+          await lstat(path);
+          return path;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((path): path is string => path !== null);
+  const executables = await executableEvidence(tools, os, signal);
   return deriveToolInstallationFacts(
     tools,
-    new Set(inspected.filter((path): path is string => path !== null)),
+    new Set(inspected),
     homeDirectory,
     os,
     executables,

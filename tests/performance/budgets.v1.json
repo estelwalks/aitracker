@@ -2,9 +2,9 @@
   "budgetsVersion": 1,
   "scope": "Performance budgets for the page-performance optimization (P0-T0-07). Structural budgets are blocking; latency budgets are layered per environment (T7-03).",
   "dtoBytes": {
-    "dashboardFirstScreen": 262144,
+    "dashboardFirstScreen": 256000,
     "otherRouteFirstScreen": 157286,
-    "widgetModel": 52429,
+    "widgetModel": 51200,
     "widgetStatus": 2048
   },
   "clientSyncComputationMs": {

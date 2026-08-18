@@ -4,12 +4,26 @@ import type {
   WidgetReadModel,
   WidgetStatusReadModel,
 } from "./read-model.ts";
+import { READ_MODEL_BUDGETS } from "../../lib/read-model/contracts.ts";
 
 /**
  * P4-T4-05/06: server adapter for the compact Widget read model. Reached only
  * through the dynamic imports in `read-model.ts`; never statically imported by
  * the browser graph.
+ *
+ * Budgets (G4): the status probe must stay ≤ 2 KB and the model ≤ 50 KB
+ * serialized. A regression throws so the widget never silently ships a heavy
+ * payload (the dashboard read model must be used instead).
  */
+
+function assertJsonBytes(value: unknown, budget: number, label: string): void {
+  const bytes = Buffer.byteLength(JSON.stringify(value), "utf8");
+  if (bytes > budget) {
+    throw new Error(
+      `widget read model ${label} exceeded budget: ${bytes} > ${budget} bytes`,
+    );
+  }
+}
 
 function periodFromWindow(window: {
   readonly totals: { readonly totalTokens: number; readonly events: number };
@@ -52,11 +66,13 @@ export async function loadWidgetStatus(
   const { usageSnapshot } = await getCompositionRoot();
   await usageSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
-  return {
+  const value: WidgetStatusReadModel = {
     revision: latest.revision,
     status: latest.status,
     generatedAt: latest.generatedAt,
   };
+  assertJsonBytes(value, READ_MODEL_BUDGETS.widgetStatusBytes, "status");
+  return value;
 }
 
 export async function loadWidgetReadModel(
@@ -65,7 +81,7 @@ export async function loadWidgetReadModel(
   const { loadDashboardSummaryReadModel } =
     await import("../dashboard/summary-api.server.ts");
   const summary = await loadDashboardSummaryReadModel(locale);
-  return {
+  const value: WidgetReadModel = {
     revision: summary.revision,
     generatedAt: summary.generatedAt,
     hasData: summary.windows.all.hasData,
@@ -82,4 +98,6 @@ export async function loadWidgetReadModel(
         : null,
     },
   };
+  assertJsonBytes(value, READ_MODEL_BUDGETS.widgetModelBytes, "model");
+  return value;
 }
