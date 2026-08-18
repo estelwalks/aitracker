@@ -95,7 +95,7 @@ export const security = {
     summary: "Skill {skills}개 · 검사 차원 {dimensions}개 · 건강도 {health}%",
     devBanner: {
       title: "개발 모드 · 검사 서비스 연결됨",
-      desc: "스캔은 실제 로컬 Skill 루트를 사용하며, 검사 기록과 모델 설정은 ~/.trusttools/security-dev/에 격리 저장됩니다.",
+      desc: "스캔은 실제 로컬 Skill 루트를 사용하며, 검사 기록은 ~/.trusttools/security-dev/에 격리 저장됩니다.",
     },
     unavailable: {
       title: "로컬 컴패니언 서비스를 사용할 수 없습니다",
@@ -371,40 +371,8 @@ export const security = {
       scannedValue: "{count}개 Skill",
     },
     model: {
-      title: "심층 검사 모델 설정",
-      desc: "API Key는 Electron safeStorage로 메인 프로세스에 암호화 저장되며 이 페이지나 일반 환경설정으로 반환되지 않습니다.",
-      devModeNote:
-        "개발 모드 전용: API Key는 격리 개발 디렉터리 ~/.trusttools/security-dev/에 일반 텍스트로 저장됩니다(0600, 로컬 개발 전용).",
-      provider: "API 프로토콜",
-      openai: "OpenAI 호환",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API Key",
-      apiKeyConfigured: "안전하게 저장됨. 비워 두면 유지",
-      apiKeyMissing: "설정되지 않음",
-      liteModel: "경량 모델",
-      proModel: "고급 모델",
-      timeoutMs: "시간 제한(밀리초)",
-      contextWindowTokens: "컨텍스트 창 Token",
-      maxAgentTurns: "최대 Agent 회차",
-      save: "설정 저장",
-      saving: "저장 중",
-      cancel: "취소",
-      configure: "모델 설정",
-      update: "모델 설정 업데이트",
-      configuredState:
-        "모델 자격 증명이 안전하게 저장되어 수동 심층 검사를 사용할 수 있습니다.",
-      missingState:
-        "모델 설정이 완료되지 않았지만 빠른 검사는 계속 사용할 수 있습니다.",
-      requiredTitle: "모델 설정 필요",
-      requiredDesc:
-        "유효한 Endpoint, API Key, 경량 모델 및 고급 모델을 저장한 후 심층 검사를 시작하세요.",
       requiredSettings:
-        "전체 검사를 실행하려면 먼저 설정에서 모델 인터페이스를 구성해야 합니다.",
-      encryptionUnavailable:
-        "이 시스템에서는 안전한 키 암호화를 사용할 수 없어 API Key를 저장할 수 없습니다.",
-      encryptionAvailable:
-        "안전한 키 암호화를 사용할 수 있으며 API Key는 메인 프로세스에만 암호화 저장됩니다.",
+        "심층 검사를 하려면 먼저 설정 → 모델 구성에서 모델을 구성해야 합니다.",
     },
     verdict: {
       allow: "허용",

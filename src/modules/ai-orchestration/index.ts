@@ -4,12 +4,6 @@ export {
   deterministicOfflineFallback,
   executeAIRequest,
 } from "./application.ts";
-export {
-  isLLMConfigured,
-  readLLMConfig,
-  type LLMEnvConfig,
-  type LLMConfigStatus,
-} from "./config.ts";
 export * from "./model-profile.ts";
 export {
   deleteModelProfile,

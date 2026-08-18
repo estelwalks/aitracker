@@ -161,8 +161,8 @@ export function getDevSecurityScannerService(): SecurityScannerService | null {
   }
 
   const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
-  // Isolated from the Electron client's `security-scan-history.json` /
-  // `security-model-config.json` so browser and client data never mix.
+  // Isolated from the Electron client's `security-scan-history.json` so
+  // browser and client data never mix.
   const dataDirectory = join(homeDirectory, APP_DATA_DIR, "security-dev");
   const service = createDevSecurityScannerService({
     homeDirectory,

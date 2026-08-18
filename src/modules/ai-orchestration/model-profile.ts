@@ -6,9 +6,9 @@
  * API key never leaves the server store — the renderer only ever receives
  * `ModelProfileView` (a boolean `apiKeyMasked` instead of the secret).
  *
- * Validation rules align with `config.ts#readLLMConfig` (URL protocol
- * http/https without embedded credentials, model charset/length) plus the
- * S-500 spec: name 1..64, model 1..120, apiKey 8..512.
+ * Validation rules: URL protocol http/https without embedded credentials,
+ * model charset/length, plus the S-500 spec: name 1..64, model 1..120,
+ * apiKey 8..512.
  */
 
 export type ProfileMode = "official" | "custom";

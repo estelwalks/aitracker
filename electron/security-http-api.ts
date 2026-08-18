@@ -12,8 +12,6 @@ type SecurityHttpService = Pick<
   | "getStatus"
   | "history"
   | "cancel"
-  | "getModelConfig"
-  | "setModelConfig"
   | "getScanSchedule"
   | "setScanSchedule"
   | "getRuntimeCapability"
@@ -67,8 +65,6 @@ function stableServiceError(error: unknown): SecurityHttpError {
     return new SecurityHttpError("security.http.no_skills", 404);
   if (message.includes("cleared"))
     return new SecurityHttpError("security.http.scan_cancelled", 409);
-  if (message.includes("Secure model key storage"))
-    return new SecurityHttpError("security.http.encryption_unavailable", 503);
   return new SecurityHttpError("security.http.invalid_request", 400);
 }
 
@@ -97,7 +93,7 @@ export async function handleSecurityHttpApi(
   try {
     const route = pathname.slice(SECURITY_API_PREFIX.length);
     const allowedMethods =
-      route === "/model-config" || route === "/scan-schedule"
+      route === "/scan-schedule"
         ? ["GET", "POST"]
         : route === "/start" ||
             route === "/cancel" ||
@@ -110,7 +106,6 @@ export async function handleSecurityHttpApi(
       route === "/start" ||
       route === "/cancel" ||
       route === "/select-skill-directory" ||
-      (route === "/model-config" && request.method === "POST") ||
       (route === "/scan-schedule" && request.method === "POST");
     if (mutation) authorizeMutation(request, expectedOrigin);
 
@@ -127,11 +122,6 @@ export async function handleSecurityHttpApi(
       case "/history":
         if (request.method !== "GET") return method(request, "GET");
         return json(await service.history());
-      case "/model-config":
-        if (request.method === "GET")
-          return json(await service.getModelConfig());
-        if (request.method !== "POST") return method(request, "POST");
-        return json(await service.setModelConfig(await jsonBody(request)));
       case "/scan-schedule":
         if (request.method === "GET")
           return json(await service.getScanSchedule());

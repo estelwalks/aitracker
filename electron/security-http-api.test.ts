@@ -19,8 +19,6 @@ function service(
     getStatus: () => ({ status: "idle" }),
     history: async () => [],
     cancel: () => ({ cancelled: false }),
-    getModelConfig: async () => ({ configured: false }),
-    setModelConfig: async () => ({ configured: true, apiKeyConfigured: true }),
     getScanSchedule: async () => ({
       enabled: true,
       cycle: "daily",
@@ -132,34 +130,6 @@ test("HTTP start forces manual and rejects automatic trigger", async () => {
   assert.deepEqual(await rejected?.json(), {
     error: { code: "security.http.invalid_request" },
   });
-});
-
-test("model key is accepted in request but never echoed", async () => {
-  const response = await handleSecurityHttpApi(
-    post("/model-config", {
-      provider: "openai",
-      endpoint: "https://example.invalid/v1",
-      apiKey: "HTTP-KEY-CANARY",
-      liteModel: "lite",
-      proModel: "pro",
-    }),
-    origin,
-    service(),
-  );
-  const serialized = await response?.text();
-  assert.equal(response?.status, 200);
-  assert.equal(serialized?.includes("HTTP-KEY-CANARY"), false);
-  assert.equal(serialized?.includes("apiKeyConfigured"), true);
-});
-
-test("model config supports authenticated GET on the same path", async () => {
-  const response = await handleSecurityHttpApi(
-    new Request(`${origin}/api/security/model-config`),
-    origin,
-    service(),
-  );
-  assert.equal(response?.status, 200);
-  assert.deepEqual(await response?.json(), { configured: false });
 });
 
 test("start rejects extra keys instead of spreading them to the service", async () => {

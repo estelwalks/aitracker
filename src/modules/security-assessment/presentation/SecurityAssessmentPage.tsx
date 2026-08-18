@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
+import { listModelProfiles } from "../../../modules/ai-orchestration/index";
 import {
   getDesktopSecurityClient,
   type SecurityClient,
@@ -29,7 +30,6 @@ import {
   latestScanEntries,
   summarizeReports,
   type SecurityHistoryView,
-  type SecurityModelConfigView,
   type SecurityRuntimeCapabilityView,
   type SecurityScanMode,
   type SecurityScanStateView,
@@ -58,8 +58,7 @@ export function SecurityAssessmentPage() {
   const [skills, setSkills] = useState<readonly SecuritySkillView[]>([]);
   const [scanState, setScanState] = useState<SecurityScanStateView>(IDLE_STATE);
   const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
-  const [modelConfig, setModelConfig] =
-    useState<SecurityModelConfigView | null>(null);
+  const [modelConfigured, setModelConfigured] = useState(false);
   const [runtime, setRuntime] = useState<SecurityRuntimeCapabilityView | null>(
     null,
   );
@@ -104,18 +103,16 @@ export function SecurityAssessmentPage() {
       }
       if (client.transport === "desktop") setConnection("available");
       try {
-        const [nextSkills, nextState, nextHistory, nextConfig, nextRuntime] =
+        const [nextSkills, nextState, nextHistory, nextRuntime] =
           await Promise.all([
             client.listSkills(),
             client.getStatus(),
             client.getHistory(),
-            client.getModelConfig(),
             client.getRuntimeCapability(),
           ]);
         setSkills(nextSkills);
         setScanState(nextState);
         setHistory(nextHistory);
-        setModelConfig(nextConfig);
         setRuntime(nextRuntime);
         setConnection("available");
       } catch (error) {
@@ -134,6 +131,27 @@ export function SecurityAssessmentPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Deep scans use the effective model profile from Settings → Model
+  // configuration (S-500); no separate security model config exists anymore.
+  useEffect(() => {
+    let disposed = false;
+    void listModelProfiles()
+      .then((result) => {
+        if (disposed) return;
+        const active = result.profiles.find(
+          (profile) => profile.id === result.activeProfileId,
+        );
+        setModelConfigured(Boolean(active?.apiKeyMasked));
+      })
+      .catch(() => {
+        // No profile → deep scan stays unavailable; fall back to quick.
+        if (!disposed) setModelConfigured(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isScanActive(scanState.status)) return;
@@ -302,9 +320,7 @@ export function SecurityAssessmentPage() {
                 : latestPhase
             }
             scanning={isScanActive(scanState.status)}
-            onScan={() =>
-              void startScan(modelConfig?.configured ? "full" : "quick")
-            }
+            onScan={() => void startScan(modelConfigured ? "full" : "quick")}
           />
 
           <AutoScanGuide />

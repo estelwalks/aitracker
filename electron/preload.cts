@@ -9,8 +9,6 @@ import {
   type DesktopApi,
   type LocalePreferences,
   type RuntimeInfo,
-  type SecurityModelConfigInput,
-  type SecurityModelConfigView,
   type SecurityRuntimeCapability,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
@@ -102,15 +100,6 @@ const desktopApi: DesktopApi = Object.freeze({
     ipcRenderer.invoke(desktopIpc.cancelSecurityScan) as Promise<{
       cancelled: boolean;
     }>,
-  getSecurityModelConfig: () =>
-    ipcRenderer.invoke(
-      desktopIpc.getSecurityModelConfig,
-    ) as Promise<SecurityModelConfigView>,
-  setSecurityModelConfig: (config: SecurityModelConfigInput) =>
-    ipcRenderer.invoke(
-      desktopIpc.setSecurityModelConfig,
-      config,
-    ) as Promise<SecurityModelConfigView>,
   getSecurityScanSchedule: () =>
     ipcRenderer.invoke(
       desktopIpc.getSecurityScanSchedule,

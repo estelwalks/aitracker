@@ -97,7 +97,7 @@ export const security = {
     summary: "{skills} 個の Skill · {dimensions} 検査次元 · 健全度 {health}%",
     devBanner: {
       title: "開発モード · 検査サービス接続済み",
-      desc: "スキャンは実際のローカル Skill ルートを使用します。検査履歴とモデル設定は ~/.trusttools/security-dev/ に分離保存されます。",
+      desc: "スキャンは実際のローカル Skill ルートを使用します。検査履歴は ~/.trusttools/security-dev/ に分離保存されます。",
     },
     unavailable: {
       title: "ローカルコンパニオンサービスを利用できません",
@@ -374,40 +374,8 @@ export const security = {
       scannedValue: "{count} 個の Skill",
     },
     model: {
-      title: "詳細スキャンのモデル設定",
-      desc: "API Key は Electron safeStorage によりメインプロセスで暗号化され、この画面や通常の設定には保存されません。",
-      devModeNote:
-        "開発モードのみ：API Key は分離開発ディレクトリ ~/.trusttools/security-dev/ に平文保存されます（0600、ローカル開発専用）。",
-      provider: "API プロトコル",
-      openai: "OpenAI 互換",
-      anthropic: "Anthropic Messages",
-      endpoint: "Endpoint",
-      apiKey: "API Key",
-      apiKeyConfigured: "安全に保存済み。空欄なら変更しません",
-      apiKeyMissing: "未設定",
-      liteModel: "軽量モデル",
-      proModel: "高性能モデル",
-      timeoutMs: "タイムアウト（ミリ秒）",
-      contextWindowTokens: "コンテキストウィンドウ Token",
-      maxAgentTurns: "最大 Agent ターン数",
-      save: "設定を保存",
-      saving: "保存中",
-      cancel: "キャンセル",
-      configure: "モデルを設定",
-      update: "モデル設定を更新",
-      configuredState:
-        "モデル認証情報は安全に保存され、手動の詳細スキャンを実行できます。",
-      missingState:
-        "モデル設定は未完了ですが、クイックスキャンは引き続き利用できます。",
-      requiredTitle: "モデル設定が必要",
-      requiredDesc:
-        "有効な Endpoint、API Key、軽量モデル、高性能モデルを保存してから詳細スキャンを開始してください。",
       requiredSettings:
-        "全体スキャンを実行するには、先に設定でモデルインターフェースを構成してください。",
-      encryptionUnavailable:
-        "このシステムでは安全な鍵暗号化を利用できないため、API Key を保存できません。",
-      encryptionAvailable:
-        "安全な鍵暗号化を利用できます。API Key はメインプロセスでのみ暗号化保存されます。",
+        "詳細スキャンには、先に「設定 → モデル設定」でモデルを構成する必要があります。",
     },
     verdict: {
       allow: "許可",
