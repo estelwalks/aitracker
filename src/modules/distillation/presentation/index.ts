@@ -26,8 +26,8 @@ export interface DistillationViewModel {
   readonly stats: { readonly runs: number; readonly approved: number };
   /**
    * Real model options for the pro-mode model picker. Derived from the
-   * configured LLM env (never the API key) plus the deterministic offline
-   * fallback. Always contains at least `offline`.
+   * saved S-500 model profiles (never the API key) plus the deterministic
+   * offline fallback. Always contains at least `offline`.
    */
   readonly modelOptions: readonly {
     id: string;
