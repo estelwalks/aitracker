@@ -104,7 +104,8 @@ export type ModelProfileErrorCode =
   | "errors.modelProfile.apiKeyTooLong"
   | "errors.modelProfile.notFound"
   | "errors.modelProfile.testFailed"
-  | "errors.modelProfile.testTimeout";
+  | "errors.modelProfile.testTimeout"
+  | "errors.modelProfile.listFailed";
 
 export type ModelProfileValidation =
   | { readonly ok: true }
@@ -113,6 +114,19 @@ export type ModelProfileValidation =
 export interface ModelProfileTestResult {
   readonly ok: boolean;
   readonly latencyMs?: number;
+  readonly errorCode?: ModelProfileErrorCode;
+}
+
+/**
+ * Result of a "list remote models" request. `source: "remote"` means the list
+ * came from the provider's `/models` endpoint; `source: "fallback"` means the
+ * request failed and a known provider default list was returned instead.
+ */
+export interface ModelListResult {
+  readonly ok: boolean;
+  readonly models?: readonly string[];
+  readonly source?: "remote" | "fallback";
+  readonly message?: string;
   readonly errorCode?: ModelProfileErrorCode;
 }
 
