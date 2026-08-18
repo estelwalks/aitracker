@@ -40,13 +40,15 @@ test("S-005 模型配置页对齐原型：左列表/右表单/当前生效，无
   const main = content(page);
 
   // 等待列表加载完成（server fn 返回、hydration 完成），避免点击落在
-  // SSR 静态 HTML 上：新增按钮在加载中为 disabled。
-  await expect(main.getByRole("button", { name: "新增" })).toBeEnabled({
-    timeout: 30_000,
+  // SSR 静态 HTML 上：「加载中...」（common.loading）仅在 loading 期间渲染；
+  // dev 冷启动首次编译 server fn 可能较慢，给足超时。
+  await expect(main.getByText("加载中...")).toHaveCount(0, {
+    timeout: 60_000,
   });
 
-  // 左列表：标题计数 + 新增按钮 + 当前生效页脚
+  // 左列表：标题计数 + 当前生效页脚；「新增」按钮已按要求移除
   await expect(main.getByText(/模型配置（\d+）/)).toBeVisible();
+  await expect(main.getByRole("button", { name: "新增" })).toHaveCount(0);
   await expect(main.getByText(/当前生效/)).toBeVisible();
 
   // 已去除的多余说明（提及其它 AI 功能用词，仅检查设置内容面板）
@@ -88,9 +90,7 @@ test("S-005 扫描配置分类不再出现模型相关说明", async ({ page }) 
   await expect(
     page.getByText("扫描配置", { exact: true }).first(),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "扫描计划" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "扫描计划" })).toBeVisible();
   // 已删除的「自动扫描将根据是否配置模型自动选择快速/深度检测」说明
   await expect(content(page).getByText(/快速\/深度检测/)).toHaveCount(0);
   await page.waitForTimeout(200);

@@ -27,8 +27,7 @@ export const settings = {
   modelProfiles: {
     count: "모델 설정（{count}）",
     empty: "아직 설정이 없습니다",
-    emptyHint: "'추가'를 클릭하여 생성",
-    add: "추가",
+    emptyHint: "오른쪽 양식에 입력하여 생성할 수 있습니다",
     active: "활성 중",
     activateTitle: "활성화",
     edit: "편집",

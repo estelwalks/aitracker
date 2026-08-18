@@ -27,8 +27,7 @@ export const settings = {
   modelProfiles: {
     count: "Model profiles ({count})",
     empty: "No profiles yet",
-    emptyHint: "Click “Add” to create one",
-    add: "Add",
+    emptyHint: "Fill in the form on the right to create one",
     active: "Active",
     activateTitle: "Set active",
     edit: "Edit",

@@ -25,8 +25,7 @@ export const settings = {
   modelProfiles: {
     count: "模型配置（{count}）",
     empty: "暂无配置",
-    emptyHint: "点击「新增」创建",
-    add: "新增",
+    emptyHint: "在右侧表单填写信息即可创建",
     active: "生效中",
     activateTitle: "设为生效",
     edit: "编辑",
