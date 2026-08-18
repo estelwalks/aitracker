@@ -28,8 +28,7 @@ export const settings = {
   modelProfiles: {
     count: "モデル設定（{count}）",
     empty: "設定はまだありません",
-    emptyHint: "「追加」をクリックして作成",
-    add: "追加",
+    emptyHint: "右側のフォームで作成できます",
     active: "有効中",
     activateTitle: "有効にする",
     edit: "編集",

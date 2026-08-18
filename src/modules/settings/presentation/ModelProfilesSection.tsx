@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -291,14 +291,10 @@ export function ModelProfilesSection() {
       <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
         {/* 左：Profile 列表 */}
         <div className="flex flex-col rounded-sm border border-border bg-surface-2">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="border-b border-border px-3 py-2">
             <span className="tt-label">
               {t("settings.modelProfiles.count", { count: profiles.length })}
             </span>
-            <TTButton size="sm" onClick={startNew} disabled={loading}>
-              <Plus className="size-3.5" />
-              {t("settings.modelProfiles.add")}
-            </TTButton>
           </div>
           {loading ? (
             <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
