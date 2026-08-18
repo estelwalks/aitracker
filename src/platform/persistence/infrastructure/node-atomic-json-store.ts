@@ -41,6 +41,13 @@ export class NodeAtomicJsonStore<T> implements AtomicJsonStore<T> {
   private readonly clock: Clock;
   private readonly fileSystem: NodeFileSystem;
   private readonly lock: FileLock;
+  /**
+   * In-process mutex: whole read/write critical sections on this instance are
+   * serialized, so concurrent callers (e.g. `Promise.all` reads) never fight
+   * over the same exclusive file lock. The file lock still guards cross-process
+   * access; this gate only prevents self-conflicts inside one process.
+   */
+  private gate: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: NodeAtomicJsonStoreOptions<T>) {
     this.clock = options.clock ?? new SystemClock();
@@ -49,11 +56,29 @@ export class NodeAtomicJsonStore<T> implements AtomicJsonStore<T> {
   }
 
   async read(): Promise<AtomicJsonReadResult<T>> {
-    return this.withLock(async () => this.readUnlocked());
+    return this.withLock(() => this.readUnlocked());
   }
 
   async write(value: T): Promise<void> {
-    await this.withLock(async () => this.writeUnlocked(value));
+    return this.withLock(() => this.writeUnlocked(value));
+  }
+
+  private withLock<R>(operation: () => Promise<R>): Promise<R> {
+    const run = this.gate.then(async () => {
+      const lease = await this.lock.acquire();
+      try {
+        return await operation();
+      } finally {
+        await lease.release();
+      }
+    });
+    // Keep the chain alive even when an operation fails, so later callers are
+    // never stuck behind a rejected gate.
+    this.gate = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   private async readUnlocked(): Promise<AtomicJsonReadResult<T>> {
@@ -146,15 +171,6 @@ export class NodeAtomicJsonStore<T> implements AtomicJsonStore<T> {
       schemaVersion: this.options.schema.currentVersion,
       source,
     };
-  }
-
-  private async withLock<R>(operation: () => Promise<R>): Promise<R> {
-    const lease = await this.lock.acquire();
-    try {
-      return await operation();
-    } finally {
-      await lease.release();
-    }
   }
 }
 

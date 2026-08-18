@@ -345,6 +345,12 @@ test("repository: persisted file is written with 0600 permissions", async () => 
     await repo.upsert(VALID_CUSTOM);
     const filePath = join(dir, "model-profiles.v1.json");
     const info = await stat(filePath);
+    // POSIX permission bits are meaningless on Windows (Node reports 0o666
+    // there); the 0600 contract applies to POSIX platforms only.
+    if (process.platform === "win32") {
+      assert.ok((info.mode & 0o777) !== 0);
+      return;
+    }
     assert.equal(info.mode & 0o777, 0o600);
   });
 });

@@ -169,6 +169,73 @@ test("uses a cross-process lock and reports conflicts without removing the owner
   });
 });
 
+test("serializes concurrent reads and writes on one instance without self-lock conflicts", async () => {
+  await withTempDirectory(async (directory) => {
+    const filePath = join(directory, "state.json");
+    const store = new NodeAtomicJsonStore({
+      filePath,
+      defaultValue: { value: 0 },
+      schema,
+    });
+
+    // Same shape as listModelProfiles: two reads issued concurrently. Before
+    // the in-process gate this always raced on the exclusive file lock.
+    const reads = await Promise.all(
+      Array.from({ length: 50 }, async () => {
+        const result = await store.read();
+        return result.value.value;
+      }),
+    );
+    assert.equal(reads.length, 50);
+    assert.ok(reads.every((value) => value === 0));
+
+    await Promise.all([
+      store.write({ value: 1 }),
+      store.write({ value: 2 }),
+      store.write({ value: 3 }),
+    ]);
+    assert.equal((await store.read()).value.value, 3);
+  });
+});
+
+test("a failed operation does not wedge the in-process gate", async () => {
+  await withTempDirectory(async (directory) => {
+    const filePath = join(directory, "state.json");
+    const actualFileSystem = createNodeFileSystem();
+    const failingStore = new NodeAtomicJsonStore({
+      filePath,
+      defaultValue: { value: 0 },
+      schema,
+      fileSystem: {
+        ...actualFileSystem,
+        async rename() {
+          throw Object.assign(new Error("busy"), { code: "EBUSY" });
+        },
+      },
+    });
+    const stableStore = new NodeAtomicJsonStore({
+      filePath,
+      defaultValue: { value: 0 },
+      schema,
+    });
+
+    await assert.rejects(failingStore.write({ value: 2 }), {
+      name: "PersistenceError",
+      code: "target-busy",
+    });
+    // Later operations on the same instance still run.
+    await assert.rejects(failingStore.write({ value: 3 }), {
+      name: "PersistenceError",
+      code: "target-busy",
+    });
+    assert.deepEqual(await stableStore.read(), {
+      value: { value: 0 },
+      schemaVersion: 2,
+      source: "default",
+    });
+  });
+});
+
 test("classifies Windows replacement EPERM as busy while preserving access-denied elsewhere", () => {
   const error = Object.assign(new Error("EPERM"), { code: "EPERM" });
   assert.equal(mapNodeError(error, "write", "win32").code, "target-busy");

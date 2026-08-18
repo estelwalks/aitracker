@@ -175,7 +175,11 @@ test("dev secret storage round-trips and persists the key with mode 0o600", asyn
   const keyPath = join(data, "security-dev-api-key");
   await waitForFile(keyPath);
   assert.equal(await readFile(keyPath, "utf8"), "super-secret-dev-key");
-  assert.equal(statSync(keyPath).mode & 0o777, 0o600);
+  // POSIX permission bits are meaningless on Windows (Node reports 0o666
+  // there); the 0600 contract applies to POSIX platforms only.
+  if (process.platform !== "win32") {
+    assert.equal(statSync(keyPath).mode & 0o777, 0o600);
+  }
 
   // A fresh instance reads the raw key back from disk.
   const fresh = createDevSecretStorage(data);
