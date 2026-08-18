@@ -41,6 +41,7 @@ import {
   type ModelProfileTestResult,
   type ModelProfileValidation,
   type ModelProfileView,
+  type ModelListResult,
   type ProfileProtocol,
 } from "./model-profile.ts";
 import type {
@@ -138,6 +139,65 @@ export function chatUrl(protocol: ProfileProtocol, endpoint: string): string {
     : `${base}/chat/completions`;
 }
 
+/** Model-list endpoint: `GET {base}/models` (chatUrl is the POST chat path). */
+export function modelListUrl(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/, "")}/models`;
+}
+
+function listHeaders(
+  protocol: ProfileProtocol,
+  apiKey: string,
+): Record<string, string> {
+  return protocol === "anthropic"
+    ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+    : { authorization: `Bearer ${apiKey}` };
+}
+
+/** Well-known model ids per provider host, used as an offline fallback. */
+const KNOWN_MODEL_LISTS: Record<string, readonly string[]> = {
+  "api.deepseek.com": ["deepseek-chat", "deepseek-reasoner"],
+  "api.openai.com": [
+    "gpt-4o",
+    "gpt-4o-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "o4-mini",
+  ],
+  "api.moonshot.cn": [
+    "moonshot-v1-8k",
+    "moonshot-v1-32k",
+    "moonshot-v1-128k",
+    "kimi-k2",
+  ],
+  "api.anthropic.com": [
+    "claude-opus-4-20250514",
+    "claude-sonnet-4-20250514",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-haiku-20241022",
+  ],
+};
+
+const DEFAULT_MODEL_LISTS: Record<ProfileProtocol, readonly string[]> = {
+  openai: KNOWN_MODEL_LISTS["api.openai.com"]!,
+  anthropic: KNOWN_MODEL_LISTS["api.anthropic.com"]!,
+};
+
+/**
+ * Provider default list when the live request fails: match the endpoint
+ * hostname against known providers, else fall back to the protocol default.
+ */
+function fallbackModelList(
+  protocol: ProfileProtocol,
+  endpoint: string,
+): readonly string[] {
+  try {
+    const host = new URL(endpoint).hostname;
+    return KNOWN_MODEL_LISTS[host] ?? DEFAULT_MODEL_LISTS[protocol];
+  } catch {
+    return DEFAULT_MODEL_LISTS[protocol];
+  }
+}
+
 function parseChatText(protocol: ProfileProtocol, raw: string): string {
   try {
     const json: unknown = JSON.parse(raw);
@@ -180,6 +240,11 @@ export interface ModelProfileRepository {
   ): Promise<{ ok: true } | { ok: false; errorCode: ModelProfileErrorCode }>;
   /** One minimal completion call with a short timeout. Never returns a key. */
   test(input: ModelProfileInput): Promise<ModelProfileTestResult>;
+  /**
+   * List remote models via `GET {endpoint}/models`. Falls back to a known
+   * provider default list when the live request fails. Never returns a key.
+   */
+  listModels(input: ModelProfileInput): Promise<ModelListResult>;
 }
 
 export interface ModelProfileRepositoryOptions {
@@ -375,6 +440,41 @@ export function createModelProfileRepository(
         }
         void error;
         return { ok: false, errorCode: "errors.modelProfile.testFailed" };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+
+    async listModels(input) {
+      const effective = await resolveTestConfig(input, read);
+      if (!effective.apiKey) {
+        return { ok: false, errorCode: "errors.modelProfile.listFailed" };
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), testTimeoutMs);
+      try {
+        const response = await fetchImpl(modelListUrl(effective.endpoint), {
+          method: "GET",
+          headers: listHeaders(effective.protocol, effective.apiKey),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = (await response.json()) as {
+          data?: Array<{ id?: string }>;
+        };
+        const models = (payload.data ?? [])
+          .map((item) => item?.id?.trim() ?? "")
+          .filter((id) => id.length > 0)
+          .sort();
+        if (models.length === 0) throw new Error("empty model list");
+        return { ok: true, models, source: "remote" };
+      } catch {
+        return {
+          ok: true,
+          models: fallbackModelList(effective.protocol, effective.endpoint),
+          source: "fallback",
+        };
       } finally {
         clearTimeout(timer);
       }

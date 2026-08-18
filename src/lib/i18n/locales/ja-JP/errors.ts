@@ -93,6 +93,8 @@ export const errors = {
     testFailed:
       "接続テストに失敗しました。エンドポイント・API Key・ネットワークを確認してください",
     testTimeout: "接続テストがタイムアウトしました（5 秒）",
+    listFailed:
+      "モデル一覧の取得に失敗しました。エンドポイント、API Key、ネットワークを確認してください",
   },
   pricing: {
     modelListInvalid: "モデルリストが不正です",
