@@ -8,11 +8,13 @@ export * from "./model-profile.ts";
 export {
   deleteModelProfile,
   listModelProfiles,
+  listRemoteModels,
   setActiveModelProfile,
   testModelProfile,
   upsertModelProfile,
 } from "./model-profile.server-fns.ts";
 export type {
+  ListRemoteModelsInput,
   ModelProfileActionResult,
   ModelProfileListResult,
 } from "./model-profile.server-fns.ts";

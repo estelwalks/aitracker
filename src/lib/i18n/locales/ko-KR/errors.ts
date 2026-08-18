@@ -87,6 +87,8 @@ export const errors = {
     notFound: "이 모델 설정은 없거나 삭제되었습니다",
     testFailed: "연결 테스트 실패. 엔드포인트, API Key, 네트워크를 확인하세요",
     testTimeout: "연결 테스트 시간 초과(5초)",
+    listFailed:
+      "모델 목록을 가져오지 못했습니다. 엔드포인트, API Key, 네트워크를 확인하세요",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",
