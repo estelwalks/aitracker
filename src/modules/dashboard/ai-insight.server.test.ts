@@ -3,17 +3,25 @@ import test from "node:test";
 
 import {
   createDashboardAIInsightService,
-  resolveDashboardAIInsightConfig,
   toDashboardAIInsightInput,
   type DashboardAIInsightInput,
+  type DashboardAIInsightRuntimeConfig,
 } from "./ai-insight.server.ts";
 import type { DashboardV2Snapshot } from "./contracts.ts";
 
-const config = {
-  baseUrl: "https://llm.example.test/v1",
+const openaiConfig: DashboardAIInsightRuntimeConfig = {
+  protocol: "openai",
+  endpoint: "https://llm.example.test/v1",
   apiKey: "test-key-123456",
   model: "trusted-model",
-} as const;
+};
+
+const anthropicConfig: DashboardAIInsightRuntimeConfig = {
+  protocol: "anthropic",
+  endpoint: "https://llm.example.test/v1",
+  apiKey: "test-key-123456",
+  model: "claude-model",
+};
 
 function input(): DashboardAIInsightInput {
   return {
@@ -58,6 +66,16 @@ function completion(content: string): Response {
   });
 }
 
+function anthropicCompletion(content: string): Response {
+  return new Response(
+    JSON.stringify({ content: [{ type: "text", text: content }] }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
+}
+
 function validOutput(): string {
   return JSON.stringify({
     headline: "Usage is steady and cache coverage is improving.",
@@ -74,7 +92,7 @@ function validOutput(): string {
 test("unconfigured service never invokes fetch and returns explicit state", async () => {
   let calls = 0;
   const service = createDashboardAIInsightService({
-    config: null,
+    resolveConfig: async () => null,
     fetch: (async () => {
       calls += 1;
       return completion(validOutput());
@@ -91,12 +109,39 @@ test("unconfigured service never invokes fetch and returns explicit state", asyn
   assert.equal(calls, 0);
 });
 
-test("OpenAI-compatible request sends only allowlisted aggregate input", async () => {
-  let sent: unknown;
+test("a failing profile resolution reports not-configured", async () => {
+  let calls = 0;
   const service = createDashboardAIInsightService({
-    config,
-    fetch: (async (_url, init) => {
-      sent = JSON.parse(String(init?.body));
+    resolveConfig: async () => {
+      throw new Error("repository unavailable");
+    },
+    fetch: (async () => {
+      calls += 1;
+      return completion(validOutput());
+    }) as typeof fetch,
+  });
+  const result = await service.refresh(input());
+  assert.deepEqual(result, {
+    status: "not-configured",
+    configured: false,
+    generatedAt: null,
+    model: null,
+    insight: null,
+  });
+  assert.deepEqual(service.read(), result);
+  assert.equal(calls, 0);
+});
+
+test("OpenAI-compatible request sends only allowlisted aggregate input", async () => {
+  let sentUrl: string | undefined;
+  let sentHeaders: Record<string, string> | undefined;
+  let sentBody: unknown;
+  const service = createDashboardAIInsightService({
+    resolveConfig: async () => openaiConfig,
+    fetch: (async (url, init) => {
+      sentUrl = String(url);
+      sentHeaders = init?.headers as Record<string, string>;
+      sentBody = JSON.parse(String(init?.body));
       return completion(validOutput());
     }) as typeof fetch,
   });
@@ -104,7 +149,10 @@ test("OpenAI-compatible request sends only allowlisted aggregate input", async (
   assert.equal(result.status, "ready");
   assert.equal(result.model, "trusted-model");
   assert.equal(result.insight?.insights.length, 1);
-  const request = sent as {
+  assert.equal(sentUrl, "https://llm.example.test/v1/chat/completions");
+  assert.equal(sentHeaders?.authorization, "Bearer test-key-123456");
+  assert.equal(sentHeaders?.["content-type"], "application/json");
+  const request = sentBody as {
     model: string;
     messages: Array<{ role: string; content: string }>;
   };
@@ -120,9 +168,80 @@ test("OpenAI-compatible request sends only allowlisted aggregate input", async (
   assert.equal(JSON.stringify(result).includes("llm.example.test"), false);
 });
 
+test("Anthropic request uses the messages endpoint, x-api-key auth and system template", async () => {
+  let sentUrl: string | undefined;
+  let sentHeaders: Record<string, string> | undefined;
+  let sentBody: unknown;
+  const service = createDashboardAIInsightService({
+    resolveConfig: async () => anthropicConfig,
+    fetch: (async (url, init) => {
+      sentUrl = String(url);
+      sentHeaders = init?.headers as Record<string, string>;
+      sentBody = JSON.parse(String(init?.body));
+      return anthropicCompletion(validOutput());
+    }) as typeof fetch,
+  });
+  const result = await service.refresh(input());
+  assert.equal(result.status, "ready");
+  assert.equal(result.model, "claude-model");
+  assert.equal(
+    result.insight?.headline,
+    "Usage is steady and cache coverage is improving.",
+  );
+  assert.equal(sentUrl, "https://llm.example.test/v1/messages");
+  assert.equal(sentHeaders?.["x-api-key"], "test-key-123456");
+  assert.equal(sentHeaders?.["anthropic-version"], "2023-06-01");
+  assert.equal(sentHeaders?.["content-type"], "application/json");
+  const request = sentBody as {
+    model: string;
+    max_tokens: number;
+    system: string;
+    messages: Array<{ role: string; content: string }>;
+  };
+  assert.equal(request.model, "claude-model");
+  assert.equal(request.max_tokens, 600);
+  assert.match(request.system, /aggregate JSON/);
+  assert.equal(request.messages.length, 1);
+  assert.equal(request.messages[0]?.role, "user");
+  const outbound = request.messages[0]?.content ?? "";
+  assert.deepEqual(JSON.parse(outbound), input());
+  assert.doesNotMatch(
+    outbound,
+    /\/Users\/|\/home\/|sessionId|command|prompt|sk-/i,
+  );
+  assert.equal(JSON.stringify(result).includes("test-key-123456"), false);
+  assert.equal(JSON.stringify(result).includes("llm.example.test"), false);
+});
+
+test("each refresh re-resolves the profile and rebuilds the provider", async () => {
+  const configs = [openaiConfig, anthropicConfig];
+  let index = 0;
+  const seenUrls: string[] = [];
+  const service = createDashboardAIInsightService({
+    resolveConfig: async () => configs[index] ?? null,
+    fetch: (async (url) => {
+      seenUrls.push(String(url));
+      return index === 1
+        ? anthropicCompletion(validOutput())
+        : completion(validOutput());
+    }) as typeof fetch,
+  });
+  const first = await service.refresh(input());
+  assert.equal(first.status, "ready");
+  assert.equal(first.model, "trusted-model");
+  index = 1;
+  const second = await service.refresh(input());
+  assert.equal(second.status, "ready");
+  assert.equal(second.model, "claude-model");
+  assert.deepEqual(seenUrls, [
+    "https://llm.example.test/v1/chat/completions",
+    "https://llm.example.test/v1/messages",
+  ]);
+});
+
 test("timeout returns a failed safe DTO without forwarding fallback text", async () => {
   const service = createDashboardAIInsightService({
-    config,
+    resolveConfig: async () => openaiConfig,
     timeoutMs: 5,
     fetch: (() => new Promise<Response>(() => undefined)) as typeof fetch,
   });
@@ -138,7 +257,7 @@ test("timeout returns a failed safe DTO without forwarding fallback text", async
 
 test("invalid or sensitive provider output is rejected", async () => {
   const service = createDashboardAIInsightService({
-    config,
+    resolveConfig: async () => openaiConfig,
     fetch: (async () =>
       completion(
         JSON.stringify({
@@ -160,7 +279,7 @@ test("TTL cache is read-only and concurrent refreshes are deduplicated", async (
     resolveResponse = resolve;
   });
   const service = createDashboardAIInsightService({
-    config,
+    resolveConfig: async () => openaiConfig,
     ttlMs: 100,
     now: () => now,
     fetch: (() => {
@@ -171,32 +290,12 @@ test("TTL cache is read-only and concurrent refreshes are deduplicated", async (
   const first = service.refresh(input());
   const second = service.refresh(input());
   assert.equal(first, second);
-  assert.equal(calls, 1);
   resolveResponse?.(completion(validOutput()));
   assert.equal((await first).status, "ready");
+  assert.equal(calls, 1);
   assert.equal(service.read().status, "ready");
   now += 101;
   assert.equal(service.read().status, "idle");
-});
-
-test("configuration requires all three valid environment variables", () => {
-  assert.equal(resolveDashboardAIInsightConfig({}), undefined);
-  assert.equal(
-    resolveDashboardAIInsightConfig({
-      TRUSTTOOLS_LLM_BASE_URL: "file:///private/model",
-      TRUSTTOOLS_LLM_API_KEY: "test-key-123456",
-      TRUSTTOOLS_LLM_MODEL: "model",
-    }),
-    undefined,
-  );
-  assert.deepEqual(
-    resolveDashboardAIInsightConfig({
-      TRUSTTOOLS_LLM_BASE_URL: "https://llm.example.test/v1/",
-      TRUSTTOOLS_LLM_API_KEY: "test-key-123456",
-      TRUSTTOOLS_LLM_MODEL: "model",
-    }),
-    { ...config, model: "model" },
-  );
 });
 
 test("allowlist projection strips an unexpected path-like project label", () => {
