@@ -5,15 +5,25 @@
  * It never receives raw events, session data, project paths, prompts, commands,
  * source-log contents, or any browser supplied text. This module owns the
  * provider boundary and returns a browser-safe projection only.
+ *
+ * Provider configuration comes from the active model profile (S-500) managed
+ * by `ai-orchestration/model-profile.server.ts` (stored at
+ * `~/.trusttools/tasks/model-profiles.v1.json`), supporting both
+ * OpenAI-compatible and Anthropic protocols. The profile — including its API
+ * key, which never crosses the renderer boundary — is resolved server-side on
+ * every refresh.
  */
 import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import { createAiExecutor } from "../ai-orchestration/index.ts";
 import {
+  createAiExecutor,
   createProviderRegistry,
   createRegistryRouter,
+  effectiveEndpoint,
+  effectiveModel,
+  effectiveProtocol,
 } from "../ai-orchestration/index.ts";
 import type {
   AIModelProvider,
@@ -114,11 +124,24 @@ export interface DashboardAIInsightAvailability {
   readonly count: number | null;
 }
 
-export interface OpenAICompatibleConfig {
-  readonly baseUrl: string;
+/**
+ * Resolved runtime configuration for the dashboard AI insight provider. The
+ * API key is server-side secret material and never appears in any
+ * browser-safe view.
+ */
+export interface DashboardAIInsightRuntimeConfig {
+  readonly protocol: "openai" | "anthropic";
+  readonly endpoint: string;
   readonly apiKey: string;
   readonly model: string;
 }
+
+/**
+ * Asynchronous profile resolution. Returns `null` when no usable active
+ * profile exists (no active profile, missing key, or resolution failure).
+ */
+export type DashboardAIInsightResolveConfig =
+  () => Promise<DashboardAIInsightRuntimeConfig | null>;
 
 interface CacheEntry {
   readonly generatedAt: string;
@@ -136,8 +159,11 @@ export interface DashboardAIInsightService {
 }
 
 export interface DashboardAIInsightServiceOptions {
-  /** `undefined` resolves process env; `null` explicitly disables the provider. */
-  readonly config?: OpenAICompatibleConfig | null;
+  /**
+   * `undefined` resolves the active model profile from the repository;
+   * `null` explicitly disables the provider.
+   */
+  readonly resolveConfig?: DashboardAIInsightResolveConfig | null;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
   readonly ttlMs?: number;
@@ -269,68 +295,102 @@ function parseInsightOutput(value: string): DashboardAIInsight | null {
   }
 }
 
-export function resolveDashboardAIInsightConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): OpenAICompatibleConfig | undefined {
-  const baseUrl = env.TRUSTTOOLS_LLM_BASE_URL?.trim();
-  const apiKey = env.TRUSTTOOLS_LLM_API_KEY?.trim();
-  const model = env.TRUSTTOOLS_LLM_MODEL?.trim();
-  if (!baseUrl || !apiKey || !model) return undefined;
-  if (apiKey.length < 8 || /[\r\n]/.test(apiKey)) return undefined;
-  if (!/^[A-Za-z0-9._:/-]{1,120}$/.test(model)) return undefined;
+/**
+ * Default configuration resolution: reads the active model profile (S-500)
+ * from the shared repository. The repository view carries no apiKey, so the
+ * key is fetched through the key-bearing `getProfileForExecution` accessor and
+ * used only inside this server-only boundary. Any failure (no active profile,
+ * missing key, invalid model, repository/import error) yields `null`.
+ */
+async function resolveActiveProfileConfig(): Promise<DashboardAIInsightRuntimeConfig | null> {
   try {
-    const url = new URL(baseUrl);
-    if (
-      (url.protocol !== "https:" && url.protocol !== "http:") ||
-      url.username ||
-      url.password
-    )
-      return undefined;
-    return {
-      baseUrl: url.toString().replace(/\/$/u, ""),
-      apiKey,
-      model,
-    };
+    const { getModelProfileRepository } =
+      await import("../ai-orchestration/model-profile.server.ts");
+    const repository = getModelProfileRepository();
+    const active = await repository.getActiveView();
+    if (!active) return null;
+    const profile = await repository.getProfileForExecution(active.id);
+    if (!profile?.apiKey) return null;
+    const protocol = effectiveProtocol(profile.mode, profile.protocol);
+    const endpoint = effectiveEndpoint(profile);
+    const model = effectiveModel(profile);
+    if (!endpoint || !model) return null;
+    return { protocol, endpoint, apiKey: profile.apiKey, model };
   } catch {
-    return undefined;
+    return null;
   }
 }
 
-function endpoint(baseUrl: string): string {
-  return `${baseUrl.replace(/\/$/u, "")}/chat/completions`;
+function openAIEndpoint(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/u, "")}/chat/completions`;
 }
 
-function createOpenAICompatibleProvider(
-  config: OpenAICompatibleConfig,
+function anthropicEndpoint(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/u, "")}/messages`;
+}
+
+function openAIHeaders(apiKey: string): Record<string, string> {
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${apiKey}`,
+  };
+}
+
+function anthropicHeaders(apiKey: string): Record<string, string> {
+  return {
+    "content-type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+}
+
+function createDashboardAIInsightProvider(
+  config: DashboardAIInsightRuntimeConfig,
   fetchImpl: typeof fetch,
 ): AIModelProvider {
+  const anthropic = config.protocol === "anthropic";
   return {
-    providerId: "openai-compatible",
+    providerId: "dashboard-insight",
     async invoke(request: AIProviderRequest): Promise<AIResponse> {
-      const response = await fetchImpl(endpoint(config.baseUrl), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${config.apiKey}`,
+      const response = await fetchImpl(
+        anthropic
+          ? anthropicEndpoint(config.endpoint)
+          : openAIEndpoint(config.endpoint),
+        {
+          method: "POST",
+          headers: anthropic
+            ? anthropicHeaders(config.apiKey)
+            : openAIHeaders(config.apiKey),
+          body: JSON.stringify(
+            anthropic
+              ? {
+                  model: config.model,
+                  max_tokens: 600,
+                  system: request.prompt.template,
+                  messages: [{ role: "user", content: request.input.text }],
+                }
+              : {
+                  model: config.model,
+                  temperature: 0.2,
+                  max_tokens: 600,
+                  response_format: { type: "json_object" },
+                  messages: [
+                    { role: "system", content: request.prompt.template },
+                    { role: "user", content: request.input.text },
+                  ],
+                },
+          ),
+          signal: request.signal,
         },
-        body: JSON.stringify({
-          model: config.model,
-          temperature: 0.2,
-          max_tokens: 600,
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: request.prompt.template },
-            { role: "user", content: request.input.text },
-          ],
-        }),
-        signal: request.signal,
-      });
+      );
       if (!response.ok) throw new Error("provider-failed");
       const payload: unknown = await response.json();
-      const text = readChatCompletionText(payload);
+      const text = anthropic
+        ? readAnthropicMessagesText(payload)
+        : readChatCompletionText(payload);
       if (text == null) throw new Error("provider-invalid-response");
       return {
-        providerId: "openai-compatible",
+        providerId: "dashboard-insight",
         modelId: config.model,
         text,
         finishReason: "stop",
@@ -349,8 +409,23 @@ function readChatCompletionText(payload: unknown): string | null {
   return typeof content === "string" ? content : null;
 }
 
+function readAnthropicMessagesText(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const content = (payload as { content?: unknown }).content;
+  if (!Array.isArray(content)) return null;
+  const text = content
+    .map((block) => {
+      if (!block || typeof block !== "object") return "";
+      const value = (block as { text?: unknown }).text;
+      return typeof value === "string" ? value : "";
+    })
+    .join("\n")
+    .trim();
+  return text.length > 0 ? text : null;
+}
+
 function cachedView(
-  config: OpenAICompatibleConfig,
+  config: DashboardAIInsightRuntimeConfig,
   entry: CacheEntry | undefined,
   now: number,
 ): DashboardAIInsightView {
@@ -382,43 +457,45 @@ function notConfiguredView(): DashboardAIInsightView {
 }
 
 /**
- * In-memory TTL/dedup service. Environment configuration is intentionally
- * evaluated once at server composition time; browser code cannot add a
- * provider or secret and an unconfigured service cannot initiate a request.
+ * In-memory TTL/dedup service. The provider configuration is resolved from the
+ * active model profile per refresh (server-side only); an unconfigured service
+ * cannot initiate a request, and a profile's API key never reaches the browser.
  */
 export function createDashboardAIInsightService(
   options: DashboardAIInsightServiceOptions = {},
 ): DashboardAIInsightService {
-  const config =
-    options.config === undefined
-      ? resolveDashboardAIInsightConfig()
-      : options.config;
+  const resolveConfig =
+    options.resolveConfig === undefined
+      ? resolveActiveProfileConfig
+      : options.resolveConfig;
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? INSIGHT_TTL_MS;
   const timeoutMs = options.timeoutMs ?? INSIGHT_TIMEOUT_MS;
   const fetchImpl = options.fetch ?? fetch;
   let cache: CacheEntry | undefined;
+  let resolved: DashboardAIInsightRuntimeConfig | undefined;
   let pending: Promise<DashboardAIInsightView> | undefined;
-  if (!config) {
-    return {
-      read: notConfiguredView,
-      async refresh() {
-        return notConfiguredView();
-      },
-    };
-  }
-  const registry = createProviderRegistry([
-    createOpenAICompatibleProvider(config, fetchImpl),
-  ]);
-  const executor = createAiExecutor({ router: createRegistryRouter(registry) });
 
   return {
     read() {
-      return cachedView(config, cache, now());
+      return resolved
+        ? cachedView(resolved, cache, now())
+        : notConfiguredView();
     },
     refresh(input) {
       if (pending) return pending;
       pending = (async () => {
+        let config: DashboardAIInsightRuntimeConfig | null;
+        try {
+          config = resolveConfig ? await resolveConfig() : null;
+        } catch {
+          config = null;
+        }
+        if (!config) {
+          resolved = undefined;
+          return notConfiguredView();
+        }
+        resolved = config;
         // JSON serialization is the final payload audit point. Do not add a
         // generic object here: the interface above is the outbound allowlist.
         const payload = JSON.stringify(input);
@@ -431,9 +508,15 @@ export function createDashboardAIInsightService(
             insight: null,
           };
         }
+        const registry = createProviderRegistry([
+          createDashboardAIInsightProvider(config, fetchImpl),
+        ]);
+        const executor = createAiExecutor({
+          router: createRegistryRouter(registry),
+        });
         const result = await executor.execute({
           requestId: randomUUID(),
-          providerId: "openai-compatible",
+          providerId: "dashboard-insight",
           modelId: config.model,
           prompt: DASHBOARD_INSIGHT_PROMPT,
           input: { text: payload },
@@ -477,7 +560,7 @@ export function getDashboardAIInsightService(): DashboardAIInsightService {
   return productionService;
 }
 
-/** Useful to force a new environment resolution in isolated server tests only. */
+/** Useful to force a fresh profile resolution in isolated server tests only. */
 export function resetDashboardAIInsightServiceForTests(): void {
   productionService = undefined;
 }

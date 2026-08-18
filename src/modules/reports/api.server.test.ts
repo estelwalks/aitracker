@@ -55,18 +55,7 @@ async function withIsolatedRoot<T>(
   }
 }
 
-/** Assert the whole LLM env block is absent/present during the callback. */
-function withoutLlmEnv<T>(fn: () => Promise<T>): Promise<T> {
-  return withEnv(
-    {
-      TRUSTTOOLS_LLM_BASE_URL: undefined,
-      TRUSTTOOLS_LLM_API_KEY: undefined,
-      TRUSTTOOLS_LLM_MODEL: undefined,
-    },
-    fn,
-  );
-}
-
+/** Probe the legacy env vars to prove they no longer open the generation gate. */
 function withLlmEnv<T>(fn: () => Promise<T>): Promise<T> {
   return withEnv(
     {
@@ -86,102 +75,96 @@ async function latestRunStatus(
   return runs.value[0]?.status;
 }
 
-test("without a profile or env LLM the transport reports triggered:false and the page is offline", async () => {
-  await withoutLlmEnv(() =>
+test("without an active profile the transport reports triggered:false and the page is offline", async () => {
+  await withIsolatedRoot(async () => {
+    assert.deepEqual(await generateReport("reports.daily"), {
+      triggered: false,
+    });
+    const view = await loadReports("zh-CN");
+    assert.equal(view.viewModel.feed.offline, true);
+  });
+});
+
+test("an env-configured LLM no longer opens the gate without an active profile", async () => {
+  await withLlmEnv(() =>
     withIsolatedRoot(async () => {
-      assert.deepEqual(await generateReport("reports.daily"), {
-        triggered: false,
-      });
+      const result = await generateReport("reports.daily");
+      assert.deepEqual(result, { triggered: false });
       const view = await loadReports("zh-CN");
       assert.equal(view.viewModel.feed.offline, true);
     }),
   );
 });
 
-test("an env-configured LLM keeps the legacy gate open without a profile", async () => {
-  await withLlmEnv(() =>
-    withIsolatedRoot(async () => {
+test("an active profile triggers a real generation against the profile endpoint", async () => {
+  await withIsolatedRoot(async (root) => {
+    let receivedBody = "";
+    const server = createServer((req: IncomingMessage, res) => {
+      let raw = "";
+      req.on("data", (chunk: Buffer) => {
+        raw += chunk.toString("utf8");
+      });
+      req.on("end", () => {
+        receivedBody = raw;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            choices: [{ message: { content: "The daily brief content." } }],
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+    try {
+      const profile = await root.modelProfiles.upsert({
+        name: "integration-profile",
+        mode: "custom",
+        protocol: "openai",
+        endpoint: `http://127.0.0.1:${port}/v1`,
+        model: "profile-test-model",
+        apiKey: "sk-profile-123456",
+      });
+      assert.ok(profile.id);
+
       const result = await generateReport("reports.daily");
       assert.equal(result.triggered, true);
-      const view = await loadReports("zh-CN");
-      assert.equal(view.viewModel.feed.offline, false);
-    }),
-  );
-});
 
-test("an active profile triggers a real generation against the profile endpoint", async () => {
-  await withoutLlmEnv(() =>
-    withIsolatedRoot(async (root) => {
-      let receivedBody = "";
-      const server = createServer((req: IncomingMessage, res) => {
-        let raw = "";
-        req.on("data", (chunk: Buffer) => {
-          raw += chunk.toString("utf8");
-        });
-        req.on("end", () => {
-          receivedBody = raw;
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(
-            JSON.stringify({
-              choices: [{ message: { content: "The daily brief content." } }],
-            }),
-          );
-        });
-      });
-      await new Promise<void>((resolve) =>
-        server.listen(0, "127.0.0.1", resolve),
+      // The real call must have used the profile's endpoint + model, which
+      // proves modelId = profile id reached the profile-backed provider.
+      const payload = JSON.parse(receivedBody) as {
+        model?: string;
+        messages?: Array<{ content?: string }>;
+      };
+      assert.equal(payload.model, "profile-test-model");
+      assert.match(
+        payload.messages?.[0]?.content ?? "",
+        /Daily report context/,
       );
-      const { port } = server.address() as AddressInfo;
-      try {
-        const profile = await root.modelProfiles.upsert({
-          name: "integration-profile",
-          mode: "custom",
-          protocol: "openai",
-          endpoint: `http://127.0.0.1:${port}/v1`,
-          model: "profile-test-model",
-          apiKey: "sk-profile-123456",
-        });
-        assert.ok(profile.id);
-
-        const result = await generateReport("reports.daily");
-        assert.equal(result.triggered, true);
-
-        // The real call must have used the profile's endpoint + model, which
-        // proves modelId = profile id reached the profile-backed provider.
-        const payload = JSON.parse(receivedBody) as {
-          model?: string;
-          messages?: Array<{ content?: string }>;
-        };
-        assert.equal(payload.model, "profile-test-model");
-        assert.match(
-          payload.messages?.[0]?.content ?? "",
-          /Daily report context/,
-        );
-        assert.equal(await latestRunStatus(root), "succeeded");
-      } finally {
-        await new Promise<void>((resolve, reject) =>
-          server.close((error) => (error ? reject(error) : resolve())),
-        );
-      }
-    }),
-  );
+      assert.equal(await latestRunStatus(root), "succeeded");
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
 });
 
 test("an active profile with an unreachable endpoint degrades to an offline draft, never a 500", async () => {
-  await withoutLlmEnv(() =>
-    withIsolatedRoot(async (root) => {
-      await root.modelProfiles.upsert({
-        name: "dead-profile",
-        mode: "custom",
-        protocol: "openai",
-        endpoint: "http://127.0.0.1:1/v1",
-        model: "dead-test-model",
-        apiKey: "sk-dead-123456",
-      });
-      const result = await generateReport("reports.daily");
-      assert.equal(result.triggered, true);
-      assert.equal(result.errorCode, undefined);
-      assert.equal(await latestRunStatus(root), "offline");
-    }),
-  );
+  await withIsolatedRoot(async (root) => {
+    await root.modelProfiles.upsert({
+      name: "dead-profile",
+      mode: "custom",
+      protocol: "openai",
+      endpoint: "http://127.0.0.1:1/v1",
+      model: "dead-test-model",
+      apiKey: "sk-dead-123456",
+    });
+    const result = await generateReport("reports.daily");
+    assert.equal(result.triggered, true);
+    assert.equal(result.errorCode, undefined);
+    assert.equal(await latestRunStatus(root), "offline");
+  });
 });

@@ -61,9 +61,9 @@ function toItem(session: SessionSummary): DistillationSessionItem {
 /**
  * Load the distillation workbench read model. Resolves the selectable sessions
  * from the composition root's shared session port, the complete persisted
- * candidate history, the real model options from the LLM configuration probe
- * and the server-side daily quota projection for real-model calls (Story
- * B-600). The same `listAll` snapshot powers both candidate cards and
+ * candidate history, the real model options from the saved S-500 model
+ * profiles and the server-side daily quota projection for real-model calls
+ * (Story B-600). The same `listAll` snapshot powers both candidate cards and
  * counters, avoiding inconsistent or duplicate persistence reads. `locale` is
  * accepted for transport parity; the projection is locale-neutral.
  */
@@ -89,14 +89,11 @@ export async function loadDistillation(
       remaining: Math.max(0, current.limit - current.used),
     }))
     .catch(() => null);
-  const { readLLMConfig } = await import("../ai-orchestration/config.ts");
   const { getModelProfileRepository } =
     await import("../ai-orchestration/model-profile.server.ts");
-  const configured = readLLMConfig();
   const profiles = await getModelProfileRepository().listViews();
-  // Saved S-500 profiles first (id + label=name), then the env-configured
-  // model, then the deterministic offline fallback. Ids are de-duplicated in
-  // case an env model collides with a profile id.
+  // Saved S-500 profiles first (id + label=name), then the deterministic
+  // offline fallback. Ids are de-duplicated across profiles.
   const seen = new Set<string>();
   const modelOptions: Array<{
     id: string;
@@ -107,10 +104,6 @@ export async function loadDistillation(
     if (seen.has(profile.id)) continue;
     seen.add(profile.id);
     modelOptions.push({ id: profile.id, label: profile.name });
-  }
-  if (configured && !seen.has(configured.model)) {
-    seen.add(configured.model);
-    modelOptions.push({ id: configured.model, label: configured.model });
   }
   modelOptions.push({
     id: "offline",
@@ -148,8 +141,8 @@ export async function startDistillation(
   const modelId = input.modelId?.trim() || "offline";
   // When the selected model is a saved S-500 profile, route the request to the
   // composition root's profile-backed provider (providerId "profile") so the
-  // real endpoint/key are used server-side. Unknown ids (env model, offline)
-  // keep the previous registry/offline behaviour.
+  // real endpoint/key are used server-side. Unknown ids (offline or deleted
+  // profiles) keep the registry/offline behaviour.
   let providerId: string | undefined;
   if (modelId !== "offline") {
     const profile = await root.modelProfiles.getProfileForExecution(modelId);
