@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,22 +16,23 @@ import { defineConfig, devices } from "playwright/test";
  * ("内置基准" source, never a network round-trip on the page path) and no
  * white screen / load-failed boundary appears.
  *
- * The server reuses the committed stale-home fixture as `TRUSTTOOLS_USAGE_HOME`
- * so first paint is deterministic and fast (a present snapshot never triggers a
- * background re-scan on the read path).
+ * The server reuses a seeded throwaway stale home as `TRUSTTOOLS_USAGE_HOME`
+ * (stale usage + skills snapshot in SQLite) so first paint is deterministic and
+ * fast (a present snapshot never triggers a background re-scan on the read path).
  *
  * Run: `npx playwright test -c playwright.config.offline.ts performance-stale-offline.spec.ts`
  */
 
 // Port differs from default (41737), empty-home (41738) and stale-home (41739).
 const port = 41740;
-const offlineHome = join(
+const seedScript = join(
   dirname(fileURLToPath(import.meta.url)),
-  "tests",
-  "fixtures",
+  "scripts",
   "e2e",
-  "stale-home",
+  "seed-stale-home.mjs",
 );
+const offlineHome = mkdtempSync(join(tmpdir(), "tt-stale-home-"));
+execFileSync(process.execPath, [seedScript, offlineHome], { stdio: "inherit" });
 
 process.env.TRUSTTOOLS_USAGE_HOME = offlineHome;
 process.env.TRUSTTOOLS_E2E_OFFLINE = "1";
