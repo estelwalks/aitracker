@@ -331,7 +331,12 @@ test("loadDistillation exposes the server-side quota projection", async () => {
   await withIsolatedRoot(async (dir) => {
     void dir;
     const root = await getCompositionRoot();
-    await root.distillQuota.increment(localDateKey(new Date()));
+    // Increment "today" exactly as the SQLite quota ledger defines it, so the
+    // write lands on the same date_key `loadDistillation` reads back. The
+    // ledger's default clock is UTC (`new Date().toISOString()`), which can
+    // differ from the local calendar day across midnight boundaries.
+    const today = (await root.distillQuota.read()).date;
+    await root.distillQuota.increment(today);
 
     const view = await loadDistillation("zh-CN");
     assert.ok(view.quota, "quota projection must be present");
