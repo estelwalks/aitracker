@@ -41,7 +41,6 @@ import {
   closeSync,
   createReadStream,
   existsSync,
-  mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
@@ -60,6 +59,10 @@ import {
   type DatabaseErrorCode,
 } from "./contracts.ts";
 import type { DatabaseHost } from "./database-host.server.ts";
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+} from "./file-permissions.server.ts";
 import {
   bigintToSafeNumber,
   mapSqliteError,
@@ -119,6 +122,8 @@ export interface BackupInventory {
 export interface BackupSchemaSnapshot {
   /** `PRAGMA application_id`; `0` when the database was never stamped. */
   readonly applicationId: number;
+  /** `PRAGMA user_version`, compared with both ledger and manifest. */
+  readonly userVersion: number;
   /** `schema_migrations` rows, or `undefined` when the table does not exist. */
   readonly migrations:
     readonly { version: number; name: string; checksum: string }[] | undefined;
@@ -214,6 +219,7 @@ async function performOnlineBackup(
   try {
     normalizeBackupJournalMode(finalPath);
     cleanupReservedSiblings(finalPath);
+    ensurePrivateFile(finalPath);
   } catch (error) {
     cleanupReservedFile(finalPath);
     throw mapBackupError(error);
@@ -357,6 +363,8 @@ export interface PruneBackupsOptions {
   readonly keepPreMigration?: boolean;
   /** Injectable epoch-milliseconds source; defaults to `Date.now`. */
   readonly now?: () => number;
+  /** Injectable deletion primitive for deterministic fault-injection tests. */
+  readonly removeFile?: (path: string) => void;
 }
 
 export interface PruneBackupsResult {
@@ -364,6 +372,8 @@ export interface PruneBackupsResult {
   readonly deleted: readonly string[];
   /** Manifest file names that remain after pruning. */
   readonly kept: readonly string[];
+  /** Expired files whose deletion failed and whose manifest records remain. */
+  readonly failed: readonly string[];
 }
 
 /**
@@ -403,7 +413,7 @@ export function pruneBackups(options: PruneBackupsOptions): PruneBackupsResult {
     }
   });
   if (candidates.length === 0) {
-    return { deleted: [], kept: Object.keys(index).sort() };
+    return { deleted: [], kept: Object.keys(index).sort(), failed: [] };
   }
 
   const newest = candidates.reduce((a, b) =>
@@ -440,19 +450,31 @@ export function pruneBackups(options: PruneBackupsOptions): PruneBackupsResult {
     }
   }
 
+  const deleted = new Set<string>();
+  const failed = new Set<string>();
+  const removeFile = options.removeFile ?? ((path: string) => rmSync(path));
   for (const fileName of toDelete) {
-    removeBestEffort(join(backupsDirectory, fileName));
+    const path = join(backupsDirectory, fileName);
+    try {
+      removeFile(path);
+    } catch {
+      // Confirmation below is authoritative; a remover may throw after the
+      // filesystem operation has already completed.
+    }
+    if (existsSync(path)) failed.add(fileName);
+    else deleted.add(fileName);
   }
 
   const remaining: Record<string, BackupManifest> = {};
   for (const [fileName, manifest] of Object.entries(index)) {
-    if (!toDelete.has(fileName)) remaining[fileName] = manifest;
+    if (!deleted.has(fileName)) remaining[fileName] = manifest;
   }
   writeManifestIndex(backupsDirectory, remaining);
 
   return {
-    deleted: [...toDelete].sort(),
+    deleted: [...deleted].sort(),
     kept: Object.keys(remaining).sort(),
+    failed: [...failed].sort(),
   };
 }
 
@@ -493,11 +515,16 @@ export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
     const applicationId = integerValue(
       session.queryFirstColumn("PRAGMA application_id"),
     );
+    const userVersion = integerValue(
+      session.queryFirstColumn("PRAGMA user_version"),
+    );
     const hasLedger =
       session.queryFirstColumn(
         `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${LEDGER_TABLE}'`,
       ) !== undefined;
-    if (!hasLedger) return { applicationId, migrations: undefined };
+    if (!hasLedger) {
+      return { applicationId, userVersion, migrations: undefined };
+    }
     const migrations = session
       .queryRows(
         `SELECT version, name, checksum FROM ${LEDGER_TABLE} ORDER BY version ASC`,
@@ -507,7 +534,7 @@ export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
         name: textValue(row.name),
         checksum: textValue(row.checksum),
       }));
-    return { applicationId, migrations };
+    return { applicationId, userVersion, migrations };
   } catch (error) {
     if (error instanceof DatabaseError) throw error;
     throw new DatabaseError("corrupt", "backup", { cause: error });
@@ -616,7 +643,7 @@ function ensureDirectory(directory: string): void {
     throw new DatabaseError("io-failure", "backup", { retryable: false });
   }
   try {
-    mkdirSync(directory, { recursive: true });
+    ensurePrivateDirectory(directory);
   } catch (error) {
     throw new DatabaseError("io-failure", "backup", { cause: error });
   }
@@ -635,8 +662,9 @@ function reserveBackupPath(directory: string, createdAtMs: number): string {
   let suffix = 2;
   for (;;) {
     try {
-      const descriptor = openSync(candidate, "wx");
+      const descriptor = openSync(candidate, "wx", 0o600);
       closeSync(descriptor);
+      ensurePrivateFile(candidate);
       return candidate;
     } catch (error) {
       if ((error as { code?: unknown }).code === "EEXIST") {
@@ -767,7 +795,9 @@ function writeManifestIndex(
   const tmpPath = `${path}.tmp`;
   try {
     writeFileSync(tmpPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
+    ensurePrivateFile(tmpPath);
     renameSync(tmpPath, path);
+    ensurePrivateFile(path);
   } catch (error) {
     removeBestEffort(tmpPath);
     throw error;

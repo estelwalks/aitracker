@@ -9,7 +9,14 @@ import {
 
 const collectorSchema = z
   .object({
-    id: z.enum(["usage", "skills", "sessions", "security", "exchange"]),
+    id: z.enum([
+      "usage",
+      "skills",
+      "sessions",
+      "security",
+      "exchange",
+      "installation",
+    ]),
     state: z.enum(["idle", "running", "healthy", "degraded", "failed"]),
     pending: z.boolean(),
     lastStartedAt: z.string().datetime({ offset: true }).optional(),
