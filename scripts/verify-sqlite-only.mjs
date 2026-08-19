@@ -82,7 +82,7 @@ const CONTENT_RULES = [
   {
     type: "legacy-read-fallback",
     pattern:
-      /\b(?:create[A-Za-z]*ReadFallback|withLegacy[A-Za-z]*|LegacyPreferenceSource)\b/g,
+      /\b(?:create[A-Za-z]*ReadFallback|withLegacy[A-Za-z]*|LegacyPreferenceSource|legacy\.read|readLegacy|legacyRead)\b/g,
   },
   {
     type: "legacy-read-switch",

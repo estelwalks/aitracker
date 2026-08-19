@@ -64,6 +64,25 @@ test("rejects read fallbacks and legacy import methods without false positives",
   assert.equal(violations.length, 3);
 });
 
+test("rejects legacy.read / readLegacy / legacyRead without hitting readOnly", async () => {
+  const violations = await withFixture(
+    {
+      "src/app/legacy-source.ts": [
+        "const value = legacy.read(key);",
+        "const other = repository.readLegacy(key);",
+        "const third = store.legacyRead(key);",
+        "const safe = preferences.readOnly;",
+      ].join("\n"),
+    },
+    analyzeSqliteOnly,
+  );
+  assert.deepEqual(
+    new Set(violations.map((item) => item.type)),
+    new Set(["legacy-read-fallback"]),
+  );
+  assert.equal(violations.length, 3);
+});
+
 test("rejects app-owned localStorage, JSON and sidecar state", async () => {
   const violations = await withFixture(
     {
