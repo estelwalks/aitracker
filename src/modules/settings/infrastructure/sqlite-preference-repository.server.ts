@@ -24,16 +24,6 @@ export interface PreferenceEntry {
   readonly updatedAtMs: number;
 }
 
-export interface RuntimeFlagEntry {
-  readonly key: string;
-  readonly value: PreferenceValue;
-  readonly updatedAtMs: number;
-}
-
-export interface LegacyPreferenceSource {
-  readonly read: (key: string) => Promise<PreferenceValue | undefined>;
-}
-
 function safeInteger(value: unknown): number {
   if (typeof value === "bigint") return bigintToSafeNumber(value);
   if (typeof value === "number" && Number.isSafeInteger(value)) return value;
@@ -181,71 +171,6 @@ export function createSqlitePreferenceRepository(
           0,
         ),
       }));
-    },
-  };
-}
-
-export interface SqliteRuntimeFlagRepository {
-  get(key: string): RuntimeFlagEntry | undefined;
-  set(entry: RuntimeFlagEntry): void;
-  remove(key: string): boolean;
-}
-
-export function createSqliteRuntimeFlagRepository(
-  database: SqliteDatabasePort,
-): SqliteRuntimeFlagRepository {
-  return {
-    get(key) {
-      const row = database
-        .prepare(
-          "SELECT flag_key, value_json, updated_at_ms FROM runtime_flags WHERE flag_key = ?",
-        )
-        .get(key);
-      if (!row) return undefined;
-      if (typeof row.flag_key !== "string") {
-        throw new DatabaseError("corrupt", "read", { retryable: false });
-      }
-      return {
-        key: row.flag_key,
-        value: parseJson(row.value_json),
-        updatedAtMs: safeInteger(row.updated_at_ms),
-      };
-    },
-    set(entry) {
-      assertTimestamp(entry.updatedAtMs);
-      const json = JSON.stringify(entry.value);
-      if (json === undefined) {
-        throw new DatabaseError("invalid-argument", "write", {
-          retryable: false,
-        });
-      }
-      database
-        .prepare(
-          `INSERT INTO runtime_flags (flag_key, value_json, updated_at_ms) VALUES (?, ?, ?)
-        ON CONFLICT (flag_key) DO UPDATE SET value_json = excluded.value_json, updated_at_ms = excluded.updated_at_ms`,
-        )
-        .run(entry.key, json, BigInt(entry.updatedAtMs));
-    },
-    remove(key) {
-      return (
-        Number(
-          database
-            .prepare("DELETE FROM runtime_flags WHERE flag_key = ?")
-            .run(key).changes,
-        ) > 0
-      );
-    },
-  };
-}
-
-/** SQLite-first read adapter used during the compatibility observation period. */
-export function createPreferenceReadFallback(
-  sqlite: SqlitePreferenceRepository,
-  legacy: LegacyPreferenceSource,
-): { readonly get: (key: string) => Promise<PreferenceValue | undefined> } {
-  return {
-    async get(key) {
-      return sqlite.get(key)?.value ?? legacy.read(key);
     },
   };
 }
