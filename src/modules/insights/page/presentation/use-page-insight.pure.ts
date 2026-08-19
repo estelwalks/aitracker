@@ -82,7 +82,9 @@ const ACTION_PATHS: Record<InsightActionId, InsightActionPath> = {
 };
 
 /** Map an action id to its in-app route path (M1 action registry). */
-export function insightActionPath(actionId: InsightActionId): InsightActionPath {
+export function insightActionPath(
+  actionId: InsightActionId,
+): InsightActionPath {
   return ACTION_PATHS[actionId];
 }
 

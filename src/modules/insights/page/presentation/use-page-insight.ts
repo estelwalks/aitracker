@@ -13,10 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { Locale } from "../../../../lib/i18n/locale";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import {
-  enhancePageInsight,
-  getPageInsight,
-} from "../server-fns";
+import { enhancePageInsight, getPageInsight } from "../server-fns";
 import type {
   InsightActionId,
   InsightEnvelope,
@@ -76,9 +73,7 @@ export interface UsePageInsightResult {
 }
 
 /** Neutral severity label key for the shared card's badge. */
-export function insightSeverityLabelKey(
-  severity: InsightSeverity,
-): MessageKey {
+export function insightSeverityLabelKey(severity: InsightSeverity): MessageKey {
   switch (severity) {
     case "info":
       return "settings.insight.severity.info";
@@ -107,9 +102,7 @@ export function usePageInsight(
 
   const scopeData = useMemo(
     () =>
-      range || entityId
-        ? ({ range, entityId } as InsightScope)
-        : undefined,
+      range || entityId ? ({ range, entityId } as InsightScope) : undefined,
     [range, entityId],
   );
 

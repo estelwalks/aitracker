@@ -13,7 +13,7 @@ import {
 import { ChevronDown, ChevronRight, Info } from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
@@ -913,77 +913,6 @@ export function ToolOverview({
   const detailRows =
     detailMode === "models" ? detailOverview.models : detailOverview.projects;
 
-  // 洞察描述的口语化文案（对齐原型 buildAgentInsights 风格，数据仍来自真实派生值）。
-  const rangeLabel =
-    toolPeriod === "today"
-      ? t("skills.agentOverview.range.today")
-      : toolPeriod === "7d"
-        ? t("skills.agentOverview.range.d7")
-        : toolPeriod === "all"
-          ? t("skills.agentOverview.range.all")
-          : toolPeriod === "custom"
-            ? t("skills.agentOverview.range.custom")
-            : t("skills.agentOverview.range.d30");
-
-  const insights = [
-    ...(toolOverview.selected == null || !toolOverview.selected.active
-      ? [
-          {
-            id: "empty",
-            title: t("skills.agentOverview.insightTitle"),
-            description: t("skills.agentOverview.noActivity"),
-          },
-        ]
-      : [
-          {
-            id: "activity",
-            title: t("skills.agentOverview.insightActivityTitle", {
-              tool: toolOverview.selected.name,
-            }),
-            description: t("skills.agentOverview.insightActivityDescription", {
-              rangeLabel,
-              tool: toolOverview.selected.name,
-              tokens: format.formatTokens(toolOverview.totalTokens),
-              pct: format.formatNumber(Math.round(toolOverview.selected.share)),
-            }),
-          },
-        ]),
-    ...(toolOverview.cacheRate == null
-      ? []
-      : [
-          {
-            id: "cache",
-            title: t("skills.agentOverview.insightCacheTitle"),
-            description: t("skills.agentOverview.insightCacheDescription", {
-              rate: format.formatPercent(toolOverview.cacheRate),
-            }),
-          },
-        ]),
-    ...(toolOverview.skillUsage.observed
-      ? [
-          {
-            id: "skill",
-            title: t("skills.agentOverview.insightSkillTitle"),
-            description: t("skills.agentOverview.insightSkillDescription", {
-              rangeLabel,
-              count: format.formatNumber(toolOverview.skillUsage.calls),
-            }),
-          },
-        ]
-      : []),
-    ...(toolOverview.sessions == null
-      ? []
-      : [
-          {
-            id: "sessions",
-            title: t("skills.agentOverview.insightSessionTitle"),
-            description: t("skills.agentOverview.insightSessionDescription", {
-              rangeLabel,
-              count: format.formatNumber(toolOverview.sessions),
-            }),
-          },
-        ]),
-  ];
   const heroTitle =
     selected == null
       ? t("skills.agentOverview.insightTitle")
@@ -991,10 +920,10 @@ export function ToolOverview({
 
   return (
     <section className="space-y-5 pb-12">
-      <JarvisInsight
+      <InsightCard
         variant="hero"
+        surfaceId="agents"
         title={heroTitle}
-        lines={insights.map((item) => item.description)}
         rotateLabel={t("skills.agentOverview.rotateInsight")}
         dotsLabel={t("insights.dots")}
       />

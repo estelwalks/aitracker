@@ -27,7 +27,7 @@ import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
-import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
+import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
 import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
@@ -36,7 +36,6 @@ import type {
   DashboardV2BreakdownRow,
   DashboardV2CalendarPoint,
   DashboardV2HeroView,
-  DashboardV2Insight,
   DashboardV2Tool,
   DashboardV2View,
 } from "../contracts.ts";
@@ -113,75 +112,14 @@ function DashboardNewChip({ className = "" }: { className?: string }) {
   );
 }
 
-function insightMessage(
-  insight: DashboardV2Insight,
-  t: ReturnType<typeof useI18n>["t"],
-  format: ReturnType<typeof useI18n>["format"],
-  context: { range: string; live: number },
-) {
-  switch (insight.kind) {
-    case "usage":
-      return t("dashboard.v2.insights.usage", {
-        range: context.range,
-        live: context.live,
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-      });
-    case "cache":
-      return t("dashboard.v2.insights.cache", {
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-        rate: format.formatPercent(Math.round(insight.cacheRate ?? 0)),
-      });
-    case "cost":
-      return t("dashboard.v2.insights.cost", {
-        tokens: format.formatTokens(insight.tokens ?? 0),
-        calls: format.formatNumber(insight.calls ?? 0),
-        cost: format.formatUsd(insight.estimatedCostUsd ?? 0),
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-        pct: format.formatPercent(Math.round(insight.pct ?? 0)),
-      });
-    case "security":
-      return insight.riskCount
-        ? t("dashboard.v2.insights.securityRisk", { count: insight.riskCount })
-        : insight.scanned != null
-          ? t("dashboard.v2.insights.securityClean", {
-              scanned: insight.scanned,
-            })
-          : t("dashboard.v2.insights.securityCleanNoScan");
-    case "monitoring":
-      return t("dashboard.v2.insights.monitoring");
-    case "empty":
-      return t("dashboard.v2.insights.empty");
-  }
-}
-
-/** Renderer accepts server-composed insights as-is; a future LLM adapter only needs to supply this contract. */
-export function DashboardJarvisInsight({
-  hero,
-  rangeLabel,
-}: {
-  hero: DashboardV2HeroView;
-  rangeLabel: string;
-}) {
-  const { t, format } = useI18n();
-  // Thin wrapper over the shared Jarvis insight card: every dashboard
-  // insight is composed server-side, then rendered with the hero variant.
-  const lines = useMemo(
-    () =>
-      hero.insights.length
-        ? hero.insights.map((insight) =>
-            insightMessage(insight, t, format, {
-              range: rangeLabel,
-              live: hero.monitoring.liveTools,
-            }),
-          )
-        : [t("dashboard.v2.insights.empty")],
-    [format, hero, rangeLabel, t],
-  );
+/** Dashboard hero consumes the shared page-insight envelope (M5 double mode). */
+export function DashboardJarvisInsight() {
+  const { t } = useI18n();
   return (
-    <JarvisInsight
+    <InsightCard
+      surfaceId="dashboard"
       variant="hero"
       title={t("dashboard.v2.heroTitle")}
-      lines={lines}
       rotateLabel={t("dashboard.v2.rotateInsight")}
       dotsLabel={t("dashboard.v2.insightDotsAria")}
     />

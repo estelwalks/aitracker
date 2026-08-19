@@ -98,6 +98,10 @@ export const settings = {
       desc: "利用可能なセキュリティ検出サービスがありません（デスクトップアプリまたはローカルコンパニオンに未接続）。自動スキャン予定の保存にはそのサービスが必要です。",
       retry: "再接続",
     },
+    llmReview: "AI 補助検出",
+    llmReviewHint:
+      "静的ルールに加え、構成済みモデルで報告の脱感作済み補足分析を行います。判定の書き換えや深刻度の引き下げは行いません。",
+    llmReviewUnconfiguredHint: "モデルを構成すると AI 補助検出を有効にできます",
     schedule: {
       title: "スキャン予定",
       enabled: "自動スキャン",
@@ -212,6 +216,53 @@ export const settings = {
   updateFailed: "バージョン情報を取得できませんでした",
   viewRelease: "リリースページを表示",
   sourceRepo: "ソースリポジトリ",
+  insight: {
+    enhanced: "AI 強化",
+    enhance: "表現を強化",
+    enhancing: "強化中…",
+    unavailableHint:
+      "モデルが未設定のため強化できません（設定で構成してください）",
+    severity: {
+      info: "情報",
+      attention: "注意",
+      risk: "リスク",
+    },
+    status: {
+      rules: "ローカルルールのみ",
+      "enhanced-cached": "AI 強化 · キャッシュ",
+      "enhanced-ready": "AI 強化",
+      "enhancer-unavailable": "強化サービスを利用できません",
+      "budget-exceeded": "1日の呼び出し上限に達しました",
+      timeout: "強化がタイムアウトしました",
+      "enhancer-failed": "強化に失敗しました",
+      "invalid-output": "強化結果が無効です",
+      stale: "データが古い可能性があります",
+    },
+    section: {
+      title: "今日のインサイト",
+      desc: "インサイトの生成方法を選択します：ローカルルールのみ、またはモデルによる表現強化。",
+      mode: "生成方法",
+      modeRules: "ローカルルールのみ",
+      modeRulesDesc: "ローカルルールのみで生成し、モデルは呼び出しません。",
+      modeManual: "手動強化",
+      modeManualDesc: "「表現を強化」を押したときだけモデルを呼び出します。",
+      modeAuto: "自動強化",
+      modeAutoDesc: "インサイトを開いたときに自動でモデルを呼び出します。",
+      profile: "強化 Profile",
+      profileHint:
+        "強化に使用するモデル。未選択時は現在の有効モデルを使用します。",
+      profileEmpty: "モデルが未設定です——上のモデル設定で追加してください",
+      consent: "自動強化を許可",
+      consentRequired: "自動強化を保存するには許可が必要です",
+      consentDesc:
+        "許可すると、自動強化は匿名化された集計統計（今日のトークン・ツール数・セッション数・セキュリティ件数）と現在のページ ID を送信します。会話内容・ファイルパス・API キー・個人情報は一切送信しません。",
+      dailyLimit: "1日の呼び出し上限",
+      dailyLimitHint: "空欄の場合は既定の 30 回（サーバー側で適用）",
+      save: "保存",
+      saved: "インサイト設定を保存しました",
+      saveFailed: "インサイト設定の保存に失敗しました",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "ログイン時起動はデスクトップアプリでのみ設定できます",
@@ -231,5 +282,7 @@ export const settings = {
     resetDoneBrowser:
       "ブラウザのアプリ設定とセキュリティ履歴をリセットしました",
     resetFailed: "アプリ設定のリセットに失敗しました",
+    llmReviewSaved: "AI 補助検出の設定を保存しました",
+    llmReviewSaveFailed: "AI 補助検出の設定の保存に失敗しました",
   },
 } as const;
