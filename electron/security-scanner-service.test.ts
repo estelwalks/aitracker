@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 
 import type { ScanSkillReport } from "skill-scanner";
@@ -18,10 +18,16 @@ import type { ScanSkillReport } from "skill-scanner";
 import {
   SecurityScannerService,
   type SecretStoragePort,
+  type SecurityScannerPersistence,
 } from "./security-scanner-service.js";
+import type { ModelConfig } from "skill-scanner";
 
 const cleanup: string[] = [];
 test.afterEach(async () => {
+  persistedHistory = [];
+  persistedSchedule = null;
+  persistedModel = undefined;
+  persistedModelError = undefined;
   await Promise.all(
     cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
@@ -30,13 +36,11 @@ test.afterEach(async () => {
 async function fixture(): Promise<{
   root: string;
   home: string;
-  data: string;
   skill: string;
 }> {
   const root = await mkdtemp(join(tmpdir(), "tt-security-scanner-"));
   cleanup.push(root);
   const home = join(root, "home");
-  const data = join(root, "data");
   const skill = join(home, ".codex", "skills", "demo");
   await mkdir(skill, { recursive: true });
   await writeFile(
@@ -44,7 +48,7 @@ async function fixture(): Promise<{
     "---\nname: Demo Skill\n---\n# Safe\n",
     "utf8",
   );
-  return { root, home, data, skill };
+  return { root, home, skill };
 }
 
 function report(
@@ -71,7 +75,35 @@ function report(
   };
 }
 
-const unavailableStorage: SecretStoragePort = {
+let persistedHistory: Awaited<ReturnType<SecurityScannerService["history"]>> =
+  [];
+let persistedSchedule: Awaited<
+  ReturnType<SecurityScannerService["getScanSchedule"]>
+> | null = null;
+let persistedModel: ModelConfig | undefined;
+let persistedModelError: Error | undefined;
+const testPersistence: SecurityScannerPersistence = {
+  readHistory: async () => structuredClone(persistedHistory),
+  writeHistory: async (entries) => {
+    persistedHistory = structuredClone([...entries]);
+  },
+  clearHistory: async () => {
+    persistedHistory = [];
+  },
+  readSchedule: async () => structuredClone(persistedSchedule),
+  writeSchedule: async (schedule) => {
+    persistedSchedule = structuredClone(schedule);
+  },
+  modelConfig: async () => {
+    if (persistedModelError) throw persistedModelError;
+    return structuredClone(persistedModel);
+  },
+};
+
+const unavailableStorage: SecretStoragePort & {
+  testPersistence: SecurityScannerPersistence;
+} = {
+  testPersistence,
   isEncryptionAvailable: () => false,
   encrypt: () => {
     throw new Error("must not encrypt");
@@ -87,7 +119,7 @@ const unavailableStorage: SecretStoragePort = {
  * from the active profile here; no security-specific config file exists.
  */
 async function writeModelProfile(
-  home: string,
+  _home: string,
   profile: {
     mode?: "official" | "custom";
     protocol?: "openai" | "anthropic";
@@ -96,28 +128,30 @@ async function writeModelProfile(
     model?: string;
   },
 ): Promise<void> {
-  const file = join(home, ".trusttools", "tasks", "model-profiles.v1.json");
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(
-    file,
-    JSON.stringify({
-      profiles: [
-        {
-          id: "m-test",
-          name: "Test Profile",
-          mode: profile.mode ?? "custom",
-          protocol: profile.protocol ?? "openai",
-          ...(profile.apiKey ? { apiKey: profile.apiKey } : {}),
-          ...(profile.endpoint ? { endpoint: profile.endpoint } : {}),
-          ...(profile.model ? { model: profile.model } : {}),
-          createdAt: "2025-01-01T00:00:00.000Z",
-          updatedAt: "2025-01-01T00:00:00.000Z",
-        },
-      ],
-      activeProfileId: "m-test",
-    }),
-    "utf8",
-  );
+  if (!profile.apiKey) {
+    persistedModel = undefined;
+    persistedModelError = undefined;
+    return;
+  }
+  const protocol = profile.protocol ?? "openai";
+  const model = profile.mode === "official" ? "deepseek-chat" : profile.model;
+  persistedModel = model
+    ? {
+        provider: profile.mode === "official" ? "openai" : protocol,
+        endpoint:
+          profile.mode === "official"
+            ? "https://api.deepseek.com/v1"
+            : (profile.endpoint ??
+              (protocol === "anthropic"
+                ? "https://api.anthropic.com/v1"
+                : "https://api.openai.com/v1")),
+        apiKey: profile.apiKey,
+        liteModel: model,
+        proModel: model,
+        timeoutMs: 120_000,
+        maxAgentTurns: 8,
+      }
+    : undefined;
 }
 
 async function waitForTerminal(service: SecurityScannerService): Promise<void> {
@@ -129,13 +163,14 @@ async function waitForTerminal(service: SecurityScannerService): Promise<void> {
 }
 
 test("discovers managed Skills and passes only bounded relative in-memory files", async () => {
-  const { home, data, skill } = await fixture();
+  const { home, skill } = await fixture();
   await writeFile(join(skill, "script.sh"), "echo ok\n", "utf8");
-  await symlink("/etc/passwd", join(skill, "escape"));
+  if (process.platform !== "win32") {
+    await symlink("/etc/passwd", join(skill, "escape"));
+  }
   const requests: unknown[] = [];
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "ko-KR",
     env: {},
     secretStorage: unavailableStorage,
@@ -170,19 +205,26 @@ test("discovers managed Skills and passes only bounded relative in-memory files"
   assert.equal(JSON.stringify(request).includes(home), false);
 
   const [entry] = await service.history();
-  assert.equal(entry.report?.status, "partial");
-  assert.equal(entry.report?.verdict, "unknown");
-  assert.deepEqual(entry.report?.skippedFiles, [
-    { path: "escape", reasonCode: "symlink", reason: "symlink" },
-  ]);
+  assert.equal(
+    entry.report?.status,
+    process.platform === "win32" ? "complete" : "partial",
+  );
+  assert.equal(
+    entry.report?.verdict,
+    process.platform === "win32" ? "allow" : "unknown",
+  );
+  if (process.platform !== "win32") {
+    assert.deepEqual(entry.report?.skippedFiles, [
+      { path: "escape", reasonCode: "symlink", reason: "symlink" },
+    ]);
+  }
   assert.equal(JSON.stringify(entry).includes(home), false);
 });
 
 test("rejects renderer paths and unknown opaque references", async () => {
-  const { home, data, skill } = await fixture();
+  const { home, skill } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -208,10 +250,9 @@ test("rejects renderer paths and unknown opaque references", async () => {
 });
 
 test("requires a model for full scans and automatic full scans report model-required", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "en-US",
     env: {},
     secretStorage: unavailableStorage,
@@ -231,30 +272,18 @@ test("requires a model for full scans and automatic full scans report model-requ
   });
   assert.equal(automatic.status, "model-required");
 
-  // A corrupt profile store also yields model-required (any parse failure
-  // resolves to "no model available").
-  const profileFile = join(
-    home,
-    ".trusttools",
-    "tasks",
-    "model-profiles.v1.json",
+  persistedModelError = new Error("SQLite model profile read failed");
+  await assert.rejects(
+    service.start({ scope: "single", skillRef: target.skillRef, mode: "full" }),
+    /SQLite model profile read failed/u,
   );
-  await mkdir(dirname(profileFile), { recursive: true });
-  await writeFile(profileFile, "{ not json", "utf8");
-  const corrupt = await service.start({
-    scope: "single",
-    skillRef: target.skillRef,
-    mode: "full",
-  });
-  assert.equal(corrupt.status, "model-required");
 });
 
 test("automatic scans default to quick when no model is configured", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   let captured: Record<string, unknown> | undefined;
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "ko-KR",
     env: {},
     secretStorage: unavailableStorage,
@@ -268,18 +297,14 @@ test("automatic scans default to quick when no model is configured", async () =>
   assert.equal(captured?.mode, "quick");
   assert.equal(captured?.locale, "ko-KR");
   assert.equal("model" in (captured ?? {}), false);
-  const persisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ trigger: string }> };
-  assert.equal(persisted.entries[0]?.trigger, "automatic");
+  assert.equal(persistedHistory[0]?.trigger, "automatic");
 });
 
 test("automatic scans use full model-aware analysis when a model is configured", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   let captured: Record<string, unknown> | undefined;
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "ko-KR",
     env: {},
     secretStorage: unavailableStorage,
@@ -305,13 +330,10 @@ test("automatic scans use full model-aware analysis when a model is configured",
     liteModel: "test-model",
     proModel: "test-model",
     timeoutMs: 120_000,
-    maxAgentTurns: 12,
+    maxAgentTurns: 8,
   });
-  const persisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ trigger: string; mode: string }> };
-  assert.equal(persisted.entries[0]?.trigger, "automatic");
-  assert.equal(persisted.entries[0]?.mode, "full");
+  assert.equal(persistedHistory[0]?.trigger, "automatic");
+  assert.equal(persistedHistory[0]?.mode, "full");
 });
 
 const DEFAULT_SCHEDULE = {
@@ -324,11 +346,10 @@ const DEFAULT_SCHEDULE = {
   notify: false,
 } as const;
 
-test("scan schedule round-trips the extended shape, persists, and falls back on corrupt files", async () => {
-  const { home, data } = await fixture();
+test("scan schedule round-trips and rejects corrupt SQLite state", async () => {
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -361,107 +382,73 @@ test("scan schedule round-trips the extended shape, persists, and falls back on 
     dir: null,
     notify: true,
   });
-  assert.deepEqual(
-    JSON.parse(
-      await readFile(join(data, "security-scan-schedule.json"), "utf8"),
-    ),
-    {
-      enabled: false,
-      cycle: "weekly",
-      time: "09:30",
-      scope: "all",
-      agents: [],
-      dir: null,
-      notify: true,
-    },
-  );
+  assert.deepEqual(persistedSchedule, {
+    enabled: false,
+    cycle: "weekly",
+    time: "09:30",
+    scope: "all",
+    agents: [],
+    dir: null,
+    notify: true,
+  });
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "monthly" }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, cycle: "monthly" }),
     /Unsupported scan cycle/u,
   );
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "daily", extra: true }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, extra: true }),
     /unsupported fields/u,
   );
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "daily", time: "25:00" }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, time: "25:00" }),
     /HH:MM/u,
   );
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "daily", time: "9:00" }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, time: "9:00" }),
     /HH:MM/u,
   );
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "daily", scope: "single" }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, scope: "single" }),
     /Unsupported scan scope/u,
   );
   await assert.rejects(
-    service.setScanSchedule({ enabled: true, cycle: "daily", notify: "yes" }),
+    service.setScanSchedule({ ...DEFAULT_SCHEDULE, notify: "yes" }),
     /notify must be a boolean/u,
   );
-  await writeFile(
-    join(data, "security-scan-schedule.json"),
-    "not json",
-    "utf8",
-  );
-  assert.deepEqual(await service.getScanSchedule(), DEFAULT_SCHEDULE);
+  persistedSchedule = { enabled: true, cycle: "invalid" } as never;
+  await assert.rejects(service.getScanSchedule(), /Unsupported scan cycle/u);
 });
 
-test("fills defaults for omitted time, scope, and notify on save", async () => {
-  const { home, data } = await fixture();
+test("rejects incomplete schedules instead of migrating them on save", async () => {
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
   });
-  const saved = await service.setScanSchedule({
-    enabled: false,
-    cycle: "daily",
-  });
-  assert.deepEqual(saved, {
-    enabled: false,
-    cycle: "daily",
-    time: "03:00",
-    scope: "all",
-    agents: [],
-    dir: null,
-    notify: false,
-  });
+  await assert.rejects(
+    service.setScanSchedule({ enabled: false, cycle: "daily" }),
+    /HH:MM/u,
+  );
 });
 
-test("migrates a legacy { enabled, cycle } schedule on read", async () => {
-  const { home, data } = await fixture();
+test("rejects an incomplete SQLite schedule row instead of migrating it", async () => {
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "en-US",
     env: {},
     secretStorage: unavailableStorage,
   });
-  await mkdir(data, { recursive: true });
-  await writeFile(
-    join(data, "security-scan-schedule.json"),
-    JSON.stringify({ enabled: true, cycle: "weekly" }),
-    "utf8",
-  );
-  assert.deepEqual(await service.getScanSchedule(), {
-    enabled: true,
-    cycle: "weekly",
-    time: "03:00",
-    scope: "all",
-    agents: [],
-    dir: null,
-    notify: false,
-  });
+  persistedSchedule = { enabled: true, cycle: "weekly" } as never;
+  await assert.rejects(service.getScanSchedule(), /HH:MM/u);
 });
 
 test("parseSchedule normalizes agent/dir scope fields and rejects invalid values", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -488,8 +475,7 @@ test("parseSchedule normalizes agent/dir scope fields and rejects invalid values
   assert.equal(dirSaved.dir, null);
   await assert.rejects(
     service.setScanSchedule({
-      enabled: true,
-      cycle: "daily",
+      ...DEFAULT_SCHEDULE,
       scope: "agent",
       agents: "Codex",
     }),
@@ -497,8 +483,7 @@ test("parseSchedule normalizes agent/dir scope fields and rejects invalid values
   );
   await assert.rejects(
     service.setScanSchedule({
-      enabled: true,
-      cycle: "daily",
+      ...DEFAULT_SCHEDULE,
       scope: "agent",
       agents: [42],
     }),
@@ -506,8 +491,7 @@ test("parseSchedule normalizes agent/dir scope fields and rejects invalid values
   );
   await assert.rejects(
     service.setScanSchedule({
-      enabled: true,
-      cycle: "daily",
+      ...DEFAULT_SCHEDULE,
       scope: "dir",
       dir: 42,
     }),
@@ -516,7 +500,7 @@ test("parseSchedule normalizes agent/dir scope fields and rejects invalid values
 });
 
 test("automatic scans with agent scope scan only the selected agents' skills", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const other = join(home, ".claude", "skills", "other");
   await mkdir(other, { recursive: true });
   await writeFile(
@@ -526,7 +510,6 @@ test("automatic scans with agent scope scan only the selected agents' skills", a
   );
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -537,31 +520,24 @@ test("automatic scans with agent scope scan only the selected agents' skills", a
     agents: ["Codex"],
   });
   await waitForTerminal(service);
-  const codexPersisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ skillName: string }> };
-  assert.equal(codexPersisted.entries.length, 1);
-  assert.equal(codexPersisted.entries[0]?.skillName, "demo");
+  assert.equal(persistedHistory.length, 1);
+  assert.equal(persistedHistory[0]?.skillName, "demo");
 
-  await rm(join(data, "security-scan-history.json"), { force: true });
+  persistedHistory = [];
   await service.startAutomaticScan({
     ...DEFAULT_SCHEDULE,
     scope: "agent",
     agents: ["Claude Code"],
   });
   await waitForTerminal(service);
-  const claudePersisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ skillName: string }> };
-  assert.equal(claudePersisted.entries.length, 1);
-  assert.equal(claudePersisted.entries[0]?.skillName, "other");
+  assert.equal(persistedHistory.length, 1);
+  assert.equal(persistedHistory[0]?.skillName, "other");
 });
 
 test("automatic scans with an empty agent selection reject with no trusted targets", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -577,7 +553,7 @@ test("automatic scans with an empty agent selection reject with no trusted targe
 });
 
 test("automatic scans with dir scope scan only skills under the directory prefix", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const other = join(home, ".claude", "skills", "other");
   await mkdir(other, { recursive: true });
   await writeFile(
@@ -587,7 +563,6 @@ test("automatic scans with dir scope scan only skills under the directory prefix
   );
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -599,25 +574,19 @@ test("automatic scans with dir scope scan only skills under the directory prefix
     dir: join(home, ".codex", "skills"),
   });
   await waitForTerminal(service);
-  const prefixPersisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ skillName: string }> };
-  assert.equal(prefixPersisted.entries.length, 1);
-  assert.equal(prefixPersisted.entries[0]?.skillName, "demo");
+  assert.equal(persistedHistory.length, 1);
+  assert.equal(persistedHistory[0]?.skillName, "demo");
 
   // Exact skill-root path still matches.
-  await rm(join(data, "security-scan-history.json"), { force: true });
+  persistedHistory = [];
   await service.startAutomaticScan({
     ...DEFAULT_SCHEDULE,
     scope: "dir",
     dir: join(home, ".codex", "skills", "demo"),
   });
   await waitForTerminal(service);
-  const exactPersisted = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ skillName: string }> };
-  assert.equal(exactPersisted.entries.length, 1);
-  assert.equal(exactPersisted.entries[0]?.skillName, "demo");
+  assert.equal(persistedHistory.length, 1);
+  assert.equal(persistedHistory[0]?.skillName, "demo");
 
   // A dir that matches nothing rejects.
   await assert.rejects(
@@ -631,11 +600,10 @@ test("automatic scans with dir scope scan only skills under the directory prefix
 });
 
 test("resolves the active model profile only for an explicit full scan and redacts it from history", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   let captured: Record<string, unknown> | undefined;
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "en-US",
     env: {},
     secretStorage: unavailableStorage,
@@ -664,7 +632,7 @@ test("resolves the active model profile only for an explicit full scan and redac
     liteModel: "test-model",
     proModel: "test-model",
     timeoutMs: 120_000,
-    maxAgentTurns: 12,
+    maxAgentTurns: 8,
   });
   assert.equal(
     JSON.stringify(await service.history()).includes("sk-test-full-only"),
@@ -673,10 +641,9 @@ test("resolves the active model profile only for an explicit full scan and redac
 });
 
 test("runs the real skill-scanner quick engine through the in-memory boundary", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "ja-JP",
     env: {},
     secretStorage: unavailableStorage,
@@ -698,7 +665,7 @@ test("runs the real skill-scanner quick engine through the in-memory boundary", 
 });
 
 test("real quick history never projects path assignment or Slack webhook canaries", async () => {
-  const { home, data, skill } = await fixture();
+  const { home, skill } = await fixture();
   await writeFile(
     join(skill, "SKILL.md"),
     "# Canary\npath=/Users/alice/private/token.txt\nhttps://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX;/Users/alice/private.txt\n",
@@ -706,7 +673,6 @@ test("real quick history never projects path assignment or Slack webhook canarie
   );
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "en-US",
     env: {},
     secretStorage: unavailableStorage,
@@ -722,7 +688,7 @@ test("real quick history never projects path assignment or Slack webhook canarie
 });
 
 test("discovery projects basename only and never marker metadata", async () => {
-  const { home, data, skill } = await fixture();
+  const { home, skill } = await fixture();
   await writeFile(
     join(skill, "SKILL.md"),
     "---\nname: /Users/alice/private https://hooks.slack.com/services/T/B/S\n---\n",
@@ -730,7 +696,6 @@ test("discovery projects basename only and never marker metadata", async () => {
   );
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -742,7 +707,7 @@ test("discovery projects basename only and never marker metadata", async () => {
 });
 
 test("rejects an unsafe scanner report instead of persisting an absolute path", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const unsafe = report();
   unsafe.findings.push({
     id: "unsafe",
@@ -760,7 +725,6 @@ test("rejects an unsafe scanner report instead of persisting an absolute path", 
   });
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -778,20 +742,13 @@ test("rejects an unsafe scanner report instead of persisting an absolute path", 
   assert.equal(entry.report, undefined);
   assert.equal(JSON.stringify(entry).includes("/Users/private"), false);
 
-  await writeFile(
-    join(data, "security-scan-history.json"),
-    JSON.stringify({
-      version: 1,
-      entries: [
-        {
-          ...entry,
-          skillName: "/Users/private/skill",
-          apiKey: "history-must-not-project-this",
-        },
-      ],
-    }),
-    "utf8",
-  );
+  persistedHistory = [
+    {
+      ...entry,
+      skillName: "/Users/private/skill",
+      apiKey: "history-must-not-project-this",
+    } as never,
+  ];
   const [projected] = await service.history();
   assert.equal(projected.skillName, "Skill");
   assert.equal(
@@ -801,14 +758,13 @@ test("rejects an unsafe scanner report instead of persisting an absolute path", 
 });
 
 test("does not follow a file exchanged for a symlink after directory enumeration", async () => {
-  const { root, home, data, skill } = await fixture();
+  const { root, home, skill } = await fixture();
   const outside = join(root, "outside.txt");
   await writeFile(outside, "TOCTOU-CANARY-SECRET", "utf8");
   let exchanged = false;
   let scannerCalled = false;
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -838,7 +794,7 @@ test("does not follow a file exchanged for a symlink after directory enumeration
 });
 
 test("sanitizes every free-text report field with exact key and path redaction", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const apiKey = "canary-api-key-value-123456";
   const tainted = report({ mode: "full" });
   const poison = `CANARY ${apiKey} path=/Users/alice/private file:///Users/alice/private C:\\Users\\alice\\private https://hooks.slack.com/services/T000/B000/SECRET123 sk-secret-12345678\u0000`;
@@ -882,7 +838,6 @@ test("sanitizes every free-text report field with exact key and path redaction",
   tainted.skippedFiles.push({ path: "asset.bin", reason: poison });
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -915,22 +870,20 @@ test("sanitizes every free-text report field with exact key and path redaction",
   assert.equal(serialized.includes("[redacted-secret]"), true);
   assert.equal(serialized.includes("[redacted-path]"), true);
 
-  const historyPath = join(data, "security-scan-history.json");
-  const tampered = JSON.parse(await readFile(historyPath, "utf8")) as {
-    entries: Array<{ report: { summary: string } }>;
-  };
-  tampered.entries[0].report.summary = `READ-CANARY ${apiKey} /Users/alice/private`;
-  await writeFile(historyPath, JSON.stringify(tampered), "utf8");
+  const [tampered] = structuredClone(persistedHistory);
+  if (tampered?.report) {
+    tampered.report.summary = `READ-CANARY ${apiKey} /Users/alice/private`;
+  }
+  persistedHistory = tampered ? [tampered] : [];
   const reread = JSON.stringify(await service.history());
   assert.equal(reread.includes(apiKey), false);
   assert.equal(reread.includes("/Users/alice"), false);
 });
 
 test("clear removes scan history and resets the scanner state", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -950,14 +903,11 @@ test("clear removes scan history and resets the scanner state", async () => {
   await clearing;
   assert.equal(service.getStatus().status, "idle");
   assert.deepEqual(await service.history(), []);
-  await assert.rejects(
-    readFile(join(data, "security-scan-history.json"), "utf8"),
-    /ENOENT/u,
-  );
+  assert.deepEqual(persistedHistory, []);
 });
 
 test("clear invalidates a deferred full run before it can restore history", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   let releaseScanner!: (value: ScanSkillReport) => void;
   let markEntered!: () => void;
   const entered = new Promise<void>((resolve) => {
@@ -968,7 +918,6 @@ test("clear invalidates a deferred full run before it can restore history", asyn
   });
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "ja-JP",
     env: {},
     secretStorage: unavailableStorage,
@@ -1014,14 +963,11 @@ test("clear invalidates a deferred full run before it can restore history", asyn
 
   assert.equal(service.getStatus().status, "idle");
   assert.deepEqual(await service.history(), []);
-  await assert.rejects(
-    readFile(join(data, "security-scan-history.json"), "utf8"),
-    /ENOENT/u,
-  );
+  assert.deepEqual(persistedHistory, []);
 });
 
 test("projects binary, size, depth and unreadable-directory limits as stable reason codes", async () => {
-  const { home, data, skill } = await fixture();
+  const { home, skill } = await fixture();
   await writeFile(join(skill, "binary.bin"), Buffer.from([0, 1, 2]));
   await writeFile(join(skill, "large.txt"), Buffer.alloc(1_000_001, 65));
   let deep = skill;
@@ -1035,7 +981,6 @@ test("projects binary, size, depth and unreadable-directory limits as stable rea
   await chmod(unreadable, 0o000);
   const service = new SecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     env: {},
     secretStorage: unavailableStorage,
@@ -1056,5 +1001,6 @@ test("projects binary, size, depth and unreadable-directory limits as stable rea
   assert.equal(codes.has("binary"), true);
   assert.equal(codes.has("file-size-limit"), true);
   assert.equal(codes.has("depth-limit"), true);
-  assert.equal(codes.has("unavailable"), true);
+  if (process.platform !== "win32")
+    assert.equal(codes.has("unavailable"), true);
 });
