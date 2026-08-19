@@ -26,6 +26,10 @@
  *   reported as `corrupt` instead of being silently treated as "no backups",
  *   and files without a usable record are surfaced as *unverified* by
  *   `listBackupFiles` rather than dropped.
+ * - No `node:sqlite` import lives here: the online backup call and every
+ *   read-only verification connection go through the narrow helpers in
+ *   `infrastructure/sqlite-runtime.server.ts` (gate rule
+ *   `platform-node-sqlite-outside-infrastructure`).
  */
 import { createHash } from "node:crypto";
 import {
@@ -39,7 +43,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { backup, DatabaseSync } from "node:sqlite";
 
 import {
   DatabaseError,
@@ -51,8 +54,12 @@ import type { DatabaseHost } from "./database-host.server.ts";
 import {
   bigintToSafeNumber,
   mapSqliteError,
-  NODE_SQLITE_CONNECTION_OPTIONS,
 } from "./infrastructure/node-sqlite-database.server.ts";
+import {
+  openReadOnlySqlite,
+  runOnlineBackup,
+  setJournalModeDelete,
+} from "./infrastructure/sqlite-runtime.server.ts";
 import { readSchemaVersion } from "./migration-runner.server.ts";
 
 export interface CreateOnlineBackupOptions {
@@ -108,11 +115,6 @@ export const MANIFEST_FILE_NAME = "manifest.json";
 
 /** Backups are named `trusttools-YYYYMMDD-HHmmss.db` (architecture §3.3). */
 const BACKUP_PREFIX = "trusttools";
-
-const READ_ONLY_OPTIONS = {
-  ...NODE_SQLITE_CONNECTION_OPTIONS,
-  readOnly: true,
-} as const;
 
 const LEDGER_TABLE = "schema_migrations";
 
@@ -172,7 +174,7 @@ async function performOnlineBackup(
   //    borrowing the Host's connection instead of opening a second writer.
   try {
     await host.withUnderlyingConnection((database) =>
-      backup(database, tmpPath),
+      runOnlineBackup(database, tmpPath),
     );
   } catch (error) {
     cleanupTemporary(tmpPath);
@@ -338,39 +340,36 @@ export function verifyBackupIntegrity(path: string): void {
  * the file is not a migrated TrustTools database.
  */
 export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
-  let database: DatabaseSync;
+  let session: ReturnType<typeof openReadOnlySqlite>;
   try {
-    database = new DatabaseSync(path, READ_ONLY_OPTIONS);
+    session = openReadOnlySqlite(path);
   } catch (error) {
     throw new DatabaseError("corrupt", "backup", { cause: error });
   }
   try {
     const applicationId = integerValue(
-      firstColumnValue(database.prepare("PRAGMA application_id").get()),
+      session.queryFirstColumn("PRAGMA application_id"),
     );
     const hasLedger =
-      database
-        .prepare(
-          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${LEDGER_TABLE}'`,
-        )
-        .get() !== undefined;
+      session.queryFirstColumn(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${LEDGER_TABLE}'`,
+      ) !== undefined;
     if (!hasLedger) return { applicationId, migrations: undefined };
-    const migrations = database
-      .prepare(
+    const migrations = session
+      .queryRows(
         `SELECT version, name, checksum FROM ${LEDGER_TABLE} ORDER BY version ASC`,
       )
-      .all()
       .map((row) => ({
-        version: integerValue((row as Record<string, unknown>).version),
-        name: textValue((row as Record<string, unknown>).name),
-        checksum: textValue((row as Record<string, unknown>).checksum),
+        version: integerValue(row.version),
+        name: textValue(row.name),
+        checksum: textValue(row.checksum),
       }));
     return { applicationId, migrations };
   } catch (error) {
     if (error instanceof DatabaseError) throw error;
     throw new DatabaseError("corrupt", "backup", { cause: error });
   } finally {
-    database.close();
+    session.close();
   }
 }
 
@@ -510,27 +509,23 @@ function assertValidAppVersion(appVersion: string): void {
  * be recreated by every later read-only `quick_check`.
  */
 function normalizeBackupJournalMode(path: string): void {
-  const database = new DatabaseSync(path, NODE_SQLITE_CONNECTION_OPTIONS);
   try {
-    database.exec("PRAGMA journal_mode=DELETE");
+    setJournalModeDelete(path);
   } catch (error) {
     throw mapSqliteError(error, "backup");
-  } finally {
-    database.close();
   }
 }
 
 /** Runs `PRAGMA quick_check` on a read-only connection; throws on failure. */
 function quickCheckOrThrow(path: string): void {
-  let database: DatabaseSync;
+  let session: ReturnType<typeof openReadOnlySqlite>;
   try {
-    database = new DatabaseSync(path, READ_ONLY_OPTIONS);
+    session = openReadOnlySqlite(path);
   } catch (error) {
     throw new DatabaseError("corrupt", "backup", { cause: error });
   }
   try {
-    const rows = database.prepare("PRAGMA quick_check").all();
-    const messages = rows.map(firstColumnValue);
+    const messages = session.queryFirstColumnAll("PRAGMA quick_check");
     const ok =
       messages.length > 0 &&
       messages.every((value) => String(value).toLowerCase() === "ok");
@@ -543,7 +538,7 @@ function quickCheckOrThrow(path: string): void {
     if (error instanceof DatabaseError) throw error;
     throw new DatabaseError("corrupt", "backup", { cause: error });
   } finally {
-    database.close();
+    session.close();
   }
 }
 
@@ -597,12 +592,6 @@ function backupFailure(error: unknown): DatabaseError {
     });
   }
   return new DatabaseError("backup-failed", "backup", { cause: error });
-}
-
-function firstColumnValue(row: unknown): unknown {
-  if (typeof row !== "object" || row === null) return undefined;
-  const values = Object.values(row);
-  return values.length === 0 ? undefined : values[0];
 }
 
 /** Read-only integer column (`readBigInts` makes SQLite integers BigInt). */

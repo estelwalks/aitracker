@@ -23,7 +23,8 @@ const { createDashboardSummaryProjector } = await tsImport(
   import.meta.url,
 );
 const { createDashboardV2SnapshotFromEvents } = await tsImport(
-  pathToFileURL(join(root, "src/modules/dashboard/test-snapshot-builder.ts")).href,
+  pathToFileURL(join(root, "src/modules/dashboard/test-snapshot-builder.ts"))
+    .href,
   import.meta.url,
 ).catch(() => null);
 
@@ -55,7 +56,9 @@ const FORBIDDEN_KEYS = [
 
 function walkForbidden(value, path = "$", hits = []) {
   if (Array.isArray(value)) {
-    value.forEach((item, index) => walkForbidden(item, `${path}[${index}]`, hits));
+    value.forEach((item, index) =>
+      walkForbidden(item, `${path}[${index}]`, hits),
+    );
     return hits;
   }
   if (value == null || typeof value !== "object") return hits;
@@ -77,9 +80,7 @@ async function run() {
     process.exit(1);
   }
   for (const file of files) {
-    const events = JSON.parse(
-      await readFile(join(fixtureDir, file), "utf8"),
-    );
+    const events = JSON.parse(await readFile(join(fixtureDir, file), "utf8"));
     const snapshot = createDashboardV2SnapshotFromEvents(events);
     const projector = createDashboardSummaryProjector();
     const summary = projector.build({
@@ -92,7 +93,8 @@ async function run() {
       Array.isArray(summary) ||
       Object.prototype.hasOwnProperty.call(summary, "events") ||
       Object.prototype.hasOwnProperty.call(summary, "details");
-    const ok = bytes <= dashboardBudget && forbidden.length === 0 && !hasRawEvents;
+    const ok =
+      bytes <= dashboardBudget && forbidden.length === 0 && !hasRawEvents;
     console.log(
       `${ok ? "PASS" : "FAIL"} ${file}: dtoBytes=${bytes} budget=${dashboardBudget} forbidden=${forbidden.length} rawEvents=${hasRawEvents}`,
     );

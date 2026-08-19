@@ -1,16 +1,19 @@
 /**
  * Runtime version/capability probe (Story S-01, T-01-02).
  *
- * Server-only. The core decision is a pure function â€” `evaluateCapabilities` â€”
- * so tests can inject fake versions and probe results. The Node provider reads
+ * Server-only. The core decision is a pure function â€?`evaluateCapabilities` â€? * so tests can inject fake versions and probe results. The Node provider reads
  * `process.versions` plus `SELECT sqlite_version()` from a throwaway
  * `:memory:` connection (no persistent connection is ever held by the probe).
+ *
+ * This module deliberately contains **no** `node:sqlite` import: every driver
+ * touch is delegated to the narrow helpers in
+ * `infrastructure/sqlite-runtime.server.ts`, which is the only place allowed to
+ * name the driver (gate rule `platform-node-sqlite-outside-infrastructure`).
  */
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-
-import { NODE_SQLITE_CONNECTION_OPTIONS } from "./infrastructure/node-sqlite-database.server.ts";
+import {
+  probeJournalModeIn,
+  readRuntimeSqliteVersion,
+} from "./infrastructure/sqlite-runtime.server.ts";
 
 /** Runtime facts recorded at startup (architecture Â§3.2). */
 export interface RuntimeVersions {
@@ -113,7 +116,8 @@ export class NodeRuntimeVersionsProvider implements RuntimeVersionsProvider {
   private readonly sqliteVersionSource: () => string;
 
   constructor(options: NodeRuntimeVersionsProviderOptions = {}) {
-    this.sqliteVersionSource = options.sqliteVersionSource ?? readSqliteVersion;
+    this.sqliteVersionSource =
+      options.sqliteVersionSource ?? readRuntimeSqliteVersion;
   }
 
   getVersions(): RuntimeVersions {
@@ -136,41 +140,7 @@ export class NodeRuntimeVersionsProvider implements RuntimeVersionsProvider {
  * up after itself. No persistent connection survives the call.
  */
 export function probeWalCapability(directory: string): CapabilityProbeResult {
-  const probeDirectory = mkdtempSync(join(directory, "dsh-wal-probe-"));
-  const databasePath = join(probeDirectory, "probe.db");
-  let database: DatabaseSync | undefined;
-  try {
-    database = new DatabaseSync(databasePath, NODE_SQLITE_CONNECTION_OPTIONS);
-    const row = database.prepare("PRAGMA journal_mode=WAL").get();
-    return {
-      journalMode:
-        typeof row?.journal_mode === "string" ? row.journal_mode : "",
-    };
-  } finally {
-    if (database !== undefined && database.isOpen) {
-      database.close();
-    }
-    try {
-      rmSync(probeDirectory, {
-        recursive: true,
-        force: true,
-        maxRetries: 3,
-        retryDelay: 100,
-      });
-    } catch {
-      // Best-effort cleanup of the throwaway probe database.
-    }
-  }
-}
-
-function readSqliteVersion(): string {
-  const database = new DatabaseSync(":memory:", NODE_SQLITE_CONNECTION_OPTIONS);
-  try {
-    const row = database.prepare("SELECT sqlite_version() AS version").get();
-    return typeof row?.version === "string" ? row.version : "unknown";
-  } finally {
-    database.close();
-  }
+  return { journalMode: probeJournalModeIn(directory).journalMode };
 }
 
 function evaluation(

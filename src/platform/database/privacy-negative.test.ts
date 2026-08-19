@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
@@ -70,13 +71,44 @@ function expectRejected(fn: () => void, what: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// test:database credibility gate (P1-1)
+// ---------------------------------------------------------------------------
+
+test("npm run test:database lists every database test file (no silent drift)", () => {
+  const databaseDir = dirname(fileURLToPath(import.meta.url));
+  const actual = readdirSync(databaseDir)
+    .filter((name) => name.endsWith(".test.ts"))
+    .sort();
+  const packagePath = resolve(databaseDir, "..", "..", "..", "package.json");
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as {
+    scripts?: Record<string, string>;
+  };
+  const command = packageJson.scripts?.["test:database"];
+  assert.equal(
+    typeof command,
+    "string",
+    "package.json must define test:database",
+  );
+  const listed = (command as string)
+    .split(/\s+/)
+    .filter((token) => token.includes("/") && token.endsWith(".test.ts"))
+    .map((token) => token.slice(token.lastIndexOf("/") + 1))
+    .sort();
+  assert.deepEqual(
+    listed,
+    actual,
+    "test:database must be an explicit file list matching the directory; a glob or directory argument goes silently green",
+  );
+});
+
+// ---------------------------------------------------------------------------
 // assertAppPreferenceValueSafe — unit
 // ---------------------------------------------------------------------------
 
 test("app_preferences: legitimate scalar/object preferences pass", () => {
   assertAppPreferenceValueSafe("theme", "dark");
   assertAppPreferenceValueSafe("windowBounds", { x: 1, y: 2 });
-  assertAppPreferenceValueSafe("lastSession", { id: "s-1", at: 1700000000000 });
+  assertAppPreferenceValueSafe("lastRoute", { id: "s-1", at: "1700000000000" });
   // Relative display paths are allowed (only absolute paths are forbidden).
   assertAppPreferenceValueSafe("exportDir", "~/Documents/trusttools");
 });
@@ -198,20 +230,149 @@ test("app_preferences: boundary cases are rejected", () => {
   );
 });
 
+test("app_preferences: toJSON() cannot smuggle content past the walker (P1-7)", () => {
+  // A toJSON() that returns a Bearer token while the object itself looks safe.
+  expectRejected(
+    () =>
+      assertAppPreferenceValueSafe("note", {
+        text: "harmless",
+        toJSON: () => "Bearer eyJhbGciOiJIUzI1NiJ9.abc.def",
+      }),
+    "toJSON returning a Bearer token",
+  );
+  // A toJSON() that returns an absolute path.
+  expectRejected(
+    () =>
+      assertAppPreferenceValueSafe("note", {
+        text: "harmless",
+        toJSON: () => "C:\\Users\\alice\\key.txt",
+      }),
+    "toJSON returning an absolute path",
+  );
+  // A toJSON() on a nested object that injects a secret.
+  expectRejected(
+    () =>
+      assertAppPreferenceValueSafe("note", {
+        nested: {
+          text: "fine",
+          toJSON: () => ({ apiKey: "sk-abcdefghijklmnopqrstuvwxyz123456" }),
+        },
+      }),
+    "nested toJSON returning a secret key",
+  );
+  // A toJSON() that injects a token-bearing array element.
+  expectRejected(
+    () =>
+      assertAppPreferenceValueSafe("note", {
+        list: {
+          toJSON: () => ["ghp_abcdefghijklmnopqrstuvwxyz"],
+        },
+      }),
+    "toJSON returning a token array",
+  );
+});
+
+test("app_preferences: 15 reviewer bypass classes are rejected (P1-8)", () => {
+  const cases: Array<[string, () => void]> = [
+    [
+      "toJSON Bearer",
+      () =>
+        assertAppPreferenceValueSafe("note", {
+          toJSON: () => "Bearer eyJhbGciOiJIUzI1NiJ9.abc.def",
+        }),
+    ],
+    [
+      "toJSON absolute path",
+      () =>
+        assertAppPreferenceValueSafe("note", {
+          toJSON: () => "C:\\Users\\alice\\key.txt",
+        }),
+    ],
+    [
+      "sensitive key name `pwd`",
+      () => assertAppPreferenceValueSafe("data", { pwd: "x" }),
+    ],
+    [
+      "sensitive key name `apiKeys`",
+      () => assertAppPreferenceValueSafe("data", { apiKeys: [] }),
+    ],
+    [
+      "sensitive key name `cookie`",
+      () => assertAppPreferenceValueSafe("data", { cookie: "sid=1" }),
+    ],
+    [
+      "sensitive key name `signature`",
+      () => assertAppPreferenceValueSafe("data", { signature: "abc" }),
+    ],
+    [
+      "sensitive key name `pat`",
+      () =>
+        assertAppPreferenceValueSafe("data", {
+          pat: "github_pat_abcdefghijklmnopqrstuvwxyz",
+        }),
+    ],
+    [
+      "Cyrillic homoglyph key `apiKey`",
+      () => assertAppPreferenceValueSafe("data", { аpiKey: "x" }),
+    ],
+    [
+      "fullwidth `ＡＰＩ＿ＫＥＹ`",
+      () => assertAppPreferenceValueSafe("data", { ＡＰＩ＿ＫＥＹ: "x" }),
+    ],
+    [
+      "drive letter without separator `D:temp`",
+      () => assertAppPreferenceValueSafe("note", { text: "D:temp\\x" }),
+    ],
+    [
+      "POSIX /mnt path",
+      () => assertAppPreferenceValueSafe("note", { text: "/mnt/data/key.txt" }),
+    ],
+    [
+      "POSIX /Applications path",
+      () =>
+        assertAppPreferenceValueSafe("note", { text: "/Applications/X.app" }),
+    ],
+    [
+      "%ENV% expansion",
+      () =>
+        assertAppPreferenceValueSafe("note", { text: "%APPDATA%\\key.txt" }),
+    ],
+    [
+      "bare POSIX absolute path",
+      () => assertAppPreferenceValueSafe("note", { text: "/data/private/key" }),
+    ],
+    [
+      "secret value in an array element",
+      () =>
+        assertAppPreferenceValueSafe("note", {
+          list: ["ghp_abcdefghijklmnopqrstuvwxyz"],
+        }),
+    ],
+  ];
+  for (const [label, invoke] of cases) {
+    expectRejected(invoke, label);
+  }
+});
+
+test("app_preferences: legitimate values still pass the hardened guard", () => {
+  assertAppPreferenceValueSafe("exportDir", "~/Documents/trusttools");
+  assertAppPreferenceValueSafe("note", { text: "普通中文文本,无敏感内容" });
+  assertAppPreferenceValueSafe("windowBounds", { x: 1, y: 2 });
+  assertAppPreferenceValueSafe("pref", { fontSize: "medium", locale: "zh-CN" });
+});
+
 // ---------------------------------------------------------------------------
 // assertInsightLineAnalysisSafe — unit
 // ---------------------------------------------------------------------------
 
 test("insight analysis: ordinary single-line analysis passes", () => {
-  assertInsightLineAnalysisSafe("本次洞察显示 Token 用量在近 7 天趋于稳定");
-  assertInsightLineAnalysisSafe("rules 模式未创建 Profile 也可运行 14 页面");
+  assertInsightLineAnalysisSafe("本次洞察显示 Token 用量在近一周趋于稳定");
+  assertInsightLineAnalysisSafe("rules 模式未创建 Profile 也可运行全部页面");
   assertInsightLineAnalysisSafe("enhanced-auto 命中同一 evidence hash 缓存");
 });
 
-test("insight analysis: bare numbers / URLs / paths / commands are rejected", () => {
+test("insight analysis: URLs / paths / commands are rejected", () => {
   for (const text of [
-    "12345",
-    "  42  ",
     "https://example.com/report",
     "http://localhost:8080/x",
     "C:\\Users\\alice\\secret.txt",
@@ -225,6 +386,20 @@ test("insight analysis: bare numbers / URLs / paths / commands are rejected", ()
     "powershell -EncodedCommand Zm9v",
     "Invoke-WebRequest http://evil.example",
     "sudo shutdown -h now",
+  ]) {
+    expectRejected(
+      () => assertInsightLineAnalysisSafe(text),
+      `analysis ${text}`,
+    );
+  }
+});
+
+test("insight analysis: any digit is rejected (§5.10 forbids numbers)", () => {
+  for (const text of [
+    "本次洞察显示 Token 用量在近 7 天趋于稳定",
+    "共发现 3 个 Profile",
+    "token 用量是 12345",
+    "１２３４５", // fullwidth digits fold to ASCII under NFKC
   ]) {
     expectRejected(
       () => assertInsightLineAnalysisSafe(text),
@@ -247,6 +422,20 @@ test("insight analysis: transcript bodies and prompt injection are rejected", ()
       `analysis ${text}`,
     );
   }
+});
+
+test("insight analysis: caller-declared entity names are rejected (§5.10)", () => {
+  const options = { forbiddenEntities: ["codex", "claude"] };
+  expectRejected(
+    () => assertInsightLineAnalysisSafe("本次洞察聚焦 codex 的用量", options),
+    "entity name codex",
+  );
+  expectRejected(
+    () => assertInsightLineAnalysisSafe("profile 命中 claude 缓存", options),
+    "entity name claude",
+  );
+  // Without a vocabulary the sentence is a legitimate fact statement.
+  assertInsightLineAnalysisSafe("本次洞察聚焦本地工具的用量");
 });
 
 test("insight analysis: boundary cases are rejected", () => {
@@ -298,7 +487,7 @@ test("integration: safe values round-trip; unsafe values never reach the DB", (t
       now,
       now + 86400000,
     );
-  const analysis = "本次洞察显示 Token 用量在近 7 天趋于稳定";
+  const analysis = "本次洞察显示 Token 用量在近一周趋于稳定";
   assertInsightLineAnalysisSafe(analysis);
   host
     .prepare(

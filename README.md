@@ -63,6 +63,8 @@ Handler。服务不监听局域网地址，也不使用固定生产端口。
 ```bash
 npm run test:e2e       # Playwright 端到端测试
 npm run test:perf      # 采集器性能测试
+npm run test:database  # 数据库平台全量单测(显式文件列表,勿用 `--test <目录>`——会虚绿)
+npm run test:scripts   # 门禁脚本自身的回归测试(browser/server 边界、模块边界、开源合规)
 ```
 
 ## 代码规范
@@ -84,8 +86,11 @@ npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifes
 ## 数据库平台运维
 
 ```bash
-npm run verify:database-schema        # 静态校验 migrations 顺序、双源 SQL 一致性与 0001 的 11 表/STRICT/关键约束
-npm run inspect:database -- <db路径>  # 只读输出健康信息、表名+行数与索引数，绝不输出任何行内容
+npm run test:database                  # 数据库平台全量单测(显式文件列表;`--test <目录>` 会虚绿,勿用)
+npm run verify:database-schema         # 静态校验 migrations 顺序、双源 SQL 一致性与 0001 的 11 表/STRICT/关键约束
+npm run verify:browser-server-boundary # browser/server 边界 + node:sqlite 仅限 infrastructure 门禁
+npm run verify:bundle-no-sqlite        # build 产物(真实浏览器 chunk)不得含 node:sqlite/DatabaseSync/DB 路径/密文
+npm run inspect:database -- <db路径>   # 只读输出健康信息、表名+行数与索引数，绝不输出任何行内容
 ```
 
 ## 工具注册表（tool-registry）
