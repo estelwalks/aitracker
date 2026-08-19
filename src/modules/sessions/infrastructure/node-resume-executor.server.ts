@@ -5,7 +5,7 @@ import {
   isResumeSafeId,
 } from "../../../lib/local-sessions/resume-id.ts";
 import type { ResumeSessionRequest } from "../contracts.ts";
-import type { ResumeCommandExecutor } from "./legacy-session-adapter.server.ts";
+import type { ResumeCommandExecutor } from "./session-adapter.server.ts";
 
 type Spawn = typeof spawn;
 

@@ -3,8 +3,8 @@ import test from "node:test";
 
 import { usageSnapshotFixture } from "../../../test-support/output-baseline.ts";
 import type { UsageSnapshotDto } from "../contracts.ts";
-import { createLegacyUsageCollector } from "./legacy-usage-collector.server.ts";
-import { toPublicUsageSnapshot } from "./legacy-usage-adapter.server.ts";
+import { createUsageCollector } from "./usage-collector.server.ts";
+import { toPublicUsageSnapshot } from "./usage-adapter.server.ts";
 
 function repository(initial?: UsageSnapshotDto) {
   let value = initial;
@@ -19,7 +19,7 @@ function repository(initial?: UsageSnapshotDto) {
   };
 }
 
-test("legacy adapter preserves aggregates while removing paths and commands", () => {
+test("usage adapter preserves aggregates while removing paths and commands", () => {
   const snapshot = toPublicUsageSnapshot({
     ...usageSnapshotFixture,
     sources: [
@@ -68,7 +68,7 @@ test("legacy adapter preserves aggregates while removing paths and commands", ()
 test("budget exhaustion retains the last persisted snapshot", async () => {
   const previous = { ...usageSnapshotFixture, generatedAt: "previous" };
   const store = repository(previous);
-  const collector = createLegacyUsageCollector({
+  const collector = createUsageCollector({
     repository: store,
     scanner: {
       scan: () => new Promise(() => undefined),
@@ -83,7 +83,7 @@ test("budget exhaustion retains the last persisted snapshot", async () => {
 test("scanner failure retains the last persisted snapshot", async () => {
   const previous = { ...usageSnapshotFixture, generatedAt: "previous" };
   const store = repository(previous);
-  const collector = createLegacyUsageCollector({
+  const collector = createUsageCollector({
     repository: store,
     scanner: {
       scan: async () => {
@@ -100,7 +100,7 @@ test("scanner failure retains the last persisted snapshot", async () => {
 test("degraded scanner output does not replace the last successful snapshot", async () => {
   const previous = { ...usageSnapshotFixture, generatedAt: "previous" };
   const store = repository(previous);
-  const collector = createLegacyUsageCollector({
+  const collector = createUsageCollector({
     repository: store,
     scanner: {
       scan: async () => ({
@@ -132,7 +132,7 @@ test("degraded scanner output does not replace the last successful snapshot", as
 test("abort signal returns a safe empty result when no snapshot exists", async () => {
   const controller = new AbortController();
   controller.abort();
-  const collector = createLegacyUsageCollector({
+  const collector = createUsageCollector({
     scanner: { scan: async () => usageSnapshotFixture },
   });
   const result = await collector.collect({ signal: controller.signal });
