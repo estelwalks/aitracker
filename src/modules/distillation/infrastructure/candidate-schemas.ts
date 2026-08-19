@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import type { JsonSchema } from "../../../test-support/json-schema.ts";
-
 /**
  * SQLite distillation candidate validation schema.
  *
@@ -11,7 +9,6 @@ import type { JsonSchema } from "../../../test-support/json-schema.ts";
  * read, returned or persisted by the distillation module; `summary` is already
  * safety-filtered by the domain before it reaches this store.
  */
-export const DISTILL_CANDIDATES_SCHEMA_VERSION = 1 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 
@@ -67,24 +64,3 @@ export const PersistedCandidateSchema = z
     execution: ExecutionSummarySchema,
   })
   .strict();
-
-export const DistillCandidateFileSchema = z
-  .object({
-    candidates: z.array(PersistedCandidateSchema),
-  })
-  .strict();
-
-export type DistillCandidateFile = z.infer<typeof DistillCandidateFileSchema>;
-
-export const DEFAULT_DISTILL_CANDIDATE_FILE: DistillCandidateFile = {
-  candidates: [],
-};
-
-export function distillCandidateStoreSchema(): JsonSchema<DistillCandidateFile> {
-  return {
-    currentVersion: DISTILL_CANDIDATES_SCHEMA_VERSION,
-    parse(value: unknown): DistillCandidateFile {
-      return DistillCandidateFileSchema.parse(value);
-    },
-  };
-}
