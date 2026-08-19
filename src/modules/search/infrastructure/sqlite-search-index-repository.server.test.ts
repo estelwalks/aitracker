@@ -189,3 +189,77 @@ test("rejects forbidden private content at the repository layer", async () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("rejects host paths and secret-shaped refs but allows opaque references", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-ref-"));
+  try {
+    const host = openHost(directory);
+    const repository = createSqliteSearchIndexRepository({ database: host });
+
+    const base: SearchDocument = {
+      id: "agent:ok",
+      type: "agent",
+      sourceRef: "agent.ok",
+      title: "Safe title",
+      tags: [],
+      textSummary: "safe summary",
+      freshness: "fresh",
+      updatedAt: "2026-08-07T00:00:00.000Z",
+    };
+    // These bypass the domain `assertSearchDocument` shape check (they are
+    // within the SAFE_ID/SAFE_SOURCE character set) so the repository guard
+    // is exercised directly.
+    const forbidden: ReadonlyArray<Partial<SearchDocument>> = [
+      { sourceRef: "C:/Users/alice/secret.txt" },
+      { sourceRef: "/Users/alice/secret.txt" },
+      { sourceRef: "sk-abc" },
+      { sourceRef: "ghp_abc" },
+      { id: "sk-abc" },
+    ];
+    for (const patch of forbidden) {
+      const snapshot: SearchIndexSnapshot = {
+        schemaVersion: 1,
+        version: "search-v1-00000000",
+        generatedAt: "2026-08-07T00:00:00.000Z",
+        stale: false,
+        documents: [{ ...base, ...patch }],
+      };
+      const result = await repository.write(snapshot);
+      assert.equal(
+        result.ok,
+        false,
+        `${JSON.stringify(patch)} must be rejected`,
+      );
+    }
+
+    // Legitimate `type:id` / `type:a/b` opaque references still persist.
+    const allowed = createSnapshot(
+      [
+        {
+          ...base,
+          id: "session:abc123",
+          type: "session",
+          sourceRef: "session.abc123",
+        },
+        {
+          ...base,
+          id: "skill:market",
+          type: "skill",
+          sourceRef: "skill:market/repo",
+        },
+      ],
+      "2026-08-07T00:00:00.000Z",
+    );
+    const allowedResult = await repository.write(allowed);
+    assert.equal(allowedResult.ok, true);
+    assert.equal(
+      Number(
+        host.prepare("SELECT COUNT(*) AS n FROM search_documents").get()!.n,
+      ),
+      2,
+    );
+    host.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
