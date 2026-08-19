@@ -1,13 +1,9 @@
 import { z } from "zod";
 
-import type { JsonSchema } from "../../../platform/persistence/contracts.ts";
-import type { ReportDocument, ReportRun, ReportStore } from "../contracts.ts";
+import type { JsonSchema } from "../../../test-support/json-schema.ts";
 
 /**
- * Persisted reports file. Mirrors the `taskRunsSchema()` pattern: a typed
- * schemaVersioned document validated with zod. The file is wrapped by
- * AtomicJsonStore as `{ schemaVersion, data }`, so this schema describes the
- * inner `data` payload only.
+ * SQLite report row validation schemas.
  *
  * New records store metadata and a relative Markdown filename. The optional
  * body field exists only to read legacy reports.v1.json files and is removed
@@ -92,83 +88,6 @@ export function reportStoreSchema(): JsonSchema<ReportFile> {
     currentVersion: REPORTS_SCHEMA_VERSION,
     parse(value: unknown): ReportFile {
       return ReportFileSchema.parse(value);
-    },
-  };
-}
-
-export interface AtomicReportStoreOptions {
-  readonly store: import("../../../platform/persistence/contracts.ts").AtomicJsonStore<ReportFile>;
-}
-
-/**
- * Durable ReportStore backed by an AtomicJsonStore. Each mutation does a
- * read-modify-write so concurrent writers serialise through the file lock.
- *
- * The store clones on read and on write so callers cannot mutate the
- * persisted document graph by holding a reference to a returned object —
- * this matches the in-memory adapter's defensive-copy behaviour.
- */
-export function createAtomicReportStore(
-  options: AtomicReportStoreOptions,
-): ReportStore {
-  const read = async (): Promise<ReportFile> =>
-    structuredClone((await options.store.read()).value);
-  return {
-    async createRun(run: ReportRun): Promise<void> {
-      const parsed = ReportRunSchema.parse(run);
-      const file = await read();
-      await options.store.write({
-        ...file,
-        runs: [...file.runs, parsed],
-      });
-    },
-    async updateRun(run: ReportRun): Promise<void> {
-      const parsed = ReportRunSchema.parse(run);
-      const file = await read();
-      const index = file.runs.findIndex((item) => item.runId === parsed.runId);
-      if (index < 0) return;
-      const runs = [...file.runs];
-      runs[index] = parsed;
-      await options.store.write({ ...file, runs });
-    },
-    async saveDocument(document: ReportDocument): Promise<void> {
-      const parsed = ReportDocumentSchema.parse(document);
-      const file = await read();
-      const index = file.documents.findIndex(
-        (item) => item.reportId === parsed.reportId,
-      );
-      const documents = [...file.documents];
-      if (index >= 0) documents[index] = parsed;
-      else documents.push(parsed);
-      await options.store.write({ ...file, documents });
-    },
-    async getDocument(reportId: string): Promise<ReportDocument | undefined> {
-      const file = await read();
-      return file.documents.find((item) => item.reportId === reportId);
-    },
-    async latest(definitionId: string): Promise<ReportDocument | undefined> {
-      const file = await read();
-      const rows = file.documents.filter(
-        (item) => item.definitionId === definitionId,
-      );
-      const sorted = rows.sort((a, b) =>
-        b.generatedAt.localeCompare(a.generatedAt),
-      );
-      return sorted[0];
-    },
-    async listDocuments(): Promise<readonly ReportDocument[]> {
-      const file = await read();
-      return [...file.documents].sort((a, b) =>
-        b.generatedAt.localeCompare(a.generatedAt),
-      );
-    },
-    async listRuns(): Promise<readonly ReportRun[]> {
-      const file = await read();
-      // Runs are validated against ReportRunSchema on every write; the schema's
-      // widened errorCode is restored to the contract's branded union here.
-      return [...file.runs].sort((a, b) =>
-        b.startedAt.localeCompare(a.startedAt),
-      ) as readonly ReportRun[];
     },
   };
 }

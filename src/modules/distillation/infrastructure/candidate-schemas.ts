@@ -1,14 +1,9 @@
 import { z } from "zod";
 
-import type { JsonSchema } from "../../../platform/persistence/contracts.ts";
-import type { CandidateOutput, CandidatePersistence } from "../contracts.ts";
+import type { JsonSchema } from "../../../test-support/json-schema.ts";
 
 /**
- * Persisted distillation candidates file
- * (`~/.trusttools/tasks/distill-candidates.v1.json`). Mirrors the reports
- * `atomic-report-store` pattern: a schemaVersioned document validated with
- * zod, wrapped by AtomicJsonStore as `{ schemaVersion, data }`. This schema
- * describes the inner `data` payload only.
+ * SQLite distillation candidate validation schema.
  *
  * Privacy: only the candidate's privacy-filtered projection is stored — the
  * session refs (opaque ids), the AI-generated knowledge note (`summary`), the
@@ -90,48 +85,6 @@ export function distillCandidateStoreSchema(): JsonSchema<DistillCandidateFile> 
     currentVersion: DISTILL_CANDIDATES_SCHEMA_VERSION,
     parse(value: unknown): DistillCandidateFile {
       return DistillCandidateFileSchema.parse(value);
-    },
-  };
-}
-
-export interface AtomicCandidateStoreOptions {
-  readonly store: import("../../../platform/persistence/contracts.ts").AtomicJsonStore<DistillCandidateFile>;
-}
-
-/**
- * Durable `CandidatePersistence` backed by an AtomicJsonStore. Each mutation
- * is a read-modify-write so concurrent writers serialise through the file
- * lock. Candidates are validated against `PersistedCandidateSchema` on every
- * write; `list()` returns the newest candidate first.
- */
-export function createAtomicCandidateStore(
-  options: AtomicCandidateStoreOptions,
-): CandidatePersistence {
-  const read = async (): Promise<DistillCandidateFile> =>
-    structuredClone((await options.store.read()).value);
-  return {
-    async list(): Promise<readonly CandidateOutput[]> {
-      const file = await read();
-      // Rows are validated against the persisted schema on every write; the
-      // schema's widened `errorCode` is restored to the contract's branded
-      // union here (mirrors the reports `listRuns` cast).
-      return [...file.candidates]
-        .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
-        .map((row) => ({
-          ...row,
-          selectedSessionRefs: [...row.selectedSessionRefs],
-        })) as readonly CandidateOutput[];
-    },
-    async save(candidate: CandidateOutput): Promise<void> {
-      const parsed = PersistedCandidateSchema.parse(candidate);
-      const file = await read();
-      const index = file.candidates.findIndex(
-        (item) => item.candidateId === parsed.candidateId,
-      );
-      const candidates = [...file.candidates];
-      if (index >= 0) candidates[index] = parsed;
-      else candidates.push(parsed);
-      await options.store.write({ ...file, candidates });
     },
   };
 }
