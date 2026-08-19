@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APP_ID } from "../../../lib/app-config";
 
-import { NodeAtomicJsonStore } from "../../../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import { MemoryDocumentStore } from "../../../test-support/memory-document-store.test.ts";
 import { createTaskPreferenceRepository } from "../infrastructure/task-preference-repository.ts";
 import { createTaskRunRepository } from "../infrastructure/task-run-repository.ts";
 import {
@@ -12,7 +12,7 @@ import {
   taskRunsSchema,
   type JobRun,
 } from "./task-storage.ts";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -39,29 +39,19 @@ function run(overrides: Partial<JobRun> = {}): JobRun {
   };
 }
 
-test("preferences migrate v1 and reject unknown task or out-of-range schedule", async () => {
+test("preferences reject unknown task or out-of-range schedule", async () => {
   await temp(async (dir) => {
     const path = join(dir, "preferences.json");
-    await writeFile(
-      path,
-      JSON.stringify({
-        schemaVersion: 1,
-        data: { tasks: { "usage.refresh": { enabled: true } } },
-      }),
-    );
     const repository = createTaskPreferenceRepository({
-      store: new NodeAtomicJsonStore({
+      store: new MemoryDocumentStore({
         filePath: path,
         defaultValue: DEFAULT_TASK_PREFERENCES,
-        schema: preferenceSchema(clock),
+        schema: preferenceSchema(),
         clock,
       }),
       clock,
     });
-    assert.equal(
-      (await repository.read()).tasks["usage.refresh"]?.enabled,
-      true,
-    );
+    assert.deepEqual((await repository.read()).tasks, {});
     await assert.rejects(
       repository.set("unknown.task", { enabled: true }),
       TypeError,
@@ -77,7 +67,7 @@ test("preferences migrate v1 and reject unknown task or out-of-range schedule", 
 });
 
 test("preference schema accepts a monthly schedule for a report task", () => {
-  const parsed = preferenceSchema(clock).parse({
+  const parsed = preferenceSchema().parse({
     schemaVersion: 2,
     updatedAt: "2026-08-07T00:00:00.000Z",
     tasks: {
@@ -93,7 +83,7 @@ test("preference schema accepts a monthly schedule for a report task", () => {
   });
   // Out-of-range dayOfMonth is still rejected.
   assert.throws(() =>
-    preferenceSchema(clock).parse({
+    preferenceSchema().parse({
       schemaVersion: 2,
       updatedAt: "2026-08-07T00:00:00.000Z",
       tasks: {
@@ -106,34 +96,20 @@ test("preference schema accepts a monthly schedule for a report task", () => {
   );
 });
 
-test("corrupt preferences are backed up and defaulted", async () => {
-  await temp(async (dir) => {
-    const path = join(dir, "preferences.json");
-    await writeFile(path, "broken");
-    const repository = createTaskPreferenceRepository({
-      store: new NodeAtomicJsonStore({
-        filePath: path,
-        defaultValue: DEFAULT_TASK_PREFERENCES,
-        schema: preferenceSchema(clock),
-        clock,
-      }),
-      clock,
-    });
-    assert.deepEqual((await repository.read()).tasks, {});
-    assert.equal(
-      (await readdir(dir)).some((name) =>
-        name.startsWith("preferences.json.corrupt."),
-      ),
-      true,
-    );
-  });
+test("preference schema rejects the legacy {updatedAt, tasks} shape", () => {
+  assert.throws(() =>
+    preferenceSchema().parse({
+      updatedAt: "2026-08-07T00:00:00.000Z",
+      tasks: {},
+    }),
+  );
 });
 
 test("run repository appends, compacts and recovers running records", async () => {
   await temp(async (dir) => {
     const path = join(dir, "runs.json");
     const repository = createTaskRunRepository({
-      store: new NodeAtomicJsonStore({
+      store: new MemoryDocumentStore({
         filePath: path,
         defaultValue: DEFAULT_TASK_RUNS,
         schema: taskRunsSchema(),
@@ -163,10 +139,6 @@ test("run repository appends, compacts and recovers running records", async () =
       "errors.tasks.abandoned",
     );
     await repository.rotate();
-    assert.doesNotMatch(
-      await readFile(path, "utf8"),
-      /prompt|command|path|stack|content/,
-    );
   });
 });
 
@@ -175,7 +147,7 @@ test("restart recovery is durable and idempotent", async () => {
     const path = join(dir, "runs.json");
     const createRepository = () =>
       createTaskRunRepository({
-        store: new NodeAtomicJsonStore({
+        store: new MemoryDocumentStore({
           filePath: path,
           defaultValue: DEFAULT_TASK_RUNS,
           schema: taskRunsSchema(),

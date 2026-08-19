@@ -83,7 +83,7 @@ export function createSqliteTaskPreferenceRepository(
       return readAll().tasks[taskId];
     },
     async save(preferences) {
-      const parsed = preferenceSchema(clock).parse(preferences);
+      const parsed = preferenceSchema().parse(preferences);
       const transaction = options.database.transaction();
       transaction.begin();
       try {
