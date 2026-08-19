@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createTaskId } from "../../../shared/ids.ts";
+import { JOB_DEFINITIONS } from "../definitions/job-catalog.generated.ts";
 import type {
   TaskPreferenceRepository,
   TaskRunRepository,
@@ -43,6 +44,33 @@ function harness() {
   };
   return { runs, prefs, repository };
 }
+
+test("defaults installation refresh on and excludes duplicate security scheduling", async () => {
+  assert.equal(
+    JOB_DEFINITIONS.some((definition) => definition.id === "security.monitor"),
+    false,
+  );
+  const installation = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "installation.refresh",
+  );
+  assert.ok(installation);
+  const h = harness();
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [installation],
+    executors: {
+      "refresh-installation-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+  await scheduler.start();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  await scheduler.stop();
+});
 
 test("calculates interval, daily, weekly and monthly schedules in local time", () => {
   const from = new Date(2026, 0, 5, 10, 0);

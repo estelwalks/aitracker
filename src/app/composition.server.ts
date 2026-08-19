@@ -781,6 +781,19 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
         await installationSnapshot.refreshNow(signal);
       },
     },
+    retention: {
+      async apply({ signal }) {
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        const [{ readCurrentRetentionDays }, { pruneExpiredCacheFiles }] =
+          await Promise.all([
+            import("../lib/settings/retention-policy.server.ts"),
+            import("../lib/local-usage/prune.server.ts"),
+          ]);
+        const retentionDays = await readCurrentRetentionDays();
+        if (signal.aborted) throw new Error("errors.tasks.cancelled");
+        return pruneExpiredCacheFiles(retentionDays);
+      },
+    },
     reports,
     monitoring,
   });

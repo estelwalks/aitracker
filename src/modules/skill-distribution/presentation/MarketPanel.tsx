@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   ChevronRight,
   Package,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
@@ -112,6 +113,8 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   const [page, setPage] = useState(1);
   const [domainCounts, setDomainCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [refreshRequest, setRefreshRequest] = useState(0);
+  const forceRefreshRef = useRef(false);
   const [detail, setDetail] = useState<MarketSkill | null>(null);
   const [installTarget, setInstallTarget] = useState<InstallRequest | null>(
     null,
@@ -168,6 +171,8 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             ...(MARKET_DOMAINS.find((item) => item.label === domain)?.tags ??
               []),
           ];
+    const forceRefresh = forceRefreshRef.current;
+    forceRefreshRef.current = false;
     void getMarketSkills({
       data: {
         page,
@@ -175,6 +180,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         search: query,
         sort,
         tags: selectedTags,
+        forceRefresh,
       },
     })
       .then((next) => {
@@ -189,7 +195,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
     return () => {
       cancelled = true;
     };
-  }, [query, sort, page, domain, t]);
+  }, [query, sort, page, domain, refreshRequest, t]);
 
   const installedBySkill = useMemo(() => {
     const map = new Map<string, Record<string, boolean>>();
@@ -309,6 +315,19 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               label: t(option.labelKey),
             }))}
           />
+          <TTButton
+            variant="default"
+            disabled={loading}
+            onClick={() => {
+              forceRefreshRef.current = true;
+              setRefreshRequest((value) => value + 1);
+            }}
+          >
+            <RefreshCw
+              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+            {t(loading ? "common.refreshing" : "common.refresh")}
+          </TTButton>
         </div>
 
         {/* 领域分类胶囊（原型样式） */}

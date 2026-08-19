@@ -64,6 +64,7 @@ export const ENV = {
   DEV_URL: `${APP_ID.toUpperCase()}_DEV_URL`,
   DEV_HOST: `${APP_ID.toUpperCase()}_DEV_HOST`,
   DEV_PORT: `${APP_ID.toUpperCase()}_DEV_PORT`,
+  PREFS_PATH: `${APP_ID.toUpperCase()}_PREFS_PATH`,
   USAGE_HOME: `${APP_ID.toUpperCase()}_USAGE_HOME`,
   HOME: `${APP_ID.toUpperCase()}_HOME`,
   RELEASE_OWNER: `${APP_ID.toUpperCase()}_RELEASE_OWNER`,

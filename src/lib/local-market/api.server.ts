@@ -11,6 +11,7 @@ import type { SkillSnapshot } from "../local-skills/types.ts";
 
 const MARKET_API = MARKET_API_BASE;
 const REQUEST_TIMEOUT_MS = 8_000;
+export const MARKET_QUERY_CACHE_TTL_MS = 30 * 60 * 1_000;
 
 export interface MarketApiOptions {
   fetcher?: typeof fetch;
@@ -23,6 +24,9 @@ export interface MarketApiOptions {
   installedCount?: number;
   /** Test seam / fast path: a real local skills snapshot to count from. */
   localSnapshot?: { skills: readonly MarketInstalledSkillShape[] };
+  /** Clock and cache-bypass seams for deterministic unit tests. */
+  now?: () => Date;
+  skipFreshCache?: boolean;
 }
 
 /** Structural slice of a local skill used to detect market-managed installs. */
@@ -130,6 +134,7 @@ export async function fetchMarketSkills(
     search: string;
     sort?: MarketSort;
     tags?: string[];
+    forceRefresh?: boolean;
   },
   options: MarketApiOptions = {},
 ): Promise<MarketListResult> {
@@ -142,6 +147,19 @@ export async function fetchMarketSkills(
     sort,
     tags.join(","),
   );
+  const cached = await readMarketCache(key);
+  const fetchedAt = cached == null ? Number.NaN : Date.parse(cached.fetchedAt);
+  const ageMs = (options.now?.() ?? new Date()).getTime() - fetchedAt;
+  if (
+    !query.forceRefresh &&
+    !options.skipFreshCache &&
+    cached != null &&
+    Number.isFinite(fetchedAt) &&
+    ageMs >= 0 &&
+    ageMs <= MARKET_QUERY_CACHE_TTL_MS
+  ) {
+    return { ...cached, source: "cache", warning: null };
+  }
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -191,7 +209,7 @@ export async function fetchMarketSkills(
       skills: sortedSkills,
       pagination: parsed.pagination,
       source: "network",
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: (options.now?.() ?? new Date()).toISOString(),
       warning: null,
       stats: computeStats(
         sortedSkills,
@@ -202,7 +220,6 @@ export async function fetchMarketSkills(
     await writeMarketCache(key, result).catch(() => undefined);
     return result;
   } catch (error) {
-    const cached = await readMarketCache(key);
     if (cached) {
       return {
         ...cached,

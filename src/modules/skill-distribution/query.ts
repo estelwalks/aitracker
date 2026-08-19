@@ -63,7 +63,16 @@ export const getMarketSkills = createServerFn({ method: "GET" })
       search: string;
       sort: MarketSort;
       tags?: string[];
-    }) => input,
+      forceRefresh?: boolean;
+    }) => {
+      if (
+        input.forceRefresh !== undefined &&
+        typeof input.forceRefresh !== "boolean"
+      ) {
+        throw new Error("errors.market.queryInvalid");
+      }
+      return input;
+    },
   )
   .handler(async ({ data }) => {
     const { getMarketSkills: query } =

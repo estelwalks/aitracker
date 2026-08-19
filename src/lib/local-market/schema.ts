@@ -127,6 +127,7 @@ export function parseMarketQuery(value: unknown): {
   search: string;
   sort: MarketSort;
   tags: string[];
+  forceRefresh: boolean;
 } {
   if (!isRecord(value)) throw new AppError("errors.market.queryInvalid");
 
@@ -137,6 +138,12 @@ export function parseMarketQuery(value: unknown): {
   const tags = Array.isArray(value.tags)
     ? value.tags.filter((tag): tag is string => typeof tag === "string")
     : [];
+  if (
+    value.forceRefresh !== undefined &&
+    typeof value.forceRefresh !== "boolean"
+  ) {
+    throw new AppError("errors.market.queryInvalid");
+  }
 
   if (!Number.isInteger(page) || page < 1)
     throw new AppError("errors.market.pageNotPositive");
@@ -150,7 +157,14 @@ export function parseMarketQuery(value: unknown): {
     throw new AppError("errors.market.sortInvalid");
   }
 
-  return { page, limit, search, sort: sortRaw as MarketSort, tags };
+  return {
+    page,
+    limit,
+    search,
+    sort: sortRaw as MarketSort,
+    tags,
+    forceRefresh: value.forceRefresh === true,
+  };
 }
 
 export function parseInstallRequest(value: unknown): {
