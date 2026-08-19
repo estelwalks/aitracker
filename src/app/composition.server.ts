@@ -619,14 +619,17 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     retention: {
       async apply({ signal }) {
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
-        const [{ readCurrentRetentionDays }, { pruneExpiredCacheFiles }] =
+        const [{ readCurrentRetentionDays }, { applyDatabaseRetention }] =
           await Promise.all([
             import("../lib/settings/retention-policy.server.ts"),
-            import("../lib/local-usage/prune.server.ts"),
+            import("../platform/database/retention.server.ts"),
           ]);
         const retentionDays = await readCurrentRetentionDays();
         if (signal.aborted) throw new Error("errors.tasks.cancelled");
-        return pruneExpiredCacheFiles(retentionDays);
+        // S-03 (T-03-04): retention now clears expired SQLite cache rows. The
+        // persisted retentionDays preference is read for parity/logging only;
+        // each table's own expires_at_ms drives the actual deletion.
+        return applyDatabaseRetention(databaseRuntime.database, Date.now());
       },
     },
     reports,
