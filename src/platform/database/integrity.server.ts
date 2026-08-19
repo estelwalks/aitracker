@@ -1,13 +1,18 @@
 /**
- * Integrity checks and corruption quarantine (Story S-03, T-03-02).
+ * Integrity checks and fault-group set-aside (Story S-03, T-03-02).
  *
  * Server-only. `checkIntegrity` reports the two health signals the platform
  * cares about — page-level `integrity_check` and `foreign_key_check` — while
- * `quarantineCorruptDatabase` moves a failed database and its `-wal`/`-shm`
- * siblings (the same fault group) out of the way **without deleting them**, so
- * the host can reopen a fresh database without silently destroying evidence.
+ * `setAsideFaultGroup` moves a database and its `-wal`/`-shm` siblings (the
+ * same fault group) out of the way **without deleting them**, so the host can
+ * reopen a fresh database without silently destroying evidence.
+ *
+ * The set-aside reason is part of the directory name because it is what an
+ * operator reads first: a database moved aside by a *successful restore* is not
+ * corrupt, and naming it `.corrupt.*` would misreport a healthy file. Reasons
+ * map to `.corrupt.<ts>/` and `.replaced.<ts>/`.
  */
-import { existsSync, mkdirSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { DatabaseError, type SqliteDatabasePort } from "./contracts.ts";
@@ -20,6 +25,25 @@ export interface IntegrityCheckResult {
   /** First non-`ok` integrity message when the check fails. */
   readonly integrityMessage?: string;
 }
+
+/**
+ * Why a fault group was moved aside.
+ *
+ * - `corrupt` — the database failed to open or failed an integrity check.
+ * - `replaced-by-restore` — the database was healthy or unusable, but a
+ *   user-confirmed restore replaced it; it is kept for rollback and evidence.
+ */
+export type SetAsideReason = "corrupt" | "replaced-by-restore";
+
+export interface SetAsideFaultGroupOptions {
+  readonly reason: SetAsideReason;
+}
+
+/** Directory-name prefix per reason. */
+const REASON_PREFIX: Readonly<Record<SetAsideReason, string>> = {
+  corrupt: ".corrupt",
+  "replaced-by-restore": ".replaced",
+};
 
 /**
  * Runs `PRAGMA integrity_check` and `PRAGMA foreign_key_check`. A clean
@@ -37,31 +61,83 @@ export function checkIntegrity(port: SqliteDatabasePort): IntegrityCheckResult {
 
 /**
  * Moves `databasePath`, `databasePath + "-wal"` and `databasePath + "-shm"` —
- * whichever exist — into a new `.corrupt.<YYYYMMDD-HHmmss>/` directory under
- * the same parent. The files are moved, never deleted, and the returned path
- * is the quarantine directory. All connections must already be closed by the
- * caller; if a rename fails because the file is still held open, the error is
- * reported as `target-busy` rather than `io-failure`.
+ * whichever exist — into a new `.corrupt.<YYYYMMDD-HHmmss>/` (reason `corrupt`)
+ * or `.replaced.<YYYYMMDD-HHmmss>/` (reason `replaced-by-restore`) directory
+ * under the same parent. The files are moved, never deleted, and the returned
+ * path is that directory. All connections must already be closed by the caller;
+ * if a rename fails because the file is still held open, the error is reported
+ * as `target-busy` rather than `io-failure`.
  */
-export function quarantineCorruptDatabase(databasePath: string): string {
+export function setAsideFaultGroup(
+  databasePath: string,
+  options: SetAsideFaultGroupOptions,
+): string {
+  const prefix = REASON_PREFIX[options.reason];
+  if (prefix === undefined) {
+    throw new DatabaseError("invalid-argument", "integrity", {
+      retryable: false,
+    });
+  }
   const directory = dirname(databasePath);
-  const quarantineDirectory = reserveQuarantineDirectory(directory);
+  const setAsideDirectory = reserveSetAsideDirectory(directory, prefix);
   try {
-    mkdirSync(quarantineDirectory, { recursive: true });
+    mkdirSync(setAsideDirectory, { recursive: true });
   } catch (error) {
     throw new DatabaseError("io-failure", "integrity", { cause: error });
   }
 
   for (const source of faultGroup(databasePath)) {
     if (!existsSync(source)) continue;
-    const target = uniqueTarget(quarantineDirectory, basename(source));
+    const target = uniqueTarget(setAsideDirectory, basename(source));
     try {
       renameSync(source, target);
     } catch (error) {
       throw classifyMoveError(error);
     }
   }
-  return quarantineDirectory;
+  return setAsideDirectory;
+}
+
+/**
+ * Convenience wrapper for the corruption path: identical to
+ * `setAsideFaultGroup(databasePath, { reason: "corrupt" })`.
+ */
+export function quarantineCorruptDatabase(databasePath: string): string {
+  return setAsideFaultGroup(databasePath, { reason: "corrupt" });
+}
+
+/**
+ * Compensating action for `setAsideFaultGroup`: moves the fault group back from
+ * `setAsideDirectory` to `databasePath` and removes the directory when it ends
+ * up empty. Used when a restore fails *after* the old database was moved aside,
+ * so the failure leaves the original database exactly where it was.
+ *
+ * A file whose original name is occupied again is left in the set-aside
+ * directory instead of overwriting the newer file — nothing is ever deleted.
+ */
+export function rollbackFaultGroup(
+  setAsideDirectory: string,
+  databasePath: string,
+): void {
+  const directory = dirname(databasePath);
+  for (const original of faultGroup(databasePath)) {
+    const name = basename(original);
+    const source = join(setAsideDirectory, name);
+    if (!existsSync(source)) continue;
+    const target = join(directory, name);
+    if (existsSync(target)) continue;
+    try {
+      renameSync(source, target);
+    } catch (error) {
+      throw classifyMoveError(error);
+    }
+  }
+  try {
+    rmdirSync(setAsideDirectory);
+  } catch {
+    // A non-empty or already-removed directory is fine: the contract is only
+    // that nothing is deleted.
+  }
 }
 
 function readIntegrity(port: SqliteDatabasePort): {
@@ -101,13 +177,18 @@ function integrityFailure(error: unknown): DatabaseError {
 }
 
 /** The database plus its WAL/SHM siblings move together as one fault group. */
-function faultGroup(databasePath: string): readonly string[] {
+export function faultGroup(databasePath: string): readonly string[] {
   return [databasePath, `${databasePath}-wal`, `${databasePath}-shm`];
 }
 
-/** First `.corrupt.<timestamp>/` name in `directory` that does not exist yet. */
-function reserveQuarantineDirectory(directory: string): string {
-  const base = `.corrupt.${formatTimestamp(Date.now())}`;
+/** True when at least one member of the fault group exists on disk. */
+export function faultGroupExists(databasePath: string): boolean {
+  return faultGroup(databasePath).some((path) => existsSync(path));
+}
+
+/** First `<prefix>.<timestamp>/` name in `directory` that does not exist yet. */
+function reserveSetAsideDirectory(directory: string, prefix: string): string {
+  const base = `${prefix}.${formatTimestamp(Date.now())}`;
   let candidate = join(directory, base);
   let suffix = 2;
   while (existsSync(candidate)) {
@@ -128,7 +209,7 @@ function formatTimestamp(ms: number): string {
 }
 
 /**
- * A freshly created quarantine directory is empty, so collisions are only
+ * A freshly created set-aside directory is empty, so collisions are only
  * defensive; the suffix loop keeps a same-named file from ever being replaced.
  */
 function uniqueTarget(directory: string, name: string): string {

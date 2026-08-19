@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   openSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -21,9 +22,11 @@ import { DatabaseError } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import {
   createOnlineBackup,
+  listBackupFiles,
   listVerifiedBackups,
   readBackupManifestIndex,
   sha256OfFile,
+  tryReadBackupManifestIndex,
 } from "./backup.server.ts";
 import { readSchemaVersion, runMigrations } from "./migration-runner.server.ts";
 
@@ -250,7 +253,7 @@ test("consecutive backups never overwrite each other and keep distinct contents"
   }
 });
 
-test("listVerifiedBackups returns only verified backups, excluding garbage and corrupted files", async (t) => {
+test("listBackupFiles verifies through the manifest and reports every rejected file", async (t) => {
   const { host, directory } = openMigratedDb(t);
   const backupsDirectory = join(directory, "backups");
 
@@ -278,6 +281,20 @@ test("listVerifiedBackups returns only verified backups, excluding garbage and c
   }
   // A stray file that is not even a database, and has no manifest record.
   writeFileSync(join(backupsDirectory, "garbage.db"), "not a sqlite database");
+  // A recorded backup whose file was deleted behind our back.
+  const missing = join(backupsDirectory, "trusttools-19990101-000000.db");
+  writeFileSync(missing, readFileSync(good.path));
+  const index = readBackupManifestIndex(backupsDirectory);
+  writeFileSync(
+    join(backupsDirectory, "manifest.json"),
+    `${JSON.stringify(
+      { ...index, [basename(missing)]: index[basename(good.path)] },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  rmSync(missing);
 
   const listed = listVerifiedBackups(backupsDirectory);
   assert.deepEqual(
@@ -286,6 +303,173 @@ test("listVerifiedBackups returns only verified backups, excluding garbage and c
     "only the intact, manifest-backed backup should be listed",
   );
   assert.equal(listed[0].manifest.sha256, sha256OfFile(good.path));
+
+  // Nothing is silently dropped: every rejected file is reported with a reason
+  // so the UI can tell the user why a backup cannot be used.
+  const inventory = listBackupFiles(backupsDirectory);
+  assert.deepEqual(
+    inventory.verified.map((backup) => backup.path),
+    [good.path],
+  );
+  assert.deepEqual(
+    [...inventory.unverified].sort((a, b) => a.path.localeCompare(b.path)),
+    [
+      { path: toCorrupt.path, reason: "quick-check-failed" },
+      {
+        path: join(backupsDirectory, "garbage.db"),
+        reason: "no-manifest-record",
+      },
+      { path: missing, reason: "missing-file" },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+  );
+});
+
+test("a damaged manifest is reported as corrupt, never as an empty index", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+  });
+  const manifestPath = join(backupsDirectory, "manifest.json");
+
+  for (const damaged of ["{ truncated", "[]", "null", '"a string"']) {
+    writeFileSync(manifestPath, damaged, "utf8");
+    assert.throws(
+      () => readBackupManifestIndex(backupsDirectory),
+      (error: unknown) =>
+        error instanceof DatabaseError &&
+        error.code === "corrupt" &&
+        error.operation === "backup",
+      `must not be accepted: ${damaged}`,
+    );
+    assert.throws(
+      () => listVerifiedBackups(backupsDirectory),
+      (error: unknown) =>
+        error instanceof DatabaseError && error.code === "corrupt",
+    );
+    assert.equal(
+      tryReadBackupManifestIndex(backupsDirectory),
+      undefined,
+      "the try-variant reports the damage as undefined",
+    );
+  }
+
+  // A missing manifest is a legitimately empty index, not corruption.
+  rmSync(manifestPath);
+  assert.deepEqual(readBackupManifestIndex(backupsDirectory), {});
+  assert.deepEqual(tryReadBackupManifestIndex(backupsDirectory), {});
+  assert.deepEqual(listVerifiedBackups(backupsDirectory), []);
+  assert.deepEqual(listBackupFiles(backupsDirectory), {
+    verified: [],
+    unverified: [{ path: backup.path, reason: "no-manifest-record" }],
+  });
+});
+
+test("concurrent backups are serialized: distinct files and one manifest entry each", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  insertFlag(host, "flag", '"value"');
+  // The same second for both calls: without the in-process mutex both would
+  // reserve the same file name and one of them would lose its manifest entry.
+  const fixedNow = () => 1_700_000_000_000;
+
+  const [first, second] = await Promise.all([
+    createOnlineBackup({
+      host,
+      backupsDirectory,
+      appVersion: APP_VERSION,
+      sqliteVersion: SQLITE_VERSION,
+      now: fixedNow,
+    }),
+    createOnlineBackup({
+      host,
+      backupsDirectory,
+      appVersion: APP_VERSION,
+      sqliteVersion: SQLITE_VERSION,
+      now: fixedNow,
+    }),
+  ]);
+
+  assert.notEqual(first.path, second.path);
+  const index = readBackupManifestIndex(backupsDirectory);
+  assert.deepEqual(index[basename(first.path)], first.manifest);
+  assert.deepEqual(index[basename(second.path)], second.manifest);
+  assert.deepEqual(
+    listVerifiedBackups(backupsDirectory)
+      .map((backup) => backup.path)
+      .sort(),
+    [first.path, second.path].sort(),
+  );
+  assert.deepEqual(
+    readdirSync(backupsDirectory)
+      .filter((name) => name.endsWith(".tmp"))
+      .sort(),
+    [],
+    "no temporary file may survive",
+  );
+});
+
+test("a failed backup does not poison the queue for the next caller", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+
+  await assert.rejects(
+    createOnlineBackup({
+      host,
+      backupsDirectory,
+      appVersion: "   ",
+      sqliteVersion: SQLITE_VERSION,
+    }),
+    (error: unknown) =>
+      error instanceof DatabaseError && error.code === "invalid-argument",
+  );
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+  });
+  assert.equal(existsSync(backup.path), true);
+});
+
+test("the backup borrows the Host connection instead of opening a second writer", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+
+  const original = DatabaseHost.prototype.withUnderlyingConnection;
+  let borrowed = 0;
+  DatabaseHost.prototype.withUnderlyingConnection = function borrow<T>(
+    this: DatabaseHost,
+    fn: (database: DatabaseSync) => T,
+  ): T {
+    borrowed += 1;
+    const invoke = original as (
+      this: DatabaseHost,
+      borrow: (database: DatabaseSync) => T,
+    ) => T;
+    return invoke.call(this, fn);
+  };
+  t.after(() => {
+    DatabaseHost.prototype.withUnderlyingConnection = original;
+  });
+
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+  });
+
+  assert.equal(
+    borrowed,
+    1,
+    "exactly one borrow of the single writable connection",
+  );
+  assert.equal(quickCheckOk(backup.path), true);
+  assert.equal(host.isOpen, true, "borrowing must not close the Host");
 });
 
 test("a backupsDirectory that is a file fails with io-failure and leaves no partial artifacts", async (t) => {

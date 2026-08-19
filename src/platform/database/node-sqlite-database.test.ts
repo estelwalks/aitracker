@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 
 import { DatabaseError } from "./index.ts";
 import {
   NodeSqliteDatabase,
+  NodeSqliteTransaction,
   bigintToSafeNumber,
   bigintToSafeString,
 } from "./infrastructure/node-sqlite-database.server.ts";
@@ -187,18 +189,69 @@ test("extensions cannot be loaded (allowExtension=false)", (t) => {
   );
 });
 
-test("close marks the database closed and further use fails with a stable error", (t) => {
+test("close marks the database closed and further use fails with not-open", (t) => {
   const dir = freshDir();
   const db = openDbInDir(t, dir, "close.db");
   db.exec("CREATE TABLE t (x INTEGER) STRICT");
   db.close();
   assert.equal(db.isOpen, false);
-  assert.throws(
+  // A closed connection is a lifecycle mistake, not a SQL mistake: it must not
+  // be reported as `sql-error`.
+  for (const use of [
     () => db.prepare("SELECT 1"),
-    (error) => error instanceof DatabaseError && error.code === "sql-error",
-  );
+    () => db.exec("SELECT 1"),
+    () => db.transaction(),
+  ]) {
+    assert.throws(
+      use,
+      (error) => error instanceof DatabaseError && error.code === "not-open",
+    );
+  }
   // Double close is a no-op.
   db.close();
+});
+
+test("a transaction begins with BEGIN IMMEDIATE, never with a deferred BEGIN", () => {
+  const executed: string[] = [];
+  const transaction = new NodeSqliteTransaction({
+    exec: (sql: string) => {
+      executed.push(sql);
+    },
+  });
+
+  transaction.begin();
+  transaction.commit();
+  transaction.begin();
+  transaction.rollback();
+
+  assert.deepEqual(executed, [
+    "BEGIN IMMEDIATE",
+    "COMMIT",
+    "BEGIN IMMEDIATE",
+    "ROLLBACK",
+  ]);
+});
+
+test("BEGIN IMMEDIATE takes the write lock before the first write statement", (t) => {
+  const dir = freshDir();
+  const db = openDbInDir(t, dir, "immediate.db");
+  db.exec("CREATE TABLE items (id INTEGER PRIMARY KEY) STRICT");
+
+  const transaction = db.transaction();
+  transaction.begin();
+  // No write has been issued yet. With the deferred default another writer
+  // could still start its own read-modify-write here; with IMMEDIATE the lock
+  // is already held, which is what the single-writer contract relies on.
+  const other = new DatabaseSync(join(dir, "immediate.db"), { timeout: 0 });
+  try {
+    assert.throws(
+      () => other.exec("INSERT INTO items (id) VALUES (1)"),
+      (error) => /lock|busy/i.test(String((error as Error).message)),
+    );
+  } finally {
+    other.close();
+  }
+  transaction.rollback();
 });
 
 test("open failure maps to a stable DatabaseError without the path in the message", () => {
