@@ -45,6 +45,46 @@ function rowToDocument(row: Readonly<Record<string, unknown>>): SearchDocument {
 }
 
 /**
+ * Lightweight repository-layer privacy guard (S-03, T-03-05).
+ *
+ * The domain `assertSearchDocument` only runs PATH checks against
+ * `textSummary` and rejects a small forbidden-word list, so a direct caller
+ * could still smuggle a drive-letter title, a Bearer token, an `API Key`, a
+ * shell command or a prompt injection past it. These patterns mirror the
+ * platform `privacy-guard.server.ts` forbidden zones without importing its
+ * preference/analysis-specific validators into the search projection.
+ */
+const FORBIDDEN_PROJECTION_PATTERNS: readonly RegExp[] = [
+  /(?:^|[^A-Za-z0-9"'])[A-Za-z]:/, // drive-letter path (C:\ C:/ D:temp)
+  /\\{2}/, // UNC / JSON-escaped backslash
+  /(?:^|[^\w])\/(?:Users|home|etc|var|tmp|opt|usr|root|mnt|media|srv|proc|dev|bin|sbin|Applications|Volumes|Library|System)\//i,
+  /(?:^|\s)\/[^\s]+/, // bare POSIX absolute path
+  /bearer\s+[a-z0-9._~+/=-]{8,}/i,
+  /\bsk-[a-z0-9_-]{16,}/i,
+  /\b(?:api|auth|access|refresh|session)[\s_-]*key\b/i,
+  /\b(?:api|access)[\s_-]*token\b/i,
+  /\brm\s+-rf\b/i,
+  /\b(?:curl|wget|powershell|cmd(?:\.exe)?|bash|sudo)\b/i,
+  /ignore\s+(all\s+)?(previous|prior|above|your)\s+instructions/i,
+  /disregard\s+(all\s+)?(previous|prior|above|your)\s+instructions/i,
+  /\bsystem\s+prompt\b/i,
+  /\bjailbreak\b/i,
+];
+
+function assertProjectionSafe(document: SearchDocument): void {
+  const fields = [document.title, document.textSummary, ...document.tags];
+  for (const field of fields) {
+    for (const pattern of FORBIDDEN_PROJECTION_PATTERNS) {
+      if (pattern.test(field)) {
+        throw new TypeError(
+          "search projection contains forbidden private content",
+        );
+      }
+    }
+  }
+}
+
+/**
  * SQLite-backed search projection index (S-03, T-03-03).
  *
  * `write` is a full rebuild: every document is upserted on its
@@ -72,6 +112,9 @@ export function createSqliteSearchIndexRepository(
     },
     async write(snapshot: SearchIndexSnapshot): Promise<Result<void>> {
       try {
+        for (const document of snapshot.documents) {
+          assertProjectionSafe(document);
+        }
         // Re-validate + canonicalize (defence in depth): createSnapshot runs
         // the domain privacy/shape guard so a direct caller cannot bypass it.
         const canonical = createSnapshot(
