@@ -1,10 +1,7 @@
 import { z } from "zod";
 
 import { ENV } from "../../lib/app-config.ts";
-import type {
-  AtomicJsonStore,
-  JsonSchema,
-} from "../../platform/persistence/contracts.ts";
+import type { JsonSchema } from "../../test-support/json-schema.ts";
 
 /**
  * Story B-600 — server-side daily quota for real-model distillation calls.
@@ -13,11 +10,8 @@ import type {
  * because only they can incur real provider cost. Offline distillation is
  * deterministic and free, so it is never counted.
  *
- * The ledger is authoritative on the server: it persists under
- * `~/.trusttools/tasks/distill-quota.v1.json` and the renderer only ever
- * reads the `{ used, limit, remaining }` projection returned by
- * `loadDistillation`. The persisted file holds just `{ date, used }` — the
- * limit is a build-time/env constant, so a tampered file cannot raise it.
+ * The ledger is authoritative on the server: SQLite stores `{ date, used }`
+ * and the renderer only reads the `{ used, limit, remaining }` projection.
  *
  * Failure policy mirrors the rest of the module: a missing or failing quota
  * port degrades to unlimited (distillation must never be blocked by quota
@@ -65,13 +59,12 @@ export interface DistillQuotaPort {
   read(): Promise<DistillQuota>;
   /**
    * Record one real-model call against `date`. Same-date calls accumulate;
-   * a different date resets the counter to 1. The underlying store
-   * serialises read-modify-write under its file lock.
+   * a different date resets the counter to 1.
    */
   increment(date: string): Promise<DistillQuota>;
 }
 
-/** Serialized quota file shape — deliberately limit-free. */
+/** Persisted quota row shape — deliberately limit-free. */
 export interface DistillQuotaFile {
   readonly date: string;
   readonly used: number;
@@ -93,7 +86,7 @@ export const DEFAULT_DISTILL_QUOTA_FILE: DistillQuotaFile = {
   used: 0,
 };
 
-/** Schema for `distill-quota.v1.json` (describes the inner `data` payload). */
+/** Validation schema for the persisted quota state. */
 export function distillQuotaStoreSchema(): JsonSchema<DistillQuotaFile> {
   return {
     currentVersion: DISTILL_QUOTA_SCHEMA_VERSION,
@@ -104,16 +97,18 @@ export function distillQuotaStoreSchema(): JsonSchema<DistillQuotaFile> {
 }
 
 export interface AtomicDistillQuotaStoreOptions {
-  /** AtomicJsonStore bound to the `distill-quota.v1.json` file. */
-  readonly store: AtomicJsonStore<DistillQuotaFile>;
+  /** Injectable document port retained for focused unit tests. */
+  readonly store: {
+    read(): Promise<{ readonly value: DistillQuotaFile }>;
+    write(value: DistillQuotaFile): Promise<void>;
+  };
   /** Overrides the daily limit; defaults to `distillDailyQuotaLimit()`. */
   readonly limit?: number;
 }
 
 /**
- * `DistillQuotaPort` backed by an AtomicJsonStore. Each increment is an
- * atomic read-modify-write so concurrent runs serialise through the file
- * lock and no call is ever lost to a torn write.
+ * Test adapter over an injected quota document port. Production uses the
+ * SQLite quota repository.
  */
 export function createAtomicDistillQuotaStore(
   options: AtomicDistillQuotaStoreOptions,

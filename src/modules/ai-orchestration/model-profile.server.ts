@@ -1,9 +1,8 @@
 /**
  * Server-only model profile persistence + connection testing (S-500).
  *
- * Storage: `~/.trusttools/tasks/model-profiles.v1.json` written through the
- * shared `NodeAtomicJsonStore` (atomic temp-file rename, temp file mode 0600,
- * directories 0700). The API key is persisted because it must be usable for
+ * Storage is supplied by the application composition root's SQLite model
+ * profile repository. The API key is persisted because it must be usable for
  * real model calls, but it never crosses the renderer boundary: every public
  * read path returns `ModelProfileView` (a boolean `apiKeyMasked`), and
  * `getProfileForExecution` is the only key-bearing accessor — used exclusively
@@ -13,19 +12,11 @@
  * transports, never statically imported from a renderer-visible module.
  */
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { z } from "zod";
 
-import { APP_DATA_DIR, ENV } from "../../lib/app-config.ts";
 import { SystemClock } from "../../platform/persistence/clock.ts";
-import type {
-  AtomicJsonStore,
-  Clock,
-  JsonSchema,
-} from "../../platform/persistence/contracts.ts";
-import { NodeAtomicJsonStore } from "../../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import type { Clock } from "../../platform/persistence/contracts.ts";
+import type { JsonSchema } from "../../test-support/json-schema.ts";
 import {
   defaultAuth,
   effectiveAuth,
@@ -54,7 +45,6 @@ import type {
 } from "./contracts.ts";
 
 export const MODEL_PROFILES_SCHEMA_VERSION = 1 as const;
-export const MODEL_PROFILES_FILE_NAME = "model-profiles.v1.json";
 export const DEFAULT_MODEL_PROFILE_TEST_TIMEOUT_MS = 5_000;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
@@ -269,7 +259,11 @@ export interface ModelProfileRepository {
 }
 
 export interface ModelProfileRepositoryOptions {
-  readonly store: AtomicJsonStore<ModelProfilesFile>;
+  /** Injectable document port retained for focused repository unit tests. */
+  readonly store: {
+    read(): Promise<{ readonly value: ModelProfilesFile }>;
+    write(value: ModelProfilesFile): Promise<void>;
+  };
   readonly clock?: Clock;
   /** Injectable for unit tests; defaults to the global fetch. */
   readonly fetchFn?: typeof fetch;
@@ -556,38 +550,6 @@ async function resolveTestConfig(
   const auth =
     input.auth ?? storedAuth ?? defaultAuth(storedProtocol ?? protocol);
   return { mode, protocol, apiKey, endpoint, model, auth };
-}
-
-/** Default file path under the current data root. */
-export function resolveModelProfilesFilePath(): string {
-  const dataRoot = process.env[ENV.USAGE_HOME] ?? homedir();
-  return join(dataRoot, APP_DATA_DIR, "tasks", MODEL_PROFILES_FILE_NAME);
-}
-
-const repositoryCache = new Map<string, ModelProfileRepository>();
-
-/**
- * Process-wide singleton keyed by resolved file path so isolated test roots
- * (`TRUSTTOOLS_USAGE_HOME`) never share a repository instance across tests.
- */
-export function getModelProfileRepository(): ModelProfileRepository {
-  const filePath = resolveModelProfilesFilePath();
-  const cached = repositoryCache.get(filePath);
-  if (cached) return cached;
-  const store = new NodeAtomicJsonStore({
-    filePath,
-    defaultValue: DEFAULT_MODEL_PROFILES_FILE,
-    schema: modelProfilesSchema(),
-    clock: new SystemClock(),
-  });
-  const repository = createModelProfileRepository({ store });
-  repositoryCache.set(filePath, repository);
-  return repository;
-}
-
-/** Test-only: clear the path-keyed singleton cache. */
-export function resetModelProfileRepositoryCacheForTests(): void {
-  repositoryCache.clear();
 }
 
 /**
