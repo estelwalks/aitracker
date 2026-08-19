@@ -8,6 +8,7 @@
  * closed and a stable error code is returned; journal semantics are never
  * silently downgraded and the database is never destructively rebuilt.
  */
+import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 
@@ -21,6 +22,7 @@ import {
 import {
   evaluateCapabilities,
   probeWalCapability,
+  type CapabilityProbeResult,
   type RuntimeVersions,
   type RuntimeVersionsProvider,
 } from "./capability-probe.server.ts";
@@ -63,10 +65,14 @@ export class DatabaseHost implements SqliteDatabasePort {
     }
 
     const versions = options.versionsProvider.getVersions();
+    // The WAL probe and the connection both need the directory to exist. Doing
+    // this before probing keeps a missing data directory from surfacing as a
+    // raw ENOENT instead of a stable database error code.
+    if (path !== ":memory:") ensureDirectory(dirname(path));
     const probeDirectory =
       options.probeDirectory ??
       (path === ":memory:" ? tmpdir() : dirname(path));
-    const probe = probeWalCapability(probeDirectory);
+    const probe = runWalProbe(probeDirectory);
     const evaluation = evaluateCapabilities(versions, probe);
     if (!evaluation.supported) {
       throw new DatabaseError("capability-mismatch", "open", {
@@ -126,6 +132,29 @@ export class DatabaseHost implements SqliteDatabasePort {
 
 function normalizeDatabasePath(path: string): string {
   return path === ":memory:" || path === "" ? ":memory:" : resolve(path);
+}
+
+/**
+ * Creates the database directory chain when it is missing. A first run on a
+ * fresh machine must not fail just because `~/.trusttools/data` does not exist
+ * yet, and a genuine filesystem failure must still be a stable error code.
+ */
+function ensureDirectory(directory: string): void {
+  try {
+    mkdirSync(directory, { recursive: true });
+  } catch (error) {
+    throw new DatabaseError("io-failure", "open", { cause: error });
+  }
+}
+
+/** Runs the WAL probe, mapping raw filesystem failures to `io-failure`. */
+function runWalProbe(directory: string): CapabilityProbeResult {
+  try {
+    return probeWalCapability(directory);
+  } catch (error) {
+    if (error instanceof DatabaseError) throw error;
+    throw new DatabaseError("io-failure", "open", { cause: error });
+  }
 }
 
 /**
