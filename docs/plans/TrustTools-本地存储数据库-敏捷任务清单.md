@@ -15,6 +15,7 @@
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
 | v1.0 | 2026-08-19 13:32:45 | 初始版本：按《TrustTools 本地存储数据库架构设计文档》与 ADR，拆分 Release 1（数据库平台内核 + 首期 11 表 + 运维/巡检脚本 + 测试门禁）的 Epic/Story/Task |
+| v1.1 | 2026-08-19 16:31:56 | 修订（修复批次 B / P1-1）：T-01-05、T-02-03 等强制验证步骤追加「⚠️ 勿用 `--test <目录>`（虚绿：目录参数只跑 1 个空 test 且 exit 0），改用 `npm run test:database`（显式文件列表）」；新增 `verify:bundle-no-sqlite` 门禁与 `test:database` 脚本 |
 
 ---
 
@@ -119,6 +120,8 @@ Release 1 是后续 M2+ 的硬依赖：未完成 Release 1，禁止开始任何�
 | T-01-04 | `infrastructure/node-sqlite-database.server.ts`：实现 `SqliteDatabasePort`——`new DatabaseSync(path, { readBigInts:true, defensive:true, allowExtension:false, allowBareNamedParameters:false, allowUnknownNamedParameters:false, timeout:5000 })`；prepared statement helper；BigInt→安全整数转换与越界拒绝 | 1d | T-01-01、T-01-03 | 未命名/未知命名参数被拒绝；`allowExtension=false` 生效；BigInt 读取可转换；超出 `Number.MAX_SAFE_INTEGER`/`MIN_SAFE_INTEGER` 抛错而非静默失真；适配器不暴露 `DatabaseSync` 类型到 platform 外层 | prettier --check → tsc --noEmit → npm run lint → commit |
 | T-01-05 | 平台内核测试（共置 `database-host.test.ts`、`node-sqlite-database.test.ts`）：PRAGMA 断言、注入低版本拒绝写路径、单例冲突、BigInt 安全整数边界 | 1d | T-01-03、T-01-04 | `node --import tsx --test src/platform/database/` 全绿；覆盖：journal 断言失败拒绝写路径、`synchronous`/`foreign_keys`/`busy_timeout`/`trusted_schema` 断言、注入 3.52.x 拒绝分支、同路径二次打开失败、BigInt 边界（MAX_SAFE_INTEGER/MIN_SAFE_INTEGER/越界抛错） | prettier --check → tsc --noEmit → npm run lint → node --import tsx --test src/platform/database/database-host.test.ts + node-sqlite-database.test.ts → commit |
 
+> ⚠️ 勿用 `--test <目录>`（虚绿）：`node --test src/platform/database/` 只跑 1 个空 test 且 exit 0。强制验证步骤改用 `npm run test:database`（显式文件列表）。
+
 ### Story S-02：迁移运行器 + 0001_platform.sql 首期 11 表 — 4.5 人日 / 8 SP
 
 作为平台开发者，我需要只向前的 checksum 迁移运行器和严格按架构文档的首期 11 张 STRICT 表，以便空库可从 0 升到最新、重复执行幂等、篡改被拒绝，并为 M2+ 预留迁移状态机契约。
@@ -130,6 +133,8 @@ Release 1 是后续 M2+ 的硬依赖：未完成 Release 1，禁止开始任何�
 | T-02-01 | `migration-runner.server.ts`：按序发现 `migrations/*.sql`、SHA-256 checksum、事务内执行并写 `schema_migrations`、只向前、拒绝 checksum 变更与版本回退 | 1d | T-01-01、T-01-03 | 空库 0→latest 成功；重复执行幂等（不重复应用）；篡改任一已应用 SQL 的 checksum 后拒绝继续；目标版本低于当前版本拒绝；中断重启后已提交 migration 不重跑 | prettier --check → tsc --noEmit → npm run lint → commit |
 | T-02-02 | `migrations/0001_platform.sql`：11 张 STRICT 表——schema_migrations、data_migration_runs、app_preferences、runtime_flags、secure_secrets、model_profiles、ai_executions、ai_daily_usage、insight_preferences、insight_enhancement_cache、insight_enhancement_lines；严格按 §5.1/§5.2/§5.10 列/CHECK/FK/唯一与部分唯一索引 | 1d | T-02-01 | 11 表均为 STRICT；`model_profiles` 部分唯一索引（`is_active=1` 最多一个）；`ai_daily_usage` 复合主键 `(date_key, capability, profile_key)`；`data_migration_runs` 唯一索引 `(source_kind, source_path_hash, source_fingerprint)`；`insight_enhancement_cache` UNIQUE 七列 + 索引 `(surface_id, expires_at_ms)`；`insight_enhancement_lines` 主键 `(cache_key, sequence)` 且 FK CASCADE；所有 `*_json` 列 `CHECK(json_valid(...))`；所有 `*_at_ms` 非负 CHECK；不创建任何非首期表 | prettier --check → tsc --noEmit → npm run lint → node --import tsx --test（随 T-02-03 单测执行） → commit |
 | T-02-03 | migration 测试（§14.1 子集）：空库从 0 到 latest、重复迁移幂等、checksum 篡改拒绝、中断重启 | 1d | T-02-01、T-02-02 | 全绿：0→latest 成功且 `schema_migrations` 恰 1 行；再跑 runner 无变化；篡改 SQL 后抛 `migration-checksum`；模拟中断后重启不重跑已提交版本；临时目录（Windows/macOS）下通过 | prettier --check → tsc --noEmit → npm run lint → node --import tsx --test src/platform/database/migration-runner.test.ts → commit |
+
+> ⚠️ 勿用 `--test <目录>`（虚绿）：目录参数只跑 1 个空 test 且 exit 0。强制验证步骤改用 `npm run test:database`（显式文件列表）。
 | T-02-04 | `data_migration_runs` 状态机契约：类型 + 常量 + 校验器（`running|succeeded|failed|skipped`、幂等键字段），预留 M2+ 下游，不实现导入 | 0.5d | T-02-02 | 契约编译通过；枚举与字段类型与 §5.1 表结构一致；导出仅供后续迁移任务消费；本轮无任何导入逻辑 | prettier --check → tsc --noEmit → npm run lint → commit |
 | T-02-05 | 表级约束负向测试：违反 FK/CHECK/部分唯一索引/唯一索引的插入全部被拒绝 | 1d | T-02-02 | 用例覆盖：第二个 active `model_profiles` 被拒；非法 `status`/`mode`/`encryption_kind` 枚举被拒；`value_json` 非 JSON 被拒；`ai_daily_usage` 复合主键重复被拒；`insight_enhancement_cache` UNIQUE 冲突被拒；`data_migration_runs` 幂等唯一索引冲突被拒；`schema_migrations.duration_ms < 0` 被拒 | prettier --check → tsc --noEmit → npm run lint → node --import tsx --test src/platform/database/table-constraints.test.ts → commit |
 
