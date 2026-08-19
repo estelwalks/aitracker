@@ -5,11 +5,12 @@ import { join } from "node:path";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 
-import { APP_DATA_DIR } from "../../lib/app-config";
+import { APP_DATA_DIR, ENV } from "../../lib/app-config";
 import { AppError } from "../../lib/errors";
 import { AI_TOOLS } from "../../lib/tools/catalog.ts";
 import { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 import { SKILL_ROOT_SUFFIXES } from "../../lib/local-skills/scanner.server.ts";
+import { resetCompositionRootForTests } from "../../app/composition.server.ts";
 import {
   migrateSourceSkills,
   validateMigrationInput,
@@ -37,9 +38,19 @@ async function withTempHome(
 ): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "tt-sources-migrate-"));
   const dataDirectory = join(root, APP_DATA_DIR);
+  // `scanLocalSkills` resolves its origins/blacklist state through the
+  // composition root's SQLite httpCache. Point that root at this temp home so
+  // the scan never touches the real `~/.trusttools` database (held open by a
+  // running dev/Electron process, or migrated by older code).
+  const previous = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = root;
+  resetCompositionRootForTests();
   try {
     await run(root, dataDirectory);
   } finally {
+    resetCompositionRootForTests();
+    if (previous === undefined) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = previous;
     await rm(root, { recursive: true, force: true });
   }
 }
