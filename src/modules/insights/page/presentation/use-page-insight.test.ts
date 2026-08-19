@@ -62,10 +62,7 @@ describe("composeLineText", () => {
       : key;
 
   it("returns the base message when there is no analysis", () => {
-    assert.equal(
-      composeLineText(t, { key: "k", params: { n: 3 } }),
-      "k(n=3)",
-    );
+    assert.equal(composeLineText(t, { key: "k", params: { n: 3 } }), "k(n=3)");
   });
 
   it("appends the analysis sentence after a full stop", () => {
@@ -83,14 +80,8 @@ describe("canEnhanceNow", () => {
   });
 
   it("allows after the cooldown elapses", () => {
-    assert.equal(
-      canEnhanceNow(0, ENHANCE_COOLDOWN_MS),
-      true,
-    );
-    assert.equal(
-      canEnhanceNow(0, ENHANCE_COOLDOWN_MS + 1),
-      true,
-    );
+    assert.equal(canEnhanceNow(0, ENHANCE_COOLDOWN_MS), true);
+    assert.equal(canEnhanceNow(0, ENHANCE_COOLDOWN_MS + 1), true);
   });
 
   it("blocks within the cooldown window", () => {

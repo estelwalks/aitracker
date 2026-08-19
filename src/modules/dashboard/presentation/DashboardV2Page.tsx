@@ -199,7 +199,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
 
   return (
     <div className="dashboard-v3 space-y-4 pb-12">
-      <DashboardJarvisInsight hero={hero} rangeLabel={rangeLabel} />
+      <DashboardJarvisInsight />
       <DashboardTrustHero
         view={view}
         today={today}

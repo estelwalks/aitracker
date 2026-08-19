@@ -1,4 +1,10 @@
-import { RefreshCw, Sparkles, type LucideIcon } from "lucide-react";
+import {
+  ArrowUpRight,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 /**
@@ -19,11 +25,41 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
  *   column. When omitted the rotate/refresh controls stay in the title row.
  * - `pills` renders extra chips in the title row (after the title), matching
  *   the homepage's `dashboard-hero-pill` status pills.
+ * - `severity` renders a neutral three-state (info/attention/risk) badge.
+ * - `source="enhanced"` adds a small neutral "AI 增强" mark to the title row.
+ * - `onEnhance` + `enhanceLabel` render an enhance button (caller passes
+ *   `onEnhance` only when the envelope is enhanceable).
+ * - `onAction` + `actionLabel` render an action button (caller closes over
+ *   the action target/path).
  */
 const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 6000;
 const HERO_TYPE_INTERVAL_MS = 22;
 const HERO_ROTATE_AFTER_MS = 9000;
+
+/** Neutral three-state severity badge tokens (muted, never saturated). */
+export type JarvisSeverity = "info" | "attention" | "risk";
+
+const SEVERITY_TONE: Record<
+  JarvisSeverity,
+  { dot: string; text: string; border: string }
+> = {
+  info: {
+    dot: "bg-muted-foreground/60",
+    text: "text-muted-foreground",
+    border: "border-border",
+  },
+  attention: {
+    dot: "bg-[var(--color-warn)]/70",
+    text: "text-[var(--color-warn)]",
+    border: "border-[var(--color-warn)]/30",
+  },
+  risk: {
+    dot: "bg-[var(--color-danger)]/70",
+    text: "text-[var(--color-danger)]",
+    border: "border-[var(--color-danger)]/30",
+  },
+};
 
 export function JarvisInsight({
   title,
@@ -37,6 +73,15 @@ export function JarvisInsight({
   actions,
   pills,
   variant = "hero",
+  severity,
+  severityLabel,
+  source,
+  enhancedLabel,
+  onEnhance,
+  enhanceLabel,
+  enhanceBusy = false,
+  onAction,
+  actionLabel,
 }: {
   title?: string;
   lines: readonly string[];
@@ -57,6 +102,22 @@ export function JarvisInsight({
   pills?: ReactNode;
   /** hero = the shared page-level prototype card; inline = compact embedding. */
   variant?: "hero" | "inline";
+  /** Current line severity; renders a neutral info/attention/risk badge. */
+  severity?: JarvisSeverity;
+  /** Localized label for the severity badge (optional). */
+  severityLabel?: string;
+  /** `enhanced` adds a small neutral "AI 增强" mark to the title row. */
+  source?: "rules" | "enhanced";
+  /** Localized "AI 增强" mark label. */
+  enhancedLabel?: string;
+  /** Renders an enhance button when provided together with `enhanceLabel`. */
+  onEnhance?: () => void;
+  enhanceLabel?: string;
+  /** Show a spinner while an enhance request is in flight. */
+  enhanceBusy?: boolean;
+  /** Renders an action button when provided together with `actionLabel`. */
+  onAction?: () => void;
+  actionLabel?: string;
 }) {
   const hero = variant === "hero";
   const safeLines = useMemo(
@@ -121,6 +182,27 @@ export function JarvisInsight({
       safeLines.length ? (current + 1) % safeLines.length : 0,
     );
 
+  const severityBadge = severity ? (
+    <span
+      className={`inline-flex h-5 items-center gap-1 rounded-full border px-2 text-[9px] tracking-[0.08em] ${SEVERITY_TONE[severity].border} ${SEVERITY_TONE[severity].text}`}
+      title={severity}
+      aria-label={severityLabel ?? severity}
+    >
+      <span
+        className={`size-1.5 rounded-full ${SEVERITY_TONE[severity].dot}`}
+      />
+      {severityLabel}
+    </span>
+  ) : null;
+
+  const enhancedMark =
+    source === "enhanced" ? (
+      <span className="inline-flex h-5 items-center gap-1 rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground">
+        <Sparkles className="size-2.5" strokeWidth={1.75} />
+        {enhancedLabel}
+      </span>
+    ) : null;
+
   const refreshButton = onRefresh ? (
     <button
       type="button"
@@ -143,6 +225,35 @@ export function JarvisInsight({
       {rotateLabel}
     </button>
   );
+
+  const enhanceButton =
+    onEnhance && enhanceLabel ? (
+      <button
+        type="button"
+        onClick={onEnhance}
+        disabled={enhanceBusy}
+        className="dashboard-hero-refresh"
+      >
+        {enhanceBusy ? (
+          <Loader2 className="size-3 animate-spin" strokeWidth={2} />
+        ) : (
+          <Sparkles className="size-3" strokeWidth={2} />
+        )}
+        {enhanceLabel}
+      </button>
+    ) : null;
+
+  const actionButton =
+    onAction && actionLabel ? (
+      <button
+        type="button"
+        onClick={onAction}
+        className="dashboard-hero-refresh"
+      >
+        {actionLabel}
+        <ArrowUpRight className="size-3" strokeWidth={2} />
+      </button>
+    ) : null;
 
   return (
     <section
@@ -178,9 +289,13 @@ export function JarvisInsight({
                 {title}
               </h1>
             ) : null}
+            {severityBadge}
+            {enhancedMark}
             {pills}
             {actions == null ? (
               <div className="ml-auto flex items-center gap-2">
+                {actionButton}
+                {enhanceButton}
                 {refreshButton}
                 {rotateButton}
               </div>
@@ -228,6 +343,8 @@ export function JarvisInsight({
         {actions != null ? (
           <div className="flex shrink-0 flex-col items-end gap-2">
             {actions}
+            {actionButton}
+            {enhanceButton}
             {refreshButton}
             {rotateButton}
           </div>

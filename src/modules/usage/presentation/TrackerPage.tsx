@@ -1,13 +1,9 @@
 import { useMemo } from "react";
 import { Boxes, Flame, FolderKanban, MessagesSquare } from "lucide-react";
 
-import { JarvisInsight } from "../../../components/JarvisInsight";
 import { MetricGrid } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
-import {
-  composeTrackerInsights,
-  resolveInsightLines,
-} from "../../../lib/page-insights";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import type { TrackerReadModel } from "../contracts.ts";
 import { RoastBoard } from "./roast/RoastBoard.tsx";
 
@@ -16,7 +12,7 @@ import { RoastBoard } from "./roast/RoastBoard.tsx";
  * model (real usage events); nothing here is mocked or estimated.
  */
 export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
-  const { t, format, locale } = useI18n();
+  const { t, format } = useI18n();
   const { boards, totals } = initial;
 
   const metrics = useMemo(
@@ -48,16 +44,13 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
     ],
     [t, format, boards, totals],
   );
-  const insightLines = useMemo(
-    () => resolveInsightLines(t, composeTrackerInsights(initial, locale)),
-    [t, initial, locale],
-  );
 
   return (
     <div className="space-y-4 pb-12">
-      <JarvisInsight
+      <InsightCard
+        surfaceId="tracker"
+        variant="hero"
         title={t("tracker.insightTitle")}
-        lines={insightLines}
         rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />

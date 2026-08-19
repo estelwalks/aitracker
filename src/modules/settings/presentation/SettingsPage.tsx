@@ -59,7 +59,12 @@ import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { useSecurityClient } from "./use-security-client";
+import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
 import { WidgetConfigPanel } from "../../widget";
+import {
+  getSecurityLlmReviewAvailability,
+  setSecurityLlmReviewEnabled,
+} from "../../security-assessment/llm-review.server-fns";
 
 // 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
 const categories = [
@@ -198,9 +203,48 @@ export function SettingsPage({
   const [resetPreferencesDialogOpen, setResetPreferencesDialogOpen] =
     useState(false);
   const [clearingData, setClearingData] = useState(false);
+  const [llmReviewConfigured, setLlmReviewConfigured] = useState(false);
+  const [llmReviewEnabled, setLlmReviewEnabled] = useState(false);
+  const [llmReviewLoading, setLlmReviewLoading] = useState(true);
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
+
+  // Optional LLM review supplement (M4): master toggle. Unconfigured (no
+  // active model profile) keeps the toggle off and shows a silent hint.
+  useEffect(() => {
+    let disposed = false;
+    getSecurityLlmReviewAvailability()
+      .then((next) => {
+        if (disposed) return;
+        setLlmReviewConfigured(next.configured);
+        setLlmReviewEnabled(next.enabled);
+      })
+      .catch(() => {
+        if (disposed) return;
+        setLlmReviewConfigured(false);
+        setLlmReviewEnabled(false);
+      })
+      .finally(() => {
+        if (!disposed) setLlmReviewLoading(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
+  const changeLlmReview = async (enabled: boolean) => {
+    setLlmReviewEnabled(enabled);
+    try {
+      const next = await setSecurityLlmReviewEnabled({ data: { enabled } });
+      setLlmReviewConfigured(next.configured);
+      setLlmReviewEnabled(next.enabled);
+      toast.success(t("settings.toast.llmReviewSaved"));
+    } catch {
+      setLlmReviewEnabled(!enabled);
+      toast.error(t("settings.toast.llmReviewSaveFailed"));
+    }
+  };
 
   // Auto-launch logic (keep existing logic intact)
   useEffect(() => {
@@ -646,6 +690,22 @@ export function SettingsPage({
               />
               <div className="mb-3 mt-1 border-t border-border pt-3">
                 <Field
+                  label={t("settings.security.llmReview")}
+                  hint={
+                    llmReviewConfigured
+                      ? t("settings.security.llmReviewHint")
+                      : t("settings.security.llmReviewUnconfiguredHint")
+                  }
+                >
+                  <Toggle
+                    value={llmReviewEnabled}
+                    onChange={(enabled) => void changeLlmReview(enabled)}
+                    disabled={!llmReviewConfigured || llmReviewLoading}
+                  />
+                </Field>
+              </div>
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                <Field
                   label={t("settings.scan.onDemand")}
                   hint={t("settings.scan.onDemandDesc")}
                 >
@@ -692,6 +752,7 @@ export function SettingsPage({
           {category === "模型配置" && (
             <div>
               <ModelProfilesSection />
+              <InsightSettingsSection />
             </div>
           )}
 

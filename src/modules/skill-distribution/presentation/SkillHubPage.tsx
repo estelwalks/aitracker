@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { useI18n } from "../../../lib/i18n/context";
 import {
   getBrowserSecurityClient,
@@ -33,7 +33,7 @@ export interface SkillHubData {
  * read — nothing is mocked.
  */
 export function SkillHubPage({ initial }: { initial: SkillHubData }) {
-  const { t, format } = useI18n();
+  const { t } = useI18n();
   const [securityHistory, setSecurityHistory] = useState<
     readonly SecurityHistoryView[]
   >([]);
@@ -61,7 +61,6 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
     };
   }, []);
 
-  const summary = initial.workspace.workspace.summary;
   const localSkillNames = useMemo(
     () => new Set(initial.workspace.snapshot.skills.map((skill) => skill.name)),
     [initial.workspace.snapshot.skills],
@@ -88,38 +87,11 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
     return { byName };
   }, [securityHistory, localSkillNames]);
 
-  // Jarvis lines — every number comes from real loader data / real reads.
-  const jarvisLines = useMemo(() => {
-    const lines: string[] = [];
-    lines.push(
-      t("skills.jarvis.localSkills", {
-        count: format.formatNumber(summary.skillCount),
-        agents: format.formatNumber(summary.activeAgentCount),
-        installs: format.formatNumber(summary.installationCount),
-      }),
-    );
-    if (securityView.byName.size > 0) {
-      const riskCount = [...securityView.byName.values()].reduce(
-        (total, count) => total + count,
-        0,
-      );
-      lines.push(
-        t("skills.jarvis.securityDetected", {
-          count: format.formatNumber(securityView.byName.size),
-          risk: format.formatNumber(riskCount),
-        }),
-      );
-    } else if (localSkillNames.size > 0) {
-      lines.push(t("skills.jarvis.securityClean"));
-    }
-    return lines;
-  }, [t, format, summary, securityView, localSkillNames]);
-
   return (
     <div className="space-y-4">
-      <JarvisInsight
-        title={t("insights.title")}
-        lines={jarvisLines}
+      <InsightCard
+        surfaceId="skills"
+        variant="hero"
         rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
