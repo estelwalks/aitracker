@@ -363,6 +363,20 @@ export const security = {
     model: {
       requiredSettings: "深度检测需先在设置-模型配置中配置模型",
     },
+    llm: {
+      title: "AI 辅助分析",
+      disclaimer: "仅补充，不改变判定",
+      trigger: "生成 AI 补充分析",
+      loading: "AI 补充分析中…",
+      failed: "AI 补充分析暂不可用，已保留静态规则结果",
+      summary: "摘要",
+      dimensions: "维度分析",
+      confidence: "置信度",
+      confidenceLow: "低",
+      confidenceMedium: "中",
+      confidenceHigh: "高",
+      modelLabel: "模型：{label}",
+    },
     verdict: {
       allow: "允许",
       warn: "警告",

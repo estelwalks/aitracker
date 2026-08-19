@@ -378,6 +378,21 @@ export const security = {
       requiredSettings:
         "Deep scans require configuring a model in Settings → Model configuration first.",
     },
+    llm: {
+      title: "AI-assisted analysis",
+      disclaimer: "Supplementary only · does not change the verdict",
+      trigger: "Generate AI-assisted analysis",
+      loading: "Generating AI-assisted analysis…",
+      failed:
+        "AI-assisted analysis is unavailable; the static rule results were kept.",
+      summary: "Summary",
+      dimensions: "Dimension analysis",
+      confidence: "Confidence",
+      confidenceLow: "Low",
+      confidenceMedium: "Medium",
+      confidenceHigh: "High",
+      modelLabel: "Model: {label}",
+    },
     verdict: {
       allow: "Allow",
       warn: "Warn",
