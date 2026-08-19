@@ -13,7 +13,7 @@ import type {
 
 export { toPublicSession } from "../application/public-projection.ts";
 
-export function createLegacySessionRepository(): SessionRepository {
+export function createSessionRepository(): SessionRepository {
   return {
     async list(signal) {
       if (signal?.aborted) return [];
@@ -36,18 +36,18 @@ export interface ResumeCommandExecutor {
   ): Promise<void>;
 }
 
-export interface LegacySessionScan {
+export interface SessionScan {
   scan(): Promise<readonly SessionRecord[]>;
 }
 
-export interface LegacyResumeSessionPortOptions {
-  readonly scanner?: LegacySessionScan;
+export interface ResumeSessionPortOptions {
+  readonly scanner?: SessionScan;
 }
 
 /** Server-only adapter. Commands and cwd never appear in ResumeSessionResult. */
-export function createLegacyResumeSessionPort(
+export function createSessionResumePort(
   executor: ResumeCommandExecutor,
-  options: LegacyResumeSessionPortOptions = {},
+  options: ResumeSessionPortOptions = {},
 ): ResumeSessionPort {
   const scanner = options.scanner ?? {
     scan: async () => (await scanLocalSessions()).sessions,

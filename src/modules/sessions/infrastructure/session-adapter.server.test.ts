@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createLegacyResumeSessionPort,
+  createSessionResumePort,
   toPublicSession,
-} from "./legacy-session-adapter.server.ts";
+} from "./session-adapter.server.ts";
 import type { SessionRecord } from "../../../lib/local-sessions/types.ts";
 import { isErr } from "../../../shared/result.ts";
 
 test("resume rejects unsafe ids without invoking executor", async () => {
   let invoked = false;
-  const port = createLegacyResumeSessionPort({
+  const port = createSessionResumePort({
     execute: async () => {
       invoked = true;
     },
@@ -74,7 +74,7 @@ function resumableRecord(): SessionRecord {
   };
 }
 
-test("legacy projection strips private session fields", () => {
+test("session projection strips private session fields", () => {
   const publicView = toPublicSession(resumableRecord());
   const serialized = JSON.stringify(publicView);
   assert.doesNotMatch(
@@ -85,7 +85,7 @@ test("legacy projection strips private session fields", () => {
   assert.equal(publicView.resumeAvailable, true);
 });
 
-test("legacy projection redacts unsafe title, project and malformed session id", () => {
+test("session projection redacts unsafe title, project and malformed session id", () => {
   const publicView = toPublicSession({
     ...resumableRecord(),
     sessionId: "/private/session.jsonl",
@@ -104,7 +104,7 @@ test("legacy projection redacts unsafe title, project and malformed session id",
 
 test("resume maps executor failure and cancellation to stable codes", async () => {
   const scanner = { scan: async () => [resumableRecord()] };
-  const failed = createLegacyResumeSessionPort(
+  const failed = createSessionResumePort(
     {
       execute: async () => {
         throw new Error("private");
@@ -119,7 +119,7 @@ test("resume maps executor failure and cancellation to stable codes", async () =
 
   const controller = new AbortController();
   controller.abort();
-  const cancelled = await createLegacyResumeSessionPort(
+  const cancelled = await createSessionResumePort(
     { execute: async () => {} },
     { scanner },
   ).resume({ source: "codex", sessionId: "abc", signal: controller.signal });
@@ -130,7 +130,7 @@ test("resume maps executor failure and cancellation to stable codes", async () =
 
 test("resume delegates only a trusted source/session pair, never a command", async () => {
   let received: unknown;
-  const port = createLegacyResumeSessionPort(
+  const port = createSessionResumePort(
     {
       execute: async (request) => {
         received = request;

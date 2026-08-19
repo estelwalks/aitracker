@@ -8,14 +8,14 @@ import type {
   UsageSnapshotDto,
 } from "../contracts.ts";
 import {
-  createLegacyUsageScanner,
+  createUsageScanner,
   toPublicUsageSnapshot,
-  type LegacyUsageScanner,
-} from "./legacy-usage-adapter.server.ts";
+  type UsageScanner,
+} from "./usage-adapter.server.ts";
 import { isCancellation } from "../../../platform/runtime/abort.ts";
 
-export interface LegacyUsageCollectorOptions {
-  readonly scanner?: LegacyUsageScanner;
+export interface UsageCollectorOptions {
+  readonly scanner?: UsageScanner;
   readonly repository?: SnapshotRepository;
   readonly now?: () => number;
 }
@@ -137,10 +137,10 @@ function withBudget<T>(
   });
 }
 
-export function createLegacyUsageCollector(
-  options: LegacyUsageCollectorOptions = {},
+export function createUsageCollector(
+  options: UsageCollectorOptions = {},
 ): UsageCollector {
-  const scanner = options.scanner ?? createLegacyUsageScanner();
+  const scanner = options.scanner ?? createUsageScanner();
   const now = options.now ?? Date.now;
   return {
     async collect(request = {}): Promise<UsageCollectionResult> {
