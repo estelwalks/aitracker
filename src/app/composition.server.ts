@@ -28,6 +28,7 @@ import {
   createAiExecutor,
   type AIExecutorPort,
 } from "../modules/ai-orchestration/ai-executor.ts";
+import type { PageInsightsApplication } from "../modules/insights/page/application.ts";
 import {
   createProviderRegistry,
   createRegistryRouter,
@@ -168,6 +169,12 @@ export interface CompositionRoot {
    * Local performance-rollout state persisted in SQLite runtime flags.
    */
   readonly performanceRollout: PerformanceRolloutRepository;
+  /**
+   * Page-insights application (M3): the 14 surface evidence adapters plus, when
+   * the `insight.killswitch` flag is off, the AI enhancer (M2). Renders
+   * rule-generated candidates always, enhanced candidates when allowed.
+   */
+  readonly insights: PageInsightsApplication;
   /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
   readonly dataRoot: string;
 }
@@ -675,6 +682,19 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     },
   };
 
+  // M3: page-insights application — the 14 surface evidence adapters plus the
+  // optional AI enhancer (M2). Assembled through the registry so the root never
+  // statically imports the adapters (avoids a module cycle); the registry also
+  // owns the `insight.killswitch` gate (enhancer disabled, Profile unread).
+  const { createPageInsightsApplicationForRoot } =
+    await import("./insight-registry.server.ts");
+  const insights = await createPageInsightsApplicationForRoot({
+    aiExecutor,
+    modelProfiles,
+    store: databaseRuntime.features.insights,
+    runtimeFlags: databaseRuntime.features.runtimeFlags,
+  });
+
   return {
     database: databaseRuntime,
     scheduler,
@@ -699,6 +719,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     monitoring,
     metrics,
     performanceRollout,
+    insights,
     dataRoot,
   };
 }
