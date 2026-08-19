@@ -146,9 +146,6 @@ export interface SqliteInsightRepository {
   /** Surface preference overrides global; missing preference defaults to rules. */
   getEffectivePreference(surfaceId: string): InsightPreference;
   setPreference(value: InsightPreference): void;
-  importLegacyPreferences(values: readonly InsightPreference[]): {
-    insertedOrUpdated: number;
-  };
   findValid(
     identity: InsightCacheIdentity,
     nowMs: number,
@@ -227,25 +224,6 @@ export function createSqliteInsightRepository(
     },
     setPreference(value) {
       void writePreference(value);
-    },
-    importLegacyPreferences(values) {
-      const transaction = database.transaction();
-      transaction.begin();
-      try {
-        const insertedOrUpdated = values.reduce(
-          (total, value) => total + writePreference(value),
-          0,
-        );
-        transaction.commit();
-        return { insertedOrUpdated };
-      } catch (error) {
-        try {
-          transaction.rollback();
-        } catch {
-          /* preserve original */
-        }
-        throw error;
-      }
     },
     findValid(identity, nowMs) {
       assertIdentity(identity);
