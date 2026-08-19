@@ -1,5 +1,4 @@
 import { homedir } from "node:os";
-import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
@@ -7,15 +6,13 @@ import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
-import { NodeAtomicJsonStore } from "../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
 import {
-  DEFAULT_PERFORMANCE_ROLLOUT_STATE,
-  PERFORMANCE_ROLLOUT_FILE,
-  createPerformanceRolloutRepository,
-  performanceRolloutSchema,
+  createDatabaseRuntime,
+  type DatabaseRuntime,
+} from "./database-runtime.server.ts";
+import {
   type PerformanceRolloutRepository,
-  type PerformanceRolloutState,
   type PerformanceRolloutStage,
 } from "./performance-rollout.ts";
 import { createExecutorRegistry } from "../modules/tasks/application/executor-registry/index.ts";
@@ -23,15 +20,9 @@ import { createTaskScheduler } from "../modules/tasks/application/scheduler.ts";
 import { createTaskApi } from "../modules/tasks/application/task-api.ts";
 import type { TaskApi } from "../modules/tasks/application/task-api.ts";
 import {
-  DEFAULT_TASK_PREFERENCES,
-  DEFAULT_TASK_RUNS,
-  preferenceSchema,
-  taskRunsSchema,
   type TaskPreferenceRepository,
   type TaskRunRepository,
 } from "../modules/tasks/application/task-storage.ts";
-import { createTaskPreferenceRepository } from "../modules/tasks/infrastructure/task-preference-repository.ts";
-import { createTaskRunRepository } from "../modules/tasks/infrastructure/task-run-repository.ts";
 import type { TaskScheduler } from "../modules/tasks/application/scheduler.ts";
 import {
   createAiExecutor,
@@ -44,41 +35,19 @@ import {
 } from "../modules/ai-orchestration/provider-registry.ts";
 import {
   createProfileBackedProvider,
-  getModelProfileRepository,
   type ModelProfileRepository,
 } from "../modules/ai-orchestration/model-profile.server.ts";
+import type { ModelSecretCodec } from "../modules/ai-orchestration/infrastructure/sqlite-model-profile-repository.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
 import type { ReportsApplication } from "../modules/reports/index.ts";
-import {
-  DEFAULT_REPORT_FILE,
-  createAtomicReportStore,
-  reportStoreSchema,
-} from "../modules/reports/infrastructure/atomic-report-store.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import { createMarkdownReportStore } from "../modules/reports/infrastructure/markdown-report-store.server.ts";
-import { createKnowledgeRepository } from "../modules/knowledge/application/index.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
-import {
-  DEFAULT_KNOWLEDGE_DOCUMENT,
-  knowledgeDocumentSchema,
-} from "../modules/knowledge/infrastructure/atomic-knowledge-store.ts";
-import { createSha256HashPort } from "../modules/knowledge/infrastructure/hash-port.server.ts";
 import { createDistillationApplication } from "../modules/distillation/application/index.ts";
 import type { DistillationApplication } from "../modules/distillation/index.ts";
-import {
-  DEFAULT_DISTILL_CANDIDATE_FILE,
-  createAtomicCandidateStore,
-  distillCandidateStoreSchema,
-} from "../modules/distillation/infrastructure/atomic-candidate-store.ts";
-import {
-  DEFAULT_DISTILL_QUOTA_FILE,
-  createAtomicDistillQuotaStore,
-  distillDailyQuotaLimit,
-  distillQuotaStoreSchema,
-  type DistillQuotaPort,
-} from "../modules/distillation/quota.ts";
+import type { DistillQuotaPort } from "../modules/distillation/quota.ts";
 import { createSessionQueryService } from "../modules/sessions/index.ts";
 import type {
   ResumeSessionPort,
@@ -86,20 +55,11 @@ import type {
 } from "../modules/sessions/contracts.ts";
 import { createLegacyResumeSessionPort } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
 import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
-import type { UsageSnapshotDto } from "../modules/usage/contracts.ts";
 import { createLegacyUsageCollector } from "../modules/usage/infrastructure/legacy-usage-collector.server.ts";
-import {
-  createUsageEnvelopeRepository,
-  usageEnvelopeSchema,
-} from "../modules/usage/infrastructure/usage-envelope.server.ts";
 import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
 import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
 import { createMonitoringRuntime } from "../modules/monitoring/application/index.ts";
-import {
-  createAtomicMonitoringStatusStore,
-  monitoringStatusSchema,
-} from "../modules/monitoring/infrastructure.ts";
 
 /**
  * Server-only composition root for the background task scheduler.
@@ -121,6 +81,8 @@ import {
 
 /** Shape of the assembled scheduler object graph. */
 export interface CompositionRoot {
+  /** SQLite lifecycle and renderer-safe cutover/health status. */
+  readonly database: DatabaseRuntime;
   /** The background task scheduler. `start()` is NOT called by this module. */
   readonly scheduler: TaskScheduler;
   readonly preferences: TaskPreferenceRepository;
@@ -139,32 +101,24 @@ export interface CompositionRoot {
    */
   readonly aiExecutor: AIExecutorPort;
   /**
-   * Multi-profile model configuration store (S-500). Profiles persist under
-   * `~/.trusttools/tasks/model-profiles.v1.json` (0600 perms); renderer-facing
-   * reads return key-free projections. The registry's `profile` provider
-   * resolves executions through this repository.
+   * Multi-profile model configuration stored in SQLite; renderer-facing reads
+   * return key-free projections. The registry's `profile` provider resolves
+   * executions through this repository.
    */
   readonly modelProfiles: ModelProfileRepository;
   /**
-   * Reports application. Backed by an AtomicJsonStore-backed report store, the
-   * AI generation adapter (using `aiExecutor`) and the offline context port.
+   * Reports application. Backed by the normalized SQLite report store, the AI
+   * generation adapter (using `aiExecutor`) and the offline context port.
    * Generation currently runs against the deterministic offline model.
    */
   readonly reports: ReportsApplication;
   /**
-   * Distillation application. Backed by the legacy local-sessions repository
-   * (wrapped as a `SessionQueryPort`), `aiExecutor`, an AtomicJsonStore-backed
-   * knowledge repository and an AtomicJsonStore-backed candidate store.
-   * Candidates are hydrated from `distill-candidates.v1.json` on construction
-   * and every start/approve/cancel writes through; approval is the only path
-   * that writes to the knowledge repository.
+   * Distillation application backed by SQLite knowledge, candidate and quota
+   * repositories. Approval is the only path that writes knowledge assets.
    */
   readonly distillation: DistillationApplication;
   /**
-   * Server-side daily quota ledger for real-model distillation calls (Story
-   * B-600). Persists only `{ date, used }` under
-   * `~/.trusttools/tasks/distill-quota.v1.json`; the daily limit is a
-   * constant/env value, so the count cannot be raised from the renderer.
+   * Server-side SQLite quota ledger for real-model distillation calls.
    */
   readonly distillQuota: DistillQuotaPort;
   /**
@@ -209,8 +163,7 @@ export interface CompositionRoot {
   /** In-memory read-model metrics sink (P0-T0-09; observe-only). */
   readonly metrics: import("../platform/observability/contracts.ts").MetricSink;
   /**
-   * Local performance-rollout state (P0-T0-08). Persists the monotonic stage
-   * and the emergency kill switch under `~/.trusttools/tasks/performance-rollout.v1.json`.
+   * Local performance-rollout state persisted in SQLite runtime flags.
    */
   readonly performanceRollout: PerformanceRolloutRepository;
   /** Resolved data root (`process.env[ENV.USAGE_HOME] ?? homedir()`). */
@@ -219,7 +172,30 @@ export interface CompositionRoot {
 
 export const COMPOSITION_GLOBAL = `__${APP_ID.toUpperCase()}_COMPOSITION__`;
 
+let secretCodecOverride: ModelSecretCodec | undefined;
+
+/** Test-only seam; production always supplies the Electron safe-storage codec. */
+export function setSecretCodecForTests(codec?: ModelSecretCodec): void {
+  secretCodecOverride = codec;
+}
+
 let composition: CompositionRoot | undefined;
+let shutdownHookInstalled = false;
+let databaseForProcessExit: DatabaseRuntime | undefined;
+
+function installDatabaseShutdownHook(database: DatabaseRuntime): void {
+  databaseForProcessExit = database;
+  if (shutdownHookInstalled) return;
+  shutdownHookInstalled = true;
+  process.once("beforeExit", () => {
+    try {
+      databaseForProcessExit?.checkpoint();
+    } catch {
+      // Teardown is best effort; close still performs its own checkpoint.
+    }
+    databaseForProcessExit?.close();
+  });
+}
 
 type CompositionGlobal = Record<
   typeof COMPOSITION_GLOBAL,
@@ -238,107 +214,33 @@ function writeGlobalCache(value: Promise<CompositionRoot> | undefined): void {
 
 async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const dataRoot = process.env[ENV.USAGE_HOME] ?? homedir();
-  const tasksDir = join(dataRoot, APP_DATA_DIR, "tasks");
-  // Lazy: ensured on first construction so a fresh install incurs no I/O
-  // until the scheduler is actually requested. `recursive: true` is a no-op
-  // when the directory already exists.
-  await mkdir(tasksDir, { recursive: true });
-
-  const preferencesStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "preferences.v1.json"),
-    defaultValue: DEFAULT_TASK_PREFERENCES,
-    schema: preferenceSchema(clock),
+  const databaseRuntime = await createDatabaseRuntime({
+    dataRoot,
     clock,
-  });
-  const runsStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "runs.v1.json"),
-    defaultValue: DEFAULT_TASK_RUNS,
-    schema: taskRunsSchema(),
-    clock,
-  });
-
-  const preferences = createTaskPreferenceRepository({
-    store: preferencesStore,
-    clock,
-  });
-  const runs = createTaskRunRepository({ store: runsStore, clock });
-
-  // Performance-rollout local state (P0-T0-08). A corrupt file safely falls
-  // back to legacy defaults; the repository is read-only in query paths.
-  const performanceRolloutStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, PERFORMANCE_ROLLOUT_FILE),
-    defaultValue: DEFAULT_PERFORMANCE_ROLLOUT_STATE,
-    schema: {
-      currentVersion: 1,
-      parse(value: unknown): PerformanceRolloutState {
-        return performanceRolloutSchema.parse(value);
+    secretCodec: secretCodecOverride ?? {
+      async encrypt() {
+        throw new Error("errors.modelProfile.safeStorageUnavailable");
+      },
+      async decrypt() {
+        throw new Error("errors.modelProfile.safeStorageUnavailable");
       },
     },
-    clock,
   });
-  const performanceRollout = createPerformanceRolloutRepository({
-    store: performanceRolloutStore,
-    clock,
-  });
-
-  // Legacy usage snapshot store. Read-only compatibility source: never
-  // written by the new pipeline (the copy-forward adapter in
-  // `createUsageEnvelopeRepository` reads it only when the envelope file is
-  // missing), so older app versions keep reading it unchanged (T7-05/08).
-  const usageSnapshotStore = new NodeAtomicJsonStore<UsageSnapshotDto | null>({
-    filePath: join(tasksDir, "usage-snapshot.v1.json"),
-    defaultValue: null,
-    schema: {
-      currentVersion: 1,
-      parse(value): UsageSnapshotDto | null {
-        if (value === null) return null;
-        if (
-          typeof value !== "object" ||
-          value === null ||
-          typeof (value as { generatedAt?: unknown }).generatedAt !== "string"
-        )
-          throw new TypeError("Invalid usage snapshot");
-        return value as UsageSnapshotDto;
-      },
-    },
-    clock,
-  });
-
-  // P2-T2-05/06: unified snapshot runtime for Usage. New snapshots live in the
-  // sibling `usage-snapshot-envelope.v1.json`; the legacy `usage-snapshot.v1.json`
-  // is never overwritten and serves as the copy-forward fallback.
-  const usageEnvelopeStore = new NodeAtomicJsonStore<
-    import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<UsageSnapshotDto>
-  >({
-    filePath: join(tasksDir, "usage-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: usageEnvelopeSchema,
-    clock,
-  });
+  const {
+    preferences,
+    runs,
+    monitoring: monitoringStore,
+    performanceRollout,
+  } = databaseRuntime.features;
 
   // P3-T3-06: project classification index. Dashboard queries resolve from
   // this persisted index (O(1)); the Usage refresh collector feeds observed
   // refs through the incremental classifier in the background.
-  const {
-    createClassificationIndexRepository,
-    DEFAULT_CLASSIFICATION_INDEX,
-    classificationIndexSchema,
-  } = await import("../modules/dashboard/classification-index.server.ts");
   const { createIncrementalClassifier } =
     await import("../modules/dashboard/incremental-classifier.server.ts");
   const { createClassificationService } =
     await import("../modules/dashboard/classification-service.server.ts");
-  const classificationIndexStore = new NodeAtomicJsonStore<
-    import("../modules/dashboard/classification-index.server.ts").ClassificationIndex
-  >({
-    filePath: join(tasksDir, "project-classification-index.v1.json"),
-    defaultValue: DEFAULT_CLASSIFICATION_INDEX,
-    schema: classificationIndexSchema,
-    clock,
-  });
-  const classificationRepository = createClassificationIndexRepository(
-    classificationIndexStore,
-  );
+  const classificationRepository = databaseRuntime.features.classifications;
   const classificationService = createClassificationService({
     repository: classificationRepository,
     classifier: createIncrementalClassifier({
@@ -350,38 +252,15 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // P3-T3-04: WSL topology snapshot. Enumerates distro/home at most once per
   // freshness window (6h from the runtime policy) and persists it; usage
   // collection reads this coordinator instead of invoking `wsl.exe` on every
-  // refresh.
-  const { createSnapshotEnvelopeRepository } =
-    await import("../platform/snapshot-runtime/envelope-repository.ts");
+  // refresh. S-03 (T-03-02): the repository is the SQLite `snapshot_blobs`
+  // store, not a per-process in-memory envelope, so the topology survives
+  // restarts.
   const { createWslSnapshotRuntime } =
     await import("../platform/discovery/wsl-snapshot-runtime.server.ts");
   type Envelope<T> =
     import("../platform/snapshot-runtime/contracts.ts").SnapshotEnvelope<T>;
-  const emptyWslEnvelope: Envelope<
-    import("../platform/discovery/wsl-topology.server.ts").WslTopology
-  > = {
-    schemaVersion: 1,
-    revision: "empty",
-    generatedAt: null,
-    sourceFingerprint: null,
-    status: "empty",
-    data: null,
-    diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
-  };
-  const wslSnapshotStore = new NodeAtomicJsonStore<
-    Envelope<import("../platform/discovery/wsl-topology.server.ts").WslTopology>
-  >({
-    filePath: join(tasksDir, "wsl-topology-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: { currentVersion: 1, parse: (value) => value as never },
-    clock,
-  });
   const wslSnapshot = createWslSnapshotRuntime({
-    repository: createSnapshotEnvelopeRepository({
-      store: wslSnapshotStore,
-      emptyEnvelope: emptyWslEnvelope,
-      schema: { currentVersion: 1, parse: (value) => value as never },
-    }),
+    repository: databaseRuntime.features.wslSnapshots,
     now: () => clock.now().getTime(),
   });
 
@@ -409,10 +288,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   const usageSnapshot = createUsageSnapshotRuntime({
-    repository: createUsageEnvelopeRepository({
-      envelopeStore: usageEnvelopeStore,
-      legacyStore: usageSnapshotStore,
-    }),
+    repository: databaseRuntime.features.usageSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.usage),
     // T3-06: after each Usage refresh, feed observed project refs to the
@@ -464,9 +340,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   // P3-T3-01/02/03: domain snapshots for Sessions, Skills and Installations.
-  // Each has its own sibling file; pages read the coordinator (O(1)) instead
-  // of re-scanning. The shared envelope repository handles corrupt fallback
-  // and last-known-good.
+  // Pages read the SQLite-backed coordinator (O(1)) instead of re-scanning.
   const { createSessionSnapshotRuntime } =
     await import("../modules/sessions/infrastructure/session-snapshot-runtime.server.ts");
   const { createSkillSnapshotRuntime } =
@@ -485,22 +359,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     data: null,
     diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
   };
-  const sessionSnapshotStore = new NodeAtomicJsonStore<
-    Envelope<
-      import("../modules/sessions/infrastructure/session-snapshot.contracts.ts").SessionSnapshotData
-    >
-  >({
-    filePath: join(tasksDir, "session-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: { currentVersion: 1, parse: (value) => value as never },
-    clock,
-  });
   const sessionSnapshot = createSessionSnapshotRuntime({
-    repository: createSnapshotEnvelopeRepository({
-      store: sessionSnapshotStore,
-      emptyEnvelope: emptySessionEnvelope,
-      schema: { currentVersion: 1, parse: (value) => value as never },
-    }),
+    repository: databaseRuntime.features.sessionSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.sessions),
   });
@@ -516,22 +376,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     data: null,
     diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
   };
-  const skillSnapshotStore = new NodeAtomicJsonStore<
-    Envelope<
-      import("../modules/skill-catalog/infrastructure/skill-snapshot.contracts.ts").SkillSnapshotData
-    >
-  >({
-    filePath: join(tasksDir, "skill-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: { currentVersion: 1, parse: (value) => value as never },
-    clock,
-  });
   const skillSnapshot = createSkillSnapshotRuntime({
-    repository: createSnapshotEnvelopeRepository({
-      store: skillSnapshotStore,
-      emptyEnvelope: emptySkillEnvelope,
-      schema: { currentVersion: 1, parse: (value) => value as never },
-    }),
+    repository: databaseRuntime.features.skillSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.skills),
   });
@@ -547,41 +393,14 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     data: null,
     diagnostics: { lastAttemptAt: null, lastSuccessAt: null, warningCodes: [] },
   };
-  const installationSnapshotStore = new NodeAtomicJsonStore<
-    Envelope<
-      import("../platform/discovery/installation-snapshot.contracts.ts").InstallationSnapshotData
-    >
-  >({
-    filePath: join(tasksDir, "installation-snapshot-envelope.v1.json"),
-    defaultValue: null as never,
-    schema: { currentVersion: 1, parse: (value) => value as never },
-    clock,
-  });
   const installationSnapshot = createInstallationSnapshotRuntime({
-    repository: createSnapshotEnvelopeRepository({
-      store: installationSnapshotStore,
-      emptyEnvelope: emptyInstallationEnvelope,
-      schema: { currentVersion: 1, parse: (value) => value as never },
-    }),
+    repository: databaseRuntime.features.installationSnapshots,
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.installation),
   });
 
-  const monitoringStore = new NodeAtomicJsonStore<
-    import("../modules/monitoring/contracts.ts").MonitoringStatus | null
-  >({
-    filePath: join(tasksDir, "monitoring.v1.json"),
-    defaultValue: null,
-    schema: {
-      ...monitoringStatusSchema,
-      parse(value) {
-        return value === null ? null : monitoringStatusSchema.parse(value);
-      },
-    },
-    clock,
-  });
   const monitoring = createMonitoringRuntime({
-    store: createAtomicMonitoringStatusStore(monitoringStore),
+    store: monitoringStore,
     now: () => clock.now(),
   });
 
@@ -604,30 +423,65 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // `profile` provider that resolves a saved profile by `modelId` at invoke
   // time — distillation selects a profile by its id and routes here, giving it
   // a real model call while every renderer-facing read stays key-free.
-  const modelProfiles = getModelProfileRepository();
+  const modelProfiles = databaseRuntime.features.modelProfiles;
   const aiRegistry = createProviderRegistry([offlineProvider]);
   aiRegistry.register(
     createProfileBackedProvider({
       resolve: (profileId) => modelProfiles.getProfileForExecution(profileId),
     }),
   );
-  const aiExecutor = createAiExecutor({
+  const coreAiExecutor = createAiExecutor({
     router: createRegistryRouter(aiRegistry),
     offlineFallback: deterministicOfflineFallback,
   });
+  const aiExecutor: AIExecutorPort = {
+    async execute(request) {
+      const startedAtMs = Date.now();
+      const result = await coreAiExecutor.execute(request);
+      const finishedAtMs = Date.now();
+      const audit = databaseRuntime.features.aiExecutions;
+      {
+        const capability = request.prompt.id.startsWith("report")
+          ? "report"
+          : "distillation";
+        const amountUsd = result.summary.cost.amountUsd;
+        audit.recordWithBudget({
+          mode: "enhanced-manual",
+          key: {
+            dateKey: new Date(finishedAtMs).toISOString().slice(0, 10),
+            capability,
+            profileKey:
+              request.providerId === "profile" ? request.modelId : "offline",
+          },
+          dailyCallLimit: null,
+          execution: {
+            capability,
+            summary: result.summary,
+            ...(result.response?.usage ? { usage: result.response.usage } : {}),
+            ...(amountUsd !== undefined && Number.isFinite(amountUsd)
+              ? {
+                  costMicrousd: BigInt(
+                    Math.max(0, Math.round(amountUsd * 1_000_000)),
+                  ),
+                }
+              : {}),
+            startedAtMs,
+            finishedAtMs,
+            durationMs: finishedAtMs - startedAtMs,
+          },
+          nowMs: finishedAtMs,
+        });
+      }
+      return result;
+    },
+  };
 
   // Reports: assemble the application after aiExecutor so the generation
   // adapter can depend on it. The store lives next to the task runs under the
-  // metadata remains under tasks; editable report bodies are real Markdown
+  // Metadata is normalized in SQLite; editable bodies remain real Markdown
   // files under `.trusttools/reports` for straightforward copy/migration.
-  const reportsStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "reports.v1.json"),
-    defaultValue: DEFAULT_REPORT_FILE,
-    schema: reportStoreSchema(),
-    clock,
-  });
   const reports = createReportsApplication({
-    store: createAtomicReportStore({ store: reportsStore }),
+    store: databaseRuntime.features.reports,
     content: createMarkdownReportStore({
       rootDirectory: join(dataRoot, APP_DATA_DIR, "reports"),
     }),
@@ -657,17 +511,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // without `securityVerdict` (consumers treat the missing verdict as
   // "unknown", never "clean"). Stamping a verdict at approval time is a
   // follow-up once distillation carries an assessment reference.
-  const knowledgeStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "knowledge.v1.json"),
-    defaultValue: DEFAULT_KNOWLEDGE_DOCUMENT,
-    schema: knowledgeDocumentSchema(),
-    clock,
-  });
-  const knowledge = createKnowledgeRepository({
-    store: knowledgeStore,
-    clock,
-    hash: createSha256HashPort(),
-  });
+  const knowledge = databaseRuntime.features.knowledge;
   // P3-T3-01 (fix): the sessions page and distillation read the SessionSnapshot
   // index (O(1)) instead of re-scanning local session logs on every query; the
   // legacy scanner remains only as the snapshot collector adapter.
@@ -683,32 +527,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // Candidate store lives next to the reports/knowledge state under the same
   // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
   // projections (session refs, generated knowledge note, execution summary).
-  const candidateStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "distill-candidates.v1.json"),
-    defaultValue: DEFAULT_DISTILL_CANDIDATE_FILE,
-    schema: distillCandidateStoreSchema(),
-    clock,
-  });
-  // B-600 server-side daily quota ledger for real-model distillation calls.
-  // The file stores only `{ date, used }`; the limit is a constant/env value
-  // (`TRUSTTOOLS_DISTILL_DAILY_QUOTA`, default 20), so the renderer can never
-  // tamper with either the count or the ceiling. Increments serialise through
-  // the same file lock as the other task stores.
-  const distillQuotaStore = new NodeAtomicJsonStore({
-    filePath: join(tasksDir, "distill-quota.v1.json"),
-    defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
-    schema: distillQuotaStoreSchema(),
-    clock,
-  });
-  const distillQuota = createAtomicDistillQuotaStore({
-    store: distillQuotaStore,
-    limit: distillDailyQuotaLimit(),
-  });
+  const distillQuota = databaseRuntime.features.distillQuota;
   const distillation = createDistillationApplication({
     sessions,
     ai: aiExecutor,
     knowledge,
-    persistence: createAtomicCandidateStore({ store: candidateStore }),
+    persistence: databaseRuntime.features.candidates,
     quota: distillQuota,
     // Story B-100: user-selected transcript segments. The adapter stays
     // behind a dynamic import of the sessions transport so this composition
@@ -737,10 +561,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // skills executors refresh through their snapshot coordinators so the task
   // runtime is the single refresh entry and pages only read snapshots.
   //
-  // T2-07 (fix): the usage.refresh executor refreshes the unified Usage
-  // snapshot coordinator — the same object pages read — so a scheduled
-  // refresh commits to `usage-snapshot-envelope.v1.json` and the legacy
-  // `usage-snapshot.v1.json` stays untouched as a read-only downgrade source.
+  // The usage.refresh executor updates the same SQLite snapshot coordinator
+  // that page queries read.
   const executorRegistry = createExecutorRegistry({
     usage: {
       async refresh({ signal }) {
@@ -840,6 +662,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   };
 
   return {
+    database: databaseRuntime,
     scheduler,
     preferences,
     runs,
@@ -888,9 +711,13 @@ export function getCompositionRoot(): Promise<CompositionRoot> {
   }
 
   const clock = new SystemClock();
-  const promise = buildCompositionRoot(clock)
+  // Defer construction one microtask so concurrent callers cannot enter the
+  // synchronous DatabaseHost.open() before the in-flight promise is cached.
+  const promise = Promise.resolve()
+    .then(() => buildCompositionRoot(clock))
     .then((root) => {
       composition = root;
+      installDatabaseShutdownHook(root.database);
       return root;
     })
     // A construction failure must never poison the global cache: clear it
@@ -910,6 +737,10 @@ export function getCompositionRoot(): Promise<CompositionRoot> {
  * data root. Never call this from production code.
  */
 export function resetCompositionRootForTests(): void {
+  composition?.database.close();
+  if (databaseForProcessExit === composition?.database) {
+    databaseForProcessExit = undefined;
+  }
   composition = undefined;
   writeGlobalCache(undefined);
 }
