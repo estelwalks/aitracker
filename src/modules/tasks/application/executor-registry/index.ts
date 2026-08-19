@@ -6,7 +6,6 @@ import type {
   TaskExecutor,
 } from "../scheduler.ts";
 import type { ReportsApplication } from "../../../reports/contracts.ts";
-import type { BackgroundSkillSecurityScanPort } from "../../../security-assessment/contracts.ts";
 import type {
   MonitoringCollectorId,
   MonitoringRecorder,
@@ -48,7 +47,6 @@ export interface ExecutorRegistryOptions {
   readonly installation?: RefreshInstallationPort;
   readonly retention?: ApplyRetentionPort;
   readonly reports?: ReportsApplication;
-  readonly security?: BackgroundSkillSecurityScanPort;
   /** Operational status only; it never receives collector inputs or output. */
   readonly monitoring?: MonitoringRecorder;
 }
@@ -136,39 +134,6 @@ function bindReports(app: ReportsApplication | undefined): TaskExecutor {
   };
 }
 
-function bindSecurity(
-  security: BackgroundSkillSecurityScanPort | undefined,
-  monitoring: MonitoringRecorder | undefined,
-): TaskExecutor {
-  return async () => {
-    if (!security) return unavailable();
-    try {
-      const result = await security.scanDiscoveredSkills();
-      const counts = { clean: 0, suspicious: 0, dangerous: 0, unknown: 0 };
-      for (const assessment of result.assessments)
-        counts[assessment.verdict] += 1;
-      await monitoring?.securityCompleted({
-        assessedAt: result.assessedAt,
-        discoveredAssetCount: result.discoveredAssetCount,
-        assessedAssetCount: result.assessedAssetCount,
-        failedAssetCount: result.failedAssetCount,
-        cleanCount: counts.clean,
-        suspiciousCount: counts.suspicious,
-        dangerousCount: counts.dangerous,
-        unknownCount: counts.unknown,
-      });
-      return {
-        summary: {
-          scanned: result.assessedAssetCount,
-          diagnosticCount: result.failedAssetCount,
-        },
-      };
-    } catch {
-      throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.failed);
-    }
-  };
-}
-
 function stableErrorCode(caught: unknown): `errors.${string}` {
   if (
     caught instanceof ControlledExecutorError &&
@@ -234,11 +199,6 @@ export function createExecutorRegistry(
     "refresh-installation-v1": monitored(
       "installation",
       bindPort(options.installation),
-      options.monitoring,
-    ),
-    "monitor-security-v1": monitored(
-      "security",
-      bindSecurity(options.security, options.monitoring),
       options.monitoring,
     ),
     "apply-retention-v1": bindPort(options.retention),

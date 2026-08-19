@@ -84,3 +84,16 @@ test("unconfigured adapters return controlled availability errors", async () => 
       error.message === "errors.tasks.executor-unavailable",
   );
 });
+
+test("retention executor delegates to the injected application port", async () => {
+  let calls = 0;
+  const registry = createExecutorRegistry({
+    retention: {
+      async apply() {
+        calls += 1;
+      },
+    },
+  });
+  await registry.executors["apply-retention-v1"](context());
+  assert.equal(calls, 1);
+});

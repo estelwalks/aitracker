@@ -143,7 +143,7 @@ class RequestBodyTooLargeError extends Error {}
 
 /**
  * Capability-token cookie name. The renderer's SPA requests (TanStack Start
- * server-fn RPC, the 5-second usage poll) use same-origin fetch with relative
+ * server-fn RPC and periodic snapshot-status refreshes) use same-origin fetch with relative
  * paths — they cannot carry `?token=` — so the token is mirrored into an
  * HttpOnly SameSite=Strict cookie on the first authenticated response and the
  * browser attaches it to every same-origin request automatically.

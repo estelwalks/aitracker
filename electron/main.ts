@@ -1026,6 +1026,7 @@ if (!hasSingleInstanceLock) {
     // Finder/login items with a reduced environment. A test-lab override, when
     // supplied, intentionally wins.
     process.env[ENV.USAGE_HOME] ??= app.getPath("home");
+    process.env[ENV.PREFS_PATH] = prefsPath();
 
     const prefs = readPrefs(prefsPath());
     currentPreferences = resolveDesktopPreferences(prefs, app.getLocale());

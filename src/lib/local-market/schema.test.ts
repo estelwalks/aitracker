@@ -94,6 +94,7 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
       search: "测试",
       sort: "stars",
       tags: [],
+      forceRefresh: false,
     },
   );
   assert.deepEqual(
@@ -104,6 +105,7 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
       search: "",
       sort: "created_at",
       tags: [],
+      forceRefresh: false,
     },
   );
   assert.deepEqual(
@@ -114,6 +116,7 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
       search: "",
       sort: "tokens",
       tags: [],
+      forceRefresh: false,
     },
   );
   assert.deepEqual(
@@ -129,6 +132,7 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
       search: "",
       sort: "stars",
       tags: ["ai", "automation"],
+      forceRefresh: false,
     },
   );
   assert.throws(
@@ -142,5 +146,15 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
   assert.throws(
     () => parseMarketQuery({ page: 1, limit: 20, search: "", sort: "invalid" }),
     /errors\.market\.sortInvalid/,
+  );
+  assert.throws(
+    () =>
+      parseMarketQuery({
+        page: 1,
+        limit: 20,
+        search: "",
+        forceRefresh: "yes",
+      }),
+    /errors\.market\.queryInvalid/,
   );
 });

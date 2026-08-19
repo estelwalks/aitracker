@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createSourcesApplication } from "./index.ts";
+import { createSourcesApplication, DEFAULT_MAX_AGE_MS } from "./index.ts";
 import type { SourceHealthInputs } from "../contracts.ts";
 
 const now = Date.parse("2026-08-07T00:00:00.000Z");
@@ -137,4 +137,26 @@ test("read failures return a stable error", async () => {
   if (result.ok) return;
   assert.equal(result.error.code, "errors.sources.readFailed");
   assert.equal(JSON.stringify(result).includes("private"), false);
+});
+
+test("default freshness follows the 15 minute Usage runtime policy", async () => {
+  assert.equal(DEFAULT_MAX_AGE_MS, 15 * 60_000);
+  const result = await createSourcesApplication({
+    repository: {
+      async read() {
+        return {
+          agentHealth: [
+            {
+              agentId: "codex",
+              status: "healthy",
+              observedAt: "2026-08-06T23:50:00.000Z",
+            },
+          ],
+        };
+      },
+    },
+    clock: () => now,
+  }).getSourceHealth();
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.value.sources[0]?.freshness, "fresh");
 });

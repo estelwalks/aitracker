@@ -20,5 +20,6 @@ export const DESKTOP_GLOBAL = "trusttoolsDesktop";
 
 export const ENV = {
   DEV_URL: "TRUSTTOOLS_DEV_URL",
+  PREFS_PATH: "TRUSTTOOLS_PREFS_PATH",
   USAGE_HOME: "TRUSTTOOLS_USAGE_HOME",
 } as const;
