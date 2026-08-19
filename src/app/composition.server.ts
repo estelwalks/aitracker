@@ -53,9 +53,9 @@ import type {
   ResumeSessionPort,
   SessionQueryPort,
 } from "../modules/sessions/contracts.ts";
-import { createLegacyResumeSessionPort } from "../modules/sessions/infrastructure/legacy-session-adapter.server.ts";
+import { createSessionResumePort } from "../modules/sessions/infrastructure/session-adapter.server.ts";
 import { createNodeResumeExecutor } from "../modules/sessions/infrastructure/node-resume-executor.server.ts";
-import { createLegacyUsageCollector } from "../modules/usage/infrastructure/legacy-usage-collector.server.ts";
+import { createUsageCollector } from "../modules/usage/infrastructure/usage-collector.server.ts";
 import { createUsageSnapshotRuntime } from "../modules/usage/infrastructure/usage-snapshot-runtime.server.ts";
 import type { UsageSnapshotRuntime } from "../modules/usage/contracts.ts";
 import type { MonitoringRuntime } from "../modules/monitoring/index.ts";
@@ -131,7 +131,7 @@ export interface CompositionRoot {
   readonly knowledge: KnowledgeRepository;
   /**
    * Session query port shared by the distillation workbench. Backed by the
-   * SessionSnapshot coordinator (P3-T3-01, O(1) read); the legacy scanner
+   * SessionSnapshot coordinator (P3-T3-01, O(1) read); the session scanner
    * remains only as the snapshot collector adapter. Exposed so the
    * distillation transport can render the session picker without reaching
    * into the application's private ports.
@@ -297,7 +297,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     // incremental classifier so the index stays fresh without blocking the
     // query path.
     collect: async (request) => {
-      const collector = createLegacyUsageCollector();
+      const collector = createUsageCollector();
       // P3-T3-04: reuse the shared WSL topology snapshot instead of re-running
       // `wsl.exe` on every usage refresh. The coordinator hydrates the
       // persisted topology once; a missing/stale snapshot triggers exactly one
@@ -527,15 +527,13 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const knowledge = databaseRuntime.features.knowledge;
   // P3-T3-01 (fix): the sessions page and distillation read the SessionSnapshot
   // index (O(1)) instead of re-scanning local session logs on every query; the
-  // legacy scanner remains only as the snapshot collector adapter.
+  // session scanner remains only as the snapshot collector adapter.
   const { createSnapshotSessionRepository } =
     await import("../modules/sessions/infrastructure/snapshot-session-repository.ts");
   const sessions = createSessionQueryService(
     createSnapshotSessionRepository(sessionSnapshot),
   );
-  const resumeSession = createLegacyResumeSessionPort(
-    createNodeResumeExecutor(),
-  );
+  const resumeSession = createSessionResumePort(createNodeResumeExecutor());
 
   // Candidate store lives next to the reports/knowledge state under the same
   // `.trusttools/tasks` directory. It persists only privacy-filtered candidate

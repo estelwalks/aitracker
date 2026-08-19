@@ -3,14 +3,15 @@ import type { LocalUsageScanOptions } from "../../../lib/local-usage/scanner.ser
 import type { UsageSnapshotDto } from "../contracts.ts";
 
 /**
- * Transitional adapter. The old scanner remains the only fact source while
- * the usage feature is migrated; no route should import it directly.
+ * Usage scanner — an external-source read-only collection adapter. The local
+ * scanner remains the only fact source for usage events; no route should
+ * import it directly.
  */
-export interface LegacyUsageScanner {
+export interface UsageScanner {
   scan(options?: LocalUsageScanOptions): Promise<UsageSnapshotDto>;
 }
 
-export function createLegacyUsageScanner(): LegacyUsageScanner {
+export function createUsageScanner(): UsageScanner {
   return { scan: scanLocalUsage };
 }
 

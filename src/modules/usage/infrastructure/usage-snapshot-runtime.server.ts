@@ -12,8 +12,8 @@ import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
 /**
  * P2-T2-06: Usage snapshot coordinator.
  *
- * The collector is the legacy scanner wrapped as a pure adapter — it receives
- * an AbortSignal, returns the sanitized snapshot, and never writes. The
+ * The collector is the usage scanner wrapped as a pure adapter (an
+ * external-source read-only collection adapter) — it receives an AbortSignal, returns the sanitized snapshot, and never writes. The
  * coordinator commits once per refresh and keeps last-known-good. Raw events
  * stay server-only (`details`/`recent` are present in the persisted snapshot
  * but only page-specific projectors expose them).
@@ -24,7 +24,7 @@ export interface UsageSnapshotRuntimeOptions {
   /** Task-runtime port for requestRefresh/invalidate. */
   readonly requestRefresh?: SnapshotRefreshPort;
   readonly now?: () => number;
-  /** Injectable collector for tests (defaults to the legacy scanner). */
+  /** Injectable collector for tests (defaults to the usage scanner). */
   readonly collect?: (request: {
     readonly signal: AbortSignal;
     readonly previous: SnapshotEnvelope<UsageSnapshotDto> | null;
@@ -50,9 +50,9 @@ export function createUsageSnapshotRuntime(
   const collect =
     options.collect ??
     (async ({ signal, previous }) => {
-      const { createLegacyUsageCollector } =
-        await import("./legacy-usage-collector.server.ts");
-      const collector = createLegacyUsageCollector();
+      const { createUsageCollector } =
+        await import("./usage-collector.server.ts");
+      const collector = createUsageCollector();
       const result = await collector.collect({
         signal,
         budget: {
