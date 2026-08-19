@@ -92,7 +92,7 @@ export function readRuntimeSqliteVersion(): string {
 export function probeJournalModeIn(directory: string): {
   readonly journalMode: string;
 } {
-  const probeDirectory = mkdtempSync(join(directory, "dsh-wal-probe-"));
+  const probeDirectory = mkdtempSync(join(directory, "trusttools-wal-probe-"));
   const databasePath = join(probeDirectory, "probe.db");
   let database: DatabaseSync | undefined;
   try {
@@ -134,13 +134,23 @@ export function runOnlineBackup(
 
 /**
  * Switches a *closed*, freshly written backup file to the delete (rollback)
- * journal mode so it becomes one self-contained file. Throws the raw driver
- * error; the caller maps it.
+ * journal mode so it becomes one self-contained file, then reads the mode back
+ * and asserts it settled on `delete`. A silent non-switch would leave a
+ * WAL-mode backup that later read-only `quick_check`s would be forced to treat
+ * as unverified (review finding P2-6). Throws the raw driver error; the caller
+ * maps it.
  */
 export function setJournalModeDelete(path: string): void {
   const database = new DatabaseSync(path, NODE_SQLITE_CONNECTION_OPTIONS);
   try {
     database.exec("PRAGMA journal_mode=DELETE");
+    const row = database.prepare("PRAGMA journal_mode").get();
+    const mode = typeof row?.journal_mode === "string" ? row.journal_mode : "";
+    if (mode.toLowerCase() !== "delete") {
+      throw new Error(
+        `journal_mode did not normalize to delete (actual: ${mode || "<none>"})`,
+      );
+    }
   } finally {
     database.close();
   }

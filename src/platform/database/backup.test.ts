@@ -22,8 +22,10 @@ import { DatabaseError } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import {
   createOnlineBackup,
+  createPreMigrationBackup,
   listBackupFiles,
   listVerifiedBackups,
+  pruneBackups,
   readBackupManifestIndex,
   sha256OfFile,
   tryReadBackupManifestIndex,
@@ -125,10 +127,11 @@ test("backs up a migrated database with uncheckpointed WAL data and round-trips 
   });
 
   // The returned manifest carries every field with values that match reality.
+  assert.equal(backup.manifest.kind, "daily");
   assert.equal(backup.manifest.schemaVersion, 1);
   assert.equal(backup.manifest.appVersion, APP_VERSION);
   assert.equal(backup.manifest.sqliteVersion, SQLITE_VERSION);
-  assert.equal(backup.manifest.sha256, sha256OfFile(backup.path));
+  assert.equal(backup.manifest.sha256, await sha256OfFile(backup.path));
   assert.equal(backup.manifest.sizeBytes, statSync(backup.path).size);
   assert.equal(typeof backup.manifest.createdAtMs, "number");
 
@@ -296,17 +299,17 @@ test("listBackupFiles verifies through the manifest and reports every rejected f
   );
   rmSync(missing);
 
-  const listed = listVerifiedBackups(backupsDirectory);
+  const listed = await listVerifiedBackups(backupsDirectory);
   assert.deepEqual(
     listed.map((backup) => backup.path),
     [good.path],
     "only the intact, manifest-backed backup should be listed",
   );
-  assert.equal(listed[0].manifest.sha256, sha256OfFile(good.path));
+  assert.equal(listed[0].manifest.sha256, await sha256OfFile(good.path));
 
   // Nothing is silently dropped: every rejected file is reported with a reason
   // so the UI can tell the user why a backup cannot be used.
-  const inventory = listBackupFiles(backupsDirectory);
+  const inventory = await listBackupFiles(backupsDirectory);
   assert.deepEqual(
     inventory.verified.map((backup) => backup.path),
     [good.path],
@@ -345,7 +348,7 @@ test("a damaged manifest is reported as corrupt, never as an empty index", async
         error.operation === "backup",
       `must not be accepted: ${damaged}`,
     );
-    assert.throws(
+    await assert.rejects(
       () => listVerifiedBackups(backupsDirectory),
       (error: unknown) =>
         error instanceof DatabaseError && error.code === "corrupt",
@@ -361,8 +364,8 @@ test("a damaged manifest is reported as corrupt, never as an empty index", async
   rmSync(manifestPath);
   assert.deepEqual(readBackupManifestIndex(backupsDirectory), {});
   assert.deepEqual(tryReadBackupManifestIndex(backupsDirectory), {});
-  assert.deepEqual(listVerifiedBackups(backupsDirectory), []);
-  assert.deepEqual(listBackupFiles(backupsDirectory), {
+  assert.deepEqual(await listVerifiedBackups(backupsDirectory), []);
+  assert.deepEqual(await listBackupFiles(backupsDirectory), {
     verified: [],
     unverified: [{ path: backup.path, reason: "no-manifest-record" }],
   });
@@ -398,7 +401,7 @@ test("concurrent backups are serialized: distinct files and one manifest entry e
   assert.deepEqual(index[basename(first.path)], first.manifest);
   assert.deepEqual(index[basename(second.path)], second.manifest);
   assert.deepEqual(
-    listVerifiedBackups(backupsDirectory)
+    (await listVerifiedBackups(backupsDirectory))
       .map((backup) => backup.path)
       .sort(),
     [first.path, second.path].sort(),
@@ -497,4 +500,167 @@ test("a backupsDirectory that is a file fails with io-failure and leaves no part
       name.endsWith(".db") || name.endsWith(".tmp") || name === "manifest.json",
   );
   assert.deepEqual(leftovers, ["platform.db"]);
+});
+
+test("createPreMigrationBackup records kind pre-migration", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const backup = await createPreMigrationBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => 1_700_000_000_000,
+  });
+  assert.equal(backup.manifest.kind, "pre-migration");
+  const onDisk = readBackupManifestIndex(backupsDirectory);
+  assert.equal(onDisk[basename(backup.path)].kind, "pre-migration");
+});
+
+test("pruneBackups keeps recent and pre-migration backups and deletes expired daily", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const DAY = 86_400_000;
+  const now = 1_700_000_000_000;
+
+  const recent = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now,
+  });
+  const expired = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 10 * DAY,
+  });
+  const preMigration = await createPreMigrationBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 10 * DAY,
+  });
+
+  const result = pruneBackups({
+    backupsDirectory,
+    keepDays: 7,
+    now: () => now,
+  });
+
+  assert.deepEqual(result.deleted, [basename(expired.path)]);
+  assert.equal(existsSync(expired.path), false);
+  assert.equal(existsSync(recent.path), true);
+  assert.equal(existsSync(preMigration.path), true);
+
+  const index = readBackupManifestIndex(backupsDirectory);
+  assert.equal(index[basename(expired.path)], undefined);
+  assert.ok(index[basename(recent.path)] !== undefined);
+  assert.ok(index[basename(preMigration.path)] !== undefined);
+});
+
+test("pruneBackups never deletes files without a manifest record", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const DAY = 86_400_000;
+  const now = 1_700_000_000_000;
+
+  await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now,
+  });
+  const expired = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 10 * DAY,
+  });
+  const stray = join(backupsDirectory, "trusttools-19900101-000000.db");
+  writeFileSync(stray, "not a sqlite database");
+
+  const result = pruneBackups({
+    backupsDirectory,
+    keepDays: 7,
+    now: () => now,
+  });
+
+  assert.equal(existsSync(stray), true, "stray files are never deleted");
+  assert.deepEqual(result.deleted, [basename(expired.path)]);
+});
+
+test("pruneBackups drops only the oldest pre-migration backup past keepDays*4", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const DAY = 86_400_000;
+  const now = 1_700_000_000_000;
+
+  const oldest = await createPreMigrationBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 40 * DAY,
+  });
+  const newer = await createPreMigrationBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 30 * DAY,
+  });
+
+  const result = pruneBackups({
+    backupsDirectory,
+    keepDays: 7,
+    now: () => now,
+  });
+
+  // keepDays * 4 = 28 days: the 40-day-old backup is dropped, the 30-day-old is
+  // the newest pre-migration backup and stays.
+  assert.deepEqual(result.deleted, [basename(oldest.path)]);
+  assert.equal(existsSync(oldest.path), false);
+  assert.equal(existsSync(newer.path), true);
+});
+
+test("pruneBackups requires both manifest and filename timestamps to be expired", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const DAY = 86_400_000;
+  const now = 1_700_000_000_000;
+
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now,
+  });
+  const index = readBackupManifestIndex(backupsDirectory);
+  const name = basename(backup.path);
+  // Forge only the manifest timestamp; the file name is still recent.
+  const forged = {
+    ...index,
+    [name]: { ...index[name], createdAtMs: now - 10 * DAY },
+  };
+  writeFileSync(
+    join(backupsDirectory, "manifest.json"),
+    `${JSON.stringify(forged, null, 2)}\n`,
+    "utf8",
+  );
+
+  const result = pruneBackups({
+    backupsDirectory,
+    keepDays: 7,
+    now: () => now,
+  });
+
+  assert.deepEqual(result.deleted, []);
+  assert.equal(existsSync(backup.path), true);
 });

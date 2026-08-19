@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { inspect } from "node:util";
 
 import { DatabaseError } from "./index.ts";
 import {
@@ -185,7 +186,12 @@ test("extensions cannot be loaded (allowExtension=false)", (t) => {
   const db = openDbInDir(t, freshDir(), "ext.db");
   assert.throws(
     () => db.exec("SELECT load_extension('nope')"),
-    (error) => error instanceof DatabaseError,
+    (error) => {
+      assert.ok(error instanceof DatabaseError, "must be a DatabaseError");
+      assert.equal(error.code, "sql-error");
+      assert.match(error.message, /sql-error/);
+      return true;
+    },
   );
 });
 
@@ -271,4 +277,33 @@ test("open failure maps to a stable DatabaseError without the path in the messag
       return true;
     },
   );
+});
+
+test("a raw filesystem cause is sanitized so util.inspect leaks no path (P2-4)", () => {
+  const missing = join(
+    tmpdir(),
+    `tt-db-missing-${process.pid}-${randomUUID()}`,
+    "missing.db",
+  );
+  let error: unknown;
+  try {
+    new NodeSqliteDatabase({ path: missing });
+  } catch (caught) {
+    error = caught;
+  }
+  assert.ok(error instanceof DatabaseError);
+  const rendered = inspect(error);
+  assert.equal(
+    rendered.includes(missing),
+    false,
+    "util.inspect must not contain the missing-file path",
+  );
+  assert.equal(
+    rendered.includes(tmpdir()),
+    false,
+    "util.inspect must not contain the temp directory",
+  );
+  assert.equal(error.message, "open:io-failure");
+  assert.equal(error.code, "io-failure");
+  assert.equal(error.retryable, true, "io-failure stays retryable");
 });
