@@ -1,33 +1,36 @@
 /**
- * S-500 model profile store + validation + connection-test unit tests.
+ * S-500 model profile validation + SQLite repository + provider unit tests.
  *
  * Covers: validation rejections (over-long name / invalid URL / short key),
- * the full CRUD lifecycle, the guarantee that `list`/views never carry the
- * apiKey, active-profile switching and the mocked connection test.
+ * the SQLite CRUD lifecycle (key-free views, active switching, secret
+ * clearing), `chatUrl`/`modelListUrl` URL construction and the profile-backed
+ * provider adapter.
  */
 import assert from "node:assert/strict";
-import test from "node:test";
-import { randomUUID } from "node:crypto";
-import { stat, mkdtemp, rm } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 
-import { SystemClock } from "../../platform/persistence/clock.ts";
-import { NodeAtomicJsonStore } from "../../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import { DatabaseHost } from "../../platform/database/database-host.server.ts";
+import { runMigrations } from "../../platform/database/migration-runner.server.ts";
 import type { ModelProfile, ModelProfileInput } from "./model-profile.ts";
 import {
-  validateModelProfileInput,
-  effectiveProtocol,
   effectiveEndpoint,
   effectiveModel,
+  effectiveProtocol,
+  validateModelProfileInput,
 } from "./model-profile.ts";
 import {
-  DEFAULT_MODEL_PROFILES_FILE,
-  createModelProfileRepository,
+  chatUrl,
   createProfileBackedProvider,
-  modelProfilesSchema,
+  modelListUrl,
   type ModelProfileRepository,
 } from "./model-profile.server.ts";
+import {
+  createSqliteModelProfileRepository,
+  type ModelSecretCodec,
+} from "./infrastructure/sqlite-model-profile-repository.server.ts";
 
 const VALID_KEY = "sk-0123456789abcdef";
 const VALID_CUSTOM: ModelProfileInput = {
@@ -53,50 +56,45 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-async function withTempRepo<T>(
-  fn: (repo: ModelProfileRepository, dir: string) => Promise<T>,
-): Promise<T> {
-  const dir = await mkdtemp(
-    join(tmpdir(), `tt-model-profile-${randomUUID()}-`),
-  );
-  try {
-    const store = new NodeAtomicJsonStore({
-      filePath: join(dir, "model-profiles.v1.json"),
-      defaultValue: DEFAULT_MODEL_PROFILES_FILE,
-      schema: modelProfilesSchema(),
-      clock: new SystemClock(),
-    });
-    const repo = createModelProfileRepository({ store });
-    return await fn(repo, dir);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-}
+const codec: ModelSecretCodec = {
+  async encrypt(plaintext) {
+    const payload = new TextEncoder().encode(plaintext);
+    const ciphertext = new Uint8Array(Math.max(16, payload.length));
+    ciphertext.fill(0xa5);
+    for (let index = 0; index < payload.length; index += 1) {
+      ciphertext[index] = payload[index]! ^ 0xa5;
+    }
+    return { ciphertext, encryptionKind: "safe-storage" };
+  },
+  async decrypt(secret) {
+    const bytes = new Uint8Array(secret.ciphertext.length);
+    for (let index = 0; index < secret.ciphertext.length; index += 1) {
+      bytes[index] = secret.ciphertext[index]! ^ 0xa5;
+    }
+    return new TextDecoder().decode(bytes).replace(/\0+$/u, "");
+  },
+};
 
-async function withTempStore<T>(
-  fn: (
-    store: NodeAtomicJsonStore<typeof DEFAULT_MODEL_PROFILES_FILE>,
-    dir: string,
-  ) => Promise<T>,
-): Promise<T> {
-  const dir = await mkdtemp(
-    join(tmpdir(), `tt-model-profile-${randomUUID()}-`),
-  );
-  try {
-    const store = new NodeAtomicJsonStore({
-      filePath: join(dir, "model-profiles.v1.json"),
-      defaultValue: DEFAULT_MODEL_PROFILES_FILE,
-      schema: modelProfilesSchema(),
-      clock: new SystemClock(),
-    });
-    return await fn(store, dir);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-}
-
-function jsonWithoutKeys(view: unknown): string {
-  return JSON.stringify(view);
+function withRepo(
+  t: { after(fn: () => void): void },
+  fn: (repository: ModelProfileRepository, host: DatabaseHost) => Promise<void>,
+): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), "tt-model-profile-"));
+  const host = DatabaseHost.open({
+    path: join(directory, "platform.db"),
+    versionsProvider: {
+      getVersions: () => ({ nodeVersion: "24.19.0", sqliteVersion: "99.0.0" }),
+    },
+  });
+  runMigrations({ database: host, appVersion: "test" });
+  t.after(() => host.close());
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const repository = createSqliteModelProfileRepository({
+    database: host,
+    secretCodec: codec,
+    now: () => 100,
+  });
+  return fn(repository, host);
 }
 
 // ── Validation (pure) ───────────────────────────────────────────────────────
@@ -219,28 +217,53 @@ test("effective helpers: official fixes protocol/endpoint/model", () => {
   assert.equal(effectiveModel({ mode: "custom", model: " gpt-4o " }), "gpt-4o");
 });
 
-// ── CRUD lifecycle ──────────────────────────────────────────────────────────
+// ── URL construction (pure) ─────────────────────────────────────────────────
 
-test("repository: upsert creates a key-free view and activates it", async () => {
-  await withTempRepo(async (repo) => {
-    const view = await repo.upsert(VALID_CUSTOM);
+test("chatUrl/modelListUrl build protocol-specific endpoints", () => {
+  assert.equal(
+    chatUrl("openai", "https://api.openai.com/v1"),
+    "https://api.openai.com/v1/chat/completions",
+  );
+  assert.equal(
+    chatUrl("anthropic", "https://api.anthropic.com/v1"),
+    "https://api.anthropic.com/v1/messages",
+  );
+  assert.equal(
+    chatUrl("openai", "https://api.openai.com/v1/"),
+    "https://api.openai.com/v1/chat/completions",
+  );
+  assert.equal(
+    modelListUrl("https://api.deepseek.com/v1"),
+    "https://api.deepseek.com/v1/models",
+  );
+  assert.equal(
+    modelListUrl("https://api.deepseek.com/v1/"),
+    "https://api.deepseek.com/v1/models",
+  );
+});
+
+// ── SQLite repository lifecycle ─────────────────────────────────────────────
+
+test("sqlite repository: upsert creates a key-free view and activates it", async (t) => {
+  await withRepo(t, async (repository) => {
+    const view = await repository.upsert(VALID_CUSTOM);
     assert.match(view.id, /^m-/);
     assert.equal(view.name, "DeepSeek-测试");
     assert.equal(view.apiKeyMasked, true);
     assert.equal("apiKey" in view, false, "view must never expose the key");
-    assert.equal(jsonWithoutKeys(view).includes(VALID_KEY), false);
+    assert.equal(JSON.stringify(view).includes(VALID_KEY), false);
 
-    const list = await repo.listViews();
+    const list = await repository.listViews();
     assert.equal(list.length, 1);
     assert.equal(list[0]!.id, view.id);
-    assert.equal(await repo.getActiveView().then((a) => a?.id), view.id);
+    assert.equal(await repository.getActiveView().then((a) => a?.id), view.id);
   });
 });
 
-test("repository: upsert update keeps createdAt and stored key when key is blank", async () => {
-  await withTempRepo(async (repo) => {
-    const created = await repo.upsert(VALID_CUSTOM);
-    const updated = await repo.upsert({
+test("sqlite repository: update keeps createdAt and stored key when key is blank", async (t) => {
+  await withRepo(t, async (repository) => {
+    const created = await repository.upsert(VALID_CUSTOM);
+    const updated = await repository.upsert({
       ...VALID_CUSTOM,
       id: created.id,
       name: "Renamed",
@@ -251,24 +274,24 @@ test("repository: upsert update keeps createdAt and stored key when key is blank
     assert.equal(updated.name, "Renamed");
     assert.equal(updated.model, "deepseek-reasoner");
     assert.equal(updated.createdAt, created.createdAt);
-    // The stored key survives a blank-key edit.
-    const full = await repo.getProfileForExecution(created.id);
+    // The stored key survives a blank-key edit (decrypted via the codec).
+    const full = await repository.getProfileForExecution(created.id);
     assert.equal(full?.apiKey, VALID_KEY);
     // A supplied key replaces it.
-    await repo.upsert({
+    await repository.upsert({
       ...VALID_CUSTOM,
       id: created.id,
       apiKey: "sk-new-key-123456",
     });
-    const replaced = await repo.getProfileForExecution(created.id);
+    const replaced = await repository.getProfileForExecution(created.id);
     assert.equal(replaced?.apiKey, "sk-new-key-123456");
   });
 });
 
-test("repository: listViews never contains the apiKey anywhere", async () => {
-  await withTempRepo(async (repo) => {
-    await repo.upsert(VALID_CUSTOM);
-    await repo.upsert({
+test("sqlite repository: listViews never contains the apiKey anywhere", async (t) => {
+  await withRepo(t, async (repository) => {
+    await repository.upsert(VALID_CUSTOM);
+    await repository.upsert({
       mode: "custom",
       protocol: "anthropic",
       name: "Claude",
@@ -276,7 +299,7 @@ test("repository: listViews never contains the apiKey anywhere", async () => {
       endpoint: "https://api.anthropic.com/v1",
       model: "claude-sonnet-4",
     });
-    const list = await repo.listViews();
+    const list = await repository.listViews();
     assert.equal(list.length, 2);
     for (const view of list) {
       assert.equal("apiKey" in view, false);
@@ -285,22 +308,44 @@ test("repository: listViews never contains the apiKey anywhere", async () => {
   });
 });
 
-test("repository: remove deletes, and deleting the active profile activates the first survivor", async () => {
-  await withTempRepo(async (repo) => {
-    const first = await repo.upsert({ ...VALID_CUSTOM, name: "A" });
-    const second = await repo.upsert({ ...VALID_CUSTOM, name: "B" });
-    assert.equal(await repo.getActiveView().then((a) => a?.id), second.id);
+test("sqlite repository: remove deletes, clears the secret and activates the survivor", async (t) => {
+  await withRepo(t, async (repository, host) => {
+    const first = await repository.upsert({ ...VALID_CUSTOM, name: "A" });
+    const second = await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    assert.equal(
+      await repository.getActiveView().then((a) => a?.id),
+      second.id,
+    );
+    assert.equal(
+      host.prepare("SELECT COUNT(*) AS n FROM secure_secrets").get()?.n,
+      2n,
+    );
 
-    const removed = await repo.remove(first.id);
+    const removed = await repository.remove(first.id);
     assert.deepEqual(removed, { ok: true });
-    assert.equal((await repo.listViews()).length, 1);
-    assert.equal(await repo.getActiveView().then((a) => a?.id), second.id);
+    assert.equal((await repository.listViews()).length, 1);
+    assert.equal(
+      await repository.getActiveView().then((a) => a?.id),
+      second.id,
+    );
 
-    const removedActive = await repo.remove(second.id);
+    // The removed profile's secret is cleared; the survivor's remains.
+    assert.equal(
+      host.prepare("SELECT COUNT(*) AS n FROM secure_secrets").get()?.n,
+      1n,
+    );
+    assert.equal(
+      host
+        .prepare("SELECT COUNT(*) AS n FROM secure_secrets WHERE secret_id = ?")
+        .get(`${first.id}:api-key`)?.n,
+      0n,
+    );
+
+    const removedActive = await repository.remove(second.id);
     assert.deepEqual(removedActive, { ok: true });
-    assert.equal(await repo.getActiveView(), null);
+    assert.equal(await repository.getActiveView(), null);
 
-    const missing = await repo.remove("m-does-not-exist");
+    const missing = await repository.remove("m-does-not-exist");
     assert.deepEqual(missing, {
       ok: false,
       errorCode: "errors.modelProfile.notFound",
@@ -308,26 +353,45 @@ test("repository: remove deletes, and deleting the active profile activates the 
   });
 });
 
-test("repository: setActive switches and rejects unknown ids", async () => {
-  await withTempRepo(async (repo) => {
-    const first = await repo.upsert({ ...VALID_CUSTOM, name: "A" });
-    const second = await repo.upsert({ ...VALID_CUSTOM, name: "B" });
-    const switched = await repo.setActive(first.id);
+test("sqlite repository: maintains a single active profile", async (t) => {
+  await withRepo(t, async (repository, host) => {
+    await repository.upsert({ ...VALID_CUSTOM, name: "A" });
+    await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    assert.equal(
+      host
+        .prepare("SELECT COUNT(*) AS n FROM model_profiles WHERE is_active = 1")
+        .get()?.n,
+      1n,
+    );
+    assert.equal(await repository.getActiveView().then((a) => a?.name), "B");
+  });
+});
+
+test("sqlite repository: setActive switches and rejects unknown ids", async (t) => {
+  await withRepo(t, async (repository) => {
+    const first = await repository.upsert({ ...VALID_CUSTOM, name: "A" });
+    const second = await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    const switched = await repository.setActive(first.id);
     assert.deepEqual(switched, { ok: true });
-    assert.equal(await repo.getActiveView().then((a) => a?.id), first.id);
+    assert.equal(await repository.getActiveView().then((a) => a?.id), first.id);
 
-    const missing = await repo.setActive("m-does-not-exist");
+    const missing = await repository.setActive("m-does-not-exist");
     assert.deepEqual(missing, {
       ok: false,
       errorCode: "errors.modelProfile.notFound",
     });
-    assert.equal(await repo.getActiveView().then((a) => a?.id), first.id);
+    assert.equal(await repository.getActiveView().then((a) => a?.id), first.id);
+    assert.equal(
+      (await repository.listViews()).find((v) => v.id === second.id) !==
+        undefined,
+      true,
+    );
   });
 });
 
-test("repository: official mode stores the fixed preset endpoint/model", async () => {
-  await withTempRepo(async (repo) => {
-    const view = await repo.upsert({
+test("sqlite repository: official mode stores the fixed preset endpoint/model", async (t) => {
+  await withRepo(t, async (repository) => {
+    const view = await repository.upsert({
       mode: "official",
       name: "官方默认",
       apiKey: VALID_KEY,
@@ -335,246 +399,9 @@ test("repository: official mode stores the fixed preset endpoint/model", async (
     assert.equal(view.protocol, "openai");
     assert.equal(view.endpoint, "https://api.deepseek.com/v1");
     assert.equal(view.model, "deepseek-chat");
-    const full = await repo.getProfileForExecution(view.id);
+    const full = await repository.getProfileForExecution(view.id);
     assert.equal(full?.apiKey, VALID_KEY);
   });
-});
-
-test("repository: persisted file is written with 0600 permissions", async () => {
-  await withTempRepo(async (repo, dir) => {
-    await repo.upsert(VALID_CUSTOM);
-    const filePath = join(dir, "model-profiles.v1.json");
-    const info = await stat(filePath);
-    // POSIX permission bits are meaningless on Windows (Node reports 0o666
-    // there); the 0600 contract applies to POSIX platforms only.
-    if (process.platform === "win32") {
-      assert.ok((info.mode & 0o777) !== 0);
-      return;
-    }
-    assert.equal(info.mode & 0o777, 0o600);
-  });
-});
-
-// ── Connection test (mocked) ────────────────────────────────────────────────
-
-test("testModelProfile: ok on 2xx, failed on non-2xx, timeout on abort", async () => {
-  const calls: string[] = [];
-  await withTempStore(async (store) => {
-    const okRepo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async (url, init) => {
-        calls.push(`${init.method} ${url}`);
-        return jsonResponse({ choices: [{ message: { content: "pong" } }] });
-      }),
-    });
-    const ok = await okRepo.test(VALID_CUSTOM);
-    assert.equal(ok.ok, true);
-    assert.ok(typeof ok.latencyMs === "number");
-    assert.equal(calls.length, 1);
-    assert.match(calls[0]!, /chat\/completions$/);
-  });
-
-  await withTempStore(async (store) => {
-    const failRepo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async () => jsonResponse({ error: "nope" }, 500)),
-    });
-    const failed = await failRepo.test(VALID_CUSTOM);
-    assert.deepEqual(failed, {
-      ok: false,
-      errorCode: "errors.modelProfile.testFailed",
-    });
-  });
-
-  await withTempStore(async (store) => {
-    const timeoutRepo = createModelProfileRepository({
-      store,
-      testTimeoutMs: 30,
-      fetchFn: ((_input, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            "abort",
-            () => reject(new DOMException("aborted", "AbortError")),
-            { once: true },
-          );
-        })) as typeof fetch,
-    });
-    const timedOut = await timeoutRepo.test(VALID_CUSTOM);
-    assert.deepEqual(timedOut, {
-      ok: false,
-      errorCode: "errors.modelProfile.testTimeout",
-    });
-  });
-});
-
-test("testModelProfile: editing with a blank key reuses the stored secret", async () => {
-  const seenHeaders: Array<Record<string, string>> = [];
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async (_url, init) => {
-        seenHeaders.push((init.headers as Record<string, string>) ?? {});
-        return jsonResponse({ choices: [{ message: { content: "pong" } }] });
-      }),
-    });
-    const created = await repo.upsert(VALID_CUSTOM);
-    const result = await repo.test({
-      mode: "custom",
-      protocol: "openai",
-      name: "DeepSeek-测试",
-      id: created.id,
-      apiKey: "",
-      model: "deepseek-chat",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(seenHeaders[0]?.authorization, `Bearer ${VALID_KEY}`);
-  });
-});
-
-// ── Remote model list (mocked) ──────────────────────────────────────────────
-
-test("listModels: remote list succeeds and is sorted", async () => {
-  let seenUrl = "";
-  let seenHeaders: Record<string, string> = {};
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async (url, init) => {
-        seenUrl = url;
-        seenHeaders = (init.headers as Record<string, string>) ?? {};
-        return jsonResponse({
-          data: [{ id: "deepseek-reasoner" }, { id: "deepseek-chat" }],
-        });
-      }),
-    });
-    const result = await repo.listModels({
-      mode: "custom",
-      protocol: "openai",
-      apiKey: VALID_KEY,
-      endpoint: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "remote");
-    assert.deepEqual(result.models, ["deepseek-chat", "deepseek-reasoner"]);
-    assert.match(seenUrl, /\/models$/);
-    assert.equal(seenHeaders.authorization, `Bearer ${VALID_KEY}`);
-  });
-});
-
-test("listModels: anthropic protocol uses x-api-key and anthropic-version", async () => {
-  let seenHeaders: Record<string, string> = {};
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async (_url, init) => {
-        seenHeaders = (init.headers as Record<string, string>) ?? {};
-        return jsonResponse({ data: [{ id: "claude-sonnet-4" }] });
-      }),
-    });
-    const result = await repo.listModels({
-      mode: "custom",
-      protocol: "anthropic",
-      apiKey: "sk-ant-0987654321",
-      endpoint: "https://api.anthropic.com/v1",
-      model: "claude-sonnet-4",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "remote");
-    assert.equal(seenHeaders["x-api-key"], "sk-ant-0987654321");
-    assert.equal(seenHeaders["anthropic-version"], "2023-06-01");
-  });
-});
-
-test("listModels: HTTP 403 falls back to the provider default list", async () => {
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async () => jsonResponse({ error: "forbidden" }, 403)),
-    });
-    const result = await repo.listModels({
-      mode: "custom",
-      protocol: "openai",
-      apiKey: VALID_KEY,
-      endpoint: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "fallback");
-    assert.ok(result.models?.includes("deepseek-chat"));
-    assert.ok(result.models?.includes("deepseek-reasoner"));
-  });
-});
-
-test("listModels: unknown host falls back to the protocol default list", async () => {
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async () => jsonResponse({ error: "nope" }, 500)),
-    });
-    const result = await repo.listModels({
-      mode: "custom",
-      protocol: "openai",
-      apiKey: VALID_KEY,
-      endpoint: "https://example.com/v1",
-      model: "gpt-4o",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "fallback");
-    assert.ok(result.models?.includes("gpt-4o"));
-    assert.ok(result.models?.includes("o4-mini"));
-  });
-});
-
-test("listModels: editing with a blank key reuses the stored secret", async () => {
-  let seenAuth = "";
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async (_url, init) => {
-        seenAuth =
-          (init.headers as Record<string, string>)?.authorization ?? "";
-        return jsonResponse({ data: [{ id: "deepseek-chat" }] });
-      }),
-    });
-    const created = await repo.upsert(VALID_CUSTOM);
-    const result = await repo.listModels({
-      id: created.id,
-      mode: "custom",
-      protocol: "openai",
-      apiKey: "",
-      endpoint: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
-    });
-    assert.equal(result.ok, true);
-    assert.equal(result.source, "remote");
-    assert.equal(seenAuth, `Bearer ${VALID_KEY}`);
-  });
-});
-
-test("listModels: no key returns listFailed without calling fetch", async () => {
-  let calls = 0;
-  await withTempStore(async (store) => {
-    const repo = createModelProfileRepository({
-      store,
-      fetchFn: mockFetch(async () => {
-        calls += 1;
-        return jsonResponse({ data: [] });
-      }),
-    });
-    const result = await repo.listModels({
-      mode: "custom",
-      protocol: "openai",
-      apiKey: "",
-      name: "x",
-      model: "y",
-    });
-    assert.deepEqual(result, {
-      ok: false,
-      errorCode: "errors.modelProfile.listFailed",
-    });
-  });
-  assert.equal(calls, 0);
 });
 
 // ── Profile-backed provider (mocked) ────────────────────────────────────────
