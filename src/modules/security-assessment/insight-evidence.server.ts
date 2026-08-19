@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `security` surface.
  *
  * Evidence sources (read-only aggregate only — never findings, paths, rules or
@@ -43,6 +43,7 @@ function composeSecurityCandidates(
       evidenceRefs: ["security.risky"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
+      mandatory: true,
     });
   }
 

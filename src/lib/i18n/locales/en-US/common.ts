@@ -6,6 +6,11 @@ export const common = {
   confirm: "Confirm",
   delete: "Delete",
   retry: "Retry",
+  chunkLoadFailed: "Content failed to load",
+  pagination: {
+    previous: "Previous",
+    next: "Next",
+  },
   backHome: "Back to Home",
   refresh: "Refresh",
   refreshing: "Refreshing...",
