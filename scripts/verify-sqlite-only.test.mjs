@@ -148,8 +148,8 @@ test("allows external reads, static config, logs, backup manifests and user file
         'export const manifest = "manifest.json";\n',
       "src/modules/distillation/export.server.ts":
         'import { writeFile } from "node:fs/promises";\nexport const save = (path, body) => writeFile(path, body);\n',
-      "scripts/generate-static-config.mjs":
-        'const output = "model-profiles.v1.json";\n',
+      "src/lib/pricing/rules-loader.server.ts":
+        'export const profiles = "fallback-profiles.json";\n',
     },
     analyzeSqliteOnly,
   );
