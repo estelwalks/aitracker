@@ -16,6 +16,13 @@
 -- sessions, reports, knowledge, security, search, insight_feedback, …) are
 -- deliberately NOT created here.
 
+-- Database identity stamp (architecture §9-6): a file carrying this
+-- application_id is a AITracker platform database. user_version is
+-- deliberately NOT stamped here — the migration runner writes and asserts it
+-- inside each migration's transaction (PRAGMA user_version = <version>), so
+-- 0001 must never contain a competing PRAGMA user_version statement.
+PRAGMA application_id = 0x54544442;
+
 CREATE TABLE schema_migrations (
   version INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -32,14 +39,14 @@ CREATE TABLE data_migration_runs (
   ),
   source_path_hash TEXT NOT NULL,
   source_schema_version INTEGER,
-  status TEXT CHECK (
-    status IS NULL OR status IN ('running', 'succeeded', 'failed', 'skipped')
+  status TEXT NOT NULL DEFAULT 'running' CHECK (
+    status IN ('running', 'succeeded', 'failed', 'skipped')
   ),
   started_at_ms INTEGER CHECK (started_at_ms IS NULL OR started_at_ms >= 0),
   finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0),
-  rows_read INTEGER NOT NULL DEFAULT 0,
-  rows_written INTEGER NOT NULL DEFAULT 0,
-  rows_skipped INTEGER NOT NULL DEFAULT 0,
+  rows_read INTEGER NOT NULL DEFAULT 0 CHECK (rows_read >= 0),
+  rows_written INTEGER NOT NULL DEFAULT 0 CHECK (rows_written >= 0),
+  rows_skipped INTEGER NOT NULL DEFAULT 0 CHECK (rows_skipped >= 0),
   error_code TEXT,
   source_fingerprint TEXT NOT NULL
 ) STRICT;
@@ -47,14 +54,31 @@ CREATE TABLE data_migration_runs (
 CREATE UNIQUE INDEX idx_data_migration_runs_idempotency
   ON data_migration_runs (source_kind, source_path_hash, source_fingerprint);
 
+-- value_json carries a content "forbidden zone" CHECK (§9-4 / §14.4) so a raw
+-- SQL write — not just the repository guard — still refuses drive-letter paths,
+-- Bearer tokens and backslashes. GLOB has no portable literal-backslash pattern
+-- under the dual-source byte-identity contract, so a backslash is detected with
+-- instr(value_json, char(92)) instead of a literal backslash in a GLOB pattern.
 CREATE TABLE app_preferences (
   preference_key TEXT PRIMARY KEY,
-  value_json TEXT NOT NULL CHECK (json_valid(value_json)),
-  value_type TEXT CHECK (
-    value_type IS NULL
-    OR value_type IN ('string', 'number', 'boolean', 'object', 'array', 'null')
+  value_json TEXT NOT NULL CHECK (
+    json_valid(value_json)
+    AND value_json NOT GLOB '*[A-Za-z]:/*'
+    AND value_json NOT LIKE '%Bearer %'
+    AND instr(value_json, char(92)) = 0
   ),
-  updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= 0)
+  value_type TEXT NOT NULL CHECK (
+    value_type IN ('string', 'number', 'boolean', 'object', 'array', 'null')
+  ),
+  updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= 0),
+  CHECK (
+    (value_type = 'string' AND json_type(value_json) = 'text')
+    OR (value_type = 'number' AND json_type(value_json) IN ('integer', 'real'))
+    OR (value_type = 'boolean' AND json_type(value_json) IN ('true', 'false'))
+    OR (value_type = 'object' AND json_type(value_json) = 'object')
+    OR (value_type = 'array' AND json_type(value_json) = 'array')
+    OR (value_type = 'null' AND json_type(value_json) = 'null')
+  )
 ) STRICT;
 
 CREATE TABLE runtime_flags (
@@ -65,11 +89,12 @@ CREATE TABLE runtime_flags (
 
 CREATE TABLE secure_secrets (
   secret_id TEXT PRIMARY KEY,
-  purpose TEXT CHECK (purpose IS NULL OR purpose IN ('model-api-key')),
-  ciphertext BLOB NOT NULL,
-  encryption_kind TEXT CHECK (
-    encryption_kind IS NULL
-    OR encryption_kind IN ('dpapi', 'keychain', 'safe-storage')
+  purpose TEXT NOT NULL DEFAULT 'model-api-key' CHECK (
+    purpose IN ('model-api-key')
+  ),
+  ciphertext BLOB NOT NULL CHECK (length(ciphertext) >= 16),
+  encryption_kind TEXT NOT NULL CHECK (
+    encryption_kind IN ('dpapi', 'keychain', 'safe-storage')
   ),
   created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
   updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= 0)
@@ -77,9 +102,13 @@ CREATE TABLE secure_secrets (
 
 CREATE TABLE model_profiles (
   profile_id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  mode TEXT CHECK (mode IS NULL OR mode IN ('official', 'custom')),
-  protocol TEXT CHECK (protocol IS NULL OR protocol IN ('openai', 'anthropic')),
+  name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 64),
+  mode TEXT NOT NULL DEFAULT 'custom' CHECK (
+    mode IN ('official', 'custom')
+  ),
+  protocol TEXT NOT NULL CHECK (
+    protocol IN ('openai', 'anthropic')
+  ),
   endpoint TEXT,
   model TEXT,
   secret_id TEXT REFERENCES secure_secrets (secret_id) ON DELETE SET NULL,
@@ -103,9 +132,8 @@ CREATE TABLE ai_executions (
   prompt_version_id TEXT NOT NULL,
   prompt_version INTEGER NOT NULL,
   input_fingerprint TEXT,
-  status TEXT CHECK (
-    status IS NULL
-    OR status IN (
+  status TEXT NOT NULL CHECK (
+    status IN (
       'completed',
       'offline',
       'fallback',
@@ -115,7 +143,7 @@ CREATE TABLE ai_executions (
       'failed'
     )
   ),
-  used_fallback INTEGER CHECK (used_fallback IS NULL OR used_fallback IN (0, 1)),
+  used_fallback INTEGER NOT NULL DEFAULT 0 CHECK (used_fallback IN (0, 1)),
   input_tokens INTEGER CHECK (input_tokens IS NULL OR input_tokens >= 0),
   output_tokens INTEGER CHECK (output_tokens IS NULL OR output_tokens >= 0),
   cost_microusd INTEGER,
@@ -139,13 +167,17 @@ CREATE INDEX idx_ai_executions_status_started
   ON ai_executions (status, started_at_ms DESC);
 
 CREATE TABLE ai_daily_usage (
-  date_key TEXT NOT NULL,
-  capability TEXT NOT NULL,
+  date_key TEXT NOT NULL CHECK (
+    date_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+  ),
+  capability TEXT NOT NULL CHECK (
+    capability IN ('distillation', 'report', 'security', 'page-insight')
+  ),
   profile_key TEXT NOT NULL,
-  calls INTEGER NOT NULL DEFAULT 0,
-  input_tokens INTEGER NOT NULL DEFAULT 0,
-  output_tokens INTEGER NOT NULL DEFAULT 0,
-  cost_microusd INTEGER NOT NULL DEFAULT 0,
+  calls INTEGER NOT NULL DEFAULT 0 CHECK (calls >= 0),
+  input_tokens INTEGER NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
+  output_tokens INTEGER NOT NULL DEFAULT 0 CHECK (output_tokens >= 0),
+  cost_microusd INTEGER NOT NULL DEFAULT 0 CHECK (cost_microusd >= 0),
   updated_at_ms INTEGER NOT NULL CHECK (updated_at_ms >= 0),
   PRIMARY KEY (date_key, capability, profile_key)
 ) STRICT;
@@ -175,27 +207,42 @@ CREATE TABLE insight_enhancement_cache (
   ai_request_id TEXT REFERENCES ai_executions (request_id) ON DELETE SET NULL,
   generated_at_ms INTEGER NOT NULL CHECK (generated_at_ms >= 0),
   expires_at_ms INTEGER NOT NULL CHECK (expires_at_ms >= 0),
-  status TEXT CHECK (status IS NULL OR status IN ('ready', 'invalidated')),
-  UNIQUE (
-    surface_id,
-    scope_hash,
-    evidence_hash,
-    locale,
-    profile_id,
-    prompt_version_id,
-    prompt_version
-  )
+  status TEXT NOT NULL DEFAULT 'ready' CHECK (status IN ('ready', 'invalidated'))
 ) STRICT;
 
 CREATE INDEX idx_insight_enhancement_cache_surface_expires
   ON insight_enhancement_cache (surface_id, expires_at_ms);
 
+-- SQLite's multi-column UNIQUE treats NULLs as distinct, so two rows with the
+-- same business identity coexist when profile/prompt are NULL (review P2-2 /
+-- EXP 5a). The expression index collapses NULL profile/prompt to sentinels so
+-- the cache identity stays unique even without a configured model.
+CREATE UNIQUE INDEX idx_insight_enhancement_cache_identity
+  ON insight_enhancement_cache (
+    surface_id,
+    scope_hash,
+    evidence_hash,
+    locale,
+    COALESCE(profile_id, ''),
+    COALESCE(prompt_version_id, ''),
+    COALESCE(prompt_version, 0)
+  );
+
+-- analysis is a rendered fact sentence (§5.10): no digits, no drive-letter
+-- colon, no backslash. The char(92) note above applies here too.
 CREATE TABLE insight_enhancement_lines (
   cache_key TEXT NOT NULL
     REFERENCES insight_enhancement_cache (cache_key) ON DELETE CASCADE,
   sequence INTEGER NOT NULL,
   candidate_id TEXT,
-  analysis TEXT,
+  analysis TEXT CHECK (
+    analysis IS NULL
+    OR (
+      analysis NOT GLOB '*[0-9]*'
+      AND analysis NOT GLOB '*[A-Za-z]:*'
+      AND instr(analysis, char(92)) = 0
+    )
+  ),
   action_id TEXT,
   PRIMARY KEY (cache_key, sequence)
 ) STRICT;

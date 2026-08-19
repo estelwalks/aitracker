@@ -201,7 +201,19 @@ const MAX_MARKER_DOMAINS = 32;
  * nothing to restore, or `manifest-corrupt` when the manifest index itself is
  * unreadable.
  */
-export function planRecovery(options: PlanRecoveryOptions): RecoveryPlan {
+/**
+ * Picks the newest verified backup without modifying the filesystem. Returns
+ * `backup-available` with that backup, `no-backup` plus the reason when there is
+ * nothing to restore, or `manifest-corrupt` when the manifest index itself is
+ * unreadable.
+ *
+ * The candidate scan uses the `size-only` verification: the planning path must
+ * not buffer every backup for a full SHA-256 (review finding P2-7). The chosen
+ * backup is fully re-verified by `restoreFromBackup`.
+ */
+export async function planRecovery(
+  options: PlanRecoveryOptions,
+): Promise<RecoveryPlan> {
   const backupsDirectory = options.backupsDirectory;
   const index = tryReadBackupManifestIndex(backupsDirectory);
   if (index === undefined) {
@@ -214,7 +226,9 @@ export function planRecovery(options: PlanRecoveryOptions): RecoveryPlan {
       unverified: [],
     };
   }
-  const inventory = listBackupFiles(backupsDirectory, index);
+  const inventory = await listBackupFiles(backupsDirectory, index, {
+    verify: "size-only",
+  });
   if (inventory.verified.length > 0) {
     return {
       kind: "backup-available",
@@ -246,9 +260,9 @@ export function planRecovery(options: PlanRecoveryOptions): RecoveryPlan {
  * Any failure removes the temporary copy, moves a set-aside database back, and
  * throws a stable `DatabaseError`. The original backup is never modified.
  */
-export function restoreFromBackup(
+export async function restoreFromBackup(
   options: RestoreFromBackupOptions,
-): RestoreResult {
+): Promise<RestoreResult> {
   if (options.confirmedByUser !== true) {
     throw invalidRestoreArgument();
   }
@@ -292,7 +306,7 @@ export function restoreFromBackup(
 
   let setAsideDirectory: string | undefined;
   try {
-    verifyRestoreCandidate(
+    await verifyRestoreCandidate(
       temporaryPath,
       manifest,
       options.definitions ?? MIGRATIONS,
@@ -376,13 +390,13 @@ export function createEmptyDatabaseWithMarker(
  * backups directory — closes the TOCTOU window in which a verified backup could
  * be swapped between the check and the copy.
  */
-function verifyRestoreCandidate(
+async function verifyRestoreCandidate(
   candidatePath: string,
   manifest: BackupManifest,
   definitions: readonly MigrationDefinition[],
-): void {
+): Promise<void> {
   verifyBackupIntegrity(candidatePath);
-  if (sha256OfFile(candidatePath) !== manifest.sha256) {
+  if ((await sha256OfFile(candidatePath)) !== manifest.sha256) {
     throw new DatabaseError("integrity-check-failed", "backup", {
       retryable: false,
     });

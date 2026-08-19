@@ -17,6 +17,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import {
   DatabaseError,
+  TRUSTTOOLS_APPLICATION_ID,
   type SqliteDatabasePort,
   type SqliteRow,
   type SqliteStatement,
@@ -25,11 +26,13 @@ import {
 import {
   evaluateCapabilities,
   probeWalCapability,
+  type CapabilityFailureReason,
   type CapabilityProbeResult,
   type RuntimeVersions,
   type RuntimeVersionsProvider,
 } from "./capability-probe.server.ts";
 import {
+  bigintToSafeNumber,
   getUnderlyingDatabaseSync,
   NodeSqliteDatabase,
 } from "./infrastructure/node-sqlite-database.server.ts";
@@ -46,8 +49,10 @@ export interface DatabaseHostOptions {
   /** Injectable runtime version source (fakeable in tests). */
   readonly versionsProvider: RuntimeVersionsProvider;
   /**
-   * Directory used for the WAL capability probe. Defaults to the database
-   * directory for file databases and to the OS temp directory for `:memory:`.
+   * Directory used for the WAL capability probe. Defaults to the OS temp
+   * directory, so no probe artifact ever lands next to the data file
+   * (review finding P2-9); injectable for tests and for callers that need a
+   * specific filesystem to probe.
    */
   readonly probeDirectory?: string;
   /** Injectable adapter factory (used by tests to simulate PRAGMA failures). */
@@ -81,16 +86,18 @@ export class DatabaseHost implements SqliteDatabasePort {
     }
 
     const versions = options.versionsProvider.getVersions();
-    const probeDirectory =
-      options.probeDirectory ??
-      (path === MEMORY_PATH ? tmpdir() : dirname(path));
+    const probeDirectory = options.probeDirectory ?? tmpdir();
     const probe = runWalProbe(probeDirectory);
     const evaluation = evaluateCapabilities(versions, probe);
     if (!evaluation.supported) {
-      throw new DatabaseError("capability-mismatch", "open", {
-        cause: evaluation.failureReason,
-        retryable: false,
-      });
+      throw new DatabaseError(
+        capabilityFailureCode(evaluation.failureReason),
+        "open",
+        {
+          cause: evaluation.failureReason,
+          retryable: false,
+        },
+      );
     }
 
     let connection: SqliteDatabasePort;
@@ -153,9 +160,47 @@ export class DatabaseHost implements SqliteDatabasePort {
     return fn(getUnderlyingDatabaseSync(this.connection));
   }
 
+  /**
+   * Runs `PRAGMA wal_checkpoint(PASSIVE|TRUNCATE)` on the Host's own connection
+   * and returns the three reported columns. `passive` never blocks active
+   * readers; `truncate` also rewrites the WAL down to zero frames. Business
+   * code should call this instead of issuing `PRAGMA wal_checkpoint` through
+   * `exec` (review finding P2-8).
+   */
+  checkpoint(mode: "passive" | "truncate"): {
+    busy: boolean;
+    logFrames: number;
+    checkpointedFrames: number;
+  } {
+    this.assertOpen("read");
+    const sql =
+      mode === "truncate"
+        ? "PRAGMA wal_checkpoint(TRUNCATE)"
+        : "PRAGMA wal_checkpoint(PASSIVE)";
+    const row = this.connection.prepare(sql).get();
+    if (row === undefined) {
+      throw new DatabaseError("sql-error", "read");
+    }
+    return {
+      busy: checkpointInteger(row, "busy") !== 0,
+      logFrames: checkpointInteger(row, "log"),
+      checkpointedFrames: checkpointInteger(row, "checkpointed"),
+    };
+  }
+
   /** Closes the connection and releases the singleton registration. */
   close(): void {
     OPEN_HOSTS.delete(this.path);
+    try {
+      // Best-effort WAL truncation before close: a file database should not
+      // leave a large -wal behind for the next open to replay. `:memory:` and
+      // already-closed connections are ignored.
+      if (this.connection.isOpen) {
+        this.connection.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
+      }
+    } catch {
+      // Best effort; the close below is the real teardown.
+    }
     closeBestEffort(this.connection);
   }
 
@@ -280,6 +325,7 @@ function applyAndAssertPragmas(
     "PRAGMA trusted_schema",
     ["0", "off"],
   );
+  assertApplicationId(connection);
 }
 
 function applyAndAssert(
@@ -304,6 +350,44 @@ class PragmaAssertionFailure extends Error {
   ) {
     super(`pragma assertion failed for ${code} (actual: ${actual})`);
   }
+}
+
+/**
+ * Maps a capability-probe failure reason to the stable open error code
+ * (review finding P2-10): a filesystem that cannot settle on WAL is
+ * `journal-not-wal`, while an unsupported SQLite version is
+ * `capability-mismatch`.
+ */
+export function capabilityFailureCode(
+  reason: CapabilityFailureReason | null,
+): "journal-not-wal" | "capability-mismatch" {
+  return reason === "wal-unavailable"
+    ? "journal-not-wal"
+    : "capability-mismatch";
+}
+
+/**
+ * `application_id` must already be `0` (fresh, not yet migrated) or the
+ * AITracker constant; any other value means the file belongs to a different
+ * application and must not be opened (architecture §9-6 database-substitution
+ * guard). Migration 0001 stamps the constant, so a migrated database always
+ * reads back the constant.
+ */
+function assertApplicationId(connection: SqliteDatabasePort): void {
+  const actual = normalizePragmaValue(
+    firstValue(connection.prepare("PRAGMA application_id").get()),
+  );
+  if (actual !== "0" && actual !== String(TRUSTTOOLS_APPLICATION_ID)) {
+    throw new PragmaAssertionFailure("capability-mismatch", actual);
+  }
+}
+
+/** One integer column of a single-row PRAGMA result, read as a safe number. */
+function checkpointInteger(row: SqliteRow, column: string): number {
+  const value = row[column];
+  if (typeof value === "bigint") return bigintToSafeNumber(value);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  throw new DatabaseError("sql-error", "read");
 }
 
 function closeBestEffort(connection: SqliteDatabasePort): void {

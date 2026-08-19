@@ -145,7 +145,7 @@ test("planRecovery returns backup-available without touching disk, and restore c
   });
 
   const before = readdirSync(backupsDirectory).sort();
-  const plan = planRecovery({ backupsDirectory });
+  const plan = await planRecovery({ backupsDirectory });
   const after = readdirSync(backupsDirectory).sort();
 
   assert.equal(plan.kind, "backup-available");
@@ -157,7 +157,7 @@ test("planRecovery returns backup-available without touching disk, and restore c
   // Restore to a fresh path: the source database is left alone, so nothing is
   // set aside and the backup must remain in place afterwards.
   const restoredPath = join(directory, "restored.db");
-  const result = restoreFromBackup({
+  const result = await restoreFromBackup({
     databasePath: restoredPath,
     backupPath: backup.path,
     backupsDirectory,
@@ -194,7 +194,7 @@ test("planRecovery reports no-backup with a reason and never confuses it with a 
 
   // 1. The directory does not exist at all (typical first run).
   assert.deepEqual(
-    planRecovery({ backupsDirectory: join(directory, "none") }),
+    await planRecovery({ backupsDirectory: join(directory, "none") }),
     {
       kind: "no-backup",
       reason: "no-backups-directory",
@@ -205,7 +205,7 @@ test("planRecovery reports no-backup with a reason and never confuses it with a 
   // 2. The directory exists but holds nothing that looks like a backup.
   const empty = join(directory, "empty-backups");
   mkdirSync(empty, { recursive: true });
-  assert.deepEqual(planRecovery({ backupsDirectory: empty }), {
+  assert.deepEqual(await planRecovery({ backupsDirectory: empty }), {
     kind: "no-backup",
     reason: "no-backup-files",
     unverified: [],
@@ -222,7 +222,7 @@ test("planRecovery reports no-backup with a reason and never confuses it with a 
   smashHeader(backup.path);
   writeFileSync(join(backupsDirectory, "garbage.db"), "not a sqlite database");
 
-  const plan = planRecovery({ backupsDirectory });
+  const plan = await planRecovery({ backupsDirectory });
   assert.equal(plan.kind, "no-backup");
   if (plan.kind !== "no-backup") return;
   assert.equal(plan.reason, "no-verified-backup");
@@ -251,7 +251,7 @@ test("planRecovery reports manifest-corrupt instead of pretending there are no b
     encoding: "utf8",
   });
 
-  assert.deepEqual(planRecovery({ backupsDirectory }), {
+  assert.deepEqual(await planRecovery({ backupsDirectory }), {
     kind: "manifest-corrupt",
     backupsDirectory,
   });
@@ -276,7 +276,7 @@ test("restoreFromBackup recovers a corrupted database and keeps the replaced fil
 
   smashHeader(databasePath);
 
-  const result = restoreFromBackup({
+  const result = await restoreFromBackup({
     databasePath,
     backupPath: backup.path,
     backupsDirectory,
@@ -321,7 +321,7 @@ test("restoreFromBackup refuses an unconfirmed restore and leaves the database u
     sqliteVersion: SQLITE_VERSION,
   });
 
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath,
@@ -356,7 +356,7 @@ test("restoreFromBackup rejects every backup path outside the backups directory"
     join(directory, "platform.db"), // unrelated absolute path
   ];
   for (const backupPath of escapes) {
-    assert.throws(
+    await assert.rejects(
       () =>
         restoreFromBackup({
           databasePath: join(directory, "restored.db"),
@@ -387,7 +387,7 @@ test("restoreFromBackup requires a manifest record for the chosen file", async (
   const unrecorded = join(backupsDirectory, "trusttools-19990101-000000.db");
   writeFileSync(unrecorded, readFileSync(backup.path));
 
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath: join(directory, "restored.db"),
@@ -422,7 +422,7 @@ test("restoreFromBackup rejects a database that is not a migrated AITracker data
           appVersion: APP_VERSION,
           sqliteVersion: SQLITE_VERSION,
           sizeBytes: statSync(foreign).size,
-          sha256: sha256OfFile(foreign),
+          sha256: await sha256OfFile(foreign),
           createdAtMs: 1,
         },
       },
@@ -432,7 +432,7 @@ test("restoreFromBackup rejects a database that is not a migrated AITracker data
     "utf8",
   );
 
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath: join(directory, "restored.db"),
@@ -456,21 +456,23 @@ test("restoreFromBackup rejects a foreign application_id and accepts the AITrack
     sqliteVersion: SQLITE_VERSION,
   });
 
-  const stamp = (applicationId: number): void => {
+  const stamp = async (applicationId: number): Promise<void> => {
     const raw = new DatabaseSync(backup.path);
     try {
       raw.exec(`PRAGMA application_id = ${applicationId}`);
     } finally {
       raw.close();
     }
+    const sha256 = await sha256OfFile(backup.path);
+    const sizeBytes = statSync(backup.path).size;
     patchManifest(backupsDirectory, (index) => {
-      index[basename(backup.path)].sha256 = sha256OfFile(backup.path);
-      index[basename(backup.path)].sizeBytes = statSync(backup.path).size;
+      index[basename(backup.path)].sha256 = sha256;
+      index[basename(backup.path)].sizeBytes = sizeBytes;
     });
   };
 
-  stamp(0x0badf00d);
-  assert.throws(
+  await stamp(0x0badf00d);
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath: join(directory, "restored.db"),
@@ -481,9 +483,9 @@ test("restoreFromBackup rejects a foreign application_id and accepts the AITrack
     isDatabaseError("invalid-argument"),
   );
 
-  // The value migration 0001 will eventually stamp is accepted.
-  stamp(TRUSTTOOLS_APPLICATION_ID);
-  const result = restoreFromBackup({
+  // The value migration 0001 stamps is accepted.
+  await stamp(TRUSTTOOLS_APPLICATION_ID);
+  const result = await restoreFromBackup({
     databasePath: join(directory, "restored.db"),
     backupPath: backup.path,
     backupsDirectory,
@@ -504,7 +506,7 @@ test("restoreFromBackup rejects a ledger that diverges from the known migrations
 
   // Same version + name, different SQL text: the backup was produced by another
   // lineage and must not be installed.
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath: join(directory, "restored.db"),
@@ -519,7 +521,7 @@ test("restoreFromBackup rejects a ledger that diverges from the known migrations
   );
 
   // A version this build does not know at all is a foreign lineage.
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath: join(directory, "restored.db"),
@@ -549,7 +551,7 @@ test("a restore that fails validation compensates and leaves the live database i
   });
   host.close();
 
-  assert.throws(
+  await assert.rejects(
     () =>
       restoreFromBackup({
         databasePath,
