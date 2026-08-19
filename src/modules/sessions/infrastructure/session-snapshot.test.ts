@@ -3,9 +3,13 @@ import test from "node:test";
 
 import { buildSessionDensity } from "./session-snapshot.contracts.ts";
 import { createSessionSnapshotRuntime } from "./session-snapshot-runtime.server.ts";
-import { createSnapshotEnvelopeRepository } from "../../../platform/snapshot-runtime/envelope-repository.ts";
-import type { AtomicJsonStore } from "../../../platform/persistence/contracts.ts";
+import { createSnapshotEnvelopeRepository } from "../../../test-support/snapshot-envelope-repository.ts";
 import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contracts.ts";
+
+interface DocumentStore<T> {
+  read(): Promise<{ value: T; source: string; schemaVersion: number }>;
+  write(value: T): Promise<void>;
+}
 import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
 import type { SessionSummary } from "../contracts.ts";
 
@@ -67,7 +71,7 @@ function session(
   };
 }
 
-function memoryStore<T>(initial: T): AtomicJsonStore<T> {
+function memoryStore<T>(initial: T): DocumentStore<T> {
   let value = initial;
   return {
     async read() {
