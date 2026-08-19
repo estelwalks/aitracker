@@ -68,5 +68,22 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  // Repository tooling (verify/inspect/generate scripts). Previously unlinted:
+  // the `**/*.{ts,tsx}` glob above does not match `.mts`/`.mjs`, so the database
+  // gate scripts were never checked (review finding P2-14). Node globals, no
+  // React rules, and prettier formatting is applied by the shared config below.
+  {
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    files: ["scripts/**/*.{mts,mjs,cjs,js}", "*.config.js", "*.config.mjs"],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-empty": ["error", { allowEmptyCatch: true }],
+    },
+  },
   eslintPluginPrettier,
 );
