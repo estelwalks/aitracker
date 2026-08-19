@@ -208,6 +208,25 @@ test("localDateKey renders the local calendar day as YYYY-MM-DD", () => {
   assert.equal(localDateKey(new Date("2026-01-02T23:59:59")), "2026-01-02");
 });
 
+test("sqlite quota store read() defaults to the local calendar day", async (t) => {
+  const port = createSqliteDistillQuotaStore(database(t), { limit: 20 });
+  const current = await port.read();
+  // The un-injected clock is `localDateKey(new Date())`, not the UTC day.
+  assert.equal(current.date, localDateKey(new Date()));
+  assert.deepEqual(current, { date: current.date, used: 0, limit: 20 });
+});
+
+test("sqlite quota store shares one local date key between read and increment", async (t) => {
+  // A fixed late-evening local instant: even when the UTC day rolls over, the
+  // injected clock keeps read() and increment() on the same local key.
+  const host = database(t);
+  const today = () => localDateKey(new Date(2026, 7, 7, 23, 30));
+  const port = createSqliteDistillQuotaStore(host, { limit: 20, today });
+  assert.equal((await port.read()).date, "2026-08-07");
+  const incremented = await port.increment("2026-08-07");
+  assert.deepEqual(incremented, { date: "2026-08-07", used: 1, limit: 20 });
+});
+
 test("distillDailyQuotaLimit falls back to the default and parses the env override", () => {
   assert.equal(
     distillDailyQuotaLimit(() => ({})),
@@ -333,8 +352,8 @@ test("loadDistillation exposes the server-side quota projection", async () => {
     const root = await getCompositionRoot();
     // Increment "today" exactly as the SQLite quota ledger defines it, so the
     // write lands on the same date_key `loadDistillation` reads back. The
-    // ledger's default clock is UTC (`new Date().toISOString()`), which can
-    // differ from the local calendar day across midnight boundaries.
+    // ledger's default clock is the local calendar day (`localDateKey`), which
+    // matches the application layer even across UTC-midnight boundaries.
     const today = (await root.distillQuota.read()).date;
     await root.distillQuota.increment(today);
 
