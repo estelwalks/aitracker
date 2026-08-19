@@ -1,30 +1,28 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import test from "node:test";
 
-import { APP_DATA_DIR, ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
+import { ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
 import {
   getCompositionRoot,
   resetCompositionRootForTests,
 } from "../../app/composition.server.ts";
-import { SystemClock } from "../../platform/persistence/clock.ts";
-import { NodeAtomicJsonStore } from "../../platform/persistence/infrastructure/node-atomic-json-store.ts";
+import { DatabaseHost } from "../../platform/database/database-host.server.ts";
+import { runMigrations } from "../../platform/database/migration-runner.server.ts";
 import { createSessionQueryService } from "../sessions/index.ts";
 import type { SessionSummary } from "../sessions/contracts.ts";
 import { createDistillationApplication } from "./application/index.ts";
 import type { DistillationRequest } from "./contracts.ts";
+import { createSqliteDistillQuotaStore } from "./infrastructure/sqlite-quota-store.server.ts";
 import {
-  DEFAULT_DISTILL_QUOTA_FILE,
   DISTILL_DAILY_QUOTA,
-  createAtomicDistillQuotaStore,
   distillDailyQuotaLimit,
-  distillQuotaStoreSchema,
   localDateKey,
   type DistillQuota,
-  type DistillQuotaPort,
 } from "./quota.ts";
 import { loadDistillation } from "./api.server.ts";
 
@@ -191,6 +189,20 @@ function setupApp(
   };
 }
 
+function database(t: { after(fn: () => void): void }): DatabaseHost {
+  const directory = mkdtempSync(join(tmpdir(), `${TEST_TMP_PREFIX}quota-`));
+  const host = DatabaseHost.open({
+    path: join(directory, "platform.db"),
+    versionsProvider: {
+      getVersions: () => ({ nodeVersion: "24.19.0", sqliteVersion: "99.0.0" }),
+    },
+  });
+  runMigrations({ database: host, appVersion: "test" });
+  t.after(() => host.close());
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  return host;
+}
+
 test("localDateKey renders the local calendar day as YYYY-MM-DD", () => {
   assert.equal(localDateKey(new Date("2026-08-07T12:00:00")), "2026-08-07");
   assert.equal(localDateKey(new Date("2026-01-02T23:59:59")), "2026-01-02");
@@ -216,14 +228,11 @@ test("distillDailyQuotaLimit falls back to the default and parses the env overri
   );
 });
 
-test("quota store accumulates same-date increments and reports the row", async () => {
-  const store = new NodeAtomicJsonStore({
-    filePath: join(tmpdir(), `${TEST_TMP_PREFIX}quota-${randomUUID()}.json`),
-    defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
-    schema: distillQuotaStoreSchema(),
-    clock: new SystemClock(),
+test("sqlite quota store accumulates same-date increments and reports the row", async (t) => {
+  const port = createSqliteDistillQuotaStore(database(t), {
+    limit: 20,
+    today: () => TODAY,
   });
-  const port = createAtomicDistillQuotaStore({ store, limit: 20 });
   await port.increment(TODAY);
   await port.increment(TODAY);
   const current = await port.read();
@@ -231,14 +240,11 @@ test("quota store accumulates same-date increments and reports the row", async (
   assert.equal(Math.max(0, current.limit - current.used), 18);
 });
 
-test("quota store resets the counter when the date changes", async () => {
-  const store = new NodeAtomicJsonStore({
-    filePath: join(tmpdir(), `${TEST_TMP_PREFIX}quota-${randomUUID()}.json`),
-    defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
-    schema: distillQuotaStoreSchema(),
-    clock: new SystemClock(),
+test("sqlite quota store resets the counter when the date changes", async (t) => {
+  const port = createSqliteDistillQuotaStore(database(t), {
+    limit: 20,
+    today: () => "2026-08-08",
   });
-  const port = createAtomicDistillQuotaStore({ store, limit: 20 });
   await port.increment("2026-08-07");
   await port.increment("2026-08-07");
   const nextDay = await port.increment("2026-08-08");
@@ -309,8 +315,11 @@ async function withIsolatedRoot<T>(
   process.env[ENV.USAGE_HOME] = dir;
   resetCompositionRootForTests();
   try {
+    await getCompositionRoot();
     return await fn(dir);
   } finally {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await (await getCompositionRoot()).scheduler.stop();
     resetCompositionRootForTests();
     if (previous === undefined) delete process.env[ENV.USAGE_HOME];
     else process.env[ENV.USAGE_HOME] = previous;
@@ -320,19 +329,9 @@ async function withIsolatedRoot<T>(
 
 test("loadDistillation exposes the server-side quota projection", async () => {
   await withIsolatedRoot(async (dir) => {
-    // Seed the authoritative ledger file directly (the same store the
-    // composition root constructs) so the read model reflects a non-empty
-    // state without invoking a real model.
-    const filePath = join(dir, APP_DATA_DIR, "tasks", "distill-quota.v1.json");
-    await mkdir(dirname(filePath), { recursive: true });
-    const store = new NodeAtomicJsonStore({
-      filePath,
-      defaultValue: DEFAULT_DISTILL_QUOTA_FILE,
-      schema: distillQuotaStoreSchema(),
-      clock: new SystemClock(),
-    });
-    const port = createAtomicDistillQuotaStore({ store, limit: 20 });
-    await port.increment(localDateKey(new Date()));
+    void dir;
+    const root = await getCompositionRoot();
+    await root.distillQuota.increment(localDateKey(new Date()));
 
     const view = await loadDistillation("zh-CN");
     assert.ok(view.quota, "quota projection must be present");
