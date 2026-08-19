@@ -12,22 +12,26 @@ import { documentFromPublic } from "../domain.ts";
 import { createSqliteSearchIndexRepository } from "../infrastructure/sqlite-search-index-repository.server.ts";
 import { SearchIndexService, createSearchEventProjection } from "./index.ts";
 
+function openHost(directory: string): DatabaseHost {
+  const host = DatabaseHost.open({
+    path: join(directory, "platform.db"),
+    versionsProvider: {
+      getVersions: () => ({ nodeVersion: "24.19.0", sqliteVersion: "99.0.0" }),
+    },
+  });
+  runMigrations({ database: host, appVersion: "test" });
+  return host;
+}
+
 test("persists updates and reloads the same index after restart", async () => {
   const directory = mkdtempSync(join(tmpdir(), "tt-search-index-"));
   try {
-    const host = DatabaseHost.open({
-      path: join(directory, "platform.db"),
-      versionsProvider: {
-        getVersions: () => ({
-          nodeVersion: "24.19.0",
-          sqliteVersion: "99.0.0",
-        }),
-      },
-    });
-    runMigrations({ database: host, appVersion: "test" });
-    const repository = createSqliteSearchIndexRepository({ database: host });
+    let host = openHost(directory);
     const clock = { now: () => new Date("2026-08-07T00:00:00.000Z") };
-    const service = new SearchIndexService(repository, clock);
+    const service = new SearchIndexService(
+      createSqliteSearchIndexRepository({ database: host }),
+      clock,
+    );
     await service.upsert(
       documentFromPublic({
         id: "knowledge:one",
@@ -37,7 +41,15 @@ test("persists updates and reloads the same index after restart", async () => {
         textSummary: "offline index",
       }),
     );
-    const restarted = new SearchIndexService(repository, clock);
+
+    // Truly close and reopen a brand-new connection on the same file, so the
+    // reload reads from SQLite rather than the in-memory index/repository.
+    host.close();
+    host = openHost(directory);
+    const restarted = new SearchIndexService(
+      createSqliteSearchIndexRepository({ database: host }),
+      clock,
+    );
     assert.equal((await restarted.load()).ok, true);
     assert.equal(restarted.query({ text: "offline" }).results.length, 1);
     host.close();
