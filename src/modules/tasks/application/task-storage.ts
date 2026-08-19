@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { JOB_DEFINITIONS } from "../definitions/job-catalog.generated.ts";
-import type { Clock } from "../../../platform/persistence/contracts.ts";
 import { createTaskId, isTaskId, type TaskId } from "../../../shared/ids.ts";
 
 export const TASK_PREFERENCES_SCHEMA_VERSION = 2 as const;
@@ -137,23 +136,6 @@ export interface TaskRunRepository {
   recoverRunning(): Promise<readonly JobRun[]>;
   compact(): Promise<void>;
   rotate(): Promise<void>;
-}
-
-export interface TaskPreferenceRepositoryOptions {
-  readonly store: {
-    read(): Promise<{ readonly value: TaskPreferencesFile }>;
-    write(value: TaskPreferencesFile): Promise<void>;
-  };
-  readonly clock?: Clock;
-}
-
-export interface TaskRunRepositoryOptions {
-  readonly store: {
-    read(): Promise<{ readonly value: TaskRunsFile }>;
-    write(value: TaskRunsFile): Promise<void>;
-  };
-  readonly clock?: Clock;
-  readonly maxEntries?: number;
 }
 
 export const DEFAULT_TASK_PREFERENCES: TaskPreferencesFile = {
