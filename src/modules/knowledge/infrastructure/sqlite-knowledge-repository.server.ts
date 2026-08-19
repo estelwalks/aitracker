@@ -14,7 +14,6 @@ import type {
   DedupeSuggestion,
   HashPort,
   KnowledgeAsset,
-  KnowledgeDocument,
   KnowledgeFilter,
   KnowledgeRepository,
   KnowledgeStatus,
@@ -163,12 +162,6 @@ function versionFromRow(
   };
 }
 
-export interface SqliteKnowledgeRepository extends KnowledgeRepository {
-  importLegacy(
-    document: KnowledgeDocument,
-  ): Promise<{ assets: number; versions: number }>;
-}
-
 export interface SqliteKnowledgeRepositoryOptions {
   readonly database: SqliteDatabasePort;
   readonly clock: Clock;
@@ -177,7 +170,7 @@ export interface SqliteKnowledgeRepositoryOptions {
 
 export function createSqliteKnowledgeRepository(
   options: SqliteKnowledgeRepositoryOptions,
-): SqliteKnowledgeRepository {
+): KnowledgeRepository {
   const { database } = options;
   const revision = () =>
     sqliteInteger(
@@ -272,7 +265,7 @@ export function createSqliteKnowledgeRepository(
       return ok(findVersion(assetId, asset.currentVersion)!);
     });
 
-  const repository: SqliteKnowledgeRepository = {
+  const repository: KnowledgeRepository = {
     async createDraft(input: CreateDraftInput, expectedRevision?: number) {
       return withTransaction(database, () => {
         const valid = check(expectedRevision);
@@ -445,71 +438,6 @@ export function createSqliteKnowledgeRepository(
           reason: "same-content-hash",
         })),
       );
-    },
-    async importLegacy(document) {
-      return withTransaction(database, () => {
-        let assets = 0;
-        let versions = 0;
-        for (const asset of document.assets) {
-          assets += Number(
-            database
-              .prepare(
-                `INSERT INTO knowledge_assets
-            (asset_id, kind, title, current_version, status, security_verdict, created_at_ms, updated_at_ms, revision)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (asset_id) DO NOTHING`,
-              )
-              .run(
-                asset.assetId,
-                asset.kind,
-                safe(asset.title, "title"),
-                asset.currentVersion,
-                asset.status,
-                asset.securityVerdict ?? null,
-                epoch(asset.createdAt),
-                epoch(asset.updatedAt),
-                document.revision,
-              ).changes,
-          );
-        }
-        for (const version of document.versions) {
-          const result = database
-            .prepare(
-              `INSERT INTO knowledge_versions
-            (version_id, asset_id, version, kind, title, content_ref, content_hash, created_by,
-             status, security_verdict, created_at_ms, updated_at_ms, audit_action, audit_actor)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (version_id) DO NOTHING`,
-            )
-            .run(
-              version.versionId,
-              version.assetId,
-              version.version,
-              version.kind,
-              safe(version.title, "title"),
-              safe(version.contentRef, "contentRef"),
-              safeHash(version.contentHash),
-              safe(version.createdBy, "createdBy"),
-              version.status,
-              version.securityVerdict ?? null,
-              epoch(version.createdAt),
-              epoch(version.updatedAt),
-              safe(version.audit.action, "action"),
-              safe(version.audit.actor, "actor"),
-            );
-          if (Number(result.changes))
-            insertProvenance(
-              version.versionId,
-              normalizeProvenance(version.provenance),
-            );
-          versions += Number(result.changes);
-        }
-        database
-          .prepare(
-            "UPDATE knowledge_metadata SET revision = MAX(revision, ?) WHERE singleton_id = 1",
-          )
-          .run(document.revision);
-        return { assets, versions };
-      });
     },
   };
   return repository;

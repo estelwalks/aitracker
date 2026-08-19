@@ -78,32 +78,11 @@ function parseJson(value: unknown): PreferenceValue {
   }
 }
 
-function withTransaction<T>(database: SqliteDatabasePort, work: () => T): T {
-  const transaction = database.transaction();
-  transaction.begin();
-  try {
-    const result = work();
-    transaction.commit();
-    return result;
-  } catch (error) {
-    try {
-      transaction.rollback();
-    } catch {
-      /* preserve the original error */
-    }
-    throw error;
-  }
-}
-
 export interface SqlitePreferenceRepository {
   get(key: string): PreferenceEntry | undefined;
   list(): PreferenceEntry[];
   set(entry: PreferenceEntry): void;
   remove(key: string): boolean;
-  /** Idempotent state import: an identical or older legacy row performs no write. */
-  importLegacy(entries: readonly PreferenceEntry[]): {
-    insertedOrUpdated: number;
-  };
 }
 
 export function createSqlitePreferenceRepository(
@@ -163,14 +142,6 @@ export function createSqlitePreferenceRepository(
             .run(key).changes,
         ) > 0
       );
-    },
-    importLegacy(entries) {
-      return withTransaction(database, () => ({
-        insertedOrUpdated: entries.reduce(
-          (count, entry) => count + set(entry),
-          0,
-        ),
-      }));
     },
   };
 }

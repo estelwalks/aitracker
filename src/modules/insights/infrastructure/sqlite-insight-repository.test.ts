@@ -55,7 +55,7 @@ function cache(
   };
 }
 
-test("surface preference overrides global and legacy import is idempotent", (t) => {
+test("surface preference overrides global", (t) => {
   const repository = createSqliteInsightRepository(fixture(t));
   const global = {
     scopeKey: "global",
@@ -66,12 +66,7 @@ test("surface preference overrides global and legacy import is idempotent", (t) 
     dailyCallLimit: null,
     updatedAtMs: 10,
   };
-  assert.deepEqual(repository.importLegacyPreferences([global]), {
-    insertedOrUpdated: 1,
-  });
-  assert.deepEqual(repository.importLegacyPreferences([global]), {
-    insertedOrUpdated: 0,
-  });
+  repository.setPreference(global);
   repository.setPreference({
     ...global,
     scopeKey: "surface:dashboard",

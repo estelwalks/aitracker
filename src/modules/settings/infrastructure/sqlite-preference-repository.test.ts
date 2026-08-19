@@ -24,15 +24,14 @@ function fixture(t: { after(fn: () => void): void }): DatabaseHost {
   return host;
 }
 
-test("preferences round-trip JSON types and legacy import is idempotent", (t) => {
+test("preferences round-trip JSON types", (t) => {
   const repository = createSqlitePreferenceRepository(fixture(t));
   const entry = {
     key: "settings.retentionDays",
     value: 90,
     updatedAtMs: 100,
   } as const;
-  assert.deepEqual(repository.importLegacy([entry]), { insertedOrUpdated: 1 });
-  assert.deepEqual(repository.importLegacy([entry]), { insertedOrUpdated: 0 });
+  repository.set(entry);
   assert.deepEqual(repository.get(entry.key), entry);
   repository.set({
     key: "ui.layout",
