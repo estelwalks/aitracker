@@ -70,6 +70,16 @@ test("unknown top-level and nested fields are rejected", () => {
   assert.throws(() => RuntimePolicySourceSchema.parse(unknownJob));
 });
 
+test("removed legacy/shadow rollout stages are rejected", () => {
+  const legacy = clone(VALID);
+  legacy.rollout.defaultStage = "legacy" as never;
+  assert.throws(() => RuntimePolicySourceSchema.parse(legacy));
+
+  const shadow = clone(VALID);
+  shadow.rollout.defaultStage = "shadow" as never;
+  assert.throws(() => RuntimePolicySourceSchema.parse(shadow));
+});
+
 test("negative, zero and out-of-range values are rejected", () => {
   const negative = clone(VALID);
   negative.snapshotPolicies.usage.freshForMinutes = -1;
