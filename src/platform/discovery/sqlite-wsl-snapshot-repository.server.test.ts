@@ -104,6 +104,53 @@ test("rejects a payload larger than the 256 KB blob ceiling", async () => {
   }
 });
 
+test("rejects host Windows paths and secret-shaped payload content", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-privacy-"));
+  try {
+    const host = openHost(directory);
+    const repository = createSqliteWslSnapshotRepository({ database: host });
+
+    const forbidden: ReadonlyArray<WslTopology> = [
+      {
+        distros: [{ distribution: "Host", home: "C:\\Users\\alice\\secret" }],
+        enumeratedAt: null,
+        failed: false,
+        warningCodes: [],
+      },
+      {
+        distros: [{ distribution: "Host", home: "sk-abc" }],
+        enumeratedAt: null,
+        failed: false,
+        warningCodes: [],
+      },
+      {
+        distros: [{ distribution: "Host", home: "ghp_abc" }],
+        enumeratedAt: null,
+        failed: false,
+        warningCodes: [],
+      },
+    ];
+    for (const data of forbidden) {
+      await assert.rejects(
+        () => repository.save(envelope("r-host", data)),
+        (error: unknown) =>
+          error instanceof DatabaseError &&
+          error.code === "invalid-argument" &&
+          error.operation === "write",
+      );
+    }
+
+    // Legitimate Linux home paths inside WSL distros still persist (the guard
+    // must not apply the platform's POSIX-root rules to `/home/dev`).
+    await repository.save(envelope("r-linux", topology));
+    const reloaded = await repository.load();
+    assert.deepEqual(reloaded.envelope.data, topology);
+    host.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("keeps the head plus one previous generation and clears on demand", async () => {
   const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-gen-"));
   try {
