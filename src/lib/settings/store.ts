@@ -1,50 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-
-export interface AppSettings {
-  launchAtLoginRequested: boolean;
-  retentionDays: number;
-  dataPath: string;
-}
-
-export const DEFAULT_SETTINGS: AppSettings = {
-  launchAtLoginRequested: false,
-  retentionDays: 90,
-  dataPath: "~/",
-};
+import { DEFAULT_SETTINGS, parseSettings, type AppSettings } from "./model.ts";
+export { DEFAULT_SETTINGS, parseSettings, type AppSettings } from "./model.ts";
 
 import { STORAGE_KEY_PREFIX } from "../app-config";
 
 const STORAGE_KEY = `${STORAGE_KEY_PREFIX}settings.v1`;
-
-export function parseSettings(raw: string | null): AppSettings {
-  if (!raw) return DEFAULT_SETTINGS;
-  try {
-    const value = JSON.parse(raw) as Partial<AppSettings>;
-    const numberValue = (candidate: unknown, fallback: number) =>
-      typeof candidate === "number" &&
-      Number.isFinite(candidate) &&
-      candidate >= 0
-        ? candidate
-        : fallback;
-    return {
-      ...DEFAULT_SETTINGS,
-      launchAtLoginRequested:
-        typeof value.launchAtLoginRequested === "boolean"
-          ? value.launchAtLoginRequested
-          : DEFAULT_SETTINGS.launchAtLoginRequested,
-      retentionDays: numberValue(
-        value.retentionDays,
-        DEFAULT_SETTINGS.retentionDays,
-      ),
-      dataPath:
-        typeof value.dataPath === "string" && value.dataPath.length > 0
-          ? value.dataPath
-          : DEFAULT_SETTINGS.dataPath,
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
 
 async function loadSettingsFromPlatform(): Promise<Record<string, unknown>> {
   const api = (
