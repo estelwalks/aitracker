@@ -71,7 +71,7 @@ function parseScope(raw: unknown): InsightScope {
     throw new AppError("errors.generic");
   }
   const record = raw as Record<string, unknown>;
-  const scope: InsightScope = {};
+  const scope: { range?: InsightScope["range"]; entityId?: string } = {};
   if (record.range !== undefined) {
     if (
       record.range !== "today" &&
@@ -95,7 +95,8 @@ function parseScope(raw: unknown): InsightScope {
   return scope;
 }
 
-function parseBase(input: unknown): GetPageInsightInput {
+/** Exported for unit tests; whitelists surface id, locale and scope. */
+export function parseGetPageInsightInput(input: unknown): GetPageInsightInput {
   if (input == null || typeof input !== "object" || Array.isArray(input)) {
     throw new AppError("errors.generic");
   }
@@ -113,29 +114,105 @@ function parseBase(input: unknown): GetPageInsightInput {
   };
 }
 
+/** Exported for unit tests. */
+export function parseEnhancePageInsightInput(
+  input: unknown,
+): EnhancePageInsightInput {
+  const base = parseGetPageInsightInput(input);
+  const value = input as Record<string, unknown>;
+  if (value.reason !== "manual" && value.reason !== "auto") {
+    throw new AppError("errors.generic");
+  }
+  return { ...base, reason: value.reason };
+}
+
+/** Exported for unit tests. */
+export function parseSetInsightPreferencesInput(
+  input: unknown,
+): SetInsightPreferencesInput {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("errors.generic");
+  }
+  const value = input as Record<string, unknown>;
+
+  const mode =
+    value.mode === undefined
+      ? "rules"
+      : (INSIGHT_MODES as readonly string[]).includes(String(value.mode))
+        ? (value.mode as InsightMode)
+        : null;
+  if (mode == null) throw new AppError("errors.generic");
+
+  const profileId =
+    value.profileId === undefined || value.profileId === null
+      ? null
+      : typeof value.profileId === "string"
+        ? value.profileId
+        : null;
+  if (
+    value.profileId !== undefined &&
+    value.profileId !== null &&
+    profileId === null
+  ) {
+    throw new AppError("errors.generic");
+  }
+
+  const consentVersion =
+    value.consentVersion === undefined || value.consentVersion === null
+      ? null
+      : typeof value.consentVersion === "string"
+        ? value.consentVersion
+        : null;
+  if (
+    value.consentVersion !== undefined &&
+    value.consentVersion !== null &&
+    consentVersion === null
+  ) {
+    throw new AppError("errors.generic");
+  }
+
+  const dailyCallLimit =
+    value.dailyCallLimit === undefined || value.dailyCallLimit === null
+      ? null
+      : typeof value.dailyCallLimit === "number" &&
+          Number.isInteger(value.dailyCallLimit) &&
+          value.dailyCallLimit >= 0
+        ? value.dailyCallLimit
+        : null;
+  if (
+    value.dailyCallLimit !== undefined &&
+    value.dailyCallLimit !== null &&
+    dailyCallLimit === null
+  ) {
+    throw new AppError("errors.generic");
+  }
+
+  if (value.surfaceId !== undefined && !isSurfaceId(value.surfaceId)) {
+    throw new AppError("errors.generic");
+  }
+  const surfaceId = value.surfaceId as InsightSurfaceId | undefined;
+
+  return { mode, profileId, consentVersion, dailyCallLimit, surfaceId };
+}
+
 export const getPageInsight = createServerFn({ method: "GET" })
-  .validator((input: unknown): GetPageInsightInput => parseBase(input))
+  .validator((input: unknown): GetPageInsightInput =>
+    parseGetPageInsightInput(input),
+  )
   .handler(async ({ data }): Promise<InsightEnvelope> => {
-    const { getPageInsightsApplication } = await import(
-      "../../../app/insight-registry.server.ts"
-    );
+    const { getPageInsightsApplication } =
+      await import("../../../app/insight-registry.server.ts");
     const application = await getPageInsightsApplication();
     return application.read(data.surfaceId, data.scope, data.locale);
   });
 
 export const enhancePageInsight = createServerFn({ method: "POST" })
-  .validator((input: unknown): EnhancePageInsightInput => {
-    const base = parseBase(input);
-    const value = input as Record<string, unknown>;
-    if (value.reason !== "manual" && value.reason !== "auto") {
-      throw new AppError("errors.generic");
-    }
-    return { ...base, reason: value.reason };
-  })
+  .validator((input: unknown): EnhancePageInsightInput =>
+    parseEnhancePageInsightInput(input),
+  )
   .handler(async ({ data }): Promise<InsightEnvelope> => {
-    const { getPageInsightsApplication } = await import(
-      "../../../app/insight-registry.server.ts"
-    );
+    const { getPageInsightsApplication } =
+      await import("../../../app/insight-registry.server.ts");
     const application = await getPageInsightsApplication();
     return application.enhance(data.surfaceId, data.scope, {
       locale: data.locale,
@@ -144,80 +221,12 @@ export const enhancePageInsight = createServerFn({ method: "POST" })
   });
 
 export const setInsightPreferences = createServerFn({ method: "POST" })
-  .validator((input: unknown): SetInsightPreferencesInput => {
-    if (input == null || typeof input !== "object" || Array.isArray(input)) {
-      throw new AppError("errors.generic");
-    }
-    const value = input as Record<string, unknown>;
-
-    const mode =
-      value.mode === undefined
-        ? "rules"
-        : (INSIGHT_MODES as readonly string[]).includes(String(value.mode))
-          ? (value.mode as InsightMode)
-          : null;
-    if (mode == null) throw new AppError("errors.generic");
-
-    const profileId =
-      value.profileId === undefined || value.profileId === null
-        ? null
-        : typeof value.profileId === "string"
-          ? value.profileId
-          : null;
-    if (
-      value.profileId !== undefined &&
-      value.profileId !== null &&
-      profileId === null
-    ) {
-      throw new AppError("errors.generic");
-    }
-
-    const consentVersion =
-      value.consentVersion === undefined || value.consentVersion === null
-        ? null
-        : typeof value.consentVersion === "string"
-          ? value.consentVersion
-          : null;
-    if (
-      value.consentVersion !== undefined &&
-      value.consentVersion !== null &&
-      consentVersion === null
-    ) {
-      throw new AppError("errors.generic");
-    }
-
-    const dailyCallLimit =
-      value.dailyCallLimit === undefined || value.dailyCallLimit === null
-        ? null
-        : typeof value.dailyCallLimit === "number" &&
-            Number.isInteger(value.dailyCallLimit) &&
-            value.dailyCallLimit >= 0
-          ? value.dailyCallLimit
-          : null;
-    if (
-      value.dailyCallLimit !== undefined &&
-      value.dailyCallLimit !== null &&
-      dailyCallLimit === null
-    ) {
-      throw new AppError("errors.generic");
-    }
-
-    const surfaceId =
-      value.surfaceId === undefined
-        ? undefined
-        : isSurfaceId(value.surfaceId)
-          ? value.surfaceId
-          : null;
-    if (value.surfaceId !== undefined && surfaceId === null) {
-      throw new AppError("errors.generic");
-    }
-
-    return { mode, profileId, consentVersion, dailyCallLimit, surfaceId };
-  })
+  .validator((input: unknown): SetInsightPreferencesInput =>
+    parseSetInsightPreferencesInput(input),
+  )
   .handler(async ({ data }): Promise<InsightPreferenceView> => {
-    const { getCompositionRoot } = await import(
-      "../../../app/composition.server.ts"
-    );
+    const { getCompositionRoot } =
+      await import("../../../app/composition.server.ts");
     const root = await getCompositionRoot();
     const store = root.database.features.insights;
 
