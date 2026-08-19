@@ -91,6 +91,11 @@ npm run verify:database-schema         # 静态校验 migrations 顺序、双源
 npm run verify:browser-server-boundary # browser/server 边界 + node:sqlite 仅限 infrastructure 门禁
 npm run verify:bundle-no-sqlite        # build 产物(真实浏览器 chunk)不得含 node:sqlite/DatabaseSync/DB 路径/密文
 npm run inspect:database -- <db路径>   # 只读输出健康信息、表名+行数与索引数，绝不输出任何行内容
+
+# 聚合门禁 verify:database 末尾会跑 verify:bundle-no-sqlite,该步骤读取
+# `.output/public` 构建产物:请先 `npm run build` 再运行 `verify:database`,否则
+# 会读到旧产物或被判定为缺少产物而失败。
+
 ```
 
 ## 工具注册表（tool-registry）
