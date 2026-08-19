@@ -60,7 +60,27 @@ function isErrorLike(value: unknown): value is Error {
 // unhandled-error logging, which this file cannot hook directly — are both
 // recorded for consumeLastCapturedError and expanded before serialization.
 const originalConsoleError = console.error.bind(console);
+
+// TanStack Start streams SSR HTML through a transform; when the CLIENT aborts
+// the page request mid-stream (navigation away, reload, or a Vite dev
+// full-reload), the transform cancels React's renderToReadableStream, and
+// react-dom (dev builds only) logs "The render was aborted by the server
+// without a reason". The consumer is already gone, so this is benign noise:
+// suppress exactly that cancellation, never other render errors.
+const RENDER_STREAM_ABORTED_MARKER = "renderToReadableStream";
+const RENDER_STREAM_ABORTED_REASON = "aborted by the server without a reason";
+function isBenignSsrStreamAbort(args: readonly unknown[]): boolean {
+  if (typeof args[0] !== "string") return false;
+  if (!args[0].includes(RENDER_STREAM_ABORTED_MARKER)) return false;
+  const reason = args[1];
+  return (
+    reason instanceof Error &&
+    reason.message.includes(RENDER_STREAM_ABORTED_REASON)
+  );
+}
+
 console.error = (...args: unknown[]) => {
+  if (isBenignSsrStreamAbort(args)) return;
   const expanded = args.map((arg) => {
     if (!isErrorLike(arg)) return arg;
     record(arg);
