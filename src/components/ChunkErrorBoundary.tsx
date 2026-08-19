@@ -1,4 +1,7 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Component, type ErrorInfo, type ReactNode } from "react";
+
+import { useI18n } from "../lib/i18n/context";
 
 /**
  * P6-T6-05: chunk error fallback for React.lazy components.
@@ -7,6 +10,24 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
  * deployment), React.lazy throws during render; this boundary catches it and
  * offers a plain retry instead of white-screening the route.
  */
+
+/** Localized fallback body; separated so the boundary class stays hook-free. */
+function ChunkErrorFallback() {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-sm border border-border bg-surface px-4 py-6 text-[12.5px] text-muted-foreground">
+      <span>{t("common.chunkLoadFailed")}</span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="rounded-sm bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+      >
+        {t("common.retry")}
+      </button>
+    </div>
+  );
+}
+
 interface ChunkErrorBoundaryProps {
   readonly children: ReactNode;
   readonly fallback?: ReactNode;
@@ -33,20 +54,7 @@ export class ChunkErrorBoundary extends Component<
 
   override render(): ReactNode {
     if (this.state.failed) {
-      return (
-        this.props.fallback ?? (
-          <div className="flex flex-col items-center gap-2 rounded-sm border border-border bg-surface px-4 py-6 text-[12.5px] text-muted-foreground">
-            <span>内容加载失败</span>
-            <button
-              type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-sm bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-            >
-              重试
-            </button>
-          </div>
-        )
-      );
+      return this.props.fallback ?? <ChunkErrorFallback />;
     }
     return this.props.children;
   }

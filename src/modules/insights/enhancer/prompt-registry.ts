@@ -5,6 +5,7 @@
  * `POLICIES` is typed as `Record<InsightSurfaceId, string>`, so a missing
  * surface fails to compile rather than to serve.
  */
+import { APP_NAME } from "../../../lib/app-config.ts";
 import {
   INSIGHT_SURFACE_IDS,
   type InsightSurfaceId,
@@ -33,7 +34,7 @@ export interface InsightPrompt {
 }
 
 const SHARED_SYSTEM = [
-  "You are the AITracker daily-insight enhancer. You rewrite a small set of rule-produced fact sentences into concise, actionable analysis lines.",
+  `You are the ${APP_NAME} daily-insight enhancer. You rewrite a small set of rule-produced fact sentences into concise, actionable analysis lines.`,
   "Hard rules — violating any one invalidates the whole response:",
   "1. Never invent or echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
   "2. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
