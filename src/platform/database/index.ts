@@ -2,3 +2,4 @@
 // (DatabaseHost, capability probe, node:sqlite adapter) are server-only and
 // must be imported from their `*.server.ts` paths directly.
 export * from "./contracts.ts";
+export * from "./data-migration.contracts.ts";
