@@ -14,6 +14,7 @@ import test from "node:test";
 
 import type { ScanSkillReport } from "skill-scanner";
 
+import { APP_DATA_DIR } from "../../../lib/app-config";
 import type { DesktopLocale } from "../../../../electron/contracts";
 import {
   handleSecurityHttpApi,
@@ -30,6 +31,7 @@ import {
   createDevSecurityScannerService,
   handleSecurityDevRequest,
   localeFromAcceptLanguage,
+  migrateLegacyDevHistory,
 } from "./security-dev-server.server.ts";
 
 const cleanup: string[] = [];
@@ -124,12 +126,31 @@ async function waitForTerminal(service: SecurityScannerService): Promise<void> {
   throw new Error("scan did not finish");
 }
 
-test("isolates dev scan history from the client data directory", async () => {
-  const { home, data, client } = await fixture();
-  const sentinel = JSON.stringify({ version: 1, entries: [] });
-  await mkdir(client, { recursive: true });
-  const clientHistoryPath = join(client, "security-scan-history.json");
-  await writeFile(clientHistoryPath, sentinel, "utf8");
+function historyEntry(id: string): Record<string, string> {
+  return {
+    id,
+    scanId: "scan:11111111-1111-4111-8111-111111111111",
+    skillRef: `skill:${"1".repeat(64)}`,
+    skillName: `skill-${id}`,
+    mode: "quick",
+    trigger: "automatic",
+    locale: "zh-CN",
+    status: "complete",
+    startedAt: "2026-08-01T00:00:00.000Z",
+    finishedAt: "2026-08-01T00:00:01.000Z",
+  };
+}
+
+test("dev service appends into a pre-existing shared history without clobbering it", async () => {
+  const { home, data } = await fixture();
+  // The shared history file already holds desktop-app entries; the dev backend
+  // must read-modify-write it, not replace it.
+  await mkdir(data, { recursive: true });
+  await writeFile(
+    join(data, "security-scan-history.json"),
+    JSON.stringify({ version: 1, entries: [historyEntry("desktop-1")] }),
+    "utf8",
+  );
 
   const service = createDevSecurityScannerService({
     homeDirectory: home,
@@ -142,22 +163,68 @@ test("isolates dev scan history from the client data directory", async () => {
   await waitForTerminal(service);
   assert.equal(service.getStatus().status, "complete");
 
-  // History is written under the isolated dev dataDirectory.
-  const devHistory = JSON.parse(
-    await readFile(join(data, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ report?: { mode?: string } }> };
-  assert.equal(devHistory.entries.length, 1);
-  assert.equal(devHistory.entries[0]?.report?.mode, "quick");
-
-  // The sibling "client" dir's sentinel history file is never touched.
-  assert.equal(await readFile(clientHistoryPath, "utf8"), sentinel);
+  const history = await service.history();
+  assert.equal(history.length, 2);
+  assert.equal(
+    history.some((entry) => entry.skillName === "skill-desktop-1"),
+    true,
+  );
+  assert.equal(
+    history.some((entry) => entry.skillName === "demo"),
+    true,
+  );
 
   // Report entries are present and sanitized (no absolute paths projected).
-  const history = await service.history();
-  assert.equal(history.length, 1);
-  assert.equal(history[0]?.skillName, "demo");
   assert.equal(JSON.stringify(history).includes(home), false);
   assert.equal(JSON.stringify(history).includes(data), false);
+});
+
+test("migrates legacy isolated dev history into the shared history, deduped and idempotent", async () => {
+  const { home } = await fixture();
+  const sharedDir = join(home, APP_DATA_DIR);
+  const legacyDir = join(sharedDir, "security-dev");
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(
+    join(legacyDir, "security-scan-history.json"),
+    JSON.stringify({
+      version: 1,
+      entries: [historyEntry("legacy-1"), historyEntry("legacy-2")],
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(sharedDir, "security-scan-history.json"),
+    JSON.stringify({
+      version: 1,
+      entries: [historyEntry("legacy-2"), historyEntry("shared-1")],
+    }),
+    "utf8",
+  );
+
+  migrateLegacyDevHistory(home);
+  migrateLegacyDevHistory(home); // idempotent
+
+  const merged = JSON.parse(
+    await readFile(join(sharedDir, "security-scan-history.json"), "utf8"),
+  ) as { entries: Array<{ id: string }> };
+  assert.deepEqual(
+    merged.entries.map((entry) => entry.id),
+    ["legacy-1", "legacy-2", "shared-1"],
+  );
+  // The legacy file is left in place for a downgrade path.
+  const legacy = JSON.parse(
+    await readFile(join(legacyDir, "security-scan-history.json"), "utf8"),
+  ) as { entries: unknown[] };
+  assert.equal(legacy.entries.length, 2);
+});
+
+test("migrateLegacyDevHistory is a no-op when no legacy history exists", async () => {
+  const { home } = await fixture();
+  migrateLegacyDevHistory(home); // must not throw
+  // No shared history is created when there is nothing to migrate.
+  await assert.rejects(
+    readFile(join(home, APP_DATA_DIR, "security-scan-history.json"), "utf8"),
+  );
 });
 
 test("dev secret storage round-trips and persists the key with mode 0o600", async () => {

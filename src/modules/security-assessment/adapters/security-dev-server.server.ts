@@ -1,7 +1,8 @@
-import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { APP_DATA_DIR, ENV } from "../../../lib/app-config.ts";
 import { createNodeRuntimeIdentity } from "../../../platform/runtime/node-runtime-identity.ts";
@@ -25,8 +26,15 @@ import {
  * wired into `src/server.ts` (the Nitro fetch handler) so `/api/security/*`
  * requests made against the dev server are served by the *same* production
  * `SecurityScannerService` the Electron desktop app uses, with a dev-only
- * plaintext secret store and an isolated data directory
- * (`~/.trusttools/security-dev/`).
+ * plaintext secret store and the *same* data directory (`~/.trusttools/`) —
+ * the browser and the desktop app therefore read and write one shared scan
+ * history (`security-scan-history.json`) and one shared scan schedule.
+ *
+ * Trade-off (accepted deliberately): the desktop app and the dev server each
+ * serialize their own history appends in-process only, so if both processes
+ * run a scan at the same moment the later atomic rename can overwrite the
+ * other's most recent entries (files never corrupt). History entries are
+ * written redacted, so cross-process reads need no shared secret.
  *
  * It is named `*.server.ts` so TanStack Start / Nitro keep it off the browser
  * bundle. The runtime-kind gate below additionally prevents activation inside
@@ -36,6 +44,12 @@ import {
 
 /** Filename (inside `dataDirectory`) that holds the dev plaintext API key. */
 const DEV_API_KEY_FILENAME = "security-dev-api-key";
+
+/** Legacy isolated dev data directory (pre shared-history layout). */
+const LEGACY_DEV_DATA_DIR = "security-dev";
+
+/** Mirror of the scanner service's history cap. */
+const MAX_HISTORY_ENTRIES = 200;
 
 /** Key used to mirror the singleton on `globalThis` so it survives Vite HMR. */
 const DEV_SERVICE_GLOBAL = "__TRUSTTOOLS_SECURITY_DEV_SERVICE__";
@@ -137,6 +151,67 @@ export function createDevSecurityScannerService(
 }
 
 /**
+ * One-time migration from the legacy isolated dev history
+ * (`~/.trusttools/security-dev/security-scan-history.json`) into the shared
+ * history file (`~/.trusttools/security-scan-history.json`), so scans made
+ * through the old dev backend are not lost when the two histories merge.
+ * Ids are deduplicated and the merged list is capped at the scanner service's
+ * history limit. The legacy file is left in place untouched.
+ *
+ * Runs synchronously before the dev service singleton is constructed so a
+ * scan can never race the merge, and failures are non-fatal (the service
+ * still starts).
+ */
+export function migrateLegacyDevHistory(homeDirectory: string): void {
+  const sharedPath = join(
+    homeDirectory,
+    APP_DATA_DIR,
+    "security-scan-history.json",
+  );
+  const legacyPath = join(
+    homeDirectory,
+    APP_DATA_DIR,
+    LEGACY_DEV_DATA_DIR,
+    "security-scan-history.json",
+  );
+  let legacy: unknown;
+  try {
+    legacy = JSON.parse(readFileSync(legacyPath, "utf8"));
+  } catch {
+    return; // no legacy history to migrate
+  }
+  const legacyEntries = Array.isArray(
+    (legacy as { entries?: unknown })?.entries,
+  )
+    ? (legacy as { entries: Array<{ id?: unknown }> }).entries
+    : [];
+  if (legacyEntries.length === 0) return;
+
+  let sharedEntries: Array<{ id?: unknown }> = [];
+  try {
+    const shared = JSON.parse(readFileSync(sharedPath, "utf8")) as {
+      entries?: Array<{ id?: unknown }>;
+    };
+    if (Array.isArray(shared.entries)) sharedEntries = shared.entries;
+  } catch {
+    // no shared history yet — migrate everything
+  }
+  const known = new Set(sharedEntries.map((entry) => entry.id));
+  const missing = legacyEntries.filter((entry) => !known.has(entry.id));
+  if (missing.length === 0) return;
+  const merged = [...missing, ...sharedEntries].slice(0, MAX_HISTORY_ENTRIES);
+
+  mkdirSync(dirname(sharedPath), { recursive: true, mode: 0o700 });
+  const temporary = `${sharedPath}.${process.pid}.${randomUUID()}.migrate.tmp`;
+  writeFileSync(
+    temporary,
+    `${JSON.stringify({ version: 1, entries: merged }, null, 2)}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  );
+  renameSync(temporary, sharedPath);
+}
+
+/**
  * Lazy singleton for the dev security service.
  *
  * Guard first: outside a web runtime (e.g. inside Electron, where the runtime
@@ -161,9 +236,11 @@ export function getDevSecurityScannerService(): SecurityScannerService | null {
   }
 
   const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
-  // Isolated from the Electron client's `security-scan-history.json` so
-  // browser and client data never mix.
-  const dataDirectory = join(homeDirectory, APP_DATA_DIR, "security-dev");
+  // Shared with the Electron client: the browser and the desktop app read and
+  // write the same scan history and schedule. The one-time migration pulls the
+  // legacy isolated dev history (security-dev/) into the shared file first.
+  const dataDirectory = join(homeDirectory, APP_DATA_DIR);
+  migrateLegacyDevHistory(homeDirectory);
   const service = createDevSecurityScannerService({
     homeDirectory,
     dataDirectory,
