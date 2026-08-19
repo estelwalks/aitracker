@@ -12,7 +12,6 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { useI18n } from "../lib/i18n/context";
 import { AppShell } from "../components/AppShell";
 import { AppProviders } from "./providers";
-import { seedDailyCountFromPlatform } from "../lib/security/daily-limit";
 import type { QueryClient } from "@tanstack/react-query";
 import type { RootLoaderData } from "./root-route-config";
 
@@ -133,8 +132,6 @@ export function ErrorComponent({
 }
 
 function PlatformPersistenceSeed() {
-  useEffect(() => {
-    void seedDailyCountFromPlatform();
-  }, []);
+  useEffect(() => {}, []);
   return null;
 }

@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import type { MessageKey } from "./i18n/messages";
+import { getPreference, setPreference } from "./preferences/client.ts";
 
 export const themes = [
   {
@@ -52,10 +53,24 @@ const ThemeCtx = createContext<{
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<ThemeId>("dark");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("tt-theme") as ThemeId | null;
-    if (saved && themes.some((t) => t.id === saved)) setTheme(saved);
+    let cancelled = false;
+    void getPreference("tt-theme").then((saved) => {
+      if (!cancelled) {
+        if (
+          typeof saved === "string" &&
+          themes.some((candidate) => candidate.id === saved)
+        ) {
+          setTheme(saved as ThemeId);
+        }
+        setHydrated(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -63,8 +78,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     themes.forEach((t) => t.cls && root.classList.remove(t.cls));
     const cls = themes.find((t) => t.id === theme)?.cls;
     if (cls) root.classList.add(cls);
-    window.localStorage.setItem("tt-theme", theme);
-  }, [theme]);
+    if (hydrated) void setPreference("tt-theme", theme);
+  }, [hydrated, theme]);
 
   return (
     <ThemeCtx.Provider value={{ theme, setTheme }}>

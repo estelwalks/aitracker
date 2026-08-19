@@ -12,7 +12,6 @@
  */
 export const APP_NAME = "AITracker";
 export const APP_DATA_DIR = ".trusttools";
-export const PREFS_FILENAME = "trusttools-prefs.json";
 export const STORAGE_KEY_PREFIX = "trusttools.";
 export const COOKIE_TOKEN_NAME = "trusttools_token";
 export const SECURITY_CSRF_HEADER = "x-trusttools-csrf";
@@ -20,6 +19,6 @@ export const DESKTOP_GLOBAL = "trusttoolsDesktop";
 
 export const ENV = {
   DEV_URL: "TRUSTTOOLS_DEV_URL",
-  PREFS_PATH: "TRUSTTOOLS_PREFS_PATH",
+  DESKTOP_BROKER_TOKEN: "TRUSTTOOLS_DESKTOP_BROKER_TOKEN",
   USAGE_HOME: "TRUSTTOOLS_USAGE_HOME",
 } as const;

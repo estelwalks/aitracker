@@ -32,11 +32,13 @@ import {
 import { BUILTIN_RATES, formatMoney as pricingFormatMoney } from "../pricing";
 import { getRatesSnapshot, type RatesSnapshot } from "../pricing/server-fns";
 import { brandParams } from "../app-config";
+import { STORAGE_KEY_PREFIX } from "../app-config";
+import { listPreferences, setPreference } from "../preferences/client.ts";
 
-const LOCALE_STORAGE_KEY = "tt-locale";
-const LOCALE_MODE_STORAGE_KEY = "tt-locale-mode";
-const CURRENCY_STORAGE_KEY = "tt-display-currency";
-const CURRENCY_MODE_STORAGE_KEY = "tt-currency-mode";
+const LOCALE_STORAGE_KEY = `${STORAGE_KEY_PREFIX}locale`;
+const LOCALE_MODE_STORAGE_KEY = `${STORAGE_KEY_PREFIX}localeMode`;
+const CURRENCY_STORAGE_KEY = `${STORAGE_KEY_PREFIX}displayCurrency`;
+const CURRENCY_MODE_STORAGE_KEY = `${STORAGE_KEY_PREFIX}currencyMode`;
 const LOCALE_SEARCH_PARAM = "locale";
 const CURRENCY_SEARCH_PARAM = "currency";
 
@@ -115,37 +117,8 @@ const I18nContext = createContext<I18nContextValue>({
   format: { ...createBoundFormatters("zh-CN"), formatUsd: () => "—" },
 });
 
-function readStoredLocale(): Locale | null {
-  try {
-    return normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY));
-  } catch {
-    return null;
-  }
-}
-
-function readStoredCurrency(): Currency | null {
-  try {
-    return normalizeCurrency(window.localStorage.getItem(CURRENCY_STORAGE_KEY));
-  } catch {
-    return null;
-  }
-}
-
-function readStoredMode(key: string): PreferenceMode | null {
-  try {
-    const value = window.localStorage.getItem(key);
-    return value === "system" || value === "manual" ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistValue(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // localStorage unavailable — preference is best-effort
-  }
+function storedMode(value: unknown): PreferenceMode | null {
+  return value === "system" || value === "manual" ? value : null;
 }
 
 /** Keep the URL `?locale=`/`?currency=` in sync so reloads/SSR match. */
@@ -192,18 +165,11 @@ export function I18nProvider({
   initialRates = null,
   children,
 }: I18nProviderProps) {
-  const [localeMode, setLocaleModeState] = useState<PreferenceMode>(
-    () => readStoredMode(LOCALE_MODE_STORAGE_KEY) ?? "system",
-  );
-  const [manualLocale, setManualLocale] = useState<Locale | null>(() =>
-    readStoredLocale(),
-  );
-  const [currencyMode, setCurrencyModeState] = useState<PreferenceMode>(
-    () => readStoredMode(CURRENCY_MODE_STORAGE_KEY) ?? "system",
-  );
-  const [manualCurrency, setManualCurrency] = useState<Currency | null>(() =>
-    readStoredCurrency(),
-  );
+  const [localeMode, setLocaleModeState] = useState<PreferenceMode>("system");
+  const [manualLocale, setManualLocale] = useState<Locale | null>(null);
+  const [currencyMode, setCurrencyModeState] =
+    useState<PreferenceMode>("system");
+  const [manualCurrency, setManualCurrency] = useState<Currency | null>(null);
   const [systemLocale, setSystemLocale] = useState<Locale>(
     () => initialLocale ?? "zh-CN",
   );
@@ -244,71 +210,43 @@ export function I18nProvider({
   }, [locale, displayCurrency]);
 
   /**
-   * Browser development mode: converge the SSR-initial locale/currency to the
-   * local preference (localStorage > navigator) once, then mirror both into
-   * the URL. In Electron the main process is the single source of truth (it
-   * resolved via prefs > system and passed `?locale=&currency=` to SSR), so we
-   * never override it here — a stale localStorage mirror must not win.
+   * Converge the SSR values to SQLite preferences once. The same server-owned
+   * preference repository is used in browser development and Electron.
    */
   useBrowserLayoutEffect(() => {
     if (converged.current) return;
     if (typeof window === "undefined") return;
-    if (window.desktopApi) {
-      converged.current = true;
-      return;
-    }
     converged.current = true;
-    const storedLocale = readStoredLocale();
-    const storedCurrency = readStoredCurrency();
-    const storedLocaleMode = readStoredMode(LOCALE_MODE_STORAGE_KEY);
-    const storedCurrencyMode = readStoredMode(CURRENCY_MODE_STORAGE_KEY);
-    const browserSystemLocale = mapSystemLocale(navigator.language);
-    const browserSystemCurrency = mapSystemCurrency(navigator.language);
-
-    let nextLocale = localeRef.current;
-    if (storedLocaleMode === "manual" && storedLocale) {
-      setManualLocale(storedLocale);
-      setLocaleModeState("manual");
-      nextLocale = storedLocale;
-    } else if (browserSystemLocale !== localeRef.current) {
-      setSystemLocale(browserSystemLocale);
-      nextLocale = browserSystemLocale;
-    }
-    let nextCurrency = currencyRef.current;
-    if (storedCurrencyMode === "manual" && storedCurrency) {
-      setManualCurrency(storedCurrency);
-      setCurrencyModeState("manual");
-      nextCurrency = storedCurrency;
-    } else if (browserSystemCurrency !== currencyRef.current) {
-      setSystemLocale(browserSystemLocale);
-      nextCurrency = browserSystemCurrency;
-    }
-    updateSearchParams(nextLocale, nextCurrency);
-  }, []);
-
-  /** Main-process initiated changes (tray/menu or future flows). */
-  useEffect(() => {
-    const api = typeof window !== "undefined" ? window.desktopApi : undefined;
-    if (!api?.onPreferencesChanged) return;
-    return api.onPreferencesChanged((next) => {
-      if (next.locale !== localeRef.current) {
-        if (next.localeSource === "manual") {
-          setManualLocale(next.locale);
-          setLocaleModeState("manual");
-        } else {
-          setSystemLocale(next.locale);
-          setLocaleModeState("system");
-        }
+    void listPreferences().then((preferences) => {
+      const localeValue = preferences[LOCALE_STORAGE_KEY];
+      const currencyValue = preferences[CURRENCY_STORAGE_KEY];
+      const manualStoredLocale = normalizeLocale(
+        typeof localeValue === "string" ? localeValue : null,
+      );
+      const manualStoredCurrency = normalizeCurrency(
+        typeof currencyValue === "string" ? currencyValue : null,
+      );
+      const storedLocaleMode = storedMode(preferences[LOCALE_MODE_STORAGE_KEY]);
+      const storedCurrencyMode = storedMode(
+        preferences[CURRENCY_MODE_STORAGE_KEY],
+      );
+      const browserSystemLocale = mapSystemLocale(navigator.language);
+      const browserSystemCurrency = mapSystemCurrency(navigator.language);
+      let nextLocale = browserSystemLocale;
+      if (storedLocaleMode === "manual" && manualStoredLocale) {
+        setManualLocale(manualStoredLocale);
+        setLocaleModeState("manual");
+        nextLocale = manualStoredLocale;
+      } else {
+        setSystemLocale(browserSystemLocale);
       }
-      if (next.displayCurrency !== currencyRef.current) {
-        if (next.currencySource === "manual") {
-          setManualCurrency(next.displayCurrency);
-          setCurrencyModeState("manual");
-        } else {
-          setCurrencyModeState("system");
-          setManualCurrency(null);
-        }
+      let nextCurrency = browserSystemCurrency;
+      if (storedCurrencyMode === "manual" && manualStoredCurrency) {
+        setManualCurrency(manualStoredCurrency);
+        setCurrencyModeState("manual");
+        nextCurrency = manualStoredCurrency;
       }
+      updateSearchParams(nextLocale, nextCurrency);
     });
   }, []);
 
@@ -335,17 +273,14 @@ export function I18nProvider({
     (mode: PreferenceMode, locale?: Locale) => {
       if (mode === "manual" && locale != null) {
         setManualLocale(locale);
-        persistValue(LOCALE_STORAGE_KEY, locale);
+        void setPreference(LOCALE_STORAGE_KEY, locale);
       }
       setLocaleModeState(mode);
-      persistValue(LOCALE_MODE_STORAGE_KEY, mode);
+      void setPreference(LOCALE_MODE_STORAGE_KEY, mode);
       updateSearchParams(
         mode === "manual" ? (locale ?? systemLocale) : systemLocale,
         currencyRef.current,
       );
-      if (typeof window !== "undefined" && window.desktopApi) {
-        void window.desktopApi.setLocaleMode(mode, locale).catch(() => {});
-      }
     },
     [systemLocale],
   );
@@ -354,21 +289,18 @@ export function I18nProvider({
     (mode: PreferenceMode, currency?: Currency) => {
       if (mode === "manual" && currency != null) {
         setManualCurrency(currency);
-        persistValue(CURRENCY_STORAGE_KEY, currency);
+        void setPreference(CURRENCY_STORAGE_KEY, currency);
       } else if (mode === "system") {
         setManualCurrency(null);
       }
       setCurrencyModeState(mode);
-      persistValue(CURRENCY_MODE_STORAGE_KEY, mode);
+      void setPreference(CURRENCY_MODE_STORAGE_KEY, mode);
       updateSearchParams(
         localeRef.current,
         mode === "manual"
           ? (currency ?? mapSystemCurrency(systemLocale))
           : mapSystemCurrency(systemLocale),
       );
-      if (typeof window !== "undefined" && window.desktopApi) {
-        void window.desktopApi.setCurrencyMode(mode, currency).catch(() => {});
-      }
     },
     [systemLocale],
   );

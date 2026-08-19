@@ -30,11 +30,14 @@ import {
 import { themes, useTheme } from "../../../lib/theme";
 import { useVersionCheck } from "../../../lib/version-check";
 import {
+  listPreferences,
+  removePreference,
+} from "../../../lib/preferences/client.ts";
+import {
   APP_VERSION,
   APP_RELEASE_DATE,
   APP_REPO_URL,
   brandParams,
-  STORAGE_KEY_PREFIX,
 } from "../../../lib/app-config";
 import {
   applyRetentionPolicyQuery,
@@ -314,17 +317,15 @@ export function SettingsPage({
   const handleResetPreferences = async () => {
     setClearingData(true);
     try {
-      const result = await window.desktopApi?.resetPreferences();
-      for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-        const key = window.localStorage.key(index);
-        if (key?.startsWith(STORAGE_KEY_PREFIX))
-          window.localStorage.removeItem(key);
-      }
+      const preferences = await listPreferences();
+      const removed = await Promise.all(
+        Object.keys(preferences).map((key) => removePreference(key)),
+      );
       setSettings(DEFAULT_SETTINGS);
       toast.success(
-        result
-          ? t("settings.toast.resetDone", { count: result.removedKeys })
-          : t("settings.toast.resetDoneBrowser"),
+        t("settings.toast.resetDone", {
+          count: removed.filter(Boolean).length,
+        }),
       );
     } catch {
       toast.error(t("settings.toast.resetFailed"));

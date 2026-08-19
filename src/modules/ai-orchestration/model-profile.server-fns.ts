@@ -1,7 +1,7 @@
 /**
  * Model profile server functions (S-500). Renderer-safe facade over the
- * server-only profile store: the handlers dynamically import
- * `model-profile.server.ts` so Node filesystem/network code never reaches the
+ * server-only profile store: handlers resolve the shared composition root so
+ * no independent persistence path can be constructed, and
  * browser bundle, and every returned projection is key-free (`ModelProfileView`
  * carries only `apiKeyMasked`).
  *
@@ -153,9 +153,9 @@ export interface ModelProfileListResult {
 /** Renderer-safe profile list + active id (Settings model panel / distill). */
 export const listModelProfiles = createServerFn({ method: "GET" }).handler(
   async (): Promise<ModelProfileListResult> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
-    const repository = getModelProfileRepository();
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const repository = (await getCompositionRoot()).modelProfiles;
     const [profiles, active] = await Promise.all([
       repository.listViews(),
       repository.getActiveView(),
@@ -168,10 +168,10 @@ export const listModelProfiles = createServerFn({ method: "GET" }).handler(
 export const upsertModelProfile = createServerFn({ method: "POST" })
   .validator((input: unknown): ModelProfileInput => parseProfileInput(input))
   .handler(async ({ data }): Promise<ModelProfileView> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
     try {
-      return await getModelProfileRepository().upsert(data);
+      return await (await getCompositionRoot()).modelProfiles.upsert(data);
     } catch (error) {
       const raw = error as { code?: unknown };
       const code =
@@ -192,18 +192,18 @@ export interface ModelProfileActionResult {
 export const deleteModelProfile = createServerFn({ method: "POST" })
   .validator((input: unknown): { id: string } => parseProfileId(input))
   .handler(async ({ data }): Promise<ModelProfileActionResult> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
-    return getModelProfileRepository().remove(data.id);
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    return (await getCompositionRoot()).modelProfiles.remove(data.id);
   });
 
 /** Activate a profile (takes effect immediately for profile-based runs). */
 export const setActiveModelProfile = createServerFn({ method: "POST" })
   .validator((input: unknown): { id: string } => parseProfileId(input))
   .handler(async ({ data }): Promise<ModelProfileActionResult> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
-    return getModelProfileRepository().setActive(data.id);
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    return (await getCompositionRoot()).modelProfiles.setActive(data.id);
   });
 
 /**
@@ -214,9 +214,9 @@ export const setActiveModelProfile = createServerFn({ method: "POST" })
 export const testModelProfile = createServerFn({ method: "POST" })
   .validator((input: unknown): ModelProfileInput => parseProfileInput(input))
   .handler(async ({ data }): Promise<ModelProfileTestResult> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
-    return getModelProfileRepository().test(data);
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    return (await getCompositionRoot()).modelProfiles.test(data);
   });
 
 /**
@@ -230,7 +230,7 @@ export const listRemoteModels = createServerFn({ method: "POST" })
     parseListRemoteModelsInput(input),
   )
   .handler(async ({ data }): Promise<ModelListResult> => {
-    const { getModelProfileRepository } =
-      await import("./model-profile.server.ts");
-    return getModelProfileRepository().listModels(data);
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    return (await getCompositionRoot()).modelProfiles.listModels(data);
   });

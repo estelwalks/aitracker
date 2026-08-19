@@ -87,7 +87,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 }
 
 /**
- * 小组件配置面板：菜单栏 / 浮窗 / 桌面小组件 三组选项，localStorage 持久化。
+ * 小组件配置面板：菜单栏 / 浮窗 / 桌面小组件 三组选项，SQLite 持久化。
  * 供设置页「小组件」分类与浮窗内 ⚙ 轻量配置复用。
  */
 export function WidgetConfigPanel({
@@ -210,7 +210,7 @@ export function WidgetConfigPanel({
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={resetWidgetPrefs}
+          onClick={() => void resetWidgetPrefs()}
           className="flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <RotateCcw className="size-3" strokeWidth={1.75} />

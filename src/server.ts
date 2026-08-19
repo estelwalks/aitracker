@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { ensureBackgroundRuntimeStarted } from "./app/bootstrap.server.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { handleDesktopStateBrokerRequest } from "./app/desktop-state-broker.server.ts";
 
 // SECURITY_API_PREFIX must stay in sync with electron/security-http-api.ts.
 const SECURITY_API_PREFIX = "/api/security";
@@ -87,6 +88,8 @@ export default {
       // The bootstrap is a no-op for web development by policy, while desktop
       // composition may inject the scheduler before the first SSR request.
       await ensureBackgroundRuntimeStarted();
+      const desktopState = await handleDesktopStateBrokerRequest(request);
+      if (desktopState) return desktopState;
       const security = await maybeHandleSecurityDevRequest(request);
       if (security) return security;
       const handler = await getServerEntry();

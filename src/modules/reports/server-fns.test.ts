@@ -128,7 +128,7 @@ test("reportScheduleInputSchema accepts a valid full config", () => {
 /**
  * End-to-end sync through the REAL composition root against an isolated
  * usage-home env var (same pattern as composition.integration.test.ts), so the
- * test exercises AtomicJsonStore → preference repository → task-api wiring.
+ * test exercises repository → task-api wiring.
  */
 async function isolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), `${TEST_TMP_PREFIX}reports-sync-`));

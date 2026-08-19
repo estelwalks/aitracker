@@ -227,7 +227,7 @@ export function reportScheduleToPreferenceRequest(
 /**
  * Testable core of `syncReportScheduleToTasks`: applies the mapped preference
  * through the wired composition root. Extracted so tests can exercise the real
- * AtomicJsonStore → repository → task-api path without a Start runtime context.
+ * repository → task-api path without a Start runtime context.
  */
 export async function syncReportScheduleToTaskPreference(
   config: ReportScheduleInput,

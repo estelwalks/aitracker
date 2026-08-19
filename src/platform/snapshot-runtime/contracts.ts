@@ -1,5 +1,3 @@
-import type { AtomicJsonStore } from "../persistence/contracts.ts";
-
 /**
  * P2-T2-01: unified snapshot runtime contracts.
  *
@@ -43,51 +41,14 @@ export interface SnapshotHydrateResult<T> {
   readonly corruptBackupCreated?: boolean;
 }
 
-/** Persistence port: atomic read/write of one domain snapshot file. */
+/** Persistence port for one domain snapshot. */
 export interface SnapshotRepository<T> {
   /** Reads the latest completed snapshot; never triggers a refresh. */
   load(): Promise<SnapshotHydrateResult<T>>;
-  /** Atomically commits a completed snapshot. */
+  /** Commits a completed snapshot. */
   save(envelope: SnapshotEnvelope<T>): Promise<void>;
-  /** Removes a stale/invalid snapshot file (used by invalidate flows). */
+  /** Clears stale/invalid snapshot state (used by invalidate flows). */
   clear(): Promise<void>;
-}
-
-/** Adapter over the shared AtomicJsonStore (sibling-file compatible). */
-export function createAtomicSnapshotRepository<T>(
-  store: AtomicJsonStore<SnapshotEnvelope<T>>,
-): SnapshotRepository<T> {
-  return {
-    async load() {
-      const result = await store.read();
-      return {
-        envelope: result.value,
-        source: result.source,
-        schemaVersion: result.schemaVersion,
-        ...(result.corruptBackupCreated ? { corruptBackupCreated: true } : {}),
-      };
-    },
-    async save(envelope) {
-      await store.write(envelope);
-    },
-    async clear() {
-      // AtomicJsonStore has no delete; writing the empty envelope is the safe
-      // equivalent for snapshot state (last-known-good preserved by callers).
-      await store.write({
-        schemaVersion: 1,
-        revision: "cleared",
-        generatedAt: null,
-        sourceFingerprint: null,
-        status: "empty",
-        data: null,
-        diagnostics: {
-          lastAttemptAt: null,
-          lastSuccessAt: null,
-          warningCodes: [],
-        },
-      } satisfies SnapshotEnvelope<T>);
-    },
-  };
 }
 
 export interface SnapshotRefreshRequest {

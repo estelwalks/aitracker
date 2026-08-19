@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useI18n } from "../../../lib/i18n/context";
+import { setPreference } from "../../../lib/preferences/client.ts";
 
 /**
  * Shared clipboard and Markdown export actions. The reports page only uses
@@ -46,8 +47,8 @@ export function useReportActions(
 }
 
 /**
- * 30s localStorage draft autosave (browser-only). The server's persisted report
- * bodies are never overwritten — drafts stay in this browser under the given
+ * 30s SQLite draft autosave. Generated report bodies remain separate from the
+ * user draft stored under the given preference
  * key. `dirtyRef` is set by the caller on every keystroke; every 30s the hook
  * persists the latest body (read via a ref so the interval closure never goes
  * stale), `flush` persists immediately (the "保存" button), and the cleanup
@@ -59,7 +60,7 @@ export function useDraftAutosave(
   dirtyRef: { current: boolean },
 ): {
   savedAt: string | null;
-  flush: () => void;
+  flush: () => Promise<void>;
 } {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const bodyRef = useRef(body);
@@ -67,22 +68,18 @@ export function useDraftAutosave(
     bodyRef.current = body;
   }, [body]);
 
-  const persist = useCallback(() => {
+  const persist = useCallback(async () => {
     if (!dirtyRef.current) return;
-    try {
-      window.localStorage.setItem(draftKey, bodyRef.current);
-      dirtyRef.current = false;
-      setSavedAt(new Date().toLocaleTimeString());
-    } catch {
-      // localStorage unavailable — draft is best-effort
-    }
+    await setPreference(draftKey, bodyRef.current);
+    dirtyRef.current = false;
+    setSavedAt(new Date().toLocaleTimeString());
   }, [draftKey, dirtyRef]);
 
   useEffect(() => {
-    const timer = window.setInterval(persist, 30_000);
+    const timer = window.setInterval(() => void persist(), 30_000);
     return () => {
       window.clearInterval(timer);
-      persist();
+      void persist();
     };
   }, [persist]);
 

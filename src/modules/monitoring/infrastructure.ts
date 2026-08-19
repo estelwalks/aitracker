@@ -1,11 +1,6 @@
 import { z } from "zod";
 
-import type { AtomicJsonStore } from "../../platform/persistence/contracts.ts";
-import {
-  monitoringModuleId,
-  type MonitoringStatus,
-  type MonitoringStatusStore,
-} from "./contracts.ts";
+import { monitoringModuleId, type MonitoringStatus } from "./contracts.ts";
 
 const collectorSchema = z
   .object({
@@ -59,16 +54,3 @@ export const monitoringStatusSchema = {
     return parsed as MonitoringStatus;
   },
 };
-
-export function createAtomicMonitoringStatusStore(
-  store: AtomicJsonStore<MonitoringStatus | null>,
-): MonitoringStatusStore {
-  return {
-    async load() {
-      return (await store.read()).value ?? undefined;
-    },
-    async save(status) {
-      await store.write(status);
-    },
-  };
-}

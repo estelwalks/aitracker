@@ -3,7 +3,10 @@ import { homedir } from "node:os";
 import { BUILTIN_RATES } from "./index.ts";
 import { PRICING_RULES_VERSION } from "./registry.ts";
 import type { PricingSnapshot } from "./types.ts";
-import type { ExchangeRateRepository } from "../../platform/snapshot-runtime/exchange-rate.server.ts";
+import type {
+  ExchangeRateCache,
+  ExchangeRateRepository,
+} from "../../platform/snapshot-runtime/exchange-rate.server.ts";
 
 // Model prices are offline rule packs (resolve.ts); this module only loads
 // display-currency exchange rates. One request fetches all three non-USD
@@ -22,6 +25,8 @@ export interface PricingOptions {
   homeDirectory?: string;
   now?: Date;
   fetcher?: typeof fetch;
+  /** Injectable cache for isolated callers/tests; production uses SQLite. */
+  cache?: ExchangeRateCache;
   /** Force a network refresh attempt even when the cache is fresh. */
   refreshExchange?: boolean;
 }
@@ -31,13 +36,14 @@ let repositoryPromise: Promise<ExchangeRateRepository> | undefined;
 async function getExchangeRepository(
   options: PricingOptions,
 ): Promise<ExchangeRateRepository> {
-  if (options.fetcher || options.now) {
+  if (options.fetcher || options.now || options.cache) {
     // Test seams: build a fresh repository with the injected fetcher/clock.
     const { createExchangeRateRepository } =
       await import("../../platform/snapshot-runtime/exchange-rate.server.ts");
     return createExchangeRateRepository({
       fetcher: options.fetcher,
       now: options.now ? () => options.now! : undefined,
+      cache: options.cache,
     });
   }
   if (!repositoryPromise) {

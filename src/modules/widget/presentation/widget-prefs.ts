@@ -1,7 +1,13 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+
+import {
+  getPreference,
+  removePreference,
+  setPreference,
+} from "../../../lib/preferences/client.ts";
 
 /**
- * 小组件配置偏好（localStorage 独立 key，避免改动 prefs 契约）。
+ * 小组件配置偏好（SQLite app_preferences 独立 key）。
  *
  * 移植自原型 `src/lib/widget-prefs.ts` 的结构与 API：
  * `useWidgetPrefs` / `setWidgetPref` / `resetWidgetPrefs`；与原型不同，
@@ -53,63 +59,69 @@ export const DEFAULT_WIDGET_PREFS: WidgetPrefs = {
 
 export const WIDGET_PREFS_STORAGE_KEY = "tt-widget-prefs";
 
-function storage(): Storage | null {
-  if (typeof globalThis === "undefined") return null;
-  try {
-    return (globalThis as { localStorage?: Storage }).localStorage ?? null;
-  } catch {
-    // localStorage 不可用（隐私模式/测试环境）——偏好为尽力而为
-    return null;
-  }
-}
-
 let state: WidgetPrefs = DEFAULT_WIDGET_PREFS;
 let hydrated = false;
+let hydration: Promise<void> | null = null;
 const listeners = new Set<() => void>();
+interface WidgetPreferencePersistence {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: string): Promise<void>;
+  remove(key: string): Promise<boolean>;
+}
+let persistence: WidgetPreferencePersistence = {
+  get: getPreference,
+  set: setPreference,
+  remove: removePreference,
+};
 
-function readStored(): WidgetPrefs {
-  const ls = storage();
-  if (ls == null) return DEFAULT_WIDGET_PREFS;
-  try {
-    const raw = ls.getItem(WIDGET_PREFS_STORAGE_KEY);
-    if (raw == null || raw === "") return DEFAULT_WIDGET_PREFS;
-    const parsed = JSON.parse(raw) as Partial<WidgetPrefs>;
-    // 只取已知字段，避免脏数据污染；未知字段被丢弃。
-    return {
-      ...DEFAULT_WIDGET_PREFS,
-      ...(typeof parsed.barStyle === "string"
-        ? { barStyle: parsed.barStyle }
-        : {}),
-      ...(typeof parsed.barClick === "string"
-        ? { barClick: parsed.barClick }
-        : {}),
-      ...(typeof parsed.defaultTab === "string"
-        ? { defaultTab: parsed.defaultTab }
-        : {}),
-      ...(typeof parsed.lastTab === "string"
-        ? { lastTab: parsed.lastTab }
-        : {}),
-      ...(typeof parsed.tone === "string" ? { tone: parsed.tone } : {}),
-      ...(typeof parsed.rotate === "number" ? { rotate: parsed.rotate } : {}),
-      ...(typeof parsed.smallContent === "string"
-        ? { smallContent: parsed.smallContent }
-        : {}),
-      ...(typeof parsed.mediumContent === "string"
-        ? { mediumContent: parsed.mediumContent }
-        : {}),
-      ...(typeof parsed.widgetTheme === "string"
-        ? { widgetTheme: parsed.widgetTheme }
-        : {}),
-    };
-  } catch {
+function parseStored(value: unknown): WidgetPrefs {
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      return DEFAULT_WIDGET_PREFS;
+    }
+  }
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
     return DEFAULT_WIDGET_PREFS;
   }
+  const parsed = value as Partial<WidgetPrefs>;
+  // 只取已知字段，避免脏数据污染；未知字段被丢弃。
+  return {
+    ...DEFAULT_WIDGET_PREFS,
+    ...(typeof parsed.barStyle === "string"
+      ? { barStyle: parsed.barStyle }
+      : {}),
+    ...(typeof parsed.barClick === "string"
+      ? { barClick: parsed.barClick }
+      : {}),
+    ...(typeof parsed.defaultTab === "string"
+      ? { defaultTab: parsed.defaultTab }
+      : {}),
+    ...(typeof parsed.lastTab === "string" ? { lastTab: parsed.lastTab } : {}),
+    ...(typeof parsed.tone === "string" ? { tone: parsed.tone } : {}),
+    ...(typeof parsed.rotate === "number" ? { rotate: parsed.rotate } : {}),
+    ...(typeof parsed.smallContent === "string"
+      ? { smallContent: parsed.smallContent }
+      : {}),
+    ...(typeof parsed.mediumContent === "string"
+      ? { mediumContent: parsed.mediumContent }
+      : {}),
+    ...(typeof parsed.widgetTheme === "string"
+      ? { widgetTheme: parsed.widgetTheme }
+      : {}),
+  };
 }
 
-function ensureHydrated(): void {
-  if (hydrated) return;
-  hydrated = true;
-  state = readStored();
+function ensureHydrated(): Promise<void> {
+  if (hydrated) return Promise.resolve();
+  if (hydration) return hydration;
+  hydration = persistence.get(WIDGET_PREFS_STORAGE_KEY).then((stored) => {
+    state = parseStored(stored);
+    hydrated = true;
+    emit();
+  });
+  return hydration;
 }
 
 function emit(): void {
@@ -117,69 +129,70 @@ function emit(): void {
 }
 
 function subscribe(listener: () => void): () => void {
-  ensureHydrated();
   listeners.add(listener);
+  void ensureHydrated();
   return () => {
     listeners.delete(listener);
   };
 }
 
-/** 读取当前内存中的偏好（首次访问时从 localStorage 水合）。 */
+/** 读取当前内存中的偏好；React 订阅建立后从 SQLite 水合。 */
 export function readWidgetPrefs(): WidgetPrefs {
-  ensureHydrated();
   return state;
 }
 
 export function setWidgetPref<K extends keyof WidgetPrefs>(
   key: K,
   value: WidgetPrefs[K],
-): void {
-  ensureHydrated();
+): Promise<void> {
   state = { ...state, [key]: value };
-  const ls = storage();
-  if (ls != null) {
-    try {
-      ls.setItem(WIDGET_PREFS_STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // ignore
-    }
-  }
   emit();
+  return persistence.set(WIDGET_PREFS_STORAGE_KEY, JSON.stringify(state));
 }
 
-export function resetWidgetPrefs(): void {
+export async function resetWidgetPrefs(): Promise<void> {
   state = DEFAULT_WIDGET_PREFS;
-  const ls = storage();
-  if (ls != null) {
-    try {
-      ls.removeItem(WIDGET_PREFS_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-  }
   emit();
+  await persistence.remove(WIDGET_PREFS_STORAGE_KEY);
 }
 
 /**
  * 仅测试使用：清空模块内存态并强制下次读取重新水合，
- * 使「写入 localStorage 后重新读取」的用例可独立验证。
+ * 使持久化水合用例可独立验证。
  */
 export function __resetWidgetPrefsModuleForTest(): void {
   state = DEFAULT_WIDGET_PREFS;
   hydrated = false;
+  hydration = null;
   listeners.clear();
+}
+
+export function __setWidgetPreferencePersistenceForTest(
+  next: WidgetPreferencePersistence,
+): void {
+  persistence = next;
+}
+
+export async function __hydrateWidgetPrefsForTest(): Promise<void> {
+  await ensureHydrated();
 }
 
 /** 响应式读取小组件偏好（服务端渲染返回默认值）。 */
 export function useWidgetPrefs(): {
   prefs: WidgetPrefs;
-  set: <K extends keyof WidgetPrefs>(key: K, value: WidgetPrefs[K]) => void;
+  set: <K extends keyof WidgetPrefs>(
+    key: K,
+    value: WidgetPrefs[K],
+  ) => Promise<void>;
 } {
   const prefs = useSyncExternalStore(
     subscribe,
     () => state,
     () => DEFAULT_WIDGET_PREFS,
   );
+  useEffect(() => {
+    void ensureHydrated();
+  }, []);
   const set = useCallback(
     <K extends keyof WidgetPrefs>(key: K, value: WidgetPrefs[K]) =>
       setWidgetPref(key, value),

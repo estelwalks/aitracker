@@ -153,9 +153,13 @@ function createCompositionBackgroundRuntime(): BackgroundRuntime {
       }
     },
     stop: async () => {
-      const { scheduler, monitoring } = await getCompositionRoot();
-      await scheduler.stop();
-      await monitoring.stop();
+      const { scheduler, monitoring, database } = await getCompositionRoot();
+      try {
+        await scheduler.stop();
+        await monitoring.stop();
+      } finally {
+        database.close();
+      }
     },
   };
 }
@@ -171,4 +175,9 @@ const productionBootstrap = createBackgroundRuntimeBootstrap({
  */
 export function ensureBackgroundRuntimeStarted(): Promise<BackgroundRuntimeStartResult> {
   return productionBootstrap.ensureStarted();
+}
+
+/** Terminal server/desktop shutdown hook. Stops workers before closing SQLite. */
+export function stopBackgroundRuntime(): Promise<void> {
+  return productionBootstrap.stop();
 }
