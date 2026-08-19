@@ -68,7 +68,7 @@ export function parseRolloutStage(
 export interface ResolveRolloutInput {
   /** Local SQLite state (or undefined before the first persisted update). */
   readonly state?: PerformanceRolloutState | undefined;
-  /** Public policy default stage (usually "legacy"). */
+  /** Public policy default stage (from the runtime policy source). */
   readonly defaultStage: PerformanceRolloutStage;
 }
 
