@@ -577,7 +577,6 @@ export const ScannerPolicySchema = z.object({
   maxDiscoveredEntriesPerSource: z.number().int().positive(),
   maxJsonlLineLength: z.number().int().positive(),
   futureTimestampToleranceMs: z.number().int().positive(),
-  cacheFileName: z.string().min(1),
   cacheNote: z.string().optional(),
 });
 
