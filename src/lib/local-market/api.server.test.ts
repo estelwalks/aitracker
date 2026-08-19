@@ -1,11 +1,42 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { after, before, test } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+import { ENV } from "../app-config";
+import { resetCompositionRootForTests } from "../../app/composition.server.ts";
 import {
   countInstalledMarketSkills,
   fetchMarketSkills,
   type MarketInstalledSkillShape,
 } from "./api.server.ts";
+
+/**
+ * The market query cache is SQLite-backed through the composition root. Point
+ * the composition root at a fresh temp data root for this file so the tests
+ * never touch the real `~/.trusttools` database (which a running dev/Electron
+ * process may hold open, and whose migration ledger can carry an older
+ * checksum than the code under test).
+ */
+let previousHome: string | undefined;
+let tempDir: string | undefined;
+
+before(async () => {
+  tempDir = await mkdtemp(join(tmpdir(), "tt-market-"));
+  previousHome = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = tempDir;
+  resetCompositionRootForTests();
+});
+
+after(async () => {
+  resetCompositionRootForTests();
+  if (previousHome === undefined) delete process.env[ENV.USAGE_HOME];
+  else process.env[ENV.USAGE_HOME] = previousHome;
+  if (tempDir !== undefined) {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 /** Deterministic snapshot used to verify installedCount without touching disk. */
 const emptyLocalSkills: MarketInstalledSkillShape[] = [];
