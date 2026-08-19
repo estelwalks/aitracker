@@ -199,18 +199,6 @@ function toSafeView(row: ProfileRow): ModelProfileView {
 const PROFILE_COLUMNS = `profile_id, name, mode, protocol, endpoint, model, secret_id,
   is_active, created_at_ms, updated_at_ms`;
 
-export interface LegacyModelProfiles {
-  readonly profiles: readonly ModelProfile[];
-  readonly activeProfileId: string | null;
-}
-
-export interface SqliteModelProfileRepository extends ModelProfileRepository {
-  /** Import is idempotent. Existing encrypted secrets are never overwritten by legacy plaintext. */
-  importLegacy(
-    source: LegacyModelProfiles,
-  ): Promise<{ profilesImported: number; secretsSkipped: number }>;
-}
-
 export interface SqliteModelProfileRepositoryOptions {
   readonly database: SqliteDatabasePort;
   readonly secretCodec: ModelSecretCodec;
@@ -221,7 +209,7 @@ export interface SqliteModelProfileRepositoryOptions {
 
 export function createSqliteModelProfileRepository(
   options: SqliteModelProfileRepositoryOptions,
-): SqliteModelProfileRepository {
+): ModelProfileRepository {
   const database = options.database;
   const secrets = createSqliteModelSecretRepository(database);
   const now = options.now ?? Date.now;
@@ -385,118 +373,5 @@ export function createSqliteModelProfileRepository(
         return { ok: false, errorCode: "errors.modelProfile.listFailed" };
       return options.listModels(input);
     },
-    async importLegacy(source) {
-      const prepared: Array<{
-        profile: ModelProfile;
-        encrypted?: EncryptedModelSecret;
-      }> = [];
-      let secretsSkipped = 0;
-      for (const profile of source.profiles) {
-        const existing = getRow(profile.id);
-        if (profile.apiKey && !existing?.secret_id) {
-          try {
-            prepared.push({
-              profile,
-              encrypted: await options.secretCodec.encrypt(profile.apiKey),
-            });
-          } catch {
-            prepared.push({ profile });
-            secretsSkipped += 1;
-          }
-        } else {
-          prepared.push({ profile });
-        }
-      }
-      let profilesImported = 0;
-      withTransaction(database, () => {
-        database
-          .prepare(
-            "UPDATE model_profiles SET is_active = 0 WHERE is_active = 1",
-          )
-          .run();
-        for (const item of prepared) {
-          const created = Date.parse(item.profile.createdAt);
-          const updated = Date.parse(item.profile.updatedAt);
-          if (
-            !Number.isSafeInteger(created) ||
-            created < 0 ||
-            !Number.isSafeInteger(updated) ||
-            updated < 0
-          )
-            continue;
-          const existing = getRow(item.profile.id);
-          const secretId = item.encrypted
-            ? `${item.profile.id}:api-key`
-            : (existing?.secret_id ?? null);
-          if (item.encrypted)
-            secrets.putEncrypted({
-              id: secretId!,
-              ...item.encrypted,
-              createdAtMs: created,
-              updatedAtMs: updated,
-            });
-          const result = database
-            .prepare(
-              `INSERT INTO model_profiles
-            (profile_id, name, mode, protocol, endpoint, model, secret_id, is_active, created_at_ms, updated_at_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-            ON CONFLICT (profile_id) DO UPDATE SET name=excluded.name, mode=excluded.mode,
-              protocol=excluded.protocol, endpoint=excluded.endpoint, model=excluded.model,
-              secret_id=COALESCE(model_profiles.secret_id, excluded.secret_id), updated_at_ms=excluded.updated_at_ms
-            WHERE excluded.updated_at_ms > model_profiles.updated_at_ms`,
-            )
-            .run(
-              item.profile.id,
-              item.profile.name,
-              item.profile.mode,
-              item.profile.protocol,
-              item.profile.endpoint ?? null,
-              item.profile.model ?? null,
-              secretId,
-              BigInt(created),
-              BigInt(updated),
-            );
-          profilesImported += Number(result.changes);
-        }
-        const activeId =
-          source.activeProfileId && getRow(source.activeProfileId)
-            ? source.activeProfileId
-            : (listRows()[0]?.profile_id ?? null);
-        if (activeId)
-          database
-            .prepare(
-              "UPDATE model_profiles SET is_active = 1 WHERE profile_id = ?",
-            )
-            .run(activeId);
-      });
-      return { profilesImported, secretsSkipped };
-    },
-  };
-}
-
-/** SQLite-first read fallback. Mutations always target SQLite. */
-export function createModelProfileReadFallback(
-  sqlite: SqliteModelProfileRepository,
-  legacy: ModelProfileRepository,
-): ModelProfileRepository {
-  return {
-    async listViews() {
-      const rows = await sqlite.listViews();
-      return rows.length ? rows : legacy.listViews();
-    },
-    async getActiveView() {
-      return (await sqlite.getActiveView()) ?? legacy.getActiveView();
-    },
-    async getProfileForExecution(id) {
-      return (
-        (await sqlite.getProfileForExecution(id)) ??
-        legacy.getProfileForExecution(id)
-      );
-    },
-    upsert: sqlite.upsert,
-    remove: sqlite.remove,
-    setActive: sqlite.setActive,
-    test: sqlite.test,
-    listModels: sqlite.listModels,
   };
 }

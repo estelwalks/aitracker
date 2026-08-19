@@ -28,8 +28,8 @@ const STEPS = [
  * First-run guide overlay (V3.0 prototype). Covers the content area with a
  * centred card explaining the four-step distillation flow: 选素材 → 跑蒸馏 →
  * 存为 Skill → 同步到工具. Steps use the prototype's chart-1 numbered circles
- * and a foreground CTA. Dismissal is recorded in localStorage so it shows once
- * per browser/install.
+ * and a foreground CTA. Dismissal is recorded in SQLite so it shows once per
+ * install.
  */
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();

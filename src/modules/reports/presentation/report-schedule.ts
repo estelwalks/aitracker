@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { syncReportScheduleToTasks } from "../server-fns.ts";
+import {
+  getPreference,
+  setPreference,
+} from "../../../lib/preferences/client.ts";
 
 /**
  * ReportSchedule configuration persistence + scheduler sync.
  *
- * The config persists to the Electron preference store (key `tt.report.schedule`,
- * matching the prototype) when `window.desktopApi` is present and always mirrors
- * to localStorage so browser dev mode behaves the same. Every save additionally
+ * The config persists to SQLite `app_preferences` (key `tt.report.schedule`).
+ * Browser and Electron renderers use the same server-owned preference client. Every save additionally
  * syncs the config into the task scheduler's `reports.generate` preference via
  * `syncReportScheduleToTasks` (Story B-200), so the persisted config actually
  * drives scheduled generation — a sync failure never blocks the local save.
@@ -91,29 +94,12 @@ export function serializeReportSchedule(config: ReportScheduleConfig): string {
 }
 
 async function loadFromPlatform(): Promise<string | null> {
-  const api = window.desktopApi;
-  if (api) {
-    try {
-      const prefs = await api.getPreferences();
-      return typeof prefs[SCHEDULE_KEY] === "string"
-        ? (prefs[SCHEDULE_KEY] as string)
-        : null;
-    } catch {
-      // IPC unavailable; fall through to localStorage
-    }
-  }
-  return null;
+  const value = await getPreference(SCHEDULE_KEY);
+  return typeof value === "string" ? value : null;
 }
 
 async function saveToPlatform(serialized: string): Promise<void> {
-  const api = window.desktopApi;
-  if (api) {
-    try {
-      await api.setPreference(SCHEDULE_KEY, serialized);
-    } catch {
-      // IPC unavailable; fall through to localStorage mirror
-    }
-  }
+  await setPreference(SCHEDULE_KEY, serialized);
 }
 
 /**
@@ -135,8 +121,8 @@ async function syncScheduleToTasks(
 }
 
 /**
- * Read the schedule once (Electron prefs first, then localStorage) and keep a
- * latest-saved mirror so prefs/localStorage stay in sync across runtimes.
+ * Read the schedule once from SQLite and retain the latest value in memory for
+ * toggle operations.
  */
 export function useReportSchedule(): {
   schedule: ReportScheduleConfig;
@@ -155,19 +141,7 @@ export function useReportSchedule(): {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let raw: string | null = null;
-      try {
-        raw = await loadFromPlatform();
-      } catch {
-        raw = null;
-      }
-      if (raw === null) {
-        try {
-          raw = window.localStorage.getItem(SCHEDULE_KEY);
-        } catch {
-          raw = null;
-        }
-      }
+      const raw = await loadFromPlatform();
       if (cancelled) return;
       const parsed = parseReportSchedule(raw);
       setSchedule(parsed);
@@ -184,12 +158,7 @@ export function useReportSchedule(): {
       const serialized = serializeReportSchedule(next);
       lastSavedRef.current = serialized;
       setSchedule(next);
-      void saveToPlatform(serialized);
-      try {
-        window.localStorage.setItem(SCHEDULE_KEY, serialized);
-      } catch {
-        // localStorage unavailable — best-effort
-      }
+      await saveToPlatform(serialized);
       return syncScheduleToTasks(next);
     },
     [],

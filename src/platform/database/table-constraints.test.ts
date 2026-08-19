@@ -99,9 +99,6 @@ const INSERT_EXECUTION =
 const INSERT_CACHE =
   "INSERT INTO insight_enhancement_cache (cache_key, surface_id, scope_hash, evidence_hash, locale, profile_id, prompt_version_id, prompt_version, model_label, ai_request_id, generated_at_ms, expires_at_ms, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-const INSERT_RUN =
-  "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, source_schema_version, status, started_at_ms, finished_at_ms, rows_read, rows_written, rows_skipped, error_code, source_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
 const INSERT_DAILY_USAGE =
   "INSERT INTO ai_daily_usage (date_key, capability, profile_key, calls, input_tokens, output_tokens, cost_microusd, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
@@ -385,40 +382,6 @@ test("rejects every illegal enum value in the first-wave tables", (t) => {
   );
   expectRejected(
     host,
-    "data_migration_runs.source_kind",
-    INSERT_RUN,
-    "run-bad-kind",
-    "yaml-blob",
-    "path-hash",
-    1,
-    "running",
-    1,
-    null,
-    0,
-    0,
-    0,
-    null,
-    "fingerprint",
-  );
-  expectRejected(
-    host,
-    "data_migration_runs.status",
-    INSERT_RUN,
-    "run-bad-status",
-    "atomic-json",
-    "path-hash",
-    1,
-    "pending",
-    1,
-    null,
-    0,
-    0,
-    0,
-    null,
-    "fingerprint",
-  );
-  expectRejected(
-    host,
     "app_preferences.value_type",
     "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
     "ui.locale",
@@ -611,61 +574,6 @@ test("rejects a seven-column insight_enhancement_cache UNIQUE conflict", (t) => 
     "ready",
   );
   assert.equal(count(host, "insight_enhancement_cache"), 3);
-});
-
-test("rejects a data_migration_runs idempotency-index conflict", (t) => {
-  const host = openMigratedHost(t);
-  run(
-    host,
-    INSERT_RUN,
-    "run-1",
-    "atomic-json",
-    "path-hash-1",
-    2,
-    "succeeded",
-    1,
-    2,
-    10,
-    10,
-    0,
-    null,
-    "fingerprint-1",
-  );
-  expectRejected(
-    host,
-    "a repeated (source_kind, source_path_hash, source_fingerprint)",
-    INSERT_RUN,
-    "run-2",
-    "atomic-json",
-    "path-hash-1",
-    2,
-    "running",
-    3,
-    null,
-    0,
-    0,
-    0,
-    null,
-    "fingerprint-1",
-  );
-  // A new fingerprint for the same file is a new, legal run.
-  run(
-    host,
-    INSERT_RUN,
-    "run-3",
-    "atomic-json",
-    "path-hash-1",
-    2,
-    "running",
-    3,
-    null,
-    0,
-    0,
-    0,
-    null,
-    "fingerprint-2",
-  );
-  assert.equal(count(host, "data_migration_runs"), 2);
 });
 
 test("rejects negative schema_migrations timings", (t) => {
@@ -877,19 +785,6 @@ test("rejects NULL in columns that are now NOT NULL (P2-1)", (t) => {
   const host = openMigratedHost(t);
   expectRejected(
     host,
-    "NULL data_migration_runs.status",
-    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, status, rows_read, rows_written, rows_skipped, source_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    "run-null-status",
-    "atomic-json",
-    "hash",
-    null,
-    0,
-    0,
-    0,
-    "fp",
-  );
-  expectRejected(
-    host,
     "NULL ai_executions.status",
     "INSERT INTO ai_executions (request_id, capability, prompt_version_id, prompt_version, status) VALUES (?, ?, ?, ?, ?)",
     "req-null-status",
@@ -970,21 +865,6 @@ test("applies the new NOT NULL defaults (P2-1)", (t) => {
       .prepare("SELECT purpose FROM secure_secrets WHERE secret_id = ?")
       .get("secret-default-purpose")?.purpose,
     "model-api-key",
-  );
-
-  run(
-    host,
-    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, source_fingerprint) VALUES (?, ?, ?, ?)",
-    "run-default-status",
-    "atomic-json",
-    "hash",
-    "fp",
-  );
-  assert.equal(
-    host
-      .prepare("SELECT status FROM data_migration_runs WHERE run_id = ?")
-      .get("run-default-status")?.status,
-    "running",
   );
 
   run(
@@ -1179,18 +1059,6 @@ test("rejects a NULL-profile/NULL-prompt cache identity duplicate (P2-2)", (t) =
 
 test("enforces counter, format, capability and name domain CHECKs (P2-3)", (t) => {
   const host = openMigratedHost(t);
-  expectRejected(
-    host,
-    "a negative rows_read",
-    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, rows_read, rows_written, rows_skipped, source_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    "run-neg",
-    "atomic-json",
-    "hash",
-    -1,
-    0,
-    0,
-    "fp",
-  );
   expectRejected(
     host,
     "a negative daily calls",

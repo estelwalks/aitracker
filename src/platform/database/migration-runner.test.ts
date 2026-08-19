@@ -29,12 +29,11 @@ interface TestScope {
 
 const APP_VERSION = "3.0.0-test";
 
-/** The 11 first-wave tables (architecture §5.0), sorted by name. */
+/** The new-project first-wave tables, sorted by name. */
 const FIRST_WAVE_TABLES = [
   "ai_daily_usage",
   "ai_executions",
   "app_preferences",
-  "data_migration_runs",
   "insight_enhancement_cache",
   "insight_enhancement_lines",
   "insight_preferences",
@@ -48,7 +47,6 @@ const EXPECTED_INDEXES = [
   "idx_ai_executions_capability_started",
   "idx_ai_executions_profile_started",
   "idx_ai_executions_status_started",
-  "idx_data_migration_runs_idempotency",
   "idx_insight_enhancement_cache_identity",
   "idx_insight_enhancement_cache_surface_expires",
   "idx_model_profiles_single_active",
@@ -208,7 +206,7 @@ test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
   );
 });
 
-test("creates exactly the 11 first-wave STRICT tables and their indexes", (t) => {
+test("creates exactly the 10 new-project STRICT tables and their indexes", (t) => {
   const host = openHost(t);
   runMigrations({
     database: host,
@@ -472,7 +470,7 @@ test("the inline SQL stays byte-identical to migrations/0001_platform.sql", () =
   );
   assert.ok(MIGRATIONS.length >= 1);
   assert.equal(MIGRATIONS[0].sql, PLATFORM_MIGRATION_0001_SQL);
-  // 11 first-wave tables, and nothing else, are declared in that text.
+  // Ten new-project tables, and nothing else, are declared in that text.
   const created = [...inline.matchAll(/CREATE TABLE (\w+)/g)].map(
     (match) => match[1],
   );

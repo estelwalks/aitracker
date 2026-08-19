@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { scanLocalUsage } from "./scanner.server.ts";
@@ -15,7 +12,6 @@ interface BenchmarkScan {
 export interface LocalUsageCacheBenchmark {
   coldMs: number;
   warmMs: number;
-  cacheBytes: number;
   filesParsedCold: number;
   filesParsedWarm: number;
   filesReusedWarm: number;
@@ -47,40 +43,30 @@ async function timedScan(
 }
 
 export async function benchmarkLocalUsagePersistentCache(): Promise<LocalUsageCacheBenchmark> {
-  const cacheDirectory = await mkdtemp(join(tmpdir(), "tt-local-usage-"));
+  const cacheDirectory = `benchmark-${Date.now()}-${Math.random()}`;
   const now = new Date();
-
-  try {
-    const cold = await timedScan(cacheDirectory, now);
-    const warm = await timedScan(cacheDirectory, now);
-    assert.deepEqual(
-      comparableSnapshot(warm.snapshot),
-      comparableSnapshot(cold.snapshot),
-    );
-
-    const cacheFile = await stat(
-      join(cacheDirectory, "local-usage-index-v10.json"),
-    );
-    return {
-      coldMs: cold.durationMs,
-      warmMs: warm.durationMs,
-      cacheBytes: cacheFile.size,
-      filesParsedCold: cold.snapshot.sources.reduce(
-        (total, source) => total + source.filesParsed,
-        0,
-      ),
-      filesParsedWarm: warm.snapshot.sources.reduce(
-        (total, source) => total + source.filesParsed,
-        0,
-      ),
-      filesReusedWarm: warm.snapshot.sources.reduce(
-        (total, source) => total + source.filesReused,
-        0,
-      ),
-      events: warm.snapshot.events,
-      totalTokens: warm.snapshot.totals.totalTokens,
-    };
-  } finally {
-    await rm(cacheDirectory, { recursive: true, force: true });
-  }
+  const cold = await timedScan(cacheDirectory, now);
+  const warm = await timedScan(cacheDirectory, now);
+  assert.deepEqual(
+    comparableSnapshot(warm.snapshot),
+    comparableSnapshot(cold.snapshot),
+  );
+  return {
+    coldMs: cold.durationMs,
+    warmMs: warm.durationMs,
+    filesParsedCold: cold.snapshot.sources.reduce(
+      (total, source) => total + source.filesParsed,
+      0,
+    ),
+    filesParsedWarm: warm.snapshot.sources.reduce(
+      (total, source) => total + source.filesParsed,
+      0,
+    ),
+    filesReusedWarm: warm.snapshot.sources.reduce(
+      (total, source) => total + source.filesReused,
+      0,
+    ),
+    events: warm.snapshot.events,
+    totalTokens: warm.snapshot.totals.totalTokens,
+  };
 }

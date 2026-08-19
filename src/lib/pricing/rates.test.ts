@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import { buildPricingSnapshot } from "./dynamic.server.ts";
 import { BUILTIN_RATES } from "./index.ts";
+import type { ExchangeRateCache } from "../../platform/snapshot-runtime/exchange-rate.server.ts";
 
 function withTempHome(): string {
   return mkdtempSync(join(tmpdir(), "tt-rates-test-"));
@@ -31,11 +32,25 @@ const LIVE_RATES = {
   rates: { CNY: 7.15, JPY: 146, KRW: 1360 },
 };
 
+function memoryCache(): ExchangeRateCache {
+  let value: Awaited<ReturnType<ExchangeRateCache["read"]>>;
+  return {
+    async read() {
+      return value;
+    },
+    async write(next) {
+      value = next;
+    },
+  };
+}
+
 test("汇率: 无缓存 → 内置基准 fallback(页面读取不联网)", async () => {
   const home = withTempHome();
+  const cache = memoryCache();
   try {
     const snap = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       fetcher: failingFetcher(),
     });
     assert.equal(snap.exchangeRateSource, "fallback");
@@ -50,6 +65,7 @@ test("汇率: 无缓存 → 内置基准 fallback(页面读取不联网)", async
 
 test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 不重复请求", async () => {
   const home = withTempHome();
+  const cache = memoryCache();
   try {
     let fetches = 0;
     const fetcher: typeof fetch = async () => {
@@ -62,6 +78,7 @@ test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 
     // 后台/手动刷新路径显式请求网络。
     const first = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       fetcher,
       refreshExchange: true,
     });
@@ -74,6 +91,7 @@ test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 
     // 页面读取路径 cache-only:缓存新鲜 → cache,不再请求
     const second = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       fetcher,
     });
     assert.equal(second.exchangeRateSource, "cache");
@@ -86,10 +104,12 @@ test("汇率: refresh 成功 → live 并写缓存; 随后页面读取走 cache 
 
 test("汇率: 缓存过期后页面读取直接 stale-cache 保留旧值", async () => {
   const home = withTempHome();
+  const cache = memoryCache();
   try {
     const now = new Date("2026-08-05T10:00:00Z");
     const fresh = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       now,
       fetcher: jsonFetcher(LIVE_RATES),
       refreshExchange: true,
@@ -105,6 +125,7 @@ test("汇率: 缓存过期后页面读取直接 stale-cache 保留旧值", async
     };
     const stale = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       now: new Date("2026-08-07T10:00:00Z"),
       fetcher: countingFetcher,
     });
@@ -118,6 +139,7 @@ test("汇率: 缓存过期后页面读取直接 stale-cache 保留旧值", async
 
 test("汇率: 24 小时内缓存保持新鲜,页面读取不发起网络请求", async () => {
   const home = withTempHome();
+  const cache = memoryCache();
   try {
     let fetches = 0;
     const fetcher: typeof fetch = async () => {
@@ -129,12 +151,14 @@ test("汇率: 24 小时内缓存保持新鲜,页面读取不发起网络请求",
     };
     await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       now: new Date("2026-08-05T10:00:00Z"),
       fetcher,
       refreshExchange: true,
     });
     const next = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       now: new Date("2026-08-05T23:59:00Z"),
       fetcher,
     });
@@ -147,6 +171,7 @@ test("汇率: 24 小时内缓存保持新鲜,页面读取不发起网络请求",
 
 test("汇率: refresh 强制重新请求并更新缓存", async () => {
   const home = withTempHome();
+  const cache = memoryCache();
   try {
     let fetches = 0;
     const fetcher: typeof fetch = async () => {
@@ -158,11 +183,13 @@ test("汇率: refresh 强制重新请求并更新缓存", async () => {
     };
     await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       fetcher,
       refreshExchange: true,
     });
     const forced = await buildPricingSnapshot([], {
       homeDirectory: home,
+      cache,
       fetcher,
       refreshExchange: true,
     });

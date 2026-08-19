@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { access, lstat } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { delimiter, join, posix } from "node:path";
 
 import type { AiTool } from "./catalog.ts";
 import {
@@ -15,6 +15,15 @@ export interface ToolInstallationFact {
   installed: boolean;
   /** Concrete existing probe paths. Empty when the tool was not found. */
   detectedPaths: string[];
+}
+
+function joinHomeRoot(homeDirectory: string, root: string): string {
+  // Pure projection tests and macOS scanner inputs may use POSIX paths even
+  // when executed on Windows. Preserve their separator semantics while real
+  // Windows homes continue to use the native path implementation.
+  return homeDirectory.startsWith("/")
+    ? posix.join(homeDirectory, root)
+    : join(homeDirectory, root);
 }
 
 /** Map node's process.platform to the registry's platform-os model. */
@@ -56,7 +65,7 @@ export function deriveToolInstallationFacts(
   const rootsByTool = detectRootsForOs(tools, os);
   return tools.map((tool) => {
     const detectedPaths = (rootsByTool.get(tool.id) ?? [])
-      .map((root) => join(homeDirectory, root))
+      .map((root) => joinHomeRoot(homeDirectory, root))
       .filter((path) => existingPaths.has(path));
     const executablePaths = executablePathsByTool.get(tool.id) ?? [];
     const allEvidence = [...new Set([...detectedPaths, ...executablePaths])];

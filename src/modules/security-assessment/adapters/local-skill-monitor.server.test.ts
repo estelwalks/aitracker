@@ -104,14 +104,22 @@ test("background monitor scans discovered skills, persists opaque hashes, and re
   }
 });
 
-test("incomplete local reads persist an unknown, fail-closed assessment without exposing the cause", async () => {
+test("incomplete local reads persist an unknown, fail-closed assessment without exposing the cause", async (t) => {
   const root = await mkdtemp(
     join(tmpdir(), `${APP_ID}-skill-scan-incomplete-`),
   );
   const skill = join(root, "skill");
   await mkdir(skill);
   await writeFile(join(root, "outside.md"), "token=sk-super-secret-value");
-  await symlink(join(root, "outside.md"), join(skill, "SKILL.md"));
+  try {
+    await symlink(join(root, "outside.md"), join(skill, "SKILL.md"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EPERM") {
+      t.skip("Windows symlink privilege is unavailable");
+      return;
+    }
+    throw error;
+  }
   const memory = historyMemory();
   const monitor = createLocalSkillSecurityMonitor({
     history: memory.history,

@@ -4,19 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { createShadowAtomicJsonStore } from "../persistence/infrastructure/shadow-atomic-json-store.ts";
-import type { AtomicJsonStore } from "../persistence/contracts.ts";
 import { DEFAULT_TASK_PREFERENCES } from "../../modules/tasks/application/task-storage.ts";
 import { createSqliteTaskPreferenceRepository } from "../../modules/tasks/infrastructure/sqlite-task-preference-repository.server.ts";
 import { createSqliteTaskRunRepository } from "../../modules/tasks/infrastructure/sqlite-task-run-repository.server.ts";
 import { createSqliteMonitoringStatusStore } from "../../modules/monitoring/sqlite-status-store.server.ts";
 import { createSqliteHttpCacheRepository } from "./http-cache-repository.server.ts";
-import { importAtomicJsonStore } from "./legacy-import.server.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
 import { LATEST_MIGRATION_VERSION, MIGRATIONS } from "./migrations/index.ts";
 import { createSqliteRuntimeFlagRepository } from "./runtime-flag-repository.server.ts";
-import { loadStorageCutoverSnapshot } from "./storage-cutover.server.ts";
 
 function hostForTest(t: { after(callback: () => void): void }): DatabaseHost {
   const directory = mkdtempSync(join(tmpdir(), "tt-m2-state-"));
@@ -29,17 +25,6 @@ function hostForTest(t: { after(callback: () => void): void }): DatabaseHost {
   t.after(() => host.close());
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   return host;
-}
-
-function memoryStore<T>(value: T, schemaVersion = 1): AtomicJsonStore<T> {
-  return {
-    async read() {
-      return { value, source: "stored", schemaVersion };
-    },
-    async write(next) {
-      value = next;
-    },
-  };
 }
 
 test("upgrades an intermediate v1 database to the M2 latest schema", (t) => {
@@ -57,7 +42,7 @@ test("upgrades an intermediate v1 database to the M2 latest schema", (t) => {
   assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   assert.deepEqual(
     result.applied.map((item) => item.version),
-    [2],
+    MIGRATIONS.slice(1).map((item) => item.version),
   );
   const tables = host
     .prepare(
@@ -156,95 +141,6 @@ test("task running recovery and monitoring state have SQLite parity", async (t) 
   });
 });
 
-test("legacy import is idempotent and rolls target writes back on failure", async (t) => {
-  const host = hostForTest(t);
-  runMigrations({ database: host, appVersion: "test" });
-  const source = memoryStore({ schemaVersion: 1, enabled: true });
-  const input = {
-    database: host,
-    source,
-    sourceIdentity: "task-preferences-v1",
-  };
-  await assert.rejects(
-    importAtomicJsonStore({
-      ...input,
-      importValue(value, database) {
-        database
-          .prepare(
-            "INSERT INTO runtime_flags (flag_key, value_json, updated_at_ms) VALUES (?, ?, ?)",
-          )
-          .run("m2.probe", JSON.stringify(value), 1);
-        throw new Error("injected failure");
-      },
-    }),
-  );
-  assert.equal(
-    host.prepare("SELECT COUNT(*) AS count FROM runtime_flags").get()!.count,
-    0n,
-  );
-  assert.equal(
-    host.prepare("SELECT status FROM data_migration_runs").get()!.status,
-    "failed",
-  );
-  const success = await importAtomicJsonStore({
-    ...input,
-    importValue(value, database) {
-      database
-        .prepare(
-          "INSERT INTO runtime_flags (flag_key, value_json, updated_at_ms) VALUES (?, ?, ?)",
-        )
-        .run("m2.probe", JSON.stringify(value), 1);
-      return { rowsRead: 1, rowsWritten: 1 };
-    },
-  });
-  assert.equal(success.status, "succeeded");
-  const repeated = await importAtomicJsonStore({
-    ...input,
-    importValue() {
-      throw new Error("must not run for an idempotency hit");
-    },
-  });
-  assert.equal(repeated.idempotentHit, true);
-  assert.equal(
-    host.prepare("SELECT COUNT(*) AS count FROM data_migration_runs").get()!
-      .count,
-    1n,
-  );
-});
-
-test("shadow store falls back on read and treats legacy write as best effort", async () => {
-  const calls: string[] = [];
-  const sqlite: AtomicJsonStore<number> = {
-    async read() {
-      throw new Error("sqlite unavailable");
-    },
-    async write(value) {
-      calls.push(`sqlite:${value}`);
-    },
-  };
-  const legacy: AtomicJsonStore<number> = {
-    async read() {
-      return { value: 7, source: "stored", schemaVersion: 1 };
-    },
-    async write() {
-      calls.push("legacy");
-      throw new Error("legacy unavailable");
-    },
-  };
-  const errors: string[] = [];
-  const shadow = createShadowAtomicJsonStore({
-    sqlite,
-    legacy,
-    readFromSqlite: () => true,
-    onSqliteReadError: () => errors.push("read"),
-    onLegacyWriteError: () => errors.push("write"),
-  });
-  assert.equal((await shadow.read()).value, 7);
-  await shadow.write(9);
-  assert.deepEqual(calls, ["sqlite:9", "legacy"]);
-  assert.deepEqual(errors, ["read", "write"]);
-});
-
 test("HTTP cache hashes keys, enforces privacy and deletes expired rows", async (t) => {
   const host = hostForTest(t);
   runMigrations({ database: host, appVersion: "test" });
@@ -284,14 +180,12 @@ test("HTTP cache hashes keys, enforces privacy and deletes expired rows", async 
   assert.equal(await cache.deleteExpired("market", 200), 1);
 });
 
-test("runtime flags enforce privacy and drive an explicit read cutover", async (t) => {
+test("runtime flags enforce privacy", async (t) => {
   const host = hostForTest(t);
   runMigrations({ database: host, appVersion: "test" });
   const flags = createSqliteRuntimeFlagRepository(host);
   await flags.set("storage.sqlite.tasks.read", true, 100);
-  const cutover = await loadStorageCutoverSnapshot(flags);
-  assert.equal(cutover.isEnabled("tasks"), true);
-  assert.equal(cutover.isEnabled("monitoring"), false);
+  assert.equal((await flags.get("storage.sqlite.tasks.read"))?.value, true);
   await assert.rejects(
     flags.set("unsafe.flag", { location: "C:/Users/example/private" }),
   );
