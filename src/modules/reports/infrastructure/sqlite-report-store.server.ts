@@ -14,10 +14,7 @@ import type {
   ReportStore,
 } from "../contracts.ts";
 import { safeReportText } from "../domain.ts";
-import {
-  ReportDocumentSchema,
-  ReportRunSchema,
-} from "./atomic-report-store.ts";
+import { ReportDocumentSchema, ReportRunSchema } from "./report-schemas.ts";
 
 const RUN_COLUMNS = `run_id, definition_id, trigger, status, started_at_ms,
   finished_at_ms, error_code, retryable`;

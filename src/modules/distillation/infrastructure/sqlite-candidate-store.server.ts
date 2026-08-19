@@ -11,7 +11,7 @@ import type {
   CandidatePersistence,
   SessionRef,
 } from "../contracts.ts";
-import { PersistedCandidateSchema } from "./atomic-candidate-store.ts";
+import { PersistedCandidateSchema } from "./candidate-schemas.ts";
 
 const COLUMNS = `candidate_id, kind, title, summary, mode, approval_state,
   generated_at_ms, ai_request_id, execution_model_id, execution_provider_id,
