@@ -70,6 +70,16 @@ export class NodeSqliteDatabase implements SqliteDatabasePort {
     }
   }
 
+  /**
+   * Server-only escape hatch for the online backup module: the underlying
+   * `DatabaseSync`, which `node:sqlite.backup()` needs as its source. The
+   * `DatabaseSync` type never crosses the `SqliteDatabasePort` boundary —
+   * only `backup.server.ts` may reach it through `getUnderlyingDatabaseSync`.
+   */
+  get underlyingDatabaseSync(): DatabaseSync {
+    return this.database;
+  }
+
   get isOpen(): boolean {
     return this.database.isOpen;
   }
@@ -102,6 +112,23 @@ export class NodeSqliteDatabase implements SqliteDatabasePort {
       throw mapSqliteError(error, "close");
     }
   }
+}
+
+/**
+ * Narrows a `SqliteDatabasePort` back to its underlying `DatabaseSync` so the
+ * online backup module can feed it to `node:sqlite.backup()`. Only the strict
+ * `node:sqlite` adapter satisfies the narrowing; any other port (including the
+ * `DatabaseHost` wrapper, which does not expose its connection) is rejected
+ * with `invalid-argument`, so the driver type never leaks into contracts or
+ * business layers.
+ */
+export function getUnderlyingDatabaseSync(
+  port: SqliteDatabasePort,
+): DatabaseSync {
+  if (port instanceof NodeSqliteDatabase) {
+    return port.underlyingDatabaseSync;
+  }
+  throw new DatabaseError("invalid-argument", "backup", { retryable: false });
 }
 
 export class NodeSqliteStatement implements SqliteStatement {
