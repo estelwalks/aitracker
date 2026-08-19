@@ -63,10 +63,30 @@ export function createSessionSnapshotRuntime(
   const collect =
     options.collect ??
     (async ({ signal }) => {
-      const { createLegacySessionRepository } =
+      if (signal?.aborted) {
+        return {
+          data: {
+            generatedAt: new Date().toISOString(),
+            sessions: [],
+            density: [],
+          },
+          sourceFingerprint: new Date().toISOString(),
+          scannedItems: 0,
+        };
+      }
+      const { scanLocalSessions } =
+        await import("../../../lib/local-sessions/scanner.server.ts");
+      const { toPublicSession } =
         await import("./legacy-session-adapter.server.ts");
-      const repository = createLegacySessionRepository();
-      const sessions = await repository.list(signal);
+      const summary = await scanLocalSessions({ signal });
+      // Public summary + server-only raw cwd. The dashboard adapter classifies
+      // sessions into the same project labels as usage events; every browser
+      // boundary (snapshot-session-repository, dashboard aggregates) strips
+      // `projectRef` before it can reach the renderer.
+      const sessions = summary.sessions.map((record) => ({
+        ...toPublicSession(record),
+        projectRef: record.projectRef,
+      }));
       return {
         data: {
           generatedAt: new Date().toISOString(),

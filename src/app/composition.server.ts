@@ -388,12 +388,24 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // through the unified task runtime. The ports are bound lazily after the
   // task API is constructed below; until then a request is a no-op, which is
   // safe because the scheduler itself drives startup/scheduled refreshes.
+  // The snapshot runtimes are constructed BEFORE the ports exist, so each
+  // runtime receives a DELEGATING port that resolves the bound port at
+  // request time — a by-value capture here would make every
+  // `requestRefresh()` a silent no-op.
   const refreshPorts: {
     usage?: SnapshotRefreshPort;
     sessions?: SnapshotRefreshPort;
     skills?: SnapshotRefreshPort;
     installation?: SnapshotRefreshPort;
   } = {};
+  const deferredPort = (
+    getPort: () => SnapshotRefreshPort | undefined,
+  ): SnapshotRefreshPort => ({
+    requestRefresh(request) {
+      const port = getPort();
+      return port ? port.requestRefresh(request) : Promise.resolve();
+    },
+  });
 
   const usageSnapshot = createUsageSnapshotRuntime({
     repository: createUsageEnvelopeRepository({
@@ -401,7 +413,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       legacyStore: usageSnapshotStore,
     }),
     now: () => clock.now().getTime(),
-    requestRefresh: refreshPorts.usage,
+    requestRefresh: deferredPort(() => refreshPorts.usage),
     // T3-06: after each Usage refresh, feed observed project refs to the
     // incremental classifier so the index stays fresh without blocking the
     // query path.
@@ -489,7 +501,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
-    requestRefresh: refreshPorts.sessions,
+    requestRefresh: deferredPort(() => refreshPorts.sessions),
   });
 
   const emptySkillEnvelope: Envelope<
@@ -520,7 +532,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
-    requestRefresh: refreshPorts.skills,
+    requestRefresh: deferredPort(() => refreshPorts.skills),
   });
 
   const emptyInstallationEnvelope: Envelope<
@@ -551,7 +563,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       schema: { currentVersion: 1, parse: (value) => value as never },
     }),
     now: () => clock.now().getTime(),
-    requestRefresh: refreshPorts.installation,
+    requestRefresh: deferredPort(() => refreshPorts.installation),
   });
 
   const monitoringStore = new NodeAtomicJsonStore<

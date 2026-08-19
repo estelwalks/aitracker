@@ -508,7 +508,11 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   // path). Empty state triggers a NON-BLOCKING background refresh through the
   // unified task runtime (T3-11): the loader returns the shell immediately
   // while the collector runs (design §4.3 and loader rule 4 — an empty
-  // snapshot must not stall the first response).
+  // snapshot must not stall the first response). The same non-blocking
+  // refresh fires when the snapshot is STALE (age > policy freshness): in the
+  // web runtime there is no scheduler to refresh it, so the page keeps
+  // polling and the next loader round carries fresh data without a manual
+  // reload.
   const { getCompositionRoot: getRootForUsage } =
     await import("../../app/composition.server.ts");
   const { usageSnapshot } = await getRootForUsage();
@@ -517,6 +521,8 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   if (latest.data == null) {
     void usageSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
     latest = usageSnapshot.readLatest();
+  } else if (latest.status === "stale") {
+    void usageSnapshot.requestRefresh({ reason: "stale" }).catch(() => {});
   }
   const usageResult =
     latest.data != null
@@ -547,6 +553,15 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       .ensureHydrated()
       .then(() => installationSnapshot.readLatest()),
   ]);
+  // Mirror the sessions-page empty-state (loader rule 4): when no session
+  // snapshot exists yet, fire a NON-BLOCKING refresh through the unified task
+  // runtime instead of stalling the first dashboard response. The page keeps
+  // polling while sessions are unavailable, so real counts appear within the
+  // next loader round without a manual reload.
+  if (sessionLatest.data == null) {
+    void sessionSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
+  }
+  const hasSessionData = sessionLatest.data != null;
   const sessionSummaries = sessionLatest.data?.sessions ?? [];
   const skillsResult = {
     status: "fulfilled" as const,
@@ -590,7 +605,9 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   const projectRefs = [
     ...rawSnapshot.details.map((event) => event.project),
     ...(sessionsResult.status === "fulfilled"
-      ? sessionsResult.value.sessions.map((session) => session.projectKey)
+      ? sessionsResult.value.sessions.map(
+          (session) => session.projectRef ?? session.projectKey,
+        )
       : []),
   ];
   // P3-T3-06: resolve from the persisted classification index (O(1), no
@@ -609,8 +626,11 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
           generatedAt: skillsResult.value.generatedAt,
         }
       : { available: false, count: 0, generatedAt: null };
+  // `available` means real session data was observed: a missing snapshot (or a
+  // failed read) reports unavailable instead of a fabricated zero, so the
+  // dashboard can keep polling until the background refresh lands.
   const sessions =
-    sessionsResult.status === "fulfilled"
+    sessionsResult.status === "fulfilled" && hasSessionData
       ? {
           available: true,
           generatedAt: sessionsResult.value.generatedAt,

@@ -3,9 +3,17 @@ import type { SessionSummary } from "../contracts.ts";
 /**
  * P3-T3-01: Session snapshot data contract.
  *
- * The snapshot stores the browser-safe session summaries (never paths,
- * commands or transcript content) plus pre-aggregated report density rows so
- * Reports can paginate over one snapshot read instead of re-scanning per page.
+ * The snapshot stores the browser-safe session summaries (never commands or
+ * transcript content) plus pre-aggregated report density rows so Reports can
+ * paginate over one snapshot read instead of re-scanning per page.
+ *
+ * `SessionSnapshotRecord` additionally carries the server-only raw `projectRef`
+ * (cwd) so the dashboard adapter can classify sessions into the same project
+ * labels as usage events. The reference never crosses to the browser:
+ * `snapshot-session-repository` strips it at the query boundary and the
+ * dashboard reduces it to display-safe aggregates. It mirrors what the usage
+ * snapshot already persists for events (`details[].project`), so no new path
+ * data is introduced server-side.
  */
 
 /** Per-day session density (source x day) used by Reports projections. */
@@ -20,9 +28,14 @@ export interface SessionDensityRow {
   readonly knownUsd: number;
 }
 
+/** Server-only record persisted in the snapshot; `projectRef` is stripped at every browser boundary. */
+export type SessionSnapshotRecord = SessionSummary & {
+  readonly projectRef?: string;
+};
+
 export interface SessionSnapshotData {
   readonly generatedAt: string;
-  readonly sessions: readonly SessionSummary[];
+  readonly sessions: readonly SessionSnapshotRecord[];
   /** Pre-aggregated density for report projections (T3-01). */
   readonly density: readonly SessionDensityRow[];
 }

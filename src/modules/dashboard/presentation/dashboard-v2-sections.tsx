@@ -30,6 +30,7 @@ import {
 import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
+import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,
@@ -318,6 +319,11 @@ export function DashboardMetricGrid({
 }) {
   const { t, format } = useI18n();
   const unavailable = t("dashboard.kpi.unavailable");
+  // 真实扫描历史（Electron IPC / 本地 companion API）解析成功后，安全扫描卡
+  // 显示累计扫描次数（runCount），不再使用 monitoring 占位摘要；解析失败时
+  // 保留原有服务端回退，绝不凭空捏造数字。
+  const securityScan = useSecurityScanOverview();
+  const securityRunsReal = securityScan.available && !securityScan.loading;
   // 休眠 = 已检测 − 本周期活跃（与系统快照卡 toolCountHint 口径一致，
   // 保证「活跃 + 休眠 = 已检测」自洽；不用实时 liveTools，避免口径打架）
   const dormantTools = Math.max(0, monitoring.detectedTools - view.activeTools);
@@ -449,12 +455,20 @@ export function DashboardMetricGrid({
     {
       icon: ShieldCheck,
       label: t("dashboard.v2.securityRunsLabel"),
-      value:
-        security == null
+      value: securityRunsReal
+        ? t("dashboard.v2.securityRunsValue", {
+            count: format.formatNumber(securityScan.runCount),
+          })
+        : security == null
           ? t("common.unknown")
           : availabilityValue(view.outputAvailability.securityRuns),
-      hint:
-        security == null
+      hint: securityRunsReal
+        ? securityScan.coverage > 0
+          ? t("dashboard.v2.securityCoverage", {
+              count: format.formatNumber(securityScan.coverage),
+            })
+          : t("dashboard.v2.securityNotScanned")
+        : security == null
           ? t("dashboard.v2.securityNotScanned")
           : t("dashboard.v2.securityCoverage", {
               count: format.formatNumber(security.cleanCount),

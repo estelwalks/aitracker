@@ -17,6 +17,13 @@ export interface SecurityScanOverview {
   /** Deduplicated count of unique scanned Skills across ALL scan history. */
   readonly coverage: number;
   readonly loading: boolean;
+  /**
+   * True once a real scan-history client (desktop IPC or companion API) has
+   * been resolved. Distinguishes "no scans yet" (runCount 0, available true)
+   * from "no scan backend reachable" (available false), so consumers can keep
+   * their server-composed fallback instead of displaying a fabricated zero.
+   */
+  readonly available: boolean;
 }
 
 /**
@@ -38,6 +45,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
   const [runCount, setRunCount] = useState(0);
   const [coverage, setCoverage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [available, setAvailable] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -61,11 +69,18 @@ export function useSecurityScanOverview(): SecurityScanOverview {
           setSummary(null);
           setRunCount(0);
           setCoverage(0);
+          setAvailable(false);
           setLoading(false);
           return;
         }
         const history = await client.getHistory();
         if (disposed) return;
+        // The real scan history was read successfully: from here on the
+        // overview counts are authoritative even if a later tick fails
+        // (last-known-good), so consumers must not fall back to the separate
+        // monitoring placeholder. A failed first read keeps `available`
+        // false and the server-composed fallback intact.
+        setAvailable(true);
         // summarizeReports dedups across all history by content hash, so the
         // latest run skipping unchanged skills never drops their totals.
         const totals = summarizeReports(history);
@@ -114,5 +129,5 @@ export function useSecurityScanOverview(): SecurityScanOverview {
     };
   }, []);
 
-  return { summary, runCount, coverage, loading };
+  return { summary, runCount, coverage, loading, available };
 }
