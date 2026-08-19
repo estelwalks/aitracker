@@ -366,8 +366,6 @@ export interface RendererSafeRuntimePolicy {
   };
   readonly rollout: {
     readonly defaultStage:
-      | "legacy"
-      | "shadow"
       | "compact-read-model"
       | "snapshot-read"
       | "unified-refresh"

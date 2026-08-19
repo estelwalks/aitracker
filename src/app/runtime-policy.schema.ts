@@ -79,8 +79,6 @@ export const resourceBudgetsSchema = z
 export const rolloutSchema = z
   .object({
     defaultStage: z.enum([
-      "legacy",
-      "shadow",
       "compact-read-model",
       "snapshot-read",
       "unified-refresh",
