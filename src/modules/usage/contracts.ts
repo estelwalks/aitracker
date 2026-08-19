@@ -95,7 +95,7 @@ export interface UsageSnapshotRuntime {
   readLatest(): UsageSnapshotReadView;
   refreshNow(signal?: AbortSignal): Promise<UsageSnapshotReadView>;
   requestRefresh(request: {
-    reason: "startup" | "schedule" | "manual" | "event" | "empty";
+    reason: "startup" | "schedule" | "manual" | "event" | "empty" | "stale";
     signal?: AbortSignal;
   }): Promise<void>;
   invalidate(): Promise<void>;

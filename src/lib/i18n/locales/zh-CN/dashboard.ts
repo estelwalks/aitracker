@@ -208,6 +208,7 @@ export const dashboard = {
     assetMemoryCount: "记忆 {count}",
     agentActivityLabel: "Agent 活跃",
     securityRunsLabel: "安全扫描",
+    securityRunsValue: "{count} 次",
     distillationOutputsLabel: "蒸馏产出",
     distillAssetCounts: "Skill {skill} 个 · 记忆 {memory} 个",
     dailyReportsLabel: "简报生成",

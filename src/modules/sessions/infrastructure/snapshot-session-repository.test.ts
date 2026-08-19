@@ -97,6 +97,23 @@ test("returns the snapshot session index without scanning", async () => {
   assert.equal(reader.refreshCalls, 0);
 });
 
+test("strips the server-only projectRef before summaries cross the query boundary", async () => {
+  const data: SessionSnapshotData = {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    sessions: [
+      { ...summary("a"), projectRef: "/private/work/project-a" },
+      { ...summary("b") },
+    ],
+    density: [],
+  };
+  const reader = readerWith(data);
+  const repository = createSnapshotSessionRepository(reader);
+  const sessions = await repository.list();
+  assert.equal("projectRef" in sessions[0]!, false);
+  assert.equal(JSON.stringify(sessions).includes("/private/work"), false);
+  assert.equal(sessions[0]?.projectKey, "project");
+});
+
 test("empty snapshot returns an empty list and refreshes in the background", async () => {
   const reader = readerWith(null);
   const repository = createSnapshotSessionRepository(reader);

@@ -61,21 +61,31 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
   const [to, setTo] = useState(localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
 
-  // First-scan empty state: the loader already fired a non-blocking refresh;
-  // poll the light snapshot-status probe until a revision lands, then
-  // re-run the route loader so real data replaces the empty shell without a
-  // manual reload (design §4.3 Empty -> Refreshing -> Fresh).
-  const isEmpty = !data.windows.all.hasData;
+  // 快照自愈轮询（空状态 + 过期状态）：
+  // - 首次扫描空状态：loader 已触发非阻塞刷新，轮询轻量状态探测直到 revision
+  //   落地，然后重跑路由 loader（design §4.3 Empty -> Refreshing -> Fresh）；
+  // - 快照过期（web 运行时没有调度器，loader 只会在 stale 时触发刷新）：轮询
+  //   探测到 stale 即重跑 loader，刷新完成后自动展示最新 token，无需手动刷新。
+  // 探测是 O(1) 的轻量 GET，fresh 时不做任何事。
   useEffect(() => {
-    if (!isEmpty) return;
     let disposed = false;
     const poll = async () => {
       try {
+        // 路由正在加载/过渡时跳过本 tick：此时 invalidate 会中止进行中的
+        // loader 请求（客户端取消），并可能让服务端 SSR 流被取消后打出
+        // "render was aborted" 噪音。下一 tick 再检查。
+        if (router.state.status === "pending") return;
         const status = await getDashboardSnapshotStatus({
           data: data.locale,
         });
         if (disposed) return;
-        if (status.revision != null) {
+        if (status.status === "stale") {
+          // 过期：重跑 loader（loader 会触发非阻塞刷新）；刷新完成前保持轮询
+          void router.invalidate();
+          return;
+        }
+        if (status.status === "empty" && status.revision != null) {
+          // 空状态且首个 revision 已落地：刷新一次后停止轮询
           clearInterval(timer);
           void router.invalidate();
         }
@@ -91,7 +101,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
       disposed = true;
       clearInterval(timer);
     };
-  }, [data.locale, isEmpty, router]);
+  }, [data.locale, router]);
 
   const isCustom = period === "custom";
   const standardKey: "today" | "7d" | "30d" | "all" =
@@ -135,6 +145,24 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
     () => windowToView(windowView, data),
     [data, windowView],
   );
+  // 会话快照缺失（首次启动或后台刷新尚未完成）时，每 15s 重新运行路由
+  // loader：loader 会触发一次非阻塞的 sessions.refresh，快照落盘后下一次
+  // 加载即携带真实会话数，无需手动刷新。会话就绪后轮询自动停止。
+  const sessionsUnavailable = view.sessions == null;
+  useEffect(() => {
+    if (!sessionsUnavailable) return;
+    let disposed = false;
+    const timer = setInterval(() => {
+      if (disposed) return;
+      // 与快照轮询相同的保护：过渡中不打断进行中的加载。
+      if (router.state.status === "pending") return;
+      void router.invalidate();
+    }, EMPTY_REFRESH_POLL_MS);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, [router, sessionsUnavailable]);
   const today = useMemo(() => windowToView(data.windows.today, data), [data]);
   const hero = data.hero;
   const rangeLabel = useMemo(() => {
