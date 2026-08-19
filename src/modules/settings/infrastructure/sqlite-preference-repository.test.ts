@@ -7,11 +7,8 @@ import test from "node:test";
 import { DatabaseError } from "../../../platform/database/contracts.ts";
 import { DatabaseHost } from "../../../platform/database/database-host.server.ts";
 import { runMigrations } from "../../../platform/database/migration-runner.server.ts";
-import {
-  createPreferenceReadFallback,
-  createSqlitePreferenceRepository,
-  createSqliteRuntimeFlagRepository,
-} from "./sqlite-preference-repository.server.ts";
+import { createSqliteRuntimeFlagRepository } from "../../../platform/database/runtime-flag-repository.server.ts";
+import { createSqlitePreferenceRepository } from "./sqlite-preference-repository.server.ts";
 
 function fixture(t: { after(fn: () => void): void }): DatabaseHost {
   const directory = mkdtempSync(join(tmpdir(), "tt-pref-repo-"));
@@ -60,16 +57,9 @@ test("preferences reject secret-bearing keys and values before SQL", (t) => {
   assert.equal(repository.list().length, 0);
 });
 
-test("runtime flags and SQLite-first fallback keep legacy read-only", async (t) => {
+test("runtime flags round-trip through SQLite", async (t) => {
   const host = fixture(t);
-  const repository = createSqlitePreferenceRepository(host);
   const flags = createSqliteRuntimeFlagRepository(host);
-  flags.set({ key: "rollout.sqlite", value: true, updatedAtMs: 20 });
-  assert.equal(flags.get("rollout.sqlite")?.value, true);
-  const fallback = createPreferenceReadFallback(repository, {
-    read: async (key) => (key === "legacy.only" ? "legacy" : undefined),
-  });
-  assert.equal(await fallback.get("legacy.only"), "legacy");
-  repository.set({ key: "legacy.only", value: "sqlite", updatedAtMs: 21 });
-  assert.equal(await fallback.get("legacy.only"), "sqlite");
+  await flags.set("rollout.sqlite", true, 20);
+  assert.equal((await flags.get("rollout.sqlite"))?.value, true);
 });
