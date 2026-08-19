@@ -121,7 +121,12 @@ test("T3-01: runtime refresh commits a snapshot and readLatest is O(1)", async (
     now: () => Date.parse("2026-08-01T00:10:00.000Z"),
     collect: async () => {
       collectCalls += 1;
-      const sessions = [session("s1", "claude-code", "2026-08-01T10:00:00Z")];
+      const sessions = [
+        {
+          ...session("s1", "claude-code", "2026-08-01T10:00:00Z"),
+          projectRef: "/private/work/project-a",
+        },
+      ];
       return {
         data: {
           generatedAt: "t",
@@ -140,6 +145,9 @@ test("T3-01: runtime refresh commits a snapshot and readLatest is O(1)", async (
   const latest = runtime.readLatest();
   assert.equal(latest.status, "fresh");
   assert.equal(latest.data?.sessions.length, 1);
+  // The server-only cwd reference is persisted with the record so the
+  // dashboard adapter can classify sessions into usage-event project labels.
+  assert.equal(latest.data?.sessions[0]?.projectRef, "/private/work/project-a");
   assert.equal(latest.data?.density.length, 1);
   assert.ok(latest.revision);
 });

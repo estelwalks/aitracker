@@ -45,7 +45,13 @@ export function createSnapshotSessionRepository(
         void reader.requestRefresh({ reason: "empty", signal }).catch(() => {});
         return [];
       }
-      return [...latest.data.sessions];
+      // Strip the server-only cwd reference before summaries cross the query
+      // boundary (sessions page, distillation transport). The dashboard reads
+      // the snapshot directly through its own adapter and also reduces refs to
+      // display-safe aggregates.
+      return latest.data.sessions.map(
+        ({ projectRef: _ref, ...summary }) => summary,
+      );
     },
   };
 }

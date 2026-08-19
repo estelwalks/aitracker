@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { APP_ID } from "../../lib/app-config.ts";
+import type { DashboardProjectClassification } from "./project-classification.server.ts";
 import {
   aggregateDashboardProjectSessions,
   aggregateDashboardSourceSessions,
@@ -200,6 +201,63 @@ test("dashboard session aggregates join Codex projectRef and preserve workflow c
       subagentCalls: 5,
     },
   ]);
+});
+
+test("dashboard project session aggregates classify by projectRef and drop non-workspace sessions", () => {
+  const sessions = [
+    {
+      projectKey: "app",
+      projectRef: `/Users/example/work/${APP_ID}`,
+      source: "codex",
+      startedAt: "2026-08-10T10:00:00+08:00",
+      turns: 6,
+      editTurns: 2,
+      subagentCalls: 3,
+    },
+    {
+      projectKey: "chat",
+      projectRef: "/Users/example/chat-123",
+      source: "codex",
+      startedAt: "2026-08-10T11:00:00+08:00",
+      turns: 4,
+      editTurns: 1,
+      subagentCalls: 2,
+    },
+    {
+      // A ref missing from the classification index resolves to "unknown"
+      // (never a workspace); its session must not leak into the project view.
+      projectKey: "unknown-dir",
+      projectRef: "/Users/example/unknown-dir",
+      source: "codex",
+      startedAt: "2026-08-10T12:00:00+08:00",
+      turns: 1,
+      editTurns: 0,
+      subagentCalls: 0,
+    },
+  ];
+  const classifications = new Map<string, DashboardProjectClassification>([
+    [`/Users/example/work/${APP_ID}`, { kind: "workspace", label: APP_ID }],
+    [
+      "/Users/example/chat-123",
+      { kind: "quick-conversation", label: "quick-conversation" },
+    ],
+    ["/Users/example/unknown-dir", { kind: "unknown", label: "unknown" }],
+  ]);
+
+  assert.deepEqual(
+    aggregateDashboardProjectSessions(sessions, classifications),
+    [
+      {
+        project: APP_ID,
+        source: "codex",
+        date: "2026-08-10",
+        count: 1,
+        turns: 6,
+        editTurns: 2,
+        subagentCalls: 3,
+      },
+    ],
+  );
 });
 
 test("dashboard V2 keeps installation detection when Claude has no usage events", () => {

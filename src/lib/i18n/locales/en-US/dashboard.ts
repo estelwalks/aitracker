@@ -213,6 +213,7 @@ export const dashboard = {
     assetMemoryCount: "Memory {count}",
     agentActivityLabel: "Agent activity",
     securityRunsLabel: "Security scans",
+    securityRunsValue: "{count} runs",
     distillationOutputsLabel: "Distillation outputs",
     distillAssetCounts: "Skill {skill} · Memory {memory}",
     dailyReportsLabel: "Briefings",

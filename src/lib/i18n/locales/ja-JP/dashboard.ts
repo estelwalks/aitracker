@@ -218,6 +218,7 @@ export const dashboard = {
     assetMemoryCount: "記憶 {count}",
     agentActivityLabel: "Agent アクティブ",
     securityRunsLabel: "セキュリティスキャン",
+    securityRunsValue: "{count} 回",
     distillationOutputsLabel: "蒸留出力",
     distillAssetCounts: "Skill {skill} 個 · 記憶 {memory} 個",
     dailyReportsLabel: "レポート生成",

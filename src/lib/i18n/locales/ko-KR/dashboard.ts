@@ -211,6 +211,7 @@ export const dashboard = {
     assetMemoryCount: "기억 {count}",
     agentActivityLabel: "Agent 활동",
     securityRunsLabel: "보안 스캔",
+    securityRunsValue: "{count}회",
     distillationOutputsLabel: "증류 결과",
     distillAssetCounts: "Skill {skill}개 · 기억 {memory}개",
     dailyReportsLabel: "보고서 생성",

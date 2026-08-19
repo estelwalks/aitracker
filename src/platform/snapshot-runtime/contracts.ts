@@ -91,8 +91,9 @@ export function createAtomicSnapshotRepository<T>(
 }
 
 export interface SnapshotRefreshRequest {
-  /** Why the refresh was requested (startup/schedule/manual/event/empty). */
-  readonly reason: "startup" | "schedule" | "manual" | "event" | "empty";
+  /** Why the refresh was requested (startup/schedule/manual/event/empty/stale). */
+  readonly reason:
+    "startup" | "schedule" | "manual" | "event" | "empty" | "stale";
   readonly signal?: AbortSignal;
 }
 
