@@ -12,7 +12,7 @@ import type {
   AssetRef,
   SecurityAssessmentHistoryStore,
 } from "../contracts.ts";
-import { securityAssessmentHistorySchema } from "./atomic-history-store.ts";
+import { securityAssessmentHistorySchema } from "./history-schemas.ts";
 
 const COLUMNS = `assessment_ref, asset_ref, asset_hash_ref, asset_kind, verdict,
   rule_version, rule_provenance, rule_pack_ref, assessed_at_ms, evidence_count`;
