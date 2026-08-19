@@ -31,18 +31,14 @@ export const APP_REPO_URL = `https://github.com/${APP_ID}/${APP_ID}`;
 
 /** Local data root directory name under the user's home (`~/.trusttools`). [compat: user data] */
 export const APP_DATA_DIR = `.${APP_ID}`;
-/** Prefix for localStorage / IPC preference keys (`trusttools.*`). [compat: browser + prefs state] */
+/** Namespace for SQLite-backed application preference keys (`trusttools.*`). */
 export const STORAGE_KEY_PREFIX = `${APP_ID}.`;
-/** Electron preferences file name inside userData. [compat: prefs state] */
-export const PREFS_FILENAME = `${APP_ID}-prefs.json`;
 /** Capability-token cookie name in the local web server. [safe] */
 export const COOKIE_TOKEN_NAME = `${APP_ID}_token`;
 /** Same-origin mutation header for the browser companion API. [safe] */
 export const SECURITY_CSRF_HEADER = `x-${APP_ID}-csrf`;
 /** HMAC domain-separation string for local-usage session IDs. [compat: changing orphans every existing session ID] */
 export const SESSION_HMAC_DOMAIN = `${APP_ID}-local-usage-session-v1`;
-/** Marker file name that designates a directory as the data root. [compat: prune safety checks] */
-export const DATA_ROOT_MARKER = `.${APP_ID}-data-root`;
 /** Downloaded export file prefix (`trusttools_export_<stamp>.csv`). [safe] */
 export const EXPORT_FILENAME_PREFIX = `${APP_ID}_export_`;
 /** Token poster image file prefix. [safe] */
@@ -64,7 +60,7 @@ export const ENV = {
   DEV_URL: `${APP_ID.toUpperCase()}_DEV_URL`,
   DEV_HOST: `${APP_ID.toUpperCase()}_DEV_HOST`,
   DEV_PORT: `${APP_ID.toUpperCase()}_DEV_PORT`,
-  PREFS_PATH: `${APP_ID.toUpperCase()}_PREFS_PATH`,
+  DESKTOP_BROKER_TOKEN: `${APP_ID.toUpperCase()}_DESKTOP_BROKER_TOKEN`,
   USAGE_HOME: `${APP_ID.toUpperCase()}_USAGE_HOME`,
   HOME: `${APP_ID.toUpperCase()}_HOME`,
   RELEASE_OWNER: `${APP_ID.toUpperCase()}_RELEASE_OWNER`,

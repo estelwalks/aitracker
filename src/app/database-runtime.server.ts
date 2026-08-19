@@ -128,6 +128,8 @@ export async function createDatabaseRuntime(
         errorCode: null,
       },
       features,
+      /** Narrow SQLite port for platform-level operations (retention). */
+      database: host,
       checkpoint() {
         if (!closed && host.isOpen) host.checkpoint("passive");
       },
