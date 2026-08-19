@@ -6,6 +6,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
   writeSync,
@@ -242,4 +243,41 @@ test("rollbackFaultGroup moves the whole fault group back and removes the direct
   rollbackFaultGroup(second, databasePath);
   assert.equal(String(readFileSync(databasePath)), "newer file");
   assert.equal(existsSync(join(second, basename(databasePath))), true);
+});
+
+test("setAsideFaultGroup rolls already-moved members back when a later rename fails", (t) => {
+  const { host, directory, databasePath } = openMigratedDb(t);
+  host.close();
+  writeFileSync(`${databasePath}-wal`, "wal bytes");
+  writeFileSync(`${databasePath}-shm`, "shm bytes");
+  const originalDatabase = readFileSync(databasePath);
+  let calls = 0;
+
+  assert.throws(
+    () =>
+      setAsideFaultGroup(databasePath, {
+        reason: "corrupt",
+        renameFile: (source, target) => {
+          calls += 1;
+          if (calls === 2) {
+            const error = new Error("injected rename failure") as Error & {
+              code: string;
+            };
+            error.code = "EACCES";
+            throw error;
+          }
+          renameSync(source, target);
+        },
+      }),
+    (error) =>
+      error instanceof Error && error.message === "integrity:target-busy",
+  );
+
+  assert.deepEqual(readFileSync(databasePath), originalDatabase);
+  assert.equal(existsSync(`${databasePath}-wal`), true);
+  assert.equal(existsSync(`${databasePath}-shm`), true);
+  assert.equal(
+    readdirSync(directory).some((name) => name.startsWith(".corrupt.")),
+    false,
+  );
 });

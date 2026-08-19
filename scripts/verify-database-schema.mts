@@ -79,6 +79,21 @@ const REQUIRED_TABLES = [
   "insight_enhancement_lines",
 ];
 
+const M2_TABLES = [
+  "task_preferences",
+  "task_runs",
+  "monitoring_state",
+  "monitoring_collectors",
+  "http_cache_entries",
+] as const;
+
+const M2_INDEXES = [
+  "idx_task_runs_task_started",
+  "idx_task_runs_status_started",
+  "idx_task_runs_correlation",
+  "idx_http_cache_namespace_expires",
+] as const;
+
 /** `PRAGMA application_id` migration 0001 must stamp (architecture §9-6). */
 const TRUSTTOOLS_APPLICATION_ID_VALUE = 0x54544442;
 
@@ -670,6 +685,86 @@ function verifyPlatform0001(sql: string, problems: Problem[]): void {
   verifyUserVersionAbsent(stripped, problems);
 }
 
+/** Closed-set and core integrity gate for migration 0002 (M2 low-risk state). */
+function verifyLowRisk0002(sql: string, problems: Problem[]): void {
+  const stripped = stripSqlComments(sql);
+  const statements = splitTopLevelStatements(stripped);
+  const tables: TableDefinition[] = [];
+  const indexes: string[] = [];
+  for (const statement of statements) {
+    const flat = oneLine(statement.text);
+    const table = /^CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i.exec(flat);
+    if (table) {
+      const body = extractParenthesizedBody(statement.text);
+      if (body === undefined) {
+        problems.push({
+          message: `0002 table ${table[1]} has unbalanced parentheses`,
+        });
+      } else {
+        tables.push({ name: table[1], body, text: statement.text });
+      }
+      continue;
+    }
+    const index =
+      /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+/i.exec(
+        flat,
+      );
+    if (index) {
+      indexes.push(index[1]);
+      continue;
+    }
+    problems.push({
+      message: `0002 forbidden top-level statement at line ${statement.line}`,
+    });
+  }
+  if (tables.map((table) => table.name).join("\0") !== M2_TABLES.join("\0")) {
+    problems.push({
+      message: `0002 table set/order differs: ${tables.map((table) => table.name).join(", ")}`,
+    });
+  }
+  if (indexes.join("\0") !== M2_INDEXES.join("\0")) {
+    problems.push({
+      message: `0002 index set/order differs: ${indexes.join(", ")}`,
+    });
+  }
+  for (const table of tables) {
+    if (!/\)\s*STRICT\s*;?\s*$/m.test(table.text.trim())) {
+      problems.push({ message: `0002 table ${table.name} is not STRICT` });
+    }
+    verifyColumnChecks(table, problems);
+  }
+  const flat = oneLine(stripped);
+  const expectations: readonly (readonly [RegExp, string])[] = [
+    [
+      /task_preferences[\s\S]*schedule_kind = 'interval'[\s\S]*interval_minutes IS NOT NULL/,
+      "task preference schedule-kind shape CHECK",
+    ],
+    [
+      /task_runs[\s\S]*status IN \('queued', 'running', 'waiting-approval', 'succeeded', 'failed', 'cancelled', 'skipped', 'abandoned'\)/,
+      "task run status CHECK",
+    ],
+    [
+      /monitoring_collectors[\s\S]*collector_id IN \('usage', 'skills', 'sessions', 'security', 'exchange', 'installation'\)/,
+      "monitoring collector ID CHECK",
+    ],
+    [
+      /http_cache_entries[\s\S]*PRIMARY KEY \(namespace, cache_key\)/,
+      "HTTP cache composite key",
+    ],
+    [
+      /http_cache_entries[\s\S]*expires_at_ms >= fetched_at_ms/,
+      "HTTP cache TTL ordering CHECK",
+    ],
+  ];
+  for (const [pattern, label] of expectations) {
+    if (!pattern.test(flat))
+      problems.push({ message: `0002 missing ${label}` });
+  }
+  process.stdout.write(
+    `  0002 M2 schema: ${tables.length}/${M2_TABLES.length} STRICT tables, ${indexes.length}/${M2_INDEXES.length} indexes\n`,
+  );
+}
+
 /**
  * Per-column `*_json` / `*_at_ms` CHECK assertions.
  *
@@ -980,6 +1075,10 @@ function main(): void {
     problems.push({
       message: "migration 0001 present but unreadable; skipped 11-table check",
     });
+  }
+
+  if (sqlByVersion.has(2)) {
+    verifyLowRisk0002(sqlByVersion.get(2)!, problems);
   }
 
   if (problems.length > 0) {

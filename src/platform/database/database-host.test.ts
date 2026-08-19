@@ -5,10 +5,13 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import {
@@ -245,13 +248,117 @@ test("rejects a database with a foreign application_id as capability-mismatch (P
       error.operation === "open",
   );
 
-  // The same file opens once the application_id is the AITracker constant.
+  // Merely forging the AITracker stamp is insufficient: the schema identity
+  // also requires a complete migration ledger and matching user_version.
   const stamped = new DatabaseSync(dbPath);
   try {
     stamped.exec(`PRAGMA application_id = ${TRUSTTOOLS_APPLICATION_ID}`);
   } finally {
     stamped.close();
   }
+  assert.throws(
+    () =>
+      DatabaseHost.open({
+        path: dbPath,
+        versionsProvider: versionsProvider("99.0.0"),
+      }),
+    (error) =>
+      error instanceof DatabaseError && error.code === "migration-reverted",
+  );
+});
+
+test("file-backed database artifacts use private POSIX permissions", (t) => {
+  if (process.platform === "win32") {
+    t.skip("Windows permissions are enforced through the current-user profile");
+    return;
+  }
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "private.db", versionsProvider("99.0.0"));
+  assert.equal(statSync(dir).mode & 0o777, 0o700);
+  assert.equal(statSync(host.path).mode & 0o777, 0o600);
+  assert.equal(statSync(`${host.path}.writer.lock`).mode & 0o777, 0o600);
+});
+
+test("rejects an unstamped SQLite file that already contains user schema", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dbPath = join(dir, "foreign-unstamped.db");
+  const raw = new DatabaseSync(dbPath);
+  try {
+    raw.exec("CREATE TABLE foreign_data (id INTEGER PRIMARY KEY) STRICT");
+    const applicationId = raw.prepare("PRAGMA application_id").get();
+    assert.ok(applicationId !== undefined);
+    assert.equal(Number(applicationId.application_id), 0);
+  } finally {
+    raw.close();
+  }
+  t.after(() => rmTempDir(dir));
+
+  assert.throws(
+    () =>
+      DatabaseHost.open({
+        path: dbPath,
+        versionsProvider: versionsProvider("99.0.0"),
+      }),
+    (error) =>
+      error instanceof DatabaseError &&
+      error.code === "capability-mismatch" &&
+      error.operation === "open",
+  );
+});
+
+test("a second process cannot acquire the writer while this process owns it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dbPath = join(dir, "cross-process.db");
+  const host = openHostInDir(
+    t,
+    dir,
+    "cross-process.db",
+    versionsProvider("99.0.0"),
+  );
+  const script = `
+    const { DatabaseHost } = await import('./src/platform/database/database-host.server.ts');
+    try {
+      DatabaseHost.open({ path: process.argv[1], versionsProvider: { getVersions: () => ({ nodeVersion: '24.19.0', sqliteVersion: '99.0.0' }) } });
+      process.exitCode = 2;
+    } catch (error) {
+      process.exitCode = error?.code === 'already-open' ? 0 : 3;
+    }
+  `;
+  const child = spawnSync(
+    process.execPath,
+    ["--import", "tsx", "--input-type=module", "-e", script, dbPath],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  assert.equal(host.isOpen, true);
+});
+
+test("a stale writer lock is atomically reclaimed", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dbPath = join(dir, "stale.db");
+  writeFileSync(
+    `${dbPath}.writer.lock`,
+    `${JSON.stringify({ pid: 2_147_483_647, token: "dead", createdAtMs: 1 })}\n`,
+  );
+  const host = openHostInDir(t, dir, "stale.db", versionsProvider("99.0.0"));
+  assert.equal(host.isOpen, true);
+});
+
+test("a child process releases writer ownership on normal process exit", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dbPath = join(dir, "child-exit.db");
+  t.after(() => rmTempDir(dir));
+  const script = `
+    const { DatabaseHost } = await import('./src/platform/database/database-host.server.ts');
+    DatabaseHost.open({ path: process.argv[1], versionsProvider: { getVersions: () => ({ nodeVersion: '24.19.0', sqliteVersion: '99.0.0' }) } });
+  `;
+  const child = spawnSync(
+    process.execPath,
+    ["--import", "tsx", "--input-type=module", "-e", script, dbPath],
+    { cwd: process.cwd(), encoding: "utf8" },
+  );
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  assert.equal(existsSync(`${dbPath}.writer.lock`), false);
   const host = DatabaseHost.open({
     path: dbPath,
     versionsProvider: versionsProvider("99.0.0"),
@@ -299,6 +406,50 @@ test("close releases the singleton so the same path can be reopened", (t) => {
   assert.equal(host.isOpen, false);
   const reopened = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   assert.equal(reopened.isOpen, true);
+});
+
+test("close keeps ownership after a close failure and releases it only on a later successful teardown", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  t.after(() => rmTempDir(dir));
+  let attempts = 0;
+  const host = DatabaseHost.open({
+    path: join(dir, "close-failure.db"),
+    versionsProvider: versionsProvider("99.0.0"),
+    adapterFactory: () =>
+      new FakeAdapter(OK_PRAGMAS, () => {
+        attempts += 1;
+        if (attempts === 1) throw new DatabaseError("busy", "close");
+      }),
+  });
+  assert.throws(
+    () => host.close(),
+    (error) => error instanceof DatabaseError,
+  );
+  assert.throws(
+    () =>
+      DatabaseHost.open({
+        path: join(dir, "close-failure.db"),
+        versionsProvider: versionsProvider("99.0.0"),
+      }),
+    (error) => error instanceof DatabaseError && error.code === "already-open",
+  );
+  host.close();
+});
+
+test("close refuses to release ownership while an asynchronous backup borrow is active", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "borrow.db", versionsProvider("99.0.0"));
+  let finish!: () => void;
+  const pending = host.withUnderlyingConnection(
+    () => new Promise<void>((resolve) => (finish = resolve)),
+  );
+  assert.throws(
+    () => host.close(),
+    (error) => error instanceof DatabaseError && error.code === "busy",
+  );
+  finish();
+  await pending;
+  host.close();
 });
 
 test("a case-alias of an open database cannot obtain a second writable connection", (t) => {

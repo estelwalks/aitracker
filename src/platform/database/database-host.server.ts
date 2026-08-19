@@ -10,7 +10,7 @@
  * stable error code is returned; journal semantics are never silently
  * downgraded and the database is never destructively rebuilt.
  */
-import { mkdirSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -36,6 +36,15 @@ import {
   getUnderlyingDatabaseSync,
   NodeSqliteDatabase,
 } from "./infrastructure/node-sqlite-database.server.ts";
+import { assertMigrationState } from "./migration-runner.server.ts";
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+} from "./file-permissions.server.ts";
+import {
+  acquireWriterOwnership,
+  type WriterOwnership,
+} from "./writer-ownership.server.ts";
 
 const OPEN_HOSTS = new Map<string, DatabaseHost>();
 
@@ -71,7 +80,10 @@ export class DatabaseHost implements SqliteDatabasePort {
     /** Versions recorded and evaluated at open time. */
     readonly runtimeVersions: RuntimeVersions,
     private readonly connection: SqliteDatabasePort,
+    private readonly ownership?: WriterOwnership,
   ) {}
+
+  private activeBorrows = 0;
 
   static open(options: DatabaseHostOptions): DatabaseHost {
     // `realpath()` can only canonicalize a chain that exists, and both the WAL
@@ -100,20 +112,31 @@ export class DatabaseHost implements SqliteDatabasePort {
       );
     }
 
+    let ownership: WriterOwnership | undefined;
     let connection: SqliteDatabasePort;
+    let databaseExistedAtConnectionOpen = false;
     try {
+      if (path !== MEMORY_PATH) ownership = acquireWriterOwnership(path);
+      databaseExistedAtConnectionOpen =
+        path !== MEMORY_PATH && existsSync(path);
       connection = options.adapterFactory
         ? options.adapterFactory(path)
         : new NodeSqliteDatabase({ path });
     } catch (error) {
+      ownership?.release();
       if (error instanceof DatabaseError) throw error;
       throw new DatabaseError("io-failure", "open", { cause: error });
     }
 
     try {
-      applyAndAssertPragmas(connection, path === MEMORY_PATH);
+      applyAndAssertPragmas(
+        connection,
+        path === MEMORY_PATH,
+        databaseExistedAtConnectionOpen,
+      );
+      if (path !== MEMORY_PATH) protectDatabaseFaultGroup(path);
     } catch (error) {
-      closeBestEffort(connection);
+      if (closeBestEffort(connection)) ownership?.release();
       if (error instanceof DatabaseError) throw error;
       if (error instanceof PragmaAssertionFailure) {
         throw new DatabaseError(error.code, "open", { retryable: false });
@@ -121,7 +144,7 @@ export class DatabaseHost implements SqliteDatabasePort {
       throw new DatabaseError("capability-mismatch", "open", { cause: error });
     }
 
-    const host = new DatabaseHost(path, versions, connection);
+    const host = new DatabaseHost(path, versions, connection, ownership);
     OPEN_HOSTS.set(path, host);
     return host;
   }
@@ -157,7 +180,20 @@ export class DatabaseHost implements SqliteDatabasePort {
    */
   withUnderlyingConnection<T>(fn: (database: DatabaseSync) => T): T {
     this.assertOpen("backup");
-    return fn(getUnderlyingDatabaseSync(this.connection));
+    this.activeBorrows += 1;
+    try {
+      const result = fn(getUnderlyingDatabaseSync(this.connection));
+      if (isPromiseLike(result)) {
+        return Promise.resolve(result).finally(() => {
+          this.activeBorrows -= 1;
+        }) as T;
+      }
+      this.activeBorrows -= 1;
+      return result;
+    } catch (error) {
+      this.activeBorrows -= 1;
+      throw error;
+    }
   }
 
   /**
@@ -190,18 +226,25 @@ export class DatabaseHost implements SqliteDatabasePort {
 
   /** Closes the connection and releases the singleton registration. */
   close(): void {
-    OPEN_HOSTS.delete(this.path);
+    if (this.activeBorrows > 0) {
+      throw new DatabaseError("busy", "close");
+    }
+    if (!this.connection.isOpen) {
+      OPEN_HOSTS.delete(this.path);
+      this.ownership?.release();
+      return;
+    }
     try {
       // Best-effort WAL truncation before close: a file database should not
       // leave a large -wal behind for the next open to replay. `:memory:` and
       // already-closed connections are ignored.
-      if (this.connection.isOpen) {
-        this.connection.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
-      }
+      this.connection.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
     } catch {
       // Best effort; the close below is the real teardown.
     }
-    closeBestEffort(this.connection);
+    this.connection.close();
+    OPEN_HOSTS.delete(this.path);
+    this.ownership?.release();
   }
 
   /** A closed Host is a lifecycle mistake, reported as `not-open`. */
@@ -267,7 +310,7 @@ function caseFold(path: string): string {
  */
 function ensureDirectory(directory: string): void {
   try {
-    mkdirSync(directory, { recursive: true });
+    ensurePrivateDirectory(directory);
   } catch (error) {
     throw new DatabaseError("io-failure", "open", { cause: error });
   }
@@ -291,6 +334,7 @@ function runWalProbe(directory: string): CapabilityProbeResult {
 function applyAndAssertPragmas(
   connection: SqliteDatabasePort,
   isMemory: boolean,
+  existedBeforeOpen: boolean,
 ): void {
   const journalMode = normalizePragmaValue(
     firstValue(connection.prepare("PRAGMA journal_mode=WAL").get()),
@@ -325,7 +369,9 @@ function applyAndAssertPragmas(
     "PRAGMA trusted_schema",
     ["0", "off"],
   );
-  assertApplicationId(connection);
+  if (assertApplicationId(connection, isMemory || !existedBeforeOpen)) {
+    assertMigrationState(connection);
+  }
 }
 
 function applyAndAssert(
@@ -373,13 +419,31 @@ export function capabilityFailureCode(
  * guard). Migration 0001 stamps the constant, so a migrated database always
  * reads back the constant.
  */
-function assertApplicationId(connection: SqliteDatabasePort): void {
+function assertApplicationId(
+  connection: SqliteDatabasePort,
+  createdByThisOpen: boolean,
+): boolean {
   const actual = normalizePragmaValue(
     firstValue(connection.prepare("PRAGMA application_id").get()),
   );
-  if (actual !== "0" && actual !== String(TRUSTTOOLS_APPLICATION_ID)) {
+  if (actual === String(TRUSTTOOLS_APPLICATION_ID)) return true;
+  if (actual !== "0") {
     throw new PragmaAssertionFailure("capability-mismatch", actual);
   }
+  if (createdByThisOpen) return false;
+
+  const userVersion = normalizePragmaValue(
+    firstValue(connection.prepare("PRAGMA user_version").get()),
+  );
+  const userObject = connection
+    .prepare(
+      "SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' AND type IN ('table', 'index', 'view', 'trigger') LIMIT 1",
+    )
+    .get();
+  if (userVersion !== "0" || userObject !== undefined) {
+    throw new PragmaAssertionFailure("capability-mismatch", actual);
+  }
+  return false;
 }
 
 /** One integer column of a single-row PRAGMA result, read as a safe number. */
@@ -390,13 +454,28 @@ function checkpointInteger(row: SqliteRow, column: string): number {
   throw new DatabaseError("sql-error", "read");
 }
 
-function closeBestEffort(connection: SqliteDatabasePort): void {
+function closeBestEffort(connection: SqliteDatabasePort): boolean {
   try {
     if (connection.isOpen) connection.close();
+    return !connection.isOpen;
   } catch {
-    // The singleton registration is already released; a failing close is
-    // reported by later opens.
+    return false;
   }
+}
+
+function protectDatabaseFaultGroup(path: string): void {
+  ensurePrivateFile(path);
+  for (const sibling of [`${path}-wal`, `${path}-shm`]) {
+    if (existsSync(sibling)) ensurePrivateFile(sibling);
+  }
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
 }
 
 /** First column of a pragma result row, regardless of column name. */

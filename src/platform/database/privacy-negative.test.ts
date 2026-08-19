@@ -9,6 +9,7 @@ import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
 import { DatabaseError } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
+import { LATEST_MIGRATION_VERSION } from "./migrations/index.ts";
 import {
   assertAppPreferenceValueSafe,
   assertInsightLineAnalysisSafe,
@@ -57,7 +58,7 @@ function openMigratedHost(scope: TestScope): DatabaseHost {
   scope.after(() => host.close());
   scope.after(() => rmTempDir(directory));
   const result = runMigrations({ database: host, appVersion: APP_VERSION });
-  assert.equal(result.currentVersion, 1);
+  assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   return host;
 }
 

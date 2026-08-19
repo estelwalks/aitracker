@@ -9,6 +9,7 @@ import { DatabaseError } from "./contracts.ts";
 import type { SqliteBindValue } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
+import { LATEST_MIGRATION_VERSION } from "./migrations/index.ts";
 
 /**
  * T-02-05: every CHECK, FK, UNIQUE and partial-unique constraint of the 11
@@ -53,7 +54,7 @@ function openMigratedHost(scope: TestScope): DatabaseHost {
   scope.after(() => host.close());
   scope.after(() => rmTempDir(directory));
   const result = runMigrations({ database: host, appVersion: APP_VERSION });
-  assert.equal(result.currentVersion, 1);
+  assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   return host;
 }
 
@@ -702,7 +703,7 @@ test("rejects negative schema_migrations timings", (t) => {
     1,
     0,
   );
-  assert.equal(count(host, "schema_migrations"), 1);
+  assert.equal(count(host, "schema_migrations"), LATEST_MIGRATION_VERSION);
 });
 
 test("enforces foreign keys on every first-wave reference", (t) => {

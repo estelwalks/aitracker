@@ -23,6 +23,7 @@ import { createHash } from "node:crypto";
 
 import {
   DatabaseError,
+  TRUSTTOOLS_APPLICATION_ID,
   type SqliteDatabasePort,
   type SqliteRow,
   type Transaction,
@@ -86,8 +87,45 @@ export function migrationChecksum(sql: string): string {
 
 /** Highest applied version, or `0` when the ledger does not exist yet. */
 export function readSchemaVersion(database: SqliteDatabasePort): number {
-  const applied = readLedger(database);
-  return applied.reduce((max, row) => Math.max(max, row.version), 0);
+  return assertMigrationState(database, MIGRATIONS);
+}
+
+/**
+ * Validates the persisted three-part schema identity and the immutable
+ * migration lineage. This is safe to call on a genuinely fresh database
+ * (`application_id = user_version = 0`, no ledger), but rejects partially
+ * stamped, gapped, reordered, or checksum-divergent databases.
+ */
+export function assertMigrationState(
+  database: SqliteDatabasePort,
+  definitions: readonly MigrationDefinition[] = MIGRATIONS,
+): number {
+  assertValidDefinitions(definitions);
+  const rows = readLedger(database);
+  assertLedgerLineage(rows, definitions);
+  const userVersion = pragmaInteger(database, "PRAGMA user_version");
+  const applicationId = pragmaInteger(database, "PRAGMA application_id");
+  const currentVersion = rows.length === 0 ? 0 : rows[rows.length - 1].version;
+
+  if (rows.length === 0) {
+    if (userVersion !== 0 || applicationId !== 0) {
+      throw new DatabaseError("migration-reverted", "migration", {
+        retryable: false,
+      });
+    }
+    return 0;
+  }
+  if (applicationId !== TRUSTTOOLS_APPLICATION_ID) {
+    throw new DatabaseError("capability-mismatch", "migration", {
+      retryable: false,
+    });
+  }
+  if (userVersion !== currentVersion) {
+    throw new DatabaseError("migration-reverted", "migration", {
+      retryable: false,
+    });
+  }
+  return currentVersion;
 }
 
 /**
@@ -110,6 +148,7 @@ export function runMigrations(
   const latestDefined = definitions[definitions.length - 1].version;
 
   const appliedRows = readLedger(database);
+  assertPersistedIdentity(database, appliedRows);
   const appliedVersions = new Set(appliedRows.map((row) => row.version));
   const currentVersion = appliedRows.reduce(
     (max, row) => Math.max(max, row.version),
@@ -162,7 +201,59 @@ export function runMigrations(
     );
     version = definition.version;
   }
+  assertMigrationState(database, definitions);
   return { applied, currentVersion: version };
+}
+
+function assertPersistedIdentity(
+  database: SqliteDatabasePort,
+  rows: readonly { version: number; name: string; checksum: string }[],
+): void {
+  const userVersion = pragmaInteger(database, "PRAGMA user_version");
+  const applicationId = pragmaInteger(database, "PRAGMA application_id");
+  if (rows.length === 0) {
+    if (userVersion !== 0 || applicationId !== 0) {
+      throw new DatabaseError("migration-reverted", "migration", {
+        retryable: false,
+      });
+    }
+    return;
+  }
+  const latest = rows[rows.length - 1].version;
+  if (applicationId !== TRUSTTOOLS_APPLICATION_ID) {
+    throw new DatabaseError("capability-mismatch", "migration", {
+      retryable: false,
+    });
+  }
+  if (userVersion !== latest) {
+    throw new DatabaseError("migration-reverted", "migration", {
+      retryable: false,
+    });
+  }
+}
+
+function assertLedgerLineage(
+  rows: readonly { version: number; name: string; checksum: string }[],
+  definitions: readonly MigrationDefinition[],
+): void {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const definition = definitions[index];
+    if (row.version !== index + 1 || definition === undefined) {
+      throw new DatabaseError("migration-reverted", "migration", {
+        retryable: false,
+      });
+    }
+    if (
+      definition.version !== row.version ||
+      definition.name !== row.name ||
+      migrationChecksum(definition.sql) !== row.checksum
+    ) {
+      throw new DatabaseError("migration-checksum", "migration", {
+        retryable: false,
+      });
+    }
+  }
 }
 
 /** Executes one migration and its ledger row inside a single transaction. */
@@ -275,22 +366,20 @@ function assertValidAppVersion(appVersion: string): void {
   }
 }
 
-/** Strictly increasing positive versions, unique names, non-empty SQL. */
+/** Consecutive positive versions from 1, unique names, non-empty SQL. */
 function assertValidDefinitions(
   definitions: readonly MigrationDefinition[],
 ): void {
   if (definitions.length === 0) throw invalidDefinition();
   const names = new Set<string>();
-  let previousVersion = 0;
-  for (const definition of definitions) {
+  for (let index = 0; index < definitions.length; index += 1) {
+    const definition = definitions[index];
     if (
       !Number.isSafeInteger(definition.version) ||
-      definition.version <= 0 ||
-      definition.version <= previousVersion
+      definition.version !== index + 1
     ) {
       throw invalidDefinition();
     }
-    previousVersion = definition.version;
     if (typeof definition.name !== "string" || definition.name.trim() === "") {
       throw invalidDefinition();
     }

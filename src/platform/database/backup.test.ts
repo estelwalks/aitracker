@@ -31,6 +31,7 @@ import {
   tryReadBackupManifestIndex,
 } from "./backup.server.ts";
 import { readSchemaVersion, runMigrations } from "./migration-runner.server.ts";
+import { LATEST_MIGRATION_VERSION } from "./migrations/index.ts";
 
 /** Enough of node:test's TestContext for the shared test bed. */
 interface TestScope {
@@ -77,7 +78,7 @@ function openMigratedDb(scope: TestScope): {
   scope.after(() => host.close());
   scope.after(() => rmTempDir(directory));
   const result = runMigrations({ database: host, appVersion: APP_VERSION });
-  assert.equal(result.currentVersion, 1);
+  assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   return { host, directory, databasePath };
 }
 
@@ -128,7 +129,7 @@ test("backs up a migrated database with uncheckpointed WAL data and round-trips 
 
   // The returned manifest carries every field with values that match reality.
   assert.equal(backup.manifest.kind, "daily");
-  assert.equal(backup.manifest.schemaVersion, 1);
+  assert.equal(backup.manifest.schemaVersion, LATEST_MIGRATION_VERSION);
   assert.equal(backup.manifest.appVersion, APP_VERSION);
   assert.equal(backup.manifest.sqliteVersion, SQLITE_VERSION);
   assert.equal(backup.manifest.sha256, await sha256OfFile(backup.path));
@@ -171,7 +172,7 @@ test("backs up a migrated database with uncheckpointed WAL data and round-trips 
     versionsProvider: versionsProvider(),
   });
   t.after(() => restored.close());
-  assert.equal(readSchemaVersion(restored), 1);
+  assert.equal(readSchemaVersion(restored), LATEST_MIGRATION_VERSION);
   assert.equal(readFlag(restored, "flag-a"), '"value-a"');
   assert.equal(readFlag(restored, "flag-b"), '"value-b"');
   const reapply = runMigrations({
@@ -663,4 +664,40 @@ test("pruneBackups requires both manifest and filename timestamps to be expired"
 
   assert.deepEqual(result.deleted, []);
   assert.equal(existsSync(backup.path), true);
+});
+
+test("pruneBackups retains and reports a manifest entry when deletion fails", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const DAY = 86_400_000;
+  const now = 1_700_000_000_000;
+  await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now,
+  });
+  const expired = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+    now: () => now - 10 * DAY,
+  });
+
+  const result = pruneBackups({
+    backupsDirectory,
+    keepDays: 7,
+    now: () => now,
+    removeFile: () => {
+      throw new Error("injected delete failure");
+    },
+  });
+
+  const name = basename(expired.path);
+  assert.deepEqual(result.deleted, []);
+  assert.deepEqual(result.failed, [name]);
+  assert.equal(existsSync(expired.path), true);
+  assert.ok(readBackupManifestIndex(backupsDirectory)[name] !== undefined);
 });
