@@ -6,6 +6,9 @@
 //   2. `node:*` builtins must never be statically imported by browser-safe
 //      modules (dynamic imports inside `.server.ts` are fine).
 //   3. Module presentation files must not re-export server APIs.
+//   4. `src/modules/**` business modules must never statically import
+//      `node:sqlite` (business logic reaches SQLite only through the platform
+//      Repository/Port); the violation type is `business-node-sqlite-import`.
 //
 // The browser-safe root set is: src/routes, src/components, src/app (except
 // *.server.ts), src/lib (except *.server.ts), src/modules/*/presentation,
@@ -58,6 +61,7 @@ function isBrowserGraphFile(repoPath) {
     return false;
   if (/^src\/platform\/persistence\/infrastructure\//.test(repoPath))
     return false;
+  if (/^src\/platform\/database\/infrastructure\//.test(repoPath)) return false;
   if (/^src\/platform\/snapshot-runtime\//.test(repoPath)) return false;
   if (/^src\/platform\/discovery\//.test(repoPath)) return false;
   if (/^src\/platform\/runtime\//.test(repoPath)) return false;
@@ -176,6 +180,28 @@ export async function analyzeBrowserServerBoundary(rootDir = root) {
       }
     }
   }
+
+  // Business modules must reach SQLite only through the platform
+  // Repository/Port. This pass scans the ENTIRE `src/modules/**` source tree —
+  // including `*.server.ts`, `infrastructure/`, `application/` and tests — for
+  // static `node:sqlite` imports, independent of the browser-graph membership
+  // used above.
+  for (const file of files) {
+    const repoPath = toRepoPath(file);
+    if (!/^src\/modules\//.test(repoPath)) continue;
+    if (!isSourceName(repoPath)) continue;
+    const source = await readFile(file, "utf8");
+    for (const importSource of extractStaticImports(source)) {
+      if (importSource === "node:sqlite" || importSource === "sqlite") {
+        violations.push({
+          type: "business-node-sqlite-import",
+          file: repoPath,
+          detail: importSource,
+        });
+      }
+    }
+  }
+
   return violations.sort((a, b) =>
     `${a.type}:${a.file}:${a.detail}`.localeCompare(
       `${b.type}:${b.file}:${b.detail}`,

@@ -81,6 +81,13 @@ npm run build:electron
 npm run verify:tool-registry   # 编译注册表 + 校验诊断 + 公共 manifest 漂移检查
 ```
 
+## 数据库平台运维
+
+```bash
+npm run verify:database-schema        # 静态校验 migrations 顺序、双源 SQL 一致性与 0001 的 11 表/STRICT/关键约束
+npm run inspect:database -- <db路径>  # 只读输出健康信息、表名+行数与索引数，绝不输出任何行内容
+```
+
 ## 工具注册表（tool-registry）
 
 每个 AI 工具的全部静态知识（探测路径、Skill/Agent 目录、用量采集 paths/mapping、会话恢复命令、价格策略）收敛为 `src/lib/tool-registry/definitions/<id>.tool.json`（v1.5 JSON，30 个：27 个产品目录工具 + DeepSeek Harness/DSH + aipy/cline 遗留采集源）；业务模块只消费注册表的派生结果，不维护自己的工具名单。
