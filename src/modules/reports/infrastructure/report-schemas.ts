@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import type { JsonSchema } from "../../../test-support/json-schema.ts";
-
 /**
  * SQLite report row validation schemas.
  *
@@ -9,7 +7,6 @@ import type { JsonSchema } from "../../../test-support/json-schema.ts";
  * body field exists only to read legacy reports.v1.json files and is removed
  * when the application lazily migrates that record.
  */
-export const REPORTS_SCHEMA_VERSION = 1 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const isoTimestamp = z.string();
@@ -71,23 +68,3 @@ export const ReportDocumentSchema = z
     approvedAt: isoTimestamp.optional(),
   })
   .strict();
-
-export const ReportFileSchema = z
-  .object({
-    runs: z.array(ReportRunSchema),
-    documents: z.array(ReportDocumentSchema),
-  })
-  .strict();
-
-export type ReportFile = z.infer<typeof ReportFileSchema>;
-
-export const DEFAULT_REPORT_FILE: ReportFile = { runs: [], documents: [] };
-
-export function reportStoreSchema(): JsonSchema<ReportFile> {
-  return {
-    currentVersion: REPORTS_SCHEMA_VERSION,
-    parse(value: unknown): ReportFile {
-      return ReportFileSchema.parse(value);
-    },
-  };
-}
