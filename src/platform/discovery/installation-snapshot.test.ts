@@ -3,10 +3,14 @@ import test from "node:test";
 
 import { displayPaths } from "./installation-snapshot.contracts.ts";
 import { createInstallationSnapshotRuntime } from "./installation-snapshot-runtime.server.ts";
-import { createSnapshotEnvelopeRepository } from "../../platform/snapshot-runtime/envelope-repository.ts";
-import type { AtomicJsonStore } from "../../platform/persistence/contracts.ts";
+import { createSnapshotEnvelopeRepository } from "../../test-support/snapshot-envelope-repository.ts";
 import type { SnapshotEnvelope } from "../../platform/snapshot-runtime/contracts.ts";
 import type { InstallationSnapshotData } from "./installation-snapshot.contracts.ts";
+
+interface DocumentStore<T> {
+  read(): Promise<{ value: T; source: string; schemaVersion: number }>;
+  write(value: T): Promise<void>;
+}
 
 const EMPTY: SnapshotEnvelope<InstallationSnapshotData> = {
   schemaVersion: 1,
@@ -22,7 +26,7 @@ const EMPTY: SnapshotEnvelope<InstallationSnapshotData> = {
   },
 };
 
-function memoryStore<T>(initial: T): AtomicJsonStore<T> {
+function memoryStore<T>(initial: T): DocumentStore<T> {
   let value = initial;
   return {
     async read() {

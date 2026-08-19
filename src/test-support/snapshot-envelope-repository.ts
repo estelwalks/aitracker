@@ -1,15 +1,17 @@
-import type { JsonSchema } from "../../test-support/json-schema.ts";
+import type { JsonSchema } from "./json-schema.ts";
 import type {
   SnapshotEnvelope,
   SnapshotHydrateResult,
   SnapshotRepository,
-} from "./contracts.ts";
+} from "../platform/snapshot-runtime/contracts.ts";
 
 /**
- * P3-T3-01/02/03: reusable snapshot envelope repository.
+ * Test-only helper; production runtimes use domain SQLite repositories.
  *
- * Test/embedded adapter over an injected snapshot document port. Production
- * runtimes use their domain-specific SQLite repositories.
+ * Reusable snapshot envelope repository over an injected snapshot document
+ * port. This adapter exists solely to exercise snapshot runtime contracts in
+ * unit tests; every production runtime validates and persists snapshots at its
+ * own SQLite boundary.
  */
 
 export interface SnapshotDocumentPort<T> {
