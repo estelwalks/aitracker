@@ -11,10 +11,7 @@ import type {
   CandidatePersistence,
   SessionRef,
 } from "../contracts.ts";
-import {
-  PersistedCandidateSchema,
-  type DistillCandidateFile,
-} from "./atomic-candidate-store.ts";
+import { PersistedCandidateSchema } from "./atomic-candidate-store.ts";
 
 const COLUMNS = `candidate_id, kind, title, summary, mode, approval_state,
   generated_at_ms, ai_request_id, execution_model_id, execution_provider_id,
@@ -99,13 +96,9 @@ function fromRow(
   }) as CandidateOutput;
 }
 
-export interface SqliteCandidatePersistence extends CandidatePersistence {
-  importLegacy(input: DistillCandidateFile): Promise<{ imported: number }>;
-}
-
 export function createSqliteCandidatePersistence(
   database: SqliteDatabasePort,
-): SqliteCandidatePersistence {
+): CandidatePersistence {
   const save = (input: CandidateOutput): number => {
     const candidate = safeCandidate(input);
     const costMicrousd =
@@ -206,14 +199,6 @@ export function createSqliteCandidatePersistence(
     },
     async save(candidate) {
       transaction(database, () => save(candidate));
-    },
-    async importLegacy(input) {
-      return transaction(database, () => ({
-        imported: input.candidates.reduce(
-          (total, candidate) => total + save(candidate as CandidateOutput),
-          0,
-        ),
-      }));
     },
   };
 }

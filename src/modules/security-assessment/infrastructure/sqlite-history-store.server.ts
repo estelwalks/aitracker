@@ -12,10 +12,7 @@ import type {
   AssetRef,
   SecurityAssessmentHistoryStore,
 } from "../contracts.ts";
-import {
-  securityAssessmentHistorySchema,
-  type SecurityAssessmentHistoryDocument,
-} from "./atomic-history-store.ts";
+import { securityAssessmentHistorySchema } from "./atomic-history-store.ts";
 
 const COLUMNS = `assessment_ref, asset_ref, asset_hash_ref, asset_kind, verdict,
   rule_version, rule_provenance, rule_pack_ref, assessed_at_ms, evidence_count`;
@@ -87,15 +84,9 @@ function fromRow(
   });
 }
 
-export interface SqliteSecurityAssessmentHistoryStore extends SecurityAssessmentHistoryStore {
-  importLegacy(
-    document: SecurityAssessmentHistoryDocument,
-  ): Promise<{ imported: number }>;
-}
-
 export function createSqliteSecurityAssessmentHistoryStore(
   database: SqliteDatabasePort,
-): SqliteSecurityAssessmentHistoryStore {
+): SecurityAssessmentHistoryStore {
   const save = (raw: AssetAssessment): number => {
     const item = validate(raw);
     const changed = Number(
@@ -169,12 +160,6 @@ export function createSqliteSecurityAssessmentHistoryStore(
         )
         .all()
         .map((row) => fromRow(database, row));
-    },
-    async importLegacy(document) {
-      const parsed = securityAssessmentHistorySchema.parse(document);
-      return transaction(database, () => ({
-        imported: parsed.entries.reduce((total, item) => total + save(item), 0),
-      }));
     },
   };
 }

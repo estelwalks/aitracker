@@ -136,17 +136,9 @@ function assertSafeRef(value: string): string {
   return value;
 }
 
-export interface SqliteReportStore extends ReportStore {
-  /** Idempotent import used by the one-release JSON compatibility window. */
-  importLegacy(input: {
-    readonly runs: readonly ReportRun[];
-    readonly documents: readonly ReportDocument[];
-  }): Promise<{ runs: number; documents: number }>;
-}
-
 export function createSqliteReportStore(
   database: SqliteDatabasePort,
-): SqliteReportStore {
+): ReportStore {
   const putRun = (input: ReportRun): number => {
     const run = ReportRunSchema.parse(input) as ReportRun;
     run.evidence.forEach((item) => assertSafeRef(item.ref));
@@ -292,15 +284,6 @@ export function createSqliteReportStore(
         .map((row) =>
           runFromRow(row, runEvidenceFor(database, sqliteText(row.run_id))),
         );
-    },
-    async importLegacy(input) {
-      return transaction(database, () => ({
-        runs: input.runs.reduce((count, run) => count + putRun(run), 0),
-        documents: input.documents.reduce(
-          (count, document) => count + putDocument(document),
-          0,
-        ),
-      }));
     },
   };
 }

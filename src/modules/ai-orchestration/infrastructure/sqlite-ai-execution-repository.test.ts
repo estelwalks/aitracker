@@ -144,24 +144,3 @@ test("transaction rollback prevents usage increments when audit insert fails", (
   );
   assert.equal(repository.getUsage(key).calls, 0n);
 });
-
-test("legacy aggregate import preserves counters beyond Number safe range", (t) => {
-  const repository = createSqliteAIExecutionRepository(fixture(t));
-  const row = {
-    dateKey: "2026-08-19",
-    capability: "distillation" as const,
-    profileKey: "offline",
-    calls: 9_007_199_254_740_993n,
-    inputTokens: 9_007_199_254_740_994n,
-    outputTokens: 3n,
-    costMicrousd: 4n,
-    updatedAtMs: 200,
-  };
-  assert.deepEqual(repository.importLegacyUsage([row]), {
-    insertedOrUpdated: 1,
-  });
-  assert.deepEqual(repository.importLegacyUsage([row]), {
-    insertedOrUpdated: 0,
-  });
-  assert.deepEqual(repository.getUsage(row), row);
-});

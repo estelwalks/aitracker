@@ -208,10 +208,6 @@ export interface SqliteAIExecutionRepository {
     readonly execution: AIExecutionPersistenceInput;
     readonly nowMs: number;
   }): BudgetedExecutionResult;
-  /** Idempotent import of legacy daily quota aggregates. */
-  importLegacyUsage(rows: readonly AIDailyUsage[]): {
-    insertedOrUpdated: number;
-  };
 }
 
 export function createSqliteAIExecutionRepository(
@@ -327,57 +323,6 @@ export function createSqliteAIExecutionRepository(
         const usage = getUsage(input.key);
         transaction.commit();
         return { outcome: "recorded", recorded: true, usage };
-      } catch (error) {
-        try {
-          transaction.rollback();
-        } catch {
-          /* keep original */
-        }
-        throw error;
-      }
-    },
-    importLegacyUsage(rows) {
-      const transaction = database.transaction();
-      transaction.begin();
-      try {
-        let insertedOrUpdated = 0;
-        for (const row of rows) {
-          assertUsageKey(row);
-          assertNonNegative(row.updatedAtMs);
-          if (
-            row.calls < 0n ||
-            row.inputTokens < 0n ||
-            row.outputTokens < 0n ||
-            row.costMicrousd < 0n
-          ) {
-            throw new DatabaseError("invalid-argument", "write", {
-              retryable: false,
-            });
-          }
-          const result = database
-            .prepare(
-              `INSERT INTO ai_daily_usage
-            (date_key, capability, profile_key, calls, input_tokens, output_tokens, cost_microusd, updated_at_ms)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (date_key, capability, profile_key) DO UPDATE SET calls=excluded.calls,
-              input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens,
-              cost_microusd=excluded.cost_microusd, updated_at_ms=excluded.updated_at_ms
-            WHERE excluded.updated_at_ms > ai_daily_usage.updated_at_ms`,
-            )
-            .run(
-              row.dateKey,
-              row.capability,
-              row.profileKey,
-              row.calls,
-              row.inputTokens,
-              row.outputTokens,
-              row.costMicrousd,
-              BigInt(row.updatedAtMs),
-            );
-          insertedOrUpdated += Number(result.changes);
-        }
-        transaction.commit();
-        return { insertedOrUpdated };
       } catch (error) {
         try {
           transaction.rollback();
