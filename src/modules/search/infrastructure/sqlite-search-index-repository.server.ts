@@ -71,7 +71,39 @@ const FORBIDDEN_PROJECTION_PATTERNS: readonly RegExp[] = [
   /\bjailbreak\b/i,
 ];
 
+/**
+ * Opaque-reference guard for `id` / `sourceRef`. These identifiers legally
+ * carry `type:id` and `type:a/b` shapes (see `domain.ts` SAFE_ID / SAFE_SOURCE),
+ * so the projection patterns above — which forbid bare `/` and mid-text drive
+ * letters — cannot apply verbatim. Only host content that can never be a valid
+ * opaque reference is rejected: drive-letter paths, absolute paths,
+ * backslashes and secret-shaped values.
+ */
+const FORBIDDEN_REFERENCE_PATTERNS: readonly RegExp[] = [
+  /^[A-Za-z]:[/\\]/, // Windows drive-letter path (C:/ C:\ D:temp)
+  /^[/\\]/, // POSIX absolute path or leading backslash
+  /\\/, // any backslash (UNC, escaped)
+  /\bsk-/i, // secret key (Anthropic/OpenAI)
+  /\bghp_/i, // GitHub classic PAT
+  /\bgho_/i, // GitHub OAuth token
+  /\bgithub_pat_/i, // GitHub fine-grained PAT
+  /\bglpat-/i, // GitLab PAT
+  /\bxox[bpas]-/i, // Slack token
+  /\bbearer\b/i, // Bearer credential
+  /-----BEGIN [a-z ]*PRIVATE KEY-----/i,
+];
+
+function assertReferenceSafe(value: string): void {
+  for (const pattern of FORBIDDEN_REFERENCE_PATTERNS) {
+    if (pattern.test(value)) {
+      throw new TypeError("search identifiers must be opaque safe references");
+    }
+  }
+}
+
 function assertProjectionSafe(document: SearchDocument): void {
+  assertReferenceSafe(document.id);
+  assertReferenceSafe(document.sourceRef);
   const fields = [document.title, document.textSummary, ...document.tags];
   for (const field of fields) {
     for (const pattern of FORBIDDEN_PROJECTION_PATTERNS) {
