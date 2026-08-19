@@ -102,7 +102,7 @@ npm run inspect:database -- <db路径>   # 只读输出健康信息、表名+行
 - 共享策略包（`definitions/_shared/`）：generic-reader 默认、scanner 预算、skill-market 顺序、usage taxonomy、platform profiles；定价 rule packs 在 `src/lib/pricing/rules/`。
 - 浏览器只导入生成的 `public-manifest.generated.ts`（display + 能力状态 + skillAgentOrder，无路径/Reader Key/命令/价格）；配置变更后执行 `npm run generate:*` 重新生成并提交（`verify:tool-registry` 会做漂移检查）。
 - 新增工具：新建 `definitions/<id>.tool.json` → 在 `definitions/manifest.json` 登记 → `npm run generate:tool-imports` → `npm run verify:tool-registry` + 相关单测通过后提交。
-- 用量缓存（`local-usage-index-v10.json`）携带 `toolRegistryVersion`（sha256 全量 canonical JSON），任何定义/策略变更自动失效重建。
+- 用量快照（SQLite `usage_events` 等）携带 `toolRegistryVersion`（sha256 全量 canonical JSON），任何定义/策略变更自动失效重建；增量缓存为进程内重建索引，不落盘。
 
 ## 数据接入
 
@@ -120,7 +120,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 
 采集器只提取 Token 数字、模型、时间、来源和项目路径，不读取或返回 prompt、回复正文。项目路径返回浏览器前会把用户 Home 目录归一化为 `~/`。
 
-首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会在 `~/.trusttools/cache/local-usage-index-v10.json` 建立仅包含结构化 Token 事件的文件级索引。后续按增量游标和文件变化刷新，缓存使用临时文件加原子重命名写入。
+首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会把结构化 Token 事件写入 SQLite 快照（`usage_events` 等），并建立进程内增量索引。后续按增量游标和文件变化刷新，增量缓存为进程内重建，不落盘。
 
 采集范围覆盖 28 个产品目录工具（含 DeepSeek Harness/DSH，读取 `~/.dsh/sessions/**/session.jsonl.zstd` 的 zstd 会话日志），并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel、zstd 帧容器和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex、WorkBuddy 和 DSH 同时保留 AITracker 原生 reader 作为校验与降级路径。
 
