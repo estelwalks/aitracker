@@ -4,9 +4,9 @@
 |------|-----|
 | 文档类型 | 架构设计文档 (ARCH) |
 | 项目名称 | TrustTools-本地存储数据库 |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 创建日期 | 2026-08-19 11:12:47 |
-| 更新日期 | 2026-08-19 11:53:04 |
+| 更新日期 | 2026-08-19 17:38:04 |
 | 生成工具 | architecture-design + tech-selection + document-header |
 | 文档状态 | 草稿 |
 
@@ -14,6 +14,7 @@
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.2 | 2026-08-19 17:38:04 | 按 Release 1 实现与独立安全审查加固回填：0001 头部 `PRAGMA application_id = 0x54544442`、`user_version` 由迁移运行器维护；枚举列 NOT NULL 与默认值、计数/格式域 CHECK、`ciphertext` 长度下限、禁存内容 SQL 级 CHECK；七列 UNIQUE 改为 COALESCE 表达式唯一索引；备份保留策略与迁移前备份 |
 | v1.1 | 2026-08-19 11:53:04 | 按 Electron 43.4.1、Node 24.18.1、SQLite 3.53.1 实测运行时更新驱动约束和连接安全参数，采用 WAL 默认策略，并与今日洞察 SQLite 存储方案对齐 |
 | v1.0 | 2026-08-19 11:12:47 | 基于现有模块化单体、AtomicJsonStore 和今日洞察双模式设计完整本地 SQLite 数据模型、迁移与实施方案 |
 
@@ -198,6 +199,8 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 
 ### 5.1 平台、迁移、偏好与缓存（10 表）
 
+> 平台身份：migration 0001 头部写入 `PRAGMA application_id = 0x54544442`（`TTDB`），启动时验证 application_id 为 0（全新库）或该常量，否则拒绝写路径（§9-6）。`user_version` 由迁移运行器在每个迁移事务内与 ledger 同行维护，业务 SQL 不得自行设置。
+
 #### `schema_migrations`
 
 | 列 | 类型/约束 | 说明 |
@@ -217,9 +220,9 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | `source_kind` | TEXT NOT NULL | `atomic-json|electron-prefs|security-json|cache-json` |
 | `source_path_hash` | TEXT NOT NULL | 路径不可逆哈希，不保存绝对路径 |
 | `source_schema_version` | INTEGER | 旧 schema 版本 |
-| `status` | TEXT CHECK `running|succeeded|failed|skipped` | 导入状态 |
+| `status` | TEXT NOT NULL DEFAULT `running` CHECK `running|succeeded|failed|skipped` | 导入状态 |
 | `started_at_ms`,`finished_at_ms` | INTEGER | 起止时间 |
-| `rows_read`,`rows_written`,`rows_skipped` | INTEGER NOT NULL DEFAULT 0 | 对账计数 |
+| `rows_read`,`rows_written`,`rows_skipped` | INTEGER NOT NULL DEFAULT 0 CHECK >= 0 | 对账计数 |
 | `error_code` | TEXT | 稳定错误码 |
 | `source_fingerprint` | TEXT NOT NULL | 幂等键组成部分 |
 
@@ -230,9 +233,9 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | 列 | 类型/约束 | 说明 |
 |---|---|---|
 | `preference_key` | TEXT PK | 如 `ui.locale`、`settings.retentionDays`、`widget.layout` |
-| `value_json` | TEXT NOT NULL CHECK json_valid | 值；禁止密钥 |
-| `value_type` | TEXT CHECK `string|number|boolean|object|array|null` | 解析保护 |
-| `updated_at_ms` | INTEGER NOT NULL | 修改时间 |
+| `value_json` | TEXT NOT NULL CHECK json_valid + 禁存盘符/Bearer/反斜杠 | 值；禁止密钥 |
+| `value_type` | TEXT NOT NULL CHECK `string|number|boolean|object|array|null` + 与 `json_type(value_json)` 一致性 CHECK | 解析保护 |
+| `updated_at_ms` | INTEGER NOT NULL CHECK >= 0 | 修改时间 |
 
 桌面 DB 为权威；localStorage 只保留启动镜像或浏览器开发态兼容值。
 
@@ -241,10 +244,10 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | 列 | 类型/约束 | 说明 |
 |---|---|---|
 | `secret_id` | TEXT PK | 不透明 ID |
-| `purpose` | TEXT CHECK `model-api-key` | 首期仅模型密钥 |
-| `ciphertext` | BLOB NOT NULL | Electron safeStorage/OS 加密结果 |
-| `encryption_kind` | TEXT CHECK `dpapi|keychain|safe-storage` | 加密后端 |
-| `created_at_ms`,`updated_at_ms` | INTEGER NOT NULL | 时间 |
+| `purpose` | TEXT NOT NULL DEFAULT `model-api-key` CHECK `model-api-key` | 首期仅模型密钥 |
+| `ciphertext` | BLOB NOT NULL CHECK length >= 16 | Electron safeStorage/OS 加密结果 |
+| `encryption_kind` | TEXT NOT NULL CHECK `dpapi|keychain|safe-storage` | 加密后端 |
+| `created_at_ms`,`updated_at_ms` | INTEGER NOT NULL CHECK >= 0 | 时间 |
 
 #### `runtime_flags`
 
@@ -321,14 +324,14 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | 列 | 类型/约束 | 说明 |
 |---|---|---|
 | `profile_id` | TEXT PK | 当前 profile.id |
-| `name` | TEXT NOT NULL | 1–64 字符 |
-| `mode` | TEXT CHECK `official|custom` | 模式 |
-| `protocol` | TEXT CHECK `openai|anthropic` | 协议 |
+| `name` | TEXT NOT NULL CHECK length 1–64 | 1–64 字符 |
+| `mode` | TEXT NOT NULL DEFAULT `custom` CHECK `official|custom` | 模式 |
+| `protocol` | TEXT NOT NULL CHECK `openai|anthropic` | 协议 |
 | `endpoint` | TEXT | custom endpoint；server-only |
 | `model` | TEXT | 模型 ID |
 | `secret_id` | TEXT FK → `secure_secrets` SET NULL | API Key 引用 |
-| `is_active` | INTEGER CHECK boolean | 活跃标志 |
-| `created_at_ms`,`updated_at_ms` | INTEGER NOT NULL | 时间 |
+| `is_active` | INTEGER NOT NULL DEFAULT 0 CHECK boolean | 活跃标志 |
+| `created_at_ms`,`updated_at_ms` | INTEGER NOT NULL CHECK >= 0 | 时间 |
 
 部分唯一索引：`CREATE UNIQUE INDEX ... ON model_profiles(is_active) WHERE is_active=1`，保证最多一个 active。
 
@@ -343,13 +346,13 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | `prompt_version_id` | TEXT NOT NULL | Prompt 注册项 |
 | `prompt_version` | INTEGER NOT NULL | 版本 |
 | `input_fingerprint` | TEXT | 脱敏输入哈希，不存 Prompt |
-| `status` | TEXT CHECK 完整 AI 状态枚举 | completed/offline/fallback/budget/timeout/cancelled/failed |
-| `used_fallback` | INTEGER CHECK boolean | 是否使用本地结果 |
-| `input_tokens`,`output_tokens` | INTEGER | 用量 |
+| `status` | TEXT NOT NULL CHECK 完整 AI 状态枚举 | completed/offline/fallback/budget/timeout/cancelled/failed |
+| `used_fallback` | INTEGER NOT NULL DEFAULT 0 CHECK boolean | 是否使用本地结果 |
+| `input_tokens`,`output_tokens` | INTEGER CHECK >= 0 | 用量 |
 | `cost_microusd` | INTEGER | 可空代表未知 |
 | `cost_confidence` | TEXT CHECK `exact|estimated|unknown` | 成本置信度 |
 | `error_code` | TEXT | 稳定错误码 |
-| `started_at_ms`,`finished_at_ms`,`duration_ms` | INTEGER | 时间 |
+| `started_at_ms`,`finished_at_ms`,`duration_ms` | INTEGER CHECK >= 0 | 时间 |
 
 索引：`(capability, started_at_ms DESC)`、`(profile_id, started_at_ms DESC)`、`(status, started_at_ms DESC)`。
 
@@ -357,11 +360,11 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 
 | 列 | 类型/约束 | 说明 |
 |---|---|---|
-| `date_key` | TEXT | 用户本地日 `YYYY-MM-DD` |
-| `capability` | TEXT | 能力 |
-| `profile_key` | TEXT | Profile ID；offline 使用固定 `offline` |
-| `calls`,`input_tokens`,`output_tokens`,`cost_microusd` | INTEGER NOT NULL DEFAULT 0 | 聚合计数 |
-| `updated_at_ms` | INTEGER NOT NULL | 时间 |
+| `date_key` | TEXT NOT NULL CHECK `YYYY-MM-DD` GLOB | 用户本地日 `YYYY-MM-DD` |
+| `capability` | TEXT NOT NULL CHECK `distillation|report|security|page-insight` | 能力 |
+| `profile_key` | TEXT NOT NULL | Profile ID；offline 使用固定 `offline` |
+| `calls`,`input_tokens`,`output_tokens`,`cost_microusd` | INTEGER NOT NULL DEFAULT 0 CHECK >= 0 | 聚合计数 |
+| `updated_at_ms` | INTEGER NOT NULL CHECK >= 0 | 时间 |
 
 主键：`(date_key, capability, profile_key)`。调用配额检查和计数增加必须与 `ai_executions` 插入位于同一事务；Insight Enhancer 预算损坏/迁移失败时 fail-closed，Insight Core 不受影响。
 
@@ -636,14 +639,14 @@ FTS5 虚拟表列 `document_id UNINDEXED, title, tags, text_summary`。启动 ca
 | `prompt_version_id`,`prompt_version` | TEXT/INTEGER | Prompt 版本 |
 | `model_label` | TEXT | 安全展示名 |
 | `ai_request_id` | TEXT FK → ai_executions SET NULL | 审计引用 |
-| `generated_at_ms`,`expires_at_ms` | INTEGER NOT NULL | TTL |
-| `status` | TEXT CHECK `ready|invalidated` | 缓存状态 |
+| `generated_at_ms`,`expires_at_ms` | INTEGER NOT NULL CHECK >= 0 | TTL |
+| `status` | TEXT NOT NULL DEFAULT `ready` CHECK `ready|invalidated` | 缓存状态 |
 
-UNIQUE `(surface_id, scope_hash, evidence_hash, locale, profile_id, prompt_version_id, prompt_version)`；索引 `(surface_id, expires_at_ms)`。
+唯一性：表达式唯一索引 `(surface_id, scope_hash, evidence_hash, locale, COALESCE(profile_id,''), COALESCE(prompt_version_id,''), COALESCE(prompt_version,0))`（COALESCE 使 NULL 身份参与唯一判定，offline 缓存不会重复扣预算）；索引 `(surface_id, expires_at_ms)`。
 
 #### `insight_enhancement_lines`
 
-主键 `(cache_key, sequence)`；列 `candidate_id`、`analysis`、`action_id`。FK → cache CASCADE。`analysis` 禁止数字、URL、路径、命令和实体名；事实句与动作 label 不持久化，始终由 Core 按当前证据本地渲染。
+主键 `(cache_key, sequence)`；列 `candidate_id`、`analysis`、`action_id`。FK → cache CASCADE。`analysis` 禁止数字、URL、路径、命令和实体名（SQL 级 CHECK 拦截数字/盘符/反斜杠，其余由 Repository 隐私守卫强制）；事实句与动作 label 不持久化，始终由 Core 按当前证据本地渲染。
 
 #### `insight_feedback`（COULD）
 
