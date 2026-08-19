@@ -31,7 +31,6 @@
 import {
   copyFileSync,
   existsSync,
-  mkdirSync,
   renameSync,
   rmSync,
   statSync,
@@ -55,6 +54,10 @@ import {
 } from "./backup.server.ts";
 import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
 import { DatabaseHost } from "./database-host.server.ts";
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+} from "./file-permissions.server.ts";
 import {
   faultGroupExists,
   rollbackFaultGroup,
@@ -299,6 +302,7 @@ export async function restoreFromBackup(
   cleanupTemporary(temporaryPath);
   try {
     copyFileSync(backupFile, temporaryPath);
+    ensurePrivateFile(temporaryPath);
   } catch (error) {
     cleanupTemporary(temporaryPath);
     throw restoreFailure(error);
@@ -317,6 +321,7 @@ export async function restoreFromBackup(
       });
     }
     renameSync(temporaryPath, target);
+    ensurePrivateFile(target);
   } catch (error) {
     cleanupTemporary(temporaryPath);
     if (setAsideDirectory !== undefined) {
@@ -403,19 +408,22 @@ async function verifyRestoreCandidate(
   }
   const snapshot = readBackupSchemaSnapshot(candidatePath);
   assertAcceptableApplicationId(snapshot.applicationId);
-  assertLedgerMatchesDefinitions(snapshot.migrations, definitions);
+  assertLedgerMatchesDefinitions(
+    snapshot.migrations,
+    snapshot.userVersion,
+    manifest.schemaVersion,
+    definitions,
+  );
 }
 
 /**
  * `application_id` identifies the file as ours (architecture §9-6). Migration
- * 0001 does not stamp it yet, so an unstamped `0` is still accepted; any other
- * value belongs to a different application and is refused.
+ * A restorable backup must be a migrated TrustTools database. Unstamped files
+ * are never accepted, even when they happen to contain a ledger-shaped table.
  */
 function assertAcceptableApplicationId(applicationId: number): void {
-  if (applicationId === 0 || applicationId === TRUSTTOOLS_APPLICATION_ID) {
-    return;
-  }
-  throw invalidRestoreArgument();
+  if (applicationId !== TRUSTTOOLS_APPLICATION_ID)
+    throw invalidRestoreArgument();
 }
 
 /**
@@ -427,14 +435,22 @@ function assertAcceptableApplicationId(applicationId: number): void {
 function assertLedgerMatchesDefinitions(
   rows:
     readonly { version: number; name: string; checksum: string }[] | undefined,
+  userVersion: number,
+  manifestVersion: number,
   definitions: readonly MigrationDefinition[],
 ): void {
-  if (rows === undefined) throw invalidRestoreArgument();
+  if (rows === undefined || rows.length === 0) throw invalidRestoreArgument();
   const definedByVersion = new Map<number, MigrationDefinition>();
   for (const definition of definitions) {
     definedByVersion.set(definition.version, definition);
   }
-  for (const row of rows) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    if (row.version !== index + 1) {
+      throw new DatabaseError("migration-reverted", "backup", {
+        retryable: false,
+      });
+    }
     const definition = definedByVersion.get(row.version);
     if (definition === undefined) {
       throw new DatabaseError("migration-reverted", "backup", {
@@ -449,6 +465,12 @@ function assertLedgerMatchesDefinitions(
         retryable: false,
       });
     }
+  }
+  const latest = rows[rows.length - 1].version;
+  if (userVersion !== latest || manifestVersion !== latest) {
+    throw new DatabaseError("migration-reverted", "backup", {
+      retryable: false,
+    });
   }
 }
 
@@ -541,7 +563,7 @@ function ensureDirectory(directory: string): void {
     throw new DatabaseError("io-failure", "backup", { retryable: false });
   }
   try {
-    mkdirSync(directory, { recursive: true });
+    ensurePrivateDirectory(directory);
   } catch (error) {
     throw new DatabaseError("io-failure", "backup", { cause: error });
   }

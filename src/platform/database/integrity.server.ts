@@ -12,10 +12,14 @@
  * corrupt, and naming it `.corrupt.*` would misreport a healthy file. Reasons
  * map to `.corrupt.<ts>/` and `.replaced.<ts>/`.
  */
-import { existsSync, mkdirSync, renameSync, rmdirSync } from "node:fs";
+import { existsSync, renameSync, rmdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { DatabaseError, type SqliteDatabasePort } from "./contracts.ts";
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+} from "./file-permissions.server.ts";
 
 export interface IntegrityCheckResult {
   /** True when every `integrity_check` row is exactly `ok`. */
@@ -37,6 +41,8 @@ export type SetAsideReason = "corrupt" | "replaced-by-restore";
 
 export interface SetAsideFaultGroupOptions {
   readonly reason: SetAsideReason;
+  /** Injectable rename primitive for deterministic fault-injection tests. */
+  readonly renameFile?: (source: string, target: string) => void;
 }
 
 /** Directory-name prefix per reason. */
@@ -81,17 +87,37 @@ export function setAsideFaultGroup(
   const directory = dirname(databasePath);
   const setAsideDirectory = reserveSetAsideDirectory(directory, prefix);
   try {
-    mkdirSync(setAsideDirectory, { recursive: true });
+    ensurePrivateDirectory(setAsideDirectory);
   } catch (error) {
     throw new DatabaseError("io-failure", "integrity", { cause: error });
   }
 
+  const renameFile = options.renameFile ?? renameSync;
+  const moved: { source: string; target: string }[] = [];
   for (const source of faultGroup(databasePath)) {
     if (!existsSync(source)) continue;
     const target = uniqueTarget(setAsideDirectory, basename(source));
     try {
-      renameSync(source, target);
+      renameFile(source, target);
+      ensurePrivateFile(target);
+      moved.push({ source, target });
     } catch (error) {
+      let rollbackError: unknown;
+      for (const item of [...moved].reverse()) {
+        try {
+          if (!existsSync(item.source) && existsSync(item.target)) {
+            renameFile(item.target, item.source);
+          }
+        } catch (candidate) {
+          rollbackError ??= candidate;
+        }
+      }
+      try {
+        rmdirSync(setAsideDirectory);
+      } catch {
+        // A failed compensation leaves evidence in the reserved directory.
+      }
+      if (rollbackError !== undefined) throw classifyMoveError(rollbackError);
       throw classifyMoveError(error);
     }
   }
