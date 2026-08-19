@@ -377,6 +377,21 @@ export const security = {
       requiredSettings:
         "詳細スキャンには、先に「設定 → モデル設定」でモデルを構成する必要があります。",
     },
+    llm: {
+      title: "AI 補助分析",
+      disclaimer: "補足のみ · 判定は変更しません",
+      trigger: "AI 補助分析を生成",
+      loading: "AI 補助分析を生成中…",
+      failed:
+        "AI 補助分析を利用できません。静的ルールの結果は保持されています。",
+      summary: "概要",
+      dimensions: "次元の分析",
+      confidence: "確信度",
+      confidenceLow: "低",
+      confidenceMedium: "中",
+      confidenceHigh: "高",
+      modelLabel: "モデル: {label}",
+    },
     verdict: {
       allow: "許可",
       warn: "警告",
