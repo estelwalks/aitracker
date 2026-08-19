@@ -228,5 +228,5 @@ export function invalidateCacheByPrefix(prefix: string): void
   （如 1k 条）防异常增长；
 - **widget 与桌面端**：`widget-data.ts` 改动影响 Electron 浮窗/托盘，需回归桌面 IPC 路径；
 - **不要动**：`snapshot.server.ts` 30s TTL 的并发去重语义（测试依赖）、持久索引格式
-  （`local-usage-index-v10.json` 升级需按 `PERSISTENT_CACHE_VERSION` 流程走）、
+  （SQLite 快照 `usage_events` 等，schema 变更需按 migration 流程走）、
   `*.server.ts` 命名约定与动态 import 模式。
