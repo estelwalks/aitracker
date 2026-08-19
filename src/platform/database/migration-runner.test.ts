@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { DatabaseError } from "./contracts.ts";
+import { TRUSTTOOLS_APPLICATION_ID } from "./contracts.ts";
 import type { SqliteRow } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
@@ -48,6 +49,7 @@ const EXPECTED_INDEXES = [
   "idx_ai_executions_profile_started",
   "idx_ai_executions_status_started",
   "idx_data_migration_runs_idempotency",
+  "idx_insight_enhancement_cache_identity",
   "idx_insight_enhancement_cache_surface_expires",
   "idx_model_profiles_single_active",
 ] as const;
@@ -115,6 +117,13 @@ function integer(value: unknown): number {
   throw new Error(`expected an integer column, received ${typeof value}`);
 }
 
+/** First column of a single-row PRAGMA result as a number. */
+function pragmaInteger(host: DatabaseHost, sql: string): number {
+  const row = host.prepare(sql).get();
+  assert.ok(row !== undefined, `${sql} must return a row`);
+  return integer(Object.values(row)[0]);
+}
+
 function text(value: unknown): string {
   if (typeof value === "string") return value;
   throw new Error(`expected a text column, received ${typeof value}`);
@@ -173,6 +182,26 @@ test("migrates an empty database from 0 to latest and records the ledger row", (
   assert.equal(integer(rows[0].applied_at_ms), record.appliedAtMs);
   assert.equal(integer(rows[0].duration_ms), 5);
   assert.equal(readSchemaVersion(host), 1);
+});
+
+test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
+  const host = openHost(t);
+  // A fresh database is unstamped (application_id 0) until migration 0001 runs.
+  assert.equal(pragmaInteger(host, "PRAGMA application_id"), 0);
+
+  const result = runMigrations({ database: host, appVersion: APP_VERSION });
+
+  assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
+  assert.equal(
+    pragmaInteger(host, "PRAGMA application_id"),
+    TRUSTTOOLS_APPLICATION_ID,
+    "migration 0001 must stamp the TrustTools application_id",
+  );
+  assert.equal(
+    pragmaInteger(host, "PRAGMA user_version"),
+    LATEST_MIGRATION_VERSION,
+    "the migration runner must set user_version to the latest applied version",
+  );
 });
 
 test("creates exactly the 11 first-wave STRICT tables and their indexes", (t) => {

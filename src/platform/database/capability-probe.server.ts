@@ -1,7 +1,8 @@
 /**
  * Runtime version/capability probe (Story S-01, T-01-02).
  *
- * Server-only. The core decision is a pure function â€?`evaluateCapabilities` â€? * so tests can inject fake versions and probe results. The Node provider reads
+ * Server-only. The core decision is a pure function â€” `evaluateCapabilities` â€”
+ * so tests can inject fake versions and probe results. The Node provider reads
  * `process.versions` plus `SELECT sqlite_version()` from a throwaway
  * `:memory:` connection (no persistent connection is ever held by the probe).
  *
@@ -136,11 +137,25 @@ export class NodeRuntimeVersionsProvider implements RuntimeVersionsProvider {
 }
 
 /**
+ * In-process probe cache keyed by directory: probing the same directory twice
+ * (e.g. every `DatabaseHost.open` now probes the shared OS temp directory) must
+ * not create a throwaway probe database each time (review finding P2-9).
+ */
+const probeCache = new Map<string, CapabilityProbeResult>();
+
+/**
  * Probes a real file-backed database in `directory` for WAL support and cleans
- * up after itself. No persistent connection survives the call.
+ * up after itself. No persistent connection survives the call, and the result
+ * is cached per directory for the lifetime of the process.
  */
 export function probeWalCapability(directory: string): CapabilityProbeResult {
-  return { journalMode: probeJournalModeIn(directory).journalMode };
+  const cached = probeCache.get(directory);
+  if (cached !== undefined) return cached;
+  const result: CapabilityProbeResult = {
+    journalMode: probeJournalModeIn(directory).journalMode,
+  };
+  probeCache.set(directory, result);
+  return result;
 }
 
 function evaluation(

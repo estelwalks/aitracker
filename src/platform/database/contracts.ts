@@ -70,14 +70,23 @@ export interface SqliteDatabasePort {
  * `user_version` and the migration checksums before a database is accepted).
  *
  * The integer is the big-endian ASCII of `TTDB` (`0x54544442`), which stays
- * inside SQLite's signed 32-bit range. Migration 0001 does not stamp it yet, so
- * validation currently accepts `0` (never stamped) **or** this constant; the
- * `PRAGMA application_id` write lands in a later migration.
+ * inside SQLite's signed 32-bit range. Migration 0001 stamps it; open-time
+ * validation accepts `0` (a fresh, not-yet-migrated database) **or** this
+ * constant, and rejects every other value as `capability-mismatch`.
  */
 export const TRUSTTOOLS_APPLICATION_ID = 0x54544442;
 
+/** Why a backup was created (architecture §10.2). */
+export type BackupKind = "daily" | "pre-migration";
+
 /** Metadata written next to a completed online backup (architecture §10.2). */
 export interface BackupManifest {
+  /**
+   * Backup purpose. `pre-migration` backups are the mandatory backups taken
+   * before a schema migration and are retained longer than `daily` backups.
+   * Manifests written before this field existed default to `daily`.
+   */
+  readonly kind: BackupKind;
   /** Schema version of the backed-up database. */
   readonly schemaVersion: number;
   /** Application version that produced the backup. */
@@ -145,6 +154,11 @@ export class DatabaseError extends Error {
   ) {
     super(`${operation}:${code}`, options);
     this.explicitRetryable = options?.retryable;
+    // `super(message, options)` stores `options.cause` verbatim on
+    // `Error.cause`, so a raw filesystem/driver error would leak its message
+    // and stack (which contain absolute paths) through `util.inspect` and into
+    // any observability sink. Overwrite it with a path-free replacement.
+    this.cause = sanitizeCause(options?.cause);
   }
 
   get retryable(): boolean {
@@ -155,4 +169,26 @@ export class DatabaseError extends Error {
           this.code === "io-failure" ||
           this.code === "target-busy";
   }
+}
+
+/**
+ * Replaces a raw `Error` cause with a path-free stand-in that keeps only the
+ * original `code`/`errno` (when present), dropping `message`, `stack` and any
+ * path. A `DatabaseError` cause is already path-free by construction (its
+ * message is `<operation>:<code>`) and carries the retryable chain, so it is
+ * kept verbatim; non-`Error` causes are discarded.
+ */
+function sanitizeCause(cause: unknown): unknown {
+  if (cause instanceof DatabaseError) return cause;
+  if (!(cause instanceof Error)) return undefined;
+  const source = cause as Error & { code?: unknown; errno?: unknown };
+  const sanitized = new Error("cause sanitized");
+  sanitized.stack = "Error: cause sanitized";
+  if (source.code !== undefined) {
+    (sanitized as Error & { code?: unknown }).code = source.code;
+  }
+  if (source.errno !== undefined) {
+    (sanitized as Error & { errno?: unknown }).errno = source.errno;
+  }
+  return sanitized;
 }

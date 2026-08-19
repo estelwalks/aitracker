@@ -3,9 +3,9 @@
  *
  * Server-only. Produces consistent backups with `node:sqlite.backup()` — never
  * by copying the open `.db`/`-wal`/`-shm` files — and verifies each one before
- * it is atomically renamed into place. A JSON `manifest.json` next to the
- * backups records every `BackupManifest` so later recovery can re-verify a
- * backup's SHA-256 against the record that produced it.
+ * it is recorded. A JSON `manifest.json` next to the backups records every
+ * `BackupManifest` so later recovery can re-verify a backup's SHA-256 against
+ * the record that produced it.
  *
  * Guarantees:
  * - The source is the **Host's own** live connection, borrowed through
@@ -13,15 +13,20 @@
  *   connection to the same file would break the single-writer contract
  *   (architecture §3.2), so the driver handle is borrowed, never re-opened.
  * - Backups of one process are serialized through an in-process mutex: name
- *   reservation, promotion and the manifest read-modify-write are one critical
- *   section, so two concurrent calls cannot reserve the same file name or lose
- *   each other's manifest entry.
- * - The destination is written to a `<name>.tmp` file, verified with a
- *   read-only `PRAGMA quick_check`, and only then atomically renamed to its
- *   final name. A colliding final name is never overwritten — it receives a
- *   `-2`, `-3`, … suffix.
- * - Every failure path removes the temporary file and never touches an
- *   existing backup or its manifest record.
+ *   reservation and the manifest read-modify-write are one critical section, so
+ *   two concurrent calls cannot reserve the same file name or lose each other's
+ *   manifest entry.
+ * - The destination name is reserved atomically with `openSync(candidate,
+ *   "wx")` and the backup is written **directly into that placeholder** (the
+ *   online backup API overwrites the empty file). There is no
+ *   `existsSync`-then-`rename` window in which a concurrent writer's finished
+ *   backup could be silently overwritten (review finding P2-5). A colliding
+ *   name receives a `-2`, `-3`, … suffix.
+ * - The destination is then normalized to the delete (rollback) journal mode
+ *   (single self-contained file), and verified with a read-only
+ *   `PRAGMA quick_check` plus a streaming SHA-256.
+ * - Every failure path removes the reserved file and any `-wal`/`-shm`
+ *   siblings, and never touches an existing backup or its manifest record.
  * - `manifest.json` is the single source of trust. An unparseable manifest is
  *   reported as `corrupt` instead of being silently treated as "no backups",
  *   and files without a usable record are surfaced as *unverified* by
@@ -33,8 +38,11 @@
  */
 import { createHash } from "node:crypto";
 import {
+  closeSync,
+  createReadStream,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -47,6 +55,7 @@ import { basename, join } from "node:path";
 import {
   DatabaseError,
   type Backup,
+  type BackupKind,
   type BackupManifest,
   type DatabaseErrorCode,
 } from "./contracts.ts";
@@ -71,6 +80,11 @@ export interface CreateOnlineBackupOptions {
   readonly appVersion: string;
   /** SQLite version recorded in the manifest. */
   readonly sqliteVersion: string;
+  /**
+   * Backup purpose; `pre-migration` backups are retained longer. Defaults to
+   * `daily`.
+   */
+  readonly kind?: BackupKind;
   /** Injectable epoch-milliseconds source; defaults to `Date.now`. */
   readonly now?: () => number;
 }
@@ -81,7 +95,7 @@ export type UnverifiedBackupReason =
   | "no-manifest-record"
   /** Recorded, but the file cannot be opened / fails `quick_check`. */
   | "quick-check-failed"
-  /** Recorded, but the bytes no longer match the recorded SHA-256. */
+  /** Recorded, but the bytes no longer match the recorded SHA-256/size. */
   | "checksum-mismatch"
   /** Recorded, but the file is gone. */
   | "missing-file";
@@ -118,6 +132,8 @@ const BACKUP_PREFIX = "trusttools";
 
 const LEDGER_TABLE = "schema_migrations";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * In-process backup mutex. Every backup runs to completion before the next one
  * starts, which is what makes name reservation and the manifest
@@ -131,7 +147,7 @@ let backupQueue: Promise<unknown> = Promise.resolve();
  * failure; existing backups are never overwritten or removed. Concurrent calls
  * are serialized in the order they were issued.
  */
-export async function createOnlineBackup(
+export function createOnlineBackup(
   options: CreateOnlineBackupOptions,
 ): Promise<Backup> {
   const run = backupQueue.then(
@@ -145,6 +161,16 @@ export async function createOnlineBackup(
     () => undefined,
   );
   return run;
+}
+
+/**
+ * Convenience wrapper for the mandatory pre-migration backup (architecture
+ * §10.2): identical to `createOnlineBackup` with `kind: "pre-migration"`.
+ */
+export function createPreMigrationBackup(
+  options: CreateOnlineBackupOptions,
+): Promise<Backup> {
+  return createOnlineBackup({ ...options, kind: "pre-migration" });
 }
 
 async function performOnlineBackup(
@@ -168,16 +194,14 @@ async function performOnlineBackup(
 
   const finalPath = reserveBackupPath(options.backupsDirectory, createdAtMs);
   const finalName = basename(finalPath);
-  const tmpPath = `${finalPath}.tmp`;
 
-  // 1. Stream the database to the temporary file via the online backup API,
-  //    borrowing the Host's connection instead of opening a second writer.
+  // 1. Stream the database directly into the atomically-reserved placeholder.
   try {
     await host.withUnderlyingConnection((database) =>
-      runOnlineBackup(database, tmpPath),
+      runOnlineBackup(database, finalPath),
     );
   } catch (error) {
-    cleanupTemporary(tmpPath);
+    cleanupReservedFile(finalPath);
     throw mapBackupError(error);
   }
 
@@ -185,23 +209,25 @@ async function performOnlineBackup(
   //    `node:sqlite.backup()` preserves the source's WAL journal mode, so a
   //    read-only `quick_check` of the WAL-mode file would create stray
   //    `-wal`/`-shm` side files. Switching to the delete journal mode first
-  //    checkpoints everything into one file and keeps backups self-contained.
+  //    checkpoints everything into one file; the mode is read back and
+  //    asserted (review finding P2-6), and any surviving siblings are removed.
   try {
-    normalizeBackupJournalMode(tmpPath);
+    normalizeBackupJournalMode(finalPath);
+    cleanupReservedSiblings(finalPath);
   } catch (error) {
-    cleanupTemporary(tmpPath);
+    cleanupReservedFile(finalPath);
     throw mapBackupError(error);
   }
 
-  // 3. Verify the temporary file before it is ever exposed as a backup.
+  // 3. Verify the reserved file before it is ever recorded as a backup.
   let sha256: string;
   let sizeBytes: number;
   try {
-    quickCheckOrThrow(tmpPath);
-    sha256 = sha256OfFile(tmpPath);
-    sizeBytes = statSync(tmpPath).size;
+    quickCheckOrThrow(finalPath);
+    sha256 = await sha256OfFile(finalPath);
+    sizeBytes = statSync(finalPath).size;
   } catch (error) {
-    cleanupTemporary(tmpPath);
+    cleanupReservedFile(finalPath);
     throw error instanceof DatabaseError ? error : mapBackupError(error);
   }
 
@@ -210,11 +236,12 @@ async function performOnlineBackup(
   try {
     schemaVersion = readSchemaVersion(host);
   } catch (error) {
-    cleanupTemporary(tmpPath);
+    cleanupReservedFile(finalPath);
     throw backupFailure(error);
   }
 
   const manifest: BackupManifest = {
+    kind: options.kind ?? "daily",
     schemaVersion,
     appVersion: options.appVersion,
     sqliteVersion: options.sqliteVersion,
@@ -223,21 +250,8 @@ async function performOnlineBackup(
     createdAtMs,
   };
 
-  // 5. Atomically promote the verified temporary file to its final name. The
-  //    final name was reserved above; if it has appeared meanwhile (another
-  //    writer), fail rather than overwrite the other backup.
-  try {
-    if (existsSync(finalPath)) {
-      throw new DatabaseError("target-busy", "backup", { retryable: true });
-    }
-    renameSync(tmpPath, finalPath);
-  } catch (error) {
-    cleanupTemporary(tmpPath);
-    throw error instanceof DatabaseError ? error : mapBackupError(error);
-  }
-
-  // 6. Record the manifest. Written after the file is final so a failed write
-  //    never leaves a manifest entry pointing at a file that was not promoted.
+  // 5. Record the manifest. Written after the file is complete and verified so
+  //    a failed write never leaves a manifest entry pointing at a partial file.
   try {
     writeManifestEntry(options.backupsDirectory, finalName, manifest);
   } catch (error) {
@@ -250,23 +264,35 @@ async function performOnlineBackup(
 
 /**
  * Full inventory of a backups directory: every backup whose stored manifest
- * still matches its file (`quick_check` passes and the SHA-256 is unchanged) as
- * `verified`, newest-first, plus every backup-looking file that could not be
- * trusted as `unverified` with the reason why. Throws `corrupt` when
- * `manifest.json` exists but cannot be parsed — a damaged manifest must not
- * look like an empty backups directory.
+ * still matches its file as `verified`, newest-first, plus every backup-looking
+ * file that could not be trusted as `unverified` with the reason why. Throws
+ * `corrupt` when `manifest.json` exists but cannot be parsed.
+ *
+ * `verify` selects the fidelity of the match:
+ * - `"sha256"` (default) compares the full streaming SHA-256.
+ * - `"size-only"` compares only `sizeBytes` — a fast filter for the recovery
+ *   planning path, where the eventual restore re-verifies the full SHA-256.
  */
-export function listBackupFiles(
+export async function listBackupFiles(
   backupsDirectory: string,
   index?: Readonly<Record<string, BackupManifest>>,
-): BackupInventory {
+  options?: { readonly verify?: "size-only" | "sha256" },
+): Promise<BackupInventory> {
+  const verify = options?.verify ?? "sha256";
   const manifests = index ?? readBackupManifestIndex(backupsDirectory);
   const verified: Backup[] = [];
   const unverified: UnverifiedBackup[] = [];
 
   for (const [fileName, manifest] of Object.entries(manifests)) {
     const path = join(backupsDirectory, fileName);
-    if (!existsSync(path) || !statSync(path).isFile()) {
+    let stat: ReturnType<typeof statSync>;
+    try {
+      stat = statSync(path);
+    } catch {
+      unverified.push({ path, reason: "missing-file" });
+      continue;
+    }
+    if (!stat.isFile()) {
       unverified.push({ path, reason: "missing-file" });
       continue;
     }
@@ -276,7 +302,12 @@ export function listBackupFiles(
       unverified.push({ path, reason: "quick-check-failed" });
       continue;
     }
-    if (sha256OfFile(path) !== manifest.sha256) {
+    if (verify === "sha256") {
+      if ((await sha256OfFile(path)) !== manifest.sha256) {
+        unverified.push({ path, reason: "checksum-mismatch" });
+        continue;
+      }
+    } else if (stat.size !== manifest.sizeBytes) {
       unverified.push({ path, reason: "checksum-mismatch" });
       continue;
     }
@@ -301,16 +332,128 @@ export function listBackupFiles(
 
 /**
  * Scans the backups directory and returns every backup whose stored manifest
- * still matches its file: `quick_check` passes and the SHA-256 is unchanged.
- * Results are ordered newest-first. Files with no manifest record are *not*
- * returned here — a backup is only ever trusted through the manifest that
- * created it — but they are reported by `listBackupFiles` as `unverified`.
+ * still matches its file (full SHA-256). Results are ordered newest-first.
+ * Files with no manifest record are *not* returned here — a backup is only ever
+ * trusted through the manifest that created it — but they are reported by
+ * `listBackupFiles` as `unverified`.
  */
-export function listVerifiedBackups(
+export async function listVerifiedBackups(
   backupsDirectory: string,
   index?: Readonly<Record<string, BackupManifest>>,
-): Backup[] {
-  return [...listBackupFiles(backupsDirectory, index).verified];
+): Promise<Backup[]> {
+  return [...(await listBackupFiles(backupsDirectory, index)).verified];
+}
+
+export interface PruneBackupsOptions {
+  /** Directory holding `manifest.json` and the backup files. */
+  readonly backupsDirectory: string;
+  /** Daily backups older than this many days are expired. */
+  readonly keepDays: number;
+  /**
+   * When `true` (default), `pre-migration` backups are exempt from daily
+   * expiry and only the oldest one is dropped once it is older than
+   * `keepDays * 4` while a later pre-migration backup exists.
+   */
+  readonly keepPreMigration?: boolean;
+  /** Injectable epoch-milliseconds source; defaults to `Date.now`. */
+  readonly now?: () => number;
+}
+
+export interface PruneBackupsResult {
+  /** Manifest file names that were deleted (and removed from the manifest). */
+  readonly deleted: readonly string[];
+  /** Manifest file names that remain after pruning. */
+  readonly kept: readonly string[];
+}
+
+/**
+ * Retention pruning (architecture §10.1/§10.2, review finding P1-11).
+ *
+ * Deletes expired `daily` backups and — when `keepPreMigration` is false —
+ * expired `pre-migration` backups. A file is only ever deleted when it has a
+ * manifest record, still passes `quick_check`, and is expired by **both** its
+ * manifest `createdAtMs` and the timestamp encoded in its file name. The newest
+ * successful backup is never deleted, files without a manifest record are never
+ * touched, and the manifest is rewritten to drop the deleted entries.
+ */
+export function pruneBackups(options: PruneBackupsOptions): PruneBackupsResult {
+  const backupsDirectory = options.backupsDirectory;
+  const keepDays = assertPositiveKeepDays(options.keepDays);
+  const keepPreMigration = options.keepPreMigration ?? true;
+  const nowMs = timestamp(options.now ?? Date.now);
+  const dailyCutoffMs = nowMs - keepDays * DAY_MS;
+  const preMigrationCutoffMs = nowMs - keepDays * 4 * DAY_MS;
+
+  const index = readBackupManifestIndex(backupsDirectory);
+  const entries = Object.entries(index).map(([fileName, manifest]) => ({
+    fileName,
+    manifest,
+    path: join(backupsDirectory, fileName),
+  }));
+
+  // A file is a deletion *candidate* only when it has a manifest record AND is
+  // still present and quick_check-clean. Stray/corrupt files are never removed.
+  const candidates = entries.filter((entry) => {
+    try {
+      if (!statSync(entry.path).isFile()) return false;
+      quickCheckOrThrow(entry.path);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (candidates.length === 0) {
+    return { deleted: [], kept: Object.keys(index).sort() };
+  }
+
+  const newest = candidates.reduce((a, b) =>
+    b.manifest.createdAtMs > a.manifest.createdAtMs ? b : a,
+  );
+
+  const toDelete = new Set<string>();
+  for (const entry of candidates) {
+    if (entry.fileName === newest.fileName) continue;
+    if (entry.manifest.kind === "pre-migration" && keepPreMigration) continue;
+    if (
+      entry.manifest.createdAtMs < dailyCutoffMs &&
+      expiredByFilename(entry.fileName, dailyCutoffMs)
+    ) {
+      toDelete.add(entry.fileName);
+    }
+  }
+
+  if (keepPreMigration) {
+    // Pre-migration backups are always kept, except the single oldest one is
+    // dropped once it is older than `keepDays * 4` while a later pre-migration
+    // backup exists (bounds unbounded growth without ever losing the newest).
+    const preMigration = candidates
+      .filter((entry) => entry.manifest.kind === "pre-migration")
+      .sort((a, b) => a.manifest.createdAtMs - b.manifest.createdAtMs);
+    if (preMigration.length >= 2) {
+      const oldest = preMigration[0];
+      if (
+        oldest.fileName !== newest.fileName &&
+        oldest.manifest.createdAtMs < preMigrationCutoffMs
+      ) {
+        toDelete.add(oldest.fileName);
+      }
+    }
+  }
+
+  for (const fileName of toDelete) {
+    removeBestEffort(join(backupsDirectory, fileName));
+  }
+
+  const remaining: Record<string, BackupManifest> = {};
+  for (const [fileName, manifest] of Object.entries(index)) {
+    if (!toDelete.has(fileName)) remaining[fileName] = manifest;
+  }
+  writeManifestIndex(backupsDirectory, remaining);
+
+  return {
+    deleted: [...toDelete].sort(),
+    kept: Object.keys(remaining).sort(),
+  };
 }
 
 /** `.db` files in the directory (never `manifest.json` or `*.tmp` leftovers). */
@@ -373,14 +516,24 @@ export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
   }
 }
 
-/** SHA-256 (hex) of a file's contents. */
-export function sha256OfFile(path: string): string {
-  return createHash("sha256").update(readFileSync(path)).digest("hex");
+/**
+ * SHA-256 (hex) of a file's contents, computed by streaming so a whole backup
+ * is never buffered in memory (review finding P2-7).
+ */
+export function sha256OfFile(path: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("error", reject);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
 }
 
 /**
  * The persisted `fileName → BackupManifest` index, or `{}` when the manifest
- * file does not exist yet.
+ * file does not exist yet. Manifests written before the `kind` field existed
+ * are normalized to `kind: "daily"`.
  *
  * An existing but unreadable/unparseable manifest throws `corrupt`: silently
  * returning `{}` would turn one damaged JSON file into "there are no backups",
@@ -414,7 +567,9 @@ export function readBackupManifestIndex(
   for (const [fileName, value] of Object.entries(parsed)) {
     // A single unusable record does not condemn the whole manifest; its file is
     // reported as `no-manifest-record` by `listBackupFiles` instead.
-    if (isBackupManifest(value)) index[fileName] = value;
+    if (isBackupManifest(value)) {
+      index[fileName] = { ...value, kind: value.kind ?? "daily" };
+    }
   }
   return index;
 }
@@ -438,7 +593,12 @@ export function tryReadBackupManifestIndex(
 export function isBackupManifest(value: unknown): value is BackupManifest {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
+  const kindOk =
+    candidate.kind === undefined ||
+    candidate.kind === "daily" ||
+    candidate.kind === "pre-migration";
   return (
+    kindOk &&
     typeof candidate.schemaVersion === "number" &&
     Number.isSafeInteger(candidate.schemaVersion) &&
     typeof candidate.appVersion === "string" &&
@@ -462,16 +622,31 @@ function ensureDirectory(directory: string): void {
   }
 }
 
-/** First non-colliding `trusttools-YYYYMMDD-HHmmss.db` name in `directory`. */
+/**
+ * Atomically reserves the first non-colliding `trusttools-YYYYMMDD-HHmmss.db`
+ * name in `directory` by creating it with `openSync(..., "wx")` (fail-exclusive)
+ * and closing the descriptor. The empty placeholder is the destination the
+ * backup writes directly into. A collision retries with a `-2`, `-3`, …
+ * suffix; any other failure is an `io-failure`.
+ */
 function reserveBackupPath(directory: string, createdAtMs: number): string {
   const base = formatTimestamp(createdAtMs);
   let candidate = join(directory, `${BACKUP_PREFIX}-${base}.db`);
   let suffix = 2;
-  while (existsSync(candidate)) {
-    candidate = join(directory, `${BACKUP_PREFIX}-${base}-${suffix}.db`);
-    suffix += 1;
+  for (;;) {
+    try {
+      const descriptor = openSync(candidate, "wx");
+      closeSync(descriptor);
+      return candidate;
+    } catch (error) {
+      if ((error as { code?: unknown }).code === "EEXIST") {
+        candidate = join(directory, `${BACKUP_PREFIX}-${base}-${suffix}.db`);
+        suffix += 1;
+        continue;
+      }
+      throw new DatabaseError("io-failure", "backup", { cause: error });
+    }
   }
-  return candidate;
 }
 
 /** `YYYYMMDD-HHmmss` in local time, for human-readable backup names. */
@@ -484,6 +659,29 @@ function formatTimestamp(ms: number): string {
   );
 }
 
+/**
+ * Local epoch-ms of the timestamp encoded in a backup file name, or `undefined`
+ * when the name does not parse. Used as the second, independent expiry check in
+ * `pruneBackups` (a forged or stale `createdAtMs` cannot by itself delete a
+ * recent file).
+ */
+function parseBackupFilenameTimestamp(fileName: string): number | undefined {
+  const match =
+    /^trusttools-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-\d+)?\.db$/.exec(
+      fileName,
+    );
+  if (match === null) return undefined;
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  const ms = new Date(year, month - 1, day, hour, minute, second).getTime();
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function expiredByFilename(fileName: string, cutoffMs: number): boolean {
+  const fileNameMs = parseBackupFilenameTimestamp(fileName);
+  // Unparseable names are never treated as expired (fail-safe).
+  return fileNameMs !== undefined && fileNameMs < cutoffMs;
+}
+
 function timestamp(clock: () => number): number {
   const value = clock();
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -492,6 +690,15 @@ function timestamp(clock: () => number): number {
     });
   }
   return Math.max(0, Math.trunc(value));
+}
+
+function assertPositiveKeepDays(days: number): number {
+  if (typeof days !== "number" || !Number.isFinite(days) || days <= 0) {
+    throw new DatabaseError("invalid-argument", "backup", {
+      retryable: false,
+    });
+  }
+  return days;
 }
 
 function assertValidAppVersion(appVersion: string): void {
@@ -506,7 +713,8 @@ function assertValidAppVersion(appVersion: string): void {
  * Converts a WAL-mode backup destination to the delete (rollback) journal mode
  * so it becomes a single self-contained file. This checkpoints any WAL frames
  * into the main file and removes `-wal`/`-shm` siblings that would otherwise
- * be recreated by every later read-only `quick_check`.
+ * be recreated by every later read-only `quick_check`. The mode is read back
+ * and asserted to be `delete`.
  */
 function normalizeBackupJournalMode(path: string): void {
   try {
@@ -606,9 +814,14 @@ function textValue(value: unknown): string {
   throw new DatabaseError("corrupt", "backup", { retryable: false });
 }
 
-/** Removes a temporary backup and any WAL/SHM siblings it may have acquired. */
-function cleanupTemporary(path: string): void {
+/** Removes a reserved backup file and any WAL/SHM siblings it acquired. */
+function cleanupReservedFile(path: string): void {
   removeBestEffort(path);
+  cleanupReservedSiblings(path);
+}
+
+/** Removes the `-wal`/`-shm` siblings of a reserved backup file, if present. */
+function cleanupReservedSiblings(path: string): void {
   removeBestEffort(`${path}-wal`);
   removeBestEffort(`${path}-shm`);
 }
@@ -617,7 +830,7 @@ function removeBestEffort(path: string): void {
   try {
     rmSync(path, { force: true, maxRetries: 3, retryDelay: 100 });
   } catch {
-    // Best effort; a surviving temporary file is harmless and never exposed
-    // as a backup because its name carries the `.tmp` suffix.
+    // Best effort; a surviving file is never exposed as a backup once its
+    // manifest entry is absent.
   }
 }

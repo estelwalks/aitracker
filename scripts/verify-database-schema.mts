@@ -26,11 +26,19 @@
 //      earlier column (the review's cross-column false negative).
 //   6. The set of top-level statements is closed: only `CREATE TABLE` for the
 //      11 documented tables, whitelisted `CREATE [UNIQUE] INDEX`, and
-//      `PRAGMA application_id`/`user_version` stamping are allowed. A
-//      `CREATE TRIGGER`/`VIEW`/`VIRTUAL TABLE`, `INSERT`, `ATTACH`, `DELETE`,
-//      `UPDATE`, … is a FAIL.
-//   7. `PRAGMA application_id`, when present, carries a plausible non-zero
-//      constant (WARN-only while batch C has not stamped it yet).
+//      `PRAGMA application_id` stamping are allowed. A `CREATE TRIGGER`/`VIEW`/
+//      `VIRTUAL TABLE`, `INSERT`, `ATTACH`, `DELETE`, `UPDATE`, … is a FAIL.
+//   7. `PRAGMA application_id` is present exactly once and equals the
+//      TrustTools constant `0x54544442` (architecture §9-6; promoted to FAIL by
+//      fix batch C / P1-4).
+//   8. Migration 0001 does NOT stamp `PRAGMA user_version` itself: the version
+//      is written and asserted by the migration runner inside each migration's
+//      transaction, so a competing stamp in 0001 is a FAIL.
+//   9. Data-domain checks: enum domains are `NOT NULL` (where documented), the
+//      reconciliation/usage counters carry `>= 0` CHECKs, `date_key` carries a
+//      `YYYY-MM-DD` GLOB, `model_profiles.name` is bounded, `ciphertext` has a
+//      minimum length, `app_preferences.value_type` matches `json_type`, and
+//      the `analysis` / `value_json` forbidden-content CHECKs are present.
 //
 // ANALYSIS RUNS ON COMMENT-STRIPPED SQL: `--` line comments and `/* */` block
 // comments are blanked out (preserving offsets and newlines) before any
@@ -71,6 +79,9 @@ const REQUIRED_TABLES = [
   "insight_enhancement_lines",
 ];
 
+/** `PRAGMA application_id` migration 0001 must stamp (architecture §9-6). */
+const TRUSTTOOLS_APPLICATION_ID_VALUE = 0x54544442;
+
 /** The only indexes migration 0001 may create. */
 const ALLOWED_INDEXES = [
   "idx_data_migration_runs_idempotency",
@@ -79,6 +90,7 @@ const ALLOWED_INDEXES = [
   "idx_ai_executions_profile_started",
   "idx_ai_executions_status_started",
   "idx_insight_enhancement_cache_surface_expires",
+  "idx_insight_enhancement_cache_identity",
 ];
 
 /** Columns whose own slice must declare a value-domain (`… IN (…)`) CHECK. */
@@ -95,6 +107,7 @@ const REQUIRED_ENUM_CHECKS: readonly (readonly [string, string])[] = [
   ["ai_executions", "status"],
   ["ai_executions", "used_fallback"],
   ["ai_executions", "cost_confidence"],
+  ["ai_daily_usage", "capability"],
   ["insight_preferences", "mode"],
   ["insight_enhancement_cache", "status"],
 ];
@@ -104,19 +117,39 @@ const REQUIRED_NOT_NULL: readonly (readonly [string, string])[] = [
   ["schema_migrations", "name"],
   ["schema_migrations", "checksum"],
   ["schema_migrations", "app_version"],
+  ["data_migration_runs", "status"],
   ["app_preferences", "value_json"],
+  ["app_preferences", "value_type"],
   ["runtime_flags", "value_json"],
   ["secure_secrets", "ciphertext"],
+  ["secure_secrets", "purpose"],
+  ["secure_secrets", "encryption_kind"],
   ["model_profiles", "name"],
+  ["model_profiles", "mode"],
+  ["model_profiles", "protocol"],
   ["model_profiles", "is_active"],
   ["ai_executions", "capability"],
+  ["ai_executions", "status"],
+  ["ai_executions", "used_fallback"],
   ["ai_executions", "prompt_version_id"],
   ["insight_enhancement_cache", "surface_id"],
   ["insight_enhancement_cache", "scope_hash"],
   ["insight_enhancement_cache", "evidence_hash"],
   ["insight_enhancement_cache", "locale"],
+  ["insight_enhancement_cache", "status"],
   ["insight_enhancement_lines", "cache_key"],
   ["insight_enhancement_lines", "sequence"],
+];
+
+/** Counter columns that must declare a non-negative (`>= 0`) CHECK. */
+const REQUIRED_NON_NEGATIVE_CHECKS: readonly (readonly [string, string])[] = [
+  ["data_migration_runs", "rows_read"],
+  ["data_migration_runs", "rows_written"],
+  ["data_migration_runs", "rows_skipped"],
+  ["ai_daily_usage", "calls"],
+  ["ai_daily_usage", "input_tokens"],
+  ["ai_daily_usage", "output_tokens"],
+  ["ai_daily_usage", "cost_microusd"],
 ];
 
 interface Problem {
@@ -538,7 +571,9 @@ function verifyTopLevelStatements(
     }
     // Stamping pragmas are the only non-DDL statements a migration may carry.
     if (
-      /^PRAGMA\s+(?:application_id|user_version)\s*=\s*-?\d+\s*;?$/i.test(flat)
+      /^PRAGMA\s+application_id\s*=\s*-?(?:\d+|0x[0-9a-fA-F]+)\s*;?$/i.test(
+        flat,
+      )
     ) {
       continue;
     }
@@ -581,11 +616,7 @@ function extractParenthesizedBody(statement: string): string | undefined {
 }
 
 /** Verifies 0001's 11-table list + STRICT + per-column and key constraints. */
-function verifyPlatform0001(
-  sql: string,
-  problems: Problem[],
-  warnings: string[],
-): void {
+function verifyPlatform0001(sql: string, problems: Problem[]): void {
   const stripped = stripSqlComments(sql);
   const statements = splitTopLevelStatements(stripped);
   const { tables } = verifyTopLevelStatements(statements, problems);
@@ -634,7 +665,9 @@ function verifyPlatform0001(
 
   verifyDocumentedColumnRules(byName, problems);
   verifyKeyConstraints(stripped, problems);
-  verifyApplicationId(stripped, warnings, problems);
+  verifyDataDomainChecks(byName, stripped, problems);
+  verifyApplicationId(stripped, problems);
+  verifyUserVersionAbsent(stripped, problems);
 }
 
 /**
@@ -739,12 +772,13 @@ function verifyKeyConstraints(sql: string, problems: Problem[]): void {
     /CREATE UNIQUE INDEX idx_data_migration_runs_idempotency ON data_migration_runs \(source_kind, source_path_hash, source_fingerprint\)/,
     "data_migration_runs three-column unique index",
   );
-  // The seven-column UNIQUE spans multiple lines and sits after a REFERENCES
-  // column, so it is matched with a tolerant, whitespace-insensitive pattern:
-  // table name → UNIQUE ( … prompt_version ).
+  // The seven-column UNIQUE was replaced by an expression unique index (review
+  // P2-2): SQLite treats NULLs as distinct, so a multi-column UNIQUE let two
+  // NULL-profile/NULL-prompt rows coexist. The index collapses NULLs to
+  // sentinels so the cache identity stays unique without a configured model.
   expect(
-    /insight_enhancement_cache[\s\S]*?UNIQUE\s*\(\s*surface_id\s*,\s*scope_hash\s*,\s*evidence_hash\s*,\s*locale\s*,\s*profile_id\s*,\s*prompt_version_id\s*,\s*prompt_version\s*\)/,
-    "insight_enhancement_cache seven-column UNIQUE",
+    /CREATE UNIQUE INDEX idx_insight_enhancement_cache_identity ON insight_enhancement_cache[\s\S]*COALESCE\(profile_id, ''\)[\s\S]*COALESCE\(prompt_version_id, ''\)[\s\S]*COALESCE\(prompt_version, 0\)/,
+    "insight_enhancement_cache expression unique index (COALESCE identity)",
   );
   expect(
     /CREATE INDEX idx_insight_enhancement_cache_surface_expires ON insight_enhancement_cache \(surface_id, expires_at_ms\)/,
@@ -761,22 +795,102 @@ function verifyKeyConstraints(sql: string, problems: Problem[]): void {
 }
 
 /**
- * `PRAGMA application_id` guard (architecture §9-6 database-substitution
- * protection). Batch B keeps this WARN-only because batch C (finding P1-4) is
- * the change that stamps it; once stamped, the value is asserted to be a
- * plausible non-zero 32-bit constant and — when `migrations/index.ts` exports a
- * central constant — to match it. Promote this warning to a FAIL after P1-4.
+ * Data-domain checks added by review batch C (P1-8 SQL / P2-1 / P2-3): minimum
+ * ciphertext length, `date_key` format, bounded `model_profiles.name`,
+ * `value_type`↔`json_type` consistency, and the `analysis`/`value_json`
+ * forbidden-content CHECKs. Each is a distinctive-substring assertion over the
+ * comment-stripped SQL.
  */
-function verifyApplicationId(
+function verifyDataDomainChecks(
+  tables: ReadonlyMap<string, TableDefinition>,
   sql: string,
-  warnings: string[],
   problems: Problem[],
 ): void {
-  const matches = [...sql.matchAll(/PRAGMA\s+application_id\s*=\s*(-?\d+)/gi)];
+  const slices = new Map<string, string>();
+  for (const [name, table] of tables) {
+    for (const column of extractColumnSlices(table.body)) {
+      slices.set(`${name}.${column.name}`, column.text);
+    }
+  }
+
+  let nonNegativeOk = 0;
+  for (const [table, column] of REQUIRED_NON_NEGATIVE_CHECKS) {
+    const slice = slices.get(`${table}.${column}`);
+    if (slice === undefined) {
+      problems.push({ message: `missing column ${table}.${column}` });
+      continue;
+    }
+    if (!/\bCHECK\s*\([\s\S]*>=\s*0/i.test(slice)) {
+      problems.push({
+        message: `column ${table}.${column} lacks a non-negative CHECK (>= 0)`,
+      });
+      continue;
+    }
+    nonNegativeOk += 1;
+  }
+  process.stdout.write(
+    `  non-negative counters OK: ${nonNegativeOk}/${REQUIRED_NON_NEGATIVE_CHECKS.length}\n`,
+  );
+
+  const flat = oneLine(sql);
+  function expect(regex: RegExp, label: string): void {
+    if (!regex.test(flat)) {
+      problems.push({ message: `missing or malformed constraint: ${label}` });
+    } else {
+      process.stdout.write(`  constraint OK: ${label}\n`);
+    }
+  }
+
+  expect(
+    /ciphertext\s+BLOB\s+NOT\s+NULL\s+CHECK\s*\(\s*length\s*\(\s*ciphertext\s*\)\s*>=\s*16/,
+    "secure_secrets.ciphertext length >= 16",
+  );
+  expect(
+    /date_key\s+GLOB\s+'\s*\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\s*\[0-9\]\[0-9\]-\s*\[0-9\]\[0-9\]\s*'/,
+    "ai_daily_usage.date_key YYYY-MM-DD GLOB",
+  );
+  expect(
+    /name\s+TEXT\s+NOT\s+NULL\s+CHECK\s*\(\s*length\s*\(\s*name\s*\)\s+BETWEEN\s+1\s+AND\s+64/,
+    "model_profiles.name length 1..64 CHECK",
+  );
+  expect(
+    /json_type\s*\(\s*value_json\s*\)/,
+    "app_preferences value_type/json_type consistency CHECK",
+  );
+  expect(
+    /analysis\s+NOT\s+GLOB\s+'\*\[0-9\]\*'/,
+    "insight_enhancement_lines.analysis no-digit CHECK",
+  );
+  expect(
+    /instr\s*\(\s*analysis\s*,\s*char\s*\(\s*92\s*\)\s*\)/,
+    "insight_enhancement_lines.analysis no-backslash CHECK",
+  );
+  expect(
+    /value_json\s+NOT\s+LIKE\s+'%Bearer\s+%'/,
+    "app_preferences.value_json no-Bearer CHECK",
+  );
+  expect(
+    /instr\s*\(\s*value_json\s*,\s*char\s*\(\s*92\s*\)\s*\)/,
+    "app_preferences.value_json no-backslash CHECK",
+  );
+}
+
+/**
+ * `PRAGMA application_id` guard (architecture §9-6 database-substitution
+ * protection, promoted to FAIL by fix batch C / P1-4): migration 0001 must
+ * stamp the TrustTools constant `0x54544442` exactly once.
+ */
+function verifyApplicationId(sql: string, problems: Problem[]): void {
+  const matches = [
+    ...sql.matchAll(
+      /PRAGMA\s+application_id\s*=\s*(-?(?:0x[0-9a-fA-F]+|\d+))/gi,
+    ),
+  ];
   if (matches.length === 0) {
-    warnings.push(
-      "no PRAGMA application_id in migration 0001 (§9-6 substitution guard) — expected from fix batch C / P1-4; WARN only for now",
-    );
+    problems.push({
+      message:
+        "no PRAGMA application_id in migration 0001 (§9-6 substitution guard); exactly one stamp of 0x54544442 is required",
+    });
     return;
   }
   if (matches.length > 1) {
@@ -785,14 +899,37 @@ function verifyApplicationId(
     });
     return;
   }
-  const value = Number(matches[0][1]);
-  if (!Number.isSafeInteger(value) || value <= 0 || value > 0x7fffffff) {
+  const raw = matches[0][1];
+  const value = raw.toLowerCase().startsWith("0x")
+    ? Number.parseInt(raw, 16)
+    : Number(raw);
+  if (value !== TRUSTTOOLS_APPLICATION_ID_VALUE) {
     problems.push({
-      message: `PRAGMA application_id must be a positive 32-bit constant; found ${matches[0][1]}`,
+      message: `PRAGMA application_id must be 0x54544442 (${TRUSTTOOLS_APPLICATION_ID_VALUE}); found ${raw}`,
     });
     return;
   }
-  process.stdout.write(`  application_id OK: ${value}\n`);
+  process.stdout.write(
+    `  application_id OK: ${raw} (${TRUSTTOOLS_APPLICATION_ID_VALUE})\n`,
+  );
+}
+
+/**
+ * `user_version` is owned by the migration runner, which writes and asserts it
+ * inside each migration's transaction. Migration 0001 must not carry a
+ * competing stamp; the runner behaviour itself is covered by unit tests.
+ */
+function verifyUserVersionAbsent(sql: string, problems: Problem[]): void {
+  if (/PRAGMA\s+user_version\s*=/i.test(sql)) {
+    problems.push({
+      message:
+        "migration 0001 must not stamp PRAGMA user_version; the migration runner manages it inside each migration transaction",
+    });
+  } else {
+    process.stdout.write(
+      "  constraint OK: 0001 leaves PRAGMA user_version to the migration runner\n",
+    );
+  }
 }
 
 function main(): void {
@@ -811,7 +948,6 @@ function main(): void {
     return;
   }
   const problems: Problem[] = [];
-  const warnings: string[] = [];
 
   process.stdout.write(`verify-database-schema: ${sqlDir}\n`);
 
@@ -839,15 +975,11 @@ function main(): void {
   }
 
   if (sqlByVersion.has(1)) {
-    verifyPlatform0001(sqlByVersion.get(1)!, problems, warnings);
+    verifyPlatform0001(sqlByVersion.get(1)!, problems);
   } else if (migrations.some((file) => file.version === 1)) {
     problems.push({
       message: "migration 0001 present but unreadable; skipped 11-table check",
     });
-  }
-
-  for (const warning of warnings) {
-    process.stdout.write(`  WARN: ${warning}\n`);
   }
 
   if (problems.length > 0) {

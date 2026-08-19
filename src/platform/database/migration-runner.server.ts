@@ -190,6 +190,7 @@ function applyMigration(
         appliedAtMs,
         durationMs,
       );
+    stampUserVersion(database, definition.version);
     transaction.commit();
     return {
       version: definition.version,
@@ -231,6 +232,31 @@ function rollbackBestEffort(transaction: Transaction): void {
     // The original failure is the one worth reporting; SQLite has already
     // aborted the transaction when ROLLBACK itself is refused.
   }
+}
+
+/**
+ * Stamps `PRAGMA user_version` inside the migration transaction and reads it
+ * back, so the persisted version can only ever advance together with its ledger
+ * row. A read-back that does not equal `version` fails the migration (and rolls
+ * the whole transaction back) rather than silently recording a wrong version.
+ */
+function stampUserVersion(database: SqliteDatabasePort, version: number): void {
+  database.exec(`PRAGMA user_version = ${version}`);
+  const actual = pragmaInteger(database, "PRAGMA user_version");
+  if (actual !== version) {
+    throw new DatabaseError("capability-mismatch", "migration", {
+      retryable: false,
+    });
+  }
+}
+
+/** First column of a single-row PRAGMA result as a safe integer. */
+function pragmaInteger(database: SqliteDatabasePort, sql: string): number {
+  const row = database.prepare(sql).get();
+  const value = row === undefined ? undefined : Object.values(row)[0];
+  if (typeof value === "bigint") return bigintToSafeNumber(value);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  throw new DatabaseError("corrupt", "migration", { retryable: false });
 }
 
 /** Keeps adapter error codes stable while re-tagging the operation. */

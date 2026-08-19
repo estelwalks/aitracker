@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import {
@@ -19,7 +20,7 @@ import {
   probeWalCapability,
   type RuntimeVersionsProvider,
 } from "./capability-probe.server.ts";
-import { DatabaseError } from "./index.ts";
+import { DatabaseError, TRUSTTOOLS_APPLICATION_ID } from "./index.ts";
 import type {
   SqliteDatabasePort,
   SqliteRow,
@@ -28,6 +29,7 @@ import type {
 } from "./index.ts";
 import {
   DatabaseHost,
+  capabilityFailureCode,
   normalizePragmaValue,
   type DatabaseHostOptions,
 } from "./database-host.server.ts";
@@ -172,7 +174,7 @@ test("probeWalCapability reports wal on a real file-backed probe and cleans up",
   const probe = probeWalCapability(dir);
   assert.equal(probe.journalMode, "wal");
   const leftovers = readdirSync(dir).filter((name) =>
-    name.includes("dsh-wal-probe"),
+    name.includes("trusttools-wal-probe"),
   );
   assert.deepEqual(leftovers, []);
 });
@@ -191,6 +193,71 @@ test("opens a file database and asserts every required pragma", (t) => {
   assert.equal(pragmaValue(host, "PRAGMA trusted_schema"), "0");
   assert.equal(pragmaValue(host, "PRAGMA wal_autocheckpoint"), "1000");
   assert.equal(existsSync(host.path), true);
+});
+
+test("maps a wal-unavailable probe to journal-not-wal (P2-10)", () => {
+  assert.equal(capabilityFailureCode("wal-unavailable"), "journal-not-wal");
+  assert.equal(
+    capabilityFailureCode("sqlite-below-baseline"),
+    "capability-mismatch",
+  );
+  assert.equal(
+    capabilityFailureCode("sqlite-version-unparseable"),
+    "capability-mismatch",
+  );
+  assert.equal(capabilityFailureCode(null), "capability-mismatch");
+});
+
+test("checkpoint returns the wal_checkpoint columns on a file database (P2-8)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
+  const result = host.checkpoint("passive");
+  assert.equal(typeof result.busy, "boolean");
+  assert.equal(Number.isSafeInteger(result.logFrames), true);
+  assert.equal(Number.isSafeInteger(result.checkpointedFrames), true);
+  // TRUNCATE is also accepted; on an idle database it checkpoints cleanly.
+  const truncated = host.checkpoint("truncate");
+  assert.equal(typeof truncated.busy, "boolean");
+});
+
+test("rejects a database with a foreign application_id as capability-mismatch (P1-4)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dbPath = join(dir, "foreign.db");
+  // Create a real SQLite file stamped with a foreign application_id.
+  const raw = new DatabaseSync(dbPath);
+  try {
+    raw.exec("CREATE TABLE t (x INTEGER) STRICT");
+    raw.exec("PRAGMA application_id = 305419896"); // 0x12345678
+  } finally {
+    raw.close();
+  }
+  t.after(() => rmTempDir(dir));
+
+  assert.throws(
+    () =>
+      DatabaseHost.open({
+        path: dbPath,
+        versionsProvider: versionsProvider("99.0.0"),
+      }),
+    (error) =>
+      error instanceof DatabaseError &&
+      error.code === "capability-mismatch" &&
+      error.operation === "open",
+  );
+
+  // The same file opens once the application_id is the TrustTools constant.
+  const stamped = new DatabaseSync(dbPath);
+  try {
+    stamped.exec(`PRAGMA application_id = ${TRUSTTOOLS_APPLICATION_ID}`);
+  } finally {
+    stamped.close();
+  }
+  const host = DatabaseHost.open({
+    path: dbPath,
+    versionsProvider: versionsProvider("99.0.0"),
+  });
+  t.after(() => host.close());
+  assert.equal(host.isOpen, true);
 });
 
 test("creates missing parent directories before probing and opening a file database", (t) => {
@@ -476,6 +543,7 @@ const OK_PRAGMAS: Readonly<Record<string, SqliteRow>> = {
   "pragma foreign_keys": { foreign_keys: 1n },
   "pragma busy_timeout": { timeout: 5000n },
   "pragma trusted_schema": { trusted_schema: 0n },
+  "pragma application_id": { application_id: 0n },
 };
 
 function fakeStatement(row: SqliteRow): SqliteStatement {

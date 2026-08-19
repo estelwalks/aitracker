@@ -107,7 +107,7 @@ const INSERT_DAILY_USAGE =
 const INSERT_LEDGER =
   "INSERT INTO schema_migrations (version, name, checksum, app_version, applied_at_ms, duration_ms) VALUES (?, ?, ?, ?, ?, ?)";
 
-const CIPHERTEXT = new Uint8Array([1, 2, 3, 4]);
+const CIPHERTEXT = new Uint8Array(32).fill(0xab);
 
 function seedSecret(host: DatabaseHost, secretId = "secret-1"): string {
   run(
@@ -857,15 +857,396 @@ test("applies the documented defaults", (t) => {
 
   run(
     host,
-    "INSERT INTO model_profiles (profile_id, name, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "INSERT INTO model_profiles (profile_id, name, protocol, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?)",
     "profile-default-active",
     "Default",
+    "openai",
     1,
     1,
   );
   const profile = host
-    .prepare("SELECT is_active FROM model_profiles WHERE profile_id = ?")
+    .prepare("SELECT is_active, mode FROM model_profiles WHERE profile_id = ?")
     .get("profile-default-active");
   assert.ok(profile !== undefined);
   assert.equal(Number(profile.is_active), 0);
+  assert.equal(profile.mode, "custom");
+});
+
+test("rejects NULL in columns that are now NOT NULL (P2-1)", (t) => {
+  const host = openMigratedHost(t);
+  expectRejected(
+    host,
+    "NULL data_migration_runs.status",
+    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, status, rows_read, rows_written, rows_skipped, source_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    "run-null-status",
+    "atomic-json",
+    "hash",
+    null,
+    0,
+    0,
+    0,
+    "fp",
+  );
+  expectRejected(
+    host,
+    "NULL ai_executions.status",
+    "INSERT INTO ai_executions (request_id, capability, prompt_version_id, prompt_version, status) VALUES (?, ?, ?, ?, ?)",
+    "req-null-status",
+    "report",
+    "prompt-1",
+    1,
+    null,
+  );
+  expectRejected(
+    host,
+    "NULL secure_secrets.purpose",
+    INSERT_SECRET,
+    "secret-null-purpose",
+    null,
+    CIPHERTEXT,
+    "dpapi",
+    1,
+    1,
+  );
+  expectRejected(
+    host,
+    "NULL secure_secrets.encryption_kind",
+    INSERT_SECRET,
+    "secret-null-kind",
+    "model-api-key",
+    CIPHERTEXT,
+    null,
+    1,
+    1,
+  );
+  expectRejected(
+    host,
+    "NULL model_profiles.protocol",
+    "INSERT INTO model_profiles (profile_id, name, mode, protocol, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+    "profile-null-protocol",
+    "N",
+    "custom",
+    null,
+    1,
+    1,
+  );
+  expectRejected(
+    host,
+    "NULL app_preferences.value_type",
+    "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "k",
+    '"v"',
+    null,
+    1,
+  );
+  expectRejected(
+    host,
+    "NULL ai_executions.used_fallback",
+    "INSERT INTO ai_executions (request_id, capability, prompt_version_id, prompt_version, status, used_fallback) VALUES (?, ?, ?, ?, ?, ?)",
+    "req-null-fallback",
+    "report",
+    "prompt-1",
+    1,
+    "completed",
+    null,
+  );
+});
+
+test("applies the new NOT NULL defaults (P2-1)", (t) => {
+  const host = openMigratedHost(t);
+
+  run(
+    host,
+    "INSERT INTO secure_secrets (secret_id, ciphertext, encryption_kind, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?)",
+    "secret-default-purpose",
+    CIPHERTEXT,
+    "dpapi",
+    1,
+    1,
+  );
+  assert.equal(
+    host
+      .prepare("SELECT purpose FROM secure_secrets WHERE secret_id = ?")
+      .get("secret-default-purpose")?.purpose,
+    "model-api-key",
+  );
+
+  run(
+    host,
+    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, source_fingerprint) VALUES (?, ?, ?, ?)",
+    "run-default-status",
+    "atomic-json",
+    "hash",
+    "fp",
+  );
+  assert.equal(
+    host
+      .prepare("SELECT status FROM data_migration_runs WHERE run_id = ?")
+      .get("run-default-status")?.status,
+    "running",
+  );
+
+  run(
+    host,
+    "INSERT INTO ai_executions (request_id, capability, prompt_version_id, prompt_version, status) VALUES (?, ?, ?, ?, ?)",
+    "req-default-fallback",
+    "report",
+    "prompt-1",
+    1,
+    "completed",
+  );
+  assert.equal(
+    Number(
+      host
+        .prepare("SELECT used_fallback FROM ai_executions WHERE request_id = ?")
+        .get("req-default-fallback")?.used_fallback,
+    ),
+    0,
+  );
+
+  run(
+    host,
+    "INSERT INTO insight_enhancement_cache (cache_key, surface_id, scope_hash, evidence_hash, locale, generated_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "ck-default-status",
+    "dashboard",
+    "scope",
+    "evidence",
+    "zh-CN",
+    1,
+    2,
+  );
+  assert.equal(
+    host
+      .prepare(
+        "SELECT status FROM insight_enhancement_cache WHERE cache_key = ?",
+      )
+      .get("ck-default-status")?.status,
+    "ready",
+  );
+});
+
+test("rejects ciphertext shorter than 16 bytes (P2-1)", (t) => {
+  const host = openMigratedHost(t);
+  expectRejected(
+    host,
+    "a 4-byte ciphertext",
+    INSERT_SECRET,
+    "secret-short",
+    "model-api-key",
+    new Uint8Array([1, 2, 3, 4]),
+    "dpapi",
+    1,
+    1,
+  );
+});
+
+test("enforces the analysis forbidden-content CHECK at the SQL level (P1-8)", (t) => {
+  const host = openMigratedHost(t);
+  run(
+    host,
+    "INSERT INTO insight_enhancement_cache (cache_key, surface_id, scope_hash, evidence_hash, locale, generated_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "ck-analysis",
+    "dashboard",
+    "scope",
+    "evidence",
+    "zh-CN",
+    1,
+    2,
+  );
+
+  // Legal Chinese and `~/…` display text are still writable.
+  run(
+    host,
+    "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
+    "ck-analysis",
+    0,
+    "本次洞察显示 Token 用量在一周内趋于稳定",
+  );
+  run(
+    host,
+    "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
+    "ck-analysis",
+    1,
+    "~/Documents/trusttools",
+  );
+  assert.equal(count(host, "insight_enhancement_lines"), 2);
+
+  expectRejected(
+    host,
+    "a digit in analysis",
+    "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
+    "ck-analysis",
+    2,
+    "近 7 天趋于稳定",
+  );
+  expectRejected(
+    host,
+    "a drive letter in analysis",
+    "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
+    "ck-analysis",
+    2,
+    "C:/Users/alice",
+  );
+  expectRejected(
+    host,
+    "a backslash in analysis",
+    "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
+    "ck-analysis",
+    2,
+    "C:\\Users\\alice",
+  );
+});
+
+test("enforces the value_json forbidden-content CHECK at the SQL level (P1-8)", (t) => {
+  const host = openMigratedHost(t);
+  const insertPreference = (key: string, json: string): void => {
+    run(
+      host,
+      "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+      key,
+      json,
+      "string",
+      1,
+    );
+  };
+
+  insertPreference("p1", JSON.stringify("~/Documents/trusttools"));
+  insertPreference("p2", JSON.stringify("普通中文文本"));
+
+  expectRejected(
+    host,
+    "a Bearer token in value_json",
+    "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "p-bearer",
+    JSON.stringify("Bearer eyJhbGciOiJIUzI1NiJ9.abc.def"),
+    "string",
+    1,
+  );
+  expectRejected(
+    host,
+    "a drive letter in value_json",
+    "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "p-drive",
+    JSON.stringify("C:/Users/alice"),
+    "string",
+    1,
+  );
+  expectRejected(
+    host,
+    "a backslash in value_json",
+    "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "p-backslash",
+    JSON.stringify("C:\\Users\\alice"),
+    "string",
+    1,
+  );
+});
+
+test("rejects a NULL-profile/NULL-prompt cache identity duplicate (P2-2)", (t) => {
+  const host = openMigratedHost(t);
+  const insertNoProfile = (cacheKey: string, surfaceId: string): void => {
+    run(
+      host,
+      "INSERT INTO insight_enhancement_cache (cache_key, surface_id, scope_hash, evidence_hash, locale, generated_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      cacheKey,
+      surfaceId,
+      "scope",
+      "evidence",
+      "zh-CN",
+      1,
+      2,
+    );
+  };
+
+  insertNoProfile("ck-1", "dashboard.today");
+  expectRejected(
+    host,
+    "a duplicate NULL-profile cache identity",
+    "INSERT INTO insight_enhancement_cache (cache_key, surface_id, scope_hash, evidence_hash, locale, generated_at_ms, expires_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "ck-2",
+    "dashboard.today",
+    "scope",
+    "evidence",
+    "zh-CN",
+    3,
+    4,
+  );
+  // A different surface is a distinct identity and is accepted.
+  insertNoProfile("ck-3", "dashboard.week");
+  assert.equal(count(host, "insight_enhancement_cache"), 2);
+});
+
+test("enforces counter, format, capability and name domain CHECKs (P2-3)", (t) => {
+  const host = openMigratedHost(t);
+  expectRejected(
+    host,
+    "a negative rows_read",
+    "INSERT INTO data_migration_runs (run_id, source_kind, source_path_hash, rows_read, rows_written, rows_skipped, source_fingerprint) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "run-neg",
+    "atomic-json",
+    "hash",
+    -1,
+    0,
+    0,
+    "fp",
+  );
+  expectRejected(
+    host,
+    "a negative daily calls",
+    "INSERT INTO ai_daily_usage (date_key, capability, profile_key, calls, updated_at_ms) VALUES (?, ?, ?, ?, ?)",
+    "2026-08-18",
+    "page-insight",
+    "profile-1",
+    -1,
+    1,
+  );
+  expectRejected(
+    host,
+    "a malformed date_key",
+    "INSERT INTO ai_daily_usage (date_key, capability, profile_key, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "18-08-2026",
+    "page-insight",
+    "profile-1",
+    1,
+  );
+  expectRejected(
+    host,
+    "an unknown daily capability",
+    "INSERT INTO ai_daily_usage (date_key, capability, profile_key, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "2026-08-18",
+    "chat",
+    "profile-1",
+    1,
+  );
+  expectRejected(
+    host,
+    "an empty model_profiles.name",
+    "INSERT INTO model_profiles (profile_id, name, mode, protocol, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+    "profile-empty-name",
+    "",
+    "custom",
+    "openai",
+    1,
+    1,
+  );
+  expectRejected(
+    host,
+    "an overlong model_profiles.name",
+    "INSERT INTO model_profiles (profile_id, name, mode, protocol, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?)",
+    "profile-long-name",
+    "x".repeat(65),
+    "custom",
+    "openai",
+    1,
+    1,
+  );
+  expectRejected(
+    host,
+    "a value_type/json_type mismatch",
+    "INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms) VALUES (?, ?, ?, ?)",
+    "p-mismatch",
+    '"text"',
+    "number",
+    1,
+  );
 });
