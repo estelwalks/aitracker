@@ -53,7 +53,9 @@
     "verify:runtime-policy": "node --import tsx scripts/verify-runtime-policy.mjs",
     "verify:module-catalog": "node --import tsx scripts/verify-module-catalog.mjs",
     "verify:browser-server-boundary": "node scripts/verify-browser-server-boundary.mjs",
+    "verify:database-schema": "node scripts/verify-database-schema.mts",
     "verify:bundle-budget": "node scripts/verify-bundle-budget.mjs",
+    "inspect:database": "node scripts/inspect-database.mts",
     "check:opensource-hygiene": "node scripts/check-open-source-hygiene.mjs"
   },
   "dependencies": {
