@@ -374,6 +374,21 @@ export const security = {
       requiredSettings:
         "심층 검사를 하려면 먼저 설정 → 모델 구성에서 모델을 구성해야 합니다.",
     },
+    llm: {
+      title: "AI 보조 분석",
+      disclaimer: "보충 전용 · 판정을 변경하지 않음",
+      trigger: "AI 보조 분석 생성",
+      loading: "AI 보조 분석 생성 중…",
+      failed:
+        "AI 보조 분석을 사용할 수 없습니다. 정적 규칙 결과는 유지되었습니다.",
+      summary: "요약",
+      dimensions: "차원 분석",
+      confidence: "신뢰도",
+      confidenceLow: "낮음",
+      confidenceMedium: "중간",
+      confidenceHigh: "높음",
+      modelLabel: "모델: {label}",
+    },
     verdict: {
       allow: "허용",
       warn: "경고",
