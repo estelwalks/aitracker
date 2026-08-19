@@ -4,6 +4,8 @@ import {
   existsSync,
   mkdtempSync,
   openSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
   writeSync,
@@ -19,6 +21,8 @@ import { NODE_SQLITE_CONNECTION_OPTIONS } from "./infrastructure/node-sqlite-dat
 import {
   checkIntegrity,
   quarantineCorruptDatabase,
+  rollbackFaultGroup,
+  setAsideFaultGroup,
 } from "./integrity.server.ts";
 import { readSchemaVersion, runMigrations } from "./migration-runner.server.ts";
 
@@ -176,4 +180,66 @@ test("quarantineCorruptDatabase moves the db/-wal/-shm fault group and allows a 
   assert.equal(reopened.isOpen, true);
   assert.equal(readSchemaVersion(reopened), 0);
   reopened.close();
+});
+
+test("setAsideFaultGroup names the directory after the reason, not after corruption", (t) => {
+  const { host, directory, databasePath } = openMigratedDb(t);
+  host.close();
+
+  // A database replaced by a *successful restore* is not corrupt, so the
+  // directory must not claim it is.
+  const replaced = setAsideFaultGroup(databasePath, {
+    reason: "replaced-by-restore",
+  });
+  assert.equal(basename(replaced).startsWith(".replaced."), true);
+  assert.equal(existsSync(join(replaced, basename(databasePath))), true);
+  assert.equal(existsSync(databasePath), false);
+
+  // The corruption path keeps the `.corrupt.*` name, via the convenience
+  // wrapper and via the explicit reason.
+  writeFileSync(databasePath, "recreated");
+  const corrupt = setAsideFaultGroup(databasePath, { reason: "corrupt" });
+  assert.equal(basename(corrupt).startsWith(".corrupt."), true);
+
+  writeFileSync(databasePath, "recreated again");
+  const wrapped = quarantineCorruptDatabase(databasePath);
+  assert.equal(basename(wrapped).startsWith(".corrupt."), true);
+  assert.notEqual(wrapped, corrupt, "each call reserves its own directory");
+  assert.equal(
+    readdirSync(directory).filter((name) => name.startsWith(".corrupt."))
+      .length,
+    2,
+  );
+});
+
+test("rollbackFaultGroup moves the whole fault group back and removes the directory", (t) => {
+  const { host, databasePath } = openMigratedDb(t);
+  host.close();
+  writeFileSync(`${databasePath}-wal`, "wal bytes");
+  writeFileSync(`${databasePath}-shm`, "shm bytes");
+  const before = readFileSync(databasePath);
+
+  const setAside = setAsideFaultGroup(databasePath, {
+    reason: "replaced-by-restore",
+  });
+  assert.equal(existsSync(databasePath), false);
+
+  rollbackFaultGroup(setAside, databasePath);
+
+  assert.deepEqual(readFileSync(databasePath), before);
+  assert.equal(existsSync(`${databasePath}-wal`), true);
+  assert.equal(existsSync(`${databasePath}-shm`), true);
+  assert.equal(
+    existsSync(setAside),
+    false,
+    "an emptied set-aside directory is removed",
+  );
+
+  // A rollback never overwrites a newer file at the original name, and never
+  // deletes the set-aside copy either.
+  const second = setAsideFaultGroup(databasePath, { reason: "corrupt" });
+  writeFileSync(databasePath, "newer file");
+  rollbackFaultGroup(second, databasePath);
+  assert.equal(String(readFileSync(databasePath)), "newer file");
+  assert.equal(existsSync(join(second, basename(databasePath))), true);
 });

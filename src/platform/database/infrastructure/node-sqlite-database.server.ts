@@ -85,6 +85,7 @@ export class NodeSqliteDatabase implements SqliteDatabasePort {
   }
 
   prepare(sql: string): SqliteStatement {
+    this.assertOpen("read");
     try {
       return new NodeSqliteStatement(this.database.prepare(sql));
     } catch (error) {
@@ -93,6 +94,7 @@ export class NodeSqliteDatabase implements SqliteDatabasePort {
   }
 
   exec(sql: string): void {
+    this.assertOpen("write");
     try {
       this.database.exec(sql);
     } catch (error) {
@@ -101,7 +103,19 @@ export class NodeSqliteDatabase implements SqliteDatabasePort {
   }
 
   transaction(): Transaction {
+    this.assertOpen("transaction");
     return new NodeSqliteTransaction(this.database);
+  }
+
+  /**
+   * A closed connection is a lifecycle mistake, not a SQL mistake: report it as
+   * `not-open` instead of letting the driver's "database is not open" surface
+   * as an opaque `sql-error`.
+   */
+  private assertOpen(operation: DatabaseOperation): void {
+    if (!this.database.isOpen) {
+      throw new DatabaseError("not-open", operation, { retryable: false });
+    }
   }
 
   close(): void {
@@ -201,17 +215,34 @@ export class NodeSqliteStatement implements SqliteStatement {
   }
 }
 
+/**
+ * The single driver capability a transaction needs. `DatabaseSync` satisfies it
+ * structurally, and tests can substitute a recorder to assert the exact SQL the
+ * transaction issues.
+ */
+export interface SqlExecutor {
+  exec(sql: string): void;
+}
+
 export class NodeSqliteTransaction implements Transaction {
   private active = false;
 
-  constructor(private readonly database: DatabaseSync) {}
+  constructor(private readonly database: SqlExecutor) {}
 
+  /**
+   * `BEGIN IMMEDIATE` — never the deferred default. A deferred transaction only
+   * takes its write lock at the first write statement, so two writers can both
+   * enter a read-modify-write sequence and one of them fails at COMMIT time
+   * with `SQLITE_BUSY` after its reads were already used. Acquiring the write
+   * lock up front is what makes the single-writer contract (architecture §3.2)
+   * and the snapshot commit flow (§8.1) hold under contention.
+   */
   begin(): void {
     if (this.active) {
       throw new DatabaseError("invalid-argument", "transaction");
     }
     try {
-      this.database.exec("BEGIN");
+      this.database.exec("BEGIN IMMEDIATE");
       this.active = true;
     } catch (error) {
       throw mapSqliteError(error, "transaction");

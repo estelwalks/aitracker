@@ -8,21 +8,30 @@
  * backup's SHA-256 against the record that produced it.
  *
  * Guarantees:
- * - The source is always a live `DatabaseSync`. Because `DatabaseHost` does not
- *   expose its connection, a second connection to the same file is opened
- *   through the strict adapter and narrowed back to `DatabaseSync` at the
- *   infrastructure boundary only.
+ * - The source is the **Host's own** live connection, borrowed through
+ *   `DatabaseHost.withUnderlyingConnection`. Opening a second writable
+ *   connection to the same file would break the single-writer contract
+ *   (architecture §3.2), so the driver handle is borrowed, never re-opened.
+ * - Backups of one process are serialized through an in-process mutex: name
+ *   reservation, promotion and the manifest read-modify-write are one critical
+ *   section, so two concurrent calls cannot reserve the same file name or lose
+ *   each other's manifest entry.
  * - The destination is written to a `<name>.tmp` file, verified with a
  *   read-only `PRAGMA quick_check`, and only then atomically renamed to its
  *   final name. A colliding final name is never overwritten — it receives a
  *   `-2`, `-3`, … suffix.
  * - Every failure path removes the temporary file and never touches an
  *   existing backup or its manifest record.
+ * - `manifest.json` is the single source of trust. An unparseable manifest is
+ *   reported as `corrupt` instead of being silently treated as "no backups",
+ *   and files without a usable record are surfaced as *unverified* by
+ *   `listBackupFiles` rather than dropped.
  */
 import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -40,10 +49,9 @@ import {
 } from "./contracts.ts";
 import type { DatabaseHost } from "./database-host.server.ts";
 import {
-  getUnderlyingDatabaseSync,
+  bigintToSafeNumber,
   mapSqliteError,
   NODE_SQLITE_CONNECTION_OPTIONS,
-  NodeSqliteDatabase,
 } from "./infrastructure/node-sqlite-database.server.ts";
 import { readSchemaVersion } from "./migration-runner.server.ts";
 
@@ -60,6 +68,41 @@ export interface CreateOnlineBackupOptions {
   readonly now?: () => number;
 }
 
+/** Why a backup file present on disk is not trustworthy. */
+export type UnverifiedBackupReason =
+  /** No usable `manifest.json` record — a stray or foreign file. */
+  | "no-manifest-record"
+  /** Recorded, but the file cannot be opened / fails `quick_check`. */
+  | "quick-check-failed"
+  /** Recorded, but the bytes no longer match the recorded SHA-256. */
+  | "checksum-mismatch"
+  /** Recorded, but the file is gone. */
+  | "missing-file";
+
+export interface UnverifiedBackup {
+  readonly path: string;
+  readonly reason: UnverifiedBackupReason;
+}
+
+/**
+ * Complete inventory of a backups directory. `unverified` exists so a user can
+ * be told that a backup-looking file was rejected and why, instead of a stray
+ * or damaged file disappearing from the UI without a trace.
+ */
+export interface BackupInventory {
+  readonly verified: readonly Backup[];
+  readonly unverified: readonly UnverifiedBackup[];
+}
+
+/** Read-only schema identity of a backup file, used before a restore. */
+export interface BackupSchemaSnapshot {
+  /** `PRAGMA application_id`; `0` when the database was never stamped. */
+  readonly applicationId: number;
+  /** `schema_migrations` rows, or `undefined` when the table does not exist. */
+  readonly migrations:
+    readonly { version: number; name: string; checksum: string }[] | undefined;
+}
+
 /** Name of the single JSON manifest next to the backup files. */
 export const MANIFEST_FILE_NAME = "manifest.json";
 
@@ -71,12 +114,38 @@ const READ_ONLY_OPTIONS = {
   readOnly: true,
 } as const;
 
+const LEDGER_TABLE = "schema_migrations";
+
+/**
+ * In-process backup mutex. Every backup runs to completion before the next one
+ * starts, which is what makes name reservation and the manifest
+ * read-modify-write safe under concurrent callers.
+ */
+let backupQueue: Promise<unknown> = Promise.resolve();
+
 /**
  * Creates one verified online backup and records its manifest. Returns the
  * completed `Backup` (path + manifest). Throws a stable `DatabaseError` on any
- * failure; existing backups are never overwritten or removed.
+ * failure; existing backups are never overwritten or removed. Concurrent calls
+ * are serialized in the order they were issued.
  */
 export async function createOnlineBackup(
+  options: CreateOnlineBackupOptions,
+): Promise<Backup> {
+  const run = backupQueue.then(
+    () => performOnlineBackup(options),
+    () => performOnlineBackup(options),
+  );
+  // The queue itself must never reject, otherwise one failed backup would
+  // reject every backup queued behind it.
+  backupQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function performOnlineBackup(
   options: CreateOnlineBackupOptions,
 ): Promise<Backup> {
   const host = options.host;
@@ -99,15 +168,15 @@ export async function createOnlineBackup(
   const finalName = basename(finalPath);
   const tmpPath = `${finalPath}.tmp`;
 
-  // 1. Stream the database to the temporary file via the online backup API.
-  const source = new NodeSqliteDatabase({ path: host.path });
+  // 1. Stream the database to the temporary file via the online backup API,
+  //    borrowing the Host's connection instead of opening a second writer.
   try {
-    await backup(getUnderlyingDatabaseSync(source), tmpPath);
+    await host.withUnderlyingConnection((database) =>
+      backup(database, tmpPath),
+    );
   } catch (error) {
     cleanupTemporary(tmpPath);
     throw mapBackupError(error);
-  } finally {
-    source.close();
   }
 
   // 2. Normalize the destination to a single-file rollback-journal database.
@@ -178,30 +247,79 @@ export async function createOnlineBackup(
 }
 
 /**
- * Scans the backups directory and returns every backup whose stored manifest
- * still matches its file: `quick_check` passes and the SHA-256 is unchanged.
- * Results are ordered newest-first. Files with no manifest record (including
- * stray or garbage `.db` files) are ignored, so a backup is only ever trusted
- * through the manifest that created it.
+ * Full inventory of a backups directory: every backup whose stored manifest
+ * still matches its file (`quick_check` passes and the SHA-256 is unchanged) as
+ * `verified`, newest-first, plus every backup-looking file that could not be
+ * trusted as `unverified` with the reason why. Throws `corrupt` when
+ * `manifest.json` exists but cannot be parsed — a damaged manifest must not
+ * look like an empty backups directory.
  */
-export function listVerifiedBackups(backupsDirectory: string): Backup[] {
-  const index = readBackupManifestIndex(backupsDirectory);
+export function listBackupFiles(
+  backupsDirectory: string,
+  index?: Readonly<Record<string, BackupManifest>>,
+): BackupInventory {
+  const manifests = index ?? readBackupManifestIndex(backupsDirectory);
   const verified: Backup[] = [];
-  for (const [fileName, manifest] of Object.entries(index)) {
-    if (!isBackupManifest(manifest)) continue;
+  const unverified: UnverifiedBackup[] = [];
+
+  for (const [fileName, manifest] of Object.entries(manifests)) {
     const path = join(backupsDirectory, fileName);
-    if (!existsSync(path) || !statSync(path).isFile()) continue;
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      unverified.push({ path, reason: "missing-file" });
+      continue;
+    }
     try {
       quickCheckOrThrow(path);
-      if (sha256OfFile(path) !== manifest.sha256) continue;
     } catch {
+      unverified.push({ path, reason: "quick-check-failed" });
+      continue;
+    }
+    if (sha256OfFile(path) !== manifest.sha256) {
+      unverified.push({ path, reason: "checksum-mismatch" });
       continue;
     }
     verified.push({ path, manifest });
   }
-  return verified.sort(
-    (a, b) => b.manifest.createdAtMs - a.manifest.createdAtMs,
-  );
+
+  for (const fileName of listBackupCandidateNames(backupsDirectory)) {
+    if (manifests[fileName] !== undefined) continue;
+    unverified.push({
+      path: join(backupsDirectory, fileName),
+      reason: "no-manifest-record",
+    });
+  }
+
+  return {
+    verified: verified.sort(
+      (a, b) => b.manifest.createdAtMs - a.manifest.createdAtMs,
+    ),
+    unverified,
+  };
+}
+
+/**
+ * Scans the backups directory and returns every backup whose stored manifest
+ * still matches its file: `quick_check` passes and the SHA-256 is unchanged.
+ * Results are ordered newest-first. Files with no manifest record are *not*
+ * returned here — a backup is only ever trusted through the manifest that
+ * created it — but they are reported by `listBackupFiles` as `unverified`.
+ */
+export function listVerifiedBackups(
+  backupsDirectory: string,
+  index?: Readonly<Record<string, BackupManifest>>,
+): Backup[] {
+  return [...listBackupFiles(backupsDirectory, index).verified];
+}
+
+/** `.db` files in the directory (never `manifest.json` or `*.tmp` leftovers). */
+function listBackupCandidateNames(backupsDirectory: string): readonly string[] {
+  let entries: readonly string[];
+  try {
+    entries = readdirSync(backupsDirectory);
+  } catch {
+    return [];
+  }
+  return entries.filter((name) => name.toLowerCase().endsWith(".db"));
 }
 
 /**
@@ -213,31 +331,108 @@ export function verifyBackupIntegrity(path: string): void {
   quickCheckOrThrow(path);
 }
 
+/**
+ * Reads the schema identity a restore has to validate: `PRAGMA application_id`
+ * and the `schema_migrations` ledger, both from a single read-only connection.
+ * `migrations` is `undefined` when the table does not exist at all, which means
+ * the file is not a migrated AITracker database.
+ */
+export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
+  let database: DatabaseSync;
+  try {
+    database = new DatabaseSync(path, READ_ONLY_OPTIONS);
+  } catch (error) {
+    throw new DatabaseError("corrupt", "backup", { cause: error });
+  }
+  try {
+    const applicationId = integerValue(
+      firstColumnValue(database.prepare("PRAGMA application_id").get()),
+    );
+    const hasLedger =
+      database
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${LEDGER_TABLE}'`,
+        )
+        .get() !== undefined;
+    if (!hasLedger) return { applicationId, migrations: undefined };
+    const migrations = database
+      .prepare(
+        `SELECT version, name, checksum FROM ${LEDGER_TABLE} ORDER BY version ASC`,
+      )
+      .all()
+      .map((row) => ({
+        version: integerValue((row as Record<string, unknown>).version),
+        name: textValue((row as Record<string, unknown>).name),
+        checksum: textValue((row as Record<string, unknown>).checksum),
+      }));
+    return { applicationId, migrations };
+  } catch (error) {
+    if (error instanceof DatabaseError) throw error;
+    throw new DatabaseError("corrupt", "backup", { cause: error });
+  } finally {
+    database.close();
+  }
+}
+
 /** SHA-256 (hex) of a file's contents. */
 export function sha256OfFile(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-/** The persisted `fileName → BackupManifest` index, or `{}` when absent. */
+/**
+ * The persisted `fileName → BackupManifest` index, or `{}` when the manifest
+ * file does not exist yet.
+ *
+ * An existing but unreadable/unparseable manifest throws `corrupt`: silently
+ * returning `{}` would turn one damaged JSON file into "there are no backups",
+ * which is exactly the state that makes a recovery flow create an empty
+ * database while intact backups sit next to it.
+ */
 export function readBackupManifestIndex(
   backupsDirectory: string,
 ): Readonly<Record<string, BackupManifest>> {
   const path = join(backupsDirectory, MANIFEST_FILE_NAME);
   if (!existsSync(path)) return {};
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (error) {
+    throw new DatabaseError("io-failure", "backup", { cause: error });
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return {};
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new DatabaseError("corrupt", "backup", {
+      cause: error,
+      retryable: false,
+    });
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return {};
+    throw new DatabaseError("corrupt", "backup", { retryable: false });
   }
   const index: Record<string, BackupManifest> = {};
   for (const [fileName, value] of Object.entries(parsed)) {
+    // A single unusable record does not condemn the whole manifest; its file is
+    // reported as `no-manifest-record` by `listBackupFiles` instead.
     if (isBackupManifest(value)) index[fileName] = value;
   }
   return index;
+}
+
+/**
+ * `readBackupManifestIndex` that reports a damaged manifest as `undefined`
+ * instead of throwing, so a caller can distinguish "manifest corrupt" from
+ * "no backups" and tell the user which one it is.
+ */
+export function tryReadBackupManifestIndex(
+  backupsDirectory: string,
+): Readonly<Record<string, BackupManifest>> | undefined {
+  try {
+    return readBackupManifestIndex(backupsDirectory);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Structural guard for a persisted `BackupManifest` record. */
@@ -408,6 +603,18 @@ function firstColumnValue(row: unknown): unknown {
   if (typeof row !== "object" || row === null) return undefined;
   const values = Object.values(row);
   return values.length === 0 ? undefined : values[0];
+}
+
+/** Read-only integer column (`readBigInts` makes SQLite integers BigInt). */
+function integerValue(value: unknown): number {
+  if (typeof value === "bigint") return bigintToSafeNumber(value);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  throw new DatabaseError("corrupt", "backup", { retryable: false });
+}
+
+function textValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  throw new DatabaseError("corrupt", "backup", { retryable: false });
 }
 
 /** Removes a temporary backup and any WAL/SHM siblings it may have acquired. */

@@ -64,6 +64,18 @@ export interface SqliteDatabasePort {
   close(): void;
 }
 
+/**
+ * `PRAGMA application_id` value that marks a file as a AITracker platform
+ * database (architecture §9-6: startup must validate `application_id`,
+ * `user_version` and the migration checksums before a database is accepted).
+ *
+ * The integer is the big-endian ASCII of `TTDB` (`0x54544442`), which stays
+ * inside SQLite's signed 32-bit range. Migration 0001 does not stamp it yet, so
+ * validation currently accepts `0` (never stamped) **or** this constant; the
+ * `PRAGMA application_id` write lands in a later migration.
+ */
+export const TRUSTTOOLS_APPLICATION_ID = 0x54544442;
+
 /** Metadata written next to a completed online backup (architecture §10.2). */
 export interface BackupManifest {
   /** Schema version of the backed-up database. */
