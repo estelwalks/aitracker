@@ -1,21 +1,13 @@
 import assert from "node:assert/strict";
-import { statSync } from "node:fs";
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import type { ScanSkillReport } from "skill-scanner";
 
-import { APP_DATA_DIR } from "../../../lib/app-config";
 import type { DesktopLocale } from "../../../../electron/contracts";
+import type { SecurityScanSchedule } from "../../../../electron/contracts";
 import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
@@ -24,6 +16,7 @@ import {
 } from "../../../../electron/security-http-api";
 import type {
   SecurityScannerService,
+  SecurityScannerPersistence,
   SecurityScannerServiceOptions,
 } from "../../../../electron/security-scanner-service";
 import {
@@ -31,7 +24,6 @@ import {
   createDevSecurityScannerService,
   handleSecurityDevRequest,
   localeFromAcceptLanguage,
-  migrateLegacyDevHistory,
 } from "./security-dev-server.server.ts";
 
 const cleanup: string[] = [];
@@ -105,19 +97,6 @@ function stubScanner(
   }) as never;
 }
 
-async function waitForFile(path: string): Promise<void> {
-  for (let index = 0; index < 100; index += 1) {
-    try {
-      const details = await stat(path);
-      if (details.isFile()) return;
-    } catch {
-      /* not yet */
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error(`file was not created: ${path}`);
-}
-
 async function waitForTerminal(service: SecurityScannerService): Promise<void> {
   for (let index = 0; index < 100; index += 1) {
     if (!["running", "cancelling"].includes(service.getStatus().status)) return;
@@ -141,22 +120,36 @@ function historyEntry(id: string): Record<string, string> {
   };
 }
 
-test("dev service appends into a pre-existing shared history without clobbering it", async () => {
+function memoryPersistence(
+  initial: readonly Record<string, unknown>[] = [],
+): SecurityScannerPersistence {
+  let entries = structuredClone(initial) as never[];
+  let schedule: SecurityScanSchedule | null = null;
+  return {
+    readHistory: async () => structuredClone(entries),
+    writeHistory: async (value) => {
+      entries = structuredClone(value) as never[];
+    },
+    clearHistory: async () => {
+      entries = [];
+    },
+    readSchedule: async () => structuredClone(schedule),
+    writeSchedule: async (value) => {
+      schedule = structuredClone(value) as never;
+    },
+    modelConfig: async () => undefined,
+  };
+}
+
+test("dev service appends through its SQLite persistence port without clobbering history", async () => {
   const { home, data } = await fixture();
-  // The shared history file already holds desktop-app entries; the dev backend
-  // must read-modify-write it, not replace it.
-  await mkdir(data, { recursive: true });
-  await writeFile(
-    join(data, "security-scan-history.json"),
-    JSON.stringify({ version: 1, entries: [historyEntry("desktop-1")] }),
-    "utf8",
-  );
+  const persistence = memoryPersistence([historyEntry("desktop-1")]);
 
   const service = createDevSecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
     scanner: stubScanner(),
+    persistence,
   });
 
   await service.start({ scope: "all", mode: "quick", trigger: "manual" });
@@ -179,57 +172,9 @@ test("dev service appends into a pre-existing shared history without clobbering 
   assert.equal(JSON.stringify(history).includes(data), false);
 });
 
-test("migrates legacy isolated dev history into the shared history, deduped and idempotent", async () => {
-  const { home } = await fixture();
-  const sharedDir = join(home, APP_DATA_DIR);
-  const legacyDir = join(sharedDir, "security-dev");
-  await mkdir(legacyDir, { recursive: true });
-  await writeFile(
-    join(legacyDir, "security-scan-history.json"),
-    JSON.stringify({
-      version: 1,
-      entries: [historyEntry("legacy-1"), historyEntry("legacy-2")],
-    }),
-    "utf8",
-  );
-  await writeFile(
-    join(sharedDir, "security-scan-history.json"),
-    JSON.stringify({
-      version: 1,
-      entries: [historyEntry("legacy-2"), historyEntry("shared-1")],
-    }),
-    "utf8",
-  );
-
-  migrateLegacyDevHistory(home);
-  migrateLegacyDevHistory(home); // idempotent
-
-  const merged = JSON.parse(
-    await readFile(join(sharedDir, "security-scan-history.json"), "utf8"),
-  ) as { entries: Array<{ id: string }> };
-  assert.deepEqual(
-    merged.entries.map((entry) => entry.id),
-    ["legacy-1", "legacy-2", "shared-1"],
-  );
-  // The legacy file is left in place for a downgrade path.
-  const legacy = JSON.parse(
-    await readFile(join(legacyDir, "security-scan-history.json"), "utf8"),
-  ) as { entries: unknown[] };
-  assert.equal(legacy.entries.length, 2);
-});
-
-test("migrateLegacyDevHistory is a no-op when no legacy history exists", async () => {
-  const { home } = await fixture();
-  migrateLegacyDevHistory(home); // must not throw
-  // No shared history is created when there is nothing to migrate.
-  await assert.rejects(
-    readFile(join(home, APP_DATA_DIR, "security-scan-history.json"), "utf8"),
-  );
-});
-
-test("dev secret storage round-trips and persists the key with mode 0o600", async () => {
+test("dev secret adapter round-trips without creating a persistence authority", async () => {
   const { data } = await fixture();
-  const storage = createDevSecretStorage(data);
+  const storage = createDevSecretStorage();
   assert.equal(storage.isEncryptionAvailable(), true);
 
   const encoded = storage.encrypt("super-secret-dev-key");
@@ -238,27 +183,17 @@ test("dev secret storage round-trips and persists the key with mode 0o600", asyn
     Buffer.from("super-secret-dev-key", "utf8").toString("base64"),
   );
   assert.equal(storage.decrypt(encoded), "super-secret-dev-key");
-
-  const keyPath = join(data, "security-dev-api-key");
-  await waitForFile(keyPath);
-  assert.equal(await readFile(keyPath, "utf8"), "super-secret-dev-key");
-  // POSIX permission bits are meaningless on Windows (Node reports 0o666
-  // there); the 0600 contract applies to POSIX platforms only.
-  if (process.platform !== "win32") {
-    assert.equal(statSync(keyPath).mode & 0o777, 0o600);
-  }
-
-  // A fresh instance reads the raw key back from disk.
-  const fresh = createDevSecretStorage(data);
-  assert.equal(fresh.decrypt(encoded), "super-secret-dev-key");
+  await assert.rejects(
+    import("node:fs/promises").then(({ stat }) => stat(data)),
+  );
 });
 
 test("full scan without a configured model returns model-required", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const service = createDevSecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "zh-CN",
+    persistence: memoryPersistence(),
   });
   const state = await service.start({
     scope: "all",
@@ -270,13 +205,13 @@ test("full scan without a configured model returns model-required", async () => 
 });
 
 test("quick global scan completes and persists a history entry with a report", async () => {
-  const { home, data } = await fixture();
+  const { home } = await fixture();
   const requests: unknown[] = [];
   const service = createDevSecurityScannerService({
     homeDirectory: home,
-    dataDirectory: data,
     locale: () => "en-US",
     scanner: stubScanner(requests),
+    persistence: memoryPersistence(),
   });
 
   await service.start({ scope: "all", mode: "quick", trigger: "manual" });
