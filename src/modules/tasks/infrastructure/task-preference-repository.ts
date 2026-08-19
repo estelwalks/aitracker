@@ -22,7 +22,7 @@ export function createTaskPreferenceRepository(
       return (await this.read()).tasks[taskId];
     },
     async save(preferences) {
-      const parsed = preferenceSchema(clock).parse(preferences);
+      const parsed = preferenceSchema().parse(preferences);
       await options.store.write(parsed);
     },
     async set(taskId, preference) {
