@@ -9,6 +9,12 @@
 //   4. `src/modules/**` business modules must never statically import
 //      `node:sqlite` (business logic reaches SQLite only through the platform
 //      Repository/Port); the violation type is `business-node-sqlite-import`.
+//   5. Inside the platform storage layers (`src/platform/database/**`,
+//      `src/platform/persistence/**`) only `infrastructure/**` may statically
+//      import `node:sqlite`. Contract, host, probe, backup, integrity and
+//      recovery modules must reach the driver through a narrow
+//      `infrastructure/*.server.ts` export; the violation type is
+//      `platform-node-sqlite-outside-infrastructure`.
 //
 // The browser-safe root set is: src/routes, src/components, src/app (except
 // *.server.ts), src/lib (except *.server.ts), src/modules/*/presentation,
@@ -21,8 +27,17 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"];
 
-function toRepoPath(filePath) {
-  return relative(root, filePath).split(sep).join("/");
+/**
+ * Repo-relative, forward-slash path of `filePath`.
+ *
+ * `rootDir` is explicit so path-scoped rules (`src/modules/**`,
+ * `src/platform/**`) can be exercised against a temporary fixture tree instead
+ * of only against this repository: with a hard-coded root, a fixture file
+ * resolved to `../../tmp/...` and every `startsWith("src/...")` rule silently
+ * matched nothing.
+ */
+function toRepoPath(filePath, rootDir = root) {
+  return relative(rootDir, filePath).split(sep).join("/");
 }
 
 function isSourceFile(name) {
@@ -85,16 +100,49 @@ function definesServerFn(source) {
   return /createServerFn\s*\(/.test(source);
 }
 
+/** Static import specifiers that pull in the raw SQLite driver. */
+function isSqliteDriverSpecifier(importSource) {
+  return importSource === "node:sqlite" || importSource === "sqlite";
+}
+
 /**
- * Static imports: `import … from "x"`, `import "x"`, re-exports
+ * Platform storage layers whose driver access must stay inside
+ * `infrastructure/**`. The rule is written generically so a second storage
+ * layer inherits it without a code change.
+ */
+const PLATFORM_STORAGE_ROOTS = [
+  "src/platform/database/",
+  "src/platform/persistence/",
+];
+
+/**
+ * True when `repoPath` belongs to a platform storage layer but is NOT one of
+ * the two places allowed to name `node:sqlite`:
+ *   - `infrastructure/**` �?the only production home of the driver;
+ *   - co-located `*.test.*` files �?fixtures legitimately create corrupt or
+ *     foreign databases with the driver, and test files never ship in any
+ *     bundle. Production modules get no such exemption.
+ */
+function isPlatformDriverRestricted(repoPath) {
+  if (!isSourceName(repoPath)) return false;
+  if (!PLATFORM_STORAGE_ROOTS.some((root) => repoPath.startsWith(root))) {
+    return false;
+  }
+  if (/(?:^|\/)infrastructure\//.test(repoPath)) return false;
+  if (/\.test\.(?:[cm]?[jt]sx?)$/.test(repoPath)) return false;
+  return true;
+}
+
+/**
+ * Static imports: `import �?from "x"`, `import "x"`, re-exports
  * `export { a } from "x"` (not dynamic).
  *
- * Only VALUE imports are collected: `import type … from "x"` and dynamic
+ * Only VALUE imports are collected: `import type �?from "x"` and dynamic
  * import() specifiers are erased at compile time and never reach the bundle.
  * A module that mixes a value import with a type import of the same specifier
  * (e.g. `import { fn } from "x"` + `import type { T } from "x"`) therefore
- * keeps the specifier — the historical false negative that let
- * `version-check.ts → version-check.server.ts` slip through.
+ * keeps the specifier �?the historical false negative that let
+ * `version-check.ts �?version-check.server.ts` slip through.
  *
  * Patterns are anchored to the start of a statement (file start or line start
  * with optional indentation) so prose inside comments or template literals
@@ -106,7 +154,7 @@ function definesServerFn(source) {
  */
 function extractStaticImports(source) {
   const valueImports = new Set();
-  // Value import statements (`import … from "x"`), excluding the `import type`
+  // Value import statements (`import �?from "x"`), excluding the `import type`
   // prefix form.
   for (const match of source.matchAll(
     /(?:^|\n)[ \t]*import\s+(?!type\b)[^"'()]+from\s*["']([^"']+)["']/g,
@@ -143,7 +191,7 @@ export async function analyzeBrowserServerBoundary(rootDir = root) {
   const violations = [];
 
   for (const file of files) {
-    const repoPath = toRepoPath(file);
+    const repoPath = toRepoPath(file, rootDir);
     if (!isBrowserGraphFile(repoPath)) continue;
     const source = await readFile(file, "utf8");
     // ServerFn definition files are the intended browser entry for RPCs;
@@ -170,7 +218,7 @@ export async function analyzeBrowserServerBoundary(rootDir = root) {
     for (const importSource of imports) {
       const target = resolveRelativeImport(file, importSource, sourceFiles);
       if (!target) continue;
-      const targetPath = toRepoPath(target);
+      const targetPath = toRepoPath(target, rootDir);
       if (/(?:^|\/)[^/]+\.server\.(?:[cm]?[jt]sx?)$/.test(targetPath)) {
         violations.push({
           type: "browser-static-server-import",
@@ -182,19 +230,41 @@ export async function analyzeBrowserServerBoundary(rootDir = root) {
   }
 
   // Business modules must reach SQLite only through the platform
-  // Repository/Port. This pass scans the ENTIRE `src/modules/**` source tree —
-  // including `*.server.ts`, `infrastructure/`, `application/` and tests — for
+  // Repository/Port. This pass scans the ENTIRE `src/modules/**` source tree �?
+  // including `*.server.ts`, `infrastructure/`, `application/` and tests �?for
   // static `node:sqlite` imports, independent of the browser-graph membership
   // used above.
   for (const file of files) {
-    const repoPath = toRepoPath(file);
+    const repoPath = toRepoPath(file, rootDir);
     if (!/^src\/modules\//.test(repoPath)) continue;
     if (!isSourceName(repoPath)) continue;
     const source = await readFile(file, "utf8");
     for (const importSource of extractStaticImports(source)) {
-      if (importSource === "node:sqlite" || importSource === "sqlite") {
+      if (isSqliteDriverSpecifier(importSource)) {
         violations.push({
           type: "business-node-sqlite-import",
+          file: repoPath,
+          detail: importSource,
+        });
+      }
+    }
+  }
+
+  // Platform storage layers: the driver import may only appear inside
+  // `infrastructure/**`. Everything else �?contracts, database host, capability
+  // probe, migration runner, backup, integrity, recovery �?must go through a
+  // narrow `infrastructure/*.server.ts` export, so a future refactor cannot
+  // quietly re-introduce `new DatabaseSync(...)` in a business-facing module.
+  // Only VALUE imports count: `import type { DatabaseSync } from "node:sqlite"`
+  // is erased at compile time and carries no runtime dependency.
+  for (const file of files) {
+    const repoPath = toRepoPath(file, rootDir);
+    if (!isPlatformDriverRestricted(repoPath)) continue;
+    const source = await readFile(file, "utf8");
+    for (const importSource of extractStaticImports(source)) {
+      if (isSqliteDriverSpecifier(importSource)) {
+        violations.push({
+          type: "platform-node-sqlite-outside-infrastructure",
           file: repoPath,
           detail: importSource,
         });
