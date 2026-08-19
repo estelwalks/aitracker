@@ -177,6 +177,21 @@ test("opens a file database and asserts every required pragma", (t) => {
   assert.equal(existsSync(host.path), true);
 });
 
+test("creates missing parent directories before probing and opening a file database", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const nestedPath = join(dir, "level-one", "level-two", "nested.db");
+  const host = DatabaseHost.open({
+    path: nestedPath,
+    versionsProvider: versionsProvider("99.0.0"),
+  });
+  t.after(() => host.close());
+  t.after(() => rmTempDir(dir));
+
+  assert.equal(host.isOpen, true);
+  assert.equal(existsSync(nestedPath), true);
+  assert.equal(pragmaValue(host, "PRAGMA journal_mode"), "wal");
+});
+
 test("rejects a second open of the same absolute path with already-open", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
