@@ -15,6 +15,11 @@ import type { VersionCheckResult } from "./version-check.server";
  */
 
 import { APP_VERSION, STORAGE_KEY_PREFIX } from "./app-config";
+import {
+  listPreferences,
+  setPreference,
+  type PreferenceValue,
+} from "./preferences/client.ts";
 
 const PREF_HAS_UPDATE = `${STORAGE_KEY_PREFIX}update.hasUpdate`;
 const PREF_LATEST = `${STORAGE_KEY_PREFIX}update.latestVersion`;
@@ -26,15 +31,6 @@ const PREF_CURRENT = `${STORAGE_KEY_PREFIX}update.currentVersion`;
 const PREF_STATUS = `${STORAGE_KEY_PREFIX}update.status`;
 export const VERSION_CHECK_TTL_MS = 24 * 60 * 60 * 1_000;
 
-interface DesktopPrefsApi {
-  getPreferences(): Promise<Record<string, unknown>>;
-  setPreference(key: string, value: unknown): Promise<void>;
-}
-
-function desktopApi(): DesktopPrefsApi | undefined {
-  return (window as { desktopApi?: DesktopPrefsApi }).desktopApi;
-}
-
 export interface UpdateState {
   hasUpdate: boolean;
   result: VersionCheckResult | null;
@@ -43,52 +39,28 @@ export interface UpdateState {
   refresh: () => Promise<void>;
 }
 
-function readString(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Seed localStorage from the IPC prefs file on mount so the synchronous red-dot
- * render sees the persisted value even after an Electron restart.
- */
-async function seedFromPlatform(): Promise<void> {
-  const api = desktopApi();
-  if (!api) return;
-  try {
-    const prefs = await api.getPreferences();
-    for (const key of [
-      PREF_HAS_UPDATE,
-      PREF_LATEST,
-      PREF_CHANGELOG,
-      PREF_RELEASE_URL,
-      PREF_DISMISSED_LATEST,
-      PREF_CHECKED_AT,
-      PREF_CURRENT,
-      PREF_STATUS,
-    ]) {
-      if (typeof prefs[key] === "string") {
-        window.localStorage.setItem(key, prefs[key] as string);
-      }
-    }
-  } catch {
-    // IPC unavailable; keep existing localStorage values.
-  }
+function stringValue(
+  values: Record<string, PreferenceValue>,
+  key: string,
+): string | null {
+  return typeof values[key] === "string" ? values[key] : null;
 }
 
 export function useVersionCheck(): UpdateState {
   const [result, setResult] = useState<VersionCheckResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [persisted, setPersisted] = useState<Record<string, PreferenceValue>>(
+    {},
+  );
 
   const runCheck = async (forceRefresh = true) => {
     setLoading(true);
     try {
       if (!forceRefresh) {
+        const values = await listPreferences();
+        setPersisted(values);
         const cached = readCachedVersionResult(
-          (key) => readString(key),
+          (key) => stringValue(values, key),
           Date.now(),
         );
         if (cached) {
@@ -99,7 +71,6 @@ export function useVersionCheck(): UpdateState {
       const { checkForUpdates } = await import("./version-check.server");
       const next = await checkForUpdates();
       setResult(next);
-      const api = desktopApi();
       const hasUpdate = next.status === "newer";
       const payload: Record<string, string> = {
         [PREF_HAS_UPDATE]: JSON.stringify(hasUpdate),
@@ -110,18 +81,12 @@ export function useVersionCheck(): UpdateState {
         [PREF_CURRENT]: next.currentVersion,
         [PREF_STATUS]: next.status,
       };
-      for (const [key, value] of Object.entries(payload)) {
-        try {
-          window.localStorage.setItem(key, value);
-        } catch {
-          // ignore
-        }
-      }
-      if (api) {
-        for (const [key, value] of Object.entries(payload)) {
-          void api.setPreference(key, value).catch(() => {});
-        }
-      }
+      await Promise.all(
+        Object.entries(payload).map(([key, value]) =>
+          setPreference(key, value),
+        ),
+      );
+      setPersisted((current) => ({ ...current, ...payload }));
     } catch {
       setResult(null);
     } finally {
@@ -132,7 +97,6 @@ export function useVersionCheck(): UpdateState {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      await seedFromPlatform();
       if (cancelled) return;
       await runCheck(false);
     })();
@@ -143,19 +107,17 @@ export function useVersionCheck(): UpdateState {
 
   const dismiss = () => {
     const latest = result?.latestVersion ?? "";
-    try {
-      window.localStorage.setItem(PREF_DISMISSED_LATEST, latest);
-    } catch {
-      // ignore
-    }
-    const api = desktopApi();
-    if (api)
-      void api.setPreference(PREF_DISMISSED_LATEST, latest).catch(() => {});
+    setPersisted((current) => ({
+      ...current,
+      [PREF_DISMISSED_LATEST]: latest,
+    }));
+    void setPreference(PREF_DISMISSED_LATEST, latest);
   };
 
-  const persistedHasUpdate = readString(PREF_HAS_UPDATE) === "true";
-  const dismissedLatest = readString(PREF_DISMISSED_LATEST) ?? "";
-  const latestVersion = result?.latestVersion ?? readString(PREF_LATEST);
+  const persistedHasUpdate = stringValue(persisted, PREF_HAS_UPDATE) === "true";
+  const dismissedLatest = stringValue(persisted, PREF_DISMISSED_LATEST) ?? "";
+  const latestVersion =
+    result?.latestVersion ?? stringValue(persisted, PREF_LATEST);
   const hasUpdate =
     persistedHasUpdate &&
     (latestVersion == null || latestVersion !== dismissedLatest);

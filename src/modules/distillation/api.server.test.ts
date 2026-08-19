@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { dirname } from "node:path";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,16 +10,9 @@ import {
   getCompositionRoot,
   resetCompositionRootForTests,
 } from "../../app/composition.server.ts";
-import { SystemClock } from "../../platform/persistence/clock.ts";
-import { NodeAtomicJsonStore } from "../../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 import type { AIExecutionResult } from "../ai-orchestration/contracts.ts";
 import type { CandidateOutput } from "./contracts.ts";
-import {
-  DEFAULT_DISTILL_CANDIDATE_FILE,
-  createAtomicCandidateStore,
-  distillCandidateStoreSchema,
-} from "./infrastructure/atomic-candidate-store.ts";
 import { loadDistillation, saveCandidateAsSkill } from "./api.server.ts";
 
 const execution = (): AIExecutionResult => ({
@@ -56,26 +48,15 @@ const candidate = (
     { source: "codex", sessionId: "s2" },
   ],
   generatedAt: "2026-08-07T00:01:00.000Z",
-  execution: execution().summary,
+  execution: { ...execution().summary, requestId: `distill:req-${id}` },
 });
 
-async function seedStore(dir: string, candidates: CandidateOutput[]) {
-  const filePath = join(
-    dir,
-    APP_DATA_DIR,
-    "tasks",
-    "distill-candidates.v1.json",
-  );
-  // The file lock requires the parent directory to exist before the first write.
-  await mkdir(dirname(filePath), { recursive: true });
-  const store = new NodeAtomicJsonStore({
-    filePath,
-    defaultValue: DEFAULT_DISTILL_CANDIDATE_FILE,
-    schema: distillCandidateStoreSchema(),
-    clock: new SystemClock(),
-  });
-  const persistence = createAtomicCandidateStore({ store });
+async function seedStore(_dir: string, candidates: CandidateOutput[]) {
+  const root = await getCompositionRoot();
+  const persistence = root.database.features.candidates;
   for (const item of candidates) await persistence.save(item);
+  await root.scheduler.stop();
+  resetCompositionRootForTests();
 }
 
 async function withIsolatedRoot<T>(
@@ -88,8 +69,11 @@ async function withIsolatedRoot<T>(
   process.env[ENV.USAGE_HOME] = dir;
   resetCompositionRootForTests();
   try {
+    await getCompositionRoot();
     return await fn(dir);
   } finally {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await (await getCompositionRoot()).scheduler.stop();
     resetCompositionRootForTests();
     if (previous === undefined) delete process.env[ENV.USAGE_HOME];
     else process.env[ENV.USAGE_HOME] = previous;
@@ -175,9 +159,7 @@ test("saveCandidateAsSkill refuses non-approved candidates, traversal names and 
 
     // Approved but traversal name. Rebuild the root so the new store state is
     // hydrated before the next action.
-    await seedStore(dir, [
-      { ...candidate("candidate-1", "approved"), candidateId: "candidate-2" },
-    ]);
+    await seedStore(dir, [candidate("candidate-2", "approved")]);
     resetCompositionRootForTests();
     const traversal = await saveCandidateAsSkill({
       candidateId: "candidate-2",

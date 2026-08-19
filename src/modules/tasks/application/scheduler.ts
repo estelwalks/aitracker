@@ -244,10 +244,9 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const definitionFor = (taskId: TaskId) =>
     catalog.find((item) => item.id === taskId);
   const nowIso = () => clock.now().toISOString();
-  // NodeAtomicJsonStore deliberately reports simultaneous writer/reader
-  // attempts as a lock conflict. Scheduler transitions are asynchronous, so
-  // serialize this runtime's own accesses instead of turning a harmless
-  // completion + scheduling read into a failed listener.
+  // Scheduler transitions are asynchronous, so serialize this runtime's own
+  // accesses instead of turning a completion + scheduling read into a failed
+  // listener.
   let runStoreTail: Promise<void> = Promise.resolve();
   const withRuns = async <T>(operation: () => Promise<T>): Promise<T> => {
     const next = runStoreTail.then(operation, operation);

@@ -11,6 +11,7 @@ import { APP_DATA_DIR, ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
 import {
   getCompositionRoot,
   resetCompositionRootForTests,
+  setSecretCodecForTests,
 } from "../../app/composition.server.ts";
 import {
   generateReport,
@@ -52,11 +53,23 @@ async function withIsolatedRoot<T>(
   const previous = process.env[ENV.USAGE_HOME];
   process.env[ENV.USAGE_HOME] = dir;
   resetCompositionRootForTests();
+  setSecretCodecForTests({
+    async encrypt(plaintext) {
+      return {
+        ciphertext: new TextEncoder().encode(`test:${plaintext}`),
+        encryptionKind: "safe-storage",
+      };
+    },
+    async decrypt(secret) {
+      return new TextDecoder().decode(secret.ciphertext).slice("test:".length);
+    },
+  });
   try {
     const root = await getCompositionRoot();
     return await fn(root, dir);
   } finally {
     resetCompositionRootForTests();
+    setSecretCodecForTests();
     if (previous === undefined) delete process.env[ENV.USAGE_HOME];
     else process.env[ENV.USAGE_HOME] = previous;
     await rm(dir, { recursive: true, force: true });

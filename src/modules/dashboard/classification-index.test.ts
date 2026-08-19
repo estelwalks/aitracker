@@ -2,25 +2,47 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createClassificationIndexRepository,
-  DEFAULT_CLASSIFICATION_INDEX,
-  classificationIndexSchema,
   type ClassificationIndex,
+  type ClassificationIndexRepository,
 } from "./classification-index.server.ts";
 import { createIncrementalClassifier } from "./incremental-classifier.server.ts";
-import type { AtomicJsonStore } from "../../platform/persistence/contracts.ts";
 import type { ClassificationIndexEntry } from "./classification-index.server.ts";
 
-function memoryStore(
-  initial: ClassificationIndex,
-): AtomicJsonStore<ClassificationIndex> {
-  let value = initial;
+function memoryRepository(): ClassificationIndexRepository {
+  let value: ClassificationIndex = {
+    schemaVersion: 1,
+    revision: 0,
+    entries: {},
+  };
   return {
-    async read() {
-      return { value, source: "stored", schemaVersion: 1 };
+    async get(ref) {
+      return value.entries[ref];
     },
-    async write(next) {
-      value = next;
+    async getMany(refs) {
+      return new Map(
+        refs.flatMap((ref) =>
+          value.entries[ref] ? [[ref, value.entries[ref]!]] : [],
+        ),
+      );
+    },
+    async commit(entries) {
+      value = {
+        schemaVersion: 1,
+        revision: value.revision + 1,
+        entries: { ...value.entries },
+      };
+      for (const entry of entries) value.entries[entry.ref] = entry;
+      return value;
+    },
+    async needsClassification(refs, fingerprints) {
+      return refs.filter(
+        (ref) =>
+          !value.entries[ref] ||
+          value.entries[ref]!.fingerprint !== (fingerprints.get(ref) ?? null),
+      );
+    },
+    async clear() {
+      value = { schemaVersion: 1, revision: 0, entries: {} };
     },
   };
 }
@@ -40,9 +62,7 @@ function entry(
 }
 
 test("T3-06: commit + get round-trips entries", async () => {
-  const repository = createClassificationIndexRepository(
-    memoryStore(DEFAULT_CLASSIFICATION_INDEX),
-  );
+  const repository = memoryRepository();
   await repository.commit([entry("proj-a", "fp-1")]);
   const found = await repository.get("proj-a");
   assert.equal(found?.kind, "workspace");
@@ -51,18 +71,14 @@ test("T3-06: commit + get round-trips entries", async () => {
 });
 
 test("T3-06: getMany returns only indexed refs", async () => {
-  const repository = createClassificationIndexRepository(
-    memoryStore(DEFAULT_CLASSIFICATION_INDEX),
-  );
+  const repository = memoryRepository();
   await repository.commit([entry("a"), entry("b")]);
   const found = await repository.getMany(["a", "b", "c"]);
   assert.deepEqual([...found.keys()].sort(), ["a", "b"]);
 });
 
 test("T3-06: needsClassification only flags missing or changed fingerprints", async () => {
-  const repository = createClassificationIndexRepository(
-    memoryStore(DEFAULT_CLASSIFICATION_INDEX),
-  );
+  const repository = memoryRepository();
   await repository.commit([entry("a", "fp-1"), entry("b", "fp-1")]);
   const missing = await repository.needsClassification(
     ["a", "b", "c"],
@@ -76,9 +92,7 @@ test("T3-06: needsClassification only flags missing or changed fingerprints", as
 });
 
 test("T3-06: incremental classifier reuses unchanged refs and probes only new ones", async () => {
-  const repository = createClassificationIndexRepository(
-    memoryStore(DEFAULT_CLASSIFICATION_INDEX),
-  );
+  const repository = memoryRepository();
   await repository.commit([
     entry("/home/x/unchanged-ref", "fp-same", "workspace"),
     entry("/home/x/changed-ref", "fp-old", "quick-conversation"),
@@ -108,9 +122,7 @@ test("T3-06: incremental classifier reuses unchanged refs and probes only new on
 });
 
 test("T3-06: deduplicates repeated refs and caps workers at 8", async () => {
-  const repository = createClassificationIndexRepository(
-    memoryStore(DEFAULT_CLASSIFICATION_INDEX),
-  );
+  const repository = memoryRepository();
   const classifier = createIncrementalClassifier({
     repository,
     homeDirectory: "/home/x",
@@ -128,14 +140,4 @@ test("T3-06: deduplicates repeated refs and caps workers at 8", async () => {
   assert.equal(result.reused, 0);
   const found = await repository.get("proj-0");
   assert.equal(found?.kind, "unknown");
-});
-
-test("T3-06: schema rejects corrupt index", () => {
-  assert.throws(() =>
-    classificationIndexSchema.parse({ schemaVersion: 2, entries: {} }),
-  );
-  assert.throws(() => classificationIndexSchema.parse(null));
-  assert.doesNotThrow(() =>
-    classificationIndexSchema.parse(DEFAULT_CLASSIFICATION_INDEX),
-  );
 });

@@ -1,9 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-
 import { BUILTIN_RATES } from "../../lib/pricing/index.ts";
-import { APP_DATA_DIR } from "../../lib/app-config.ts";
 import { RUNTIME_POLICY } from "../../app/runtime-policy.generated.ts";
 import type { Currency } from "../../lib/i18n/locale.ts";
 
@@ -17,12 +12,15 @@ import type { Currency } from "../../lib/i18n/locale.ts";
  * refresh runs. Offline failures keep last-known-good.
  */
 
-export const EXCHANGE_CACHE_FILE = "usd-rates.json";
-
 interface ExchangeCache {
   fetchedAt: string;
   date: string;
   rates: Partial<Record<Currency, number>>;
+}
+
+export interface ExchangeRateCache {
+  read(): Promise<ExchangeCache | undefined>;
+  write(value: ExchangeCache): Promise<void>;
 }
 
 export type ExchangeRateSource = "live" | "cache" | "stale-cache" | "fallback";
@@ -71,27 +69,29 @@ function withFallbacks(
   };
 }
 
-async function readJson<T>(path: string): Promise<T | undefined> {
-  try {
-    return JSON.parse(await readFile(path, "utf8")) as T;
-  } catch {
-    return undefined;
-  }
-}
-
-async function writeJson(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(path, `${JSON.stringify(value)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
-}
-
 const EXCHANGE_URL =
   "https://api.frankfurter.dev/v2/latest?base=USD&symbols=CNY,JPY,KRW";
 
-function cachePath(homeDirectory: string): string {
-  return join(homeDirectory, APP_DATA_DIR, "cache", EXCHANGE_CACHE_FILE);
+async function defaultCache(): Promise<ExchangeRateCache> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const repository = (await getCompositionRoot()).database.features.httpCache;
+  return {
+    async read() {
+      return (await repository.get<ExchangeCache>("exchange-rates", "usd"))
+        ?.payload;
+    },
+    async write(value) {
+      const fetchedAtMs = Date.parse(value.fetchedAt);
+      await repository.put({
+        namespace: "exchange-rates",
+        key: "usd",
+        payload: value,
+        fetchedAtMs,
+        expiresAtMs: Number.MAX_SAFE_INTEGER,
+      });
+    },
+  };
 }
 
 function builtinFallback(now: Date): ExchangeRateSnapshot {
@@ -105,15 +105,18 @@ function builtinFallback(now: Date): ExchangeRateSnapshot {
 }
 
 export function createExchangeRateRepository(
-  options: { readonly fetcher?: typeof fetch; readonly now?: () => Date } = {},
+  options: {
+    readonly fetcher?: typeof fetch;
+    readonly now?: () => Date;
+    readonly cache?: ExchangeRateCache;
+  } = {},
 ): ExchangeRateRepository {
   const policy = RUNTIME_POLICY.snapshotPolicies.exchangeRates;
   const freshForMs = policy.freshForMinutes * 60 * 1000;
 
-  const loadCached = async (
-    homeDirectory: string,
-  ): Promise<ExchangeCache | undefined> =>
-    readJson<ExchangeCache>(cachePath(homeDirectory));
+  const cache = async () => options.cache ?? defaultCache();
+  const loadCached = async (): Promise<ExchangeCache | undefined> =>
+    (await cache()).read();
 
   const snapshotFromCache = (
     cached: ExchangeCache | undefined,
@@ -134,17 +137,18 @@ export function createExchangeRateRepository(
   };
 
   return {
-    async readCache({ homeDirectory = homedir() } = {}) {
+    async readCache() {
       return snapshotFromCache(
-        await loadCached(homeDirectory),
+        await loadCached(),
         options.now?.() ?? new Date(),
       );
     },
 
-    async refresh({ homeDirectory = homedir(), fetcher, now } = {}) {
+    async refresh({ fetcher, now } = {}) {
       const current = now ?? options.now?.() ?? new Date();
       const runFetcher = fetcher ?? options.fetcher ?? fetch;
-      const cached = await loadCached(homeDirectory);
+      const cached = await loadCached();
+      let next: ExchangeCache;
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), policy.timeoutMs);
@@ -170,23 +174,25 @@ export function createExchangeRateRepository(
         };
         if (rates.CNY === 0 || rates.JPY === 0 || rates.KRW === 0)
           throw new Error("missing currency");
-        const next: ExchangeCache = {
+        next = {
           fetchedAt: current.toISOString(),
           date: value.date,
           rates,
-        };
-        await writeJson(cachePath(homeDirectory), next);
-        return {
-          rates: { ...rates, USD: 1 },
-          date: next.date,
-          source: "live",
-          fetchedAt: next.fetchedAt,
-          stale: false,
         };
       } catch {
         // Offline/failure: keep last-known-good (stale cache or builtin).
         return snapshotFromCache(cached, current);
       }
+      // SQLite persistence failures are fatal; only network/response failures
+      // may use the last known business value.
+      await (await cache()).write(next);
+      return {
+        rates: { ...next.rates, USD: 1 } as Record<Currency, number>,
+        date: next.date,
+        source: "live",
+        fetchedAt: next.fetchedAt,
+        stale: false,
+      };
     },
   };
 }
