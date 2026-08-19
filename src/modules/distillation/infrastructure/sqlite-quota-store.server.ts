@@ -5,6 +5,7 @@ import {
 } from "../../../platform/database/sqlite-values.server.ts";
 import {
   distillDailyQuotaLimit,
+  localDateKey,
   type DistillQuota,
   type DistillQuotaPort,
 } from "../quota.ts";
@@ -16,7 +17,10 @@ export function createSqliteDistillQuotaStore(
   options: { readonly limit?: number; readonly today?: () => string } = {},
 ): DistillQuotaPort {
   const limit = options.limit ?? distillDailyQuotaLimit();
-  const today = options.today ?? (() => new Date().toISOString().slice(0, 10));
+  // The default clock is the *local* calendar day, matching `quota.localDateKey`
+  // so `read()` and `increment()` always agree on the same key even when the
+  // UTC day (new Date().toISOString()) differs across a midnight boundary.
+  const today = options.today ?? (() => localDateKey(new Date()));
   const readDate = (date: string): DistillQuota => {
     const row = database
       .prepare(
