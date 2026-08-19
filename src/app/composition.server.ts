@@ -158,6 +158,8 @@ export interface CompositionRoot {
   readonly wslSnapshot: import("../platform/discovery/wsl-snapshot-runtime.server.ts").WslSnapshotRuntime;
   /** Project classification service (P3-T3-06); queries read the index. */
   readonly classificationService: import("../modules/dashboard/classification-service.server.ts").ClassificationService;
+  /** Search index service (S-03, T-03-03); SQLite-backed safe projection. */
+  readonly searchIndex: import("../modules/search/application/index.ts").SearchIndexService;
   /** Renderer-safe heartbeat for the desktop background listener. */
   readonly monitoring: MonitoringRuntime;
   /** In-memory read-model metrics sink (P0-T0-09; observe-only). */
@@ -398,6 +400,17 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     now: () => clock.now().getTime(),
     requestRefresh: deferredPort(() => refreshPorts.installation),
   });
+
+  // S-03 (T-03-03): search index service. The repository persists the safe
+  // projection in search_documents; the service keeps the in-memory snapshot
+  // for O(1) query scoring and rebuilds it from the SQLite store on startup.
+  const { SearchIndexService } =
+    await import("../modules/search/application/index.ts");
+  const searchIndex = new SearchIndexService(
+    databaseRuntime.features.searchIndex,
+    clock,
+  );
+  await searchIndex.load();
 
   const monitoring = createMonitoringRuntime({
     store: monitoringStore,
@@ -681,6 +694,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     installationSnapshot,
     wslSnapshot,
     classificationService,
+    searchIndex,
     monitoring,
     metrics,
     performanceRollout,
