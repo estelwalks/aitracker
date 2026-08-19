@@ -2191,7 +2191,6 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
     "maxDiscoveredEntriesPerSource": 30000,
     "maxJsonlLineLength": 16777216,
     "futureTimestampToleranceMs": 86400000,
-    "cacheFileName": "local-usage-index-v10.json",
     "cacheNote": "The implementation cache version (PERSISTENT_CACHE_VERSION) and the registry fingerprint stay in TypeScript; changing either invalidates the persistent cache."
   },
   "skillMarketPolicy": {
@@ -2386,4 +2385,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "753dfd0d004bf445";
+export const TOOL_REGISTRY_VERSION: string = "30980766eed23a5c";

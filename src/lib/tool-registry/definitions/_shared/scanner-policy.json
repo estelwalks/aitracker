@@ -6,6 +6,5 @@
   "maxDiscoveredEntriesPerSource": 30000,
   "maxJsonlLineLength": 16777216,
   "futureTimestampToleranceMs": 86400000,
-  "cacheFileName": "local-usage-index-v10.json",
   "cacheNote": "The implementation cache version (PERSISTENT_CACHE_VERSION) and the registry fingerprint stay in TypeScript; changing either invalidates the persistent cache."
 }
