@@ -139,3 +139,35 @@ test("keeps the head plus one previous generation and clears on demand", async (
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("snapshot_blobs only accepts valid JSON (SQL CHECK) and bounded payloads", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-json-"));
+  try {
+    const host = openHost(directory);
+    host
+      .prepare(
+        `INSERT INTO snapshot_generations (snapshot_id, domain, schema_version, revision, status, created_at_ms)
+         VALUES (?, 'wsl', 1, ?, 'fresh', 0)`,
+      )
+      .run("g1", "r1");
+
+    assert.throws(
+      () =>
+        host
+          .prepare(
+            "INSERT INTO snapshot_blobs (snapshot_id, payload_json, payload_bytes) VALUES (?, ?, ?)",
+          )
+          .run("g1", "{not json", 9),
+      (error: unknown) =>
+        error instanceof DatabaseError && error.code === "constraint-violation",
+    );
+    host
+      .prepare(
+        "INSERT INTO snapshot_blobs (snapshot_id, payload_json, payload_bytes) VALUES (?, ?, ?)",
+      )
+      .run("g1", "{}", 2);
+    host.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
