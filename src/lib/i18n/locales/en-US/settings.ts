@@ -97,6 +97,11 @@ export const settings = {
       desc: "No security scan service is available (not connected to the desktop app or the local companion). The auto-scan schedule needs that service to be saved.",
       retry: "Reconnect",
     },
+    llmReview: "AI-assisted detection",
+    llmReviewHint:
+      "In addition to static rules, use the configured model to add a sanitized supplementary analysis; it never rewrites the verdict or downgrades severity.",
+    llmReviewUnconfiguredHint:
+      "Configure a model to enable AI-assisted detection",
     schedule: {
       title: "Scan schedule",
       enabled: "Automatic scanning",
@@ -208,6 +213,55 @@ export const settings = {
   updateFailed: "Could not fetch version info",
   viewRelease: "View release page",
   sourceRepo: "Source repository",
+  insight: {
+    enhanced: "AI enhanced",
+    enhance: "Enhance wording",
+    enhancing: "Enhancing…",
+    unavailableHint:
+      "No model configured — enhance is unavailable (configure in Settings)",
+    severity: {
+      info: "Info",
+      attention: "Attention",
+      risk: "Risk",
+    },
+    status: {
+      rules: "Local rules only",
+      "enhanced-cached": "AI enhanced · cached",
+      "enhanced-ready": "AI enhanced",
+      "enhancer-unavailable": "Enhancer unavailable",
+      "budget-exceeded": "Daily call limit reached",
+      timeout: "Enhance timed out",
+      "enhancer-failed": "Enhance failed",
+      "invalid-output": "Invalid enhancer output",
+      stale: "Data may be stale",
+    },
+    section: {
+      title: "Today's insights",
+      desc: "Choose how insights are generated: local rules only, or enhanced by a model.",
+      mode: "Generation mode",
+      modeRules: "Local rules only",
+      modeRulesDesc:
+        "Generate insights with local rules only; no model is called.",
+      modeManual: "Manual enhance",
+      modeManualDesc: "Call the model only when you tap “Enhance wording”.",
+      modeAuto: "Auto enhance",
+      modeAutoDesc: "Automatically call the model to enhance wording on open.",
+      profile: "Enhance profile",
+      profileHint:
+        "Profile used for enhancement; falls back to the active profile when empty.",
+      profileEmpty:
+        "No model configured yet — add one in the model config above",
+      consent: "Authorize auto-enhance",
+      consentRequired: "Auto-enhance requires consent before saving",
+      consentDesc:
+        "When authorized, auto-enhance sends de-identified aggregate stats (today's tokens, tool count, session count, security counts) and the current page id; it never sends conversation content, file paths, API keys, or personal identity.",
+      dailyLimit: "Daily call limit",
+      dailyLimitHint: "Leave empty to default to 30 (server-enforced)",
+      save: "Save",
+      saved: "Insight settings saved",
+      saveFailed: "Failed to save insight settings",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "Launch at login is only available in the desktop app",
@@ -225,5 +279,7 @@ export const settings = {
     resetDone: "Reset {count} app preferences & security history items",
     resetDoneBrowser: "Reset app preferences & security history in the browser",
     resetFailed: "Failed to reset app preferences",
+    llmReviewSaved: "AI-assisted detection settings saved",
+    llmReviewSaveFailed: "Failed to save AI-assisted detection settings",
   },
 } as const;

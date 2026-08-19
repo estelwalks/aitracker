@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { EmptyState, Panel, TTButton } from "../../../components/tt";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey } from "../../../lib/i18n/messages";
@@ -194,31 +194,6 @@ export function DistillationPage({
     (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
     0,
   );
-
-  const jarvisLines = useMemo(() => {
-    const lines: string[] = [];
-    if (selectionCount > 0) {
-      lines.push(
-        t("distill.insightSelected", {
-          count: selectionCount,
-          turns: selectedTurns,
-        }),
-      );
-    }
-    if (waitingCount > 0) {
-      lines.push(t("distill.insightWaiting", { count: waitingCount }));
-    }
-    if (runs > 0) {
-      lines.push(t("distill.insightRuns", { count: runs }));
-    }
-    if (approved > 0) {
-      lines.push(t("distill.insightApproved", { count: approved }));
-    }
-    if (lines.length === 0) {
-      lines.push(t("distill.insightEmpty"));
-    }
-    return lines;
-  }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
 
   function toggle(item: DistillationSessionItem) {
     setSelected(
@@ -480,9 +455,10 @@ export function DistillationPage({
         </header>
 
         <div className="mb-3">
-          <JarvisInsight
+          <InsightCard
+            surfaceId="distill"
+            variant="hero"
             title={t("distill.jarvisTitle")}
-            lines={jarvisLines}
             rotateLabel={t("distill.insightRotate")}
             dotsLabel={t("distill.insightDots")}
           />

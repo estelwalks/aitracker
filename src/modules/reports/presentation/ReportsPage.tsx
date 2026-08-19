@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import {
@@ -309,43 +309,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     });
   }, [periods, query, kind, feed.reports]);
 
-  const insightLines = useMemo(() => {
-    const lines: string[] = [];
-    if (feed.reportCount > 0) {
-      lines.push(
-        t("reports.insight.reports", {
-          count: format.formatNumber(feed.reportCount),
-        }),
-      );
-    }
-    if (feed.runCount > 0) {
-      lines.push(
-        t("reports.insight.runs", {
-          count: format.formatNumber(feed.runCount),
-        }),
-      );
-    }
-    if (feed.density.total > 0) {
-      lines.push(
-        t("reports.insight.sessions", {
-          count: format.formatNumber(feed.density.total),
-        }),
-      );
-    }
-    if (generateBlocked) {
-      lines.push(t("reports.insight.modelNotConfigured"));
-    }
-    if (lines.length === 0) lines.push(t("reports.insight.empty"));
-    return lines;
-  }, [
-    feed.reportCount,
-    feed.runCount,
-    feed.density.total,
-    generateBlocked,
-    t,
-    format,
-  ]);
-
   /* Load the body for the selected period: saved draft first, else the
      persisted report body (read-only from the server). */
   useEffect(() => {
@@ -472,9 +435,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const prevKey = addPeriods(kind, selectedKey, -1);
   return (
     <div className="space-y-4 pb-12">
-      <JarvisInsight
+      <InsightCard
+        surfaceId="reports"
+        variant="hero"
         title={t("reports.insight.title")}
-        lines={insightLines}
         rotateLabel={t("reports.insight.rotate")}
         dotsLabel={t("reports.insight.dots")}
       />

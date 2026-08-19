@@ -11,15 +11,11 @@ import {
 import { toast } from "sonner";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
-import { JarvisInsight } from "../../../../components/JarvisInsight";
+import { InsightCard } from "../../../insights/page/presentation/insight-card";
 import { EmptyState, TTButton } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import { toUiError } from "../../../../lib/errors";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import {
-  composeSourcesInsights,
-  resolveInsightLines,
-} from "../../../../lib/page-insights";
 import type { UsageLogParsing } from "../../../../lib/tools/catalog";
 import { getSourcesQuery, refreshSourcesQuery } from "../server-fns";
 import type {
@@ -81,7 +77,7 @@ const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
 };
 
 export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
-  const { t, format, locale } = useI18n();
+  const { t, format } = useI18n();
   const [summary, setSummary] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [migrationSource, setMigrationSource] =
@@ -109,11 +105,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           entry.paths.some((path) => path.toLocaleLowerCase().includes(kw))),
     );
   }, [summary.entries, keyword, statusFilter]);
-  const insightLines = useMemo(
-    () => resolveInsightLines(t, composeSourcesInsights(summary, locale)),
-    [t, summary, locale],
-  );
-
   async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
@@ -184,9 +175,10 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         </div>
       </header>
 
-      <JarvisInsight
+      <InsightCard
+        surfaceId="sources"
+        variant="hero"
         title={t("insights.title")}
-        lines={insightLines}
         rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />

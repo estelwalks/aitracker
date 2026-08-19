@@ -34,7 +34,9 @@ function InsightSkeleton({ variant }: { variant: "hero" | "inline" }) {
       className={`dashboard-insight-hero${hero ? "" : " dashboard-insight-inline"}`}
       aria-hidden="true"
     >
-      <div className={`relative flex min-w-0 items-center ${hero ? "gap-4" : "gap-3"}`}>
+      <div
+        className={`relative flex min-w-0 items-center ${hero ? "gap-4" : "gap-3"}`}
+      >
         <span
           className={`shrink-0 animate-pulse rounded-full bg-surface-2 ${hero ? "size-10" : "size-8"}`}
         />
@@ -89,13 +91,21 @@ export function InsightCard({
   const topSeverity = lines[0]?.severity;
   const actionLines = lines.filter((line) => line.action != null);
 
+  const enhanceHint =
+    envelope?.status === "enhancer-unavailable" ? (
+      <span
+        className="max-w-[220px] text-right text-[10px] leading-snug text-muted-foreground"
+        title={t("settings.insight.unavailableHint")}
+      >
+        {t("settings.insight.unavailableHint")}
+      </span>
+    ) : null;
+
   const actions =
-    actionLines.length === 0 ? undefined : (
+    actionLines.length === 0 && enhanceHint == null ? undefined : (
       <div className="flex flex-col items-end gap-1.5">
         {actionLines.map((line) => {
-          const action = line.action as NonNullable<
-            (typeof line)["action"]
-          >;
+          const action = line.action as NonNullable<(typeof line)["action"]>;
           const path = insightActionPath(action.id);
           const content = (
             <>
@@ -120,6 +130,7 @@ export function InsightCard({
             </Link>
           );
         })}
+        {enhanceHint}
       </div>
     );
 
@@ -143,4 +154,5 @@ export function InsightCard({
       rotateLabel={rotateLabel}
       actions={actions}
     />
-  );}
+  );
+}
