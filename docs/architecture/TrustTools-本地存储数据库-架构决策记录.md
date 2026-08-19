@@ -4,16 +4,17 @@
 |------|-----|
 | 文档类型 | 架构决策记录 (ADR) |
 | 项目名称 | TrustTools-本地存储数据库 |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 | 创建日期 | 2026-08-19 11:12:47 |
-| 更新日期 | 2026-08-19 11:53:04 |
+| 更新日期 | 2026-08-20 |
 | 生成工具 | tech-selection + document-header |
-| 文档状态 | 草稿 |
+| 文档状态 | 已接受 |
 
 ## 修订记录
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.2 | 2026-08-20 | 按新项目模式定稿：移除 legacy 回退/迁移路线，SQLite 为唯一应用存储权威；状态改为 accepted |
 | v1.1 | 2026-08-19 11:53:04 | 将运行时基线更新为 Electron 43.4.1 / Node 24.18.1 / SQLite 3.53.1，确认 WAL 版本缺陷已修复并采用 WAL 默认策略 |
 | v1.0 | 2026-08-19 11:12:47 | 完成嵌入式数据库、Node 驱动、日志模式和访问层选型 |
 
@@ -21,7 +22,7 @@
 
 ## 1. 状态
 
-proposed
+accepted
 
 ## 2. 决策范围
 
@@ -42,7 +43,7 @@ proposed
 | SQLite + `node:sqlite` | 高：事务、关联、FTS5、JSON 均满足 | 高：仓库已使用，零新增运行时依赖 | 低：随 Electron/Node 分发，无独立服务 | 单机读写和百万级本地索引匹配 | Node 24 API 仍未达到 Stability 2；SQLite 版本随 Electron 固定 | **采用**，通过薄 Port、精确版本和启动探针隔离 |
 | SQLite + `better-sqlite3` | 高 | 中 | 中高：原生 addon 需按 Electron ABI 重建、签名和多平台验证 | 成熟同步 API，性能良好 | 供应链、ABI、打包和升级成本增加 | 作为 `node:sqlite` 不可用时的备选驱动，不作为首选 |
 | libSQL/本地同步客户端 | 中 | 中低 | 中高：增加客户端/同步语义 | 支持远程同步和扩展 | 当前无云同步需求，增加隐私和运维面 | 不采用；出现跨设备同步需求时复审 |
-| 保持多份 Atomic JSON | 低到中 | 最高 | 低 | 读全文件、关联/N+1、并发写和增长性较差 | 文件数量和 schema 漂移继续扩大 | 仅作为迁移期兼容源，不作为目标存储 |
+| 保持多份 Atomic JSON | 低到中 | 最高 | 低 | 读全文件、关联/N+1、并发写和增长性较差 | 文件数量和 schema 漂移继续扩大 | 不采用；JSON 存储代码已删除，不再作为任何存储 |
 
 ## 4. 决策
 
@@ -50,9 +51,9 @@ proposed
 2. 首选驱动为 `node:sqlite` 的 `DatabaseSync`，封装在 `SqliteDatabasePort` 后；业务模块只依赖 Repository，不依赖驱动 API。
 3. 不引入 ORM。使用版本化 SQL migration、prepared statement、明确事务和 Zod 边界校验；避免再维护一套 ORM schema 与 SQL schema。
 4. 以 Electron 43.4.1 / Node 24.18.1 / SQLite 3.53.1 为首发运行时基线，直接使用 `journal_mode=WAL`、`synchronous=FULL`、`wal_autocheckpoint=1000`、`foreign_keys=ON`、`busy_timeout=5000`、`trusted_schema=OFF`；禁止在多进程中同时持有写连接。
-5. 初始化必须确认 `PRAGMA journal_mode=WAL` 返回 `wal`；否则关闭 SQLite 写路径并保留 legacy adapter。checkpoint 仅由 Database Host 管理，备份使用 `sqlite.backup()`，不能只复制 `.db` 而遗漏 `-wal/-shm` 状态。
+5. 初始化必须确认 `PRAGMA journal_mode=WAL` 返回 `wal`；失败即致命（关闭连接、记录稳定错误码并让启动失败），不存在 JSON 回退路径。checkpoint 仅由 Database Host 管理，备份使用 `sqlite.backup()`，不能只复制 `.db` 而遗漏 `-wal/-shm` 状态。
 6. `DatabaseSync` 显式启用 `readBigInts`、`defensive` 和严格命名参数，禁用 extension；Repository 承担 BigInt 边界转换与 DTO 校验。
-7. renderer 不获得数据库路径、连接或任意 SQL 能力。所有读写经 server/Electron trusted boundary 的固定 Repository 方法。
+7. renderer 不获得数据库路径、连接或任意 SQL 能力；不存在 `executeSql` 通用接口。所有读写经 server/Electron trusted boundary 的固定 Repository 方法。
 8. API Key 不以明文列存储。模型 Profile 与密钥分表，密钥使用 Electron `safeStorage`/操作系统凭据能力加密后存为 BLOB；无法加密时不自动迁移明文密钥，要求用户重新录入。
 9. 原始会话正文、Skill 源码、完整命令、绝对路径和外部数据库内容不进入应用数据库；仅保存现有的浏览器安全投影、聚合量和不可逆指纹。
 
@@ -76,8 +77,8 @@ proposed
 
 - 新增 `platform/database`，拥有连接生命周期、migration、事务、备份、完整性检查和测试 fixture。
 - 每个业务模块新增 SQLite Repository adapter；Domain/Application contract 保持不变。
-- migration 期间 JSON 文件保持只读并可回滚；完成校验后移入带时间戳的 legacy 归档目录，不立即删除。
-- 开发态若 Electron 主进程和 Vite server 是两个进程，只允许一个进程成为 Database Host；另一个进程必须通过现有 IPC/本地可信接口调用，或继续使用兼容 JSON adapter，禁止双写连接。
+- 无迁移期：全新安装直接使用 SQLite；JSON 存储代码已删除，不存在只读回滚或 legacy 归档。
+- 开发态若 Electron 主进程和 Vite server 是两个进程，只允许一个进程成为 Database Host；另一个进程必须通过现有 IPC/本地可信接口调用，禁止双写连接。
 - 备份使用 Node `sqlite.backup()`/SQLite Online Backup API；不能在数据库打开时只复制 `.db` 文件。
 
 ## 7. 复审触发条件

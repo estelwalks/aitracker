@@ -4,9 +4,9 @@
 |------|-----|
 | 文档类型 | 架构设计文档 (ARCH) |
 | 项目名称 | TrustTools-本地存储数据库 |
-| 版本 | v1.2 |
+| 版本 | v1.3 |
 | 创建日期 | 2026-08-19 11:12:47 |
-| 更新日期 | 2026-08-19 17:38:04 |
+| 更新日期 | 2026-08-20 |
 | 生成工具 | architecture-design + tech-selection + document-header |
 | 文档状态 | 草稿 |
 
@@ -14,6 +14,7 @@
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.3 | 2026-08-20 | 按新项目模式定稿：移除 legacy 回退/迁移路线，SQLite 为唯一应用存储权威；§2.2 迁移/回滚行改为无迁移；§3.2 删除 legacy 回退分支；§5.0 更新为首期 10 表（data_migration_runs 已删除）+ 0002~0005 迁移落地；§11 退役；§13 标注 M2~M6 已完成 |
 | v1.2 | 2026-08-19 17:38:04 | 按 Release 1 实现与独立安全审查加固回填：0001 头部 `PRAGMA application_id = 0x54544442`、`user_version` 由迁移运行器维护；枚举列 NOT NULL 与默认值、计数/格式域 CHECK、`ciphertext` 长度下限、禁存内容 SQL 级 CHECK；七列 UNIQUE 改为 COALESCE 表达式唯一索引；备份保留策略与迁移前备份 |
 | v1.1 | 2026-08-19 11:53:04 | 按 Electron 43.4.1、Node 24.18.1、SQLite 3.53.1 实测运行时更新驱动约束和连接安全参数，采用 WAL 默认策略，并与今日洞察 SQLite 存储方案对齐 |
 | v1.0 | 2026-08-19 11:12:47 | 基于现有模块化单体、AtomicJsonStore 和今日洞察双模式设计完整本地 SQLite 数据模型、迁移与实施方案 |
@@ -22,7 +23,7 @@
 
 ## 0. 结论摘要
 
-推荐在现有模块化单体中增加一个**服务端专用嵌入式 SQLite 存储层**，逐步收敛目前 15 份以上 `AtomicJsonStore`、Electron 偏好、安全历史、市场/汇率缓存以及未来今日洞察增强缓存。外部 Agent 的日志、会话正文、Skill 源码和外部 SQLite 仍是只读来源，不复制原始内容。
+推荐在现有模块化单体中增加一个**服务端专用嵌入式 SQLite 存储层**，收敛目前 15 份以上 `AtomicJsonStore`、Electron 偏好、安全历史、市场/汇率缓存以及未来今日洞察增强缓存。外部 Agent 的日志、会话正文、Skill 源码和外部 SQLite 仍是只读来源，不复制原始内容。
 
 关键设计：
 
@@ -32,7 +33,7 @@
 4. 表按平台、快照、用量/会话、Skill、任务、报告/知识、蒸馏、AI、安全、搜索、今日洞察 11 个域组织：完整目标为 52 张基线普通表、1 张可选反馈表和 1 张可选 FTS5 虚拟表；首期不一次性创建全部表。
 5. 高频查询字段规范化；低频、异构、小体量快照允许受约束 JSON。不能把整个系统再次设计成单表 JSON 文档库。
 6. Insight Core 的规则结果不落库；只持久化可选 Enhancer 偏好、缓存、执行审计和预算，确保不接大模型时数据库中也没有模型调用数据。
-7. 现有 Repository/Port 保持稳定，采用 shadow write → 对账 → read switch → JSON 归档的渐进迁移。
+7. 现有 Repository/Port 保持稳定；SQLite 为唯一应用存储权威，无 shadow write / read switch / JSON 归档（各域 SQLite 仓库已落地并接线）。
 
 ## 1. 输入验证、范围与假设
 
@@ -99,8 +100,8 @@
 | 启动 | migration + capability probe 正常路径 < 500 ms；失败时阻止写入而不是自动破坏性重建 |
 | 恢复 | 应用崩溃后数据库可打开，未完成任务按现有策略标记 abandoned |
 | 隐私 | renderer 无 SQL/路径/密钥；禁存内容在 DB 检查中为零 |
-| 迁移 | 每个 JSON 源可重复导入且幂等；切换前新旧结果逐项对账 |
-| 回滚 | 切换期可恢复到只读 JSON adapter；不需要降级数据库 schema |
+| 迁移 | N/A（无迁移）—— 全新安装直接使用 SQLite；无 JSON 源 |
+| 回滚 | 不需要降级数据库 schema；通过应用版本 + 备份恢复 |
 
 ## 3. 推荐存储架构
 
@@ -119,7 +120,6 @@ flowchart LR
   COL[只读 Scanner] --> STAGE[内存安全投影]
   STAGE --> REPO
   RAW[外部 JSON/JSONL/SQLite] --> COL
-  LEGACY[Legacy JSON Stores] -. 迁移期只读/对账 .-> REPO
 ```
 
 依赖方向必须是 `domain/application → repository port ← sqlite adapter → database host`。`node:sqlite` 只能出现在 `platform/database/infrastructure` 和模块的 `*.server.ts` adapter 中。
@@ -128,15 +128,15 @@ flowchart LR
 
 - 每个数据库绝对路径只有一个可写 `DatabaseHost` singleton。
 - `DatabaseSync` 仅在 server/Electron trusted process 创建；renderer bundle boundary 必须阻断 `node:sqlite`。
-- 运行时基线固定为 Electron 43.4.1 / Node 24.18.1 / SQLite 3.53.1；启动时必须读取并记录 `process.versions.electron/node/chrome` 与 `SELECT sqlite_version()`，版本或能力不匹配时拒绝开启 SQLite 写路径并保留 legacy adapter。
+- 运行时基线固定为 Electron 43.4.1 / Node 24.18.1 / SQLite 3.53.1；启动时必须读取并记录 `process.versions.electron/node/chrome` 与 `SELECT sqlite_version()`，版本或能力不匹配时拒绝开启 SQLite 写路径并让启动失败（无备用存储）。
 - 连接显式使用 `timeout=5000`、`readBigInts=true`、`allowExtension=false`、`allowBareNamedParameters=false`、`allowUnknownNamedParameters=false` 和 `defensive=true`；Repository 负责把 BigInt 安全转换为领域数值或字符串。
 - 首发直接使用 `journal_mode=WAL`、`synchronous=FULL`、`wal_autocheckpoint=1000`、`foreign_keys=ON`、`busy_timeout=5000`、`trusted_schema=OFF`。SQLite 3.53.1 已包含 WAL-reset 修复，满足当前单机本地文件系统基线。
-- 初始化必须读取 `PRAGMA journal_mode` 并断言为 `wal`。未返回 `wal` 通常代表目录/文件系统不支持或环境异常：关闭连接、记录稳定错误码并保留 legacy adapter，不静默降为另一种 journal 语义。
+- 初始化必须读取 `PRAGMA journal_mode` 并断言为 `wal`。未返回 `wal` 通常代表目录/文件系统不支持或环境异常：关闭连接、记录稳定错误码并让启动失败，不静默降为另一种 journal 语义。
 - 只允许 Database Host 执行 checkpoint：正常运行依赖 autocheckpoint；空闲维护使用 `PASSIVE`；应用完整退出且无 reader 时可用 `TRUNCATE`。禁止业务 Repository 自行 checkpoint。
 - `allowExtension=false`；不加载任意 SQLite extension。
 - 所有用户输入经 prepared statement 绑定，表名/排序列来自代码白名单。
 - 同步 SQL 不等于在 UI 主线程随意执行：collector 在事务外完成文件扫描和投影，写事务只做批量 statement + head pointer 切换。
-- 开发态存在第二进程时，必须指定一个 Database Host；在完成跨进程 broker 前，Electron 主进程管理的数据保持 JSON 兼容源，禁止两边直接写同一 DB。
+- 开发态存在第二进程时，必须指定一个 Database Host；Electron 主进程数据经 DesktopStateBroker 写同一 DB，禁止两边各自直接写连接。
 
 ### 3.3 文件布局
 
@@ -149,10 +149,7 @@ flowchart LR
 ├── backups/
 │   ├── trusttools-YYYYMMDD-HHmmss.db
 │   └── manifest.json
-├── legacy/
-│   └── migrated-YYYYMMDD-HHmmss/      # 原 JSON 文件归档，迁移观察期保留
-├── tasks/                              # 迁移期旧 store；切换后只读
-├── cache/                              # 未迁移的可丢弃缓存
+├── cache/                              # 可丢弃缓存
 └── logs/
     └── observability.jsonl
 ```
@@ -186,18 +183,18 @@ flowchart LR
 
 ### 5.0 首期小型数据库与完整目标的关系
 
-本章是整个产品的目标数据模型，不代表第一个 migration 必须创建 54 个物理对象。结合当前“全页面今日洞察”优先级，首期建议只创建以下 11 张表：
+本章是整个产品的目标数据模型，不代表第一个 migration 必须创建 54 个物理对象。首期（migration 0001）实际落地以下 10 张表（`data_migration_runs` 已删除）；0002~0005 迁移随后落地 task / snapshot / business-assets / search+wsl 各域：
 
 | 首期分组 | 表 | 无模型时是否产生业务行 |
 |---|---|---|
-| 数据库内核 | `schema_migrations`、`data_migration_runs`、`app_preferences`、`runtime_flags` | 会；只保存版本、迁移和本地偏好 |
+| 数据库内核 | `schema_migrations`、`app_preferences`、`runtime_flags` | 会；只保存版本、迁移和本地偏好 |
 | 可选模型配置 | `secure_secrets`、`model_profiles` | 不会；用户未配置模型时保持空表 |
 | 可选 AI 审计/预算 | `ai_executions`、`ai_daily_usage` | 不会；rules 模式不写入 |
 | 今日洞察 | `insight_preferences`、`insight_enhancement_cache`、`insight_enhancement_lines` | 仅 preference 可有 `rules` 行；增强缓存保持空 |
 
-Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evidence、规则候选或规则结果持久化。等任务、Usage、Session、Knowledge 等模块分别通过 shadow-write 和对账门后，再由后续 migration 创建对应表。这样既得到小型数据库的运维收益，也避免一次性大迁移。
+Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evidence、规则候选或规则结果持久化。任务、Usage、Session、Knowledge 等模块的 SQLite 仓库已由 0002~0005 迁移落地并接线（task / snapshot / business-assets / search+wsl），无 shadow-write 或对账门。
 
-### 5.1 平台、迁移、偏好与缓存（10 表）
+### 5.1 平台、迁移、偏好与缓存（9 现行表，data_migration_runs 已废弃）
 
 > 平台身份：migration 0001 头部写入 `PRAGMA application_id = 0x54544442`（`TTDB`），启动时验证 application_id 为 0（全新库）或该常量，否则拒绝写路径（§9-6）。`user_version` 由迁移运行器在每个迁移事务内与 ledger 同行维护，业务 SQL 不得自行设置。
 
@@ -212,21 +209,9 @@ Insight Core 继续通过现有模块 Repository 读取真实快照，不把 Evi
 | `applied_at_ms` | INTEGER NOT NULL | 完成时间 |
 | `duration_ms` | INTEGER NOT NULL CHECK >= 0 | 执行耗时 |
 
-#### `data_migration_runs`
+#### `data_migration_runs`（已废弃，仅存档）
 
-| 列 | 类型/约束 | 说明 |
-|---|---|---|
-| `run_id` | TEXT PK | 一次 JSON 导入 ID |
-| `source_kind` | TEXT NOT NULL | `atomic-json|electron-prefs|security-json|cache-json` |
-| `source_path_hash` | TEXT NOT NULL | 路径不可逆哈希，不保存绝对路径 |
-| `source_schema_version` | INTEGER | 旧 schema 版本 |
-| `status` | TEXT NOT NULL DEFAULT `running` CHECK `running|succeeded|failed|skipped` | 导入状态 |
-| `started_at_ms`,`finished_at_ms` | INTEGER | 起止时间 |
-| `rows_read`,`rows_written`,`rows_skipped` | INTEGER NOT NULL DEFAULT 0 CHECK >= 0 | 对账计数 |
-| `error_code` | TEXT | 稳定错误码 |
-| `source_fingerprint` | TEXT NOT NULL | 幂等键组成部分 |
-
-唯一索引：`(source_kind, source_path_hash, source_fingerprint)`。
+> 新项目模式已删除该表（无 JSON 导入）；下列定义仅作历史存档参考，不再是现行表。原列定义：`run_id`(PK)、`source_kind`、`source_path_hash`、`source_schema_version`、`status`、`started_at_ms`/`finished_at_ms`、`rows_read`/`rows_written`/`rows_skipped`、`error_code`、`source_fingerprint`；唯一索引 `(source_kind, source_path_hash, source_fingerprint)`。
 
 #### `app_preferences`
 
@@ -732,7 +717,6 @@ SQLite 不支持跨数据库/文件系统原子事务。任何外部 Skill 安�
 
 | 流程 | 幂等键 |
 |---|---|
-| JSON migration | source path hash + source fingerprint |
 | Usage event | source + stable source event ID；缺失时使用允许字段指纹 |
 | Snapshot | domain + revision |
 | Task run | run_id；同 input_fingerprint 的并发由 scheduler singleflight |
@@ -783,47 +767,15 @@ SQLite 不支持跨数据库/文件系统原子事务。任何外部 Skill 安�
   → 关闭所有连接并把 DB、-wal、-shm 作为同一故障组隔离到 .corrupt.<timestamp>/
   → 查找最新 checksum + quick_check 通过的备份
   → 用户确认后恢复（L2 数据不可静默丢弃）
-  → 无备份时创建空 DB，再从 legacy JSON 导入可恢复域
+  → 无备份时创建空 DB
   → 外部只读源重建 L0/L1；报告/知识等 L2 标记无法恢复
 ```
 
 严禁启动失败后直接删除数据库并静默重建。
 
-## 11. JSON 到 SQLite 迁移映射
+## 11. JSON 到 SQLite 迁移映射（已废弃/退役）
 
-| 当前来源 | 目标表 | 策略 |
-|---|---|---|
-| `preferences.v1.json` | task_preferences | schedule 字段规范化；options_json 保存受控任务选项 |
-| `runs.v1.json` | task_runs | 按 runId 幂等插入，时间转 epoch ms |
-| `performance-rollout.v1.json` | runtime_flags | 一个 flag 文档 |
-| usage envelope/legacy snapshot | snapshot_* + usage_* | 优先 envelope；legacy 只在 envelope 缺失时导入 |
-| project classification index | project_classifications | 原始 ref 转 HMAC；不迁移绝对路径明文 |
-| WSL envelope | snapshot_* + snapshot_blobs | payload 小型 JSON，设置大小上限 |
-| session envelope | snapshot_* + sessions/density | transcript 永不迁移 |
-| skill envelope | snapshot_* + skills/installations/blacklist | 路径已在现有投影移除 |
-| installation envelope | snapshot_* + agent_installations/paths | 仅 `~/` 相对展示路径 |
-| `monitoring.v1.json` | monitoring_state/collectors | running 在恢复后不直接视为健康 |
-| `reports.v1.json` | report_runs/reports/evidence/assets | 一个源文档在一个事务导入 |
-| `knowledge.v1.json` | knowledge_assets/versions/provenance | 校验 revision/currentVersion 一致 |
-| `distill-candidates.v1.json` | candidates/sessions + ai_executions | execution summary 拆分并引用 |
-| `distill-quota.v1.json` | ai_daily_usage | capability=`distillation` |
-| `model-profiles.v1.json` | model_profiles + secure_secrets | Profile 先导；明文 key 仅在 safeStorage 可用时加密迁移，否则要求重录 |
-| Electron prefs/localStorage | app_preferences/task_preferences | DB 为 desktop 权威；保留 UI 启动镜像 |
-| security history/schedule | security_* + task_preferences | 合并 legacy 与 assessment schema，按稳定 ID 去重 |
-| market/exchange cache | http_cache_entries | 可选择不迁移，首次使用重建 |
-| search index | search_documents/FTS | 不迁移，基于安全投影重建 |
-
-迁移状态机：
-
-1. **Discover**：只读发现文件并计算指纹，不修改源。
-2. **Backup**：首次 migration 创建数据库备份/空库检查点。
-3. **Import**：每个 source 在独立事务中导入并记录 `data_migration_runs`。
-4. **Validate**：行数、业务 hash、抽样 DTO 和关键页面 read model 双向对账。
-5. **Shadow write**：新写同时进入 SQLite 与旧 JSON；以 SQLite 失败为主要错误，JSON 失败记录兼容告警。
-6. **Read switch**：按模块开关切换 SQLite Repository；连续稳定一个版本。
-7. **Archive**：停止 JSON 写入，把旧文件移入 legacy 目录；再稳定一个版本后允许用户清理。
-
-不能在同一个发布中同时导入、切读、删除旧文件。
+> 本章已废弃：项目按新项目模式实现，无 JSON → SQLite 迁移；SQLite 为唯一应用存储权威，历史 JSON 存储代码已删除。原 JSON→SQLite 映射与迁移状态机不再作为现行流程保留，仅存档于历史版本。
 
 ## 12. 目标代码结构
 
@@ -833,11 +785,10 @@ src/platform/database/
 ├── database-host.server.ts         # 单连接生命周期与 capability probe
 ├── migrations/
 │   ├── 0001_platform.sql
-│   ├── 0002_snapshots_usage.sql
-│   ├── 0003_sessions_skills.sql
-│   ├── 0004_tasks_content.sql
-│   ├── 0005_ai_security.sql
-│   └── 0006_search_insights.sql
+│   ├── 0002_low_risk_state.sql
+│   ├── 0003_snapshot_read_models.sql
+│   ├── 0004_business_assets.sql
+│   └── 0005_search_wsl.sql
 ├── migration-runner.server.ts
 ├── backup.server.ts
 ├── integrity.server.ts
@@ -848,7 +799,7 @@ src/modules/<feature>/infrastructure/
 └── sqlite-<feature>-repository.server.ts
 
 src/app/
-└── composition.server.ts           # 选择 JSON/SQLite adapter；业务 contract 不变
+└── composition.server.ts           # 组装 SQLite Repository；业务 contract 不变
 
 scripts/
 ├── verify-database-schema.mts
@@ -877,46 +828,17 @@ scripts/
 
 质量门：Windows/macOS 临时目录下迁移幂等、崩溃恢复、备份恢复、锁冲突测试通过。
 
-### M2：低风险状态迁移（4 人日）
+### M2–M5：各域 SQLite 仓库落地（已完成）
 
-- 迁移 runtime flags、task preferences/runs、monitoring、HTTP cache。
-- Shadow write 对账；保持 JSON read fallback。
-- 完成 retention Job 的数据库路径。
+M2（低风险状态）→ M3（快照与高价值查询）→ M4（业务资产与安全）→ M5（今日洞察与搜索）各域 SQLite Repository 均已落地并接线（task / snapshot / business-assets / search+wsl，对应迁移 0002~0005），无 shadow-write / read-switch / JSON read fallback。Electron prefs 经 DesktopStateBroker 写 SQLite `app_preferences`；项目 ref 以 HMAC 存储，不持久化绝对路径。
 
-质量门：任务调度、running recovery、缓存清理与旧行为 parity。
+质量门（已达成）：running recovery、generation/head 原子切换、L2 备份恢复、密钥加解密、无模型 14 页面、隐私负向测试均通过。
 
-### M3：快照和高价值查询迁移（8–10 人日）
+### M6：JSON 归档（不适用）
 
-- 按 usage → sessions → skills/installations 顺序迁移。
-- 建 generation/head 原子切换和旧 generation 清理。
-- 页面查询切为索引/keyset pagination，补性能基准。
-- 项目 ref 迁移为 HMAC，不再持久化绝对路径。
+M6 的「停止旧 JSON 写入并归档」不适用——新项目模式已删除 JSON 存储代码，无 legacy 数据需要归档或用户确认清理。
 
-质量门：同 fixture 新旧 DTO 等价；100 万 usage event 基准满足预算；刷新失败保留旧 head。
-
-### M4：业务资产与安全迁移（7–9 人日）
-
-- Reports、Knowledge、Distillation、Model Profile/secret、安全扫描、分发审计迁移。
-- Electron prefs 与 server storage 收敛到单一 Database Host。
-- 完成跨 DB/文件副作用的补偿测试。
-
-质量门：L2 备份恢复、知识 revision、审批、安全判定和密钥加解密测试通过。
-
-### M5：今日洞察与搜索（4–5 人日）
-
-- Release A 只使用 Core 查询 Repository，不写增强表。
-- Release B 创建 Insight preferences/cache/lines、AI execution/budget adapter。
-- Search documents 迁移；FTS5 只在能力/质量基准通过后启用。
-
-质量门：无模型 14 页面完整通过；增强失败不污染 Core；缓存键隔离与隐私负向测试通过。
-
-### M6：切换与清理（3 人日 + 一个版本观察期）
-
-- 按域开启 SQLite read；完成架构/测试审计。
-- 停止旧 JSON 写入，归档而非删除。
-- 一个稳定版本后提供用户确认清理 legacy 数据。
-
-整体估算约 32–38 人日。若只为今日洞察引入最小数据库，可先交付 M0–M2 + M5 中 Insight 表（约 12–15 人日），Usage/Knowledge 等全量规范化后续迁移；不能因此让 Insight 表直接依赖旧 JSON 文件内部结构。
+整体估算约 32–38 人日（历史值）；新项目模式下 M0–M5 已全部落地，无需分阶段迁移。
 
 ## 14. 测试设计输入
 
@@ -924,9 +846,9 @@ scripts/
 
 - 空库从 0 升至 latest；每个中间版本升至 latest；重复执行无变化。
 - migration checksum 改变时拒绝继续，不静默覆盖历史。
-- 每个 legacy JSON：missing、valid、旧版本、部分非法、损坏、重复导入。
+- N/A（无 legacy JSON 迁移）：旧 JSON 存储代码已删除，不再有导入用例。
 - 明文 API Key：safeStorage 可用时加密迁移；不可用时不落库并要求重录。
-- migration 中断后重启：已提交 source 不重复，未提交 source 可重试。
+- migration 中断后重启：已提交 version 不重复，未提交 version 可重试。
 
 ### 14.2 事务与恢复
 
@@ -991,7 +913,7 @@ scripts/
 - 明确 Insight Core 不写增强表，保持“不接大模型”完整可用。
 - 根据当前实测 Electron 43.4.1 / Node 24.18.1 / SQLite 3.53.1 更新运行时基线；确认 WAL-reset 版本风险已解除，采用 `WAL + FULL`，并补齐 journal 断言、checkpoint、在线备份和单写者约束。
 - 补充 `node:sqlite` 的 BigInt、defensive、严格命名参数、扩展禁用和运行时失配降级约束。
-- 补齐备份、损坏隔离、migration checksum、JSON 对账、Retention、跨文件补偿和测试门禁。
+- 补齐备份、损坏隔离、migration checksum、Retention、跨文件补偿和测试门禁。
 
 ### 遗留待确认项
 
