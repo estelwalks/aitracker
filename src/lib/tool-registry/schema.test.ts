@@ -542,7 +542,9 @@ describe("shared policy packs (TC-POL-001)", () => {
     assert.equal(pack.maxDiscoveredEntriesPerSource, 30_000);
     assert.equal(pack.maxJsonlLineLength, 16 * 1024 * 1024);
     assert.equal(pack.futureTimestampToleranceMs, 24 * 60 * 60 * 1000);
-    assert.equal(pack.cacheFileName, "local-usage-index-v10.json");
+    // S-04 (T-04-02): `cacheFileName` was removed from the pack; the persistent
+    // cache version stays in TypeScript (`PERSISTENT_CACHE_VERSION`).
+    assert.equal("cacheFileName" in pack, false);
   });
 
   test("usage-taxonomy matches DEBUG_COMMAND_HINTS", () => {
