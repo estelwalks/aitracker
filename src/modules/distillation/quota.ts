@@ -1,7 +1,4 @@
-import { z } from "zod";
-
 import { ENV } from "../../lib/app-config.ts";
-import type { JsonSchema } from "../../test-support/json-schema.ts";
 
 /**
  * Story B-600 — server-side daily quota for real-model distillation calls.
@@ -62,69 +59,4 @@ export interface DistillQuotaPort {
    * a different date resets the counter to 1.
    */
   increment(date: string): Promise<DistillQuota>;
-}
-
-/** Persisted quota row shape — deliberately limit-free. */
-export interface DistillQuotaFile {
-  readonly date: string;
-  readonly used: number;
-}
-
-export const DISTILL_QUOTA_SCHEMA_VERSION = 1 as const;
-
-const DistillQuotaFileSchema = z
-  .object({
-    date: z.string(),
-    used: z.number().int().min(0),
-  })
-  .strict();
-
-export type PersistedDistillQuotaFile = z.infer<typeof DistillQuotaFileSchema>;
-
-export const DEFAULT_DISTILL_QUOTA_FILE: DistillQuotaFile = {
-  date: "",
-  used: 0,
-};
-
-/** Validation schema for the persisted quota state. */
-export function distillQuotaStoreSchema(): JsonSchema<DistillQuotaFile> {
-  return {
-    currentVersion: DISTILL_QUOTA_SCHEMA_VERSION,
-    parse(value: unknown): DistillQuotaFile {
-      return DistillQuotaFileSchema.parse(value);
-    },
-  };
-}
-
-export interface AtomicDistillQuotaStoreOptions {
-  /** Injectable document port retained for focused unit tests. */
-  readonly store: {
-    read(): Promise<{ readonly value: DistillQuotaFile }>;
-    write(value: DistillQuotaFile): Promise<void>;
-  };
-  /** Overrides the daily limit; defaults to `distillDailyQuotaLimit()`. */
-  readonly limit?: number;
-}
-
-/**
- * Test adapter over an injected quota document port. Production uses the
- * SQLite quota repository.
- */
-export function createAtomicDistillQuotaStore(
-  options: AtomicDistillQuotaStoreOptions,
-): DistillQuotaPort {
-  const limit = options.limit ?? distillDailyQuotaLimit();
-  return {
-    async read(): Promise<DistillQuota> {
-      const { value } = await options.store.read();
-      return { date: value.date, used: value.used, limit };
-    },
-    async increment(date: string): Promise<DistillQuota> {
-      const { value } = await options.store.read();
-      const used = value.date === date ? value.used + 1 : 1;
-      const next: DistillQuotaFile = { date, used };
-      await options.store.write(next);
-      return { date: next.date, used: next.used, limit };
-    },
-  };
 }
