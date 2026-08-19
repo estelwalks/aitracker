@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -76,6 +82,16 @@ function pragmaValue(port: SqliteDatabasePort, sql: string): string {
   return normalizePragmaValue(
     row === undefined ? undefined : Object.values(row)[0],
   );
+}
+
+/**
+ * The canonical form a Host registers itself under, computed from the
+ * filesystem instead of from the Host: `realpath` (which resolves symlinks such
+ * as macOS `/var` → `/private/var`) plus Windows case folding.
+ */
+function canonical(path: string): string {
+  const real = realpathSync.native(resolve(path));
+  return process.platform === "win32" ? real.toLowerCase() : real;
 }
 
 test("NodeRuntimeVersionsProvider reads real runtime versions without a persistent connection", () => {
@@ -167,7 +183,7 @@ test("opens a file database and asserts every required pragma", (t) => {
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
 
   assert.equal(host.isOpen, true);
-  assert.equal(host.path, resolve(join(dir, "host.db")));
+  assert.equal(host.path, canonical(join(dir, "host.db")));
   assert.equal(pragmaValue(host, "PRAGMA journal_mode"), "wal");
   assert.equal(pragmaValue(host, "PRAGMA synchronous"), "2");
   assert.equal(pragmaValue(host, "PRAGMA foreign_keys"), "1");
@@ -216,6 +232,122 @@ test("close releases the singleton so the same path can be reopened", (t) => {
   assert.equal(host.isOpen, false);
   const reopened = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   assert.equal(reopened.isOpen, true);
+});
+
+test("a case-alias of an open database cannot obtain a second writable connection", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "platform.db", versionsProvider("99.0.0"));
+  const aliasPath = join(dir, "PLATFORM.DB");
+
+  // `PLATFORM.DB` resolving to the same file is a property of the filesystem,
+  // not of the platform: Windows is always case-insensitive, macOS usually is,
+  // and ext4 is not.
+  const caseInsensitive = existsSync(aliasPath);
+  if (process.platform === "win32") {
+    assert.equal(
+      caseInsensitive,
+      true,
+      "Windows filesystems are case-insensitive",
+    );
+  }
+
+  if (caseInsensitive) {
+    assert.throws(
+      () =>
+        DatabaseHost.open({
+          path: aliasPath,
+          versionsProvider: versionsProvider("99.0.0"),
+        }),
+      (error) =>
+        error instanceof DatabaseError &&
+        error.code === "already-open" &&
+        error.operation === "open",
+    );
+  } else {
+    // On a case-sensitive filesystem the alias is a genuinely different file;
+    // what must still hold is that the key is the canonical real path.
+    assert.equal(host.path, canonical(join(dir, "platform.db")));
+    const aliased = DatabaseHost.open({
+      path: aliasPath,
+      versionsProvider: versionsProvider("99.0.0"),
+    });
+    t.after(() => aliased.close());
+    assert.notEqual(aliased.path, host.path);
+  }
+});
+
+test("an empty path is rejected instead of silently becoming an in-memory database", () => {
+  for (const path of ["", "   "]) {
+    assert.throws(
+      () =>
+        DatabaseHost.open({
+          path,
+          versionsProvider: versionsProvider("99.0.0"),
+        }),
+      (error) =>
+        error instanceof DatabaseError &&
+        error.code === "invalid-argument" &&
+        error.operation === "open",
+    );
+  }
+});
+
+test("a closed Host reports not-open instead of forwarding to a dead connection", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
+  host.close();
+  for (const use of [
+    () => host.prepare("SELECT 1"),
+    () => host.exec("SELECT 1"),
+    () => host.transaction(),
+    () => host.withUnderlyingConnection(() => undefined),
+  ]) {
+    assert.throws(
+      use,
+      (error) => error instanceof DatabaseError && error.code === "not-open",
+    );
+  }
+});
+
+test("withUnderlyingConnection borrows the Host's own connection, not a second one", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
+
+  // `foreign_keys` is per-connection and the Host asserts it ON at open time; a
+  // freshly opened second connection would report the SQLite default of 0.
+  const borrowed = host.withUnderlyingConnection((database) =>
+    normalizePragmaValue(
+      Object.values(database.prepare("PRAGMA foreign_keys").get() ?? {})[0],
+    ),
+  );
+  assert.equal(borrowed, "1");
+
+  // Writes through the borrowed handle are the Host's own writes.
+  host.exec("CREATE TABLE probe (id INTEGER PRIMARY KEY) STRICT");
+  host.withUnderlyingConnection((database) => {
+    database.exec("INSERT INTO probe (id) VALUES (7)");
+  });
+  assert.equal(
+    Number(host.prepare("SELECT COUNT(*) AS n FROM probe").get()?.n),
+    1,
+  );
+});
+
+test("withUnderlyingConnection refuses a port that is not the strict adapter", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  t.after(() => rmTempDir(dir));
+  const host = openHostInDir(
+    t,
+    dir,
+    "host.db",
+    versionsProvider("99.0.0"),
+    () => new FakeAdapter(OK_PRAGMAS),
+  );
+  assert.throws(
+    () => host.withUnderlyingConnection(() => undefined),
+    (error) =>
+      error instanceof DatabaseError && error.code === "invalid-argument",
+  );
 });
 
 test("a low injected sqlite version rejects the write path with capability-mismatch", (t) => {
