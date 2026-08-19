@@ -13,3 +13,6 @@ test-results/
 .DS_Store
 # External reference sample (downloaded zip + extracted project), not repo code
 docs/V3.0_TrustTools/project-sparkle-hub-*
+
+# Local agent skills directory (personal workflow tooling, not repo code)
+.skills/
