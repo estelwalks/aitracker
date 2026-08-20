@@ -62,7 +62,9 @@
     "skills": "unsupported",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "resume",
+      "reader": "dsh-session-v1",
+      "command": ["dsh", "--profile", "tui", "--resume", "{sessionId}"]
     },
     "market": "unsupported",
     "security": "unsupported"
