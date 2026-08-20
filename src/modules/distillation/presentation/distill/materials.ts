@@ -4,27 +4,29 @@ import type { DistillationSessionItem } from "../index.ts";
 export type DistillationTimeRange = "today" | "7" | "30" | "all";
 
 /**
- * The material picker can select individual sessions, complete projects, or
- * the prototype's "config" material mode (tool prompt/rule files). The config
- * mode currently has no real file source, so the UI shows an honest empty
- * state and blocks the run until the data layer exposes such files.
+ * The material picker can select individual sessions or complete projects.
+ * The prototype keeps a "config" material mode in its type but hardcodes the
+ * state to "chat", so it is never reachable — the workbench drops it entirely.
  */
-export type DistillationMaterialGranularity = "session" | "project" | "config";
-
-/** True when the material mode selects tool config files instead of sessions. */
-export function isConfigMaterial(
-  granularity: DistillationMaterialGranularity,
-): boolean {
-  return granularity === "config";
-}
+export type DistillationMaterialGranularity = "session" | "project";
 
 export interface DistillationProjectMaterial {
-  /** Source is included because project keys are not globally unique. */
+  /** The sanitized project name; merged across agent sources like the prototype. */
   readonly key: string;
-  readonly source: string;
   readonly projectKey: string;
+  /** Deduplicated agent sources backing this project (drives stacked icons). */
+  readonly sources: readonly string[];
   readonly sessions: readonly DistillationSessionItem[];
+  /** Latest session start (project-row date label). */
+  readonly last: string;
 }
+
+/**
+ * Heuristic tokens-per-turn used to estimate a session/project's material
+ * size. The privacy-safe renderer projection omits raw token totals, so the
+ * estimate is always presented with the "~" prefix (E-200).
+ */
+export const EST_TOKENS_PER_TURN = 900;
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -69,22 +71,39 @@ export function filterDistillationSessions(
  * Groups only the currently range-filtered sessions. A project can therefore
  * be selected as a real set of session refs without accidentally including
  * sessions outside the visible time scope.
+ *
+ * Only git-backed projects count as "projects": sessions whose cwd resolved
+ * to no repository fall back to their folder name and would otherwise appear
+ * as fake projects (e.g. `~/.claude/projects/<hash>`). They remain selectable
+ * individually under the "by session" granularity, just not as a project.
+ *
+ * Like the prototype, a project is merged across agent sources by its
+ * sanitized name (the project row shows the stacked sources), and the row's
+ * date label is the latest session start among its members.
  */
 export function groupDistillationSessionsByProject(
   sessions: readonly DistillationSessionItem[],
 ): readonly DistillationProjectMaterial[] {
   const groups = new Map<string, DistillationProjectMaterial>();
   for (const session of sessions) {
-    const key = `${session.source}:${session.projectKey}`;
+    if (session.isGitProject !== true) continue;
+    const key = session.projectKey;
     const current = groups.get(key);
     if (current) {
-      groups.set(key, { ...current, sessions: [...current.sessions, session] });
+      groups.set(key, {
+        ...current,
+        sources: [...new Set([...current.sources, session.source])],
+        sessions: [...current.sessions, session],
+        last:
+          session.startedAt > current.last ? session.startedAt : current.last,
+      });
     } else {
       groups.set(key, {
         key,
-        source: session.source,
         projectKey: session.projectKey,
+        sources: [session.source],
         sessions: [session],
+        last: session.startedAt,
       });
     }
   }
@@ -99,35 +118,34 @@ export function materialKeyOf(item: {
 }
 
 /**
- * Applies a single-session checkbox transition without ever exceeding the
- * server contract's opaque-ref limit. Returning the original Set instance on
- * a rejected addition lets React avoid a redundant render and makes the
- * boundary behaviour straightforward to unit test.
+ * Applies a single-session checkbox transition. Returns the original Set
+ * instance when the key is already present and removed — React re-renders on
+ * the new Set, and toggling the same key twice returns a stable identity for
+ * no-op renders.
  */
 export function toggleMaterialSelection(
   current: ReadonlySet<string>,
   key: string,
-  maxSelection: number,
 ): ReadonlySet<string> {
   const next = new Set(current);
   if (next.has(key)) {
     next.delete(key);
-    return next;
+  } else {
+    next.add(key);
   }
-  if (next.size >= maxSelection) return current;
-  next.add(key);
   return next;
 }
 
 /**
- * Project selection is atomic: either every missing real session fits and is
- * added, or the existing selection is preserved. This avoids presenting a
- * partially-selected project as though it had been distilled in full.
+ * Project selection is atomic: either every missing real session is added, or
+ * the existing selection is preserved. This avoids presenting a
+ * partially-selected project as though it had been distilled in full. The
+ * prototype accumulates sessions without a count limit, so there is no cap to
+ * reject against — the atomicity is about all-or-nothing, not capacity.
  */
 export function toggleProjectSelection(
   current: ReadonlySet<string>,
   projectKeys: readonly string[],
-  maxSelection: number,
 ): ReadonlySet<string> {
   const uniqueKeys = [...new Set(projectKeys)];
   const selectedEverySession =
@@ -137,8 +155,6 @@ export function toggleProjectSelection(
     for (const key of uniqueKeys) next.delete(key);
     return next;
   }
-  const missing = uniqueKeys.filter((key) => !next.has(key));
-  if (next.size + missing.length > maxSelection) return current;
-  for (const key of missing) next.add(key);
+  for (const key of uniqueKeys) next.add(key);
   return next;
 }

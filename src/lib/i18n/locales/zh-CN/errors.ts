@@ -69,6 +69,9 @@ export const errors = {
     skillExists: "同名 Skill 已存在，请更换名称",
     quotaExceeded:
       "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
+    noModelConfigured:
+      "尚未配置可用的 AI 模型。请到「设置 → 模型」添加一个带 API Key 的模型（或设置 ANTHROPIC_API_KEY 环境变量），再开始蒸馏。",
+    aiFailed: "AI 模型调用失败，未生成蒸馏结果。请检查模型配置或网络后重试。",
   },
   modelProfile: {
     nameRequired: "请输入配置名称",
@@ -84,6 +87,8 @@ export const errors = {
     testFailed: "连接测试失败，请检查服务地址、API Key 与网络",
     testTimeout: "连接测试超时（5 秒）",
     listFailed: "获取模型列表失败，请检查服务地址、API Key 与网络",
+    safeStorageUnavailable:
+      "无法安全保存 API Key：系统密钥存储不可用（数据目录不可写或加密初始化失败）",
   },
   pricing: {
     modelListInvalid: "模型列表不合法",

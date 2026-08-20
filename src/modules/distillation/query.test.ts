@@ -33,6 +33,25 @@ test("start distillation validator forwards valid user-selected segments", () =>
   ]);
 });
 
+test("start distillation validator accepts more than the former 8-selection cap", () => {
+  const refs = Array.from({ length: 12 }, (_, i) => ({
+    source: "codex",
+    sessionId: `s${i}`,
+  }));
+  const segments = Array.from({ length: 12 }, (_, i) => ({
+    source: "codex",
+    sessionId: `s${i}`,
+    startIndex: i,
+    endIndex: i,
+  }));
+  const result = validateStartDistillationInput({
+    sessionRefs: refs,
+    segments,
+  });
+  assert.equal(result.sessionRefs.length, 12);
+  assert.equal(result.segments?.length, 12);
+});
+
 test("start distillation validator rejects malformed segments", () => {
   const malformed = [
     // Non-array.
@@ -79,16 +98,6 @@ test("start distillation validator rejects malformed segments", () => {
         { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 1 },
         { source: "codex", sessionId: "s1", startIndex: 0, endIndex: 1 },
       ],
-    },
-    // More than 8 segments.
-    {
-      ...base,
-      segments: Array.from({ length: 9 }, (_, index) => ({
-        source: "codex",
-        sessionId: "s1",
-        startIndex: index,
-        endIndex: index,
-      })),
     },
   ];
   for (const input of malformed) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, RefreshCw, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,6 +60,8 @@ const EMPTY_FORM: FormState = {
   listMsg: "",
 };
 
+const AUTOSAVE_DEBOUNCE_MS = 900;
+
 function toInput(form: FormState): ModelProfileInput {
   return {
     ...(form.id ? { id: form.id } : {}),
@@ -104,15 +106,26 @@ export function ModelProfilesSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [autoSaveState, setAutoSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [deleteTarget, setDeleteTarget] = useState<ModelProfileView | null>(
     null,
   );
+  const lastSavedSnapshotRef = useRef<string>("");
 
   const load = async () => {
     try {
       const result = await listModelProfiles();
       setProfiles([...result.profiles]);
       setActiveId(result.activeProfileId);
+      const activeProfile =
+        result.profiles.find((profile) => profile.id === result.activeProfileId) ??
+        result.profiles[0] ??
+        null;
+      lastSavedSnapshotRef.current = activeProfile
+        ? JSON.stringify(toInput(fromProfile(activeProfile)))
+        : "";
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
@@ -137,6 +150,8 @@ export function ModelProfilesSection() {
 
   const activeView =
     profiles.find((profile) => profile.id === activeId) ?? null;
+
+  const formSnapshot = JSON.stringify(toInput(form));
 
   const describeProfile = (view: ModelProfileView | null): string => {
     if (!view) return "—";
@@ -193,10 +208,16 @@ export function ModelProfilesSection() {
   };
 
   const startNew = () => {
+    lastSavedSnapshotRef.current = "";
+    setAutoSaveState("idle");
     setForm(EMPTY_FORM);
   };
 
   const editProfile = (profile: ModelProfileView) => {
+    lastSavedSnapshotRef.current = JSON.stringify(
+      toInput(fromProfile(profile)),
+    );
+    setAutoSaveState("idle");
     setForm(fromProfile(profile));
   };
 
@@ -279,8 +300,14 @@ export function ModelProfilesSection() {
   const doSave = async () => {
     setSaving(true);
     try {
+      const currentApiKey = form.apiKey;
       const saved = await upsertModelProfile({ data: toInput(form) });
-      setForm(fromProfile(saved));
+      const nextForm = {
+        ...fromProfile(saved),
+        apiKey: currentApiKey,
+      };
+      lastSavedSnapshotRef.current = JSON.stringify(toInput(nextForm));
+      setForm(nextForm);
       toast.success(
         t("settings.modelProfiles.savedToast", { name: saved.name }),
       );
@@ -292,6 +319,60 @@ export function ModelProfilesSection() {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (loading || testing || saving || deleteTarget) return;
+    if (!formValid) return;
+    if (formSnapshot === lastSavedSnapshotRef.current) return;
+    const trimmedApiKey = form.apiKey.trim();
+    if (form.id == null && trimmedApiKey.length < 8) return;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setAutoSaveState("saving");
+        try {
+          const currentApiKey = form.apiKey;
+          const saved = await upsertModelProfile({ data: toInput(form) });
+          const nextForm = {
+            ...fromProfile(saved),
+            apiKey: currentApiKey,
+          };
+          lastSavedSnapshotRef.current = JSON.stringify(toInput(nextForm));
+          setProfiles((current) => {
+            const next = current.filter((item) => item.id !== saved.id);
+            return [...next, saved];
+          });
+          setActiveId(saved.id);
+          setForm((current) => {
+            return current.id === saved.id || current.id == null
+              ? nextForm
+              : current;
+          });
+          setAutoSaveState("saved");
+        } catch {
+          setAutoSaveState("error");
+        }
+      })();
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    deleteTarget,
+    form,
+    form.id,
+    form.apiKey,
+    formSnapshot,
+    formValid,
+    loading,
+      saving,
+      testing,
+  ]);
+
+  useEffect(() => {
+    if (autoSaveState !== "saved" && autoSaveState !== "error") return;
+    const timer = window.setTimeout(() => setAutoSaveState("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [autoSaveState]);
 
   return (
     <>
@@ -398,6 +479,15 @@ export function ModelProfilesSection() {
                     name: form.name || "—",
                   })
                 : t("settings.modelProfiles.formTitleNew")}
+            </span>
+            <span className="tt-num text-[11px] text-muted-foreground">
+              {autoSaveState === "saving"
+                ? t("settings.status.saving")
+                : autoSaveState === "saved"
+                  ? "已自动保存"
+                  : autoSaveState === "error"
+                    ? "自动保存失败"
+                    : ""}
             </span>
           </div>
 

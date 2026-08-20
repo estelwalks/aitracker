@@ -1,6 +1,5 @@
-import { Sparkles } from "lucide-react";
+import { HelpCircle, X } from "lucide-react";
 
-import { Panel } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 
 export const DISTILL_GUIDE_KEY = "tt.distill.guide";
@@ -25,36 +24,56 @@ const STEPS = [
 ] as const;
 
 /**
- * First-run guide overlay (V3.0 prototype). Covers the content area with a
- * centred card explaining the four-step distillation flow: 选素材 → 跑蒸馏 →
- * 存为 Skill → 同步到工具. Steps use the prototype's chart-1 numbered circles
- * and a foreground CTA. Dismissal is recorded in SQLite so it shows once per
- * install.
+ * 首次进入引导覆盖层,对齐原型 779-839:absolute 覆盖内容区,chart-1 模糊 blob、
+ * HelpCircle 图标、两段介绍、2 列步骤网格 + 开始使用 CTA。遮罩可点击关闭;
+ * 关闭后写入 SQLite 不再自动弹出,可在标题栏点「?」重看。
  */
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   return (
     <div
-      className="pointer-events-auto fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-[10vh]"
+      className="absolute inset-0 z-40 flex items-start justify-center p-6 pt-16"
       role="dialog"
       aria-modal="true"
       aria-label={t("distill.guideTitle")}
     >
-      <div className="fixed inset-0 bg-background/85 backdrop-blur-sm" />
-      <Panel
-        className="relative w-full max-w-md shadow-2xl"
-        title={
-          <span className="flex items-center gap-2">
-            <Sparkles className="size-4 text-primary" />
+      <div
+        className="tt-overlay absolute inset-0 rounded-xl backdrop-blur-md"
+        onClick={onClose}
+      />
+      <section className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-card p-7 shadow-2xl shadow-black/60">
+        <div
+          className="pointer-events-none absolute -top-24 right-0 size-64 rounded-full opacity-[0.18] blur-3xl"
+          style={{ background: "var(--chart-1)" }}
+        />
+        <header className="relative flex items-center gap-2">
+          <HelpCircle className="size-4" style={{ color: "var(--chart-1)" }} />
+          <h2 className="text-[14px] font-semibold tracking-tight">
             {t("distill.guideTitle")}
-          </span>
-        }
-      >
-        <ol className="space-y-4">
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto rounded-lg p-1 text-muted-foreground hover:text-foreground"
+            aria-label={t("common.close")}
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+        <p className="relative mt-3 text-[13px] leading-relaxed">
+          {t("distill.guideIntro1")}
+        </p>
+        <p className="relative mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+          {t("distill.guideIntro2")}
+        </p>
+        <ol className="relative mt-4 grid gap-2 sm:grid-cols-2">
           {STEPS.map((step, index) => (
-            <li key={step.titleKey} className="flex items-start gap-3">
+            <li
+              key={step.titleKey}
+              className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2.5"
+            >
               <span
-                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full font-mono text-[10px] font-semibold"
+                className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full font-mono text-[10px]"
                 style={{
                   background:
                     "color-mix(in oklab, var(--chart-1) 18%, transparent)",
@@ -63,27 +82,28 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
               >
                 {index + 1}
               </span>
-              <div className="min-w-0">
-                <span className="block text-[13px] font-medium">
-                  {t(step.titleKey)}
-                </span>
-                <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+              <span className="min-w-0">
+                <span className="block text-[12px]">{t(step.titleKey)}</span>
+                <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
                   {t(step.descKey)}
-                </p>
-              </div>
+                </span>
+              </span>
             </li>
           ))}
         </ol>
-        <div className="mt-6 flex justify-end">
+        <div className="relative mt-5 flex items-center gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 font-mono text-[11.5px] font-semibold text-background transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 font-mono text-[11.5px] text-background transition-opacity hover:opacity-90"
           >
             {t("distill.guideStart")}
           </button>
+          <span className="font-mono text-[10.5px] text-muted-foreground">
+            {t("distill.guideReopenHint")}
+          </span>
         </div>
-      </Panel>
+      </section>
     </div>
   );
 }

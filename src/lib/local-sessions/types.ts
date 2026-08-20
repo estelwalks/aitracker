@@ -68,6 +68,10 @@ export interface SessionRecord {
   /** Git repository root when available; otherwise raw cwd. */
 
   projectRef: string;
+  /** True when `projectRef` resolved to a real git repository root (a `.git`
+   *  directory or a worktree `gitdir:` file); false/absent when it fell back
+   *  to the raw cwd because no repository was found. */
+  isGitProject?: boolean;
   model: string | null;
   /** ISO timestamp of the earliest record. */
   startedAt: string;

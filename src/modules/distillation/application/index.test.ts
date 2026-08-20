@@ -241,16 +241,22 @@ test("filters missing and duplicate selections before model invocation", async (
   assert.equal(missing.ok, false);
 });
 
-test("offline, model failure and budget exceeded remain explainable degraded candidates", async () => {
+test("a real-model run that degrades fails honestly instead of fabricating a result", async () => {
+  // 用户要求:真实模型调用失败必须诚实报错(aiFailed),绝不能像旧版那样
+  // 静默产出一条"蒸馏完成"的假结果。只有显式选择离线模式才走确定性回退。
   for (const status of ["offline", "fallback", "budget-exceeded"] as const) {
     const { app } = setup(execution(status));
     const result = await app.start(request());
-    assert.equal(result.ok, true);
-    assert.equal(
-      result.ok && result.value.candidate?.mode,
-      status === "fallback" ? "fallback" : status,
-    );
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "errors.distillation.aiFailed");
   }
+});
+
+test("explicit offline requests still return an explainable deterministic candidate", async () => {
+  const { app } = setup(execution("offline", ""));
+  const result = await app.start(request({ modelId: "offline" }));
+  assert.equal(result.ok, true);
+  assert.equal(result.ok && result.value.candidate?.mode, "offline");
 });
 
 test("approval is the only path that invokes knowledge; cancellation closes the gate", async () => {
@@ -262,7 +268,7 @@ test("approval is the only path that invokes knowledge; cancellation closes the 
   const approved = await state.app.approve(candidateId, "user");
   assert.equal(approved.ok, true);
   assert.deepEqual(state.calls, [
-    "create:Distilled summary (2 sessions)",
+    "create:demo Task Memory · 2 sessions",
     "approve",
   ]);
   const cancelledState = setup();
@@ -340,7 +346,7 @@ test("start persists the candidate so a fresh application can list it via listWa
   assert.equal(waiting.length, 1);
   assert.equal(waiting[0]!.candidateId, "candidate-1");
   assert.equal(waiting[0]!.approvalState, "waiting-approval");
-  assert.equal(waiting[0]!.title, "Distilled summary (2 sessions)");
+  assert.equal(waiting[0]!.title, "demo Task Memory · 2 sessions");
 });
 
 test("approve persists the updated state and removes the candidate from listWaiting", async () => {
@@ -619,7 +625,7 @@ test("invalid segments are rejected before the model runs", async () => {
     }),
   );
   assert.equal(duplicate.ok, false);
-  // More than 8 segments are rejected.
+  // More than 8 distinct windows are now accepted (the cap was removed).
   const tooMany = Array.from({ length: 9 }, (_, index) => ({
     source: "codex",
     sessionId: "s1",
@@ -634,8 +640,8 @@ test("invalid segments are rejected before the model runs", async () => {
       },
     }),
   );
-  assert.equal(overLimit.ok, false);
-  assert.equal(invoked, false);
+  assert.equal(overLimit.ok, true);
+  assert.equal(invoked, true);
 });
 
 test("counts() buckets distilled knowledge assets into capability and memory", async () => {

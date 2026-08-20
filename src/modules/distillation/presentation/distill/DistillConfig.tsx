@@ -5,18 +5,17 @@ import {
   FlaskConical,
   FolderOpen,
   History,
-  Info,
   Loader2,
   Search,
-  X,
+  Trash2,
   Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
-import { EmptyState } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
+import type { SegmentRef } from "../../contracts";
 import type { DistillationSessionItem } from "../index.ts";
 import { MaterialPicker } from "./MaterialDrawer.tsx";
 import {
@@ -26,27 +25,40 @@ import {
   type OutTypeId,
 } from "./out-types.ts";
 import {
-  isConfigMaterial,
+  EST_TOKENS_PER_TURN,
   type DistillationMaterialGranularity,
   type DistillationTimeRange,
 } from "./materials.ts";
 
+/** 原型 5 个提示词预设：点击向已有文本去重追加，不替换。 */
 const PRESETS = [
-  { id: "summary", key: "distill.presetSummary" },
-  { id: "skill", key: "distill.presetSkill" },
-  { id: "brief", key: "distill.presetBrief" },
+  { id: "concise", key: "distill.presetConcise" },
+  { id: "scripts", key: "distill.presetScripts" },
+  { id: "pitfalls", key: "distill.presetPitfalls" },
+  { id: "sources", key: "distill.presetSources" },
+  { id: "chinese", key: "distill.presetChinese" },
 ] as const;
 
 const PROMPT_BY_PRESET = {
-  summary: "distill.presetPromptSummary",
-  skill: "distill.presetPromptSkill",
-  brief: "distill.presetPromptBrief",
+  concise: "distill.presetPromptConcise",
+  scripts: "distill.presetPromptScripts",
+  pitfalls: "distill.presetPromptPitfalls",
+  sources: "distill.presetPromptSources",
+  chinese: "distill.presetPromptChinese",
 } as const;
 
 export interface DistillConfigModelOption {
   readonly id: string;
   readonly label: string;
   readonly offline?: boolean;
+  /** Vendor group shown in the picker dropdown header (官方 / Anthropic / …). */
+  readonly vendor?: string;
+  /** Secondary mono text under the model name (model or endpoint). */
+  readonly sub?: string;
+  /** True for the official-mode profile; only official models gate on quota. */
+  readonly official?: boolean;
+  /** True when the profile has a usable endpoint (status dot). */
+  readonly ok?: boolean;
 }
 
 /** Renderer-safe projection of the server-side daily quota (Story B-600). */
@@ -169,14 +181,6 @@ function ModelSelect({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const current = options.find((option) => option.id === value) ?? options[0];
-  const visible = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase();
-    return needle
-      ? options.filter((option) =>
-          option.label.toLocaleLowerCase().includes(needle),
-        )
-      : options;
-  }, [options, query]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,70 +191,133 @@ function ModelSelect({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
+  const kw = query.trim().toLocaleLowerCase();
+  const list = kw
+    ? options.filter((option) =>
+        `${option.label} ${option.sub ?? ""} ${option.vendor ?? ""}`
+          .toLocaleLowerCase()
+          .includes(kw),
+      )
+    : options;
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof list>();
+    for (const option of list) {
+      const vendor = option.vendor ?? "自有";
+      map.set(vendor, [...(map.get(vendor) ?? []), option]);
+    }
+    return [...map.entries()];
+  }, [list]);
+
   return (
-    <div ref={rootRef} className="relative max-w-[360px]">
-      <button
-        type="button"
-        onClick={() => setOpen((currentOpen) => !currentOpen)}
-        className="flex w-full items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-left ring-1 ring-border/70"
-        aria-expanded={open}
-      >
-        <span
-          className={`size-1.5 shrink-0 rounded-full ${current?.offline ? "bg-warn" : "bg-ok"}`}
-        />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-          {current?.offline ? t("distill.proOffline") : current?.label}
-        </span>
-        <span className="truncate font-mono text-[10px] text-muted-foreground">
-          {current?.id}
-        </span>
-        <ChevronDown
-          className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-      {open && (
-        <div className="absolute z-30 mt-1.5 w-full min-w-[300px] rounded-xl bg-card p-1.5 shadow-2xl ring-1 ring-border">
-          <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
-            <Search className="size-3.5 text-muted-foreground" />
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("distill.modelSearch")}
-              className="min-w-0 flex-1 bg-transparent font-mono text-[11px] outline-none"
-            />
+    <div ref={rootRef} className="relative w-full sm:max-w-[300px]">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((currentOpen) => !currentOpen)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/40"
+          style={{ boxShadow: "inset 0 0 0 1px var(--border)" }}
+        >
+          <span
+            className="size-1.5 shrink-0 rounded-full"
+            style={{
+              background: current?.ok ? "var(--chart-2)" : "var(--chart-5)",
+            }}
+          />
+          <span className="truncate text-[12px] leading-5 font-medium">
+            {current?.offline ? t("distill.proOffline") : current?.label}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] leading-5 text-muted-foreground">
+            {current?.offline ? "" : current?.sub}
+          </span>
+          <ChevronDown
+            className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+        {open && (
+          <div
+            className="absolute z-30 mt-1.5 w-[320px] max-w-[92vw] rounded-xl bg-card p-1.5"
+            style={{
+              boxShadow:
+                "0 18px 48px -18px rgba(0,0,0,.6), inset 0 0 0 1px var(--border)",
+            }}
+          >
+            <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("distill.modelSearch")}
+                className="w-full bg-transparent font-mono text-[11.5px] outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="tt-scroll mt-1.5 max-h-[260px] overflow-y-auto">
+              {groups.length === 0 && (
+                <div className="px-3 py-6 text-center font-mono text-[11px] text-muted-foreground">
+                  {t("distill.modelNoMatch")}
+                </div>
+              )}
+              {groups.map(([vendor, items]) => (
+                <div key={vendor} className="mb-1">
+                  <div className="px-2.5 py-1 font-mono text-[10px] tracking-wide text-muted-foreground">
+                    {vendor}
+                  </div>
+                  {items.map((option) => {
+                    const on = option.id === value;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          onChange(option.id);
+                          setOpen(false);
+                          setQuery("");
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                          on ? "bg-accent/60" : "hover:bg-accent/35"
+                        }`}
+                      >
+                        <span
+                          className="size-1.5 shrink-0 rounded-full"
+                          style={{
+                            background: option.ok
+                              ? "var(--chart-2)"
+                              : "var(--chart-5)",
+                          }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12px] leading-4">
+                            {option.offline
+                              ? t("distill.proOffline")
+                              : option.label}
+                          </span>
+                          <span className="block truncate font-mono text-[10px] leading-4 text-muted-foreground">
+                            {option.sub}
+                          </span>
+                        </span>
+                        {on && (
+                          <Check
+                            className="size-3.5 shrink-0"
+                            style={{ color: "var(--chart-1)" }}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <Link
+              to="/settings"
+              search={{ section: "model" }}
+              className="mt-1 flex items-center justify-center gap-1.5 rounded-lg bg-surface-2 py-2 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              + {t("distill.addOwnModel")}
+            </Link>
           </div>
-          <div className="mt-1 max-h-56 overflow-y-auto">
-            {visible.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => {
-                  onChange(option.id);
-                  setOpen(false);
-                  setQuery("");
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left ${
-                  option.id === value ? "bg-accent" : "hover:bg-accent/60"
-                }`}
-              >
-                <BrandIcon name={option.label} className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-[12px]">
-                  {option.offline ? t("distill.proOffline") : option.label}
-                </span>
-                {option.id === value && (
-                  <Check className="size-3.5 text-primary" />
-                )}
-              </button>
-            ))}
-            {visible.length === 0 && (
-              <p className="px-3 py-6 text-center font-mono text-[11px] text-muted-foreground">
-                {t("distill.modelNoMatch")}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -266,14 +333,12 @@ export function DistillConfig({
   onModelId,
   modelOptions,
   quota,
-  promptPreset,
-  onPromptPreset,
   promptText,
   onPromptText,
   outType,
   onOutType,
   historyCount,
-  segmentsCount,
+  segments,
   onHistory,
   onSwitchModel,
   availableItems,
@@ -282,7 +347,8 @@ export function DistillConfig({
   onToggle,
   onToggleProject,
   onOpenMaterial,
-  onRemoveItem,
+  onClearSelection,
+  onClearSegments,
   onRun,
   canRun,
   busy,
@@ -298,8 +364,6 @@ export function DistillConfig({
   modelOptions: readonly DistillConfigModelOption[];
   /** Server-side daily quota projection; `null` when the ledger is unavailable. */
   quota: DistillQuotaView | null;
-  promptPreset: string;
-  onPromptPreset: (value: string) => void;
   promptText: string;
   onPromptText: (value: string) => void;
   /** Selected output type (prototype ② 出产物). */
@@ -307,11 +371,11 @@ export function DistillConfig({
   onOutType: (value: OutTypeId) => void;
   /** Number of persisted candidates, shown on the header history chip. */
   historyCount: number;
-  /** Number of user-selected transcript segments (drives the privacy note). */
-  segmentsCount?: number;
+  /** User-picked transcript windows (pro 素材盒 chips + run hint counts). */
+  segments: readonly SegmentRef[];
   /** Open the distill-history dialog (E-600). */
   onHistory: () => void;
-  /** Switch the pro-mode model to the first non-offline option (E-400). */
+  /** Switch the pro-mode model to the first own (non-official) profile. */
   onSwitchModel: () => void;
   availableItems: readonly DistillationSessionItem[];
   selected: ReadonlySet<string>;
@@ -319,30 +383,82 @@ export function DistillConfig({
   onToggle: (item: DistillationSessionItem) => void;
   onToggleProject: (items: readonly DistillationSessionItem[]) => void;
   onOpenMaterial: () => void;
-  onRemoveItem: (item: DistillationSessionItem) => void;
+  /** Quick-mode「清空」：清空已选会话。 */
+  onClearSelection: () => void;
+  /** Pro-mode 素材盒「清空」：清空已选片段。 */
+  onClearSegments: () => void;
   onRun: () => void;
   canRun: boolean;
   busy: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const pickPreset = (id: string) => {
-    onPromptPreset(id);
     const key = PROMPT_BY_PRESET[id as keyof typeof PROMPT_BY_PRESET];
-    if (key) onPromptText(t(key));
+    if (!key) return;
+    const text = t(key);
+    // 原型语义：预设向已有文本去重追加（v.trim() ? v.trim()+"；" : ""）+ p.text。
+    onPromptText(
+      promptText.includes(text)
+        ? promptText
+        : (promptText.trim() ? `${promptText.trim()}；` : "") + text,
+    );
   };
 
-  const realModel = mode === "pro" && modelId !== "offline";
+  const selectedOption =
+    modelOptions.find((option) => option.id === modelId) ?? modelOptions[0];
   const hasRealModels = modelOptions.some((option) => !option.offline);
-  const quotaExhausted = quota != null && quota.remaining <= 0 && realModel;
-  const configMode = isConfigMaterial(granularity);
+  const quotaExhausted =
+    quota != null && quota.remaining <= 0 && selectedOption?.official === true;
   const typeMeta = outTypeMeta(outType);
-  const switchTarget = modelOptions.find((option) => !option.offline);
+  // 额度横幅的切换目标：第一个自有（非官方、非离线）模型，与原型 profiles[0] 一致。
+  const switchTarget = modelOptions.find(
+    (option) => !option.offline && option.official !== true,
+  );
   const statusLabel =
-    quota != null && realModel
+    quota != null && selectedOption?.official
       ? t("distill.quotaHeader", { count: quota.remaining })
-      : hasRealModels
+      : selectedOption?.ok
         ? t("distill.ownModelConnected")
         : t("distill.ownModelUnconfigured");
+  // 原型 token 为启发式估算（turns × EST_TOKENS_PER_TURN，E-200）。
+  const estTokens = selectedItems.reduce(
+    (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
+    0,
+  );
+  // 素材盒 chips 按会话聚合选段数（原型的「{count} 条」）。
+  const segsBySession = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const seg of segments) {
+      const key = `${seg.source}:${seg.sessionId}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [segments]);
+  // chips 的会话标题：按 `${source}:${sessionId}` 查当前可选项。
+  const titleByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of availableItems) {
+      map.set(`${item.source}:${item.sessionId}`, item.title);
+    }
+    return map;
+  }, [availableItems]);
+  const pickedEmpty =
+    mode === "pro" ? segments.length === 0 : selected.size === 0;
+  const runHint = pickedEmpty
+    ? mode === "quick"
+      ? granularity === "project"
+        ? t("distill.runNeedProject")
+        : t("distill.runNeedSession")
+      : t("distill.runNeedSegments")
+    : mode === "quick"
+      ? t("distill.runSummaryQuick", {
+          count: selectedItems.length,
+          tokens: format.formatTokens(estTokens),
+        })
+      : t("distill.runSummarySegments", {
+          count: segments.length,
+          tokens: format.formatTokens(estTokens),
+        });
 
   return (
     <section className="shrink-0 rounded-xl bg-card p-5">
@@ -418,7 +534,9 @@ export function DistillConfig({
       )}
 
       <div className="mt-3 divide-y divide-border/40">
-        {/* ① 选素材：粒度（会话 / 项目 / 配置）+ 时间（quick 模式） */}
+        {/* ① 选素材：粒度（会话 / 项目）+ 时间（quick 模式）。原型 distill.tsx
+            只暴露「按会话 / 按项目」两个粒度；config 素材是原型里的死代码
+            （material 状态硬编码为 chat，无入口），故工作台不提供该选项。 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
           <StepTag n="1" text={t("distill.stepMaterial")} />
           {mode === "quick" && (
@@ -428,7 +546,6 @@ export function DistillConfig({
                   [
                     ["session", t("distill.grainSession")],
                     ["project", t("distill.grainProject")],
-                    ["config", t("distill.configMaterial")],
                   ] as const
                 ).map(([value, label]) => {
                   const on = granularity === value;
@@ -471,7 +588,19 @@ export function DistillConfig({
               </div>
               <span className="font-mono text-[10.5px] text-muted-foreground">
                 {t("distill.rangeSessions", { count: availableItems.length })}
+                {granularity === "session" && selected.size > 0
+                  ? ` · ${t("distill.rangeSelected", { count: selected.size })}`
+                  : ""}
               </span>
+              {granularity === "session" && selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={onClearSelection}
+                  className="font-mono text-[10.5px] text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  {t("distill.clear")}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -479,27 +608,12 @@ export function DistillConfig({
         {/* 素材列表行：quick = 会话/项目卡片；pro = 素材盒；config = 诚实空态 */}
         <div className="flex flex-wrap items-start gap-3 py-3">
           <RowLabel className="mt-1">
-            {configMode
-              ? t("distill.configMaterial")
-              : granularity === "project"
-                ? t("distill.materialProject")
-                : t("distill.materialSession")}
+            {granularity === "project"
+              ? t("distill.materialProject")
+              : t("distill.materialSession")}
           </RowLabel>
           <div className="min-w-0 flex-1">
-            {configMode ? (
-              <>
-                <p className="mb-2 font-mono text-[10.5px] text-muted-foreground">
-                  {t("distill.configMaterialHint")}
-                </p>
-                {/* No tool config-file source in the data layer yet — honest empty
-                    state instead of fabricating a TOOL_PROMPT_FILES mock list. */}
-                <EmptyState
-                  icon={<FolderOpen className="size-5" />}
-                  title={t("distill.configMaterialEmpty")}
-                  desc={t("distill.configMaterialEmptyDesc")}
-                />
-              </>
-            ) : mode === "quick" ? (
+            {mode === "quick" ? (
               <MaterialPicker
                 sessions={availableItems}
                 selected={selected}
@@ -512,7 +626,7 @@ export function DistillConfig({
               <div
                 className="rounded-xl px-4 py-3.5 transition-colors"
                 style={
-                  selectedItems.length
+                  segments.length
                     ? {
                         background:
                           "color-mix(in oklab, var(--chart-1) 8%, transparent)",
@@ -526,62 +640,112 @@ export function DistillConfig({
                       }
                 }
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <span
-                    className="grid size-9 shrink-0 place-items-center rounded-lg"
-                    style={{
-                      background:
-                        "color-mix(in oklab, var(--chart-1) 16%, transparent)",
-                    }}
-                  >
-                    <FolderOpen
-                      className="size-4"
-                      style={{ color: "var(--chart-1)" }}
-                    />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12.5px] font-semibold">
-                      {t("distill.proSelected", {
-                        count: selectedItems.length,
-                      })}
+                {segments.length === 0 ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span
+                      className="grid size-9 shrink-0 place-items-center rounded-lg"
+                      style={{
+                        background:
+                          "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                      }}
+                    >
+                      <FolderOpen
+                        className="size-4"
+                        style={{ color: "var(--chart-1)" }}
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12.5px] font-semibold">
+                        {t("distill.materialBoxEmpty")}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+                        {t("distill.materialBoxEmptyDesc")}
+                      </div>
                     </div>
-                    <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
-                      {t("distill.materialPrivacyShort")}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenMaterial}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                      style={{ background: "var(--chart-1)" }}
+                    >
+                      <FolderOpen className="size-3.5" />
+                      {t("distill.materialOpen")}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={onOpenMaterial}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
-                    style={{ background: "var(--chart-1)" }}
-                  >
-                    <FolderOpen className="size-3.5" />
-                    {t("common.distillation.openMaterial")}
-                  </button>
-                </div>
-                {selectedItems.length > 0 && (
-                  <ul className="mt-3 flex flex-wrap gap-1.5">
-                    {selectedItems.map((item) => (
-                      <li
-                        key={`${item.source}:${item.sessionId}`}
-                        className="inline-flex max-w-56 items-center gap-1.5 rounded-full bg-foreground/[0.06] px-2.5 py-1 font-mono text-[10px]"
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span
+                        className="grid size-9 shrink-0 place-items-center rounded-lg"
+                        style={{
+                          background:
+                            "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                        }}
                       >
-                        <BrandIcon
-                          name={item.source}
-                          className="size-3.5 shrink-0"
+                        <FolderOpen
+                          className="size-4"
+                          style={{ color: "var(--chart-1)" }}
                         />
-                        <span className="truncate">{item.title}</span>
-                        <button
-                          type="button"
-                          onClick={() => onRemoveItem(item)}
-                          aria-label={t("common.cancel")}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[12.5px] font-semibold">
+                          {t("distill.materialBoxCount", {
+                            chats: segsBySession.size,
+                            segs: segments.length,
+                          })}
+                        </div>
+                        <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
+                          {t("distill.materialBoxTokens", {
+                            tokens: format.formatTokens(estTokens),
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onOpenMaterial}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                        style={{ background: "var(--chart-1)" }}
+                      >
+                        {t("distill.materialContinue")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onClearSegments}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-surface-2 px-3 py-2 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Trash2 className="size-3.5" />
+                        {t("distill.clear")}
+                      </button>
+                    </div>
+                    {segsBySession.size > 0 && (
+                      <ul className="mt-3 flex flex-wrap gap-1.5">
+                        {[...segsBySession.entries()]
+                          .slice(0, 8)
+                          .map(([key, count]) => (
+                            <li
+                              key={key}
+                              className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full bg-foreground/[0.06] px-2.5 py-1 font-mono text-[10.5px]"
+                            >
+                              <BrandIcon
+                                name={key.split(":")[0]!}
+                                className="size-3.5 shrink-0"
+                              />
+                              <span className="truncate">
+                                {titleByKey.get(key) ?? key.split(":")[1]}
+                              </span>
+                              <span className="shrink-0 text-muted-foreground">
+                                {t("distill.chipCount", { count })}
+                              </span>
+                            </li>
+                          ))}
+                        {segsBySession.size > 8 && (
+                          <li className="inline-flex items-center rounded-full bg-foreground/[0.06] px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground">
+                            +{segsBySession.size - 8}
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -609,15 +773,20 @@ export function DistillConfig({
                       key={preset.id}
                       type="button"
                       onClick={() => pickPreset(preset.id)}
-                      className={`rounded-lg px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
-                        promptPreset === preset.id
-                          ? "bg-foreground text-background"
-                          : "bg-surface-2 text-muted-foreground hover:text-foreground"
-                      }`}
+                      className="rounded-lg bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground transition-colors hover:text-foreground"
                     >
                       + {t(preset.key)}
                     </button>
                   ))}
+                  {promptText.trim() !== "" && (
+                    <button
+                      type="button"
+                      onClick={() => onPromptText("")}
+                      className="font-mono text-[10.5px] text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                      {t("distill.clear")}
+                    </button>
+                  )}
                 </div>
                 <div className="relative">
                   <textarea
@@ -635,7 +804,7 @@ export function DistillConfig({
                       }
                     }}
                     rows={3}
-                    className="min-h-[76px] w-full resize-y rounded-lg bg-surface-2 px-3 py-2 pb-6 text-[12px] leading-6 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary"
+                    className="min-h-[76px] w-full resize-y rounded-lg bg-surface-2 px-3 py-2 pb-6 text-[12px] leading-6 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-[var(--chart-1)]"
                   />
                   <span className="pointer-events-none absolute right-3 bottom-2 font-mono text-[9.5px] text-muted-foreground">
                     {t("distill.promptCount", { count: promptText.length })}
@@ -679,28 +848,8 @@ export function DistillConfig({
                 : t("distill.runPro", { type: t(typeMeta.labelKey) })}
           </button>
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-            {configMode
-              ? t("distill.configMaterialRunHint")
-              : selectedItems.length > 0
-                ? t("distill.runSummary", { count: selectedItems.length })
-                : t("common.distillation.runHint")}
+            {runHint}
           </span>
-          {!configMode && selectedItems.length >= 8 && (
-            <span className="inline-flex items-center gap-1 text-[10.5px] text-warn">
-              <AlertTriangle className="size-3" /> {t("distill.selectionLimit")}
-            </span>
-          )}
-          {!configMode && quota != null && !realModel && (
-            <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
-              <Info className="size-3" /> {t("distill.quotaOffline")}
-            </span>
-          )}
-          {(segmentsCount ?? 0) > 0 && (
-            <span className="inline-flex basis-full items-start gap-1.5 pl-[72px] text-[11px] leading-relaxed text-muted-foreground">
-              <Info className="mt-0.5 size-3 shrink-0" />
-              {t("distill.segment.privacyNote")}
-            </span>
-          )}
         </div>
       </div>
     </section>

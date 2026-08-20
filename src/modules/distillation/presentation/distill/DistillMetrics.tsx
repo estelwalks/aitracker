@@ -2,9 +2,11 @@ import { useI18n } from "../../../../lib/i18n/context";
 
 /**
  * Four workbench metrics aligned with the prototype (lines 762-777):
- * 已选素材 (~tokens) / 素材 Token (本次输入预估) / 蒸馏次数 (本次会话 / 进行中…)
- * / 已入库 (保存为 Skill). All numbers come from real state: the live
- * selection, this session's successful runs and the persisted approved count.
+ * 已选素材 (~tokens) / 素材 Token (本次输入预估) / 蒸馏次数 (累计 / 进行中…)
+ * / 已入库 (保存为 Skill). Runs and committed both aggregate the persisted
+ * totals plus this page session's increments — the same 口径, so a reload
+ * shows the persisted count instead of resetting one card and keeping the
+ * other.
  *
  * The token figure is a documented heuristic estimate derived from the
  * selected sessions' real turn counts — the privacy-safe renderer projection
@@ -29,18 +31,18 @@ export function DistillMetrics({
   busy: boolean;
 }) {
   const { t, format } = useI18n();
-  const hasMaterial = selectedCount > 0;
-  const tokenValue = hasMaterial ? `~${format.formatTokens(estTokens)}` : "—";
+  // 原型指标条：已选素材 sub 恒显「~{tokens} tokens」，素材 Token 恒显数值
+  // （非空才出现，无「—」；估计值本身已带「~」语义，见 E-200）。
   const cards = [
     {
       k: t("distill.metricMaterial"),
       v: `${selectedCount}`,
-      s: hasMaterial ? `~${format.formatTokens(estTokens)} tokens` : "—",
+      s: `~${format.formatTokens(estTokens)} tokens`,
       c: "var(--chart-1)",
     },
     {
       k: t("distill.metricTokens"),
-      v: tokenValue,
+      v: format.formatTokens(estTokens),
       s: t("distill.metricTokensSub"),
       c: "var(--chart-4)",
     },

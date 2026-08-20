@@ -30,7 +30,9 @@ export type DistillationErrorCode =
   | "errors.distillation.invalidName"
   | "errors.distillation.invalidAgent"
   | "errors.distillation.skillExists"
-  | "errors.distillation.quotaExceeded";
+  | "errors.distillation.quotaExceeded"
+  | "errors.distillation.noModelConfigured"
+  | "errors.distillation.aiFailed";
 
 export type ApprovalState = "waiting-approval" | "approved" | "cancelled";
 export type DistillationMode =
@@ -95,6 +97,11 @@ export interface DistillationRequest {
    * registry route.
    */
   readonly providerId?: string;
+  /**
+   * Output kind the run should produce (prototype 出产物: skill/workflow/prompt
+   * into the capability group, profile/task into memory). Absent → "memory".
+   */
+  readonly kind?: CandidateOutput["kind"];
   readonly budgetUsd?: number;
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
@@ -129,6 +136,11 @@ export interface CandidateOutput {
   readonly approvalState: ApprovalState;
   readonly selectedSessionRefs: readonly SessionRef[];
   readonly generatedAt: string;
+  /**
+   * 批准后对应的知识资产 id（记忆资产 → 记忆库条目）。批准时写入并持久化，
+   * 用于从候选卡跳回记忆库。能力资产（brief/skill/prompt）不落知识库则为空。
+   */
+  readonly knowledgeAssetId?: string;
   readonly execution: AIExecutionSummary;
 }
 

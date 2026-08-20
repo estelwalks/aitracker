@@ -20,6 +20,7 @@
 import { mkdir, lstat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
+import { promptForKind } from "./prompts.ts";
 
 import type { Locale } from "../../lib/i18n/locale.ts";
 import type { SessionSummary } from "../sessions/contracts.ts";
@@ -49,6 +50,7 @@ function toItem(session: SessionSummary): DistillationSessionItem {
     sessionId: session.sessionId,
     title: session.title,
     projectKey: session.projectKey,
+    isGitProject: session.isGitProject,
     model: session.model,
     startedAt: session.startedAt,
     endedAt: session.endedAt,
@@ -69,60 +71,98 @@ function toItem(session: SessionSummary): DistillationSessionItem {
 export async function loadDistillation(
   _locale: Locale,
 ): Promise<DistillationViewModel> {
-  const { getCompositionRoot } =
-    await import("../../app/composition.server.ts");
-  const root = await getCompositionRoot();
-  // The material picker must reflect the current local Claude/Codex logs, not
-  // a still-fresh snapshot created by an older scanner version. Wait for the
-  // shared collector so fallback titles and newly discovered sessions are in
-  // the exact snapshot queried below.
-  await root.sessionSnapshot.requestRefresh({ reason: "manual" });
-  const [page, candidates] = await Promise.all([
-    root.sessions.query({ page: 1, pageSize: 100 }),
-    root.distillation.listAll(),
-  ]);
-  const sessions = page.ok ? page.value.sessions.map(toItem) : [];
-  // The quota ledger is authoritative on the server; the renderer only reads
-  // this remaining-count projection. A failing read degrades to `null` — the
-  // workbench keeps working and shows the offline hint instead.
-  const quota = await root.distillQuota
-    .read()
-    .then((current) => ({
-      used: current.used,
-      limit: current.limit,
-      remaining: Math.max(0, current.limit - current.used),
-    }))
-    .catch(() => null);
-  const profiles = await root.modelProfiles.listViews();
-  // Saved S-500 profiles first (id + label=name), then the deterministic
-  // offline fallback. Ids are de-duplicated across profiles.
-  const seen = new Set<string>();
-  const modelOptions: Array<{
-    id: string;
-    label: string;
-    offline?: boolean;
-  }> = [];
-  for (const profile of profiles) {
-    if (seen.has(profile.id)) continue;
-    seen.add(profile.id);
-    modelOptions.push({ id: profile.id, label: profile.name });
+  try {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    await root.sessionSnapshot
+      .requestRefresh({ reason: "manual" })
+      .catch(() => undefined);
+    const [page, candidates] = await Promise.all([
+      root.sessions.query({ page: 1, pageSize: 100 }),
+      root.distillation.listAll(),
+    ]);
+    const sessions = page.ok ? page.value.sessions.map(toItem) : [];
+    const quota = await root.distillQuota
+      .read()
+      .then((current) => ({
+        used: current.used,
+        limit: current.limit,
+        remaining: Math.max(0, current.limit - current.used),
+      }))
+      .catch(() => null);
+    const profiles = await root.modelProfiles.listViews();
+    const activeProfile = await root.modelProfiles.getActiveView();
+    const seen = new Set<string>();
+    const modelOptions: Array<{
+      id: string;
+      label: string;
+      offline?: boolean;
+      vendor?: string;
+      sub?: string;
+      official?: boolean;
+      ok?: boolean;
+    }> = [];
+    for (const profile of profiles) {
+      if (seen.has(profile.id)) continue;
+      seen.add(profile.id);
+      modelOptions.push({
+        id: profile.id,
+        label: profile.name,
+        vendor:
+          profile.mode === "official"
+            ? "官方"
+            : profile.protocol === "anthropic"
+              ? "Anthropic"
+              : "OpenAI",
+        sub: profile.model ?? profile.endpoint ?? "未配置",
+        official: profile.mode === "official",
+        ok:
+          profile.mode === "official"
+            ? quota != null && quota.remaining > 0
+            : !!profile.endpoint,
+      });
+    }
+    const { getEnvProviderConfig } =
+      await import("../ai-orchestration/model-profile.server.ts");
+    const envConfig = getEnvProviderConfig();
+    if (envConfig) {
+      modelOptions.unshift({
+        id: "default",
+        label: envConfig.model,
+        vendor: "官方",
+        sub: envConfig.base,
+        ok: true,
+      });
+    }
+    modelOptions.push({
+      id: "offline",
+      label: "offline",
+      offline: true as const,
+    });
+    const activeModelId = activeProfile?.id ?? (envConfig ? "default" : "offline");
+    return {
+      sessions,
+      candidates,
+      stats: {
+        runs: candidates.length,
+        approved: candidates.filter((item) => item.approvalState === "approved")
+          .length,
+      },
+      modelOptions,
+      activeModelId,
+      quota,
+    };
+  } catch {
+    return {
+      sessions: [],
+      candidates: [],
+      stats: { runs: 0, approved: 0 },
+      modelOptions: [{ id: "offline", label: "offline", offline: true }],
+      activeModelId: "offline",
+      quota: null,
+    };
   }
-  modelOptions.push({
-    id: "offline",
-    label: "offline",
-    offline: true as const,
-  });
-  return {
-    sessions,
-    candidates,
-    stats: {
-      runs: candidates.length,
-      approved: candidates.filter((item) => item.approvalState === "approved")
-        .length,
-    },
-    modelOptions,
-    quota,
-  };
 }
 
 /**
@@ -140,33 +180,49 @@ export async function startDistillation(
   const root = await getCompositionRoot();
   const refs = Array.isArray(input?.sessionRefs) ? input.sessionRefs : [];
   const segments = Array.isArray(input?.segments) ? input.segments : [];
-  const modelId = input.modelId?.trim() || "offline";
-  // When the selected model is a saved S-500 profile, route the request to the
-  // composition root's profile-backed provider (providerId "profile") so the
-  // real endpoint/key are used server-side. Unknown ids (offline or deleted
-  // profiles) keep the registry/offline behaviour.
+  // The page forwards the selected model. "default" is the built-in model backed
+  // by the host environment's Anthropic-compatible credentials; a saved S-500
+  // profile id routes to the profile-backed provider. The explicit "offline"
+  // option is a real, supported mode — it keeps providerId undefined so the
+  // registry's default offline provider produces a deterministic candidate (the
+  // domain's `isRealModelRequest` treats it as non-real). Only an id that
+  // resolves to no model (a deleted/unknown profile) is rejected honestly
+  // instead of silently fabricating a fallback result.
+  const modelId = input.modelId?.trim() || "default";
   let providerId: string | undefined;
-  if (modelId !== "offline") {
+  // The request modelId doubles as the label surfaced on the result card, so the
+  // env route substitutes the real model name (e.g. "deepseek-v4-flash") for the
+  // generic "default" option id.
+  let effectiveModelId = modelId;
+  if (modelId === "default") {
+    const { getEnvProviderConfig } =
+      await import("../ai-orchestration/model-profile.server.ts");
+    const envConfig = getEnvProviderConfig();
+    if (envConfig) {
+      providerId = "env";
+      effectiveModelId = envConfig.model;
+    }
+  } else if (modelId !== "offline") {
     const profile = await root.modelProfiles.getProfileForExecution(modelId);
     if (profile) providerId = "profile";
   }
+  if (!providerId && modelId !== "offline")
+    return { ok: false, errorCode: "errors.distillation.noModelConfigured" };
   const result = await root.distillation.start({
     requestId: `distill:${crypto.randomUUID()}`,
     selection: {
       sessionRefs: refs,
       ...(segments.length > 0 ? { segments } : {}),
     },
-    modelId,
+    modelId: effectiveModelId,
+    kind: input.kind,
     providerId,
     prompt: {
-      id: "distillation.summary",
-      version: 1,
-      template:
-        input.promptText?.trim() ||
-        (segments.length > 0
-          ? "Summarise the selected sessions and their chosen message segments into a concise knowledge note."
-          : "Summarise the selected sessions' metadata into a concise knowledge note."),
+      id: `distillation.${input.kind ?? "memory"}`,
+      version: 2,
+      template: promptForKind(input.kind, input.promptText),
     },
+    timeoutMs: 120_000,
   });
   if (!result.ok) return { ok: false, errorCode: result.error.code };
   return { ok: true, candidate: result.value.candidate };
@@ -275,12 +331,10 @@ export async function saveCandidateAsSkill(
   if (exists)
     return { ok: false, errorCode: "errors.distillation.skillExists" };
 
-  // An edited draft overrides the approved summary for the Skill body; the
-  // approved knowledge entry is never modified by this write.
+  const suppliedFiles = Array.isArray(input.files) ? input.files : [];
   const summary = input.content?.trim() || candidate.summary;
   const description = summary.split("\n")[0]?.slice(0, 120) ?? "";
-  const body = summary || `Distilled knowledge note (${name}).`;
-  const content = [
+  const fallbackSkill = [
     "---",
     `name: ${name}`,
     ...(description ? [`description: ${description}`] : []),
@@ -288,12 +342,46 @@ export async function saveCandidateAsSkill(
     "",
     `# ${name}`,
     "",
-    body,
+    summary || `Distilled knowledge note (${name}).`,
     "",
   ].join("\n");
-
+  const files = suppliedFiles.length
+    ? suppliedFiles
+    : [{ path: "SKILL.md", content: fallbackSkill }];
+  const seenPaths = new Set<string>();
+  const validated: Array<{ targetFile: string; content: string }> = [];
+  for (const file of files) {
+    const filePath = file.path?.trim();
+    if (
+      !filePath ||
+      filePath.startsWith("/") ||
+      filePath.includes("\\") ||
+      seenPaths.has(filePath)
+    )
+      // A bad file path is client input, not a server failure — return a
+      // translatable error instead of throwing a 500.
+      return { ok: false, errorCode: "errors.distillation.invalidName" };
+    const targetFile = join(targetDir, filePath);
+    if (!isPathInside(targetDir, targetFile))
+      return { ok: false, errorCode: "errors.distillation.invalidName" };
+    seenPaths.add(filePath);
+    validated.push({ targetFile, content: file.content });
+  }
+  if (!seenPaths.has("SKILL.md"))
+    return { ok: false, errorCode: "errors.distillation.invalidName" };
   await mkdir(targetDir, { recursive: true, mode: 0o700 });
+  for (const file of validated) {
+    await mkdir(resolve(file.targetFile, ".."), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(file.targetFile, file.content, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+  }
   const skillPath = join(targetDir, "SKILL.md");
-  await writeFile(skillPath, content, { encoding: "utf8", mode: 0o600 });
+  // Make the new package visible in Skill management immediately.
+  await root.skillSnapshot.requestRefresh({ reason: "manual" }).catch(() => {});
   return { ok: true, agent: input.targetAgent, path: skillPath };
 }

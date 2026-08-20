@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, FolderOpen, Loader2, Search, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  FolderOpen,
+  Loader2,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
-import { EmptyState, TTButton } from "../../../../components/tt";
+import { EmptyState } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { SessionTranscriptMessage } from "../../../../modules/sessions/contracts";
 import { getSessionTranscript } from "../../../../modules/sessions/query";
@@ -12,11 +20,9 @@ import type { DistillationSessionItem } from "../index.ts";
 import {
   groupDistillationSessionsByProject,
   materialKeyOf,
+  EST_TOKENS_PER_TURN,
   type DistillationMaterialGranularity,
 } from "./materials.ts";
-
-const MAX_SELECTION = 8;
-const MAX_SEGMENTS = 8;
 
 type TranscriptState = {
   messages: SessionTranscriptMessage[];
@@ -24,35 +30,30 @@ type TranscriptState = {
 };
 
 /**
- * Full-screen material library matching the prototype's workspace hierarchy.
- * The right pane is a per-message segment picker: the user clicks conversation
- * bubbles to set a start/end range (prototype 1552-1684), "select whole
- * session" for the full transcript, and clears the range to revert. Committed
- * ranges are lifted to the page as `SegmentRef`s and, on start, loaded into
- * memory server-side for the current AI request only.
+ * Full-screen material library matching the prototype's workspace hierarchy
+ * (prototype distill.tsx 1401-1741).
+ *
+ * The left column lists sessions (filter/search + per-session join pill); the
+ * right pane is a per-message range picker: clicking a bubble sets start/end
+ * in turn (prototype pickAt), hover buttons pin the exact start/end, and the
+ * footer "select whole session" commits the full transcript. Committed ranges
+ * are lifted to the page as `SegmentRef`s and, on start, loaded into memory
+ * server-side for the current AI request only.
  *
  * PRIVACY: the transcript is fetched through the server fn, which reads the
  * user's own local logs into memory for this page render. It is never
  * persisted and only reaches the selected model as part of the user's own
- * distillation run — surfaced in the disclosure note below.
+ * distillation run.
  */
 export function MaterialDrawer({
   sessions,
-  selected,
-  granularity,
   segments,
   onSegmentsChange,
-  onToggle,
-  onToggleProject,
   onClose,
 }: {
   sessions: readonly DistillationSessionItem[];
-  selected: ReadonlySet<string>;
-  granularity: DistillationMaterialGranularity;
   segments: readonly SegmentRef[];
   onSegmentsChange: (next: SegmentRef[]) => void;
-  onToggle: (item: DistillationSessionItem) => void;
-  onToggleProject: (items: readonly DistillationSessionItem[]) => void;
   onClose: () => void;
 }) {
   const { t, format } = useI18n();
@@ -127,14 +128,11 @@ export function MaterialDrawer({
       .sort(([a], [b]) => (a < b ? 1 : -1))
       .map(([, entry]) => entry);
   }, [filtered, format]);
-  const active =
-    sessions.find((item) => materialKeyOf(item) === activeKey) ??
-    filtered[0] ??
-    null;
   const byKey = useMemo(
     () => new Map(sessions.map((item) => [materialKeyOf(item), item])),
     [sessions],
   );
+  const active = activeKey ? (byKey.get(activeKey) ?? null) : null;
 
   // Per-session transcript cache + the active session's live transcript.
   const cacheRef = useRef(new Map<string, TranscriptState>());
@@ -143,6 +141,10 @@ export function MaterialDrawer({
     status: "loading",
   });
   const activeKeyRef = useRef<string | null>(null);
+  // When the user clicks the left-column "add whole session" pill on a session
+  // whose transcript is not loaded yet, remember it here; the load effect below
+  // commits the full range as soon as the transcript arrives.
+  const pendingFullRef = useRef<string | null>(null);
   useEffect(() => {
     const key = activeKey;
     if (!key) {
@@ -173,12 +175,20 @@ export function MaterialDrawer({
         };
         cacheRef.current.set(key, next);
         if (activeKeyRef.current === key) setActiveTranscript(next);
+        if (pendingFullRef.current === key) {
+          pendingFullRef.current = null;
+          if (next.messages.length > 0) {
+            commitRange(key, 0, next.messages.length - 1);
+          }
+        }
       })
       .catch(() => {
         const next: TranscriptState = { messages: [], status: "error" };
         cacheRef.current.set(key, next);
         if (activeKeyRef.current === key) setActiveTranscript(next);
+        if (pendingFullRef.current === key) pendingFullRef.current = null;
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, byKey]);
 
   // Committed per-session ranges, seeded from the page's carried-over segments
@@ -208,289 +218,280 @@ export function MaterialDrawer({
     const next = mutate(ranges);
     setRanges(next);
     const list: SegmentRef[] = [];
-    for (const [key, window] of Object.entries(next)) {
+    for (const [key, win] of Object.entries(next)) {
       const item = byKey.get(key);
       if (!item) continue;
       list.push({
         source: item.source,
         sessionId: item.sessionId,
-        startIndex: window.s,
-        endIndex: window.e,
+        startIndex: win.s,
+        endIndex: win.e,
       });
     }
     onSegmentsChange(list);
   }
-
-  // Transient point-to-point picker state for the active session (TranscriptPanel
-  // model): first click sets the anchor, second click sets the end and commits.
-  const [anchor, setAnchor] = useState<number | null>(null);
-  const [pickEnd, setPickEnd] = useState<number | null>(null);
-  const [hover, setHover] = useState<number | null>(null);
-  useEffect(() => {
-    if (!activeKey) {
-      setAnchor(null);
-      setPickEnd(null);
-      setHover(null);
-      return;
-    }
-    const committed = ranges[activeKey];
-    setAnchor(committed ? committed.s : null);
-    setPickEnd(committed ? committed.e : null);
-    setHover(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKey]);
-
-  const liveRange = useMemo(() => {
-    if (anchor === null) return null;
-    const other = pickEnd ?? hover;
-    if (other === null) return { s: anchor, e: anchor, live: false };
-    return {
-      s: Math.min(anchor, other),
-      e: Math.max(anchor, other),
-      live: pickEnd === null,
-    };
-  }, [anchor, pickEnd, hover]);
-  function inLiveRange(index: number): boolean {
-    return liveRange !== null && index >= liveRange.s && index <= liveRange.e;
-  }
-
-  function pick(index: number) {
-    if (!active) return;
-    if (anchor === null || pickEnd !== null) {
-      setAnchor(index);
-      setPickEnd(null);
-      return;
-    }
-    const s = Math.min(anchor, index);
-    const e = Math.max(anchor, index);
-    const key = materialKeyOf(active);
-    if (ranges[key] == null && segments.length >= MAX_SEGMENTS) {
-      setAnchor(null);
-      setPickEnd(null);
-      return;
-    }
-    setPickEnd(index);
+  function commitRange(key: string, s: number, e: number) {
     updateRanges((current) => ({ ...current, [key]: { s, e } }));
   }
 
-  function selectAll() {
-    if (!active || activeTranscript.messages.length === 0) return;
-    const e = activeTranscript.messages.length - 1;
-    const key = materialKeyOf(active);
-    if (ranges[key] == null && segments.length >= MAX_SEGMENTS) return;
-    setAnchor(0);
-    setPickEnd(e);
-    updateRanges((current) => ({ ...current, [key]: { s: 0, e } }));
+  // ── Range model: prototype pickAt / setStart / setEnd / clearChat ──────
+  function inRange(key: string, index: number): boolean {
+    const r = ranges[key];
+    return !!r && index >= r.s && index <= r.e;
   }
-
-  function clearRange() {
-    setAnchor(null);
-    setPickEnd(null);
-    setHover(null);
-    if (!active) return;
-    const key = materialKeyOf(active);
+  function pickAt(key: string, index: number) {
+    updateRanges((current) => {
+      const r = current[key];
+      if (!r) return { ...current, [key]: { s: index, e: index } };
+      if (r.s === r.e && r.s === index) {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }
+      if (index < r.s) return { ...current, [key]: { s: index, e: r.e } };
+      return { ...current, [key]: { s: r.s, e: index } };
+    });
+  }
+  function setStart(key: string, index: number) {
+    updateRanges((current) => {
+      const r = current[key];
+      return {
+        ...current,
+        [key]: { s: index, e: r ? Math.max(r.e, index) : index },
+      };
+    });
+  }
+  function setEnd(key: string, index: number) {
+    updateRanges((current) => {
+      const r = current[key];
+      return {
+        ...current,
+        [key]: { s: r ? Math.min(r.s, index) : index, e: index },
+      };
+    });
+  }
+  function clearChat(key: string) {
     updateRanges((current) => {
       const next = { ...current };
       delete next[key];
       return next;
     });
   }
+  function clearAllRanges() {
+    updateRanges(() => ({}));
+  }
+  // "Select whole session": commit the full transcript once known (lazy load).
+  function selectAllOf(key: string) {
+    const cached = cacheRef.current.get(key);
+    if (cached && cached.status === "ready" && cached.messages.length > 0) {
+      commitRange(key, 0, cached.messages.length - 1);
+      return;
+    }
+    pendingFullRef.current = key;
+    setActiveKey(key);
+  }
+  function pillClick(item: DistillationSessionItem) {
+    const key = materialKeyOf(item);
+    if (ranges[key]) {
+      clearChat(key);
+      return;
+    }
+    selectAllOf(key);
+  }
 
-  const totalMessages = segments.reduce(
-    (sum, segment) => sum + (segment.endIndex - segment.startIndex + 1),
+  const key = activeKey;
+  const rangeWindow = key ? ranges[key] : undefined;
+  const allOn =
+    key !== null &&
+    rangeWindow !== undefined &&
+    activeTranscript.status === "ready" &&
+    activeTranscript.messages.length > 0 &&
+    rangeWindow.s === 0 &&
+    rangeWindow.e === activeTranscript.messages.length - 1;
+  const pickedSegs = Object.values(ranges).reduce(
+    (sum, r) => sum + (r.e - r.s + 1),
     0,
   );
-
-  // The picker lists only text-bearing messages: thinking/reasoning-only
-  // messages carry no distillable content and just flood the picker with
-  // collapsed "思考" toggles. Original transcript indices are preserved so
-  // SegmentRef ranges stay aligned with the server's message slice.
-  const visibleMessages = activeTranscript.messages
-    .map((message, index) => ({ message, index }))
-    .filter(({ message }) => message.text.trim().length > 0);
+  const pickedTokens = [...Object.keys(ranges)].reduce((sum, k) => {
+    const item = byKey.get(k);
+    return item ? sum + item.turns * EST_TOKENS_PER_TURN : sum;
+  }, 0);
 
   if (typeof document === "undefined") return null;
 
   const rightPane =
     active == null ? (
-      <EmptyState
-        icon={<FolderOpen className="size-6" />}
-        title={t("common.distillation.noSessions")}
-        desc={t("common.distillation.noSessionsDesc")}
-      />
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-4 p-8 text-center">
+        <span className="grid size-14 place-items-center rounded-2xl bg-surface-2">
+          <FolderOpen
+            className="size-6 text-muted-foreground"
+            strokeWidth={1.5}
+          />
+        </span>
+        <p className="max-w-[280px] text-[13px] leading-6 text-muted-foreground">
+          {t("distill.segment.pickPrompt")}
+        </p>
+      </div>
     ) : (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex items-start gap-3 border-b border-border/60 px-5 py-4">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2">
-            <BrandIcon name={active.source} className="size-5" />
+        <div className="flex flex-wrap items-center gap-3 px-5 pt-4">
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-full"
+            style={{
+              background: `color-mix(in oklab, ${brandColorOf(active.source)} 18%, transparent)`,
+              color: brandColorOf(active.source),
+            }}
+          >
+            <BrandIcon name={active.source} className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[15px] font-semibold">
+            <h3 className="truncate text-[14px] font-semibold tracking-tight">
               {active.title}
             </h3>
-            <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">
-              {active.source}:{active.sessionId}
+            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {active.source} · {active.projectKey} ·{" "}
+              {t("distill.segment.totalMessages", {
+                count: activeTranscript.messages.length,
+              })}
+              {rangeWindow
+                ? ` · ${t("distill.segment.selectedRange", {
+                    start: rangeWindow.s + 1,
+                    end: rangeWindow.e + 1,
+                    count: rangeWindow.e - rangeWindow.s + 1,
+                  })}`
+                : ""}
             </p>
           </div>
-          <TTButton
-            variant={
-              selected.has(materialKeyOf(active)) ? "default" : "primary"
-            }
-            disabled={
-              !selected.has(materialKeyOf(active)) &&
-              selected.size >= MAX_SELECTION
-            }
-            onClick={() => onToggle(active)}
-          >
-            <Check className="size-3.5" />
-            {selected.has(materialKeyOf(active))
-              ? t("distill.materialRemove")
-              : t("distill.materialAdd")}
-          </TTButton>
-        </div>
-
-        {activeTranscript.status === "ready" &&
-        activeTranscript.messages.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-5 py-2.5">
-            <span className="text-[11px] text-muted-foreground">
-              {anchor === null
-                ? t("distill.segment.startHint")
-                : t("distill.segment.selectedRange", {
-                    start: (liveRange?.s ?? anchor) + 1,
-                    end: (liveRange?.e ?? anchor) + 1,
-                    count:
-                      (liveRange?.e ?? anchor) - (liveRange?.s ?? anchor) + 1,
-                  })}
-            </span>
-            {visibleMessages.length < activeTranscript.messages.length && (
-              <span className="font-mono text-[10px] text-muted-foreground/70">
-                {t("distill.segment.hiddenThinking", {
-                  count:
-                    activeTranscript.messages.length - visibleMessages.length,
-                })}
-              </span>
-            )}
-            <div className="flex-1" />
+          {rangeWindow && (
             <button
               type="button"
-              onClick={selectAll}
-              className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] transition-opacity hover:opacity-80"
+              onClick={() => clearChat(materialKeyOf(active))}
+              className="rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
             >
-              {t("distill.segment.selectAll")}
+              {t("distill.segment.clearRange")}
             </button>
-            {anchor !== null && (
-              <button
-                type="button"
-                onClick={clearRange}
-                className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] transition-opacity hover:opacity-80"
-              >
-                {t("distill.segment.clearRange")}
-              </button>
-            )}
+          )}
+          <button
+            type="button"
+            onClick={() => selectAllOf(materialKeyOf(active))}
+            className="rounded-full px-3 py-1.5 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: brandColorOf(active.source) }}
+          >
+            {allOn
+              ? t("distill.segment.cancelAll")
+              : t("distill.segment.selectAll")}
+          </button>
+        </div>
+        {activeTranscript.status === "ready" &&
+        activeTranscript.messages.length > 0 ? (
+          <div className="px-5 pb-1 pt-2">
+            <p className="font-mono text-[10.5px] leading-5 text-muted-foreground">
+              {t("distill.segment.startHint")}
+            </p>
+            <p className="mt-0.5 font-mono text-[10.5px] leading-5 text-muted-foreground">
+              {t("distill.segment.crossHint")}
+              {Object.keys(ranges).length > 1 &&
+                t("distill.segment.crossCount", {
+                  count: Object.keys(ranges).length,
+                })}
+            </p>
           </div>
         ) : null}
 
-        <div
-          className="tt-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4"
-          onMouseLeave={() => setHover(null)}
-        >
+        <div className="tt-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {activeTranscript.status === "loading" ? (
-            <div className="flex h-full items-center justify-center">
-              <EmptyState
-                icon={<Loader2 className="size-5 animate-spin" />}
-                title={t("sessions.transcript.loading")}
-              />
+            <div className="flex h-full flex-col items-center justify-center gap-2">
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
             </div>
           ) : activeTranscript.status === "error" ||
             activeTranscript.messages.length === 0 ? (
-            <EmptyState
-              title={t("distill.segment.noTranscript")}
-              desc={t("distill.materialPrivacyNote")}
-            />
-          ) : visibleMessages.length === 0 ? (
-            <EmptyState
-              title={t("distill.segment.thinkingOnly")}
-              desc={t("distill.materialPrivacyNote")}
-            />
-          ) : (
-            <div className="space-y-3">
-              {visibleMessages.map(({ message, index }) => {
-                const inRange =
-                  ranges[materialKeyOf(active)] !== undefined
-                    ? index >= ranges[materialKeyOf(active)].s &&
-                      index <= ranges[materialKeyOf(active)].e
-                    : inLiveRange(index);
-                return (
-                  <SegmentBubble
-                    key={index}
-                    message={message}
-                    index={index}
-                    isStart={liveRange !== null && liveRange.s === index}
-                    isEnd={
-                      liveRange !== null &&
-                      liveRange.e === index &&
-                      liveRange.e !== liveRange.s
-                    }
-                    inRange={inRange}
-                    preview={liveRange?.live === true}
-                    confirmed={pickEnd !== null}
-                    onPick={() => pick(index)}
-                    onHover={() => setHover(index)}
-                  />
-                );
-              })}
+            <div className="flex h-full items-center justify-center">
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {t("distill.segment.noTranscript")}
+              </p>
             </div>
+          ) : (
+            <ul className="space-y-3">
+              {activeTranscript.messages.map((message, index) => (
+                <SegmentBubble
+                  key={index}
+                  text={message.text.trim() || message.thinking?.trim() || ""}
+                  index={index}
+                  mine={message.role === "user"}
+                  source={active.source}
+                  isStart={rangeWindow?.s === index}
+                  isEnd={rangeWindow?.e === index}
+                  inRange={key !== null && inRange(key, index)}
+                  bc={brandColorOf(active.source)}
+                  onPick={() => key !== null && pickAt(key, index)}
+                  onStart={() => key !== null && setStart(key, index)}
+                  onEnd={() => key !== null && setEnd(key, index)}
+                />
+              ))}
+            </ul>
           )}
-        </div>
-
-        <div className="border-t border-border/60 px-5 py-3">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {t("distill.segment.privacyNote")}
-          </p>
         </div>
       </div>
     );
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
       role="dialog"
       aria-modal="true"
-      aria-label={t("common.distillation.materialDrawerTitle")}
+      aria-label={t("distill.drawerTitle")}
     >
       <button
         type="button"
         aria-label={t("common.close")}
-        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+        className="absolute inset-0 animate-fade-in backdrop-blur-md"
+        style={{ background: "oklch(0 0 0 / 0.68)" }}
         onClick={onClose}
       />
-      <section className="relative flex h-[86vh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-card shadow-2xl ring-1 ring-border/70">
+      <section
+        className="relative flex h-[86vh] w-full max-w-[1180px] animate-scale-in flex-col overflow-hidden rounded-3xl bg-card"
+        style={{
+          boxShadow:
+            "0 40px 120px -30px rgba(0,0,0,.8), inset 0 0 0 1px color-mix(in oklab, var(--foreground) 8%, transparent)",
+        }}
+      >
         <header className="relative flex items-center gap-3 overflow-hidden px-5 py-4">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+          <div
+            className="pointer-events-none absolute -top-24 left-10 size-56 rounded-full opacity-[0.16] blur-3xl"
+            style={{ background: "var(--chart-1)" }}
+          />
+          <span
+            className="relative flex size-9 items-center justify-center rounded-full"
+            style={{
+              background:
+                "color-mix(in oklab, var(--chart-1) 18%, transparent)",
+              color: "var(--chart-1)",
+            }}
+          >
             <FolderOpen className="size-4.5" strokeWidth={1.8} />
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
             <h2 className="text-[15px] font-semibold tracking-tight">
-              {t("common.distillation.materialDrawerTitle")}
+              {t("distill.drawerTitle")}
             </h2>
-            <p className="text-[12px] text-muted-foreground">
-              {t("distill.segment.startHint")}
+            <p className="text-[12.5px] text-muted-foreground">
+              {t("distill.drawerSub")}
             </p>
           </div>
-          <span className="hidden rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10px] text-muted-foreground sm:inline">
-            ESC
+          <span className="relative hidden rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground sm:inline">
+            {t("distill.drawerEsc")}
           </span>
           <button
             type="button"
             onClick={onClose}
             aria-label={t("common.close")}
-            className="grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="relative grid size-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             <X className="size-4" />
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,390px)_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
           <div className="flex min-h-0 flex-col border-r border-border/60">
             <div className="space-y-2 px-4 py-3">
               <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-2">
@@ -504,60 +505,34 @@ export function MaterialDrawer({
                 />
               </div>
               <div className="grid grid-cols-3 gap-1.5">
-                <select
+                <FilterSelect
+                  label={t("distill.materialSource")}
                   value={source}
-                  onChange={(event) => setSource(event.target.value)}
-                  aria-label={t("distill.materialSource")}
-                  className="tt-select w-full"
-                >
-                  <option value="all" className="bg-card text-foreground">
-                    {t("distill.materialSource")}
-                  </option>
-                  {sources.map((item) => (
-                    <option
-                      key={item}
-                      value={item}
-                      className="bg-card text-foreground"
-                    >
-                      {item}
-                    </option>
-                  ))}
-                </select>
-                <select
+                  onChange={setSource}
+                  options={[
+                    ["all", t("distill.materialSource")],
+                    ...sources.map((item) => [item, item] as const),
+                  ]}
+                />
+                <FilterSelect
+                  label={t("distill.materialTime")}
                   value={range}
-                  onChange={(event) => setRange(event.target.value)}
-                  aria-label={t("distill.materialTime")}
-                  className="tt-select w-full"
-                >
-                  <option value="all" className="bg-card text-foreground">
-                    {t("distill.materialTime")}
-                  </option>
-                  <option value="7" className="bg-card text-foreground">
-                    {t("distill.range7")}
-                  </option>
-                  <option value="30" className="bg-card text-foreground">
-                    {t("distill.range30")}
-                  </option>
-                </select>
-                <select
+                  onChange={setRange}
+                  options={[
+                    ["all", t("distill.materialTime")],
+                    ["7", t("distill.range7")],
+                    ["30", t("distill.range30")],
+                  ]}
+                />
+                <FilterSelect
+                  label={t("distill.materialProject")}
                   value={proj}
-                  onChange={(event) => setProj(event.target.value)}
-                  aria-label={t("distill.materialProject")}
-                  className="tt-select w-full"
-                >
-                  <option value="all" className="bg-card text-foreground">
-                    {t("distill.materialProject")}
-                  </option>
-                  {projects.map((item) => (
-                    <option
-                      key={item}
-                      value={item}
-                      className="bg-card text-foreground"
-                    >
-                      {item}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setProj}
+                  options={[
+                    ["all", t("distill.materialProject")],
+                    ...projects.map((item) => [item, item] as const),
+                  ]}
+                />
               </div>
             </div>
             <div className="tt-scroll min-h-0 flex-1 overflow-y-auto pb-2">
@@ -595,86 +570,97 @@ export function MaterialDrawer({
                       </div>
                       <ul className="space-y-1 px-2 pb-1.5">
                         {group.items.map((item) => {
-                          const key = materialKeyOf(item);
-                          const checked = selected.has(key);
-                          const disabled =
-                            !checked && selected.size >= MAX_SELECTION;
-                          const activeItem = activeKey === key;
+                          const itemKey = materialKeyOf(item);
+                          const activeItem = activeKey === itemKey;
                           const color = brandColorOf(item.source);
-                          const window = ranges[key];
+                          const pillWindow = ranges[itemKey];
+                          const on = pillWindow
+                            ? pillWindow.e - pillWindow.s + 1
+                            : 0;
+                          const total =
+                            cacheRef.current.get(itemKey)?.messages.length;
                           return (
-                            <li key={key} className="relative">
+                            <li key={itemKey} className="group/it relative">
                               <button
                                 type="button"
-                                onClick={() => setActiveKey(key)}
-                                aria-pressed={checked}
-                                className={`relative flex w-full items-start gap-2.5 rounded-xl px-3 py-2.5 pr-24 text-left transition-colors ${
-                                  checked
-                                    ? "bg-primary/10 ring-1 ring-primary/70"
-                                    : activeItem
-                                      ? "bg-surface-2"
-                                      : "hover:bg-foreground/[0.04]"
+                                onClick={() => setActiveKey(itemKey)}
+                                aria-pressed={activeItem}
+                                className={`flex w-full items-start gap-2.5 rounded-xl py-2.5 pr-[104px] pl-3 text-left transition-colors ${
+                                  activeItem
+                                    ? "bg-surface-2"
+                                    : "hover:bg-foreground/[0.04]"
                                 }`}
-                              >
-                                {activeItem && (
-                                  <span
-                                    className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r-full"
-                                    style={{ background: color }}
-                                  />
-                                )}
-                                <BrandIcon
-                                  name={item.source}
-                                  className="mt-1 size-4 shrink-0"
-                                />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13px]">
-                                    {item.title}
-                                  </span>
-                                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                                    <span className="truncate">
-                                      {item.projectKey}
-                                    </span>
-                                    <span>·</span>
-                                    <span>
-                                      {t("common.distillation.selectedTurns", {
-                                        count: item.turns,
-                                      })}
-                                    </span>
-                                    {window ? (
-                                      <span className="rounded-full bg-primary/10 px-1.5 py-px text-[9.5px] text-primary">
-                                        #{window.s + 1}→#{window.e + 1}
-                                      </span>
-                                    ) : checked ? (
-                                      <span className="rounded-full bg-surface-2 px-1.5 py-px text-[9.5px] text-muted-foreground">
-                                        {t("distill.segment.onlyMeta")}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => onToggle(item)}
-                                className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1.5 font-mono text-[10px] disabled:opacity-35"
                                 style={
-                                  checked
-                                    ? { background: color, color: "white" }
+                                  activeItem
+                                    ? { boxShadow: `inset 2px 0 0 ${color}` }
                                     : undefined
                                 }
                               >
-                                <span className="grid size-3.5 place-items-center rounded border border-current/25">
-                                  {checked && (
-                                    <Check
-                                      className="size-2.5"
-                                      strokeWidth={3}
-                                    />
-                                  )}
+                                <BrandIcon
+                                  name={item.source}
+                                  className="mt-1 size-3.5 shrink-0"
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[13px] leading-6">
+                                    {item.title}
+                                  </span>
+                                  <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
+                                    {t("distill.durationMin", {
+                                      min: durationMinOf(item),
+                                    })}{" "}
+                                    ·{" "}
+                                    {t("common.distillation.selectedTurns", {
+                                      count: item.turns,
+                                    })}{" "}
+                                    · {item.projectKey}
+                                  </span>
                                 </span>
-                                {checked
-                                  ? t("distill.materialAdded")
-                                  : t("distill.materialAdd")}
                               </button>
+                              <span className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => pillClick(item)}
+                                  className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 font-mono text-[10.5px] font-semibold transition-colors"
+                                  style={
+                                    on > 0
+                                      ? { background: color, color: "#fff" }
+                                      : {
+                                          background: "var(--color-surface-2)",
+                                          color:
+                                            "var(--color-muted-foreground)",
+                                          boxShadow:
+                                            "inset 0 0 0 1px var(--color-border)",
+                                        }
+                                  }
+                                >
+                                  <span
+                                    className="grid size-3.5 place-items-center rounded-[4px]"
+                                    style={
+                                      on > 0
+                                        ? {
+                                            background:
+                                              "color-mix(in oklab, #fff 22%, transparent)",
+                                          }
+                                        : {
+                                            boxShadow:
+                                              "inset 0 0 0 1px var(--color-border)",
+                                          }
+                                    }
+                                  >
+                                    {on > 0 && (
+                                      <Check
+                                        className="size-2.5"
+                                        strokeWidth={3}
+                                      />
+                                    )}
+                                  </span>
+                                  {on > 0
+                                    ? total
+                                      ? `${on}/${total}`
+                                      : t("distill.chipCount", { count: on })
+                                    : t("distill.joinWhole")}
+                                </button>
+                              </span>
                             </li>
                           );
                         })}
@@ -689,32 +675,116 @@ export function MaterialDrawer({
           <div className="hidden min-h-0 flex-col md:flex">{rightPane}</div>
         </div>
 
-        <footer className="flex flex-wrap items-center gap-2 bg-surface-2/50 px-5 py-3">
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {t("common.distillation.selected", { count: selected.size })} /{" "}
-            {MAX_SELECTION}
-          </span>
-          {segments.length > 0 && (
-            <span className="font-mono text-[11px] text-primary">
-              {t("distill.segment.summary", {
-                segments: segments.length,
-                messages: totalMessages,
+        <footer className="flex flex-col gap-2 bg-surface-2/50 px-5 py-3">
+          {Object.keys(ranges).length > 0 && (
+            <div className="tt-scroll flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
+              {Object.entries(ranges).map(([cid, r]) => {
+                const item = byKey.get(cid);
+                if (!item) return null;
+                const color = brandColorOf(item.source);
+                return (
+                  <button
+                    key={cid}
+                    type="button"
+                    onClick={() => clearChat(cid)}
+                    className="group inline-flex max-w-[260px] items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[10.5px] transition-opacity hover:opacity-80"
+                    style={{
+                      background: `color-mix(in oklab, ${color} 16%, transparent)`,
+                      color,
+                    }}
+                  >
+                    <span className="truncate">{item.title.slice(0, 16)}</span>
+                    <span className="shrink-0 opacity-80">
+                      #{r.s + 1}→#{r.e + 1}
+                    </span>
+                    <X className="size-3 shrink-0 opacity-60 group-hover:opacity-100" />
+                  </button>
+                );
               })}
-            </span>
+            </div>
           )}
-          <span className="ml-auto text-[10.5px] text-muted-foreground">
-            {granularity === "project"
-              ? t("distill.projectAtomicHint")
-              : t("distill.sessionSelectionHint")}
-          </span>
-          <TTButton variant="primary" onClick={onClose}>
-            {t("common.confirm")}
-          </TTButton>
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[12px]">
+            <span>
+              {t("distill.footerSelected")}{" "}
+              <b style={{ color: "var(--chart-1)" }}>
+                {Object.keys(ranges).length}
+              </b>{" "}
+              {t("distill.footerSessions")} ·{" "}
+              <b style={{ color: "var(--chart-1)" }}>{pickedSegs}</b>{" "}
+              {t("distill.footerSegments")} · ~
+              {format.formatTokens(pickedTokens)}
+            </span>
+            <button
+              type="button"
+              onClick={clearAllRanges}
+              disabled={Object.keys(ranges).length === 0}
+              className="ml-auto inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+            >
+              <Trash2 className="size-3.5" /> {t("distill.footerClear")}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full bg-surface-2 px-4 py-1.5 transition-colors hover:bg-foreground/10"
+            >
+              {t("distill.footerCancel")}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={pickedSegs === 0}
+              className="rounded-full px-4 py-1.5 font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              style={{
+                background: "var(--chart-1)",
+                boxShadow: "0 10px 24px -14px var(--chart-1)",
+              }}
+            >
+              {t("distill.footerConfirm")}
+            </button>
+          </div>
         </footer>
       </section>
     </div>,
     document.body,
   );
+}
+
+/** Prototype Select (distill.tsx 1436-1450): mono select + chevron. */
+function FilterSelect({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly (readonly [string, string])[];
+  label: string;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        className="w-full appearance-none rounded-lg bg-surface-2 py-1.5 pr-6 pl-2.5 font-mono text-[11px] text-foreground outline-none"
+      >
+        {options.map(([val, text]) => (
+          <option key={val} value={val} className="bg-card text-foreground">
+            {text}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+    </div>
+  );
+}
+
+function durationMinOf(item: DistillationSessionItem): number {
+  const start = new Date(item.startedAt).getTime();
+  const end = new Date(item.endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 60000));
 }
 
 /** Compact session/project card grid shared by quick mode and the page. */
@@ -745,43 +815,64 @@ export function MaterialPicker({
 
   if (granularity === "project") {
     return (
-      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <ul className="tt-scroll max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
         {groupDistillationSessionsByProject(sessions).map((project) => {
           const keys = project.sessions.map(materialKeyOf);
           const selectedCount = keys.filter((key) => selected.has(key)).length;
           const checked = selectedCount === keys.length;
-          const disabled =
-            !checked &&
-            selected.size + keys.length - selectedCount > MAX_SELECTION;
           const turns = project.sessions.reduce(
             (sum, item) => sum + item.turns,
             0,
           );
+          const tokens = turns * EST_TOKENS_PER_TURN;
           return (
             <li key={project.key}>
               <button
                 type="button"
-                disabled={disabled}
                 onClick={() => onToggleProject(project.sessions)}
                 aria-pressed={checked}
-                className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left transition-all disabled:opacity-35 ${
+                className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors"
+                style={
                   checked
-                    ? "bg-primary/10 ring-1 ring-primary/70"
-                    : "bg-surface-2 hover:bg-accent"
-                }`}
+                    ? {
+                        background:
+                          "color-mix(in oklab, var(--chart-1) 9%, transparent)",
+                        boxShadow:
+                          "inset 0 0 0 1px color-mix(in oklab, var(--chart-1) 42%, transparent)",
+                      }
+                    : {
+                        background: "var(--color-surface)",
+                        boxShadow: "inset 0 0 0 1px var(--color-border)",
+                      }
+                }
               >
-                <BrandIcon name={project.source} className="size-4 shrink-0" />
+                {/* 原型行头：最多 3 个来源 BrandIcon 叠放 */}
+                <span className="flex -space-x-1">
+                  {project.sources.slice(0, 3).map((source) => (
+                    <BrandIcon
+                      key={source}
+                      name={source}
+                      className="size-4 shrink-0"
+                    />
+                  ))}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px]">
                     {project.projectKey}
                   </span>
-                  <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                    {t("distill.projectSessions", { count: keys.length })} ·{" "}
-                    {t("common.distillation.selectedTurns", { count: turns })}
+                  <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
+                    {t("distill.projectSessions", {
+                      count: project.sessions.length,
+                    })}{" "}
+                    · ~{format.formatTokens(tokens)} ·{" "}
+                    {format.formatDateTime(project.last, false)}
                   </span>
                 </span>
                 {checked && (
-                  <Check className="size-3.5 shrink-0 text-primary" />
+                  <Check
+                    className="size-3.5 shrink-0"
+                    style={{ color: "var(--chart-1)" }}
+                  />
                 )}
               </button>
             </li>
@@ -793,39 +884,50 @@ export function MaterialPicker({
 
   return (
     <ul
-      className={`${compact ? "max-h-[280px] overflow-y-auto pr-1" : ""} space-y-1.5`}
+      className={`tt-scroll ${compact ? "max-h-[260px] overflow-y-auto pr-1" : ""} space-y-1.5`}
     >
       {sessions.map((item) => {
-        const key = materialKeyOf(item);
-        const checked = selected.has(key);
-        const disabled = !checked && selected.size >= MAX_SELECTION;
+        const itemKey = materialKeyOf(item);
+        const checked = selected.has(itemKey);
+        const tokens = item.turns * EST_TOKENS_PER_TURN;
         return (
-          <li key={key}>
+          <li key={itemKey}>
             <button
               type="button"
-              disabled={disabled}
               onClick={() => onToggle(item)}
               aria-pressed={checked}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left transition-all disabled:opacity-35 ${
+              className="flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors"
+              style={
                 checked
-                  ? "bg-primary/10 ring-1 ring-primary/70"
-                  : "bg-surface-2 hover:bg-accent"
-              }`}
+                  ? {
+                      background:
+                        "color-mix(in oklab, var(--chart-1) 9%, transparent)",
+                      boxShadow:
+                        "inset 0 0 0 1px color-mix(in oklab, var(--chart-1) 42%, transparent)",
+                    }
+                  : {
+                      background: "var(--color-surface)",
+                      boxShadow: "inset 0 0 0 1px var(--color-border)",
+                    }
+              }
             >
               <BrandIcon name={item.source} className="size-4 shrink-0" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12.5px]">
                   {item.title}
                 </span>
-                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
                   {item.projectKey} ·{" "}
-                  {format.formatDateTime(item.startedAt, false)} ·{" "}
-                  {t("common.distillation.selectedTurns", {
-                    count: item.turns,
-                  })}
+                  {format.formatDateTime(item.startedAt, false)} · ~
+                  {format.formatTokens(tokens)}
                 </span>
               </span>
-              {checked && <Check className="size-3.5 shrink-0 text-primary" />}
+              {checked && (
+                <Check
+                  className="size-3.5 shrink-0"
+                  style={{ color: "var(--chart-1)" }}
+                />
+              )}
             </button>
           </li>
         );
@@ -834,92 +936,109 @@ export function MaterialPicker({
   );
 }
 
-/** Per-message bubble with point-to-point range marks (prototype 1612-1676). */
+/** Per-message bubble with start/end marks and hover pin buttons
+ *  (prototype 1612-1676). */
 function SegmentBubble({
-  message,
+  text,
   index,
+  mine,
+  source,
   isStart,
   isEnd,
   inRange,
-  preview,
-  confirmed,
+  bc,
   onPick,
-  onHover,
+  onStart,
+  onEnd,
 }: {
-  message: SessionTranscriptMessage;
+  text: string;
   index: number;
+  mine: boolean;
+  source: string;
   isStart: boolean;
   isEnd: boolean;
   inRange: boolean;
-  preview: boolean;
-  confirmed: boolean;
+  bc: string;
   onPick: () => void;
-  onHover: () => void;
+  onStart: () => void;
+  onEnd: () => void;
 }) {
   const { t } = useI18n();
-
-  const mark = (
-    <span
-      className={`mt-2.5 w-8 shrink-0 text-center text-[10px] transition-opacity ${
-        isStart
-          ? "font-semibold text-primary"
-          : isEnd
-            ? "font-semibold text-primary/70"
-            : "text-muted-foreground opacity-0 group-hover:opacity-100"
-      }`}
-    >
-      {isStart
-        ? t("distill.segment.start")
-        : isEnd
-          ? t("distill.segment.end")
-          : `#${index + 1}`}
-    </span>
-  );
-  const ring = isStart
-    ? "ring-1 ring-primary"
-    : inRange
-      ? preview
-        ? "ring-1 ring-primary/40"
-        : "ring-1 ring-primary/70"
-      : "";
-
-  if (message.role === "user") {
-    return (
-      <div
-        className="group flex cursor-pointer items-start justify-end gap-2"
-        onClick={onPick}
-        onMouseEnter={onHover}
-      >
-        <div
-          className={`max-w-[80%] rounded-xl rounded-tr-sm border px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground transition-all ${
-            inRange
-              ? "border-primary bg-primary/20"
-              : "border-primary bg-primary/12"
-          } ${ring}`}
-        >
-          {message.text}
-        </div>
-        {mark}
-      </div>
-    );
-  }
-
   return (
-    <div
-      className="group flex cursor-pointer items-start justify-start gap-2"
-      onClick={onPick}
-      onMouseEnter={onHover}
-    >
-      {mark}
+    <li className={`group flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-xl rounded-tl-sm border bg-surface-2 px-3.5 py-2.5 transition-all ${
-          inRange ? "border-primary" : "border-border"
-        } ${ring}`}
+        className={`flex max-w-[78%] min-w-0 flex-col ${mine ? "items-end" : "items-start"}`}
       >
-        <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
-          {message.text}
-        </p>
+        <div className="flex items-center gap-1.5 px-1 pb-1 font-mono text-[10px] text-muted-foreground">
+          <span>#{index + 1}</span>
+          <span>{mine ? t("distill.segment.me") : source}</span>
+          {isStart && (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold text-white"
+              style={{ background: bc }}
+            >
+              {t("distill.segment.markStart")}
+            </span>
+          )}
+          {isEnd && (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold text-white"
+              style={{ background: bc }}
+            >
+              {t("distill.segment.markEnd")}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onPick}
+          className={`relative w-full rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-6 transition-colors ${
+            mine ? "rounded-tr-sm" : "rounded-tl-sm"
+          } ${inRange ? "" : "bg-surface-2/70 hover:bg-surface-2"}`}
+          style={
+            inRange
+              ? {
+                  background: `color-mix(in oklab, ${bc} 14%, transparent)`,
+                  boxShadow: `inset 0 0 0 1px ${bc}`,
+                }
+              : undefined
+          }
+        >
+          <span className="flex items-start gap-2.5">
+            <span
+              className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full"
+              style={
+                inRange
+                  ? { background: bc, color: "#fff" }
+                  : { boxShadow: "inset 0 0 0 1px var(--color-border)" }
+              }
+            >
+              {inRange && <Check className="size-2.5" strokeWidth={3} />}
+            </span>
+            <span className="min-w-0 flex-1 whitespace-pre-wrap">{text}</span>
+          </span>
+        </button>
+        <div
+          className={`mt-1 flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 ${
+            mine ? "flex-row-reverse" : ""
+          }`}
+        >
+          <button
+            type="button"
+            onClick={onStart}
+            className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("distill.segment.start")}
+          </button>
+          <button
+            type="button"
+            onClick={onEnd}
+            className="rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("distill.segment.end")}
+          </button>
+        </div>
       </div>
-    </div>
+    </li>
   );
 }
