@@ -53,8 +53,6 @@ export const common = {
     emptyTitle: "No briefings yet",
     emptyDesc: "Once generated, briefings will be listed here.",
     generate: "Generate briefing",
-    generateHint:
-      "Generation will be wired to the scheduler in a later release.",
     kindDaily: "Daily",
     kindWeekly: "Weekly",
     updatedAt: "Updated {time}",

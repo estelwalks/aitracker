@@ -9,17 +9,15 @@ import type { ReportDocument, ReportRun, ReportStore } from "../contracts.ts";
  * AtomicJsonStore as `{ schemaVersion, data }`, so this schema describes the
  * inner `data` payload only.
  *
- * Privacy: only report ids, statuses, timestamps, error codes and the
- * generated `body` are stored. `body` is produced by the report generation
- * adapter and (in the offline case) is a fixed deterministic string with no
- * user content; the application layer additionally redacts it via
- * `safeReportText` before persistence.
+ * New records store metadata and a relative Markdown filename. The optional
+ * body field exists only to read legacy reports.v1.json files and is removed
+ * when the application lazily migrates that record.
  */
 export const REPORTS_SCHEMA_VERSION = 1 as const;
 
 const opaqueId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
 const isoTimestamp = z.string();
-const safeErrorCode = z.string().regex(/^errors\.[a-z0-9][a-z0-9._-]*$/);
+const safeErrorCode = z.string().regex(/^errors\.[a-z][A-Za-z0-9._-]*$/);
 
 const EvidenceRefSchema = z
   .object({
@@ -64,7 +62,11 @@ export const ReportDocumentSchema = z
     definitionId: z.enum(["reports.daily", "reports.weekly"]),
     status: z.enum(["draft", "approved", "archived"]),
     title: z.string().min(1),
-    body: z.string(),
+    contentFile: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.md$/)
+      .optional(),
+    body: z.string().optional(),
     generatedAt: isoTimestamp,
     templateVersion: z.number().int().nonnegative(),
     evidence: z.array(EvidenceRefSchema),

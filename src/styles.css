@@ -288,6 +288,129 @@
   color: var(--color-muted-foreground);
 }
 
+/* 全站统一的筛选/标签胶囊：同一字号、同一高度、同一间距（V3.0 原型 tt-chip） */
+@utility tt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding-inline: 0.625rem;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-muted-foreground);
+  background-color: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    opacity 0.16s ease;
+
+  &:hover {
+    color: var(--color-foreground);
+  }
+}
+
+@utility tt-chip-on {
+  color: var(--color-foreground);
+  background-color: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  font-weight: 500;
+}
+
+/* 小标签（只读徽标），比 tt-chip 更轻 */
+@utility tt-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.25rem;
+  padding-inline: 0.4rem;
+  border-radius: 9999px;
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-muted-foreground);
+  background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+}
+
+/* 统一的下拉筛选控件：与 tt-chip 同高、同字号 */
+@utility tt-select {
+  height: 1.75rem;
+  padding-inline: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  line-height: 1;
+  color: var(--color-foreground);
+  background-color: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    right 0.9rem center,
+    right 0.62rem center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+
+  &:hover {
+    background-color: color-mix(in oklab, var(--color-foreground) 9%, transparent);
+  }
+}
+
+/* 全站统一遮罩层（V3.0 原型 tt-overlay）：自包含，各主题通用 */
+@utility tt-overlay {
+  background-color: oklch(0 0 0 / 0.62);
+}
+
+/* 透明毛玻璃分段控件（V3.0 原型 tt-seg）：整体一枚磨砂胶囊，激活项为内嵌亮玻璃丸 */
+@utility tt-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9999px;
+  backdrop-filter: blur(18px) saturate(170%);
+  background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-foreground) 14%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 16%, transparent);
+}
+
+@utility tt-seg-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  padding-inline: 0.95rem;
+  border-radius: 9999px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-muted-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    color: var(--color-foreground);
+    background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  }
+}
+
+@utility tt-seg-on {
+  color: var(--color-foreground);
+  font-weight: 500;
+  background-color: color-mix(in oklab, var(--color-foreground) 20%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 30%, transparent),
+    inset 0 -1px 0 color-mix(in oklab, var(--color-foreground) 8%, transparent),
+    0 6px 16px -10px color-mix(in oklab, var(--color-foreground) 55%, transparent);
+}
+
 /* Markdown 排版：报告 / 蒸馏预览等富文本渲染复用 */
 @utility tt-md {
   line-height: 28px;

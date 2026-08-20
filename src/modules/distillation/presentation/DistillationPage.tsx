@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
   Columns2,
   HelpCircle,
+  Loader2,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -77,7 +78,17 @@ export function DistillationPage({
   initialSegment?: SegmentRefCodec | null;
 }) {
   const { t } = useI18n();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // A carried-over `?segment=` session is seeded into the selection right away
+  // (its segment is meaningless unless the session is part of sessionRefs).
+  // Seeding here — rather than re-adding it in an effect — lets the drop
+  // cleanup below run safely without racing the arrival.
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    if (!initialSegment) return new Set();
+    const key = `${initialSegment.source}:${initialSegment.sessionId}`;
+    return initial.sessions.some((item) => materialKeyOf(item) === key)
+      ? new Set([key])
+      : new Set();
+  });
   const [busy, setBusy] = useState(false);
   /** True only while a distillation run is in flight (drives 蒸馏中… states). */
   const [distilling, setDistilling] = useState(false);
@@ -102,15 +113,13 @@ export function DistillationPage({
   );
   const [promptPreset, setPromptPreset] = useState("summary");
   const [promptText, setPromptText] = useState("");
-  // Carried-over user segment (Story B-100). It lives only in this page's
-  // state and is forwarded to the server on start; the referenced text is
-  // loaded into memory server-side and never persisted.
-  const [segment, setSegment] = useState<SegmentRef | null>(() =>
-    initialSegment ? { ...initialSegment } : null,
+  // User-selected transcript segments (Story B-100): the `?segment=` URL
+  // window plus any ranges picked in the material drawer. Each segment lives
+  // only in this page's state and is forwarded to the server on start; the
+  // referenced text is loaded into memory server-side and never persisted.
+  const [segments, setSegments] = useState<SegmentRef[]>(() =>
+    initialSegment ? [{ ...initialSegment }] : [],
   );
-  // Once the user actively changes the selection, the carried-over segment
-  // stops auto-selecting its session so it never overrides their choice.
-  const selectionTouched = useRef(false);
   // Guide visibility is deferred to a client-only effect: SSR has no
   // localStorage, so reading it in the useState initializer makes the server
   // and first client render disagree and triggers a React hydration mismatch.
@@ -136,26 +145,22 @@ export function DistillationPage({
       return next.size === current.size ? current : next;
     });
   }, [materialSessions]);
-  // Auto-select the carried-over segment's session once, before the user
-  // touches the selection, so the distill run has the session it points at.
+  // A segment whose session leaves the selection is meaningless — drop it so a
+  // run can never reference an unselected session. The counterpart (adding a
+  // segment's session to the selection) happens eagerly where segments enter —
+  // the `initialSegment` seed above and `handleSegmentsChange` below — never in
+  // an effect, which would fight an explicit user deselection (the session
+  // would snap straight back).
   useEffect(() => {
-    if (!segment || selectionTouched.current) return;
-    const key = `${segment.source}:${segment.sessionId}`;
-    if (!materialSessions.some((item) => keyOf(item) === key)) return;
-    setSelected((current) => {
-      if (current.has(key) || current.size >= MAX_SELECTION) return current;
-      const next = new Set(current);
-      next.add(key);
-      return next;
+    if (segments.length === 0) return;
+    setSegments((current) => {
+      const next = current.filter((seg) => {
+        const key = `${seg.source}:${seg.sessionId}`;
+        return selected.has(key);
+      });
+      return next.length === current.length ? current : next;
     });
-  }, [segment, materialSessions]);
-  // A segment whose session leaves the selection is meaningless — drop it so
-  // the run can never reference an unselected session.
-  useEffect(() => {
-    if (!segment) return;
-    const key = `${segment.source}:${segment.sessionId}`;
-    if (!selected.has(key)) setSegment(null);
-  }, [selected, segment]);
+  }, [selected, segments]);
   const selectionCount = selected.size;
   // B-600: a real-model run whose daily quota is exhausted cannot start. The
   // server re-checks the authoritative ledger on every start, so this only
@@ -220,7 +225,6 @@ export function DistillationPage({
   }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
 
   function toggle(item: DistillationSessionItem) {
-    selectionTouched.current = true;
     setSelected(
       (prev) =>
         toggleMaterialSelection(
@@ -232,7 +236,6 @@ export function DistillationPage({
   }
 
   function removeItem(item: DistillationSessionItem) {
-    selectionTouched.current = true;
     setSelected((prev) => {
       const next = new Set(prev);
       next.delete(keyOf(item));
@@ -241,7 +244,6 @@ export function DistillationPage({
   }
 
   function toggleProject(items: readonly DistillationSessionItem[]) {
-    selectionTouched.current = true;
     setSelected(
       (prev) =>
         toggleProjectSelection(
@@ -252,9 +254,41 @@ export function DistillationPage({
     );
   }
 
-  function clearSegment() {
-    selectionTouched.current = true;
-    setSegment(null);
+  function clearSegments() {
+    setSegments([]);
+  }
+
+  /**
+   * Segments only enter the page through this handler (the material drawer) and
+   * the `initialSegment` seed. The segment's session is added to the selection
+   * here, in the same commit, so a freshly picked range is never dropped by the
+   * stale-read cleanup effect; segments whose session cannot be selected (the
+   * selection is full or the session left the visible set) are filtered out.
+   */
+  function handleSegmentsChange(next: SegmentRef[]) {
+    const nextSelected = new Set(selected);
+    let selectedChanged = false;
+    for (const seg of next) {
+      const key = `${seg.source}:${seg.sessionId}`;
+      if (nextSelected.has(key) || nextSelected.size >= MAX_SELECTION) continue;
+      if (!materialSessions.some((item) => keyOf(item) === key)) continue;
+      nextSelected.add(key);
+      selectedChanged = true;
+    }
+    const kept = next.filter((seg) =>
+      nextSelected.has(`${seg.source}:${seg.sessionId}`),
+    );
+    const same =
+      kept.length === segments.length &&
+      kept.every(
+        (seg, index) =>
+          seg.source === segments[index].source &&
+          seg.sessionId === segments[index].sessionId &&
+          seg.startIndex === segments[index].startIndex &&
+          seg.endIndex === segments[index].endIndex,
+      );
+    if (selectedChanged) setSelected(nextSelected);
+    if (!same) setSegments(kept);
   }
 
   function dismissGuide() {
@@ -290,9 +324,11 @@ export function DistillationPage({
       const result = await startDistillation({
         data: {
           sessionRefs: refs.map((ref) => ({ ...ref })),
-          // Forward the carried-over user segment; the server loads its
-          // transcript window into memory for this request only.
-          ...(segment ? { segments: [segment] } : {}),
+          // Forward the user-selected transcript windows; the server loads
+          // their text into memory for this request only.
+          ...(segments.length > 0
+            ? { segments: segments.map((seg) => ({ ...seg })) }
+            : {}),
           ...(options?.modelId ? { modelId: options.modelId } : {}),
           ...(options?.promptText ? { promptText: options.promptText } : {}),
         },
@@ -477,20 +513,22 @@ export function DistillationPage({
           busy={distilling}
         />
 
-        {segment ? (
+        {segments.length > 0 ? (
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-[12px]">
             <span className="font-medium text-foreground">
               {t("distill.segment.banner", {
-                count: segment.endIndex - segment.startIndex + 1,
+                count: segments.reduce(
+                  (sum, seg) => sum + (seg.endIndex - seg.startIndex + 1),
+                  0,
+                ),
               })}
             </span>
             <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-muted-foreground">
-              {t("distill.segment.origin", {
-                source: segment.source,
-                sessionId: segment.sessionId,
-              })}
+              {segments
+                .map((seg) => `${seg.source}:${seg.sessionId}`)
+                .join(" · ")}
             </span>
-            <TTButton variant="ghost" size="sm" onClick={clearSegment}>
+            <TTButton variant="ghost" size="sm" onClick={clearSegments}>
               {t("distill.segment.clear")}
             </TTButton>
           </div>
@@ -514,6 +552,7 @@ export function DistillationPage({
           outType={outType}
           onOutType={setOutType}
           historyCount={candidates.length}
+          segmentsCount={segments.length}
           onHistory={() => setHistoryOpen(true)}
           onSwitchModel={handleSwitchModel}
           availableItems={materialSessions}
@@ -539,6 +578,15 @@ export function DistillationPage({
                 approved,
               })}
             </span>
+            {distilling && (
+              <span
+                className="inline-flex items-center gap-1.5 text-[11.5px] font-medium"
+                style={{ color: "var(--chart-1)" }}
+              >
+                <Loader2 className="size-3.5 animate-spin" />
+                {t("distill.running")}
+              </span>
+            )}
             {candidates.length > 0 && (
               <TTButton
                 className="ml-auto"
@@ -604,6 +652,8 @@ export function DistillationPage({
             sessions={materialSessions}
             selected={selected}
             granularity={granularity}
+            segments={segments}
+            onSegmentsChange={handleSegmentsChange}
             onToggle={toggle}
             onToggleProject={toggleProject}
             onClose={() => setDrawerOpen(false)}

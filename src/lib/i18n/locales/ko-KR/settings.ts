@@ -61,6 +61,12 @@ export const settings = {
     modelPlaceholder: "예: deepseek-chat",
     requestPath: "요청 경로",
     authMethod: "인증 방식",
+    authLabel: "인증 헤더",
+    authXApiKey: "x-api-key 헤더",
+    authXApiKeyHint: "Anthropic 표준: x-api-key 전송",
+    authBearer: "Bearer 토큰",
+    authBearerHint:
+      "Authorization: Bearer를 요구하는 게이트웨이용 (예: 내부 DeepSeek 게이트웨이)",
     listModels: "모델 목록 가져오기",
     listingModels: "가져오는 중…",
     selectModel: "모델 선택…",

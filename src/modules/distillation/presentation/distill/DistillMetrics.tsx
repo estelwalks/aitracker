@@ -1,4 +1,3 @@
-import { MetricGrid } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 
 /**
@@ -32,35 +31,50 @@ export function DistillMetrics({
   const { t, format } = useI18n();
   const hasMaterial = selectedCount > 0;
   const tokenValue = hasMaterial ? `~${format.formatTokens(estTokens)}` : "—";
+  const cards = [
+    {
+      k: t("distill.metricMaterial"),
+      v: `${selectedCount}`,
+      s: hasMaterial ? `~${format.formatTokens(estTokens)} tokens` : "—",
+      c: "var(--chart-1)",
+    },
+    {
+      k: t("distill.metricTokens"),
+      v: tokenValue,
+      s: t("distill.metricTokensSub"),
+      c: "var(--chart-4)",
+    },
+    {
+      k: t("distill.metricRuns"),
+      v: `${runs}`,
+      s: busy ? t("distill.metricRunsBusy") : t("distill.metricRunsIdle"),
+      c: "var(--chart-2)",
+    },
+    {
+      k: t("distill.metricSaved"),
+      v: `${approved}`,
+      s: t("distill.metricSavedSub"),
+      c: "var(--chart-3)",
+    },
+  ];
   return (
-    <MetricGrid
-      className="mb-3"
-      items={[
-        {
-          label: t("distill.metricMaterial"),
-          v: selectedCount,
-          sub: hasMaterial ? `~${format.formatTokens(estTokens)} tokens` : "—",
-          color: "var(--chart-1)",
-        },
-        {
-          label: t("distill.metricTokens"),
-          v: tokenValue,
-          sub: t("distill.metricTokensSub"),
-          color: "var(--chart-4)",
-        },
-        {
-          label: t("distill.metricRuns"),
-          v: runs,
-          sub: busy ? t("distill.metricRunsBusy") : t("distill.metricRunsIdle"),
-          color: "var(--chart-2)",
-        },
-        {
-          label: t("distill.metricSaved"),
-          v: approved,
-          sub: t("distill.metricSavedSub"),
-          color: "var(--chart-3)",
-        },
-      ]}
-    />
+    <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {cards.map((m) => (
+        <div key={m.k} className="rounded-xl bg-card p-4">
+          <div className="truncate text-[11px] leading-4 text-muted-foreground">
+            {m.k}
+          </div>
+          <div
+            className="tt-num mt-1.5 font-mono text-[20px] leading-none font-bold"
+            style={{ color: m.c }}
+          >
+            {m.v}
+          </div>
+          <div className="mt-1.5 truncate font-mono text-[10px] leading-4 text-muted-foreground">
+            {m.s}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }

@@ -41,6 +41,9 @@ function parseProfileInput(value: unknown): ModelProfileInput {
     ...(typeof candidate.protocol === "string"
       ? { protocol: candidate.protocol as ModelProfileInput["protocol"] }
       : {}),
+    ...(candidate.auth === "x-api-key" || candidate.auth === "bearer"
+      ? { auth: candidate.auth }
+      : {}),
     ...(typeof candidate.apiKey === "string"
       ? { apiKey: candidate.apiKey }
       : {}),
@@ -75,6 +78,7 @@ export interface ListRemoteModelsInput {
   readonly id?: string;
   readonly mode: "official" | "custom";
   readonly protocol?: "openai" | "anthropic";
+  readonly auth?: "x-api-key" | "bearer";
   readonly apiKey?: string;
   readonly endpoint?: string;
   readonly model?: string;
@@ -94,6 +98,9 @@ function parseListRemoteModelsInput(value: unknown): ListRemoteModelsInput {
     ...(typeof candidate.id === "string" ? { id: candidate.id } : {}),
     ...(candidate.protocol === "openai" || candidate.protocol === "anthropic"
       ? { protocol: candidate.protocol }
+      : {}),
+    ...(candidate.auth === "x-api-key" || candidate.auth === "bearer"
+      ? { auth: candidate.auth }
       : {}),
     ...(typeof candidate.apiKey === "string"
       ? { apiKey: candidate.apiKey }
