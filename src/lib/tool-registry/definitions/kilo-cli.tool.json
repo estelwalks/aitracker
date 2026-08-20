@@ -32,6 +32,14 @@
         ],
         "base": "dataHome",
         "path": "kilo"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "userProfile",
+        "path": "Local/kilo"
       }
     ]
   },

@@ -635,6 +635,132 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "market": "unsupported",
         "security": "unsupported"
       }
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen CLI",
+      "nameZh": "Qwen CLI",
+      "icon": "deepseek",
+      "color": "#615ced",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "commandcode",
+      "name": "Command Code",
+      "nameZh": "Command Code",
+      "icon": "other",
+      "color": "#8b5cf6",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "proma",
+      "name": "Proma",
+      "nameZh": "Proma",
+      "icon": "other",
+      "color": "#f97316",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "qodercn",
+      "name": "Qoder CN",
+      "nameZh": "Qoder CN",
+      "icon": "other",
+      "color": "#22c55e",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "unsupported",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "reasonix",
+      "name": "Reasonix",
+      "nameZh": "Reasonix",
+      "icon": "other",
+      "color": "#06b6d4",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
+    },
+    {
+      "id": "cherrystudio",
+      "name": "Cherry Studio",
+      "nameZh": "Cherry Studio",
+      "icon": "other",
+      "color": "#ec4899",
+      "platforms": {
+        "macos": "supported",
+        "windows10": "supported",
+        "windows11": "supported",
+        "linux": "planned"
+      },
+      "capabilities": {
+        "usage": "adapter",
+        "skills": "unsupported",
+        "agents": "unsupported",
+        "sessions": "unsupported",
+        "market": "unsupported",
+        "security": "unsupported"
+      }
     }
   ],
   "skillAgentOrder": [

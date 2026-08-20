@@ -14,19 +14,19 @@ import {
  */
 const EXTENSION_IDS = ["aipy", "cline"];
 
-test("the registry compiles all 30 tool definitions with no diagnostics", () => {
+test("the registry compiles all built-in tool definitions with no diagnostics", () => {
   const registry = getDefaultRegistry();
   const errors = registry.diagnostics.filter((d) => d.severity === "error");
   assert.deepEqual(errors, []);
-  assert.equal(registry.definitions.length, 30);
+  assert.equal(registry.definitions.length, 36);
 });
 
 test("registry tools match the frozen baseline (TC-REG-001)", () => {
   const registry = getDefaultRegistry();
-  // All 30 tools are visible now (aipy/cline are user extensions, not hidden).
+  // All built-in tools are visible now (aipy/cline are user extensions, not hidden).
   assert.equal(
     registry.definitions.filter((def) => def.catalogVisible !== false).length,
-    30,
+    36,
   );
   // The frozen 27-tool baseline matches the first 27 definitions in order.
   const ids = registry.definitions.map((def) => def.id);
@@ -38,12 +38,14 @@ test("registry tools match the frozen baseline (TC-REG-001)", () => {
     const def = registry.byId.get(expected.id);
     assert.ok(def, `tool "${expected.id}" missing from registry`);
     assert.equal(def.display.nameZh, expected.nameZh);
-    assert.deepEqual(
-      [...def.detection.roots],
-      expected.id === "gemini-cli"
-        ? [".gemini/tmp"]
-        : [...expected.detectRoots],
-    );
+    const expectedRoots =
+      expected.id === "gemini-cli" ? [".gemini/tmp"] : expected.detectRoots;
+    for (const root of expectedRoots) {
+      assert.ok(
+        def.detection.roots.includes(root),
+        `${expected.id} must retain baseline detection root ${root}`,
+      );
+    }
   }
   // The user extension tools are present and visible.
   for (const id of EXTENSION_IDS) {
@@ -57,13 +59,14 @@ test("each config id equals its filename stem", () => {
   const registry = getDefaultRegistry();
   const ids = registry.ids;
   assert.equal(new Set(ids).size, ids.length, "config ids must be unique");
-  // 27 baseline ids + dsh + aipy/cline extensions.
+  // 27 baseline ids + dsh + aipy/cline extensions + reference local sources.
   assert.deepEqual(
     [...ids].slice(0, 27),
     BASELINE_TOOLS.map((t) => t.id),
   );
   assert.equal(ids[27], "dsh");
-  assert.deepEqual(ids.slice(28), EXTENSION_IDS);
+  assert.ok(ids.includes("qwen"));
+  assert.ok(ids.includes("cherrystudio"));
 });
 
 test("skill/market/usage capabilities match the frozen baseline sets", () => {
@@ -79,7 +82,7 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "openclaw",
     "antigravity",
   ];
-  // 15 tools carry a usage capability: 8 native + 5 catalog adapter + 2 extension adapter.
+  // Native readers plus registry-declared generic adapters are supported.
   const BASELINE_USAGE_NATIVE = new Set([
     "claude-code",
     "codex",
@@ -98,6 +101,11 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "roo-code",
     "aipy",
     "cline",
+    "qwen",
+    "commandcode",
+    "proma",
+    "reasonix",
+    "cherrystudio",
   ]);
   const BASELINE_SESSIONS_RESUME = new Set([
     "claude-code",
@@ -132,9 +140,9 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
   }
 });
 
-test("public manifest mirrors all 30 visible tools", () => {
+test("public manifest mirrors all visible tools", () => {
   const registry = getDefaultRegistry();
-  assert.equal(registry.publicManifest.tools.length, 30);
+  assert.equal(registry.publicManifest.tools.length, 36);
   assert.deepEqual(
     registry.publicManifest.tools.map((t) => t.id),
     registry.definitions.map((d) => d.id),

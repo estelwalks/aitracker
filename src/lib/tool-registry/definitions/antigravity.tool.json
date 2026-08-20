@@ -27,9 +27,47 @@
       },
       {
         "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".gemini/antigravity-ide"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".gemini/antigravity-backup"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".gemini/antigravity-cli/conversations"
+      },
+      {
+        "targets": [
           "macos"
         ],
         "base": "appData",
+        "path": "Antigravity"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "appDataRoaming",
         "path": "Antigravity"
       }
     ]

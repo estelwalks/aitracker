@@ -22,6 +22,36 @@
         ],
         "base": "configHome",
         "path": "github-copilot"
+      },
+      {
+        "targets": [
+          "macos",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".copilot"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "userProfile",
+        "path": "Code/User/workspaceStorage"
+      },
+      {
+        "targets": [
+          "macos"
+        ],
+        "base": "appData",
+        "path": "Code/User/workspaceStorage"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "Code/User/workspaceStorage"
       }
     ]
   },

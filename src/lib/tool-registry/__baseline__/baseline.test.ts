@@ -20,7 +20,7 @@ import {
 // rule-pack resolver) lives in src/lib/pricing/parity.test.ts - model prices
 // are no longer a static `MODEL_PRICES` catalog.
 
-test("baseline tools match the live AI_TOOLS catalog (27 baseline + aipy/cline)", () => {
+test("baseline tools remain present in the expanded AI_TOOLS catalog", () => {
   // The frozen baseline is the 27-tool product catalog captured pre-migration.
   // aipy/cline are user-added extension tools (catalogVisible=true) and now
   // appear in AI_TOOLS after the 27 baseline tools.
@@ -29,20 +29,22 @@ test("baseline tools match the live AI_TOOLS catalog (27 baseline + aipy/cline)"
     const live = AI_TOOLS.find((tool) => tool.id === expected.id);
     assert.ok(live, `baseline tool "${expected.id}" missing from AI_TOOLS`);
     assert.equal(live.nameZh, expected.nameZh);
-    assert.deepEqual(
-      [...live.detectRoots],
-      expected.id === "gemini-cli"
-        ? [".gemini/tmp"]
-        : [...expected.detectRoots],
-    );
+    const expectedRoots =
+      expected.id === "gemini-cli" ? [".gemini/tmp"] : expected.detectRoots;
+    for (const root of expectedRoots) {
+      assert.ok(
+        live.detectRoots.includes(root),
+        `${expected.id} must retain baseline detection root ${root}`,
+      );
+    }
   }
-  // The 27 baseline tools come first in canonical order; dsh and the
-  // extensions follow.
+  // The 27 baseline tools remain first in canonical order; later additions are
+  // appended so the frozen migration parity stays meaningful.
   assert.deepEqual(
     AI_TOOLS.slice(0, 27).map((t) => t.id),
     BASELINE_TOOLS.map((t) => t.id),
   );
-  assert.equal(AI_TOOLS.length, 30);
+  assert.equal(AI_TOOLS.length, 36);
 });
 
 test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
@@ -118,13 +120,14 @@ test("baseline usage adapters remain represented (native sources included)", () 
         },
       ]);
     } else {
+      const baselinePaths = expected.paths.map((path) => ({
+        root: path.root,
+        glob: path.glob,
+        format: path.format,
+      }));
       assert.deepEqual(
-        actualPaths,
-        expected.paths.map((path) => ({
-          root: path.root,
-          glob: path.glob,
-          format: path.format,
-        })),
+        actualPaths.slice(0, baselinePaths.length),
+        baselinePaths,
       );
     }
     const customMapping =

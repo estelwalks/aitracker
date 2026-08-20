@@ -24,6 +24,16 @@
         ],
         "base": "home",
         "path": ".hermes"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".hermes/state.db"
       }
     ]
   },

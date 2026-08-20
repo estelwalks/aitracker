@@ -21,6 +21,28 @@
         ],
         "base": "appData",
         "path": "Code/User/globalStorage/kilocode.kilo-code"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "appDataRoaming",
+        "path": "Code/User/globalStorage/kilocode.kilo-code"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "Code/User/globalStorage/kilocode.kilo-code"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "home",
+        "path": ".vscode-server/data/User/globalStorage/kilocode.kilo-code"
       }
     ]
   },

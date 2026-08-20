@@ -2,6 +2,8 @@ import type { UsageSourcesSummary } from "../../../lib/local-usage/get-usage-sou
 import type { SkillSnapshotData } from "../../skill-catalog";
 import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
+import { osFromProcess } from "../../../lib/tools/detection.server";
+import { sourcePathsForPlatform } from "../../../lib/local-usage/source-paths";
 import {
   toSourcesQuerySummary,
   type SourcesQuerySummary,
@@ -44,6 +46,16 @@ function projectSources(
       const skillAgent = skillAgentLabelFor(entry.id);
       return {
         ...entry,
+        // Installation snapshots contain the paths that happened to exist at
+        // scan time. The Sources page must always show the platform-specific
+        // catalog paths as well, including not-installed agents, so users can
+        // locate their data before the first scan.
+        paths: sourcePathsForPlatform(
+          entry.id,
+          osFromProcess(process.platform),
+          process.env.HOME ?? process.env.USERPROFILE ?? "",
+          process.env,
+        ),
         skillCount:
           skillAgent == null ? null : (countByAgent.get(skillAgent) ?? 0),
         skillAgent,

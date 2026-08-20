@@ -29,6 +29,14 @@
         ],
         "base": "dataHome",
         "path": "zed"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "userProfile",
+        "path": "Local/Zed/threads"
       }
     ]
   },
