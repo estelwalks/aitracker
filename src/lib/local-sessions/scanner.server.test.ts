@@ -145,6 +145,50 @@ test("Claude Code: parses one session with ai-title + usage, excludes journal.js
   });
 });
 
+test("Claude Code: parses custom-title record (current title format)", async () => {
+  await withTempHome(async (home) => {
+    const projectDir = join(home, ".claude", "projects", "demo");
+    await mkdir(projectDir, { recursive: true });
+    const sessionId = "claude-cccccccc-bbbb-aaaa-dddd-eeeeeeeeeeee";
+    await writeFile(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:00.000Z",
+          type: "custom-title",
+          customTitle: "Refactor auth module",
+          sessionId,
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:30.000Z",
+          sessionId,
+          cwd: "/demo",
+          type: "user",
+          message: { role: "user", content: "SECRET PROMPT DO NOT LEAK" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T09:01:00.000Z",
+          sessionId,
+          cwd: "/demo",
+          type: "assistant",
+          message: {
+            role: "assistant",
+            model: "claude-sonnet-4",
+            usage: { input_tokens: 10 },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+
+    assert.equal(session.title, "Refactor auth module");
+    assert.equal(session.source, "claude-code");
+    assertPrivacyClean(session);
+  });
+});
+
 test("Claude Code: skips <synthetic> / <unknown> placeholder models", async () => {
   await withTempHome(async (home) => {
     const projectDir = join(home, ".claude", "projects", "demo");

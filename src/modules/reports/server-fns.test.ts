@@ -10,6 +10,7 @@ import {
   resetCompositionRootForTests,
 } from "../../app/composition.server.ts";
 import {
+  buildReportPeriod,
   reportScheduleInputSchema,
   reportScheduleToPreferenceRequest,
   reportScheduleToTaskSchedule,
@@ -189,6 +190,25 @@ test("syncReportScheduleToTaskPreference persists weekly and monthly schedules",
       schedule: { kind: "monthly", dayOfMonth: 31, localTime: "09:00" },
     });
   });
+});
+
+test("buildReportPeriod resolves day/week/month keys and rejects malformed ones", () => {
+  assert.deepEqual(buildReportPeriod("day", "2026-08-15"), {
+    granularity: "day",
+    key: "2026-08-15",
+  });
+  assert.deepEqual(buildReportPeriod("week", "2026-08-10"), {
+    granularity: "week",
+    key: "2026-08-10",
+  });
+  assert.deepEqual(buildReportPeriod("month", "2026-08"), {
+    granularity: "month",
+    key: "2026-08",
+  });
+  assert.equal(buildReportPeriod("day", "2026-8-5"), undefined);
+  assert.equal(buildReportPeriod("month", "2026-08-15"), undefined);
+  assert.equal(buildReportPeriod(undefined, "2026-08-15"), undefined);
+  assert.equal(buildReportPeriod("day", undefined), undefined);
 });
 
 test("syncReportScheduleToTaskPreference with enabled=false disables the task", async () => {

@@ -62,6 +62,12 @@ export const settings = {
     modelPlaceholder: "e.g. deepseek-chat",
     requestPath: "Request path",
     authMethod: "Auth method",
+    authLabel: "Auth header",
+    authXApiKey: "x-api-key header",
+    authXApiKeyHint: "Anthropic standard: sends x-api-key",
+    authBearer: "Bearer token",
+    authBearerHint:
+      "For gateways requiring Authorization: Bearer (e.g. internal DeepSeek gateway)",
     listModels: "Fetch model list",
     listingModels: "Fetching…",
     selectModel: "Select model…",
