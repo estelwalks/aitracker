@@ -57,6 +57,7 @@ import {
 } from "../modules/reports/infrastructure/atomic-report-store.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
+import { createMarkdownReportStore } from "../modules/reports/infrastructure/markdown-report-store.server.ts";
 import { createKnowledgeRepository } from "../modules/knowledge/application/index.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
 import {
@@ -617,7 +618,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
 
   // Reports: assemble the application after aiExecutor so the generation
   // adapter can depend on it. The store lives next to the task runs under the
-  // same `.trusttools/tasks` directory so all scheduler state is co-located.
+  // metadata remains under tasks; editable report bodies are real Markdown
+  // files under `.trusttools/reports` for straightforward copy/migration.
   const reportsStore = new NodeAtomicJsonStore({
     filePath: join(tasksDir, "reports.v1.json"),
     defaultValue: DEFAULT_REPORT_FILE,
@@ -626,7 +628,10 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
   const reports = createReportsApplication({
     store: createAtomicReportStore({ store: reportsStore }),
-    context: createReportContextPort(),
+    content: createMarkdownReportStore({
+      rootDirectory: join(dataRoot, APP_DATA_DIR, "reports"),
+    }),
+    context: createReportContextPort({ snapshot: sessionSnapshot }),
     generation: createReportGenerationPort({
       ai: aiExecutor,
       // B-400: reports reuse the active S-500 profile (a real model call via
