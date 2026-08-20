@@ -459,7 +459,6 @@ export function DistillationPage({
             surfaceId="distill"
             variant="hero"
             title={t("distill.jarvisTitle")}
-            rotateLabel={t("distill.insightRotate")}
             dotsLabel={t("distill.insightDots")}
           />
         </div>

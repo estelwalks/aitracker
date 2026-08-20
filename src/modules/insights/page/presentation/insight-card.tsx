@@ -1,31 +1,26 @@
 /**
  * Shared presentational wrapper that wires `usePageInsight` into the existing
  * `JarvisInsight` card. Routes pass a `surfaceId` (+ optional `scope`) and get
- * a localized, enhanceable, action-aware hero/inline card with a loading
- * placeholder — no per-route boilerplate.
+ * a localized hero/inline card with a loading placeholder — no per-route
+ * boilerplate.
+ *
+ * The card is intentionally minimal: title + severity/增强 marks + typed
+ * insight line. Action buttons, the enhance control, the "换一条" rotate
+ * control and the unavailable hint are no longer surfaced here — pages show the
+ * insight as a passive read-only caption.
  */
-import { Link } from "@tanstack/react-router";
-import { ArrowUpRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { useI18n } from "../../../../lib/i18n/context";
 import type {
-  InsightActionId,
   InsightScope,
   InsightSurfaceId,
 } from "../contracts";
 import {
-  insightActionPath,
   insightSeverityLabelKey,
   usePageInsight,
-  type InsightActionPath,
 } from "./use-page-insight";
-
-export interface InsightCardAction {
-  readonly id: InsightActionId;
-  readonly label: string;
-}
 
 function InsightSkeleton({ variant }: { variant: "hero" | "inline" }) {
   const hero = variant === "hero";
@@ -61,8 +56,6 @@ export function InsightCard({
   accent,
   icon,
   dotsLabel,
-  rotateLabel,
-  onAction,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
@@ -71,16 +64,13 @@ export function InsightCard({
   readonly accent?: string;
   readonly icon?: LucideIcon;
   readonly dotsLabel?: string;
-  readonly rotateLabel?: string;
-  /** Optional custom action handler; defaults to a Link to `insightActionPath`. */
-  readonly onAction?: (
-    action: InsightCardAction,
-    path: InsightActionPath,
-  ) => void;
 }) {
   const { locale, t } = useI18n();
-  const { lines, loading, envelope, canEnhance, enhancing, enhance } =
-    usePageInsight({ surfaceId, scope, locale });
+  const { lines, loading, envelope } = usePageInsight({
+    surfaceId,
+    scope,
+    locale,
+  });
 
   if (loading && lines.length === 0) {
     return <InsightSkeleton variant={variant} />;
@@ -89,50 +79,6 @@ export function InsightCard({
 
   const textLines = lines.map((line) => line.text);
   const topSeverity = lines[0]?.severity;
-  const actionLines = lines.filter((line) => line.action != null);
-
-  const enhanceHint =
-    envelope?.status === "enhancer-unavailable" ? (
-      <span
-        className="max-w-[220px] text-right text-[10px] leading-snug text-muted-foreground"
-        title={t("settings.insight.unavailableHint")}
-      >
-        {t("settings.insight.unavailableHint")}
-      </span>
-    ) : null;
-
-  const actions =
-    actionLines.length === 0 && enhanceHint == null ? undefined : (
-      <div className="flex flex-col items-end gap-1.5">
-        {actionLines.map((line) => {
-          const action = line.action as NonNullable<(typeof line)["action"]>;
-          const path = insightActionPath(action.id);
-          const content = (
-            <>
-              {action.label}
-              <ArrowUpRight className="size-3" strokeWidth={2} />
-            </>
-          );
-          return onAction ? (
-            <button
-              key={line.id}
-              type="button"
-              onClick={() =>
-                onAction({ id: action.id, label: action.label }, path)
-              }
-              className="dashboard-hero-refresh"
-            >
-              {content}
-            </button>
-          ) : (
-            <Link key={line.id} to={path} className="dashboard-hero-refresh">
-              {content}
-            </Link>
-          );
-        })}
-        {enhanceHint}
-      </div>
-    );
 
   return (
     <JarvisInsight
@@ -147,12 +93,7 @@ export function InsightCard({
       }
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
-      onEnhance={canEnhance ? () => void enhance("manual") : undefined}
-      enhanceLabel={t("settings.insight.enhance")}
-      enhanceBusy={enhancing}
       dotsLabel={dotsLabel}
-      rotateLabel={rotateLabel}
-      actions={actions}
     />
   );
 }

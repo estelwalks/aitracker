@@ -51,7 +51,6 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
         surfaceId="tracker"
         variant="hero"
         title={t("tracker.insightTitle")}
-        rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
       <MetricGrid items={metrics} />

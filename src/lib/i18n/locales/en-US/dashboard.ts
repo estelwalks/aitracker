@@ -207,6 +207,7 @@ export const dashboard = {
     securityAttention: "{count} attention items",
     securityClean: "Normal",
     securityScanSummary: "Scanned {assessed} / {discovered} local assets",
+    securitySafeUnsafe: "{safe} safe · {unsafe} unsafe",
     assetsLabel: "Skill assets",
     distillationAssetsLabel: "Distillation assets",
     assetSkillCount: "Skill {count}",

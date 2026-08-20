@@ -120,7 +120,6 @@ export function DashboardJarvisInsight() {
       surfaceId="dashboard"
       variant="hero"
       title={t("dashboard.v2.heroTitle")}
-      rotateLabel={t("dashboard.v2.rotateInsight")}
       dotsLabel={t("dashboard.v2.insightDotsAria")}
     />
   );
@@ -158,9 +157,13 @@ export function DashboardTrustHero({
   const securitySub =
     security == null
       ? t("dashboard.v2.securityNotScanned")
-      : t("dashboard.v2.securityScanSummary", {
-          assessed: security.assessedAssetCount,
-          discovered: security.discoveredAssetCount,
+      : t("dashboard.v2.securitySafeUnsafe", {
+          safe: security.cleanCount,
+          unsafe:
+            security.suspiciousCount +
+            security.dangerousCount +
+            security.unknownCount +
+            security.failedAssetCount,
         });
   const todaySub =
     today.estimatedCostUsd == null

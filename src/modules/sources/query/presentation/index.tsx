@@ -179,7 +179,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         surfaceId="sources"
         variant="hero"
         title={t("insights.title")}
-        rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
 

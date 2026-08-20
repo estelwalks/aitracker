@@ -92,7 +92,6 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
       <InsightCard
         surfaceId="skills"
         variant="hero"
-        rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
 

@@ -205,6 +205,7 @@ export const dashboard = {
     securityAttention: "확인 항목 {count}개",
     securityClean: "정상",
     securityScanSummary: "로컬 자산 {assessed} / {discovered}개 검사됨",
+    securitySafeUnsafe: "{safe}개 안전 · {unsafe}개 위험",
     assetsLabel: "Skill 자산",
     distillationAssetsLabel: "증류 자산",
     assetSkillCount: "Skill {count}",
