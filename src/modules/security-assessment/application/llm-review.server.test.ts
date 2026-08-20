@@ -13,7 +13,7 @@ import {
   type SecurityLlmDimension,
   type SecurityLlmDimensionHit,
   type SecurityLlmReviewAggregate,
-  type SecurityLlmReviewRequest,
+  type SecurityLlmReviewAggregateRequest,
 } from "../llm-review.contracts.ts";
 import {
   createSecurityLlmReviewService,
@@ -114,8 +114,8 @@ function aggregate(
 }
 
 function request(
-  overrides: Partial<SecurityLlmReviewRequest> = {},
-): SecurityLlmReviewRequest {
+  overrides: Partial<SecurityLlmReviewAggregateRequest> = {},
+): SecurityLlmReviewAggregateRequest {
   return { assetRef: "scan:asset-1", aggregate: aggregate(), ...overrides };
 }
 

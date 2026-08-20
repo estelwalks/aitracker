@@ -131,6 +131,35 @@ export function usePageInsight(
     };
   }, [surfaceId, locale, scopeData]);
 
+  useEffect(() => {
+    if (envelope?.autoEnhance !== true || envelope.source !== "rules") return;
+    if (enhancingRef.current) return;
+    // The rules envelope has already rendered. Queue auto enhancement in a
+    // separate turn so the provider can never enter the first-paint path.
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      if (!canEnhanceNow(lastEnhanceAtRef.current, now)) return;
+      lastEnhanceAtRef.current = now;
+      enhancingRef.current = true;
+      setEnhancing(true);
+      void enhancePageInsight({
+        data: {
+          surfaceId,
+          locale,
+          scope: scopeData ?? {},
+          reason: "auto",
+        },
+      })
+        .then(setEnvelope)
+        .catch(() => {})
+        .finally(() => {
+          enhancingRef.current = false;
+          setEnhancing(false);
+        });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [envelope, surfaceId, locale, scopeData]);
+
   const enhance = useCallback(
     async (reason: "manual" = "manual"): Promise<void> => {
       if (enhancingRef.current) return;

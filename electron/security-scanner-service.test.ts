@@ -72,6 +72,17 @@ function report(
     rules: [],
     branches: [{ name: "static", status: "complete" }],
     skippedFiles: [],
+    tokenUsage: {
+      status: "not_applicable",
+      requestCount: 0,
+      reportedRequestCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cachedInputTokens: 0,
+      byModel: {},
+      byBranch: {},
+    },
   };
 }
 
@@ -334,6 +345,16 @@ test("automatic scans use full model-aware analysis when a model is configured",
   });
   assert.equal(persistedHistory[0]?.trigger, "automatic");
   assert.equal(persistedHistory[0]?.mode, "full");
+
+  // The persistence adapter withdraws the model as soon as the preference is
+  // disabled. Subsequent automatic scans must not retain or send stale config.
+  await writeModelProfile(home, {});
+  captured = undefined;
+  await service.startAutomaticScan();
+  await waitForTerminal(service);
+  const disabledCapture = captured as Record<string, unknown> | undefined;
+  assert.equal(disabledCapture?.mode, "quick");
+  assert.equal("model" in (disabledCapture ?? {}), false);
 });
 
 const DEFAULT_SCHEDULE = {

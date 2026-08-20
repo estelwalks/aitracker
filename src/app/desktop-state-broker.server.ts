@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { ENV, STORAGE_KEY_PREFIX } from "../lib/app-config.ts";
 import type { PreferenceValue } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
 import { getCompositionRoot } from "./composition.server.ts";
+import { SECURITY_LLM_REVIEW_PREF_KEY } from "../modules/security-assessment/llm-review.contracts.ts";
 
 export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
@@ -178,6 +179,9 @@ export async function handleDesktopStateBrokerRequest(
       return json({ ok: true });
     }
     if (request.method === "GET" && route === "/model-profile") {
+      if (preferences.get(SECURITY_LLM_REVIEW_PREF_KEY)?.value !== true) {
+        return json(null);
+      }
       const active = await root.modelProfiles.getActiveView();
       if (!active) return json(null);
       return json(

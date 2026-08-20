@@ -24,6 +24,7 @@ import {
   createDevSecurityScannerService,
   handleSecurityDevRequest,
   localeFromAcceptLanguage,
+  toSecurityModelConfig,
 } from "./security-dev-server.server.ts";
 
 const cleanup: string[] = [];
@@ -76,6 +77,17 @@ function report(
     rules: [],
     branches: [{ name: "static", status: "complete" }],
     skippedFiles: [],
+    tokenUsage: {
+      status: "not_applicable",
+      requestCount: 0,
+      reportedRequestCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      cachedInputTokens: 0,
+      byModel: {},
+      byBranch: {},
+    },
   };
 }
 
@@ -122,6 +134,7 @@ function historyEntry(id: string): Record<string, string> {
 
 function memoryPersistence(
   initial: readonly Record<string, unknown>[] = [],
+  modelConfig?: Awaited<ReturnType<SecurityScannerPersistence["modelConfig"]>>,
 ): SecurityScannerPersistence {
   let entries = structuredClone(initial) as never[];
   let schedule: SecurityScanSchedule | null = null;
@@ -137,9 +150,32 @@ function memoryPersistence(
     writeSchedule: async (value) => {
       schedule = structuredClone(value) as never;
     },
-    modelConfig: async () => undefined,
+    modelConfig: async () => structuredClone(modelConfig),
   };
 }
+
+const configuredModel = {
+  provider: "openai" as const,
+  endpoint: "http://127.0.0.1:11434/v1",
+  apiKey: "test-key",
+  liteModel: "local-model",
+  proModel: "local-model",
+  timeoutMs: 120_000,
+  maxAgentTurns: 8,
+};
+
+test("dev model adapter defaults off and exposes config only after opt-in", () => {
+  const profile = {
+    mode: "custom" as const,
+    protocol: "openai" as const,
+    apiKey: "test-key",
+    endpoint: "http://127.0.0.1:11434/v1",
+    model: "local-model",
+  };
+  assert.equal(toSecurityModelConfig(profile, false), undefined);
+  assert.deepEqual(toSecurityModelConfig(profile, true), configuredModel);
+  assert.equal(toSecurityModelConfig(null, true), undefined);
+});
 
 test("dev service appends through its SQLite persistence port without clobbering history", async () => {
   const { home, data } = await fixture();
@@ -225,6 +261,34 @@ test("quick global scan completes and persists a history entry with a report", a
   assert.equal(history[0]?.report?.locale, "en-US");
   assert.equal(history[0]?.report?.scannedFiles, 1);
   assert.equal((requests[0] as { files: unknown[] }).files.length, 1);
+});
+
+test("dev automatic scans stay quick when disabled and become full only when enabled", async () => {
+  const { home } = await fixture();
+  const disabledRequests: unknown[] = [];
+  const disabled = createDevSecurityScannerService({
+    homeDirectory: home,
+    scanner: stubScanner(disabledRequests),
+    persistence: memoryPersistence(),
+  });
+  await disabled.startAutomaticScan();
+  await waitForTerminal(disabled);
+  assert.equal((disabledRequests[0] as { mode: string }).mode, "quick");
+  assert.equal("model" in (disabledRequests[0] as object), false);
+
+  const enabledRequests: unknown[] = [];
+  const enabled = createDevSecurityScannerService({
+    homeDirectory: home,
+    scanner: stubScanner(enabledRequests),
+    persistence: memoryPersistence([], configuredModel),
+  });
+  await enabled.startAutomaticScan();
+  await waitForTerminal(enabled);
+  assert.equal((enabledRequests[0] as { mode: string }).mode, "full");
+  assert.deepEqual(
+    (enabledRequests[0] as { model: unknown }).model,
+    configuredModel,
+  );
 });
 
 test("handleSecurityDevRequest routes only /api/security/* requests", async () => {

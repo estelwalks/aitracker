@@ -15,12 +15,12 @@ import {
   type ModelProfileView,
 } from "../../../ai-orchestration";
 import { setInsightPreferences } from "../server-fns";
+import { getInsightPreferences } from "../server-fns";
+import { INSIGHT_AUTO_CONSENT_VERSION } from "../contracts";
 
 type InsightMode = "rules" | "enhanced-manual" | "enhanced-auto";
 
 /** Bump when the consent wording changes (fed back to the server as a string). */
-const INSIGHT_CONSENT_VERSION = "1";
-
 export function InsightSettingsSection() {
   const { t } = useI18n();
   const [mode, setMode] = useState<InsightMode>("rules");
@@ -32,13 +32,26 @@ export function InsightSettingsSection() {
 
   useEffect(() => {
     let cancelled = false;
-    void listModelProfiles()
-      .then((result) => {
-        if (!cancelled) setProfiles([...result.profiles]);
-      })
-      .catch(() => {
-        // No profiles → the dropdown shows the neutral "not configured" hint.
-      });
+    void Promise.allSettled([
+      listModelProfiles(),
+      getInsightPreferences({ data: {} }),
+    ]).then(([profilesResult, preferenceResult]) => {
+      if (cancelled) return;
+      if (profilesResult.status === "fulfilled") {
+        setProfiles([...profilesResult.value.profiles]);
+      }
+      if (preferenceResult.status === "fulfilled") {
+        const preference = preferenceResult.value;
+        setMode(preference.mode);
+        setProfileId(preference.profileId ?? "");
+        setConsent(preference.consentVersion === INSIGHT_AUTO_CONSENT_VERSION);
+        setDailyLimit(
+          preference.dailyCallLimit == null
+            ? ""
+            : String(preference.dailyCallLimit),
+        );
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -58,7 +71,7 @@ export function InsightSettingsSection() {
           mode,
           ...(mode !== "rules" && profileId ? { profileId } : {}),
           ...(mode === "enhanced-auto"
-            ? { consentVersion: INSIGHT_CONSENT_VERSION }
+            ? { consentVersion: INSIGHT_AUTO_CONSENT_VERSION }
             : {}),
           ...(parsedLimit != null &&
           Number.isFinite(parsedLimit) &&
