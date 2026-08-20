@@ -55,7 +55,6 @@ export const common = {
     emptyTitle: "ブリーフィングなし",
     emptyDesc: "生成後にブリーフィングがここに表示されます。",
     generate: "ブリーフィングを生成",
-    generateHint: "生成機能は今後のリリースでスケジューラに接続されます。",
     kindDaily: "日次",
     kindWeekly: "週次",
     updatedAt: "更新 {time}",

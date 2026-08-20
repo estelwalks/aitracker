@@ -309,10 +309,11 @@ export function createReportsPresentation(
       }
     },
     generateNow(input) {
+      // Only a hard module `disabled` blocks generation. `offline` (no model
+      // profile) is informational: the deterministic draft path still yields a
+      // usable report from the real collected context.
       if (options.disabled)
         return Promise.resolve(err("errors.reports.disabled"));
-      if (options.offline)
-        return Promise.resolve(err("errors.reports.offline"));
       return options.reports.generate({ ...input, trigger: "manual" });
     },
   };

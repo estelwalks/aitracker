@@ -9,13 +9,36 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { ReportContent } from "./contracts.ts";
+import type { ReportContent, ReportPeriod } from "./contracts.ts";
 import type { Schedule } from "../tasks/index.ts";
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
+/**
+ * Resolve an optional `{ granularity, periodKey }` from the renderer into a
+ * `ReportPeriod`. Day/week keys are local `YYYY-MM-DD`, month keys `YYYY-MM`;
+ * anything else (or a missing granularity) resolves to undefined, so the
+ * request falls back to the current period instead of erroring.
+ */
+export function buildReportPeriod(
+  granularity?: "day" | "week" | "month",
+  periodKey?: string,
+): ReportPeriod | undefined {
+  if (!granularity || !periodKey) return undefined;
+  if (granularity === "month") {
+    return /^\d{4}-\d{2}$/.test(periodKey)
+      ? { granularity, key: periodKey }
+      : undefined;
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(periodKey)
+    ? { granularity, key: periodKey }
+    : undefined;
+}
+
 export interface GenerateReportNowResult {
   readonly triggered: boolean;
+  /** The newly persisted draft, returned so the renderer can show it immediately. */
+  readonly reportId?: string;
   readonly errorCode?: string;
 }
 
@@ -27,13 +50,39 @@ export interface GenerateReportNowResult {
  * sends `reports.daily`/`reports.weekly`).
  */
 export const generateReportNow = createServerFn({ method: "POST" })
-  .validator((input: unknown): { definitionId?: string } => {
-    if (input != null && typeof input === "object") {
-      const candidate = (input as { definitionId?: unknown }).definitionId;
-      if (typeof candidate === "string") return { definitionId: candidate };
-    }
-    return {};
-  })
+  .validator(
+    (
+      input: unknown,
+    ): {
+      definitionId?: string;
+      granularity?: "day" | "week" | "month";
+      periodKey?: string;
+    } => {
+      if (input != null && typeof input === "object") {
+        const candidate = input as {
+          definitionId?: unknown;
+          granularity?: unknown;
+          periodKey?: unknown;
+        };
+        const granularity =
+          candidate.granularity === "day" ||
+          candidate.granularity === "week" ||
+          candidate.granularity === "month"
+            ? candidate.granularity
+            : undefined;
+        return {
+          ...(typeof candidate.definitionId === "string"
+            ? { definitionId: candidate.definitionId }
+            : {}),
+          ...(granularity ? { granularity } : {}),
+          ...(typeof candidate.periodKey === "string"
+            ? { periodKey: candidate.periodKey }
+            : {}),
+        };
+      }
+      return {};
+    },
+  )
   .handler(async ({ data }): Promise<GenerateReportNowResult> => {
     if (
       data.definitionId !== "reports.daily" &&
@@ -41,8 +90,9 @@ export const generateReportNow = createServerFn({ method: "POST" })
     ) {
       return { triggered: false };
     }
+    const period = buildReportPeriod(data.granularity, data.periodKey);
     const { generateReport } = await import("./api.server.ts");
-    return generateReport(data.definitionId);
+    return generateReport(data.definitionId, period);
   });
 
 /**
@@ -62,6 +112,38 @@ export const getReportBody = createServerFn({ method: "GET" })
     if (!data.reportId || !OPAQUE_ID.test(data.reportId)) return null;
     const { getReportBody: read } = await import("./api.server.ts");
     return read(data.reportId);
+  });
+
+export interface SaveReportBodyResult {
+  readonly saved: boolean;
+  readonly content?: ReportContent;
+  readonly errorCode?: string;
+}
+
+/** Atomically replace the Markdown file belonging to an existing report. */
+export const saveReportBody = createServerFn({ method: "POST" })
+  .validator((input: unknown): { reportId?: string; body?: string } => {
+    if (input == null || typeof input !== "object") return {};
+    const candidate = input as { reportId?: unknown; body?: unknown };
+    return {
+      ...(typeof candidate.reportId === "string"
+        ? { reportId: candidate.reportId }
+        : {}),
+      ...(typeof candidate.body === "string" ? { body: candidate.body } : {}),
+    };
+  })
+  .handler(async ({ data }): Promise<SaveReportBodyResult> => {
+    if (
+      !data.reportId ||
+      !OPAQUE_ID.test(data.reportId) ||
+      data.body === undefined ||
+      data.body.includes("\0") ||
+      new TextEncoder().encode(data.body).byteLength > 2 * 1024 * 1024
+    ) {
+      return { saved: false, errorCode: "errors.reports.invalidContent" };
+    }
+    const { saveReportBody: save } = await import("./api.server.ts");
+    return save(data.reportId, data.body);
   });
 
 /**

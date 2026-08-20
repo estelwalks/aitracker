@@ -1,12 +1,4 @@
-import { Link } from "@tanstack/react-router";
-import {
-  Brain,
-  FlaskConical,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { Brain, Download, Pencil, Sparkles, Trash2 } from "lucide-react";
 import {
   lazy,
   Suspense,
@@ -14,42 +6,21 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
-import { BrandIcon } from "../../../components/BrandIcon";
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { JarvisInsight } from "../../../components/JarvisInsight";
-import {
-  EmptyState,
-  Panel,
-  SearchInput,
-  Segmented,
-  TTButton,
-} from "../../../components/tt";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
+import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import {
-  archiveMemory,
-  createMemory,
-  getMemoryAssets,
-  updateMemory,
-} from "../query";
+import { archiveMemory, getMemoryAssets, updateMemory } from "../query";
+import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
-import { TYPE_COLORS } from "./memory-meta";
 
 // P6-T6-05: the editor form is an on-demand chunk (loaded only when the user
-// creates/edits an entry); the boundary keeps the page usable if the chunk
+// edits an entry); the boundary keeps the page usable if the chunk
 // fails to load.
 const MemoryForm = lazy(() =>
   import("./MemoryForm.tsx").then((module) => ({
@@ -65,11 +36,48 @@ function sourceLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
   return item.source;
 }
 
+function typeLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
+  return item.type === "profile"
+    ? t("memory.typeProfile")
+    : t("memory.typeTask");
+}
+
+function download(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** 单条记忆导出 MD：frontmatter + 摘要，浏览器本地下载（不触碰网络）。 */
+function downloadMemoryMarkdown(item: MemoryEntry) {
+  const safeName = (item.title || "memory")
+    .replace(/[^\p{L}\p{N} _-]/gu, "")
+    .trim()
+    .slice(0, 60);
+  const frontmatter = [
+    "---",
+    `title: ${item.title.replace(/\n/g, " ") || "记忆"}`,
+    `type: ${item.type}`,
+    `source: ${item.source}`,
+    ...(item.project ? [`project: ${item.project}`] : []),
+    `createdAt: ${item.createdAt}`,
+    `updatedAt: ${item.updatedAt}`,
+    "---",
+    "",
+    item.summary || "",
+  ].join("\n");
+  download(`${safeName || "memory"}.md`, frontmatter);
+}
+
 /**
- * 记忆库整页（V3.0 原型对齐）：JarvisInsight 概览、搜索 + 类型筛选 + 新增/
- * 去蒸馏入口、按来源分组侧栏与记忆卡片网格、新增/编辑表单与删除确认。所有
- * 数据来自 knowledge 模块的 renderer-safe server fns —— 仅投影元数据与
- * provenance 摘要，绝不返回对话正文（CLEAN_ROOM）。
+ * 记忆库整页（V3.0 原型对齐）：JarvisInsight 概览、数据概览统计条、搜索 + 类型
+ * 筛选、卡片网格（2/3 列）、编辑表单与删除确认。所有
+ * 数据来自 knowledge 模块的 renderer-safe server fns —— 仅投影元数据与 provenance
+ * 摘要，绝不返回对话正文（CLEAN_ROOM）。
  */
 export function MemoryPage() {
   const { t, format } = useI18n();
@@ -81,8 +89,7 @@ export function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [type, setType] = useState<TypeFilter>("all");
-  const [source, setSource] = useState<string>("all");
-  const [editing, setEditing] = useState<MemoryEntry | "new" | null>(null);
+  const [editing, setEditing] = useState<MemoryEntry | null>(null);
   const [confirmDel, setConfirmDel] = useState<MemoryEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,22 +111,10 @@ export function MemoryPage() {
     void reload();
   }, [reload]);
 
-  const sources = useMemo(() => {
-    const map = new Map<string, { label: string; count: number }>();
-    for (const item of entries) {
-      const label = sourceLabel(item, t);
-      const row = map.get(item.source) ?? { label, count: 0 };
-      row.count += 1;
-      map.set(item.source, row);
-    }
-    return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
-  }, [entries, t]);
-
   const list = useMemo(() => {
     const keyword = q.trim().toLowerCase();
     return entries
       .filter((item) => (type === "all" ? true : item.type === type))
-      .filter((item) => (source === "all" ? true : item.source === source))
       .filter((item) => {
         if (!keyword) return true;
         // 占位文案与原型一致（搜「正文」）：本地只投影摘要、绝不返回对话正文
@@ -131,7 +126,7 @@ export function MemoryPage() {
           .toLowerCase()
           .includes(keyword);
       });
-  }, [entries, q, type, source, t]);
+  }, [entries, q, type, t]);
 
   const jarvisLines = useMemo(() => {
     if (counts.total === 0) return [t("memory.insightEmpty")];
@@ -146,32 +141,52 @@ export function MemoryPage() {
     ];
   }, [counts, t]);
 
+  const distillCount = useMemo(
+    () => entries.filter((item) => item.origin === "distill").length,
+    [entries],
+  );
+  const lastUpdated = useMemo(
+    () =>
+      entries.reduce(
+        (max, item) =>
+          Math.max(max, Date.parse(item.updatedAt || item.createdAt) || 0),
+        0,
+      ),
+    [entries],
+  );
+
+  const statCards = [
+    {
+      label: t("memory.statTotal"),
+      value: format.formatNumber(counts.total),
+      sub: t("memory.statTotalSub", {
+        profile: counts.profile,
+        task: counts.task,
+      }),
+    },
+    {
+      label: t("memory.statProfile"),
+      value: format.formatNumber(counts.profile),
+      sub: t("memory.statProfileSub"),
+    },
+    {
+      label: t("memory.statDistill"),
+      value: format.formatNumber(distillCount),
+      sub: t("memory.statDistillSub", {
+        manual: Math.max(0, counts.total - distillCount),
+      }),
+    },
+    {
+      label: t("memory.statUpdated"),
+      value: lastUpdated
+        ? format.formatDateTime(new Date(lastUpdated), false)
+        : "—",
+      sub: t("memory.statUpdatedSub"),
+    },
+  ];
+
   function errorMessage(errorCode?: string): string {
     return errorCode ? t(errorCode as MessageKey) : t("common.failed");
-  }
-
-  async function handleCreate(input: MemoryCreateInput) {
-    setBusy(true);
-    try {
-      const result = await createMemory({ data: input });
-      if (!result.ok || !result.entry) {
-        toast.error(errorMessage(result.errorCode));
-        return;
-      }
-      setEntries((prev) => [result.entry!, ...prev]);
-      setCounts((prev) => ({
-        total: prev.total + 1,
-        profile: prev.profile + (input.type === "profile" ? 1 : 0),
-        task: prev.task + (input.type === "task" ? 1 : 0),
-      }));
-      setEditing(null);
-      toast.success(t("memory.added"));
-    } catch (error) {
-      const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function handleUpdate(assetId: string, input: MemoryCreateInput) {
@@ -225,6 +240,8 @@ export function MemoryPage() {
     }
   }
 
+  const filtered = q.trim() !== "" || type !== "all";
+
   return (
     <div className="space-y-4 pb-12">
       <JarvisInsight
@@ -234,118 +251,129 @@ export function MemoryPage() {
         dotsLabel={t("memory.insightDots")}
       />
 
-      <Panel>
-        <div className="flex flex-wrap items-center gap-2">
-          <SearchInput
-            value={q}
-            onChange={setQ}
-            placeholder={t("memory.searchPlaceholder")}
-            ariaLabel={t("memory.searchPlaceholder")}
-          />
-          <div className="ml-auto flex items-center gap-2">
-            <Segmented
-              value={type}
-              onChange={setType}
-              options={[
-                {
-                  value: "all",
-                  label: `${t("memory.typeAll")} ${counts.total}`,
-                },
-                {
-                  value: "profile",
-                  label: `${t("memory.typeProfile")} ${counts.profile}`,
-                },
-                {
-                  value: "task",
-                  label: `${t("memory.typeTask")} ${counts.task}`,
-                },
-              ]}
-            />
-            <TTButton
-              onClick={() => setEditing("new")}
-              disabled={busy}
-              title={t("memory.add")}
+      {/* 数据概览（V3.0 原型对齐） */}
+      <div className="overflow-hidden rounded-xl bg-card">
+        <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
+          {statCards.map((card) => (
+            <div
+              key={card.label}
+              className="bg-card px-4 py-3.5 transition-colors hover:bg-surface-2"
             >
-              <Plus className="size-3.5" strokeWidth={2} />
-              {t("memory.add")}
-            </TTButton>
-            <Link to="/distill">
-              <TTButton>
-                <FlaskConical className="size-3.5" strokeWidth={1.8} />
-                {t("memory.goDistill")}
-              </TTButton>
-            </Link>
-          </div>
-        </div>
-      </Panel>
-
-      <div className="grid gap-3 lg:grid-cols-[196px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-[var(--radius)] bg-card p-2">
-          <p className="px-2 py-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
-            {t("memory.source")}
-          </p>
-          <ul className="space-y-0.5">
-            <SourceRow
-              label={t("memory.allSources")}
-              count={counts.total}
-              on={source === "all"}
-              onClick={() => setSource("all")}
-            />
-            {sources.map(([key, row]) => (
-              <SourceRow
-                key={key}
-                label={row.label}
-                count={row.count}
-                // 与原型一致：非「蒸馏 / unknown」来源显示品牌图标。
-                icon={
-                  key !== "distill" && key !== "unknown" ? (
-                    <BrandIcon name={key} className="size-3.5 shrink-0" />
-                  ) : undefined
-                }
-                on={source === key}
-                onClick={() => setSource(key)}
-              />
-            ))}
-          </ul>
-        </aside>
-
-        {loading ? (
-          <Panel>
-            <EmptyState
-              icon={<Sparkles className="size-5" strokeWidth={1.8} />}
-              title={t("common.loading")}
-            />
-          </Panel>
-        ) : list.length === 0 ? (
-          <EmptyState
-            icon={<Brain className="size-5" strokeWidth={1.8} />}
-            title={t("memory.empty")}
-            desc={t("memory.emptyDesc")}
-          />
-        ) : (
-          <>
-            <div className="grid gap-3 md:grid-cols-2">
-              {list.map((item) => (
-                <MemoryCard
-                  key={item.assetId}
-                  item={item}
-                  busy={busy}
-                  onEdit={() => setEditing(item)}
-                  onDelete={() => setConfirmDel(item)}
-                />
-              ))}
+              <div className="truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+                {card.label}
+              </div>
+              <div className="tt-num mt-2 truncate text-[22px] leading-none font-black tracking-tight">
+                {card.value}
+              </div>
+              <div
+                className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+                title={card.sub}
+              >
+                {card.sub}
+              </div>
             </div>
-            {hasMore && (
-              <p className="mt-2 px-1 font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground/60">
-                {t("memory.hasMore", {
-                  total: counts.total,
-                  limit: 50,
-                })}
-              </p>
-            )}
-          </>
+          ))}
+        </div>
+      </div>
+
+      {/* 筛选栏（V3.0 原型：tt-panel + 玻璃分段） */}
+      <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
+        <SearchInput
+          value={q}
+          onChange={setQ}
+          placeholder={t("memory.searchPlaceholder")}
+          ariaLabel={t("memory.searchPlaceholder")}
+          className="min-w-0 flex-1"
+        />
+        <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
+          {(
+            [
+              {
+                value: "all" as TypeFilter,
+                label: `${t("memory.typeAll")} ${counts.total}`,
+              },
+              {
+                value: "profile" as TypeFilter,
+                label: `${t("memory.typeProfile")} ${counts.profile}`,
+              },
+              {
+                value: "task" as TypeFilter,
+                label: `${t("memory.typeTask")} ${counts.task}`,
+              },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setType(option.value)}
+              className={`rounded-sm px-2.5 py-1 text-xs transition-colors ${
+                type === option.value
+                  ? "bg-primary/15 font-medium text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {filtered && (
+          <button
+            type="button"
+            onClick={() => {
+              setQ("");
+              setType("all");
+            }}
+            className="shrink-0 rounded-full px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("memory.reset")}
+          </button>
         )}
       </div>
+
+      {/* 列表头 */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+        <span>
+          {t("memory.count", { count: format.formatNumber(list.length) })}
+        </span>
+        <span className="ml-auto">{t("memory.countHint")}</span>
+      </div>
+
+      {loading ? (
+        <div className="tt-panel p-5">
+          <EmptyState
+            icon={<Sparkles className="size-5" strokeWidth={1.8} />}
+            title={t("common.loading")}
+          />
+        </div>
+      ) : list.length === 0 ? (
+        <EmptyState
+          icon={<Brain className="size-5" strokeWidth={1.8} />}
+          title={t("memory.empty")}
+          desc={t("memory.emptyDesc")}
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {list.map((item) => (
+              <MemoryCard
+                key={item.assetId}
+                item={item}
+                busy={busy}
+                onEdit={() => setEditing(item)}
+                onDelete={() => setConfirmDel(item)}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <p className="mt-2 px-1 font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground/60">
+              {t("memory.hasMore", {
+                total: counts.total,
+                limit: 50,
+              })}
+            </p>
+          )}
+        </>
+      )}
 
       {editing && (
         <ChunkErrorBoundary>
@@ -359,82 +387,40 @@ export function MemoryPage() {
             }
           >
             <MemoryForm
-              item={editing === "new" ? null : editing}
+              item={editing}
               busy={busy}
               onClose={() => setEditing(null)}
-              onSubmit={
-                editing === "new"
-                  ? (input) => handleCreate(input)
-                  : (input) => handleUpdate(editing.assetId, input)
-              }
+              onSubmit={(input) => handleUpdate(editing.assetId, input)}
             />
           </Suspense>
         </ChunkErrorBoundary>
       )}
 
       {confirmDel && (
-        <Dialog open onOpenChange={(open) => !open && setConfirmDel(null)}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t("memory.deleteTitle")}</DialogTitle>
-              <DialogDescription>
-                {t("memory.deleteConfirm", { title: confirmDel.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <TTButton
-                variant="ghost"
-                onClick={() => setConfirmDel(null)}
-                disabled={busy}
-              >
+        <MemoryModal
+          title={t("memory.deleteTitle")}
+          onClose={() => setConfirmDel(null)}
+          footer={
+            <>
+              <TTButton onClick={() => setConfirmDel(null)} disabled={busy}>
                 {t("memory.cancel")}
               </TTButton>
-              <button
-                type="button"
+              <TTButton
+                variant="danger"
                 onClick={() => void handleDelete(confirmDel.assetId)}
                 disabled={busy}
-                className="rounded-sm bg-[var(--chart-5)] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
               >
                 {t("memory.delete")}
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              </TTButton>
+            </>
+          }
+        >
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            {t("memory.deleteConfirm", { title: confirmDel.title })}
+          </p>
+        </MemoryModal>
       )}
     </div>
-  );
-}
-
-function SourceRow({
-  label,
-  count,
-  on,
-  onClick,
-  icon,
-}: {
-  label: string;
-  count: number;
-  on: boolean;
-  onClick: () => void;
-  icon?: ReactNode;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={on}
-        className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
-          on
-            ? "bg-primary/12 text-primary"
-            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-        }`}
-      >
-        {icon}
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        <span className="font-mono text-[10.5px] opacity-70">{count}</span>
-      </button>
-    </li>
   );
 }
 
@@ -450,74 +436,71 @@ function MemoryCard({
   onDelete: () => void;
 }) {
   const { t, format } = useI18n();
-  const color = TYPE_COLORS[item.type];
-  const typeLabel =
-    item.type === "profile" ? t("memory.typeProfile") : t("memory.typeTask");
   const label = sourceLabel(item, t);
-  const originLabel =
-    item.origin === "distill"
-      ? t("memory.originDistill")
-      : t("memory.originManual");
-  const meta = [
-    label,
-    ...(item.project ? [item.project] : []),
-    // 蒸馏条目 source 已显示「蒸馏」，origin 标签不再重复。
-    ...(item.origin === "manual" ? [originLabel] : []),
-    format.formatDateTime(item.createdAt),
-  ].join(" · ");
+  const sourceLine = `${t("memory.form.source")} ${label}${
+    item.project ? ` · ${item.project}` : ""
+  }`;
 
   return (
-    <div className="group rounded-[var(--radius)] bg-card p-4">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-surface-2">
-          <Sparkles className="size-4" style={{ color }} strokeWidth={1.8} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px]"
-              style={{
-                background: `color-mix(in oklab, ${color} 16%, transparent)`,
-                color,
-              }}
-            >
-              {typeLabel}
-            </span>
-            <p
-              className="min-w-0 flex-1 truncate text-[13.5px] font-semibold"
-              title={item.title}
-            >
-              {item.title}
-            </p>
-          </div>
-          <p className="mt-1.5 line-clamp-3 text-[12.5px] leading-relaxed text-foreground/85">
-            {item.summary || "—"}
-          </p>
-          <p className="mt-2 truncate font-mono text-[10.5px] text-muted-foreground">
-            {meta}
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
+    <article className="group flex min-w-0 flex-col rounded-xl border border-border bg-card p-3.5 transition-colors hover:border-primary/40 hover:bg-surface-2/40">
+      <div className="min-w-0">
         <button
           type="button"
           onClick={onEdit}
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+          className="block w-full truncate text-left text-[13px] font-medium hover:text-primary"
+          title={item.title}
         >
-          <Pencil className="size-3" strokeWidth={2} />
-          {t("memory.edit")}
+          {item.title}
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground transition-colors hover:text-[var(--chart-5)] disabled:opacity-40"
-        >
-          <Trash2 className="size-3" strokeWidth={2} />
-          {t("memory.delete")}
-        </button>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
+            {typeLabel(item, t)}
+          </span>
+          <span className="font-mono text-[10.5px] text-muted-foreground">
+            {sourceLine}
+          </span>
+        </div>
       </div>
-    </div>
+
+      <p className="mt-2.5 line-clamp-3 min-h-[3.2em] text-[12.5px] leading-relaxed text-muted-foreground">
+        {item.summary || "—"}
+      </p>
+
+      <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2.5">
+        <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
+          {format.formatDateTime(item.updatedAt || item.createdAt, false)}
+        </span>
+        <span className="ml-auto flex items-center gap-1">
+          <TTButton
+            size="sm"
+            onClick={() => {
+              downloadMemoryMarkdown(item);
+              toast.success(t("memory.exportMd"));
+            }}
+            disabled={busy}
+          >
+            <Download className="size-3.5" strokeWidth={2} />
+            {t("memory.exportMd")}
+          </TTButton>
+          <TTButton
+            size="sm"
+            onClick={onEdit}
+            disabled={busy}
+            title={t("memory.edit")}
+          >
+            <Pencil className="size-3.5" strokeWidth={2} />
+          </TTButton>
+          <TTButton
+            size="sm"
+            variant="danger"
+            onClick={onDelete}
+            disabled={busy}
+            title={t("memory.delete")}
+          >
+            <Trash2 className="size-3.5" strokeWidth={2} />
+          </TTButton>
+        </span>
+      </div>
+    </article>
   );
 }

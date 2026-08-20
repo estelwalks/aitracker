@@ -1,20 +1,23 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { CalendarDays, FileText } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  PenLine,
+  RefreshCw,
+  Save,
+  Search,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { JarvisInsight } from "../../../components/JarvisInsight";
-import {
-  Dot,
-  EmptyState,
-  Panel,
-  StatusBadge,
-  TTButton,
-} from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
-import type { MessageKey } from "../../../lib/i18n/messages";
 import {
   addPeriods,
   dayKeyOf,
@@ -24,172 +27,287 @@ import {
   sumPeriodDensity,
   type PeriodGranularity,
 } from "../period.ts";
-import { generateReportNow } from "../server-fns.ts";
-import { ArchiveBand, type ArchiveBlock } from "./ArchiveBand.tsx";
-import { QuickNotes } from "./QuickNotes.tsx";
-import { ReportBodyCard } from "./ReportBodyCard.tsx";
+import {
+  generateReportNow,
+  getReportBody,
+  saveReportBody,
+} from "../server-fns.ts";
 import { ReportSchedule } from "./ReportSchedule.tsx";
-import type {
-  ReportListItem,
-  ReportQueryViewModel,
-  ReportUiStatus,
-} from "./index.ts";
+import { useDraftAutosave, useReportActions } from "./report-actions.ts";
+import { MarkdownView } from "./markdown.tsx";
+import type { ReportListItem, ReportQueryViewModel } from "./index.ts";
 
-// P6-T6-05: the period calendar only renders when the user expands it, so it
-// is an on-demand chunk with an error fallback.
+// P6-T6-05: the period calendar only expands when the user clicks its toggle,
+// so it stays an on-demand chunk with an error fallback.
 const PeriodCalendar = lazy(() =>
   import("./PeriodCalendar.tsx").then((module) => ({
     default: module.PeriodCalendar,
   })),
 );
 
-const TIMELINE_WINDOW = 8;
-const GRANULARITIES: readonly PeriodGranularity[] = ["day", "week", "month"];
+const WEEKDAY_SUFFIX = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-const STATUS_TONE: Record<
-  ReportUiStatus,
-  "neutral" | "primary" | "ok" | "warn" | "danger"
-> = {
-  draft: "warn",
-  running: "primary",
-  "waiting-approval": "warn",
-  failed: "danger",
-  published: "ok",
-  stale: "neutral",
-};
+const KINDS: {
+  k: PeriodGranularity;
+  labelKey: "reports.kind.day" | "reports.kind.week" | "reports.kind.month";
+  hintKey:
+    "reports.kind.dayHint" | "reports.kind.weekHint" | "reports.kind.monthHint";
+}[] = [
+  { k: "day", labelKey: "reports.kind.day", hintKey: "reports.kind.dayHint" },
+  {
+    k: "week",
+    labelKey: "reports.kind.week",
+    hintKey: "reports.kind.weekHint",
+  },
+  {
+    k: "month",
+    labelKey: "reports.kind.month",
+    hintKey: "reports.kind.monthHint",
+  },
+];
 
-const STATUS_LABEL_KEY: Record<ReportUiStatus, MessageKey> = {
-  draft: "common.status.waitingApproval",
-  running: "common.status.running",
-  "waiting-approval": "common.status.waitingApproval",
-  failed: "common.status.failed",
-  published: "common.status.fresh",
-  stale: "common.status.stale",
-};
+type Saved = { md: string; at: number };
+
+type GenerationFailureKey =
+  | "reports.body.generationFailed"
+  | "reports.body.generationTimedOut"
+  | "reports.body.generationCancelled"
+  | "reports.body.generationLimitReached";
+
+function generationFailureKey(errorCode?: string): GenerationFailureKey {
+  switch (errorCode) {
+    case "errors.reports.timeout":
+      return "reports.body.generationTimedOut";
+    case "errors.reports.cancelled":
+      return "reports.body.generationCancelled";
+    case "errors.reports.budgetExceeded":
+      return "reports.body.generationLimitReached";
+    default:
+      return "reports.body.generationFailed";
+  }
+}
+
+const mdKey = (key: string) => `tt.report.${key}.md`;
+
+/**
+ * Report drafts used to be stored as JSON (`{ md, at }`), while the shared
+ * autosave hook stores the Markdown string directly. Accept both formats so a
+ * saved draft never masks a generated report merely because parsing failed.
+ */
+function readSavedDraft(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return null;
+    try {
+      const legacy = JSON.parse(raw) as Partial<Saved>;
+      if (legacy && typeof legacy === "object" && typeof legacy.md === "string")
+        return legacy.md;
+    } catch {
+      // Current autosave format is raw Markdown, which is not JSON.
+    }
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function removeSavedDraft(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* localStorage unavailable — drafts are best-effort */
+  }
+}
+
+/** Mirror of the prototype's `Period` shape, derived from a period key. */
+interface PeriodModel {
+  readonly kind: PeriodGranularity;
+  readonly key: string;
+  readonly from: string;
+  readonly to: string;
+  readonly label: string;
+  readonly short: string;
+}
+
+function periodModel(
+  granularity: PeriodGranularity,
+  key: string,
+  t: ReturnType<typeof useI18n>["t"],
+): PeriodModel {
+  const start = periodStartDate(granularity, key);
+  const safeStart = start ?? new Date();
+  const year = safeStart.getFullYear();
+  const month = safeStart.getMonth() + 1;
+  const day = safeStart.getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  if (granularity === "day") {
+    return {
+      kind: granularity,
+      key,
+      from: key,
+      to: key,
+      label: `${year}年${month}月${day}日 · ${WEEKDAY_SUFFIX[safeStart.getDay()]}`,
+      short: `${month}/${day}`,
+    };
+  }
+  if (granularity === "week") {
+    const monday = start ?? safeStart;
+    const sunday = new Date(
+      monday.getFullYear(),
+      monday.getMonth(),
+      monday.getDate() + 6,
+    );
+    const from = dayKeyOf(monday);
+    const to = dayKeyOf(sunday);
+    const suffix = t("reports.period.weekSuffix");
+    return {
+      kind: granularity,
+      key,
+      from,
+      to,
+      label: `${year}年 ${month}/${day} – ${sunday.getMonth() + 1}/${sunday.getDate()} ${suffix}`,
+      short: `${month}/${day}周`,
+    };
+  }
+  const lastDay = new Date(year, month, 0).getDate();
+  return {
+    kind: granularity,
+    key,
+    from: `${key}-01`,
+    to: `${key}-${pad(lastDay)}`,
+    label: `${year} 年 ${month} 月`,
+    short: `${year}-${pad(month)}`,
+  };
+}
+
+function isFuturePeriod(
+  granularity: PeriodGranularity,
+  key: string,
+  now: Date,
+): boolean {
+  const start = periodStartDate(granularity, key);
+  return start ? start.getTime() > now.getTime() : true;
+}
 
 function definitionFor(
   granularity: PeriodGranularity,
 ): "reports.daily" | "reports.weekly" {
-  // Only daily/weekly definitions exist; month browsing generates the weekly
-  // review (a monthly definition is a follow-up).
+  // Only daily/weekly definitions exist; week/month browsing generates the
+  // weekly review (a monthly definition is a follow-up).
   return granularity === "day" ? "reports.daily" : "reports.weekly";
 }
 
 /**
- * /reports (简报与记忆) aligned with the V3.0 prototype: Jarvis insight card →
- * sticky history archive band → ReportSchedule → report header (period label +
- * real session/token/cost stats + today/week/month shortcut + "立即生成" +
- * PeriodCalendar) → inline body card → quick notes.
+ * /reports (日报 / 周报) faithfully mirrors the V3.0 prototype layout:
+ * hero JarvisInsight → ReportSchedule → sticky archive bar (日报/周报/月报
+ * segmented + period pills with real session counts and a saved-dot + archive
+ * search) → report body card (period label + real session/token/cost stats +
+ * "立即生成" + PeriodCalendar + "今天/本周/本月") → inline preview/edit Markdown
+ * editor → rewrite confirm modal.
  *
  * All figures come from the server read model: `feed.density` aggregates real
- * sessions by day (via the composition root's sessions port), report/run counts
- * come from persisted documents/runs, and the archived dots map each period to
- * a persisted report. Generation stays LLM-gated (`feed.offline`/`disabled`);
- * without a configured model the buttons are disabled with an honest hint.
+ * sessions by day, report/run counts come from persisted documents/runs, and
+ * each archived pill maps to a persisted report. Generation stays real
+ * (`generateReportNow`), so even without a model profile the deterministic
+ * offline draft still lands in the archive. Edits are user-authored drafts
+ * kept in this browser (`tt.report.<period>.md`, 30s autosave), the
+ * server's persisted bodies stay read-only.
  */
 export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const { t, format } = useI18n();
   const router = useRouter();
   const feed = initial.feed;
-  const reports = feed.reports;
   const offline = feed.offline;
-  const disabled = feed.disabled;
-  const generateBlocked = offline || disabled;
-  const generateHint = generateBlocked
-    ? t("common.reports.generateHint")
-    : undefined;
+  // Generation is never blocked by `offline` (no model profile): the adapter
+  // produces a deterministic draft from the real collected context. Only a
+  // hard module `disabled` state blocks it.
+  const generateBlocked = feed.disabled;
 
   const [now] = useState(() => new Date());
-  const [granularity, setGranularity] = useState<PeriodGranularity>("day");
+  const [kind, setKind] = useState<PeriodGranularity>("day");
   const [selectedKey, setSelectedKey] = useState<string>(() =>
     periodKeyOf("day", new Date()),
   );
-  const [windowOffset, setWindowOffset] = useState(0);
-  const [search, setSearch] = useState("");
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"preview" | "edit">("preview");
+  const [body, setBody] = useState("");
+  const [askRewrite, setAskRewrite] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generationFailure, setGenerationFailure] =
+    useState<GenerationFailureKey | null>(null);
+  const [preferredReport, setPreferredReport] = useState<{
+    selection: string;
+    reportId: string;
+  } | null>(null);
+  const dirtyRef = useRef(false);
 
-  /** A report is "archived" in the period containing its generatedAt. */
-  const archivedByGranularity = useMemo(() => {
-    const result: Record<PeriodGranularity, Set<string>> = {
-      day: new Set(),
-      week: new Set(),
-      month: new Set(),
-    };
-    for (const report of reports) {
-      if (!report.generatedAt) continue;
-      const date = new Date(report.generatedAt);
-      if (Number.isNaN(date.getTime())) continue;
-      for (const granularityItem of GRANULARITIES) {
-        result[granularityItem].add(periodKeyOf(granularityItem, date));
-      }
-    }
-    return result;
-  }, [reports]);
-
-  const periodLabel = (
-    granularityItem: PeriodGranularity,
-    key: string,
-  ): string => {
-    const start = periodStartDate(granularityItem, key);
-    if (!start) return key;
-    if (granularityItem === "month") {
-      return format.formatDate(start, { year: "numeric", month: "long" });
-    }
-    if (granularityItem === "week") {
-      return format.formatDate(start, { month: "2-digit", day: "2-digit" });
-    }
-    return format.formatDate(start);
-  };
-
-  const blocks: readonly ArchiveBlock[] = useMemo(() => {
-    const endKey = addPeriods(granularity, selectedKey, windowOffset);
-    const startKey = addPeriods(granularity, endKey, -(TIMELINE_WINDOW - 1));
-    const out: ArchiveBlock[] = [];
-    for (let index = 0; index < TIMELINE_WINDOW; index += 1) {
-      const key = addPeriods(granularity, startKey, index);
-      const metric = sumPeriodDensity(feed.density, granularity, key);
-      out.push({
-        key,
-        label: periodLabel(granularity, key),
-        count: metric.count,
-        archived: archivedByGranularity[granularity].has(key),
-      });
+  /** Timeline of periods ending at "now" (newest → oldest), filling the bar. */
+  const periods = useMemo(() => {
+    const span = kind === "day" ? 9 : kind === "week" ? 8 : 12;
+    const anchor = periodKeyOf(kind, now);
+    const out: PeriodModel[] = [];
+    for (let index = 0; index < span; index += 1) {
+      const key = addPeriods(kind, anchor, -index);
+      out.push(periodModel(kind, key, t));
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [granularity, selectedKey, windowOffset, feed.density, reports, format]);
+  }, [kind, now]);
 
-  const activeReport: ReportListItem | undefined = useMemo(() => {
-    for (const report of reports) {
-      if (!report.generatedAt) continue;
-      if (
-        periodContains(
-          granularity,
-          selectedKey,
-          dayKeyOf(new Date(report.generatedAt)),
-        )
-      ) {
-        return report;
-      }
-    }
-    return undefined;
-  }, [reports, granularity, selectedKey]);
-
+  const period = periodModel(kind, selectedKey, t);
   const periodMetric = useMemo(
-    () => sumPeriodDensity(feed.density, granularity, selectedKey),
-    [feed.density, granularity, selectedKey],
+    () => sumPeriodDensity(feed.density, kind, selectedKey),
+    [feed.density, kind, selectedKey],
   );
 
-  const searchResults = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    if (!query) return [];
-    return reports.filter(
-      (report) =>
-        report.title.toLocaleLowerCase().includes(query) ||
-        report.kind.includes(query),
-    );
-  }, [search, reports]);
+  /** A report is "archived" in the period containing its generatedAt. */
+  const reportInPeriod = (key: string): ReportListItem | undefined => {
+    const preferred = kind === "day" ? "daily" : "weekly";
+    let fallback: ReportListItem | undefined;
+    for (const report of feed.reports) {
+      if (!report.generatedAt) continue;
+      if (periodContains(kind, key, dayKeyOf(new Date(report.generatedAt)))) {
+        if (report.kind === preferred) return report;
+        fallback ??= report;
+      }
+    }
+    return fallback;
+  };
+
+  const selection = `${kind}:${selectedKey}`;
+  const activeReport =
+    preferredReport?.selection === selection
+      ? (feed.reports.find(
+          (report) => report.reportId === preferredReport.reportId,
+        ) ?? reportInPeriod(selectedKey))
+      : reportInPeriod(selectedKey);
+
+  const filteredPeriods = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return periods;
+    return periods.filter((item) => {
+      const saved = readSavedDraft(mdKey(item.key)) ?? "";
+      const hasReport = feed.reports.some(
+        (report) =>
+          report.generatedAt &&
+          periodContains(
+            kind,
+            item.key,
+            dayKeyOf(new Date(report.generatedAt)),
+          ) &&
+          report.title.toLocaleLowerCase().includes(q),
+      );
+      return (
+        item.label.toLocaleLowerCase().includes(q) ||
+        item.from.includes(q) ||
+        item.short.toLocaleLowerCase().includes(q) ||
+        saved.toLocaleLowerCase().includes(q) ||
+        hasReport
+      );
+    });
+  }, [periods, query, kind, feed.reports]);
 
   const insightLines = useMemo(() => {
     const lines: string[] = [];
@@ -228,240 +346,523 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     format,
   ]);
 
-  const selectGranularity = (next: PeriodGranularity) => {
-    const reference = periodStartDate(granularity, selectedKey) ?? now;
-    setGranularity(next);
-    setSelectedKey(periodKeyOf(next, reference));
-    setWindowOffset(0);
+  /* Load the body for the selected period: saved draft first, else the
+     persisted report body (read-only from the server). */
+  useEffect(() => {
+    setMode("preview");
+    dirtyRef.current = false;
+    const saved = readSavedDraft(mdKey(selectedKey));
+    if (saved !== null) {
+      setBody(saved);
+      return;
+    }
+    const report = activeReport;
+    if (!report?.reportId) {
+      setBody("");
+      return;
+    }
+    let cancelled = false;
+    getReportBody({ data: { reportId: report.reportId } })
+      .then((content) => {
+        if (!cancelled) setBody(content?.body ?? "");
+      })
+      .catch(() => {
+        if (!cancelled) setBody("");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, activeReport?.reportId]);
+
+  const { exportMd } = useReportActions(
+    body,
+    activeReport?.title ?? period.label,
+  );
+  const { savedAt: autoSavedAt, flush } = useDraftAutosave(
+    mdKey(selectedKey),
+    body,
+    dirtyRef,
+  );
+  const savedAtLabel = autoSavedAt ? autoSavedAt.slice(0, 5) : null;
+
+  const handleSave = async () => {
+    if (!activeReport?.reportId) {
+      toast.error(t("common.failed"));
+      return;
+    }
+    try {
+      const result = await saveReportBody({
+        data: { reportId: activeReport.reportId, body },
+      });
+      if (!result.saved) {
+        toast.error(t("common.failed"));
+        return;
+      }
+      dirtyRef.current = false;
+      removeSavedDraft(mdKey(selectedKey));
+      flush();
+      toast.success(t("reports.body.save"));
+    } catch {
+      toast.error(t("common.failed"));
+    }
+  };
+
+  const switchKind = (next: PeriodGranularity) => {
+    setGenerationFailure(null);
+    setKind(next);
+    setSelectedKey(periodKeyOf(next, now));
   };
 
   const selectPeriod = (key: string) => {
+    setGenerationFailure(null);
     setSelectedKey(key);
-    setWindowOffset(0);
-    setShowCalendar(false);
   };
 
-  const openReportPeriod = (report: ReportListItem) => {
-    if (!report.generatedAt) return;
-    const date = new Date(report.generatedAt);
-    const next = report.kind === "weekly" ? "week" : "day";
-    setGranularity(next);
-    setSelectedKey(periodKeyOf(next, date));
-    setWindowOffset(0);
-    setSearch("");
-    setShowCalendar(false);
-  };
-
-  const handleGenerate = async () => {
-    if (generateBlocked || generating) return;
+  const doGenerate = async () => {
+    if (generating) return;
+    setGenerationFailure(null);
     setGenerating(true);
     try {
       const result = await generateReportNow({
-        data: { definitionId: definitionFor(granularity) },
+        data: {
+          definitionId: definitionFor(kind),
+          granularity: kind,
+          periodKey: selectedKey,
+        },
       });
-      if (result.triggered) {
-        toast.success(t("common.success"));
-        await router.invalidate();
-      } else {
-        toast.error(t("common.failed"));
+      if (!result.triggered || !result.reportId) {
+        const failureKey = generationFailureKey(result.errorCode);
+        setGenerationFailure(failureKey);
+        toast.error(t(failureKey));
+        return;
       }
+
+      const content = await getReportBody({
+        data: { reportId: result.reportId },
+      });
+      if (!content?.body.trim()) {
+        const failureKey = generationFailureKey(result.errorCode);
+        setGenerationFailure(failureKey);
+        toast.error(t(failureKey));
+        return;
+      }
+
+      // A period-scoped browser edit belongs to the previous report. It must
+      // not shadow the freshly generated server draft.
+      removeSavedDraft(mdKey(selectedKey));
+      setPreferredReport({ selection, reportId: result.reportId });
+      setMode("preview");
+      dirtyRef.current = false;
+      setBody(content.body);
+      setGenerationFailure(null);
+      toast.success(t("common.success"));
+      await router.invalidate();
     } catch (error) {
       const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
+      const failureKey = generationFailureKey(ui?.code);
+      setGenerationFailure(failureKey);
+      toast.error(t(failureKey));
     } finally {
       setGenerating(false);
     }
   };
 
+  const nextKey = addPeriods(kind, selectedKey, 1);
+  const prevKey = addPeriods(kind, selectedKey, -1);
   return (
-    <>
-      <div className="mb-3">
-        <JarvisInsight
-          title={t("reports.insight.title")}
-          lines={insightLines}
-          rotateLabel={t("insights.rotate")}
-          dotsLabel={t("insights.dots")}
-        />
-      </div>
-
-      {(offline || disabled) && (
-        <div className="mb-3 rounded-sm border border-border bg-surface px-3 py-2 text-[12px] text-muted-foreground">
-          {offline ? t("common.status.offline") : t("common.status.disabled")}
-          {disabled && ` · ${t("common.reports.generateHint")}`}
-        </div>
-      )}
-
-      <ArchiveBand
-        granularity={granularity}
-        onGranularity={selectGranularity}
-        search={search}
-        onSearch={setSearch}
-        blocks={blocks}
-        selectedKey={selectedKey}
-        onSelect={selectPeriod}
-        onPrev={() => setWindowOffset((value) => value - TIMELINE_WINDOW)}
-        onNext={() => setWindowOffset((value) => value + TIMELINE_WINDOW)}
+    <div className="space-y-4 pb-12">
+      <JarvisInsight
+        title={t("reports.insight.title")}
+        lines={insightLines}
+        rotateLabel={t("reports.insight.rotate")}
+        dotsLabel={t("reports.insight.dots")}
       />
 
-      <ReportSchedule />
+      <div className="space-y-4">
+        <ReportSchedule />
 
-      <section className="mt-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold tracking-tight">
-              {periodLabel(granularity, selectedKey)}
-            </h2>
-            <p className="tt-num mt-0.5 font-mono text-[11px] text-muted-foreground">
-              {t("reports.header.sessions", { count: periodMetric.count })}
-              {" · "}
-              {t("reports.header.tokens", {
-                tokens: format.formatTokens(periodMetric.tokens),
-              })}
-              {" · "}
-              {t("reports.header.cost", {
-                cost: format.formatUsd(periodMetric.knownUsd),
-              })}
-            </p>
+        {/* 顶部：归档筛选 + 当前周期操作（V3.0 原型） */}
+        <section className="sticky top-14 z-10 rounded-xl bg-card p-2.5 shadow-[0_10px_24px_-18px_rgba(0,0,0,0.7)] ring-1 ring-border/60 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="tt-seg shrink-0">
+              {KINDS.map((item) => (
+                <button
+                  key={item.k}
+                  type="button"
+                  onClick={() => switchKind(item.k)}
+                  className={`tt-seg-item ${kind === item.k ? "tt-seg-on" : ""}`}
+                  title={t(item.hintKey)}
+                >
+                  {t(item.labelKey)}
+                </button>
+              ))}
+            </div>
+
+            {/* 最近几期：紧凑药丸 */}
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => selectPeriod(prevKey)}
+                className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80"
+                aria-label={t("reports.archive.prev")}
+              >
+                <ChevronLeft className="size-3.5" />
+              </button>
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-1">
+                {filteredPeriods.map((item) => {
+                  const n = sumPeriodDensity(
+                    feed.density,
+                    kind,
+                    item.key,
+                  ).count;
+                  const has = Boolean(reportInPeriod(item.key));
+                  const active = item.key === selectedKey;
+                  const f = item.from;
+                  const big =
+                    kind === "day"
+                      ? `${Number(f.slice(5, 7))}/${Number(f.slice(8, 10))}`
+                      : kind === "month"
+                        ? `${Number(f.slice(5, 7))}月`
+                        : `${Number(f.slice(5, 7))}/${Number(f.slice(8, 10))}–${Number(item.to.slice(5, 7))}/${Number(item.to.slice(8, 10))}`;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => selectPeriod(item.key)}
+                      title={item.label}
+                      className={`relative flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-1.5 py-1.5 font-mono text-[11px] transition-colors ${
+                        active
+                          ? "bg-surface-2 font-semibold text-foreground ring-1 ring-border"
+                          : "text-muted-foreground hover:bg-surface-2/55"
+                      } ${n || has ? "" : "opacity-45"}`}
+                    >
+                      <span className="tt-num truncate whitespace-nowrap">
+                        {big}
+                      </span>
+                      {has && (
+                        <span className="size-1 shrink-0 rounded-full bg-ok" />
+                      )}
+                    </button>
+                  );
+                })}
+                {filteredPeriods.length === 0 && (
+                  <span className="px-2 text-[11.5px] text-muted-foreground">
+                    {t("reports.archive.noMatch")}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => selectPeriod(nextKey)}
+                disabled={isFuturePeriod(kind, nextKey, now)}
+                className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 hover:opacity-80 disabled:opacity-35"
+                aria-label={t("reports.archive.next")}
+              >
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+
+            <div className="flex w-[190px] shrink-0 items-center gap-2 rounded-full bg-surface-2 px-2.5 py-1.5">
+              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("reports.archive.search")}
+                className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  className="shrink-0 text-muted-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowCalendar((value) => !value)}
-              aria-expanded={showCalendar}
-              title={t("reports.calendar.toggle")}
-              className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] transition-colors ${
-                showCalendar
-                  ? "bg-surface-2 text-foreground"
-                  : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-              }`}
-            >
-              <CalendarDays className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => selectPeriod(periodKeyOf(granularity, now))}
-              className="rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] transition-opacity hover:opacity-80"
-            >
-              {granularity === "day"
-                ? t("reports.header.goToday")
-                : granularity === "week"
-                  ? t("reports.header.goWeek")
-                  : t("reports.header.goMonth")}
-            </button>
-            <TTButton
-              variant="primary"
-              disabled={generateBlocked || generating}
-              title={generateBlocked ? generateHint : undefined}
-              onClick={() => void handleGenerate()}
-            >
-              <FileText className="size-3.5" />
-              {generating
-                ? t("reports.header.generating")
-                : t("reports.header.generate")}
-            </TTButton>
+        </section>
+
+        {/* 报告主体：周期信息 + 操作 + 编辑器合并为一张卡 */}
+        <div className="min-w-0 space-y-4">
+          <section className="rounded-xl bg-card p-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-[13px] font-semibold tracking-tight">
+                  {period.label}
+                </h2>
+                <span className="tt-num mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
+                  {t("reports.header.sessions", {
+                    count: periodMetric.count,
+                  })}
+                  {" · "}
+                  {t("reports.header.tokens", {
+                    tokens: format.formatTokens(periodMetric.tokens),
+                  })}
+                  {" · "}
+                  {t("reports.header.cost", {
+                    cost: format.formatUsd(periodMetric.knownUsd),
+                  })}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <ChunkErrorBoundary>
+                  <Suspense
+                    fallback={
+                      <span className="h-8 rounded-lg bg-surface-2/70 px-2.5" />
+                    }
+                  >
+                    <PeriodCalendar
+                      granularity={kind}
+                      selectedKey={selectedKey}
+                      density={feed.density}
+                      now={now}
+                      onSelect={selectPeriod}
+                    />
+                  </Suspense>
+                </ChunkErrorBoundary>
+                <button
+                  type="button"
+                  onClick={() => selectPeriod(periodKeyOf(kind, now))}
+                  className="rounded-full bg-surface-2 px-3 py-1.5 font-mono text-[11px] hover:opacity-80"
+                >
+                  {kind === "day"
+                    ? t("reports.header.goToday")
+                    : kind === "week"
+                      ? t("reports.header.goWeek")
+                      : t("reports.header.goMonth")}
+                </button>
+              </div>
+            </div>
+
+            {generating && (
+              <div
+                className="mt-3 rounded-xl border border-border/70 bg-surface-2/55 px-4 py-3"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <div className="flex items-center gap-2 text-[12px] font-medium">
+                  <RefreshCw className="size-3.5 animate-spin" />
+                  {t("reports.body.generationProgressTitle")}
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {t("reports.body.generationProgressDesc")}
+                </p>
+                <div
+                  role="progressbar"
+                  aria-label={t("reports.body.generationProgressTitle")}
+                  className="mt-2 h-1.5 overflow-hidden rounded-full bg-border/70"
+                >
+                  <div
+                    className="h-full w-full animate-pulse rounded-full"
+                    style={{ background: "var(--chart-1)" }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {!generating && generationFailure && (
+              <div
+                className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-danger/35 bg-danger/5 px-4 py-3"
+                role="alert"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-semibold text-danger">
+                    {t("reports.body.generationFailureTitle")}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {t(generationFailure)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void doGenerate()}
+                  disabled={generateBlocked}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px] font-medium disabled:opacity-40"
+                >
+                  <RefreshCw className="size-3.5" />
+                  {t("reports.body.retryGeneration")}
+                </button>
+              </div>
+            )}
+
+            {!body ? (
+              <div className="mt-3 border-t border-border/60 px-6 py-16 text-center">
+                <PenLine
+                  className="mx-auto size-6 text-muted-foreground"
+                  strokeWidth={1.6}
+                />
+                <p className="mt-3 text-[12.5px] text-muted-foreground">
+                  {t("reports.body.emptyTitle")}
+                </p>
+                {!generationFailure && (
+                  <button
+                    type="button"
+                    onClick={() => void doGenerate()}
+                    disabled={generating || generateBlocked}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+                    style={{ background: "var(--chart-1)" }}
+                  >
+                    {generating ? (
+                      <>
+                        <RefreshCw className="size-3.5 animate-spin" />
+                        {t("reports.header.generating")}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="size-3.5" />
+                        {t("reports.body.draft")}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+                  <div className="inline-flex items-center gap-1 rounded-xl bg-surface p-1">
+                    {[
+                      {
+                        m: "preview" as const,
+                        label: t("common.reports.editor.preview"),
+                        icon: Eye,
+                      },
+                      {
+                        m: "edit" as const,
+                        label: t("common.reports.editor.edit"),
+                        icon: PenLine,
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.m}
+                        type="button"
+                        onClick={() => setMode(option.m)}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                          mode === option.m
+                            ? "bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.25)]"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <option.icon className="size-3.5" />
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {mode === "edit" && (
+                    <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
+                      {savedAtLabel
+                        ? t("reports.body.savedAt", { time: savedAtLabel })
+                        : t("reports.body.unsaved")}
+                    </span>
+                  )}
+                </div>
+
+                {mode === "edit" ? (
+                  <textarea
+                    value={body}
+                    onChange={(event) => {
+                      dirtyRef.current = true;
+                      setBody(event.target.value);
+                    }}
+                    spellCheck={false}
+                    className="tt-scroll min-h-[460px] w-full resize-y rounded-xl bg-surface-2 p-4 font-mono text-[12.5px] leading-7 outline-none"
+                  />
+                ) : (
+                  <div className="tt-scroll min-h-[460px] rounded-xl bg-surface-2/40 px-5 py-4">
+                    <MarkdownView source={body} />
+                  </div>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {mode === "edit" && (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white"
+                      style={{ background: "var(--chart-1)" }}
+                    >
+                      <Save className="size-3.5" /> {t("reports.body.save")}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAskRewrite(true)}
+                    disabled={!periodMetric.count || generating}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px] disabled:opacity-40"
+                  >
+                    <RefreshCw className="size-3.5" />{" "}
+                    {t("reports.body.regenerate")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportMd}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3.5 py-2 text-[12px]"
+                  >
+                    <Download className="size-3.5" />{" "}
+                    {t("reports.body.exportMarkdown")}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {askRewrite && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
+          onClick={() => setAskRewrite(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-sm rounded-xl bg-card p-5"
+          >
+            <div className="mb-2 flex items-center">
+              <h3 className="text-[13.5px] font-semibold tracking-tight">
+                {t("reports.body.rewriteTitle")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setAskRewrite(false)}
+                className="ml-auto text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+              {t("reports.body.rewriteDesc", { count: periodMetric.count })}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAskRewrite(false)}
+                className="rounded-full bg-surface-2 px-4 py-2 text-[12px]"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAskRewrite(false);
+                  void doGenerate();
+                }}
+                className="rounded-full px-4 py-2 text-[12px] font-semibold text-white"
+                style={{ background: "var(--chart-1)" }}
+              >
+                {t("reports.body.rewriteConfirm")}
+              </button>
+            </div>
           </div>
         </div>
-
-        {showCalendar && (
-          <div className="relative mt-3 z-10">
-            <ChunkErrorBoundary>
-              <Suspense
-                fallback={
-                  <div className="h-40 animate-pulse rounded-sm bg-surface" />
-                }
-              >
-                <PeriodCalendar
-                  granularity={granularity}
-                  selectedKey={selectedKey}
-                  density={feed.density}
-                  now={now}
-                  onSelect={selectPeriod}
-                />
-              </Suspense>
-            </ChunkErrorBoundary>
-          </div>
-        )}
-      </section>
-
-      {search.trim() ? (
-        <Panel className="mt-3" title={t("reports.body.reportList")}>
-          {searchResults.length === 0 ? (
-            <EmptyState
-              title={t("reports.body.noMatch")}
-              desc={t("reports.body.noReports")}
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {searchResults.map((report) => (
-                <ReportRow
-                  key={report.reportId ?? report.runId ?? report.definitionId}
-                  report={report}
-                  onOpen={() => openReportPeriod(report)}
-                />
-              ))}
-            </ul>
-          )}
-        </Panel>
-      ) : (
-        <>
-          <ReportBodyCard
-            report={activeReport}
-            sessionCount={periodMetric.count}
-            generateBlocked={generateBlocked}
-            generateHint={generateHint}
-            onGenerate={() => void handleGenerate()}
-            onRegenerate={() => void handleGenerate()}
-          />
-          <QuickNotes />
-        </>
       )}
-    </>
-  );
-}
 
-function ReportRow({
-  report,
-  onOpen,
-}: {
-  report: ReportListItem;
-  onOpen: () => void;
-}) {
-  const { t, format } = useI18n();
-  const tone = STATUS_TONE[report.status];
-  return (
-    <li
-      className="flex cursor-pointer flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-3 text-[13px] transition-colors hover:bg-surface-2/50"
-      onClick={onOpen}
-    >
-      <div className="flex w-full items-center gap-2">
-        <Dot className="bg-primary" />
-        <span className="truncate font-medium text-foreground">
-          {report.title}
-        </span>
-        <StatusBadge tone={tone}>
-          {t(STATUS_LABEL_KEY[report.status])}
-        </StatusBadge>
-      </div>
-      <div className="flex w-full flex-wrap gap-x-5 gap-y-1 text-[11px] text-muted-foreground">
-        <span>
-          {t(
-            report.kind === "weekly"
-              ? "common.reports.kindWeekly"
-              : "common.reports.kindDaily",
-          )}
-          {report.templateVersion !== undefined && (
-            <> · v{report.templateVersion}</>
-          )}
-        </span>
-        {report.generatedAt && (
-          <span className="tt-num">
-            {format.formatDateTime(report.generatedAt, false)}
-          </span>
-        )}
-        {report.errorCode && (
-          <span className="text-danger">{report.errorCode}</span>
-        )}
-      </div>
-    </li>
+      {/* offline 不阻止生成（确定性草稿），仅停用态需提示 */}
+      {offline && generateBlocked && (
+        <p className="rounded-sm border border-border bg-surface px-3 py-2 text-[12px] text-muted-foreground">
+          {t("reports.insight.modelNotConfigured")}
+        </p>
+      )}
+    </div>
   );
 }

@@ -161,7 +161,9 @@ export async function startDistillation(
       version: 1,
       template:
         input.promptText?.trim() ||
-        "Summarise the selected sessions' metadata into a concise knowledge note.",
+        (segments.length > 0
+          ? "Summarise the selected sessions and their chosen message segments into a concise knowledge note."
+          : "Summarise the selected sessions' metadata into a concise knowledge note."),
     },
   });
   if (!result.ok) return { ok: false, errorCode: result.error.code };

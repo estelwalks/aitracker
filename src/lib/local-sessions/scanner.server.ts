@@ -394,6 +394,19 @@ async function scanClaudeCodeSessions(
         }
         return;
       }
+      // Current Claude Code persists user/auto titles as custom-title records
+      // carrying the title in `customTitle` (ai-title records are legacy).
+      if (recordType === "custom-title") {
+        const customTitle = stringValue(record.customTitle);
+        const sessionId = stringValue(
+          record.sessionId ?? record.session_id ?? record.conversationId,
+        );
+        if (sessionId != null) sawSessionId = true;
+        if (customTitle != null) {
+          local.push({ title: customTitle, terminalStatus });
+        }
+        return;
+      }
 
       const sessionId = stringValue(
         record.sessionId ?? record.session_id ?? record.conversationId,
