@@ -66,6 +66,22 @@ export async function loadSessionsPage(
   }
 }
 
+/** Runs the real session collector before returning the refreshed page. */
+export async function refreshSessionsPage(
+  input: SessionsPageInput,
+): Promise<SessionPage> {
+  try {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    await root.sessionSnapshot.requestRefresh({ reason: "manual" });
+    return await loadSessionsPage(input);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("errors.sessions.queryFailed");
+  }
+}
+
 /**
  * Finds one session through the public query port. The scanner/query service
  * remains the authority; this transport never reads a session file directly.

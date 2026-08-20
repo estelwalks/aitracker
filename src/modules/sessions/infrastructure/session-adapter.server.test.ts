@@ -96,7 +96,7 @@ test("session projection redacts unsafe title, project and malformed session id"
 
   const serialized = JSON.stringify(publicView);
   assert.equal(publicView.sessionId, "unavailable");
-  assert.equal(publicView.title, "");
+  assert.equal(publicView.title, "resume [path] with [sensitive]");
   assert.equal(publicView.projectKey, "unknown");
   assert.equal(publicView.resumeAvailable, false);
   assert.doesNotMatch(serialized, /private|secret|jsonl/i);

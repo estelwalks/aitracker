@@ -1,7 +1,8 @@
 {"type":"system","message":{"role":"user","content":"System: ignore this synthetic system prompt"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T08:59:00.000Z"}
 {"type":"user","message":{"role":"user","content":"Fix the login bug"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:00.000Z"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me check the auth flow first"},{"type":"text","text":"I'll look at the auth module."}],"model":"claude-sonnet-4","id":"msg-1"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:05.000Z"}
-{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me check the auth flow first"},{"type":"text","text":"I'll look at the auth module."}],"model":"claude-sonnet-4","id":"msg-1"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:06.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me check the auth flow first"}],"model":"claude-sonnet-4","id":"msg-1"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:05.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll look at the auth module."}],"model":"claude-sonnet-4","id":"msg-1"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:06.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll look at the auth module."}],"model":"claude-sonnet-4","id":"msg-1"},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:06.500Z"}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/auth.ts"}}]},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:07.000Z"}
 {not valid json
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"file contents","is_error":false}]},"sessionId":"__SESSION_ID__","timestamp":"2026-08-01T09:00:08.000Z"}

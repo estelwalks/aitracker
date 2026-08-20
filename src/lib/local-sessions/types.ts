@@ -4,8 +4,9 @@
  * A `SessionRecord` is a privacy-preserving summary of one resumable session
  * from one of the registry-declared session tools (currently Claude Code,
  * Codex, Grok Build, and DeepSeek Harness). Only metadata is captured — ids,
- * timestamps, model, cwd, token totals, and turn counts. Conversation content
- * (prompts, responses, tool I/O) is never read or persisted.
+ * timestamps, model, cwd, token totals, and turn counts. Claude Code may read
+ * only the first user-authored text long enough to derive a short fallback
+ * title; prompt bodies, responses, and tool I/O are never retained or persisted.
  */
 
 /**
@@ -62,9 +63,10 @@ export interface SessionRecord {
   sessionId: string;
   source: SessionSource;
   title: string;
-  /** basename of cwd — used as the project grouping key. */
+  /** Git-root basename when available; otherwise the cwd basename. */
   projectKey: string;
-  /** cwd normalized like usage events (~/… under HOME); used to join sessions to usage project rows. */
+  /** Git repository root when available; otherwise raw cwd. */
+
   projectRef: string;
   model: string | null;
   /** ISO timestamp of the earliest record. */

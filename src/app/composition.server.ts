@@ -665,7 +665,16 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   };
   refreshPorts.sessions = {
     requestRefresh: async () => {
-      await taskApi.runNow({ taskId: "sessions.refresh" }).catch(() => {});
+      const started = await taskApi
+        .runNow({ taskId: "sessions.refresh" })
+        .catch(() => null);
+      if (started?.ok !== true) return;
+      // `runNow` only queues the collector. Session-page and distillation
+      // refreshes need the committed snapshot, so wait for this exact run to
+      // reach a terminal state before their query reads the coordinator.
+      await taskApi
+        .awaitRun({ runId: started.value.runId, timeoutMs: 60_000 })
+        .catch(() => {});
     },
   };
   refreshPorts.skills = {

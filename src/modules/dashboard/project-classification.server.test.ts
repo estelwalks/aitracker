@@ -42,7 +42,7 @@ test("dashboard project classification keeps only locally evidenced workspaces",
   );
   assert.deepEqual(await classifyDashboardProjectRef(nestedPackage, { home }), {
     kind: "workspace",
-    label: "prototype",
+    label: "real-project",
   });
   assert.deepEqual(
     await classifyDashboardProjectRef(join(home, "removed"), { home }),
