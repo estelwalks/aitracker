@@ -14,11 +14,11 @@ import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
 } from "../../../../electron/security-http-api";
-import {
+import type {
+  SecretStoragePort,
+  SecurityScannerPersistence,
   SecurityScannerService,
-  type SecretStoragePort,
-  type SecurityScannerPersistence,
-  type SecurityScannerServiceOptions,
+  SecurityScannerServiceOptions,
 } from "../../../../electron/security-scanner-service";
 import {
   DESKTOP_HISTORY_KEY,
@@ -180,8 +180,10 @@ export function createDevSecurityScannerService(
   options: Partial<SecurityScannerServiceOptions> & {
     readonly homeDirectory: string;
   },
-): SecurityScannerService {
-  return new SecurityScannerService({
+): Promise<SecurityScannerService> {
+  return import("../../../../electron/security-scanner-service.js").then(
+    ({ SecurityScannerService }) =>
+      new SecurityScannerService({
     homeDirectory: options.homeDirectory,
     locale: options.locale ?? (() => currentDevLocale),
     env: options.env ?? process.env,
@@ -192,7 +194,8 @@ export function createDevSecurityScannerService(
     ...(options.beforeOpenFile
       ? { beforeOpenFile: options.beforeOpenFile }
       : {}),
-  });
+      }),
+  );
 }
 
 /**
@@ -204,7 +207,7 @@ export function createDevSecurityScannerService(
  * `globalThis` (mirroring `getCompositionRoot`) so Vite HMR re-imports reuse
  * the same in-flight scanner state.
  */
-export function getDevSecurityScannerService(): SecurityScannerService | null {
+export async function getDevSecurityScannerService(): Promise<SecurityScannerService | null> {
   const identity = createNodeRuntimeIdentity();
   if (identity.kind !== "web") {
     devSecurityScanner = null;
@@ -220,7 +223,7 @@ export function getDevSecurityScannerService(): SecurityScannerService | null {
   }
 
   const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
-  const service = createDevSecurityScannerService({
+  const service = await createDevSecurityScannerService({
     homeDirectory,
   });
   devSecurityScanner = service;
@@ -295,7 +298,7 @@ export async function handleSecurityDevRequest(
   const url = new URL(request.url);
   if (!url.pathname.startsWith(`${SECURITY_API_PREFIX}/`)) return null;
 
-  const service = getDevSecurityScannerService();
+  const service = await getDevSecurityScannerService();
   if (!service) return null;
 
   // Track the browser's preferred language so scans report in that locale.

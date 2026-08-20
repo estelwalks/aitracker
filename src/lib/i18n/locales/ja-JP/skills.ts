@@ -26,6 +26,11 @@ export const skills = {
     external: "外部",
     other: "その他",
   },
+  agent: {
+    all: "すべてのAgent",
+    prevGroup: "前のAgent",
+    nextGroup: "次のAgent",
+  },
   summary: {
     assets: "資産",
     installations: "{count} 件のインストール",

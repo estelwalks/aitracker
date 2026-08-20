@@ -306,14 +306,19 @@ export function createDistillationApplication(
               ? "brief"
               : "snippet",
         title: current.title,
+        // Persist the distilled body (PRD FR-014 标题+正文): the memory hub
+        // card and Markdown export show the full generated memory, not a
+        // 160-char provenance fragment. Content is the safety-filtered
+        // candidate summary — raw conversation is never stored.
         content: current.summary,
+        persistContent: true,
         provenance: [
           ...current.selectedSessionRefs.map((ref) => ({
             sourceRef: `session:${ref.source}:${ref.sessionId}` as never,
             sourceType: "session" as const,
             capturedAt: current.generatedAt,
-            // 候选摘要已由 domain 做过安全过滤（UNSAFE 正则），直接作为
-            // provenance 摘要，让记忆库卡片展示真实内容而非固定占位文案。
+            // 候选摘要已由 domain 做过安全过滤（路径→~/、凭据值→[REDACTED]），
+            // 直接作为 provenance 摘要，让记忆库卡片展示真实内容而非占位文案。
             summary: current.summary.slice(0, 200),
           })),
           ...(typeRef

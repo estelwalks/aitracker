@@ -36,7 +36,8 @@ export function MemoryForm({
   const { t } = useI18n();
   const [type, setType] = useState<MemoryType>(item?.type ?? "task");
   const [title, setTitle] = useState(item?.title ?? "");
-  const [body, setBody] = useState(item?.summary ?? "");
+  // 完整正文（FR-014）：编辑蒸馏记忆时展示完整产物，而非 160 字符摘要片段。
+  const [body, setBody] = useState(item?.body ?? item?.summary ?? "");
   // 来源/项目可编辑（FR-025：录入一条记忆可选类型、标题/正文并标来源/项目）。
   // 蒸馏条目的 source token（distill）不是工具名，编辑时不预填，缺省回落到
   // manual——用户编辑即视为把这条记忆收归手动管理。
@@ -145,7 +146,7 @@ export function MemoryForm({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             rows={5}
-            maxLength={4000}
+            maxLength={24000}
             placeholder={t("memory.form.bodyPlaceholder")}
             className="w-full rounded-sm border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed outline-none focus:border-primary"
           />

@@ -24,6 +24,11 @@ export const skills = {
     external: "外部",
     other: "其他",
   },
+  agent: {
+    all: "全部Agent",
+    prevGroup: "上一组Agent",
+    nextGroup: "下一组Agent",
+  },
   summary: {
     assets: "工具资产",
     installations: "{count} 个安装副本",

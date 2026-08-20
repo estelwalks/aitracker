@@ -26,6 +26,11 @@ export const skills = {
     external: "외부",
     other: "기타",
   },
+  agent: {
+    all: "모든 Agent",
+    prevGroup: "이전 Agent",
+    nextGroup: "다음 Agent",
+  },
   summary: {
     assets: "자산",
     installations: "설치 복사본 {count}개",

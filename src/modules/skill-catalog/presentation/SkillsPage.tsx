@@ -2,7 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Brain,
   Check,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   ShieldBan,
   Trash2,
@@ -10,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { BrandIcon } from "../../../components/BrandIcon";
 import {
   EmptyState,
   Pagination,
@@ -36,7 +40,7 @@ import {
   type AssetSourceFilter,
   type SkillAssetView,
 } from "../application";
-import { SkillCard, type SkillCardSecurity } from "./SkillCard.tsx";
+import { type SkillCardSecurity, SkillListRow } from "./SkillListRow.tsx";
 import { SkillDetailModal } from "./SkillDetailModal.tsx";
 import { SkillSecurityModal } from "./SkillSecurityModal.tsx";
 import { SyncTargetModal } from "./SyncTargetModal.tsx";
@@ -84,6 +88,8 @@ export function SkillsPage({
   const [source, setSource] = useState<AssetSourceFilter>("all");
   const [sourceLabel, setSourceLabel] = useState("all");
   const [page, setPage] = useState(1);
+  /** Agent 筛选行分页游标（原型第2行，一屏 9 个 + 全部）。 */
+  const [agentPage, setAgentPage] = useState(0);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [syncTarget, setSyncTarget] = useState<SyncTargetState | null>(null);
@@ -167,7 +173,46 @@ export function SkillsPage({
     [workspace.coverage],
   );
 
+  // 原型第2行 Agent 筛选：仅展示本地已探测到客户端的 Agent，一屏 9 个 +
+  // 「全部Agent」，超出用左右浮动圆钮翻页。各 Agent 计数来自工作台预投影的
+  // facets.agents（该 skill 已安装到对应 Agent 的安装副本数）。
+  const AGENT_PAGE_SIZE = 9;
+  const agentCounts = useMemo(
+    () =>
+      new Map(
+        workspace.facets.agents.map((facet) => [facet.value, facet.count]),
+      ),
+    [workspace.facets.agents],
+  );
+  const agentPages = Math.max(
+    1,
+    Math.ceil(detectedAgentList.length / AGENT_PAGE_SIZE),
+  );
+  const agentPageIndex = Math.min(agentPage, agentPages - 1);
+  const shownAgents = detectedAgentList.slice(
+    agentPageIndex * AGENT_PAGE_SIZE,
+    agentPageIndex * AGENT_PAGE_SIZE + AGENT_PAGE_SIZE,
+  );
+
   const summary = workspace.summary;
+
+  // 原型对齐：origin 分段 tab 计数（全部/蒸馏/外部/其他）。蒸馏 = 无 source
+  // 元数据的 skill（saveCandidateAsSkill 只写 name/description frontmatter），
+  // 外部 = market，其他 = frontmatter（与原型 all - distilled - external 一致）。
+  const originCounts = useMemo(() => {
+    const map = new Map(
+      workspace.facets.sources.map((facet) => [facet.value, facet.count]),
+    );
+    const distilled = map.get("unknown") ?? 0;
+    const external = map.get("market") ?? 0;
+    const total = workspace.summary.skillCount;
+    return {
+      total,
+      distilled,
+      external,
+      other: Math.max(0, total - distilled - external),
+    };
+  }, [workspace]);
 
   const securitySummary = security
     ? {
@@ -470,10 +515,22 @@ export function SkillsPage({
               <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2/70 p-0.5">
                 {(
                   [
-                    { v: "all", label: t("skills.origin.all") },
-                    { v: "unknown", label: t("skills.origin.distilled") },
-                    { v: "market", label: t("skills.origin.external") },
-                    { v: "frontmatter", label: t("skills.origin.other") },
+                    {
+                      v: "all",
+                      label: `${t("skills.origin.all")} ${originCounts.total}`,
+                    },
+                    {
+                      v: "unknown",
+                      label: `${t("skills.origin.distilled")} ${originCounts.distilled}`,
+                    },
+                    {
+                      v: "market",
+                      label: `${t("skills.origin.external")} ${originCounts.external}`,
+                    },
+                    {
+                      v: "frontmatter",
+                      label: `${t("skills.origin.other")} ${originCounts.other}`,
+                    },
                   ] as const
                 ).map((option) => (
                   <button
@@ -513,6 +570,87 @@ export function SkillsPage({
               )}
             </div>
           </section>
+
+          {/* Agent 筛选行（原型第2行）：一屏 9 个 + 全部，超出用浮动圆钮翻页 */}
+          {detectedAgentList.length > 0 && (
+            <div className="relative">
+              <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAgent("all");
+                    setPage(1);
+                  }}
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+                    agent === "all"
+                      ? "bg-primary/15 text-primary"
+                      : "bg-surface-2 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t("skills.agent.all")}
+                  <span className="tt-num opacity-60">{allAssets.length}</span>
+                </button>
+                {shownAgents.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setAgent(item);
+                      setPage(1);
+                    }}
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+                      agent === item
+                        ? "bg-primary/15 text-primary"
+                        : "bg-surface-2 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <BrandIcon name={item} className="size-3.5" />
+                    {item}
+                    <span className="tt-num opacity-60">
+                      {agentCounts.get(item) ?? 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {agentPages > 1 && (
+                <>
+                  {agentPageIndex > 0 && (
+                    <>
+                      <span className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-background to-transparent" />
+                      <button
+                        type="button"
+                        aria-label={t("skills.agent.prevGroup")}
+                        title={t("skills.agent.prevGroup")}
+                        onClick={() =>
+                          setAgentPage((p) => (p - 1 + agentPages) % agentPages)
+                        }
+                        className="absolute top-1/2 left-1 z-20 grid size-6 -translate-y-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                      >
+                        <ChevronLeft className="size-3.5" />
+                      </button>
+                    </>
+                  )}
+                  {agentPageIndex < agentPages - 1 && (
+                    <>
+                      <span className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background to-transparent" />
+                      <button
+                        type="button"
+                        aria-label={t("skills.agent.nextGroup")}
+                        title={t("skills.agent.nextGroup")}
+                        onClick={() =>
+                          setAgentPage((p) => (p + 1) % agentPages)
+                        }
+                        className="absolute top-1/2 right-1 z-20 grid size-6 -translate-y-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                      >
+                        <ChevronRight className="size-3.5" />
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {assets.length === 0 ? (
             <EmptyState
@@ -648,30 +786,22 @@ export function SkillsPage({
                 )}
               </div>
 
-              {/* Skill card grid */}
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {paged.map((skill) => {
-                  const selected = checkedIds.has(skill.id);
-                  return (
-                    <SkillCard
-                      key={skill.id}
-                      skill={skill}
-                      selected={selected}
-                      security={securityOf(skill.name)}
-                      blacklisted={snapshot.blacklist.includes(skill.name)}
-                      detectedAgentCount={detectedAgents.size}
-                      onSelect={() => toggleChecked(skill.id, !selected)}
-                      onOpen={() => setDetailSkillId(skill.id)}
-                      onSync={() =>
-                        setSyncTarget({
-                          title: skill.name,
-                          skills: [skill],
-                        })
-                      }
-                      onRemove={() => openUninstall(skill)}
-                    />
-                  );
-                })}
+              {/* 原型对齐的列表行布局 */}
+              <ul className="overflow-hidden rounded-xl border border-border bg-card">
+                {paged.map((skill, index) => (
+                  <SkillListRow
+                    key={skill.id}
+                    skill={skill}
+                    selected={checkedIds.has(skill.id)}
+                    security={securityOf(skill.name)}
+                    blacklisted={snapshot.blacklist.includes(skill.name)}
+                    index={index}
+                    onSelect={() =>
+                      toggleChecked(skill.id, !checkedIds.has(skill.id))
+                    }
+                    onOpen={() => setDetailSkillId(skill.id)}
+                  />
+                ))}
               </ul>
 
               <Pagination
