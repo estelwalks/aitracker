@@ -244,6 +244,29 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
   assert.equal(view.estimatedCostUsd, null);
 });
 
+test("Dashboard V2 exposes locally estimable cache savings without pricing availability", () => {
+  const view = createDashboardV2View(
+    {
+      ...snapshot,
+      pricingAvailable: false,
+      events: [
+        {
+          ...snapshot.events[0]!,
+          cachedInputTokens: 1_000_000,
+          inputTokens: 0,
+          totalTokens: 1_000_020,
+        },
+      ],
+    },
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.cacheSavingsUsd != null && view.cacheSavingsUsd > 0, true);
+  assert.equal(view.estimatedCostUsd, null);
+});
+
 test("Dashboard V2 does not compare an all-time range with a previous period", () => {
   const view = createDashboardV2View(snapshot, "all");
 
