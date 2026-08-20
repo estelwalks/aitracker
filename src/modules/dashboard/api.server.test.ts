@@ -125,6 +125,36 @@ test("dashboard snapshot projects scanner data without paths or command summarie
   assert.equal(JSON.stringify(result).includes("opaque-session"), false);
 });
 
+test("dashboard keeps project rows whose classification is still pending", () => {
+  const firstProject = `/Users/example/work/${APP_ID}`;
+  const secondProject = "/Users/example/work/another-project";
+  const result = toDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      details: [
+        { ...rawSnapshot.details[0]!, project: firstProject },
+        { ...rawSnapshot.details[0]!, project: secondProject },
+      ],
+    },
+    new Map([
+      [firstProject, { kind: "workspace", label: APP_ID }],
+      // The second reference is not in the persisted index yet. The query
+      // path must keep it visible with the safe final-segment fallback.
+    ]),
+  );
+
+  assert.deepEqual(
+    result.details.map((event) => ({
+      project: event.project,
+      projectKind: event.projectKind,
+    })),
+    [
+      { project: APP_ID, projectKind: "workspace" },
+      { project: "another-project", projectKind: "workspace" },
+    ],
+  );
+});
+
 test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
   const snapshot = toDashboardSnapshot(rawSnapshot);
   const result = toDashboardV2Snapshot({

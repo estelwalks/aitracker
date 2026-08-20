@@ -685,6 +685,22 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   const { classificationService } = await getCompositionRoot();
   const projectClassifications =
     await classificationService.resolve(projectRefs);
+  // A usage snapshot can predate the classification index (for example after
+  // an app upgrade). Keep this response useful through the safe fallback in
+  // `toDashboardSnapshot`, while backfilling only the raw usage refs in the
+  // background so later responses can restore verified workspace filtering.
+  const missingUsageRefs = [
+    ...new Set(
+      rawSnapshot.details
+        .map((event) => event.project)
+        .filter((ref) => !projectClassifications.has(ref)),
+    ),
+  ];
+  if (missingUsageRefs.length > 0) {
+    void classificationService
+      .classifyIncrementally(missingUsageRefs)
+      .catch(() => {});
+  }
   const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
   const skills =
     skillsResult.status === "fulfilled"
