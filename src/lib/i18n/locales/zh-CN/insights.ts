@@ -42,6 +42,8 @@ export const insights = {
         "今天 {agents} 个 Agent 值守，已拦截 {blocked} 次风险，节省约 {hours} 小时，还有 {distillable} 段会话可蒸馏。",
       "dashboard-assets":
         "主力 Agent「{name}」承担了 {rate} 的用量，其余 Agent 使用较少，可考虑均衡分配。",
+      "dashboard-usage":
+        "今日已采集 {events} 个用量事件、共 {sessions} 段会话，可前往会话页查看详情或发起蒸馏。",
       "dashboard-security-safe":
         "今日未发现安全风险，所有已扫描项目均通过检查。",
       "dashboard-security-risk":

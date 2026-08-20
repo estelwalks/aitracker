@@ -37,6 +37,8 @@ export const insights = {
         "{agents} agents on duty today, {blocked} risks blocked, ~{hours} hours saved, and {distillable} sessions ready to distill.",
       "dashboard-assets":
         "Agent “{name}” carried {rate} of usage; the rest are lightly used — consider balancing.",
+      "dashboard-usage":
+        "Collected {events} usage events across {sessions} sessions today; open Sessions to review or distill.",
       "dashboard-security-safe":
         "No security risks found today; every scanned item passed.",
       "dashboard-security-risk":

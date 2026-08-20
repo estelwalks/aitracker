@@ -44,6 +44,8 @@ export const insights = {
         "今日は {agents} 個の Agent が稼働し、{blocked} 回のリスクを遮断、約 {hours} 時間を節約、{distillable} 件のセッションを蒸留できます。",
       "dashboard-assets":
         "主力 Agent「{name}」が {rate} の使用量を占めています。他は低使用のため、配分の見直しをご検討ください。",
+      "dashboard-usage":
+        "今日は {events} 件の使用イベントと {sessions} 件のセッションを収集しました。セッションで確認や蒸留ができます。",
       "dashboard-security-safe":
         "本日はセキュリティリスクは見つかりませんでした。スキャン済み項目はすべて合格です。",
       "dashboard-security-risk":
