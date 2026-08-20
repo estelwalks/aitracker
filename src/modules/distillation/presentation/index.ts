@@ -46,9 +46,8 @@ export interface DistillationViewModel {
     ok?: boolean;
   }[];
   /**
-   * The server-resolved preferred real model for new runs. This should track
-   * the active S-500 profile when one exists; otherwise it may fall back to
-   * the built-in env-backed model or `offline`.
+   * The server-resolved preferred real model for new runs. This tracks the
+   * active S-500 profile when one exists; otherwise it is `offline`.
    */
   readonly activeModelId?: string;
   /**
@@ -83,7 +82,7 @@ export interface DistillationStartInput {
     readonly startIndex: number;
     readonly endIndex: number;
   }>;
-  /** Optional model id; defaults to the built-in model when omitted. */
+  /** Optional model id; defaults to the shared active profile or offline. */
   readonly modelId?: string;
   /** Optional custom prompt template; defaults to the built-in summary prompt. */
   readonly promptText?: string;

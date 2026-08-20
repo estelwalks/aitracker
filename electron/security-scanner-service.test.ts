@@ -360,7 +360,7 @@ test("automatic scans use full model-aware analysis when a model is configured",
 const DEFAULT_SCHEDULE = {
   enabled: true,
   cycle: "daily",
-  time: "03:00",
+  time: "10:00",
   scope: "all",
   agents: [],
   dir: null,

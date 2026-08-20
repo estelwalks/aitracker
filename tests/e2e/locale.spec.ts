@@ -23,9 +23,7 @@ test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page 
   await expect(
     page.getByRole("link", { name: "Settings", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Security & Defense" }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Security Scan" })).toBeVisible();
   // localStorage preference also becomes the canonical browser URL, so a
   // subsequent SSR request starts from the same language.
   await expect

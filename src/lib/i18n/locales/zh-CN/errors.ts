@@ -70,7 +70,7 @@ export const errors = {
     quotaExceeded:
       "今日官方模型蒸馏额度已用完（每日 {limit} 次），请明天再试或前往「管理模型」",
     noModelConfigured:
-      "尚未配置可用的 AI 模型。请到「设置 → 模型」添加一个带 API Key 的模型（或设置 ANTHROPIC_API_KEY 环境变量），再开始蒸馏。",
+      "尚未配置可用的 AI 模型。请到「设置 → 模型」添加一个带 API Key 的模型，再开始蒸馏。",
     aiFailed: "AI 模型调用失败，未生成蒸馏结果。请检查模型配置或网络后重试。",
   },
   modelProfile: {

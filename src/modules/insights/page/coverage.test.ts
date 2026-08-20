@@ -63,7 +63,7 @@ test("the sitemap file is explicitly excluded from the surface registry", () => 
   assert.equal(registered.has("sitemap[.]xml.ts"), false);
 });
 
-test("settings page renders the registered settings insight surface", () => {
+test("settings page keeps the insight surface off the top-level settings hero", () => {
   const source = readFileSync(
     path.resolve(
       ROUTES_DIR,
@@ -71,5 +71,6 @@ test("settings page renders the registered settings insight surface", () => {
     ),
     "utf8",
   );
-  assert.match(source, /<InsightCard\s+surfaceId="settings"/);
+  assert.doesNotMatch(source, /InsightCard/);
+  assert.match(source, /<InsightSettingsSection\s*\/>/);
 });

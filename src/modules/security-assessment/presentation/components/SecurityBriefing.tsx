@@ -1,12 +1,5 @@
-import {
-  AlertTriangle,
-  RadarIcon,
-  RefreshCw,
-  ScanLine,
-  ShieldCheck,
-  ShieldX,
-} from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { RadarIcon, ScanLine } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useI18n } from "../../../../lib/i18n/context";
 import type { SecurityScanPhase, SecurityTotals } from "../security-view";
@@ -15,10 +8,9 @@ const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 8000;
 
 /**
- * 安全播报：与 V3.0 原型一致的安全 hero 卡片。
- * 左侧雷达 orb（tone 呼吸光晕）+ 打字机式安全结论 + 状态徽标 + 「换一条」，
- * 右侧健康度 SVG 圆环 + 单个「开始全局检测」CTA。
- * 不再使用共享 JarvisInsight 模板，也不再渲染任何 dev-mode 提示。
+ * V3.0 prototype security briefing, fitted into the existing hero footprint.
+ * The card keeps the current outer dimensions while restoring the prototype's
+ * radar orb, typewriter carousel, health ring and single global-scan CTA.
  */
 export function SecurityBriefing({
   totals,
@@ -68,21 +60,33 @@ export function SecurityBriefing({
                 dimensions,
                 total: totals.total,
               });
-    return [
-      first,
+    const status =
       latestStatus === "partial"
         ? t("security.center.briefing.partialLine")
-        : t("security.center.briefing.boundaryLine"),
-    ];
-  }, [dimensions, latestStatus, risky, suspicious, t, totals]);
+        : `${t("security.center.briefing.lastScan", {
+            dimensions,
+            time: lastScan,
+          })} · ${health}% ${t("security.center.briefing.health")}`;
+    return [first, status, t("security.center.briefing.boundaryLine")];
+  }, [
+    dimensions,
+    health,
+    lastScan,
+    latestStatus,
+    risky,
+    suspicious,
+    t,
+    totals,
+  ]);
 
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
+  const activeIndex = index % lines.length;
+  const line = lines[activeIndex] ?? "";
 
   useEffect(() => setIndex(0), [lines]);
 
   useEffect(() => {
-    const line = lines[index % lines.length] ?? "";
     if (
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -105,29 +109,27 @@ export function SecurityBriefing({
       window.clearInterval(typer);
       window.clearTimeout(rotate);
     };
-  }, [index, lines]);
+  }, [line, lines.length]);
 
-  const R = 42;
-  const C = 2 * Math.PI * R;
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl bg-card p-6 shadow-[var(--elev-1)] md:p-7">
-      <span
-        className="pointer-events-none absolute -top-28 -right-16 size-80 rounded-full opacity-[0.14] blur-3xl"
-        style={{ background: tone }}
-      />
-      <span className="pointer-events-none absolute -bottom-28 -left-16 size-72 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+    <section
+      className="dashboard-insight-hero security-briefing-card"
+      style={{ "--briefing-tone": tone } as CSSProperties}
+      aria-label={t("security.center.briefing.title")}
+    >
+      <div className="relative grid h-full gap-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="flex min-w-0 items-start gap-4">
           <span className="relative mt-0.5 shrink-0">
             <span
               className="tt-breathe absolute inset-0 rounded-full blur-md"
               style={{ background: tone, opacity: 0.45 }}
             />
-            <span className="relative grid size-12 place-items-center rounded-full bg-surface-2">
+            <span className="relative grid size-10 place-items-center rounded-full bg-surface-2">
               <RadarIcon
-                className="size-6"
+                className="size-5"
                 style={{ color: tone }}
                 strokeWidth={1.7}
               />
@@ -135,67 +137,53 @@ export function SecurityBriefing({
           </span>
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[15px] font-semibold tracking-tight">
-                {t("security.center.briefing.title")}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIndex((v) => (v + 1) % lines.length)}
-                className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 font-mono text-[10.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <RefreshCw className="size-3" strokeWidth={2} />
-                {t("security.center.briefing.refresh")}
-              </button>
-            </div>
+            <h2 className="text-[15px] font-semibold tracking-tight">
+              {t("security.center.briefing.title")}
+            </h2>
 
             <p
-              className="mt-2.5 min-h-[54px] text-[15px] leading-relaxed font-medium text-foreground/90 md:text-[16px]"
-              aria-label={typed}
+              className="mt-2 min-h-[46px] text-[15px] leading-relaxed font-medium text-foreground/90 md:text-[16px]"
+              aria-label={line}
             >
               {typed}
               <span className="tt-breathe ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] bg-foreground/60" />
             </p>
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <Chip
-                icon={ShieldX}
-                label={t("security.center.briefing.highRisk", {
-                  count: totals.danger,
-                })}
-                color="var(--danger)"
-              />
-              <Chip
-                icon={AlertTriangle}
-                label={t("security.center.briefing.suspicious", {
-                  count: suspicious,
-                })}
-                color="var(--warn)"
-              />
-              <Chip
-                icon={ShieldCheck}
-                label={t("security.center.briefing.passed", {
-                  count: totals.safe,
-                })}
-                color="var(--ok)"
-              />
-              <span className="inline-flex items-center rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground">
-                {t("security.center.briefing.lastScan", {
-                  dimensions,
-                  time: lastScan,
-                })}
-              </span>
+            <div
+              className="mt-2.5 flex items-center gap-1.5"
+              role="tablist"
+              aria-label={t("security.center.briefing.title")}
+            >
+              {lines.map((item, itemIndex) => (
+                <button
+                  key={`${itemIndex}-${item}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={itemIndex === activeIndex}
+                  aria-label={`${itemIndex + 1}`}
+                  onClick={() => setIndex(itemIndex)}
+                  className={`h-1 rounded-full transition-all duration-500 ${
+                    itemIndex === activeIndex
+                      ? "w-9 bg-foreground/70"
+                      : "w-2.5 bg-foreground/15"
+                  }`}
+                />
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-5 md:flex-col md:items-end">
-          <div className="relative grid size-[104px] shrink-0 place-items-center">
+        <div className="flex items-center gap-3 md:flex-col md:items-center md:gap-1.5">
+          <div
+            className="relative grid size-[72px] shrink-0 place-items-center"
+            title={`${t("security.center.briefing.health")} ${health}%`}
+            aria-label={`${t("security.center.briefing.health")} ${health}%`}
+          >
             <svg viewBox="0 0 100 100" className="size-full -rotate-90">
               <circle
                 cx="50"
                 cy="50"
-                r={R}
+                r={radius}
                 fill="none"
                 stroke="var(--surface-2)"
                 strokeWidth="7"
@@ -203,24 +191,24 @@ export function SecurityBriefing({
               <circle
                 cx="50"
                 cy="50"
-                r={R}
+                r={radius}
                 fill="none"
                 stroke={tone}
                 strokeWidth="7"
                 strokeLinecap="round"
-                strokeDasharray={C}
-                strokeDashoffset={C * (1 - health / 100)}
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - health / 100)}
                 style={{ transition: "stroke-dashoffset 1s ease" }}
               />
             </svg>
             <div className="absolute flex flex-col items-center">
               <span
-                className="tt-num text-[26px] leading-none font-bold"
+                className="tt-num text-[17px] leading-none font-bold"
                 style={{ color: tone }}
               >
                 {health}%
               </span>
-              <span className="mt-1 font-mono text-[9.5px] text-muted-foreground">
+              <span className="mt-0.5 font-mono text-[8px] text-muted-foreground">
                 {t("security.center.briefing.health")}
               </span>
             </div>
@@ -230,10 +218,10 @@ export function SecurityBriefing({
             type="button"
             onClick={onScan}
             disabled={scanning}
-            className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[13px] font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+            className="group inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-[11px] font-medium whitespace-nowrap text-primary-foreground transition-transform hover:scale-[1.02] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ScanLine
-              className="size-4 transition-transform group-hover:rotate-6"
+              className="size-3.5 transition-transform group-hover:rotate-6"
               strokeWidth={2}
             />
             {t("security.center.briefing.startGlobalScan")}
@@ -241,25 +229,5 @@ export function SecurityBriefing({
         </div>
       </div>
     </section>
-  );
-}
-
-function Chip({
-  icon: Icon,
-  label,
-  color,
-}: {
-  icon: typeof ShieldCheck;
-  label: string;
-  color: string;
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px]"
-      style={{ color }}
-    >
-      <Icon className="size-3" strokeWidth={2} />
-      {label}
-    </span>
   );
 }

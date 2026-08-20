@@ -5,8 +5,6 @@ import type {
 } from "./contracts.js";
 import type { ModelConfig } from "skill-scanner";
 
-const SECURITY_LLM_REVIEW_PREF_KEY = "tt.security.llmReview";
-
 interface StoredModelProfile {
   readonly mode: "official" | "custom";
   readonly protocol: "openai" | "anthropic";
@@ -104,8 +102,6 @@ export class DesktopStateBroker {
   }
 
   async modelConfig(): Promise<ModelConfig | undefined> {
-    const preferences = await this.preferences();
-    if (preferences[SECURITY_LLM_REVIEW_PREF_KEY] !== true) return undefined;
     const profile = await this.#request<StoredModelProfile | null>(
       "/model-profile",
     );

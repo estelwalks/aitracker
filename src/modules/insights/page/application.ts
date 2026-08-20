@@ -55,10 +55,10 @@ export function createPageInsightsApplication(options: {
     }
     return {
       scopeKey: "global",
-      mode: "rules",
+      mode: "enhanced-auto",
       profileId: null,
-      consentVersion: null,
-      consentedAtMs: null,
+      consentVersion: INSIGHT_AUTO_CONSENT_VERSION,
+      consentedAtMs: 0,
       dailyCallLimit: null,
       updatedAtMs: 0,
     };

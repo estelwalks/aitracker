@@ -143,7 +143,7 @@ function readCache(
 
 export interface SqliteInsightRepository {
   getPreference(scopeKey: string): InsightPreference | undefined;
-  /** Surface preference overrides global; missing preference defaults to rules. */
+  /** Surface preference overrides global; missing preference defaults to LLM on. */
   getEffectivePreference(surfaceId: string): InsightPreference;
   setPreference(value: InsightPreference): void;
   findValid(
@@ -213,10 +213,10 @@ export function createSqliteInsightRepository(
         getPreference(`surface:${surfaceId}`) ??
         getPreference("global") ?? {
           scopeKey: "global",
-          mode: "rules",
+          mode: "enhanced-auto",
           profileId: null,
-          consentVersion: null,
-          consentedAtMs: null,
+          consentVersion: "1",
+          consentedAtMs: 0,
           dailyCallLimit: null,
           updatedAtMs: 0,
         }

@@ -209,5 +209,5 @@ export const distill = {
   },
   anotherHistoryResults: "기타 {count}개 기록 결과 · 보기",
   noModelHint:
-    "AI 모델이 구성되지 않았습니다. 「설정 → 모델」에서 API 키가 있는 모델을 추가하거나 ANTHROPIC_API_KEY 환경 변수를 설정하지 않으면 증류에서 실제 결과를 생성할 수 없습니다.",
+    "AI 모델이 구성되지 않았습니다. 「설정 → 모델」에서 API 키가 있는 모델을 추가하지 않으면 증류에서 실제 결과를 생성할 수 없습니다.",
 } as const;

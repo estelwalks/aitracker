@@ -7,7 +7,7 @@ export const nav = {
   distill: "Distill Studio",
   reports: "Reports",
   memoryHub: "Memory",
-  guard: "Security & Defense",
+  guard: "Security Scan",
   tracker: "Burn Leaderboard",
   skillHub: "Skill Management",
   market: "Skill Market",

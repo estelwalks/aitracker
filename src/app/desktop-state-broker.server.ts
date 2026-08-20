@@ -3,7 +3,6 @@ import { timingSafeEqual } from "node:crypto";
 import { ENV, STORAGE_KEY_PREFIX } from "../lib/app-config.ts";
 import type { PreferenceValue } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
 import { getCompositionRoot } from "./composition.server.ts";
-import { SECURITY_LLM_REVIEW_PREF_KEY } from "../modules/security-assessment/llm-review.contracts.ts";
 
 export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
@@ -39,6 +38,20 @@ function enumValue(
     : fallback;
 }
 
+/** Preserve a renderer-safe Skill name without ever persisting a filesystem path. */
+function safeSkillName(value: unknown): string {
+  const cleaned = Array.from(String(value ?? ""), (character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 31 || code === 127 ? " " : character;
+  })
+    .join("")
+    .trim();
+  if (!cleaned || cleaned.includes("/") || cleaned.includes("\\")) {
+    return "Skill";
+  }
+  return cleaned.slice(0, 160);
+}
+
 async function body(request: Request): Promise<Record<string, unknown>> {
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
@@ -61,7 +74,7 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
       id: String(entry.id ?? "").slice(0, 160),
       scanId: String(entry.scanId ?? "").slice(0, 80),
       skillRef: String(entry.skillRef ?? "").slice(0, 80),
-      skillName: "Skill",
+      skillName: safeSkillName(entry.skillName),
       mode: entry.mode === "full" ? "full" : "quick",
       trigger: entry.trigger === "automatic" ? "automatic" : "manual",
       locale: enumValue(
@@ -179,9 +192,6 @@ export async function handleDesktopStateBrokerRequest(
       return json({ ok: true });
     }
     if (request.method === "GET" && route === "/model-profile") {
-      if (preferences.get(SECURITY_LLM_REVIEW_PREF_KEY)?.value !== true) {
-        return json(null);
-      }
       const active = await root.modelProfiles.getActiveView();
       if (!active) return json(null);
       return json(

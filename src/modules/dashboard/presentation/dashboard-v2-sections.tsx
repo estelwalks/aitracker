@@ -566,8 +566,10 @@ export function DashboardRangePicker({
             setOpen(false);
           }}
         >
-          <label>
-            {t("dashboard.header.customFrom")}
+          <label className="space-y-1">
+            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+              {t("dashboard.header.customFrom")}
+            </span>
             <input
               type="date"
               name="from"
@@ -575,10 +577,13 @@ export function DashboardRangePicker({
               value={draftFrom}
               max={draftTo}
               onChange={(event) => setDraftFrom(event.target.value)}
+              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
             />
           </label>
-          <label>
-            {t("dashboard.header.customTo")}
+          <label className="space-y-1">
+            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+              {t("dashboard.header.customTo")}
+            </span>
             <input
               type="date"
               name="to"
@@ -586,12 +591,13 @@ export function DashboardRangePicker({
               value={draftTo}
               min={draftFrom}
               onChange={(event) => setDraftTo(event.target.value)}
+              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={!draftFrom || !draftTo || draftFrom > draftTo}
-            className="col-span-2 mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
+            className="col-span-2 mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Check className="size-3.5" strokeWidth={2.2} />
             {t("common.confirm")}

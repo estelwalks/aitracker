@@ -44,6 +44,11 @@ export function ScanTaskDetail({
     task.totals.danger +
     task.totals.unknown +
     task.totals.failed;
+  const skillFindings = [
+    ...new Map(
+      task.findings.map((finding) => [finding.entryId, finding]),
+    ).values(),
+  ];
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -109,16 +114,16 @@ export function ScanTaskDetail({
           <div>
             <h4 className="text-[12.5px] font-semibold">
               {t("security.center.task.riskDetails", {
-                count: task.findings.length,
+                count: skillFindings.length,
               })}
             </h4>
-            {task.findings.length === 0 ? (
+            {skillFindings.length === 0 ? (
               <p className="mt-2 rounded-lg bg-surface-2 px-3.5 py-4 text-center font-mono text-[12px] text-ok">
                 {t("security.center.task.noFindings")}
               </p>
             ) : (
               <div className="mt-2 space-y-2">
-                {task.findings.map((finding, index) => {
+                {skillFindings.map((finding, index) => {
                   const source = task.entries.find(
                     (entry) => entry.id === finding.entryId,
                   );
