@@ -357,6 +357,7 @@ export function DashboardMetricGrid({
             }),
       delta: view.comparison.cacheRate.deltaPercent,
       alwaysBaseline: true,
+      baselineLabel: view.period === "all" ? undefined : baselineLabel,
     },
     {
       icon: Wrench,
@@ -435,13 +436,15 @@ export function DashboardMetricGrid({
     >
       {cards.map((card) => {
         const Icon = card.icon;
+        const cardBaselineLabel =
+          "baselineLabel" in card ? card.baselineLabel : baselineLabel;
         // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
         const showBaseline =
-          baselineLabel &&
+          cardBaselineLabel &&
           (card.delta != null ||
             ("alwaysBaseline" in card && card.alwaysBaseline === true));
         const hintLine = showBaseline
-          ? `${card.hint} · ${baselineLabel}`
+          ? `${card.hint} · ${cardBaselineLabel}`
           : card.hint;
         return (
           <article key={card.label} className="dashboard-metric-card">
