@@ -10,11 +10,15 @@ import {
 import { toast } from "sonner";
 
 import { EmptyState, Panel, TTButton } from "../../../components/tt";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import type { SegmentRefCodec } from "../../../lib/distill-segment";
+import {
+  getPreference,
+  setPreference,
+} from "../../../lib/preferences/client.ts";
 import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, cancelCandidate, startDistillation } from "../query";
@@ -50,15 +54,6 @@ function keyOf(item: { source: string; sessionId: string }): string {
 
 function toRef(item: { source: string; sessionId: string }): SessionRef {
   return { source: item.source, sessionId: item.sessionId };
-}
-
-function readGuideSeen(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    return window.localStorage.getItem(DISTILL_GUIDE_KEY) === "1";
-  } catch {
-    return true;
-  }
 }
 
 /**
@@ -120,12 +115,13 @@ export function DistillationPage({
   const [segments, setSegments] = useState<SegmentRef[]>(() =>
     initialSegment ? [{ ...initialSegment }] : [],
   );
-  // Guide visibility is deferred to a client-only effect: SSR has no
-  // localStorage, so reading it in the useState initializer makes the server
-  // and first client render disagree and triggers a React hydration mismatch.
+  // Guide visibility is loaded after hydration from the SQLite preference
+  // repository so SSR and the first client render remain identical.
   const [showGuide, setShowGuide] = useState(false);
   useEffect(() => {
-    setShowGuide(!readGuideSeen());
+    void getPreference(DISTILL_GUIDE_KEY).then((seen) => {
+      setShowGuide(seen !== true);
+    });
   }, []);
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
@@ -199,31 +195,6 @@ export function DistillationPage({
     0,
   );
 
-  const jarvisLines = useMemo(() => {
-    const lines: string[] = [];
-    if (selectionCount > 0) {
-      lines.push(
-        t("distill.insightSelected", {
-          count: selectionCount,
-          turns: selectedTurns,
-        }),
-      );
-    }
-    if (waitingCount > 0) {
-      lines.push(t("distill.insightWaiting", { count: waitingCount }));
-    }
-    if (runs > 0) {
-      lines.push(t("distill.insightRuns", { count: runs }));
-    }
-    if (approved > 0) {
-      lines.push(t("distill.insightApproved", { count: approved }));
-    }
-    if (lines.length === 0) {
-      lines.push(t("distill.insightEmpty"));
-    }
-    return lines;
-  }, [selectionCount, selectedTurns, waitingCount, runs, approved, t]);
-
   function toggle(item: DistillationSessionItem) {
     setSelected(
       (prev) =>
@@ -292,13 +263,7 @@ export function DistillationPage({
   }
 
   function dismissGuide() {
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(DISTILL_GUIDE_KEY, "1");
-      } catch {
-        // localStorage unavailable (private mode) — the guide simply re-appears.
-      }
-    }
+    void setPreference(DISTILL_GUIDE_KEY, true);
     setShowGuide(false);
   }
 
@@ -490,10 +455,10 @@ export function DistillationPage({
         </header>
 
         <div className="mb-3">
-          <JarvisInsight
+          <InsightCard
+            surfaceId="distill"
+            variant="hero"
             title={t("distill.jarvisTitle")}
-            lines={jarvisLines}
-            rotateLabel={t("distill.insightRotate")}
             dotsLabel={t("distill.insightDots")}
           />
         </div>

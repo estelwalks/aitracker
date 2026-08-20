@@ -6,12 +6,11 @@
  * summaries (already safety-filtered by the distillation domain). The raw
  * session content is never read or returned here.
  *
- * Candidates are persisted by the application through an injected
- * `CandidatePersistence` store (`~/.trusttools/tasks/distill-candidates.v1.json`)
- * and hydrated on construction, so `loadDistillation` can enumerate the full
- * experiment history after a navigation/refresh. Persisted candidates contain
- * only session metadata and the safety-filtered knowledge note — never raw
- * conversation content.
+ * Candidates are persisted by the application through the composition root's
+ * SQLite `CandidatePersistence` repository and hydrated on construction, so
+ * `loadDistillation` can enumerate the full experiment history after a
+ * navigation/refresh. Persisted candidates contain only session metadata and
+ * the safety-filtered knowledge note — never raw conversation content.
  *
  * `saveCandidateAsSkill` is the only path that writes a generated knowledge
  * note into a tool's skill root. It requires an explicitly approved candidate
@@ -89,9 +88,7 @@ export async function loadDistillation(
       remaining: Math.max(0, current.limit - current.used),
     }))
     .catch(() => null);
-  const { getModelProfileRepository } =
-    await import("../ai-orchestration/model-profile.server.ts");
-  const profiles = await getModelProfileRepository().listViews();
+  const profiles = await root.modelProfiles.listViews();
   // Saved S-500 profiles first (id + label=name), then the deterministic
   // offline fallback. Ids are de-duplicated across profiles.
   const seen = new Set<string>();

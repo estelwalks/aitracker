@@ -273,9 +273,10 @@ export interface DesktopApi {
   /** Resolve the current display locale (user preference > system > zh-CN). */
   getLocale(): Promise<DesktopLocale>;
   /**
-   * Persist a locale choice to the prefs file and rebuild the native tray/
-   * menus. Rejects non-locale values; the renderer must only send one of the
-   * four `DesktopLocale` strings.
+   * Persist a locale choice via DesktopStateBroker to SQLite app_preferences
+   * (renderer/server authoritative) and rebuild the native tray/menus. Rejects
+   * non-locale values; the renderer must only send one of the four
+   * `DesktopLocale` strings.
    */
   setLocale(locale: DesktopLocale): Promise<void>;
   /** Subscribe to locale changes initiated in the main process; returns an unsubscribe function. */
@@ -284,7 +285,8 @@ export interface DesktopApi {
   getLocalePreferences(): Promise<LocalePreferences>;
   /**
    * Set the language preference: "system" follows the OS; "manual" pins a
-   * locale (required in manual mode). Persisted to prefs; tray/menus rebuild.
+   * locale (required in manual mode). Persisted via DesktopStateBroker to
+   * SQLite app_preferences; tray/menus rebuild.
    */
   setLocaleMode(
     mode: DesktopPreferenceMode,

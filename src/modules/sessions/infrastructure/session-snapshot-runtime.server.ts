@@ -9,8 +9,8 @@ import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
 /**
  * P3-T3-01: Session snapshot coordinator.
  *
- * The legacy session scanner is wrapped as a pure collector adapter — it
- * receives an AbortSignal, returns browser-safe summaries plus pre-aggregated
+ * The session scanner is wrapped as a pure collector adapter (an
+ * external-source read-only collection adapter) — it receives an AbortSignal, returns browser-safe summaries plus pre-aggregated
  * density, and never writes. Pages and Reports read the coordinator (O(1)),
  * so no page query re-scans the local session logs.
  */
@@ -76,8 +76,7 @@ export function createSessionSnapshotRuntime(
       }
       const { scanLocalSessions } =
         await import("../../../lib/local-sessions/scanner.server.ts");
-      const { toPublicSession } =
-        await import("./legacy-session-adapter.server.ts");
+      const { toPublicSession } = await import("./session-adapter.server.ts");
       const summary = await scanLocalSessions({ signal });
       // Public summary + server-only raw cwd. The dashboard adapter classifies
       // sessions into the same project labels as usage events; every browser

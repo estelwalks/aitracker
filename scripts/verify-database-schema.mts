@@ -18,7 +18,7 @@
 //   3. The `MIGRATIONS` array actually references those inline constants
 //      (`version:`/`name:`/`sql:` triple), so an inlined-but-unreferenced
 //      migration cannot pass.
-//   4. Migration 0001 defines exactly the 11 first-wave STRICT tables with the
+//   4. Migration 0001 defines exactly the 10 new-project STRICT tables with the
 //      documented names, and its key constraints/indexes are present.
 //   5. Every `*_json` column has a `json_valid(...)` CHECK and every
 //      `*_at_ms` column has a non-negative CHECK — matched **inside that
@@ -67,7 +67,6 @@ const DEFAULT_SQL_DIR = join(
 /** First-wave table names, in creation order (architecture §5.1/§5.2/§5.10). */
 const REQUIRED_TABLES = [
   "schema_migrations",
-  "data_migration_runs",
   "app_preferences",
   "runtime_flags",
   "secure_secrets",
@@ -79,12 +78,33 @@ const REQUIRED_TABLES = [
   "insight_enhancement_lines",
 ];
 
+const M2_TABLES = [
+  "task_preferences",
+  "task_runs",
+  "monitoring_state",
+  "monitoring_collectors",
+  "http_cache_entries",
+] as const;
+
+const M2_INDEXES = [
+  "idx_task_runs_task_started",
+  "idx_task_runs_status_started",
+  "idx_task_runs_correlation",
+  "idx_http_cache_namespace_expires",
+] as const;
+
+const M5_TABLES = ["snapshot_blobs", "search_documents"] as const;
+
+const M5_INDEXES = [
+  "idx_search_documents_type_updated",
+  "idx_search_documents_freshness",
+] as const;
+
 /** `PRAGMA application_id` migration 0001 must stamp (architecture §9-6). */
 const TRUSTTOOLS_APPLICATION_ID_VALUE = 0x54544442;
 
 /** The only indexes migration 0001 may create. */
 const ALLOWED_INDEXES = [
-  "idx_data_migration_runs_idempotency",
   "idx_model_profiles_single_active",
   "idx_ai_executions_capability_started",
   "idx_ai_executions_profile_started",
@@ -95,8 +115,6 @@ const ALLOWED_INDEXES = [
 
 /** Columns whose own slice must declare a value-domain (`… IN (…)`) CHECK. */
 const REQUIRED_ENUM_CHECKS: readonly (readonly [string, string])[] = [
-  ["data_migration_runs", "source_kind"],
-  ["data_migration_runs", "status"],
   ["app_preferences", "value_type"],
   ["secure_secrets", "purpose"],
   ["secure_secrets", "encryption_kind"],
@@ -117,7 +135,6 @@ const REQUIRED_NOT_NULL: readonly (readonly [string, string])[] = [
   ["schema_migrations", "name"],
   ["schema_migrations", "checksum"],
   ["schema_migrations", "app_version"],
-  ["data_migration_runs", "status"],
   ["app_preferences", "value_json"],
   ["app_preferences", "value_type"],
   ["runtime_flags", "value_json"],
@@ -143,9 +160,6 @@ const REQUIRED_NOT_NULL: readonly (readonly [string, string])[] = [
 
 /** Counter columns that must declare a non-negative (`>= 0`) CHECK. */
 const REQUIRED_NON_NEGATIVE_CHECKS: readonly (readonly [string, string])[] = [
-  ["data_migration_runs", "rows_read"],
-  ["data_migration_runs", "rows_written"],
-  ["data_migration_runs", "rows_skipped"],
   ["ai_daily_usage", "calls"],
   ["ai_daily_usage", "input_tokens"],
   ["ai_daily_usage", "output_tokens"],
@@ -460,10 +474,20 @@ function verifyDualSource(
     return undefined;
   }
 
-  const inline = extractInlineSql(indexTsSource, file.prefix);
+  let inline = extractInlineSql(indexTsSource, file.prefix);
+  let inlineOwner = "migrations/index.ts";
+  if (inline === undefined) {
+    const sidecarPath = file.path.replace(/\.sql$/, ".ts");
+    try {
+      inline = extractInlineSql(readFileSync(sidecarPath, "utf8"), file.prefix);
+      inlineOwner = relative(process.cwd(), sidecarPath);
+    } catch {
+      // A sidecar is optional; the diagnostic below remains authoritative.
+    }
+  }
   if (inline === undefined) {
     problems.push({
-      message: `no inline PLATFORM_MIGRATION_${file.prefix}_SQL in migrations/index.ts`,
+      message: `no inline PLATFORM_MIGRATION_${file.prefix}_SQL in migrations/index.ts or a same-name .ts sidecar`,
     });
     return sqlText;
   }
@@ -477,7 +501,7 @@ function verifyDualSource(
     });
   } else {
     process.stdout.write(
-      `  ${file.name}: dual-source OK (sha256 ${fileHash})\n`,
+      `  ${file.name}: dual-source OK via ${inlineOwner} (sha256 ${fileHash})\n`,
     );
   }
   return sqlText;
@@ -615,7 +639,7 @@ function extractParenthesizedBody(statement: string): string | undefined {
   return undefined;
 }
 
-/** Verifies 0001's 11-table list + STRICT + per-column and key constraints. */
+/** Verifies 0001's closed table list + STRICT + column/key constraints. */
 function verifyPlatform0001(sql: string, problems: Problem[]): void {
   const stripped = stripSqlComments(sql);
   const statements = splitTopLevelStatements(stripped);
@@ -625,15 +649,15 @@ function verifyPlatform0001(sql: string, problems: Problem[]): void {
   const ordered = oneLine(tableNames.join(" "));
   const expected = oneLine(REQUIRED_TABLES.join(" "));
 
-  process.stdout.write("  11-table list check:\n");
+  process.stdout.write(`  ${REQUIRED_TABLES.length}-table list check:\n`);
   const seenSet = new Set(tableNames);
   const duplicated = tableNames.filter(
     (name, index) => tableNames.indexOf(name) !== index,
   );
 
-  if (tableNames.length !== 11 || ordered !== expected) {
+  if (tableNames.length !== REQUIRED_TABLES.length || ordered !== expected) {
     problems.push({
-      message: `expected exactly 11 tables in documented order; found ${tableNames.length}: ${tableNames.join(", ") || "(none)"}`,
+      message: `expected exactly ${REQUIRED_TABLES.length} tables in documented order; found ${tableNames.length}: ${tableNames.join(", ") || "(none)"}`,
     });
   }
   for (const name of REQUIRED_TABLES) {
@@ -668,6 +692,182 @@ function verifyPlatform0001(sql: string, problems: Problem[]): void {
   verifyDataDomainChecks(byName, stripped, problems);
   verifyApplicationId(stripped, problems);
   verifyUserVersionAbsent(stripped, problems);
+}
+
+/** Closed-set and core integrity gate for migration 0002 (M2 low-risk state). */
+function verifyLowRisk0002(sql: string, problems: Problem[]): void {
+  const stripped = stripSqlComments(sql);
+  const statements = splitTopLevelStatements(stripped);
+  const tables: TableDefinition[] = [];
+  const indexes: string[] = [];
+  for (const statement of statements) {
+    const flat = oneLine(statement.text);
+    const table = /^CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i.exec(flat);
+    if (table) {
+      const body = extractParenthesizedBody(statement.text);
+      if (body === undefined) {
+        problems.push({
+          message: `0002 table ${table[1]} has unbalanced parentheses`,
+        });
+      } else {
+        tables.push({ name: table[1], body, text: statement.text });
+      }
+      continue;
+    }
+    const index =
+      /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+/i.exec(
+        flat,
+      );
+    if (index) {
+      indexes.push(index[1]);
+      continue;
+    }
+    problems.push({
+      message: `0002 forbidden top-level statement at line ${statement.line}`,
+    });
+  }
+  if (tables.map((table) => table.name).join("\0") !== M2_TABLES.join("\0")) {
+    problems.push({
+      message: `0002 table set/order differs: ${tables.map((table) => table.name).join(", ")}`,
+    });
+  }
+  if (indexes.join("\0") !== M2_INDEXES.join("\0")) {
+    problems.push({
+      message: `0002 index set/order differs: ${indexes.join(", ")}`,
+    });
+  }
+  for (const table of tables) {
+    if (!/\)\s*STRICT\s*;?\s*$/m.test(table.text.trim())) {
+      problems.push({ message: `0002 table ${table.name} is not STRICT` });
+    }
+    verifyColumnChecks(table, problems);
+  }
+  const flat = oneLine(stripped);
+  const expectations: readonly (readonly [RegExp, string])[] = [
+    [
+      /task_preferences[\s\S]*schedule_kind = 'interval'[\s\S]*interval_minutes IS NOT NULL/,
+      "task preference schedule-kind shape CHECK",
+    ],
+    [
+      /task_runs[\s\S]*status IN \('queued', 'running', 'waiting-approval', 'succeeded', 'failed', 'cancelled', 'skipped', 'abandoned'\)/,
+      "task run status CHECK",
+    ],
+    [
+      /monitoring_collectors[\s\S]*collector_id IN \('usage', 'skills', 'sessions', 'security', 'exchange', 'installation'\)/,
+      "monitoring collector ID CHECK",
+    ],
+    [
+      /http_cache_entries[\s\S]*PRIMARY KEY \(namespace, cache_key\)/,
+      "HTTP cache composite key",
+    ],
+    [
+      /http_cache_entries[\s\S]*expires_at_ms >= fetched_at_ms/,
+      "HTTP cache TTL ordering CHECK",
+    ],
+  ];
+  for (const [pattern, label] of expectations) {
+    if (!pattern.test(flat))
+      problems.push({ message: `0002 missing ${label}` });
+  }
+  process.stdout.write(
+    `  0002 M2 schema: ${tables.length}/${M2_TABLES.length} STRICT tables, ${indexes.length}/${M2_INDEXES.length} indexes\n`,
+  );
+}
+
+/**
+ * Closed-set and core integrity gate for migration 0005 (S-03: snapshot blobs
+ * for the WSL topology + the browser-safe search projection index).
+ */
+function verifySearchWsl0005(sql: string, problems: Problem[]): void {
+  const stripped = stripSqlComments(sql);
+  const statements = splitTopLevelStatements(stripped);
+  const tables: TableDefinition[] = [];
+  const indexes: string[] = [];
+  for (const statement of statements) {
+    const flat = oneLine(statement.text);
+    const table = /^CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/i.exec(flat);
+    if (table) {
+      const body = extractParenthesizedBody(statement.text);
+      if (body === undefined) {
+        problems.push({
+          message: `0005 table ${table[1]} has unbalanced parentheses`,
+        });
+      } else {
+        tables.push({ name: table[1], body, text: statement.text });
+      }
+      continue;
+    }
+    const index =
+      /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+([A-Za-z_][A-Za-z0-9_]*)\s+ON\s+/i.exec(
+        flat,
+      );
+    if (index) {
+      indexes.push(index[1]);
+      continue;
+    }
+    problems.push({
+      message: `0005 forbidden top-level statement at line ${statement.line}`,
+    });
+  }
+  if (tables.map((table) => table.name).join("\0") !== M5_TABLES.join("\0")) {
+    problems.push({
+      message: `0005 table set/order differs: ${tables.map((table) => table.name).join(", ")}`,
+    });
+  }
+  if (indexes.join("\0") !== M5_INDEXES.join("\0")) {
+    problems.push({
+      message: `0005 index set/order differs: ${indexes.join(", ")}`,
+    });
+  }
+  for (const table of tables) {
+    if (!/\)\s*STRICT\s*;?\s*$/m.test(table.text.trim())) {
+      problems.push({ message: `0005 table ${table.name} is not STRICT` });
+    }
+    verifyColumnChecks(table, problems);
+  }
+
+  const flat = oneLine(stripped);
+  const expectations: readonly (readonly [RegExp, string])[] = [
+    [
+      /snapshot_blobs[\s\S]*snapshot_id TEXT PRIMARY KEY REFERENCES snapshot_generations \(snapshot_id\) ON DELETE CASCADE/,
+      "snapshot_blobs FK → snapshot_generations ON DELETE CASCADE",
+    ],
+    [
+      /snapshot_blobs[\s\S]*payload_json TEXT NOT NULL CHECK \(json_valid\(payload_json\)\)/,
+      "snapshot_blobs payload_json json_valid CHECK",
+    ],
+    [
+      /snapshot_blobs[\s\S]*payload_bytes INTEGER NOT NULL CHECK \(payload_bytes >= 0\)/,
+      "snapshot_blobs payload_bytes non-negative CHECK",
+    ],
+    [
+      /search_documents[\s\S]*UNIQUE \(type, source_ref\)/,
+      "search_documents UNIQUE (type, source_ref)",
+    ],
+    [
+      /search_documents[\s\S]*type IN \('agent', 'skill', 'session', 'report', 'knowledge', 'finding'\)/,
+      "search_documents type enum CHECK",
+    ],
+    [
+      /search_documents[\s\S]*freshness IN \('fresh', 'stale', 'unknown'\)/,
+      "search_documents freshness enum CHECK",
+    ],
+    [
+      /CREATE INDEX idx_search_documents_type_updated ON search_documents \(type, updated_at_ms DESC\)/,
+      "search_documents (type, updated_at_ms DESC) index",
+    ],
+    [
+      /CREATE INDEX idx_search_documents_freshness ON search_documents \(freshness\)/,
+      "search_documents (freshness) index",
+    ],
+  ];
+  for (const [pattern, label] of expectations) {
+    if (!pattern.test(flat))
+      problems.push({ message: `0005 missing ${label}` });
+  }
+  process.stdout.write(
+    `  0005 search/wsl schema: ${tables.length}/${M5_TABLES.length} STRICT tables, ${indexes.length}/${M5_INDEXES.length} indexes\n`,
+  );
 }
 
 /**
@@ -767,10 +967,6 @@ function verifyKeyConstraints(sql: string, problems: Problem[]): void {
   expect(
     /ai_daily_usage[^;]*PRIMARY KEY \(date_key, capability, profile_key\)/,
     "ai_daily_usage PRIMARY KEY (date_key, capability, profile_key)",
-  );
-  expect(
-    /CREATE UNIQUE INDEX idx_data_migration_runs_idempotency ON data_migration_runs \(source_kind, source_path_hash, source_fingerprint\)/,
-    "data_migration_runs three-column unique index",
   );
   // The seven-column UNIQUE was replaced by an expression unique index (review
   // P2-2): SQLite treats NULLs as distinct, so a multi-column UNIQUE let two
@@ -978,8 +1174,16 @@ function main(): void {
     verifyPlatform0001(sqlByVersion.get(1)!, problems);
   } else if (migrations.some((file) => file.version === 1)) {
     problems.push({
-      message: "migration 0001 present but unreadable; skipped 11-table check",
+      message: `migration 0001 present but unreadable; skipped ${REQUIRED_TABLES.length}-table check`,
     });
+  }
+
+  if (sqlByVersion.has(2)) {
+    verifyLowRisk0002(sqlByVersion.get(2)!, problems);
+  }
+
+  if (sqlByVersion.has(5)) {
+    verifySearchWsl0005(sqlByVersion.get(5)!, problems);
   }
 
   if (problems.length > 0) {

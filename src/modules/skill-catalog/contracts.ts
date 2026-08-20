@@ -1,8 +1,4 @@
 import type {
-  AtomicJsonStore,
-  Clock,
-} from "../../platform/persistence/contracts.ts";
-import type {
   AssetAssessment,
   AssetHashRef,
   AssetRef,
@@ -77,12 +73,6 @@ export interface OfflineCache {
   readonly entries: readonly SkillPackageDto[];
   readonly savedAt?: string;
   readonly stale: boolean;
-}
-
-export interface SkillCatalogRepositoryOptions {
-  readonly store: AtomicJsonStore<OfflineCacheDocument>;
-  readonly clock: Clock;
-  readonly maxAgeMs?: number;
 }
 
 export type SkillSecurityAssessmentPort = SecurityAssessmentPort;

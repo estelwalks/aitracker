@@ -1,5 +1,4 @@
-import { readFileSync, writeFileSync, renameSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -47,18 +46,11 @@ import {
   CURRENCY_PREF_KEY,
   LOCALE_MODE_PREF_KEY,
   LOCALE_PREF_KEY,
-  PREFS_FILENAME,
-  readPrefs,
-  writePrefs,
 } from "./prefs.js";
-import {
-  APP_DATA_DIR,
-  APP_NAME,
-  ENV,
-  STORAGE_KEY_PREFIX,
-} from "./app-config.js";
+import { APP_NAME, ENV } from "./app-config.js";
 import { SecurityScannerService } from "./security-scanner-service.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
+import { DesktopStateBroker } from "./desktop-state-broker.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -72,6 +64,7 @@ let allowedOrigin = "";
 let isQuitting = false;
 let securityScanner: SecurityScannerService | null = null;
 let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
+let desktopStateBroker: DesktopStateBroker | null = null;
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -80,20 +73,14 @@ let currentPreferences: LocalePreferences = {
   currencySource: "fallback",
 };
 
-const CURRENT_SCHEMA_VERSION = "v10";
-
-function prefsPath(): string {
-  return join(app.getPath("userData"), PREFS_FILENAME);
+async function hasCloseHintBeenShown(): Promise<boolean> {
+  if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
+  return (await desktopStateBroker.preferences()).closeHintShown === true;
 }
 
-function hasCloseHintBeenShown(): boolean {
-  return readPrefs(prefsPath()).closeHintShown === true;
-}
-
-function markCloseHintShown(): void {
-  const prefs = readPrefs(prefsPath());
-  prefs.closeHintShown = true;
-  writePrefs(prefsPath(), prefs);
+async function markCloseHintShown(): Promise<void> {
+  if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
+  await desktopStateBroker.setPreference("closeHintShown", true);
 }
 
 /**
@@ -335,120 +322,6 @@ function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
   );
 }
 
-/**
- * Sync the latest desktop security scan into the web-side monitoring store
- * (`~/.trusttools/tasks/monitoring.v1.json`). The dashboard reads that file
- * to render the "security posture" card; without this, packaged builds always
- * show "unknown / not scanned" even after manual or automatic scans.
- */
-async function syncMonitoringSecuritySummary(): Promise<void> {
-  try {
-    const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
-    const dataDir = join(homeDir, APP_DATA_DIR);
-    const historyRaw = await readFile(
-      join(dataDir, "security-scan-history.json"),
-      "utf8",
-    ).catch(() => null);
-    if (historyRaw == null) return;
-    const history = JSON.parse(historyRaw) as {
-      entries?: SecurityScanHistoryEntry[];
-    };
-    const entries = history.entries ?? [];
-    const last = entries[entries.length - 1];
-    if (last == null) return;
-    const scanEntries = entries.filter((entry) => entry.scanId === last.scanId);
-    const counts = { clean: 0, suspicious: 0, dangerous: 0, unknown: 0 };
-    let assessed = 0;
-    let failed = 0;
-    for (const entry of scanEntries) {
-      if (
-        entry.status === "failed" ||
-        entry.status === "skipped" ||
-        entry.status === "cancelled"
-      ) {
-        failed += 1;
-        continue;
-      }
-      assessed += 1;
-      const verdict = entry.report?.verdict ?? "unknown";
-      if (verdict === "allow") counts.clean += 1;
-      else if (verdict === "warn") counts.suspicious += 1;
-      else if (verdict === "block") counts.dangerous += 1;
-      else counts.unknown += 1;
-    }
-    const nowIso = new Date().toISOString();
-    const summary = {
-      assessedAt: last.finishedAt,
-      discoveredAssetCount: scanEntries.length,
-      assessedAssetCount: assessed,
-      failedAssetCount: failed,
-      cleanCount: counts.clean,
-      suspiciousCount: counts.suspicious,
-      dangerousCount: counts.dangerous,
-      unknownCount: counts.unknown,
-    };
-
-    const monitorPath = join(dataDir, "tasks", "monitoring.v1.json");
-    const existingRaw = await readFile(monitorPath, "utf8").catch(() => null);
-    // The web store wraps values as { schemaVersion, data } (NodeAtomicJsonStore).
-    const existingDoc = existingRaw ? JSON.parse(existingRaw) : null;
-    const existing =
-      existingDoc &&
-      typeof existingDoc === "object" &&
-      "data" in existingDoc &&
-      existingDoc.data != null
-        ? (existingDoc.data as Record<string, unknown>)
-        : existingDoc && typeof existingDoc === "object"
-          ? (existingDoc as Record<string, unknown>)
-          : null;
-    const status: Record<string, unknown> = existing ?? {
-      module: "monitoring",
-      running: false,
-      pendingCount: 0,
-      collectors: [{ id: "security", state: "healthy", pending: false }],
-    };
-    status.security = summary;
-    status.heartbeatAt = nowIso;
-    const collectors = status.collectors as
-      | {
-          id: string;
-          state: string;
-          pending: boolean;
-          lastSucceededAt?: string;
-        }[]
-      | undefined;
-    if (Array.isArray(collectors)) {
-      const security = collectors.find(
-        (collector) => collector.id === "security",
-      );
-      if (security) {
-        security.state = "healthy";
-        security.pending = false;
-        security.lastSucceededAt = nowIso;
-      } else {
-        collectors.push({
-          id: "security",
-          state: "healthy",
-          pending: false,
-          lastSucceededAt: nowIso,
-        });
-      }
-    }
-    await mkdir(join(dataDir, "tasks"), { recursive: true });
-    const tmpPath = `${monitorPath}.tmp`;
-    const document =
-      existingDoc &&
-      typeof existingDoc === "object" &&
-      "schemaVersion" in existingDoc
-        ? { schemaVersion: 1, data: status }
-        : status;
-    await writeFile(tmpPath, JSON.stringify(document, null, 2), "utf8");
-    await rename(tmpPath, monitorPath);
-  } catch (error) {
-    console.warn("Failed to sync security monitoring summary", error);
-  }
-}
-
 async function runAutomaticSecurityScan(
   schedule?: SecurityScanSchedule,
 ): Promise<void> {
@@ -464,9 +337,6 @@ async function runAutomaticSecurityScan(
     // automatic pass. The next run retries through the same safe service.
     return;
   }
-  void waitForAutomaticScanSettled(scanner, state.scanId).then(() => {
-    void syncMonitoringSecuritySummary();
-  });
   if (schedule?.notify !== true) return;
   await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
 }
@@ -591,35 +461,34 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     desktopIpc.getPreferences,
-    (event): Record<string, unknown> => {
+    async (event): Promise<Record<string, unknown>> => {
       assertTrustedSender(event);
-      return readPrefs(prefsPath());
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      return desktopStateBroker.preferences();
     },
   );
 
   ipcMain.handle(
     desktopIpc.setPreference,
-    (event, key: unknown, value: unknown): void => {
+    async (event, key: unknown, value: unknown): Promise<void> => {
       assertTrustedSender(event);
       if (typeof key !== "string" || key.length === 0)
         throw new TypeError("Preference key required");
-      const current = readPrefs(prefsPath());
-      current[key] = value;
-      writePrefs(prefsPath(), current);
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      await desktopStateBroker.setPreference(key, value);
     },
   );
   ipcMain.handle(
     desktopIpc.resetPreferences,
     async (event): Promise<{ removedKeys: number }> => {
       assertTrustedSender(event);
-      const current = readPrefs(prefsPath());
-      const keys = Object.keys(current).filter(
-        (key) => key === "closeHintShown" || key.startsWith(STORAGE_KEY_PREFIX),
-      );
-      for (const key of keys) delete current[key];
-      writePrefs(prefsPath(), current);
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      const result = await desktopStateBroker.resetPreferences();
       await securityScanner?.clear();
-      return { removedKeys: keys.length };
+      return result;
     },
   );
 
@@ -628,19 +497,24 @@ function registerIpcHandlers(): void {
     return currentPreferences.locale;
   });
 
-  ipcMain.handle(desktopIpc.setLocale, (event, locale: unknown): void => {
-    assertTrustedSender(event);
-    // Legacy manual shortcut — pins the manual locale mode.
-    const next = normalizeDesktopLocale(locale);
-    if (next == null) {
-      // IPC 不接受任意 locale — only the four supported values.
-      throw new TypeError("Unsupported locale");
-    }
-    const prefs = readPrefs(prefsPath());
-    prefs[LOCALE_MODE_PREF_KEY] = "manual";
-    prefs[LOCALE_PREF_KEY] = next;
-    applyPreferences(prefs);
-  });
+  ipcMain.handle(
+    desktopIpc.setLocale,
+    async (event, locale: unknown): Promise<void> => {
+      assertTrustedSender(event);
+      // Legacy manual shortcut — pins the manual locale mode.
+      const next = normalizeDesktopLocale(locale);
+      if (next == null) {
+        // IPC 不接受任意 locale — only the four supported values.
+        throw new TypeError("Unsupported locale");
+      }
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      const prefs = await desktopStateBroker.preferences();
+      prefs[LOCALE_MODE_PREF_KEY] = "manual";
+      prefs[LOCALE_PREF_KEY] = next;
+      await applyPreferences(prefs);
+    },
+  );
 
   ipcMain.handle(
     desktopIpc.getLocalePreferences,
@@ -652,37 +526,41 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     desktopIpc.setLocaleMode,
-    (event, mode: unknown, locale: unknown): void => {
+    async (event, mode: unknown, locale: unknown): Promise<void> => {
       assertTrustedSender(event);
       if (mode !== "system" && mode !== "manual") {
         throw new TypeError("Unsupported preference mode");
       }
-      const prefs = readPrefs(prefsPath());
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      const prefs = await desktopStateBroker.preferences();
       prefs[LOCALE_MODE_PREF_KEY] = mode;
       if (mode === "manual") {
         const next = normalizeDesktopLocale(locale);
         if (next == null) throw new TypeError("Unsupported locale");
         prefs[LOCALE_PREF_KEY] = next;
       }
-      applyPreferences(prefs);
+      await applyPreferences(prefs);
     },
   );
 
   ipcMain.handle(
     desktopIpc.setCurrencyMode,
-    (event, mode: unknown, currency: unknown): void => {
+    async (event, mode: unknown, currency: unknown): Promise<void> => {
       assertTrustedSender(event);
       if (mode !== "system" && mode !== "manual") {
         throw new TypeError("Unsupported preference mode");
       }
-      const prefs = readPrefs(prefsPath());
+      if (!desktopStateBroker)
+        throw new Error("Desktop state broker unavailable");
+      const prefs = await desktopStateBroker.preferences();
       prefs[CURRENCY_MODE_PREF_KEY] = mode;
       if (mode === "manual") {
         const next = normalizeDesktopCurrency(currency);
         if (next == null) throw new TypeError("Unsupported currency");
         prefs[CURRENCY_PREF_KEY] = next;
       }
-      applyPreferences(prefs);
+      await applyPreferences(prefs);
     },
   );
 
@@ -709,12 +587,6 @@ function registerIpcHandlers(): void {
       assertTrustedSender(event);
       if (!securityScanner) throw new Error("Security scanner is unavailable");
       const state = await securityScanner.start(request);
-      // Keep the dashboard posture card in sync once the scan settles.
-      void waitForAutomaticScanSettled(securityScanner, state.scanId).then(
-        () => {
-          void syncMonitoringSecuritySummary();
-        },
-      );
       return state;
     },
   );
@@ -759,8 +631,11 @@ function registerIpcHandlers(): void {
  * Persist preference changes, re-resolve, rebuild the tray when the locale
  * changed and broadcast the new resolution to the renderer.
  */
-function applyPreferences(prefs: Record<string, unknown>): void {
-  writePrefs(prefsPath(), prefs);
+async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
+  if (!desktopStateBroker) throw new Error("Desktop state broker unavailable");
+  for (const [key, value] of Object.entries(prefs)) {
+    await desktopStateBroker.setPreference(key, value);
+  }
   const resolved = resolveDesktopPreferences(prefs, app.getLocale());
   const localeChanged = resolved.locale !== currentPreferences.locale;
   currentPreferences = resolved;
@@ -857,14 +732,14 @@ async function createMainWindow(): Promise<void> {
     }
     event.preventDefault();
 
-    if (!hasCloseHintBeenShown()) {
+    if (!(await hasCloseHintBeenShown())) {
       const closeHint =
         electronMessages[currentPreferences.locale].dialog.closeHint;
       await dialog.showMessageBox(mainWindow!, {
         message: closeHint.message,
         buttons: [closeHint.ok],
       });
-      markCloseHintShown();
+      await markCloseHintShown();
     }
 
     mainWindow?.hide();
@@ -948,31 +823,6 @@ async function prewarmLocalData(origin: string): Promise<void> {
   }
 }
 
-async function checkDataCompatibility(): Promise<{
-  compatible: boolean;
-  oldVersion?: string;
-}> {
-  const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
-  const schemaVersionPath = join(homeDir, APP_DATA_DIR, "schema_version");
-
-  try {
-    const content = await readFile(schemaVersionPath, "utf8");
-    const existing = content.trim();
-    if (existing === CURRENT_SCHEMA_VERSION) {
-      return { compatible: true };
-    }
-    return { compatible: false, oldVersion: existing };
-  } catch {
-    // File doesn't exist — write the current version and proceed
-    try {
-      await writeFile(schemaVersionPath, CURRENT_SCHEMA_VERSION, "utf8");
-    } catch {
-      // Directory might not exist; start-up will handle this naturally
-    }
-    return { compatible: true };
-  }
-}
-
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -1026,15 +876,14 @@ if (!hasSingleInstanceLock) {
     // Finder/login items with a reduced environment. A test-lab override, when
     // supplied, intentionally wins.
     process.env[ENV.USAGE_HOME] ??= app.getPath("home");
-
-    const prefs = readPrefs(prefsPath());
-    currentPreferences = resolveDesktopPreferences(prefs, app.getLocale());
+    process.env[ENV.DESKTOP_BROKER_TOKEN] ??= randomUUID();
+    desktopStateBroker = new DesktopStateBroker({
+      origin: () => allowedOrigin,
+      capabilityToken: () => localWebServer?.capabilityToken,
+    });
+    currentPreferences = resolveDesktopPreferences({}, app.getLocale());
     securityScanner = new SecurityScannerService({
       homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
-      dataDirectory: join(
-        process.env[ENV.USAGE_HOME] || app.getPath("home"),
-        APP_DATA_DIR,
-      ),
       locale: () => currentPreferences.locale,
       env: process.env,
       secretStorage: {
@@ -1043,47 +892,13 @@ if (!hasSingleInstanceLock) {
         decrypt: (value) =>
           safeStorage.decryptString(Buffer.from(value, "base64")),
       },
+      persistence: desktopStateBroker,
     });
-
-    const compat = await checkDataCompatibility();
-    if (!compat.compatible) {
-      const dataIncompat =
-        electronMessages[currentPreferences.locale].dialog.dataIncompat;
-      const oldVer = compat.oldVersion ?? "?";
-      const { response } = await dialog.showMessageBox({
-        type: "warning",
-        title: dataIncompat.title,
-        message: interpolate(dataIncompat.message, {
-          oldVer: oldVer.replace(/^v/i, ""),
-          curVer: CURRENT_SCHEMA_VERSION,
-        }),
-        buttons: [dataIncompat.quit, dataIncompat.clearAndContinue],
-      });
-
-      if (response === 1) {
-        // User chose to clear data and continue
-        const homeDir = process.env[ENV.USAGE_HOME] || app.getPath("home");
-        try {
-          await unlink(join(homeDir, APP_DATA_DIR, "schema_version"));
-        } catch {
-          // File may not exist
-        }
-        try {
-          await writeFile(
-            join(homeDir, APP_DATA_DIR, "schema_version"),
-            CURRENT_SCHEMA_VERSION,
-            "utf8",
-          );
-        } catch {
-          // Directory may not exist; proceed anyway
-        }
-      } else {
-        app.quit();
-        return;
-      }
-    }
-
     allowedOrigin = await resolveApplicationOrigin();
+    currentPreferences = resolveDesktopPreferences(
+      await desktopStateBroker.preferences(),
+      app.getLocale(),
+    );
     registerIpcHandlers();
     rebuildTray();
     // 先创建主窗口（立即反馈启动），本地数据预热改为并行执行——

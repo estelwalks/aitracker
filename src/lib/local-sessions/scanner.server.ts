@@ -1,10 +1,12 @@
 import { createReadStream } from "node:fs";
 import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
 
 import { ENV } from "../app-config";
+import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
+import { normalizeProjectPath } from "../local-usage/project-path.ts";
 import {
   getDefaultRegistry,
   getSessionPlanFor,
@@ -1067,6 +1069,251 @@ async function scanGrokSessions(
   return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
 }
 
+// --------------------------------------------------------------------------
+// DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/
+// One session is a directory holding `session.jsonl` (compression "none") or
+// `session.jsonl.zstd` (concatenated zstd frames). The first record is the
+// session header (id/cwd/createdAt); `assistant/message` records carry the
+// per-step usage, `tool/call` records carry tool names (metadata only), and
+// `turn/start` marks each user turn. Physical decoding is shared with the
+// usage chain via `readDshSessionLog`; only metadata is extracted here.
+//
+// turns = `turn/start` records (a DSH "step" is one model round inside a
+// turn, so steps are intentionally not counted as turns). editTurns /
+// subagentCalls are best-effort from `tool/call` names, never tool arguments.
+
+function isDshEditTool(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (lower.startsWith("todo")) return false;
+  return (
+    lower.includes("edit") ||
+    lower.includes("write") ||
+    lower.includes("str_replace") ||
+    lower.includes("replace") ||
+    lower.includes("apply_patch")
+  );
+}
+
+function isDshSubagentTool(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower.includes("subagent") ||
+    lower.includes("agent") ||
+    lower.includes("task")
+  );
+}
+
+/* DSH session files live at ~/.dsh/sessions/<workspace>/<session-id>/, named session.jsonl or session.jsonl.zstd. */
+async function collectDshSessionFiles(
+  sessionsRoot: string,
+): Promise<FileCandidate[]> {
+  const files: FileCandidate[] = [];
+  if (!(await directoryAvailable(sessionsRoot))) return files;
+  const seen = new Set<string>();
+  let discoveredEntries = 0;
+  const pending = [sessionsRoot];
+  while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+    const directoryPath = pending.pop();
+    if (directoryPath == null) break;
+    let directory;
+    try {
+      directory = await opendir(directoryPath);
+    } catch {
+      continue;
+    }
+    for await (const entry of directory) {
+      discoveredEntries += 1;
+      if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
+      const entryPath = join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (
+        entry.name !== "session.jsonl" &&
+        entry.name !== "session.jsonl.zstd"
+      ) {
+        continue;
+      }
+      if (!seen.has(entryPath)) {
+        seen.add(entryPath);
+        files.push({ path: entryPath });
+        if (files.length >= MAX_FILES_PER_SOURCE) return files;
+      }
+    }
+  }
+  // A session dir holds one container; prefer zstd when both forms exist.
+  const byDirectory = new Map<string, string>();
+  for (const file of files) {
+    const directory = dirname(file.path);
+    const existing = byDirectory.get(directory);
+    if (
+      existing == null ||
+      (!existing.endsWith(".zstd") && file.path.endsWith(".zstd"))
+    ) {
+      byDirectory.set(directory, file.path);
+    }
+  }
+  return [...byDirectory.values()].map((path) => ({ path }));
+}
+
+async function scanDshSessions(dshDirectory: string): Promise<SessionRecord[]> {
+  const sessionsRoot = join(dshDirectory, "sessions");
+  const files = await collectDshSessionFiles(sessionsRoot);
+  const fragments = new Map<string, SessionFragment>();
+
+  for (const file of files) {
+    const fallbackSessionId = basename(dirname(file.path));
+    let content: string;
+    try {
+      const size = await readFileSize(file.path);
+      if (size < 0 || size > MAX_FILE_BYTES) continue;
+      content = await readDshSessionLog(file.path);
+    } catch {
+      continue;
+    }
+
+    let sessionId: string | undefined;
+    let title = "";
+    let model: string | null = null;
+    let projectRef: string | null = null;
+    const timestamps: RecordTimestamp[] = [];
+    const totals = emptyTokenCounts();
+    let turnStarts = 0;
+    let assistantMessages = 0;
+    const observedTurnKeys = new Set<string>();
+    const editTurnKeys = new Set<string>();
+    let unattributedEditTurns = 0;
+    let subagentCalls = 0;
+
+    for (const line of content.split("\n")) {
+      if (line.trim().length === 0) continue;
+      let record: JsonObject;
+      try {
+        record = asObject(JSON.parse(line)) ?? {};
+      } catch {
+        continue;
+      }
+      const recordType = stringValue(record.type);
+      const data = asObject(record.data);
+      const time = parseTimestampValue(record.time);
+      if (time != null) timestamps.push(time);
+
+      if (recordType === "session") {
+        const headerId = stringValue(record.id);
+        if (headerId != null) sessionId = headerId;
+        const cwd = stringValue(record.cwd);
+        if (cwd != null) projectRef = cwd;
+        const createdAt = parseTimestampValue(record.createdAt);
+        if (createdAt != null) timestamps.push(createdAt);
+        continue;
+      }
+      if (recordType === "session/title") {
+        const sessionTitle = stringValue(data?.title);
+        if (sessionTitle != null && title === "") title = sessionTitle;
+        continue;
+      }
+      if (recordType === "request/context") {
+        const contextModel = stringValue(data?.model);
+        if (contextModel != null) model = contextModel;
+        continue;
+      }
+      if (recordType === "request/header") {
+        const headerModel = stringValue(
+          asObject(asObject(data?.header)?.config)?.model,
+        );
+        if (headerModel != null) model = headerModel;
+        continue;
+      }
+      if (recordType === "turn/start") {
+        turnStarts += 1;
+        continue;
+      }
+      if (recordType === "assistant/message") {
+        assistantMessages += 1;
+        const turn = data?.turn;
+        if (turn !== undefined && turn !== null) {
+          observedTurnKeys.add(String(turn));
+        }
+        const usage = asObject(data?.usage);
+        if (usage != null) {
+          const inputTokens = tokenValue(
+            usage.inputTokens ?? usage.uncachedInputTokens,
+          );
+          const cachedInputTokens = tokenValue(
+            usage.cacheReadTokens ?? usage.cachedInputTokens,
+          );
+          const cacheCreationInputTokens = tokenValue(
+            usage.cacheWriteTokens ??
+              usage.cacheCreationInputTokens ??
+              usage.cache_creation_input_tokens,
+          );
+          const outputTokens = tokenValue(usage.outputTokens);
+          const reasoningOutputTokens = tokenValue(
+            usage.reasoningTokens ?? usage.reasoningOutputTokens,
+          );
+          const totalTokens =
+            inputTokens +
+            cachedInputTokens +
+            cacheCreationInputTokens +
+            outputTokens +
+            reasoningOutputTokens;
+          if (totalTokens > 0) {
+            totals.inputTokens += inputTokens;
+            totals.cachedInputTokens += cachedInputTokens;
+            totals.cacheCreationInputTokens += cacheCreationInputTokens;
+            totals.outputTokens += outputTokens;
+            totals.reasoningOutputTokens += reasoningOutputTokens;
+            totals.totalTokens += totalTokens;
+          }
+        }
+        continue;
+      }
+      if (recordType === "tool/call") {
+        const name = stringValue(data?.name) ?? "";
+        if (name === "") continue;
+        if (isDshEditTool(name)) {
+          const turn = data?.turn;
+          if (turn === undefined || turn === null) {
+            unattributedEditTurns += 1;
+          } else {
+            editTurnKeys.add(String(turn));
+          }
+        }
+        if (isDshSubagentTool(name)) {
+          subagentCalls += 1;
+        }
+        continue;
+      }
+    }
+
+    const resolvedId = sessionId ?? fallbackSessionId;
+    if (resolvedId === "") continue;
+
+    const fragment =
+      fragments.get(resolvedId) ?? createEmptyFragment("dsh", resolvedId);
+    if (fragment.title === "" && title !== "") fragment.title = title;
+    if (model != null) fragment.model = model;
+    if (fragment.projectRef == null && projectRef != null) {
+      fragment.projectRef = projectRef;
+    }
+    fragment.timestamps.push(...timestamps);
+    addTokenCounts(fragment.totals, totals);
+    fragment.turns +=
+      turnStarts > 0
+        ? turnStarts
+        : observedTurnKeys.size > 0
+          ? observedTurnKeys.size
+          : assistantMessages;
+    fragment.editTurns += editTurnKeys.size + unattributedEditTurns;
+    fragment.subagentCalls += subagentCalls;
+    fragments.set(resolvedId, fragment);
+  }
+
+  return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
+}
+
 function fragmentToRecord(fragment: SessionFragment): SessionRecord {
   const sortedTimestamps = fragment.timestamps
     .map((entry) => entry.ms)
@@ -1177,6 +1424,11 @@ registerSessionReader({
   scan: scanGrokSessions,
   defaultRoots: [".grok"],
 });
+registerSessionReader({
+  key: "dsh-session-v1",
+  scan: scanDshSessions,
+  defaultRoots: [".dsh"],
+});
 
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,
@@ -1234,9 +1486,16 @@ export async function scanLocalSessions(
     }),
   );
 
-  const sessions = dedupeAndSort(perTool.flat()).sort((left, right) =>
-    right.startedAt.localeCompare(left.startedAt),
-  );
+  const sessions = dedupeAndSort(perTool.flat())
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
+    // Normalize each record's projectRef the same way the usage scanner
+    // normalizes `event.project` (HOME-relative paths become ~/…), so the
+    // dashboard classification index and project aggregation join sessions to
+    // usage events under one key instead of a raw cwd that misses the index.
+    .map((session) => ({
+      ...session,
+      projectRef: normalizeProjectPath(session.projectRef, homeDirectory),
+    }));
 
   return {
     generatedAt: now.toISOString(),

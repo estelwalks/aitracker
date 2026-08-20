@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 
 import {
   getDefaultRegistry,
@@ -22,6 +22,10 @@ export interface InstallationProbeFileSystem {
 }
 
 export type ProbeOutcome = "present" | "missing" | "inaccessible";
+
+function joinHomeRoot(home: string, root: string): string {
+  return home.startsWith("/") ? posix.join(home, root) : join(home, root);
+}
 
 /** Internal error with a stable code; its message never contains a path. */
 export class AgentInstallationRepositoryError extends Error {
@@ -152,7 +156,10 @@ export function createAgentInstallationRepository(
         if (status === "supported" && plan) {
           for (const root of plan.paths) {
             throwIfAborted(input.signal);
-            const next = await fileSystem.probe(join(home, root), input.signal);
+            const next = await fileSystem.probe(
+              joinHomeRoot(home, root),
+              input.signal,
+            );
             if (next === "present" || next === "inaccessible") {
               outcome = next;
               if (next === "present") break;

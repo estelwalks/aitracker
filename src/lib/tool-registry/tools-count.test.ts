@@ -99,7 +99,12 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
     "aipy",
     "cline",
   ]);
-  const BASELINE_SESSIONS_RESUME = new Set(["claude-code", "codex", "grok"]);
+  const BASELINE_SESSIONS_RESUME = new Set([
+    "claude-code",
+    "codex",
+    "grok",
+    "dsh",
+  ]);
   for (const def of registry.definitions) {
     const isSkill = BASELINE_SKILL_IDS.includes(def.id);
     assert.equal(
@@ -116,8 +121,8 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         ? "adapter"
         : "unsupported";
     assert.equal(def.capabilities.usage.mode, expectedUsage);
-    // agents/security unsupported for every tool; sessions resume for the 3
-    // resume-capable tools (claude-code/codex/grok).
+    // agents/security unsupported for every tool; sessions resume for the 4
+    // resume-capable tools (claude-code/codex/grok/dsh).
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(
       def.capabilities.sessions.mode,

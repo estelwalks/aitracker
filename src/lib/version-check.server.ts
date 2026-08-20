@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { APP_ID, APP_VERSION, ENV } from "./app-config";
 
 /**
- * FR-033 — silent new-version check on startup.
+ * FR-033 — best-effort new-version check requested by the Settings UI.
  *
  * Compares the running app version against the latest GitHub release. The
  * check is best-effort: any network failure or >5s timeout is swallowed and

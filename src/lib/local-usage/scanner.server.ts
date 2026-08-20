@@ -1,20 +1,12 @@
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
-import {
-  mkdir,
-  opendir,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
+import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
 
-import { APP_DATA_DIR, ENV } from "../app-config";
+import { ENV } from "../app-config";
 import {
   getDefaultRegistry,
   getScannerPolicy,
@@ -77,25 +69,13 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // events gain the new privacy-safe output aggregate instead of retaining a
 // stale "unobserved" capability.
 const PERSISTENT_CACHE_VERSION = 14;
-const PERSISTENT_CACHE_FILE_NAME =
-  SCANNER_POLICY?.cacheFileName ?? "local-usage-index-v10.json";
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
  * invalidates the cache so stale parse results are never served.
  */
 const REGISTRY_FINGERPRINT = computeToolRegistryVersion(getDefaultRegistry());
-const LEGACY_PERSISTENT_CACHE_FILE_NAMES = [
-  "local-usage-index-v1.json",
-  "local-usage-index-v2.json",
-  "local-usage-index-v3.json",
-  "local-usage-index-v4.json",
-  "local-usage-index-v5.json",
-  "local-usage-index-v6.json",
-  "local-usage-index-v7.json",
-  "local-usage-index-v8.json",
-  "local-usage-index-v9.json",
-];
+const processUsageIndexes = new Map<string, PersistentUsageIndex>();
 
 interface JsonObject {
   [key: string]: unknown;
@@ -496,64 +476,15 @@ function isCachedDiagnostic(value: unknown): value is LocalUsageDiagnostic {
   );
 }
 
-async function loadPersistentIndex(
-  cacheFilePath: string,
-  signal?: AbortSignal,
-): Promise<PersistentUsageIndex | undefined> {
-  try {
-    signal?.throwIfAborted();
-    const raw = JSON.parse(await readFile(cacheFilePath, "utf8")) as unknown;
-    signal?.throwIfAborted();
-    const index = asObject(raw);
-    if (
-      index?.version !== PERSISTENT_CACHE_VERSION ||
-      !Array.isArray(index.files) ||
-      index.registryFingerprint !== REGISTRY_FINGERPRINT
-    ) {
-      return undefined;
-    }
-
-    const files: PersistentFileEntry[] = [];
-    for (const value of index.files) {
-      const entry = persistentFileEntry(value);
-      if (entry == null) {
-        return undefined;
-      }
-      files.push(entry);
-    }
-    return {
-      version: PERSISTENT_CACHE_VERSION,
-      registryFingerprint: REGISTRY_FINGERPRINT,
-      files,
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-async function writePersistentIndex(
-  cacheDirectory: string,
-  cacheFilePath: string,
+function writeProcessIndex(
+  cacheKey: string,
   files: PersistentFileEntry[],
-): Promise<void> {
-  await mkdir(cacheDirectory, { recursive: true, mode: 0o700 });
-  const temporaryPath = join(
-    cacheDirectory,
-    `.${PERSISTENT_CACHE_FILE_NAME}.${process.pid}.${Date.now()}.tmp`,
-  );
-  const payload = JSON.stringify({
+): void {
+  processUsageIndexes.set(cacheKey, {
     version: PERSISTENT_CACHE_VERSION,
     registryFingerprint: REGISTRY_FINGERPRINT,
     files,
-  } satisfies PersistentUsageIndex);
-
-  try {
-    await writeFile(temporaryPath, payload, { encoding: "utf8", mode: 0o600 });
-    await rename(temporaryPath, cacheFilePath);
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined);
-    throw error;
-  }
+  });
 }
 
 function fileSignatureMatches(
@@ -2626,15 +2557,12 @@ export async function scanLocalUsage(
     join(root, "archived_sessions"),
   ]);
   const cutoffTime = nowTime - lookbackDays * DAY_IN_MS;
-  const cacheDirectory =
-    options.cacheDirectory ?? join(homeDirectory, APP_DATA_DIR, "cache");
-  const cacheFilePath = join(cacheDirectory, PERSISTENT_CACHE_FILE_NAME);
-  const legacyCacheFilePaths = LEGACY_PERSISTENT_CACHE_FILE_NAMES.map(
-    (fileName) => join(cacheDirectory, fileName),
-  );
+  // This is a rebuildable performance index only. It is deliberately scoped
+  // to this process and never persisted as application-owned files.
+  const cacheKey = options.cacheDirectory ?? homeDirectory;
   const persistentIndex = options.disablePersistentCache
     ? undefined
-    : await loadPersistentIndex(cacheFilePath, options.signal);
+    : processUsageIndexes.get(cacheKey);
   const cachedFiles = new Map(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );
@@ -2768,19 +2696,7 @@ export async function scanLocalUsage(
       genericResults.some((result) => result.summary.filesParsed > 0) ||
       persistentIndex.files.length !== currentCacheEntries.length);
   if (shouldWritePersistentIndex) {
-    await writePersistentIndex(
-      cacheDirectory,
-      cacheFilePath,
-      currentCacheEntries,
-    )
-      .then(() =>
-        Promise.all(
-          legacyCacheFilePaths.map((path) =>
-            unlink(path).catch(() => undefined),
-          ),
-        ),
-      )
-      .catch(() => undefined);
+    writeProcessIndex(cacheKey, currentCacheEntries);
   }
 
   const nativeEvents = [

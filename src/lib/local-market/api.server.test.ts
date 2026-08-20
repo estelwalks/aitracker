@@ -1,11 +1,42 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { after, before, test } from "node:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+import { ENV } from "../app-config";
+import { resetCompositionRootForTests } from "../../app/composition.server.ts";
 import {
   countInstalledMarketSkills,
   fetchMarketSkills,
   type MarketInstalledSkillShape,
 } from "./api.server.ts";
+
+/**
+ * The market query cache is SQLite-backed through the composition root. Point
+ * the composition root at a fresh temp data root for this file so the tests
+ * never touch the real `~/.trusttools` database (which a running dev/Electron
+ * process may hold open, and whose migration ledger can carry an older
+ * checksum than the code under test).
+ */
+let previousHome: string | undefined;
+let tempDir: string | undefined;
+
+before(async () => {
+  tempDir = await mkdtemp(join(tmpdir(), "tt-market-"));
+  previousHome = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = tempDir;
+  resetCompositionRootForTests();
+});
+
+after(async () => {
+  resetCompositionRootForTests();
+  if (previousHome === undefined) delete process.env[ENV.USAGE_HOME];
+  else process.env[ENV.USAGE_HOME] = previousHome;
+  if (tempDir !== undefined) {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 /** Deterministic snapshot used to verify installedCount without touching disk. */
 const emptyLocalSkills: MarketInstalledSkillShape[] = [];
@@ -31,6 +62,7 @@ const marketLocalSkills: MarketInstalledSkillShape[] = [
 /** Market fetch options that pin installedCount so tests never scan the disk. */
 const noScan = (overrides: { installedCount?: number } = {}) => ({
   installedCount: overrides.installedCount ?? 0,
+  skipFreshCache: true,
 });
 
 const validResponse = {
@@ -123,6 +155,7 @@ test("fetchMarketSkills reports the injected local market install count", async 
     { page: 1, limit: 20, search: "", sort: "downloads" },
     {
       installedCount: 3,
+      skipFreshCache: true,
       fetcher: async () =>
         new Response(JSON.stringify(validResponse), {
           status: 200,
@@ -139,6 +172,7 @@ test("fetchMarketSkills counts installed market skills from a real local snapsho
     { page: 1, limit: 20, search: "", sort: "downloads" },
     {
       localSnapshot: { skills: marketLocalSkills },
+      skipFreshCache: true,
       fetcher: async () =>
         new Response(JSON.stringify(validResponse), {
           status: 200,
@@ -227,7 +261,13 @@ test("fetchMarketSkills falls back to the query cache when network fails", async
   );
 
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "测试", sort: "downloads" },
+    {
+      page: 1,
+      limit: 20,
+      search: "测试",
+      sort: "downloads",
+      forceRefresh: true,
+    },
     {
       fetcher: async () => {
         throw new Error("offline");
@@ -237,4 +277,93 @@ test("fetchMarketSkills falls back to the query cache when network fails", async
 
   assert.equal(result.source, "cache");
   assert.match(result.warning ?? "", /网络不可用/);
+});
+
+test("fresh query cache avoids both list and size network requests", async () => {
+  const query = {
+    page: 1,
+    limit: 20,
+    search: `ttl-fresh-${process.pid}`,
+    sort: "downloads" as const,
+  };
+  const now = Date.parse("2026-08-19T00:00:00.000Z");
+  let requests = 0;
+  const fetcher: typeof fetch = async () => {
+    requests += 1;
+    return new Response(JSON.stringify(validResponse), { status: 200 });
+  };
+  await fetchMarketSkills(query, {
+    ...noScan(),
+    fetcher,
+    now: () => new Date(now),
+  });
+  requests = 0;
+
+  const cached = await fetchMarketSkills(query, {
+    ...noScan(),
+    skipFreshCache: false,
+    fetcher,
+    now: () => new Date(now + 29 * 60_000),
+  });
+  assert.equal(requests, 0);
+  assert.equal(cached.source, "cache");
+  assert.equal(cached.warning, null);
+});
+
+test("stale query cache refreshes from the network", async () => {
+  const query = {
+    page: 1,
+    limit: 20,
+    search: `ttl-stale-${process.pid}`,
+    sort: "downloads" as const,
+  };
+  const now = Date.parse("2026-08-19T00:00:00.000Z");
+  await fetchMarketSkills(query, {
+    ...noScan(),
+    fetcher: async () =>
+      new Response(JSON.stringify(validResponse), { status: 200 }),
+    now: () => new Date(now),
+  });
+  let posts = 0;
+  const refreshed = await fetchMarketSkills(query, {
+    ...noScan(),
+    skipFreshCache: false,
+    fetcher: async (_input, init) => {
+      if (init?.method === "POST") posts += 1;
+      return new Response(JSON.stringify(validResponse), { status: 200 });
+    },
+    now: () => new Date(now + 31 * 60_000),
+  });
+  assert.equal(posts, 1);
+  assert.equal(refreshed.source, "network");
+});
+
+test("forceRefresh bypasses a fresh query cache", async () => {
+  const base = {
+    page: 1,
+    limit: 20,
+    search: `ttl-force-${process.pid}`,
+    sort: "downloads" as const,
+  };
+  const now = new Date("2026-08-19T00:00:00.000Z");
+  await fetchMarketSkills(base, {
+    ...noScan(),
+    fetcher: async () =>
+      new Response(JSON.stringify(validResponse), { status: 200 }),
+    now: () => now,
+  });
+  let posts = 0;
+  await fetchMarketSkills(
+    { ...base, forceRefresh: true },
+    {
+      ...noScan(),
+      skipFreshCache: false,
+      fetcher: async (_input, init) => {
+        if (init?.method === "POST") posts += 1;
+        return new Response(JSON.stringify(validResponse), { status: 200 });
+      },
+      now: () => now,
+    },
+  );
+  assert.equal(posts, 1);
 });

@@ -6,12 +6,10 @@
  * source-log contents, or any browser supplied text. This module owns the
  * provider boundary and returns a browser-safe projection only.
  *
- * Provider configuration comes from the active model profile (S-500) managed
- * by `ai-orchestration/model-profile.server.ts` (stored at
- * `~/.trusttools/tasks/model-profiles.v1.json`), supporting both
- * OpenAI-compatible and Anthropic protocols. The profile — including its API
- * key, which never crosses the renderer boundary — is resolved server-side on
- * every refresh.
+ * Provider configuration comes from the active SQLite model profile (S-500),
+ * supporting both OpenAI-compatible and Anthropic protocols. The profile —
+ * including its API key, which never crosses the renderer boundary — is
+ * resolved through the composition root on every refresh.
  */
 import { randomUUID } from "node:crypto";
 
@@ -304,9 +302,9 @@ function parseInsightOutput(value: string): DashboardAIInsight | null {
  */
 async function resolveActiveProfileConfig(): Promise<DashboardAIInsightRuntimeConfig | null> {
   try {
-    const { getModelProfileRepository } =
-      await import("../ai-orchestration/model-profile.server.ts");
-    const repository = getModelProfileRepository();
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const repository = (await getCompositionRoot()).modelProfiles;
     const active = await repository.getActiveView();
     if (!active) return null;
     const profile = await repository.getProfileForExecution(active.id);

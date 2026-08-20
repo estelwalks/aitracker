@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
+import { usePageInsight } from "../../insights/page/presentation/use-page-insight";
 import { setWidgetPref, useWidgetPrefs, type WidgetTab } from "./widget-prefs";
 import { WidgetThemeScope } from "./widget-theme";
 import { WidgetConfigPanel } from "./WidgetConfigPanel";
@@ -415,10 +416,14 @@ export function JarvisWidget({
   className?: string;
   onOpenSettings?: () => void;
 }) {
-  const { t, format } = useI18n();
+  const { t, format, locale } = useI18n();
   const { prefs } = useWidgetPrefs();
   const { today, total, security, hasData, loading, generatedAt, refresh } =
     useWidgetData();
+  const { lines: widgetInsightLines } = usePageInsight({
+    surfaceId: "widget",
+    locale,
+  });
   const [tab, setTab] = useState<WidgetTab>(
     prefs.defaultTab === "last" ? prefs.lastTab : prefs.defaultTab,
   );
@@ -434,7 +439,10 @@ export function JarvisWidget({
     setWidgetPref("lastTab", next);
   };
 
-  const lines = useJarvisLines(tab);
+  const localLines = useJarvisLines(tab);
+  const lines = widgetInsightLines.length
+    ? widgetInsightLines.map((line) => line.text)
+    : localLines;
   const danger = security.summary?.dangerousCount ?? 0;
   const stamp = loading
     ? t("common.loading")

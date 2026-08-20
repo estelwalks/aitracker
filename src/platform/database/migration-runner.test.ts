@@ -29,12 +29,11 @@ interface TestScope {
 
 const APP_VERSION = "3.0.0-test";
 
-/** The 11 first-wave tables (architecture §5.0), sorted by name. */
+/** The new-project first-wave tables, sorted by name. */
 const FIRST_WAVE_TABLES = [
   "ai_daily_usage",
   "ai_executions",
   "app_preferences",
-  "data_migration_runs",
   "insight_enhancement_cache",
   "insight_enhancement_lines",
   "insight_preferences",
@@ -48,7 +47,6 @@ const EXPECTED_INDEXES = [
   "idx_ai_executions_capability_started",
   "idx_ai_executions_profile_started",
   "idx_ai_executions_status_started",
-  "idx_data_migration_runs_idempotency",
   "idx_insight_enhancement_cache_identity",
   "idx_insight_enhancement_cache_surface_expires",
   "idx_model_profiles_single_active",
@@ -56,21 +54,21 @@ const EXPECTED_INDEXES = [
 
 /** A harmless extra migration used to prove "only pending versions run". */
 const PROBE_MIGRATION: MigrationDefinition = {
-  version: 2,
-  name: "0002_test_probe",
+  version: LATEST_MIGRATION_VERSION + 1,
+  name: "test_probe_next",
   sql: "CREATE TABLE t_mig_probe (x INTEGER) STRICT;\n",
 };
 
 /** Fails halfway so the transaction rollback can be observed. */
 const BROKEN_MIGRATION: MigrationDefinition = {
-  version: 2,
-  name: "0002_test_broken",
+  version: LATEST_MIGRATION_VERSION + 1,
+  name: "test_broken_next",
   sql: "CREATE TABLE t_broken_probe (x INTEGER) STRICT;\nTHIS IS NOT SQL;\n",
 };
 
 const THIRD_MIGRATION: MigrationDefinition = {
-  version: 3,
-  name: "0003_test_third",
+  version: LATEST_MIGRATION_VERSION + 2,
+  name: "test_probe_after_next",
   sql: "CREATE TABLE t_mig_third (x INTEGER) STRICT;\n",
 };
 
@@ -164,7 +162,7 @@ test("migrates an empty database from 0 to latest and records the ledger row", (
   });
 
   assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
-  assert.equal(result.applied.length, 1);
+  assert.equal(result.applied.length, MIGRATIONS.length);
   const record = result.applied[0];
   assert.equal(record.version, 1);
   assert.equal(record.name, "0001_platform");
@@ -174,14 +172,18 @@ test("migrates an empty database from 0 to latest and records the ledger row", (
   assert.equal(record.durationMs, 5);
 
   const rows = ledgerRows(host);
-  assert.equal(rows.length, 1, "schema_migrations must hold exactly one row");
+  assert.equal(
+    rows.length,
+    MIGRATIONS.length,
+    "schema_migrations must hold every bundled migration row",
+  );
   assert.equal(integer(rows[0].version), 1);
   assert.equal(text(rows[0].name), "0001_platform");
   assert.equal(text(rows[0].checksum), record.checksum);
   assert.equal(text(rows[0].app_version), APP_VERSION);
   assert.equal(integer(rows[0].applied_at_ms), record.appliedAtMs);
   assert.equal(integer(rows[0].duration_ms), 5);
-  assert.equal(readSchemaVersion(host), 1);
+  assert.equal(readSchemaVersion(host), LATEST_MIGRATION_VERSION);
 });
 
 test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
@@ -204,9 +206,13 @@ test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
   );
 });
 
-test("creates exactly the 11 first-wave STRICT tables and their indexes", (t) => {
+test("creates exactly the 10 new-project STRICT tables and their indexes", (t) => {
   const host = openHost(t);
-  runMigrations({ database: host, appVersion: APP_VERSION });
+  runMigrations({
+    database: host,
+    appVersion: APP_VERSION,
+    definitions: [MIGRATIONS[0]],
+  });
 
   assert.deepEqual(
     objectNames(host, "table"),
@@ -261,7 +267,7 @@ test("re-running the migrator applies nothing and leaves the ledger untouched", 
   assert.deepEqual(second.applied, []);
   assert.equal(second.currentVersion, first.currentVersion);
   const after = ledgerRows(host);
-  assert.equal(after.length, 1);
+  assert.equal(after.length, MIGRATIONS.length);
   assert.equal(
     integer(after[0].applied_at_ms),
     integer(before[0].applied_at_ms),
@@ -292,6 +298,26 @@ test("rejects a renamed applied migration with migration-checksum", (t) => {
   assert.throws(
     () => runMigrations({ database: host, appVersion: APP_VERSION }),
     isDatabaseError("migration-checksum"),
+  );
+});
+
+test("rejects user_version that disagrees with the migration ledger", (t) => {
+  const host = openHost(t);
+  runMigrations({ database: host, appVersion: APP_VERSION });
+  host.exec("PRAGMA user_version = 99");
+
+  assert.throws(
+    () => runMigrations({ database: host, appVersion: APP_VERSION }),
+    isDatabaseError("migration-reverted"),
+  );
+});
+
+test("rejects an empty ledger paired with a TrustTools application stamp", (t) => {
+  const host = openHost(t);
+  host.exec(`PRAGMA application_id = ${TRUSTTOOLS_APPLICATION_ID}`);
+  assert.throws(
+    () => runMigrations({ database: host, appVersion: APP_VERSION }),
+    isDatabaseError("migration-reverted"),
   );
 });
 
@@ -350,10 +376,14 @@ test("applies only the pending versions after an interrupted-then-resumed run", 
     clock: fakeClock(1_800_000_000_000),
   });
 
-  assert.equal(result.applied.length, 1, "v1 must not be applied twice");
-  assert.equal(result.applied[0].version, 2);
-  assert.equal(result.currentVersion, 2);
-  assert.equal(ledgerRows(host).length, 2);
+  assert.equal(
+    result.applied.length,
+    1,
+    "bundled migrations must not run twice",
+  );
+  assert.equal(result.applied[0].version, PROBE_MIGRATION.version);
+  assert.equal(result.currentVersion, PROBE_MIGRATION.version);
+  assert.equal(ledgerRows(host).length, MIGRATIONS.length + 1);
   assert.ok(objectNames(host, "table").includes("t_mig_probe"));
 });
 
@@ -372,8 +402,12 @@ test("rolls a failing migration back completely and allows a retry", (t) => {
   );
 
   const rows = ledgerRows(host);
-  assert.equal(rows.length, 1, "the failed version must not be recorded");
-  assert.equal(integer(rows[0].version), 1);
+  assert.equal(
+    rows.length,
+    MIGRATIONS.length,
+    "the failed version must not be recorded",
+  );
+  assert.equal(integer(rows.at(-1)?.version), LATEST_MIGRATION_VERSION);
   assert.ok(
     !objectNames(host, "table").includes("t_broken_probe"),
     "the partially executed statement must be rolled back",
@@ -385,8 +419,8 @@ test("rolls a failing migration back completely and allows a retry", (t) => {
     appVersion: APP_VERSION,
     definitions: [...MIGRATIONS, PROBE_MIGRATION],
   });
-  assert.equal(retry.currentVersion, 2);
-  assert.equal(ledgerRows(host).length, 2);
+  assert.equal(retry.currentVersion, PROBE_MIGRATION.version);
+  assert.equal(ledgerRows(host).length, MIGRATIONS.length + 1);
 });
 
 test("rejects malformed definition lists with invalid-argument", (t) => {
@@ -434,9 +468,9 @@ test("the inline SQL stays byte-identical to migrations/0001_platform.sql", () =
     migrationChecksum(fileText),
     migrationChecksum(PLATFORM_MIGRATION_0001_SQL),
   );
-  assert.equal(MIGRATIONS.length, 1);
+  assert.ok(MIGRATIONS.length >= 1);
   assert.equal(MIGRATIONS[0].sql, PLATFORM_MIGRATION_0001_SQL);
-  // 11 first-wave tables, and nothing else, are declared in that text.
+  // Ten new-project tables, and nothing else, are declared in that text.
   const created = [...inline.matchAll(/CREATE TABLE (\w+)/g)].map(
     (match) => match[1],
   );

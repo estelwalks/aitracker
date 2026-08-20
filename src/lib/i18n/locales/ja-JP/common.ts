@@ -7,6 +7,11 @@ export const common = {
   confirm: "確認",
   delete: "削除",
   retry: "再試行",
+  chunkLoadFailed: "コンテンツの読み込みに失敗しました",
+  pagination: {
+    previous: "前のページ",
+    next: "次のページ",
+  },
   backHome: "ホームへ戻る",
   refresh: "更新",
   refreshing: "更新中...",

@@ -7,6 +7,11 @@ export const common = {
   confirm: "확인",
   delete: "삭제",
   retry: "다시 시도",
+  chunkLoadFailed: "콘텐츠를 불러오지 못했습니다",
+  pagination: {
+    previous: "이전 페이지",
+    next: "다음 페이지",
+  },
   backHome: "홈으로 돌아가기",
   refresh: "새로고침",
   refreshing: "새로고침 중...",

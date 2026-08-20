@@ -3,8 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
+import { constants, zstdCompressSync } from "node:zlib";
 
 import { ENV } from "../app-config";
+import { normalizeProjectPath } from "../local-usage/project-path.ts";
 import { compileToolRegistry } from "../tool-registry/registry.ts";
 import {
   __resetSessionReaders,
@@ -915,5 +917,216 @@ test("P1-3: a newly registered session reader is scanned via the registry plan",
     } finally {
       __resetSessionReaders();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DeepSeek Harness (DSH) — ~/.dsh/sessions/<workspace>/<session-id>/session.jsonl[.zstd]
+// ---------------------------------------------------------------------------
+
+const DSH_SESSION_ID = "11111111-2222-3333-4444-555555555555";
+
+/** Privacy-safe DSH session records (content strings are never extracted). */
+function dshRecords(cwd: string): object[] {
+  return [
+    {
+      type: "session",
+      version: 0,
+      id: DSH_SESSION_ID,
+      createdAt: "2026-08-03T09:00:00.000Z",
+      cwd,
+      delegationDepth: 0,
+      agentPreset: "cordis",
+    },
+    {
+      type: "session/title",
+      seq: 1,
+      time: "2026-08-03T09:00:00.100Z",
+      data: { title: "Refactor scanner", source: "user" },
+    },
+    {
+      type: "request/context",
+      seq: 2,
+      time: "2026-08-03T09:00:00.200Z",
+      data: {
+        provider: "deepseek-official",
+        model: "deepseek-v4-flash",
+        contextWindow: 1000000,
+      },
+    },
+    {
+      type: "turn/start",
+      seq: 3,
+      time: "2026-08-03T09:00:00.300Z",
+      data: { turn: 1 },
+    },
+    {
+      type: "assistant/message",
+      seq: 4,
+      time: "2026-08-03T09:00:01.000Z",
+      data: {
+        turn: 1,
+        step: 1,
+        message: { role: "assistant", content: "SECRET MESSAGE" },
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          reasoningTokens: 5,
+        },
+      },
+    },
+    {
+      type: "tool/call",
+      seq: 5,
+      time: "2026-08-03T09:00:01.500Z",
+      data: {
+        turn: 1,
+        step: 1,
+        callId: "call-1",
+        name: "edit",
+        arguments: "SECRET ARGS",
+      },
+    },
+    {
+      type: "assistant/message",
+      seq: 6,
+      time: "2026-08-03T09:00:02.000Z",
+      data: {
+        turn: 1,
+        step: 2,
+        message: { role: "assistant", content: "SECRET MESSAGE" },
+        usage: { inputTokens: 40, outputTokens: 3, cacheReadTokens: 0 },
+      },
+    },
+    {
+      type: "tool/call",
+      seq: 7,
+      time: "2026-08-03T09:00:02.500Z",
+      data: {
+        turn: 1,
+        step: 2,
+        callId: "call-2",
+        name: "subagent",
+        arguments: "SECRET ARGS",
+      },
+    },
+  ];
+}
+
+function dshJsonl(cwd: string): string {
+  return `${dshRecords(cwd)
+    .map((record) => JSON.stringify(record))
+    .join("\n")}\n`;
+}
+
+test("DSH: parses session.jsonl (compression none) with turns/project/tools", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "trusttools_webapp");
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "trusttools_webapp",
+      DSH_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, "session.jsonl"), dshJsonl(cwd));
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+
+    assert.equal(session.source, "dsh");
+    assert.equal(session.sessionId, DSH_SESSION_ID);
+    assert.equal(session.title, "Refactor scanner");
+    assert.equal(session.model, "deepseek-v4-flash");
+    assert.equal(session.projectKey, "trusttools_webapp");
+    assert.equal(session.projectRef, "~/trusttools_webapp");
+    assert.equal(session.turns, 1);
+    assert.equal(session.editTurns, 1);
+    assert.equal(session.subagentCalls, 1);
+    assert.equal(session.totals.inputTokens, 140);
+    assert.equal(session.totals.cachedInputTokens, 50);
+    assert.equal(session.totals.outputTokens, 23);
+    assert.equal(session.totals.reasoningOutputTokens, 5);
+    assert.equal(session.totals.totalTokens, 218);
+    assert.equal(session.resumeSafe, true);
+    assert.equal(
+      session.resumeCommand,
+      `dsh --profile tui --resume ${DSH_SESSION_ID}`,
+    );
+    assert.equal(session.startedAt, "2026-08-03T09:00:00.000Z");
+    assertPrivacyClean(session);
+  });
+});
+
+test("DSH: decodes a zstd session log through the shared dsh-zstd reader", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "project-z");
+    const sessionDir = join(
+      home,
+      ".dsh",
+      "sessions",
+      "project-z",
+      DSH_SESSION_ID,
+    );
+    await mkdir(sessionDir, { recursive: true });
+    const frame = (text: string) =>
+      zstdCompressSync(Buffer.from(text, "utf8"), {
+        params: { [constants.ZSTD_c_checksumFlag]: 1 },
+      });
+    const [header, ...events] = dshRecords(cwd);
+    await writeFile(
+      join(sessionDir, "session.jsonl.zstd"),
+      Buffer.concat([
+        frame(`${JSON.stringify(header)}\n`),
+        frame(`${events.map((record) => JSON.stringify(record)).join("\n")}\n`),
+      ]),
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+    assert.equal(session.source, "dsh");
+    assert.equal(session.sessionId, DSH_SESSION_ID);
+    assert.equal(session.turns, 1);
+    assert.equal(session.totals.inputTokens, 140);
+    assert.equal(session.resumeSafe, true);
+    assertPrivacyClean(session);
+  });
+});
+
+test("session projectRef normalizes identically to usage event projects", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "acme");
+    // Use Claude Code's layout (simplest) to exercise the shared normalization
+    // applied by scanLocalSessions to every scanned session record.
+    const projectDir = join(home, ".claude", "projects", "-demo-acme");
+    await mkdir(projectDir, { recursive: true });
+    const sessionId = "claude-cccccccc-cccc-cccc-cccc-cccccccccccc";
+    await writeFile(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:00.000Z",
+          sessionId,
+          cwd,
+          type: "assistant",
+          message: {
+            role: "assistant",
+            model: "claude-sonnet-4",
+            usage: { input_tokens: 10, output_tokens: 5 },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+
+    // The scanner normalizes HOME-relative cwd exactly like the usage scanner
+    // normalizes event.project, so both collapse to the same project key.
+    assert.equal(session.projectRef, normalizeProjectPath(cwd, home));
+    assert.equal(session.projectRef, "~/acme");
+    assert.equal(session.projectKey, "acme");
   });
 });

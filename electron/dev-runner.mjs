@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 // Env-var names below mirror src/lib/app-config.ts ENV (plain JS cannot import
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
@@ -7,6 +8,7 @@ const port = process.env.TRUSTTOOLS_DEV_PORT ?? "5173";
 const origin = `http://${host}:${port}`;
 const command = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
+const desktopBrokerToken = randomUUID();
 let shuttingDown = false;
 
 function startProcess(argumentsList, environment = process.env) {
@@ -48,17 +50,10 @@ function shutdown(exitCode = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-const vite = startProcess([
-  "exec",
-  "--",
-  "vite",
-  "dev",
-  "--host",
-  host,
-  "--port",
-  port,
-  "--strictPort",
-]);
+const vite = startProcess(
+  ["exec", "--", "vite", "dev", "--host", host, "--port", port, "--strictPort"],
+  { ...process.env, TRUSTTOOLS_DESKTOP_BROKER_TOKEN: desktopBrokerToken },
+);
 
 vite.once("exit", (code) => shutdown(code ?? 1));
 
@@ -71,6 +66,7 @@ try {
   const electron = startProcess(["exec", "--", "electron", "."], {
     ...process.env,
     TRUSTTOOLS_DEV_URL: origin,
+    TRUSTTOOLS_DESKTOP_BROKER_TOKEN: desktopBrokerToken,
   });
   electron.once("exit", (code) => shutdown(code ?? 0));
 } catch (error) {
