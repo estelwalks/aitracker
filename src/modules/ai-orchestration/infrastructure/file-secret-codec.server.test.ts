@@ -37,6 +37,7 @@ test("key file is created under <dataRoot>/secure with 0600 mode", async (t) => 
   const info = statSync(keyPath);
   assert.ok(info.isFile());
   assert.equal(info.size, 32);
+  if (process.platform === "win32") return;
   // 0o600 regardless of umask.
   assert.equal(info.mode & 0o777, 0o600);
 });

@@ -20,10 +20,9 @@
  *
  * Run via `npm run check:i18n` or directly: node scripts/check-app-config-sync.mjs
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { execFileSync } from "node:child_process";
 
 // Both config modules are zero-import pure constants, so we compare their
 // actual runtime values (robust against template-literal derivation) rather
@@ -37,6 +36,26 @@ const electronConfig = await import(
 );
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+function listFiles(relativeRoots, predicate) {
+  const files = [];
+  const visit = (relativePath) => {
+    const absolutePath = join(root, relativePath);
+    for (const entry of readdirSync(absolutePath, { withFileTypes: true })) {
+      const child = join(relativePath, entry.name);
+      if (entry.isDirectory()) {
+        visit(child);
+      } else {
+        const normalizedChild = child.replaceAll("\\", "/");
+        if (entry.isFile() && predicate(normalizedChild)) {
+          files.push(normalizedChild);
+        }
+      }
+    }
+  };
+  for (const relativeRoot of relativeRoots) visit(relativeRoot);
+  return files;
+}
 
 function read(path) {
   return readFileSync(join(root, path), "utf8");
@@ -82,24 +101,10 @@ for (const [name, value] of Object.entries(electronEnv)) {
 
 // Cross-check env-var literals in plain-JS scripts that cannot import the config.
 const expectedEnvValues = new Set(Object.values(srcEnv));
-const scriptFiles = execFileSync(
-  "find",
-  [
-    "scripts",
-    "electron",
-    "-name",
-    "*.mjs",
-    "-o",
-    "-name",
-    "*.cjs",
-    "-o",
-    "-name",
-    "*.cts",
-  ],
-  { cwd: root, encoding: "utf8" },
-)
-  .split("\n")
-  .filter((f) => f && !f.includes("app-config"));
+const scriptFiles = listFiles(
+  ["scripts", "electron"],
+  (file) => /\.(mjs|cjs|cts)$/.test(file) && !file.includes("app-config"),
+);
 for (const file of scriptFiles) {
   const source = read(file);
   for (const match of source.matchAll(/\bTRUSTTOOLS_[A-Z0-9_]+/g)) {
@@ -120,15 +125,11 @@ const EXCLUDED_FILES = new Set([
   "electron/app-config.ts",
   "electron/dev-runner.mjs",
 ]);
-const codeFiles = execFileSync("find", ["src", "electron", "-type", "f"], {
-  cwd: root,
-  encoding: "utf8",
-})
-  .split("\n")
-  .filter(Boolean)
-  .filter(
-    (f) => /\.(ts|tsx|cts|mjs|css|cjs)$/.test(f) && !EXCLUDED_FILES.has(f),
-  );
+const codeFiles = listFiles(
+  ["src", "electron"],
+  (file) =>
+    /\.(ts|tsx|cts|mjs|css|cjs)$/.test(file) && !EXCLUDED_FILES.has(file),
+);
 for (const file of codeFiles) {
   const clean = stripComments(read(file));
   if (!BRAND_RE.test(clean)) continue;

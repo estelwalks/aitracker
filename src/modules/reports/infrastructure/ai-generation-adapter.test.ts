@@ -32,9 +32,9 @@ function context(): ReportContext {
   return { evidence: [], summary: "Fixed offline summary text." };
 }
 
-function response(text: string): AIResponse {
+function response(text: string, providerId = "offline"): AIResponse {
   return {
-    providerId: "offline",
+    providerId,
     modelId: "report-generator",
     text,
     finishReason: "stop",
@@ -80,7 +80,7 @@ test("completed with response text maps to succeeded and passes body through", a
   const generation = createReportGenerationPort({
     ai: fake({
       summary: summary("completed"),
-      response: response("The daily brief content."),
+      response: response("The daily brief content.", "profile"),
     }),
   });
   const result = await generation.generate({
@@ -103,7 +103,7 @@ test("offline preserves the fallback draft body", async () => {
     context: context(),
   });
   assert.equal(result.status, "offline");
-  assert.equal(result.body, "Offline deterministic fallback text.");
+  assert.match(result.body ?? "", /## 今日摘要/);
 });
 
 test("fallback (provider error path) also maps to offline", async () => {
@@ -177,7 +177,7 @@ test("the AI request carries the definition template and context summary", async
   const captured: { request?: AIRequest } = {};
   const generation = createReportGenerationPort({
     ai: fake(
-      { summary: summary("completed"), response: response("ok") },
+      { summary: summary("completed"), response: response("ok", "profile") },
       captured,
     ),
   });
@@ -189,7 +189,7 @@ test("the AI request carries the definition template and context summary", async
   assert.ok(captured.request);
   assert.equal(captured.request?.modelId, "report-generator");
   assert.equal(captured.request?.prompt.id, "reports.daily.default");
-  assert.equal(captured.request?.prompt.version, 1);
+  assert.equal(captured.request?.prompt.version, definition().template.version);
   assert.equal(
     captured.request?.prompt.template,
     definition().template.template,

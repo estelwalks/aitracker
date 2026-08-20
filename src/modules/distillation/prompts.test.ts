@@ -15,7 +15,10 @@ test("workflow prompt asks for a complete reusable workflow structure", () => {
   assert.match(prompt, /# 概述/);
   assert.match(prompt, /## 工作流步骤/);
   assert.match(prompt, /\{\{task_goal\}\}/);
-  assert.match(prompt, /异常处理必须覆盖 fallback、降级方案、重试条件、人工接管信号/);
+  assert.match(
+    prompt,
+    /异常处理必须覆盖 fallback、降级方案、重试条件、人工接管信号/,
+  );
 });
 
 test("custom user prompt is appended after the built-in template", () => {
