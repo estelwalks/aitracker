@@ -8,7 +8,7 @@
  * (singleflight), generate, validate (five layers), and persist. Every failure
  * path returns a stable status — nothing here throws to the caller.
  */
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../../../lib/crypto/sha256.ts";
 import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
 import type {
   AIExecutionSummary,
@@ -101,7 +101,7 @@ export interface InsightEnhancerOptions {
 }
 
 function sha256(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
+  return sha256Hex(text);
 }
 
 function canonicalize(value: unknown): unknown {

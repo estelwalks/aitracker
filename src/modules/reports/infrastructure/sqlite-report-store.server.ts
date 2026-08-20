@@ -181,6 +181,8 @@ export function createSqliteReportStore(
 
   const putDocument = (input: ReportDocument): number => {
     const document = ReportDocumentSchema.parse(input) as ReportDocument;
+    if (document.body === undefined)
+      throw new TypeError("SQLite report documents require an inline body");
     const body = safeReportText(document.body);
     for (const item of document.evidence) assertSafeRef(item.ref);
     for (const item of document.assets) assertSafeRef(item.assetId);

@@ -1,6 +1,5 @@
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 
 import { APP_DATA_DIR, APP_ID, ENV } from "../lib/app-config.ts";
 import { SystemClock } from "../platform/persistence/clock.ts";
@@ -44,7 +43,6 @@ import { createReportsApplication } from "../modules/reports/application/index.t
 import type { ReportsApplication } from "../modules/reports/index.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
-import { createMarkdownReportStore } from "../modules/reports/infrastructure/markdown-report-store.server.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
 import { createDistillationApplication } from "../modules/distillation/application/index.ts";
 import type { DistillationApplication } from "../modules/distillation/index.ts";
@@ -498,13 +496,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
 
   // Reports: assemble the application after aiExecutor so the generation
   // adapter can depend on it. The store lives next to the task runs under the
-  // Metadata is normalized in SQLite; editable bodies remain real Markdown
-  // files under `.trusttools/reports` for straightforward copy/migration.
+  // Report metadata and bodies are stored together in the normalized SQLite
+  // report tables; the composition root intentionally does not install the
+  // optional filesystem content adapter.
   const reports = createReportsApplication({
     store: databaseRuntime.features.reports,
-    content: createMarkdownReportStore({
-      rootDirectory: join(dataRoot, APP_DATA_DIR, "reports"),
-    }),
+    inlineContent: true,
     context: createReportContextPort({ snapshot: sessionSnapshot }),
     generation: createReportGenerationPort({
       ai: aiExecutor,

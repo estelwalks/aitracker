@@ -4,7 +4,7 @@ import { z } from "zod";
  * SQLite report row validation schemas.
  *
  * New records store metadata and a relative Markdown filename. The optional
- * body field exists only to read legacy reports.v1.json files and is removed
+ * body field exists only to read legacy inline report documents and is removed
  * when the application lazily migrates that record.
  */
 
