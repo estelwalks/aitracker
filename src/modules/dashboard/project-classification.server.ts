@@ -1,7 +1,11 @@
-import { access, readFile, readdir, stat } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 
+import {
+  findNearestGitRepositoryRoot,
+  isGitRepositoryRoot,
+} from "../../lib/git-repository.server.ts";
 import type { DashboardProjectKind } from "./contracts.ts";
 
 /**
@@ -92,46 +96,6 @@ async function hasMarker(
   }
 }
 
-/** A git worktree / submodule `.git` file carries a `gitdir: <path>` line. */
-const GITDIR_LINE_RE = /^gitdir:\s*(.+)\s*$/im;
-
-/**
- * True when `directory` is a valid git repository root: either a real `.git`
- * directory, or a worktree/submodule `.git` FILE whose `gitdir:` line points
- * at an existing git directory (relative paths resolve against `directory`,
- * mirroring `git rev-parse --git-dir`). A bare existence check would accept
- * any file named `.git` and any stale worktree pointer, misclassifying
- * non-projects as workspaces.
- */
-async function isGitRepository(
-  pathImpl: ProjectPathImpl,
-  directory: string,
-): Promise<boolean> {
-  const gitPath = pathImpl.join(directory, ".git");
-  let gitStat;
-  try {
-    gitStat = await stat(gitPath);
-  } catch {
-    return false;
-  }
-  if (gitStat.isDirectory()) return true;
-  if (!gitStat.isFile()) return false;
-  let content: string;
-  try {
-    content = await readFile(gitPath, "utf8");
-  } catch {
-    return false;
-  }
-  const match = GITDIR_LINE_RE.exec(content);
-  if (match == null) return false;
-  const gitDir = pathImpl.resolve(directory, match[1].trim());
-  try {
-    return (await stat(gitDir)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Bounded probe of the workspace markers inside a directory tree. Many real
  * work directories (for example a Codex cwd holding several sub-projects)
@@ -155,7 +119,7 @@ async function hasWorkspaceMarkerInSubtree(
     const { directory, depth } = pending.pop()!;
     visited += 1;
     if (
-      (await isGitRepository(pathImpl, directory)) ||
+      (await isGitRepositoryRoot(pathImpl, directory)) ||
       (
         await Promise.all(
           workspaceMarkers
@@ -206,11 +170,20 @@ export async function classifyDashboardProjectRef(
   if (!(await isDirectory(initial)))
     return { kind: "unknown", label: "unknown" };
 
+  // Repository identity wins over nested language/package markers. Sessions
+  // anywhere inside one checkout therefore aggregate under the same project.
+  const gitRoot = await findNearestGitRepositoryRoot(pathImpl, initial);
+  if (gitRoot != null) {
+    return {
+      kind: "workspace",
+      label: pathImpl.basename(gitRoot) || "workspace",
+    };
+  }
+
   const homePath = pathImpl.resolve(home);
   let directory = pathImpl.resolve(initial);
   while (true) {
     if (
-      (await isGitRepository(pathImpl, directory)) ||
       (
         await Promise.all(
           workspaceMarkers
@@ -221,8 +194,6 @@ export async function classifyDashboardProjectRef(
       (directory === pathImpl.resolve(initial) &&
         (await hasWorkspaceMarkerInSubtree(pathImpl, directory)))
     ) {
-      // A nested package is a separate local project even when it is checked
-      // into a parent repository (for example, a prototype inside a monorepo).
       return {
         kind: "workspace",
         label: pathImpl.basename(directory) || "workspace",

@@ -395,12 +395,29 @@ async function readClaudeTranscript(
     () => true,
     limits.maxFiles,
   );
-  const seenMessageIds = new Set<string>();
+  interface ClaudeStreamMessage {
+    role: "user" | "assistant";
+    text: string;
+    thinking: string;
+    ts: number;
+    seq: number;
+  }
+  const streamedMessages = new Map<string, ClaudeStreamMessage>();
+  let recordSequence = 0;
+
+  const mergeStreamPart = (current: string, incoming: string): string => {
+    if (!incoming || current === incoming || current.includes(incoming)) {
+      return current;
+    }
+    if (!current || incoming.includes(current)) return incoming;
+    return `${current}\n${incoming}`;
+  };
+
   for (const file of files) {
     await readJsonLines(
       file.path,
       (record) => {
-        if (out.length >= limits.maxMessages) return;
+        const seq = recordSequence++;
         // Skip system prompts and tool/result-only meta records.
         if (record.isMeta === true) return;
         if (stringValue(record.type) === "system") return;
@@ -412,12 +429,31 @@ async function readClaudeTranscript(
         if (message == null) return;
         const role = stringValue(message.role);
         if (role !== "user" && role !== "assistant") return;
+        const { text, thinking } = extractContent(message.content);
+        if (!text && !thinking) return;
         const messageId = stringValue(message.id);
         if (messageId != null) {
-          if (seenMessageIds.has(messageId)) return; // streamed duplicate
-          seenMessageIds.add(messageId);
+          const existing = streamedMessages.get(messageId);
+          if (existing != null) {
+            existing.text = mergeStreamPart(existing.text, text);
+            existing.thinking = mergeStreamPart(existing.thinking, thinking);
+            existing.ts = Math.min(
+              existing.ts,
+              parseTimestampMs(record.timestamp),
+            );
+            return;
+          }
+          if (out.length + streamedMessages.size >= limits.maxMessages) return;
+          streamedMessages.set(messageId, {
+            role,
+            text,
+            thinking,
+            ts: parseTimestampMs(record.timestamp),
+            seq,
+          });
+          return;
         }
-        const { text, thinking } = extractContent(message.content);
+        if (out.length + streamedMessages.size >= limits.maxMessages) return;
         pushMessage(
           out,
           role,
@@ -427,6 +463,19 @@ async function readClaudeTranscript(
           limits,
         );
       },
+      limits,
+    );
+  }
+
+  for (const streamed of [...streamedMessages.values()].sort((left, right) =>
+    left.ts === right.ts ? left.seq - right.seq : left.ts - right.ts,
+  )) {
+    pushMessage(
+      out,
+      streamed.role,
+      streamed.text,
+      streamed.thinking || undefined,
+      streamed.ts,
       limits,
     );
   }
@@ -486,6 +535,13 @@ function extractCodexMessage(
     candidates.push(responseItem);
   }
   if (nestedMessage != null) candidates.push(nestedMessage);
+  const payloadRole = stringValue(payload.role);
+  if (
+    (payloadRole === "user" || payloadRole === "assistant") &&
+    !candidates.includes(payload)
+  ) {
+    candidates.push(payload);
+  }
   if (
     payload.type === "message" ||
     payload.type === "user_message" ||

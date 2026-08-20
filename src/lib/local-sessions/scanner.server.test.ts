@@ -156,17 +156,18 @@ test("Claude Code: parses custom-title record (current title format)", async () 
       join(projectDir, `${sessionId}.jsonl`),
       [
         JSON.stringify({
-          timestamp: "2026-08-01T09:00:00.000Z",
-          type: "custom-title",
-          customTitle: "Refactor auth module",
-          sessionId,
-        }),
-        JSON.stringify({
           timestamp: "2026-08-01T09:00:30.000Z",
           sessionId,
           cwd: "/demo",
           type: "user",
           message: { role: "user", content: "SECRET PROMPT DO NOT LEAK" },
+        }),
+        // An explicit title discovered after the first user message still wins.
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:45.000Z",
+          type: "custom-title",
+          customTitle: "Refactor auth module",
+          sessionId,
         }),
         JSON.stringify({
           timestamp: "2026-08-01T09:01:00.000Z",
@@ -188,6 +189,140 @@ test("Claude Code: parses custom-title record (current title format)", async () 
     assert.equal(session.title, "Refactor auth module");
     assert.equal(session.source, "claude-code");
     assertPrivacyClean(session);
+  });
+});
+
+test("Claude Code: derives a safe title from the first valid user text block", async () => {
+  await withTempHome(async (home) => {
+    const projectDir = join(home, ".claude", "projects", "fallback-title");
+    const repo = join(home, "work", "real-repository");
+    const nestedCwd = join(repo, "packages", "web");
+    await mkdir(projectDir, { recursive: true });
+    await mkdir(join(repo, ".git"), { recursive: true });
+    await mkdir(nestedCwd, { recursive: true });
+    const sessionId = "claude-fallback-title-aaaaaaaaaaaaaaaa";
+    const rawPath = join(home, "private", "credentials.txt");
+    await writeFile(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T08:59:00.000Z",
+          sessionId,
+          cwd: nestedCwd,
+          type: "user",
+          isMeta: true,
+          message: { role: "user", content: "injected system command" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T08:59:30.000Z",
+          sessionId,
+          cwd: nestedCwd,
+          type: "user",
+          message: {
+            role: "user",
+            content: [{ type: "tool_result", content: "tool output" }],
+          },
+        }),
+        JSON.stringify({
+          sessionId,
+          cwd: nestedCwd,
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `## Please fix <b>login</b> at ${rawPath} token=abc123`,
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:30.000Z",
+          sessionId,
+          cwd: nestedCwd,
+          type: "user",
+          message: { role: "user", content: "SHOULD NOT REPLACE FIRST TEXT" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T09:01:00.000Z",
+          sessionId,
+          cwd: nestedCwd,
+          type: "assistant",
+          message: { role: "assistant", model: "claude-sonnet-4" },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.title, "Please fix login at [path] [sensitive]");
+    assert.ok(!session.title.includes(rawPath));
+    assert.ok(!session.title.includes("abc123"));
+    assert.equal(session.projectKey, "real-repository");
+    assert.equal(session.projectRef, normalizeProjectPath(repo, home));
+    assertPrivacyClean(session);
+  });
+});
+
+test("session projects aggregate at a valid gitdir root and retain non-git cwd fallback", async () => {
+  await withTempHome(async (home) => {
+    const projectDir = join(home, ".claude", "projects", "git-projects");
+    const gitMetadata = join(home, "git-metadata", "worktrees", "feature");
+    const checkout = join(home, "checkouts", "feature");
+    const nestedOne = join(checkout, "apps", "one");
+    const nestedTwo = join(checkout, "packages", "two");
+    const noGitRoot = join(home, "scratch", "plain-root");
+    const noGit = join(noGitRoot, "nested", "plain-folder");
+    await mkdir(projectDir, { recursive: true });
+    await mkdir(gitMetadata, { recursive: true });
+    await mkdir(nestedOne, { recursive: true });
+    await mkdir(nestedTwo, { recursive: true });
+    await mkdir(noGit, { recursive: true });
+    await writeFile(join(checkout, ".git"), `gitdir: ${gitMetadata}\n`);
+
+    const sessions = [
+      ["claude-git-one-aaaaaaaaaaaaaaaa", nestedOne],
+      ["claude-git-two-bbbbbbbbbbbbbbbb", nestedTwo],
+      ["claude-no-git-cccccccccccccccc", noGit],
+    ] as const;
+    for (const [sessionId, cwd] of sessions) {
+      await writeFile(
+        join(projectDir, `${sessionId}.jsonl`),
+        `${JSON.stringify({
+          timestamp: "2026-08-01T09:00:00.000Z",
+          sessionId,
+          cwd,
+          type: "assistant",
+          message: { role: "assistant", model: "claude-sonnet-4" },
+        })}\n`,
+      );
+    }
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const byId = new Map(
+      summary.sessions.map((session) => [session.sessionId, session]),
+    );
+    for (const sessionId of [sessions[0][0], sessions[1][0]]) {
+      assert.equal(byId.get(sessionId)?.projectKey, "feature");
+      assert.equal(byId.get(sessionId)?.projectRef, normalizeProjectPath(checkout, home));
+    }
+    assert.equal(byId.get(sessions[2][0])?.projectKey, "plain-folder");
+    assert.equal(byId.get(sessions[2][0])?.projectRef, normalizeProjectPath(noGit, home));
+
+    // A negative lookup must not be permanent: users commonly run `git init`
+    // after the first scan while the desktop app remains open.
+    await mkdir(join(noGitRoot, ".git"), { recursive: true });
+    const rescanned = await scanLocalSessions({
+      homeDirectory: home,
+      now: NOW,
+    });
+    const initialized = rescanned.sessions.find(
+      (session) => session.sessionId === sessions[2][0],
+    );
+    assert.equal(initialized?.projectKey, "plain-root");
+    assert.equal(initialized?.projectRef, normalizeProjectPath(noGitRoot, home));
   });
 });
 
@@ -378,6 +513,7 @@ test("Codex: parses current payload envelopes and counts explicit patch events o
       (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
     );
     assert.equal(session.sessionId, sessionId);
+    assert.equal(session.title, "Review the current envelope parser");
     assert.equal(session.model, "gpt-5-codex");
     assert.equal(session.projectRef, "/Users/demo/codex-current");
     assert.equal(session.editTurns, 1);

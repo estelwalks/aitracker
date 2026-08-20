@@ -8,6 +8,10 @@ import { ENV } from "../app-config";
 import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
 import { normalizeProjectPath } from "../local-usage/project-path.ts";
 import {
+  findNearestGitRepositoryRoot,
+  serverPathImplForPlatform,
+} from "../git-repository.server.ts";
+import {
   getDefaultRegistry,
   getSessionPlanFor,
   listSessionTools,
@@ -78,6 +82,9 @@ interface SessionFragment {
   source: SessionSource;
   sessionId: string;
   title: string;
+  /** Earliest safe user-text fallback; explicit titles always win. */
+  fallbackTitle: string;
+  fallbackTitleAt: number | null;
   model: string | null;
   projectRef: string | null;
   timestamps: RecordTimestamp[];
@@ -335,6 +342,8 @@ function createEmptyFragment(
     source,
     sessionId,
     title: "",
+    fallbackTitle: "",
+    fallbackTitleAt: null,
     model: null,
     projectRef: null,
     timestamps: [],
@@ -344,6 +353,63 @@ function createEmptyFragment(
     subagentCalls: 0,
     terminalStatus: null,
   };
+}
+
+const FALLBACK_TITLE_MAX_LENGTH = 120;
+
+/**
+ * Reduce user-authored content to a short, display-safe fallback title.
+ * Paths, links and likely credentials are redacted before the text leaves the
+ * JSONL callback; no prompt body is added to SessionRecord.
+ */
+function safeFallbackTitle(content: unknown): string | undefined {
+  const parts =
+    typeof content === "string"
+      ? [content]
+      : asArray(content).flatMap((item) => {
+          const block = asObject(item);
+          const blockType = stringValue(block?.type);
+          return (blockType === "text" || blockType === "input_text") &&
+            typeof block?.text === "string"
+            ? [block.text]
+            : [];
+        });
+  if (parts.length === 0) return undefined;
+
+  const normalized = parts
+    .join(" ")
+    .replace(/<[^>]*>/gu, " ")
+    .replace(/```[A-Za-z0-9_-]*|```|`/gu, " ")
+    .replace(/https?:\/\/\S+/giu, "[link]")
+    .replace(/[A-Za-z]:[\\/][^\s"'<>]+/gu, "[path]")
+    .replace(/(?:^|\s)\/(?:[^\s/]+\/)*[^\s"'<>]*/gu, " [path]")
+    .replace(
+      /\b(?:bearer\s+\S+|(?:api[_-]?key|token|password|secret|authorization)\s*[:=]?\s*\S*)/giu,
+      "[sensitive]",
+    )
+    .replace(/^\s*(?:#{1,6}|[-*+]>?)\s*/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (normalized.length === 0) return undefined;
+  return Array.from(normalized).slice(0, FALLBACK_TITLE_MAX_LENGTH).join("");
+}
+
+function claudeFallbackTitle(
+  record: JsonObject,
+  message: JsonObject | undefined,
+): string | undefined {
+  const recordType = stringValue(record.type)?.toLowerCase();
+  const role = stringValue(message?.role)?.toLowerCase();
+  if (recordType !== "user" && role !== "user") return undefined;
+  if (
+    record.isMeta === true ||
+    record.is_meta === true ||
+    message?.isMeta === true ||
+    message?.is_meta === true
+  ) {
+    return undefined;
+  }
+  return safeFallbackTitle(message?.content);
 }
 
 // --------------------------------------------------------------------------
@@ -371,9 +437,11 @@ async function scanClaudeCodeSessions(
 
   for (const file of files) {
     let sawSessionId = false;
+    let sawUsefulRecord = false;
     const local: {
       sessionId?: string;
       title?: string;
+      fallbackTitle?: string;
       model?: string;
       cwd?: string;
       timestamp?: RecordTimestamp;
@@ -387,6 +455,13 @@ async function scanClaudeCodeSessions(
 
     await readJsonLines(file.path, (record) => {
       const recordType = stringValue(record.type);
+      if (
+        recordType !== "permission-mode" &&
+        recordType !== "file-history-snapshot" &&
+        recordType !== "last-prompt"
+      ) {
+        sawUsefulRecord = true;
+      }
       const terminalStatus = explicitTerminalStatus(record);
       // Title from the agent-authored ai-title record.
       if (recordType === "ai-title") {
@@ -427,6 +502,7 @@ async function scanClaudeCodeSessions(
         record.timestamp ?? message?.timestamp,
       );
       const cwd = stringValue(record.cwd) ?? stringValue(record.project);
+      const fallbackTitle = claudeFallbackTitle(record, message);
 
       // Token usage lives on assistant lines (per local-usage/scanner convention).
       let tokens: SessionTokenCounts | undefined;
@@ -484,6 +560,7 @@ async function scanClaudeCodeSessions(
 
       local.push({
         sessionId,
+        fallbackTitle,
         model:
           model != null && !SYNTHETIC_MODEL_TOKENS.has(model)
             ? model
@@ -499,7 +576,7 @@ async function scanClaudeCodeSessions(
       });
     });
 
-    if (!sawSessionId) continue; // journal.jsonl, skill-injections.jsonl, etc.
+    if (!sawSessionId || !sawUsefulRecord) continue;
 
     // Resolve the file-level sessionId (first non-empty observed).
     const fileSessionId = local
@@ -515,6 +592,16 @@ async function scanClaudeCodeSessions(
     for (const entry of local) {
       if (entry.title != null && fragment.title === "") {
         fragment.title = entry.title;
+      }
+      if (
+        entry.fallbackTitle != null &&
+        (fragment.fallbackTitle === "" ||
+          (entry.timestamp != null &&
+            fragment.fallbackTitleAt != null &&
+            entry.timestamp.ms < fragment.fallbackTitleAt))
+      ) {
+        fragment.fallbackTitle = entry.fallbackTitle;
+        fragment.fallbackTitleAt = entry.timestamp?.ms ?? null;
       }
       if (entry.model != null) {
         fragment.model = entry.model; // last real model wins
@@ -577,7 +664,9 @@ async function scanClaudeCodeSessions(
     if (fragment != null) addTokenCounts(fragment.totals, usage.tokens);
   }
 
-  return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -620,6 +709,25 @@ function codexSessionIdFromFilename(name: string): string | undefined {
   return match != null ? match[0] : undefined;
 }
 
+/** Current Codex records may put the message directly in payload or nest it. */
+function codexFallbackTitle(
+  payload: JsonObject | undefined,
+): string | undefined {
+  if (payload == null) return undefined;
+  const candidates = [
+    asObject(payload.item),
+    asObject(payload.response_item),
+    asObject(payload.message),
+    payload,
+  ];
+  for (const candidate of candidates) {
+    if (candidate == null || stringValue(candidate.role) !== "user") continue;
+    const title = safeFallbackTitle(candidate.content);
+    if (title != null) return title;
+  }
+  return undefined;
+}
+
 async function scanCodexSessions(
   codexDirectory: string,
 ): Promise<SessionRecord[]> {
@@ -658,11 +766,25 @@ async function scanCodexSessions(
     let editTurns = 0;
     let subagentCalls = 0;
     let terminalStatus: ExplicitTerminalStatus | undefined;
+    let fallbackTitle = "";
+    let fallbackTitleAt: number | null = null;
 
     await readJsonLines(file.path, (record) => {
       const recordType = stringValue(record.type);
       const payload = asObject(record.payload);
       const payloadType = stringValue(payload?.type);
+      const candidateTitle = codexFallbackTitle(payload);
+      const candidateTimestamp = parseTimestampValue(record.timestamp);
+      if (
+        candidateTitle != null &&
+        (fallbackTitle === "" ||
+          (candidateTimestamp != null &&
+            fallbackTitleAt != null &&
+            candidateTimestamp.ms < fallbackTitleAt))
+      ) {
+        fallbackTitle = candidateTitle;
+        fallbackTitleAt = candidateTimestamp?.ms ?? null;
+      }
       terminalStatus =
         mergeTerminalStatus(
           terminalStatus ?? null,
@@ -810,6 +932,16 @@ async function scanCodexSessions(
       const title = titles.get(sessionId);
       if (title != null) fragment.title = title;
     }
+    if (
+      fallbackTitle !== "" &&
+      (fragment.fallbackTitle === "" ||
+        (fallbackTitleAt != null &&
+          fragment.fallbackTitleAt != null &&
+          fallbackTitleAt < fragment.fallbackTitleAt))
+    ) {
+      fragment.fallbackTitle = fallbackTitle;
+      fragment.fallbackTitleAt = fallbackTitleAt;
+    }
     fragment.timestamps.push(...timestamps);
     addTokenCounts(fragment.totals, perFileTotals);
     fragment.turns += assistantTurns;
@@ -822,7 +954,9 @@ async function scanCodexSessions(
     fragments.set(sessionId, fragment);
   }
 
-  return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -1066,7 +1200,9 @@ async function scanGrokSessions(
     fragments.set(resolvedId, fragment);
   }
 
-  return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
 }
 
 // --------------------------------------------------------------------------
@@ -1311,10 +1447,14 @@ async function scanDshSessions(dshDirectory: string): Promise<SessionRecord[]> {
     fragments.set(resolvedId, fragment);
   }
 
-  return [...fragments.values()].map((fragment) => fragmentToRecord(fragment));
+  return Promise.all(
+    [...fragments.values()].map((fragment) => fragmentToRecord(fragment)),
+  );
 }
 
-function fragmentToRecord(fragment: SessionFragment): SessionRecord {
+async function fragmentToRecord(
+  fragment: SessionFragment,
+): Promise<SessionRecord> {
   const sortedTimestamps = fragment.timestamps
     .map((entry) => entry.ms)
     .sort((left, right) => left - right);
@@ -1329,7 +1469,10 @@ function fragmentToRecord(fragment: SessionFragment): SessionRecord {
     fragment.timestamps.find((entry) => entry.ms === endedMs)?.iso ??
     (endedMs != null ? new Date(endedMs).toISOString() : startedAt);
 
-  const projectRef = fragment.projectRef ?? "unknown";
+  const rawProjectRef = fragment.projectRef ?? "unknown";
+  const pathImpl = serverPathImplForPlatform(process.platform);
+  const gitRoot = await findNearestGitRepositoryRoot(pathImpl, rawProjectRef);
+  const projectRef = gitRoot ?? rawProjectRef;
   const resumeSafe = isResumeSafeId(fragment.sessionId);
   const status: SessionStatus =
     fragment.terminalStatus ?? (resumeSafe ? "available" : "unavailable");
@@ -1344,8 +1487,8 @@ function fragmentToRecord(fragment: SessionFragment): SessionRecord {
   const record = {
     sessionId: fragment.sessionId,
     source: fragment.source,
-    title: fragment.title,
-    projectKey: projectKeyFromCwd(fragment.projectRef),
+    title: fragment.title || fragment.fallbackTitle,
+    projectKey: projectKeyFromCwd(projectRef),
     projectRef,
     model: fragment.model,
     startedAt,
