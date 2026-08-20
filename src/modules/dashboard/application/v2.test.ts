@@ -244,6 +244,28 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
   assert.equal(view.estimatedCostUsd, null);
 });
 
+test("Dashboard V2 does not compare an all-time range with a previous period", () => {
+  const view = createDashboardV2View(snapshot, "all");
+
+  assert.deepEqual(view.comparison.tokens, {
+    previous: null,
+    deltaPercent: null,
+  });
+  assert.deepEqual(view.comparison.cost, {
+    previous: null,
+    deltaPercent: null,
+  });
+  assert.deepEqual(view.comparison.sessions, {
+    previous: null,
+    deltaPercent: null,
+  });
+  assert.deepEqual(view.comparison.cacheRate, {
+    previous: null,
+    deltaPercent: null,
+    deltaPoints: null,
+  });
+});
+
 test("Dashboard V2 maps multiple project sessions and reports zero when none exist", () => {
   const multiProject: DashboardV2Snapshot = {
     ...snapshot,
