@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `distill` surface.
  *
  * Evidence sources (read-only counts/status only — never candidate notes or
@@ -28,6 +28,7 @@ function composeDistillCandidates(
   const waiting = metricValue(bundle, "distill.waiting");
   const quotaRemaining = metricValue(bundle, "distill.quotaRemaining");
   const quotaUsedRate = metricValue(bundle, "distill.quotaUsedRate");
+  const knowledge = metricValue(bundle, "distill.knowledge");
   const candidates: InsightCandidate[] = [];
 
   if (waiting != null && waiting > 0) {
@@ -51,6 +52,27 @@ function composeDistillCandidates(
       evidenceRefs: ["distill.quotaUsedRate"],
       allowedActionIds: ["open_settings"],
       actionId: "open_settings",
+    });
+  }
+
+  if (knowledge != null && knowledge > 0) {
+    candidates.push({
+      id: "distill.focus",
+      severity: "info",
+      factKey: "insights.page.distill.distill-focus",
+      factParams: {},
+      evidenceRefs: ["distill.knowledge"],
+      allowedActionIds: ["open_distill"],
+      actionId: "open_distill",
+    });
+    candidates.push({
+      id: "distill.repeat",
+      severity: "info",
+      factKey: "insights.page.distill.distill-repeat",
+      factParams: {},
+      evidenceRefs: ["distill.knowledge"],
+      allowedActionIds: ["open_distill"],
+      actionId: "open_distill",
     });
   }
 

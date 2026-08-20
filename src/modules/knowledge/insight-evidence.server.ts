@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `memory` surface.
  *
  * Evidence sources (read-only counts/status only — never knowledge bodies):
@@ -34,6 +34,15 @@ function composeMemoryCandidates(
         id: "memory.auto",
         severity: "info",
         factKey: "insights.page.memory.memory-auto",
+        factParams: {},
+        evidenceRefs: ["memory.count"],
+        allowedActionIds: ["open_memory"],
+        actionId: "open_memory",
+      },
+      {
+        id: "memory.kinds",
+        severity: "info",
+        factKey: "insights.page.memory.memory-kinds",
         factParams: {},
         evidenceRefs: ["memory.count"],
         allowedActionIds: ["open_memory"],

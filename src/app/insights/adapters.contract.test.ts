@@ -155,6 +155,13 @@ const FIXTURES: readonly AdapterFixture[] = [
     healthy: [
       ev("dashboard.securityAssessed", 12),
       ev("dashboard.securityRisk", 0),
+      ev("dashboard.events", 30),
+      ev("dashboard.tokens", 200_000),
+      ev("dashboard.sessions", 5),
+      ev("dashboard.topSource", "claude-code", "status"),
+      ev("dashboard.topShareRate", 63),
+      ev("dashboard.lowCacheSource", "codex", "status"),
+      ev("dashboard.lowCacheRate", 12),
     ],
     risk: [
       ev("dashboard.securityAssessed", 12),
@@ -163,7 +170,12 @@ const FIXTURES: readonly AdapterFixture[] = [
   },
   {
     adapter: widgetInsightAdapter,
-    healthy: [ev("dashboard.securityRisk", 0), ev("dashboard.sessions", 5)],
+    healthy: [
+      ev("dashboard.securityRisk", 0),
+      ev("dashboard.sessions", 5),
+      ev("dashboard.lowCacheSource", "codex", "status"),
+      ev("dashboard.lowCacheRate", 12),
+    ],
     risk: [ev("dashboard.securityRisk", 2), ev("dashboard.sessions", 5)],
   },
   {
@@ -174,6 +186,11 @@ const FIXTURES: readonly AdapterFixture[] = [
       ev("tracker.topSource", "claude-code", "status"),
       ev("tracker.lowCacheSource", "codex", "status"),
       ev("tracker.lowCacheRate", 12, "metric"),
+      ev("tracker.wasteLeaderName", "claude-code", "status"),
+      ev("tracker.wasteLeaderRate", 42),
+      ev("tracker.topModel", "claude-sonnet", "status"),
+      ev("tracker.topProject", "~/demo", "status"),
+      ev("tracker.suggestCount", 2),
     ],
   },
   {
@@ -193,6 +210,7 @@ const FIXTURES: readonly AdapterFixture[] = [
       ev("distill.waiting", 2),
       ev("distill.quotaRemaining", 5),
       ev("distill.quotaUsedRate", 75),
+      ev("distill.knowledge", 3),
     ],
     risk: [
       ev("distill.waiting", 0),
@@ -224,6 +242,7 @@ const FIXTURES: readonly AdapterFixture[] = [
       ev("security.clean", 20),
       ev("security.failed", 0),
       ev("security.scanTime", OBSERVED_AT, "status"),
+      ev("security.coverageRate", 80),
     ],
     risk: [
       ev("security.assessed", 20),
@@ -240,11 +259,16 @@ const FIXTURES: readonly AdapterFixture[] = [
       ev("skills.count", 7),
       ev("skills.agents", 3),
       ev("skills.outdated", 1),
+      ev("skills.enabled", 4),
     ],
   },
   {
     adapter: marketInsightAdapter,
-    healthy: [ev("market.installed", 3), ev("market.cachedTotal", 40)],
+    healthy: [
+      ev("market.installed", 3),
+      ev("market.cachedTotal", 40),
+      ev("market.updates", 1),
+    ],
   },
   {
     adapter: chatsInsightAdapter,

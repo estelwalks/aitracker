@@ -31,8 +31,9 @@ function composeMarketCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const installed = metricValue(bundle, "market.installed");
+  const updates = metricValue(bundle, "market.updates");
   if (installed != null && installed > 0) {
-    return [
+    const candidates: InsightCandidate[] = [
       {
         id: "market.installed",
         severity: "info",
@@ -43,6 +44,27 @@ function composeMarketCandidates(
         actionId: "open_market",
       },
     ];
+    if (updates != null && updates > 0) {
+      candidates.push({
+        id: "market.updates",
+        severity: "attention",
+        factKey: "insights.page.market.market-updates",
+        factParams: { count: updates },
+        evidenceRefs: ["market.updates"],
+        allowedActionIds: ["open_market"],
+        actionId: "open_market",
+      });
+    }
+    candidates.push({
+      id: "market.review",
+      severity: "info",
+      factKey: "insights.page.market.market-review",
+      factParams: {},
+      evidenceRefs: ["market.installed"],
+      allowedActionIds: ["open_market"],
+      actionId: "open_market",
+    });
+    return candidates;
   }
   return [
     {
@@ -77,6 +99,14 @@ export const marketInsightAdapter: PageInsightAdapter = {
     }
 
     const freshness = freshnessOf(snapshot.generatedAt, nowMs);
+    const updates = snapshot.skills.reduce((total, skill) => {
+      const hasAvailableUpdate = skill.installations.some(
+        (installation) =>
+          installation.source?.kind === "market" &&
+          installation.updateStatus === "available",
+      );
+      return total + (hasAvailableUpdate ? 1 : 0);
+    }, 0);
     const evidence = [
       metricEvidence(
         "market.installed",
@@ -85,6 +115,7 @@ export const marketInsightAdapter: PageInsightAdapter = {
         freshness,
         "count",
       ),
+      metricEvidence("market.updates", updates, observedAt, freshness, "count"),
     ];
 
     const cached = await readMarketCache(DEFAULT_CACHE_KEY).catch(() => null);
