@@ -30,6 +30,7 @@ function composeSecurityCandidates(
   const risky = metricValue(bundle, "security.risky");
   const failed = metricValue(bundle, "security.failed");
   const assessed = metricValue(bundle, "security.assessed");
+  const coverageRate = metricValue(bundle, "security.coverageRate");
   const scanTime = bundle.evidence.find(
     (item) => item.id === "security.scanTime" && typeof item.value === "string",
   );
@@ -61,6 +62,23 @@ function composeSecurityCandidates(
   }
 
   if (
+    coverageRate != null &&
+    coverageRate < 100 &&
+    assessed != null &&
+    assessed > 0
+  ) {
+    candidates.push({
+      id: "security.coverage",
+      severity: "info",
+      factKey: "insights.page.security.security-scan-coverage",
+      factParams: { rate: coverageRate },
+      evidenceRefs: ["security.coverageRate"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+    });
+  }
+
+  if (
     candidates.length === 0 &&
     assessed != null &&
     assessed > 0 &&
@@ -72,6 +90,27 @@ function composeSecurityCandidates(
       factKey: "insights.page.security.security-last-scan",
       factParams: { time: String(scanTime.value) },
       evidenceRefs: ["security.assessed", "security.scanTime"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+    });
+  }
+
+  if (assessed != null && assessed > 0) {
+    candidates.push({
+      id: "security.scan-first",
+      severity: "info",
+      factKey: "insights.page.security.security-scan-first",
+      factParams: {},
+      evidenceRefs: ["security.assessed"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+    });
+    candidates.push({
+      id: "security.history",
+      severity: "info",
+      factKey: "insights.page.security.security-history",
+      factParams: {},
+      evidenceRefs: ["security.assessed"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
     });
@@ -94,6 +133,13 @@ export const securityInsightAdapter: PageInsightAdapter = {
     }
 
     const freshness = freshnessOf(security.assessedAt, nowMs);
+    const coverageRate =
+      security.discoveredAssetCount > 0
+        ? Math.round(
+            (security.assessedAssetCount / security.discoveredAssetCount) * 100,
+          )
+        : null;
+
     return {
       surfaceId: "security" as const,
       scope,
@@ -140,6 +186,17 @@ export const securityInsightAdapter: PageInsightAdapter = {
           observedAt,
           freshness,
         ),
+        ...(coverageRate != null
+          ? [
+              metricEvidence(
+                "security.coverageRate",
+                coverageRate,
+                observedAt,
+                freshness,
+                "percent",
+              ),
+            ]
+          : []),
       ],
     };
   },

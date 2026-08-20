@@ -2,7 +2,7 @@
  * Page-insight evidence adapters for the `dashboard` and `widget` surfaces.
  *
  * Evidence sources (all O(1) read models, never a scan):
- *  - unified Usage snapshot (event count + total tokens)
+ *  - unified Usage snapshot (event count + total tokens + per-source breakdown)
  *  - unified Session snapshot (session count)
  *  - monitoring heartbeat's security summary (assessed/risky asset counts)
  *
@@ -17,6 +17,7 @@ import {
   freshnessOf,
   metricEvidence,
   metricValue,
+  statusEvidence,
 } from "../../app/insights/evidence-util.server.ts";
 import { getMonitoringSecuritySummary } from "../../app/security-summary.server.ts";
 import type {
@@ -25,6 +26,8 @@ import type {
   InsightScope,
   PageInsightAdapter,
 } from "../insights/page/contracts.ts";
+
+const LOW_CACHE_THRESHOLD = 40;
 
 function composeDashboardCandidates(
   bundle: InsightEvidenceBundle,
@@ -69,9 +72,51 @@ function composeDashboardCandidates(
         events: events ?? 0,
         sessions: sessions ?? 0,
       },
-      evidenceRefs: ["dashboard.events", "dashboard.tokens", "dashboard.sessions"],
+      evidenceRefs: [
+        "dashboard.events",
+        "dashboard.tokens",
+        "dashboard.sessions",
+      ],
       allowedActionIds: ["open_sessions", "open_distill"],
       actionId: "open_sessions",
+    });
+  }
+
+  const topSource = bundle.evidence.find(
+    (item) =>
+      item.id === "dashboard.topSource" && typeof item.value === "string",
+  );
+  const topShareRate = metricValue(bundle, "dashboard.topShareRate");
+  if (topSource != null && topShareRate != null) {
+    candidates.push({
+      id: "dashboard.assets",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-assets",
+      factParams: { name: String(topSource.value), rate: topShareRate },
+      evidenceRefs: ["dashboard.topSource", "dashboard.topShareRate"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+  }
+
+  const lowCacheSource = bundle.evidence.find(
+    (item) =>
+      item.id === "dashboard.lowCacheSource" && typeof item.value === "string",
+  );
+  const lowCacheRate = metricValue(bundle, "dashboard.lowCacheRate");
+  if (
+    lowCacheRate != null &&
+    lowCacheRate < LOW_CACHE_THRESHOLD &&
+    lowCacheSource != null
+  ) {
+    candidates.push({
+      id: "dashboard.efficiency",
+      severity: "attention",
+      factKey: "insights.page.dashboard.dashboard-efficiency",
+      factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
+      evidenceRefs: ["dashboard.lowCacheSource", "dashboard.lowCacheRate"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
     });
   }
 
@@ -126,6 +171,58 @@ async function loadDashboardEvidence(scope: InsightScope) {
       "tokens",
     ),
   ];
+
+  const activeSources = snapshot.bySource.filter((source) => source.events > 0);
+  const topSource = activeSources.reduce(
+    (best, source) =>
+      best == null || source.totalTokens > best.totalTokens ? source : best,
+    undefined as (typeof activeSources)[number] | undefined,
+  );
+  if (topSource != null && snapshot.totals.totalTokens > 0) {
+    evidence.push(
+      statusEvidence(
+        "dashboard.topSource",
+        topSource.key,
+        observedAt,
+        freshness,
+      ),
+      metricEvidence(
+        "dashboard.topShareRate",
+        Math.round((topSource.totalTokens / snapshot.totals.totalTokens) * 100),
+        observedAt,
+        freshness,
+        "percent",
+      ),
+    );
+  }
+
+  const withCache = activeSources.filter((source) => source.inputTokens > 0);
+  const lowCache = withCache.reduce(
+    (best, source) => {
+      const rate = (source.cachedInputTokens / source.inputTokens) * 100;
+      return best == null || rate < best.rate
+        ? { key: source.key, rate }
+        : best;
+    },
+    undefined as { key: string; rate: number } | undefined,
+  );
+  if (lowCache != null) {
+    evidence.push(
+      statusEvidence(
+        "dashboard.lowCacheSource",
+        lowCache.key,
+        observedAt,
+        freshness,
+      ),
+      metricEvidence(
+        "dashboard.lowCacheRate",
+        Math.round(lowCache.rate),
+        observedAt,
+        freshness,
+        "percent",
+      ),
+    );
+  }
 
   await sessionSnapshot.ensureHydrated();
   const sessionsLatest = sessionSnapshot.readLatest();
@@ -187,6 +284,12 @@ export const widgetInsightAdapter: PageInsightAdapter = {
   composeCandidates(bundle) {
     const risk = metricValue(bundle, "dashboard.securityRisk");
     const sessions = metricValue(bundle, "dashboard.sessions");
+    const lowCacheRate = metricValue(bundle, "dashboard.lowCacheRate");
+    const lowCacheSource = bundle.evidence.find(
+      (item) =>
+        item.id === "dashboard.lowCacheSource" &&
+        typeof item.value === "string",
+    );
     if (risk != null && risk > 0) {
       return [
         {
@@ -204,7 +307,7 @@ export const widgetInsightAdapter: PageInsightAdapter = {
       // No dashboard evidence at all → honest empty (no lines).
       return [];
     }
-    return [
+    const candidates: InsightCandidate[] = [
       {
         id: "widget.distill",
         severity: "info",
@@ -215,5 +318,21 @@ export const widgetInsightAdapter: PageInsightAdapter = {
         actionId: "open_distill",
       },
     ];
+    if (
+      lowCacheRate != null &&
+      lowCacheRate < LOW_CACHE_THRESHOLD &&
+      lowCacheSource != null
+    ) {
+      candidates.push({
+        id: "widget.efficiency",
+        severity: "attention",
+        factKey: "insights.page.widget.widget-broadcast-efficiency",
+        factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
+        evidenceRefs: ["dashboard.lowCacheSource", "dashboard.lowCacheRate"],
+        allowedActionIds: ["open_tracker"],
+        actionId: "open_tracker",
+      });
+    }
+    return candidates;
   },
 };

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `settings` surface.
  *
  * Evidence sources (read-only, renderer-safe, never a secret):
@@ -67,6 +67,15 @@ function composeSettingsCandidates(
         factKey: "insights.page.settings.settings-scan-plan",
         factParams: { count: tasksEnabled ?? 0 },
         evidenceRefs: ["settings.tasksEnabled"],
+        allowedActionIds: ["open_settings"],
+        actionId: "open_settings",
+      },
+      {
+        id: "settings.local",
+        severity: "info",
+        factKey: "insights.page.settings.settings-local",
+        factParams: {},
+        evidenceRefs: ["settings.profiles"],
         allowedActionIds: ["open_settings"],
         actionId: "open_settings",
       },

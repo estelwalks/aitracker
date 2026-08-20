@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `reports` surface.
  *
  * Evidence sources (read-only counts/status — never report bodies):
@@ -38,6 +38,24 @@ function composeReportsCandidates(
         factKey: "insights.page.reports.reports-latest",
         factParams: { time: String(latestTime.value) },
         evidenceRefs: ["reports.total", "reports.latestTime"],
+        allowedActionIds: ["open_reports"],
+        actionId: "open_reports",
+      },
+      {
+        id: "reports.collab",
+        severity: "info",
+        factKey: "insights.page.reports.reports-collab",
+        factParams: {},
+        evidenceRefs: ["reports.total"],
+        allowedActionIds: ["open_reports"],
+        actionId: "open_reports",
+      },
+      {
+        id: "reports.next",
+        severity: "info",
+        factKey: "insights.page.reports.reports-next",
+        factParams: {},
+        evidenceRefs: ["reports.total"],
         allowedActionIds: ["open_reports"],
         actionId: "open_reports",
       },

@@ -60,6 +60,8 @@ export const insights = {
         "「{name}」의 캐시 히트율이 {rate}에 불과합니다. 컨텍스트 재사용을 활성화하세요.",
       "agents-focus-security":
         "「{name}」에서 최근 {count}건의 위험 작업이 있습니다. 권한과 설정을 재검토하세요.",
+      "agents-prompt-guide":
+        "프롬프트를 더 구체적으로 쓰면 중복 읽기와 재작업이 줄어 token을 아낄 수 있습니다.",
     },
     distill: {
       "distill-ready":
@@ -69,6 +71,10 @@ export const insights = {
       "distill-quota":
         "증류 할당량이 {rate} 사용되었습니다. 일일 호출량을 관리하세요.",
       "distill-empty": "오늘 증류할 세션이 없습니다.",
+      "distill-focus":
+        "소재가 집중될수록 증류 품질이 높아집니다. 한 번에 3~8개의 강한 관련 대화를 고르는 편이 전체 가져오기보다 낫습니다.",
+      "distill-repeat":
+        "반복되는 질문·답변은 하나의 Skill로 고정해 token을 아낄 수 있습니다.",
     },
     reports: {
       "reports-highlights":
@@ -78,6 +84,10 @@ export const insights = {
       "reports-latest":
         "최근 리포트는 {time}에 생성되었으며, 데이터는 현재 스캔 기준입니다.",
       "reports-empty": "이번 기간 데이터가 없습니다.",
+      "reports-collab":
+        "AI가 초안을 쓰고, 당신이 다듬고, 저장만 하면 됩니다. 리포트는 처음부터 쓰지 않고 결론만 확인하면 됩니다.",
+      "reports-next":
+        "리포트에 「다음 단계」를 한 줄 추가하면 요약 시 자동으로 인용됩니다.",
     },
     memory: {
       "memory-total":
@@ -86,6 +96,8 @@ export const insights = {
         "증류 자동 축적을 활성화하면 경험이 자동으로 메모리에 기록됩니다.",
       "memory-empty":
         "메모리가 비어 있습니다. 세션을 증류하면 경험이 자동으로 축적됩니다.",
+      "memory-kinds":
+        "프로필은 당신이 누구이고 어떻게 일하기 좋아하는지, 작업 기억은 우리가 정한 규칙을 기억합니다.",
     },
     security: {
       "security-risk-top":
@@ -96,6 +108,10 @@ export const insights = {
         "이번 스캔은 소스의 {rate}를 커버했습니다. 나머지는 빠르게 보완하세요.",
       "security-last-scan":
         "마지막 전체 스캔은 {time}에 완료되었습니다. 결과는 참고용입니다.",
+      "security-scan-first":
+        "새 스킬은 활성화 전에 먼저 스캔하세요. 몇 초면 대부분의 악성 스크립트를 차단할 수 있습니다.",
+      "security-history":
+        "스캔 기록은 보관됩니다. 문제가 생기면 이전/이후 버전을 비교해 어떤 업데이트에서 위험이 생겼는지 빠르게 찾을 수 있습니다.",
     },
     tracker: {
       "tracker-burn-leader": "소비 최대: 「{name}」, 누적 {tokens} tokens.",
@@ -105,6 +121,10 @@ export const insights = {
         "캐시 히트 최저: 「{name}」· {rate}, 컨텍스트 재사용을 권장합니다.",
       "tracker-suggest":
         "소비 최적화 제안 {count}건 — 버닝 리더보드를 확인하세요.",
+      "tracker-top-model":
+        "「{name}」이(가) 가장 많은 tokens를 소비했습니다. 가벼운 작업은 더 작은 모델로 처리할 수 있습니다.",
+      "tracker-top-project":
+        "프로젝트별로 보면 「{name}」의 소비 비중이 가장 높습니다. 프롬프트 템플릿을 먼저 최적화하세요.",
       "tracker-empty": "지금은 뚜렷한 낭비 항목이 없습니다.",
     },
     skills: {
@@ -113,12 +133,18 @@ export const insights = {
         "그중 {count}개가 활성화됨 — 나머지는 필요 시 활성화하세요.",
       "skills-unscanned":
         "{count}개의 스킬이 스캔되지 않았습니다. 활성화 전에 안전 스캔을 먼저 완료하세요.",
+      "skills-sync":
+        "Skill이 일부 Agent에만 설치되면 결과가 일관되지 않습니다. 원클릭 동기화로 보완하세요.",
+      "skills-specific":
+        "Skill이 구체적일수록 모델이 덜 흔들리고 token도 아낍니다.",
     },
     market: {
       "market-installed": "{count}개의 마켓 컴포넌트가 설치되었습니다.",
       "market-updates":
         "{count}개의 컴포넌트에 업데이트가 있습니다. 빠른 업그레이드를 권장합니다.",
       "market-scan-first": "새 컴포넌트 설치 전에 보안 스캔을 먼저 완료하세요.",
+      "market-review":
+        "설치 전에 SKILL.md와 버전 기록을 확인해 못 쓰는 패키지를 피하세요.",
     },
     chats: {
       "chats-total": "총 {count}개의 세션을 수집했습니다.",
@@ -127,6 +153,10 @@ export const insights = {
       "chats-recoverable":
         "{count}개의 세션을 복구할 수 있습니다. 보관하거나 증류하세요.",
       "chats-empty": "아직 세션이 없습니다. 데이터 소스를 연결하면 표시됩니다.",
+      "chats-resume":
+        "복구 명령에는 프로젝트 경로가 포함되어 터미널에 붙여 넣으면 원래 작업 디렉터리로 돌아갑니다.",
+      "chats-distill":
+        "재사용할 세션은 증류 워크벤치로 보내세요. 기록을 뒤지는 것보다 Skill로 만드는 편이 빠릅니다.",
     },
     "chat-detail": {
       "chat-detail-turns":
@@ -134,6 +164,8 @@ export const insights = {
       "chat-detail-tokens": "이 세션은 {tokens} tokens를 소비했습니다.",
       "chat-detail-recoverable":
         "이 세션은 복구하거나 증류할 수 있습니다. 상세 페이지에서 시작하세요.",
+      "chat-detail-resume":
+        "이 세션은 복구해 컨텍스트를 이어갈 수 있습니다. 복구 명령에는 프로젝트 경로가 포함됩니다.",
     },
     widget: {
       "widget-broadcast-security":
@@ -150,6 +182,8 @@ export const insights = {
         "스캔 계획이 {count}개의 데이터 소스를 커버합니다. 여기서 조정하세요.",
       "settings-collection":
         "데이터 수집 완전도는 {rate}입니다. 부족한 부분은 여기서 소스를 확인하세요.",
+      "settings-local":
+        "수집은 전부 로컬에서 이루어지며 대화 내용은 업로드되지 않습니다. 데이터 소스에서 수집 범위를 조정하세요.",
     },
     sources: {
       "sources-connected": "{count}개의 데이터 소스를 연결했습니다.",
@@ -159,6 +193,10 @@ export const insights = {
         "{count}개의 도구가 미설치 상태입니다. 다운로드하여 연결하세요.",
       "sources-all-good":
         "전체 {count}개의 소스가 정상이며 이상 로그가 없습니다.",
+      "sources-rescan":
+        "도구 디렉터리가 변경되면 다시 스캔하세요. 그렇지 않으면 세션과 스킬 수집에 공백이 생깁니다.",
+      "sources-local":
+        "모든 수집은 로컬에서 이루어지며 대화 내용은 어디에도 업로드되지 않습니다.",
     },
   },
 } as const;

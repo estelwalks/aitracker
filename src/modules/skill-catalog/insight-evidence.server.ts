@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapter for the `skills` surface.
  *
  * Evidence sources (O(1) snapshot read — never a scan, never a path):
@@ -25,20 +25,49 @@ function composeSkillsCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const count = metricValue(bundle, "skills.count");
+  const enabled = metricValue(bundle, "skills.enabled");
+  const candidates: InsightCandidate[] = [];
   if (count != null && count > 0) {
-    return [
-      {
-        id: "skills.local",
+    candidates.push({
+      id: "skills.local",
+      severity: "info",
+      factKey: "insights.page.skills.skills-local",
+      factParams: { count },
+      evidenceRefs: ["skills.count"],
+      allowedActionIds: ["open_skills"],
+      actionId: "open_skills",
+    });
+    if (enabled != null) {
+      candidates.push({
+        id: "skills.enabled",
         severity: "info",
-        factKey: "insights.page.skills.skills-local",
-        factParams: { count },
-        evidenceRefs: ["skills.count"],
+        factKey: "insights.page.skills.skills-enabled",
+        factParams: { count: enabled },
+        evidenceRefs: ["skills.enabled"],
         allowedActionIds: ["open_skills"],
         actionId: "open_skills",
-      },
-    ];
+      });
+    }
+    candidates.push({
+      id: "skills.sync",
+      severity: "info",
+      factKey: "insights.page.skills.skills-sync",
+      factParams: {},
+      evidenceRefs: ["skills.count"],
+      allowedActionIds: ["open_skills"],
+      actionId: "open_skills",
+    });
+    candidates.push({
+      id: "skills.specific",
+      severity: "info",
+      factKey: "insights.page.skills.skills-specific",
+      factParams: {},
+      evidenceRefs: ["skills.count"],
+      allowedActionIds: ["open_skills"],
+      actionId: "open_skills",
+    });
   }
-  return [];
+  return candidates;
 }
 
 export const skillsInsightAdapter: PageInsightAdapter = {
@@ -72,6 +101,9 @@ export const skillsInsightAdapter: PageInsightAdapter = {
     const installedAgents = Object.values(snapshot.agents).filter(
       (agent) => agent.installed,
     ).length;
+    const enabled = snapshot.skills.filter(
+      (skill) => skill.installations.length > 0,
+    ).length;
 
     return {
       surfaceId: "skills" as const,
@@ -95,6 +127,13 @@ export const skillsInsightAdapter: PageInsightAdapter = {
         metricEvidence(
           "skills.outdated",
           outdated,
+          observedAt,
+          freshness,
+          "count",
+        ),
+        metricEvidence(
+          "skills.enabled",
+          enabled,
           observedAt,
           freshness,
           "count",
