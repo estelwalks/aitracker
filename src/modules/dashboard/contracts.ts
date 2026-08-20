@@ -254,11 +254,6 @@ export interface DashboardV2BreakdownRow {
   readonly previousTokens: number | null;
   /** Percent change against previousTokens; null means not comparable. */
   readonly deltaPercent: number | null;
-  /**
-   * Absolute token increase when the previous window had none (0 → N); a
-   * percentage is undefined there, so the chip shows "+N" instead.
-   */
-  readonly absoluteDelta: number | null;
   /** Present for projects only, aggregated on the server without session ids. */
   readonly sessions: number | null;
   /**

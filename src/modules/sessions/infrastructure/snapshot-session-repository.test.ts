@@ -48,6 +48,7 @@ function summary(id: string): SessionSummary {
 function readerWith(
   data: SessionSnapshotData | null,
   refresh = async () => {},
+  status: "fresh" | "stale" = "fresh",
 ): SessionSnapshotReader & { refreshCalls: number } {
   const state = {
     data,
@@ -64,7 +65,7 @@ function readerWith(
     readLatest() {
       return {
         data: state.data,
-        status: state.data == null ? ("empty" as const) : ("fresh" as const),
+        status: state.data == null ? ("empty" as const) : status,
         revision: state.data == null ? null : "rev-1",
         generatedAt: state.data?.generatedAt ?? null,
       };
@@ -119,6 +120,25 @@ test("empty snapshot returns an empty list and refreshes in the background", asy
   const repository = createSnapshotSessionRepository(reader);
   const sessions = await repository.list();
   assert.deepEqual(sessions, []);
+  assert.equal(reader.refreshCalls, 1);
+});
+
+test("stale snapshot remains readable and schedules a refresh", async () => {
+  const reader = readerWith(
+    {
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      sessions: [summary("a")],
+      density: [],
+    },
+    async () => {},
+    "stale",
+  );
+  const repository = createSnapshotSessionRepository(reader);
+  const sessions = await repository.list();
+  assert.deepEqual(
+    sessions.map((session) => session.sessionId),
+    ["a"],
+  );
   assert.equal(reader.refreshCalls, 1);
 });
 
