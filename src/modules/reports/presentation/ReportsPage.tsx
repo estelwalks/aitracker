@@ -439,7 +439,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         surfaceId="reports"
         variant="hero"
         title={t("reports.insight.title")}
-        rotateLabel={t("reports.insight.rotate")}
         dotsLabel={t("reports.insight.dots")}
       />
 

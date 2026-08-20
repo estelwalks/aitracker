@@ -214,17 +214,18 @@ export function JarvisInsight({
     </button>
   ) : null;
 
-  const rotateButton = (
-    <button
-      type="button"
-      onClick={rotateNext}
-      disabled={safeLines.length < 2}
-      className="dashboard-hero-refresh"
-    >
-      <RefreshCw className="size-3" strokeWidth={2} />
-      {rotateLabel}
-    </button>
-  );
+  const rotateButton =
+    rotateLabel == null ? null : (
+      <button
+        type="button"
+        onClick={rotateNext}
+        disabled={safeLines.length < 2}
+        className="dashboard-hero-refresh"
+      >
+        <RefreshCw className="size-3" strokeWidth={2} />
+        {rotateLabel}
+      </button>
+    );
 
   const enhanceButton =
     onEnhance && enhanceLabel ? (

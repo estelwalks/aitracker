@@ -212,6 +212,7 @@ export const dashboard = {
     securityClean: "正常",
     securityScanSummary:
       "ローカル資産 {assessed} / {discovered} 件をスキャン済み",
+    securitySafeUnsafe: "{safe} 件安全 · {unsafe} 件不安全",
     assetsLabel: "Skill 資産",
     distillationAssetsLabel: "蒸留アセット",
     assetSkillCount: "Skill {count}",
