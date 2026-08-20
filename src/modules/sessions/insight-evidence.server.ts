@@ -31,6 +31,7 @@ function composeChatsCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const total = metricValue(bundle, "chats.total");
+  const recoverable = metricValue(bundle, "chats.recoverable");
   const topSource = bundle.evidence.find(
     (item) => item.id === "chats.topSource" && typeof item.value === "string",
   );
@@ -57,6 +58,35 @@ function composeChatsCandidates(
         actionId: "open_sessions",
       });
     }
+    if (recoverable != null && recoverable > 0) {
+      candidates.push({
+        id: "chats.recoverable",
+        severity: "info",
+        factKey: "insights.page.chats.chats-recoverable",
+        factParams: { count: recoverable },
+        evidenceRefs: ["chats.recoverable"],
+        allowedActionIds: ["open_sessions", "open_distill"],
+        actionId: "open_sessions",
+      });
+    }
+    candidates.push({
+      id: "chats.resume",
+      severity: "info",
+      factKey: "insights.page.chats.chats-resume",
+      factParams: {},
+      evidenceRefs: ["chats.total"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+    candidates.push({
+      id: "chats.distill",
+      severity: "info",
+      factKey: "insights.page.chats.chats-distill",
+      factParams: {},
+      evidenceRefs: ["chats.recoverable"],
+      allowedActionIds: ["open_distill"],
+      actionId: "open_distill",
+    });
   }
 
   if (candidates.length === 0) {
@@ -175,6 +205,15 @@ function composeChatDetailCandidates(
       id: "chat-detail.recoverable",
       severity: "info",
       factKey: "insights.page.chat-detail.chat-detail-recoverable",
+      factParams: {},
+      evidenceRefs: ["chat-detail.recoverable"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+    candidates.push({
+      id: "chat-detail.resume",
+      severity: "info",
+      factKey: "insights.page.chat-detail.chat-detail-resume",
       factParams: {},
       evidenceRefs: ["chat-detail.recoverable"],
       allowedActionIds: ["open_sessions"],

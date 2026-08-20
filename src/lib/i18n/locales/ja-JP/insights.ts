@@ -64,6 +64,8 @@ export const insights = {
         "「{name}」のキャッシュヒット率は {rate} のみです。コンテキスト再利用を有効化してください。",
       "agents-focus-security":
         "「{name}」は直近 {count} 件のリスク操作があります。権限と設定を再確認してください。",
+      "agents-prompt-guide":
+        "プロンプトを具体的に書くと、重複読み込みや手戻りが減り、token を節約できます。",
     },
     distill: {
       "distill-ready":
@@ -73,6 +75,10 @@ export const insights = {
       "distill-quota":
         "蒸留クォータは {rate} 使用済みです。1 日の呼び出し量にご注意ください。",
       "distill-empty": "本日蒸留できるセッションはありません。",
+      "distill-focus":
+        "素材が絞られているほど蒸留品質は向上します。3〜8 件の関連性の高い会話を選ぶ方が、全体をインポートするより良い成果が得られます。",
+      "distill-repeat":
+        "繰り返しの多い Q&A は 1 つの Skill に固定でき、token を節約できます。",
     },
     reports: {
       "reports-highlights":
@@ -82,6 +88,10 @@ export const insights = {
       "reports-latest":
         "最新レポートは {time} に生成されました。データは現在のスキャン時点です。",
       "reports-empty": "今期のデータはありません。",
+      "reports-collab":
+        "AI が下書きし、あなたが修正して保存するだけ。レポートはゼロから書く必要がなく、結論の確認だけで済みます。",
+      "reports-next":
+        "レポートに「次のステップ」を追記すると、集計時に自動で引用されます。",
     },
     memory: {
       "memory-total":
@@ -90,6 +100,8 @@ export const insights = {
         "蒸留の自動蓄積を有効にすると、経験が自動でメモリに保存されます。",
       "memory-empty":
         "メモリは空です。セッションを蒸留すると経験が自動で蓄積されます。",
+      "memory-kinds":
+        "プロフィールはあなたが誰でどう働きたいかを、タスク記憶は私たちが決めたルールを覚えています。",
     },
     security: {
       "security-risk-top":
@@ -100,6 +112,10 @@ export const insights = {
         "今回のスキャンは {rate} のソースを対象としました。残りは早めに補完してください。",
       "security-last-scan":
         "前回の完全スキャンは {time} に完了しました。結果は参考値です。",
+      "security-scan-first":
+        "新しいスキルは有効化する前にスキャンしてください。数秒で大半の悪意あるスクリプトを防げます。",
+      "security-history":
+        "スキャン履歴は保存されます。問題発生時に前後バージョンを比較し、どの更新でリスクが入ったかを特定できます。",
     },
     tracker: {
       "tracker-burn-leader":
@@ -110,6 +126,10 @@ export const insights = {
         "キャッシュヒット率が最も低い: 「{name}」· {rate}、コンテキスト再利用をご検討ください。",
       "tracker-suggest":
         "{count} 件の消費改善提案があります。詳細はバーンランキングをご覧ください。",
+      "tracker-top-model":
+        "「{name}」が最も多くの tokens を消費しています。軽量タスクはより小さいモデルで処理できます。",
+      "tracker-top-project":
+        "プロジェクト別では「{name}」の消費が最も多く、プロンプトテンプレートの最適化をご検討ください。",
       "tracker-empty": "今のところ目立った浪費はありません。",
     },
     skills: {
@@ -118,6 +138,10 @@ export const insights = {
         "うち {count} 個が有効です。残りは必要に応じて有効化できます。",
       "skills-unscanned":
         "{count} 個のスキルが未スキャンです。安全確認のため先にスキャンしてから有効化してください。",
+      "skills-sync":
+        "Skill が一部の Agent にしか入っていないと結果が不整合になります。ワンクリック同期で補完してください。",
+      "skills-specific":
+        "Skill が具体的であるほどモデルはぶれにくく、token も節約できます。",
     },
     market: {
       "market-installed":
@@ -126,6 +150,8 @@ export const insights = {
         "{count} 個のコンポーネントに更新があります。早めのアップグレードをおすすめします。",
       "market-scan-first":
         "新しいコンポーネントをインストールする前に、必ずセキュリティスキャンを完了してください。",
+      "market-review":
+        "インストール前に SKILL.md とバージョン履歴を確認し、使えないパッケージを避けてください。",
     },
     chats: {
       "chats-total": "{count} 件のセッションを収集しました。",
@@ -135,6 +161,10 @@ export const insights = {
         "{count} 件のセッションを復元できます。アーカイブまたは蒸留してください。",
       "chats-empty":
         "まだセッションがありません。データソースを接続すると表示されます。",
+      "chats-resume":
+        "復元コマンドにはプロジェクトパスが含まれ、ターミナルに貼り付けるだけで元の作業ディレクトリに戻れます。",
+      "chats-distill":
+        "再利用できるセッションは蒸留ワークベンチへ。履歴を探すより Skill 化する方が早いです。",
     },
     "chat-detail": {
       "chat-detail-turns":
@@ -142,6 +172,8 @@ export const insights = {
       "chat-detail-tokens": "このセッションは {tokens} tokens を消費しました。",
       "chat-detail-recoverable":
         "このセッションは復元または蒸留できます。詳細ページから開始してください。",
+      "chat-detail-resume":
+        "このセッションは復元してコンテキストを継続できます。復元コマンドにはプロジェクトパスが含まれます。",
     },
     widget: {
       "widget-broadcast-security":
@@ -158,6 +190,8 @@ export const insights = {
         "スキャン計画は {count} 個のデータソースを対象とします。ここで調整できます。",
       "settings-collection":
         "データ収集の完全度は {rate} です。不足分はここでソースを確認できます。",
+      "settings-local":
+        "収集はすべてローカルで行われ、会話内容はアップロードされません。データソースで収集範囲を調整できます。",
     },
     sources: {
       "sources-connected": "{count} 個のデータソースを接続済みです。",
@@ -167,6 +201,10 @@ export const insights = {
         "{count} 件のツールが未インストールです。ダウンロードして接続してください。",
       "sources-all-good":
         "全 {count} 件のソースが正常で、異常ログはありません。",
+      "sources-rescan":
+        "ツールのディレクトリ変更後は再スキャンしてください。さもないとセッションやスキルの収集に欠落が生じます。",
+      "sources-local":
+        "すべての収集はローカルで行われ、会話内容がアップロードされることはありません。",
     },
   },
 } as const;

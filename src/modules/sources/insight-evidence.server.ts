@@ -44,6 +44,23 @@ function composeSourcesCandidates(
       allowedActionIds: ["open_sources"],
       actionId: "open_sources",
     });
+    candidates.push({
+      id: "sources.rescan",
+      severity: "info",
+      factKey: "insights.page.sources.sources-rescan",
+      factParams: {},
+      evidenceRefs: ["sources.connected"],
+      allowedActionIds: ["open_sources"],
+      actionId: "open_sources",
+    });
+    candidates.push({
+      id: "sources.local",
+      severity: "info",
+      factKey: "insights.page.sources.sources-local",
+      factParams: {},
+      evidenceRefs: ["sources.connected"],
+      allowedActionIds: ["open_sources"],
+    });
   }
 
   if (total != null && connected != null && total > 0 && connected < total) {

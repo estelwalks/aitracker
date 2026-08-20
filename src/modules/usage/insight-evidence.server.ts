@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Page-insight evidence adapters for the `tracker` and `agents` surfaces.
  *
  * Evidence sources (all O(1) read models, never a scan):
@@ -23,6 +23,7 @@ import type {
   InsightScope,
   PageInsightAdapter,
 } from "../insights/page/contracts.ts";
+import { suggestionFor, wasteIndex } from "./application/tracker.ts";
 
 const LOW_CACHE_THRESHOLD = 40;
 
@@ -38,6 +39,19 @@ function composeTrackerCandidates(
       item.id === "tracker.lowCacheSource" && typeof item.value === "string",
   );
   const lowCacheRate = metricValue(bundle, "tracker.lowCacheRate");
+  const wasteLeaderName = bundle.evidence.find(
+    (item) =>
+      item.id === "tracker.wasteLeaderName" && typeof item.value === "string",
+  );
+  const wasteLeaderRate = metricValue(bundle, "tracker.wasteLeaderRate");
+  const topModel = bundle.evidence.find(
+    (item) => item.id === "tracker.topModel" && typeof item.value === "string",
+  );
+  const topProject = bundle.evidence.find(
+    (item) =>
+      item.id === "tracker.topProject" && typeof item.value === "string",
+  );
+  const suggestCount = metricValue(bundle, "tracker.suggestCount");
   const candidates: InsightCandidate[] = [];
 
   if (tokens != null && tokens > 0 && topSource != null) {
@@ -47,6 +61,45 @@ function composeTrackerCandidates(
       factKey: "insights.page.tracker.tracker-burn-leader",
       factParams: { name: String(topSource.value), tokens },
       evidenceRefs: ["tracker.topSource", "tracker.tokens"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (wasteLeaderName != null && wasteLeaderRate != null) {
+    candidates.push({
+      id: "tracker.waste-leader",
+      severity: "attention",
+      factKey: "insights.page.tracker.tracker-waste-leader",
+      factParams: {
+        name: String(wasteLeaderName.value),
+        rate: wasteLeaderRate,
+      },
+      evidenceRefs: ["tracker.wasteLeaderName", "tracker.wasteLeaderRate"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (topModel != null) {
+    candidates.push({
+      id: "tracker.top-model",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-top-model",
+      factParams: { name: String(topModel.value) },
+      evidenceRefs: ["tracker.topModel"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (topProject != null) {
+    candidates.push({
+      id: "tracker.top-project",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-top-project",
+      factParams: { name: String(topProject.value) },
+      evidenceRefs: ["tracker.topProject"],
       allowedActionIds: ["open_tracker"],
       actionId: "open_tracker",
     });
@@ -63,6 +116,18 @@ function composeTrackerCandidates(
       factKey: "insights.page.tracker.tracker-cache-low",
       factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
       evidenceRefs: ["tracker.lowCacheSource", "tracker.lowCacheRate"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (suggestCount != null && suggestCount > 0) {
+    candidates.push({
+      id: "tracker.suggest",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-suggest",
+      factParams: { count: suggestCount },
+      evidenceRefs: ["tracker.suggestCount"],
       allowedActionIds: ["open_tracker"],
       actionId: "open_tracker",
     });
@@ -155,6 +220,91 @@ async function loadTrackerEvidence(scope: InsightScope) {
     );
   }
 
+  const topModel = snapshot.byModel.reduce(
+    (best, model) =>
+      best == null || model.totalTokens > best.totalTokens ? model : best,
+    undefined as (typeof snapshot.byModel)[number] | undefined,
+  );
+  if (topModel != null && topModel.totalTokens > 0) {
+    evidence.push(
+      statusEvidence("tracker.topModel", topModel.key, observedAt, freshness),
+    );
+  }
+
+  const topProject = snapshot.byProject.reduce(
+    (best, project) =>
+      best == null || project.totalTokens > best.totalTokens ? project : best,
+    undefined as (typeof snapshot.byProject)[number] | undefined,
+  );
+  if (topProject != null && topProject.totalTokens > 0) {
+    evidence.push(
+      statusEvidence(
+        "tracker.topProject",
+        topProject.key,
+        observedAt,
+        freshness,
+      ),
+    );
+  }
+
+  const withTokens = sources.filter((source) => source.totalTokens > 0);
+  const wasteLeader = withTokens.reduce(
+    (best, source) => {
+      const cacheRate =
+        source.inputTokens > 0
+          ? (source.cachedInputTokens / source.inputTokens) * 100
+          : null;
+      const outputRatio =
+        source.totalTokens > 0 ? source.outputTokens / source.totalTokens : 0;
+      const waste = wasteIndex(cacheRate, outputRatio);
+      return best == null || waste > best.waste
+        ? { key: source.key, waste }
+        : best;
+    },
+    undefined as { key: string; waste: number } | undefined,
+  );
+  if (wasteLeader != null) {
+    evidence.push(
+      statusEvidence(
+        "tracker.wasteLeaderName",
+        wasteLeader.key,
+        observedAt,
+        freshness,
+      ),
+      metricEvidence(
+        "tracker.wasteLeaderRate",
+        Math.round(wasteLeader.waste),
+        observedAt,
+        freshness,
+        "percent",
+      ),
+    );
+  }
+
+  const suggestCount = sources.filter((source) => {
+    const cacheRate =
+      source.inputTokens > 0
+        ? (source.cachedInputTokens / source.inputTokens) * 100
+        : null;
+    const outputRatio =
+      source.totalTokens > 0 ? source.outputTokens / source.totalTokens : 0;
+    return (
+      suggestionFor({ cacheRate, outputRatio, tokens: source.totalTokens }) !==
+      "none"
+    );
+  }).length;
+  if (suggestCount > 0) {
+    evidence.push(
+      metricEvidence(
+        "tracker.suggestCount",
+        suggestCount,
+        observedAt,
+        freshness,
+        "count",
+      ),
+    );
+  }
+
   return {
     surfaceId: "tracker" as const,
     scope,
@@ -206,6 +356,14 @@ function composeAgentsCandidates(
       evidenceRefs: ["agents.activeSources", "agents.blocked", "agents.hours"],
       allowedActionIds: ["open_sources", "open_tracker"],
       actionId: "open_sources",
+    });
+    candidates.push({
+      id: "agents.prompt-guide",
+      severity: "info",
+      factKey: "insights.page.agents.agents-prompt-guide",
+      factParams: {},
+      evidenceRefs: ["agents.activeSources"],
+      allowedActionIds: ["open_tracker"],
     });
   }
 
