@@ -607,17 +607,21 @@ export function MaterialDrawer({
                               <button
                                 type="button"
                                 onClick={() => setActiveKey(key)}
-                                className={`flex w-full items-start gap-2.5 rounded-xl px-3 py-2.5 pr-24 text-left transition-colors ${
-                                  activeItem
-                                    ? "bg-surface-2"
-                                    : "hover:bg-foreground/[0.04]"
+                                aria-pressed={checked}
+                                className={`relative flex w-full items-start gap-2.5 rounded-xl px-3 py-2.5 pr-24 text-left transition-colors ${
+                                  checked
+                                    ? "bg-primary/10 ring-1 ring-primary/70"
+                                    : activeItem
+                                      ? "bg-surface-2"
+                                      : "hover:bg-foreground/[0.04]"
                                 }`}
-                                style={
-                                  activeItem
-                                    ? { boxShadow: `inset 2px 0 0 ${color}` }
-                                    : undefined
-                                }
                               >
+                                {activeItem && (
+                                  <span
+                                    className="absolute top-2 bottom-2 left-0 w-0.5 rounded-r-full"
+                                    style={{ background: color }}
+                                  />
+                                )}
                                 <BrandIcon
                                   name={item.source}
                                   className="mt-1 size-4 shrink-0"
