@@ -26,6 +26,7 @@ import {
   projectDesktopSecurityHistory,
 } from "../../../app/desktop-state-broker.server.ts";
 import { getCompositionRoot } from "../../../app/composition.server.ts";
+import { SECURITY_LLM_REVIEW_PREF_KEY } from "../llm-review.contracts.ts";
 
 /**
  * Browser-dev-only security backend.
@@ -97,9 +98,11 @@ interface StoredModelProfile {
   readonly model?: string;
 }
 
-function toModelConfig(
+export function toSecurityModelConfig(
   profile: StoredModelProfile | null,
+  enabled: boolean,
 ): ModelConfig | undefined {
+  if (!enabled) return undefined;
   if (!profile?.apiKey) return undefined;
   const provider = profile.mode === "official" ? "openai" : profile.protocol;
   const endpoint =
@@ -161,12 +164,16 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
     },
     async modelConfig() {
       const root = await getCompositionRoot();
+      const enabled =
+        root.database.features.appPreferences.get(SECURITY_LLM_REVIEW_PREF_KEY)
+          ?.value === true;
+      if (!enabled) return undefined;
       const active = await root.modelProfiles.getActiveView();
       if (!active) return undefined;
       const profile = (await root.modelProfiles.getProfileForExecution(
         active.id,
       )) as StoredModelProfile | null;
-      return toModelConfig(profile);
+      return toSecurityModelConfig(profile, enabled);
     },
   };
 }

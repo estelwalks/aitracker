@@ -94,8 +94,9 @@ export const settings = {
     },
     llmReview: "AI 辅助检测",
     llmReviewHint:
-      "在静态规则之外，用已配置的模型对报告做脱敏补充分析；不改写判定、不下调严重度。",
-    llmReviewUnconfiguredHint: "配置模型后可启用 AI 辅助检测",
+      "开启后，full 检测会将待扫描 Skill 的文件内容发送到所选模型端点；本地端点的数据留在本机。规则判定始终保留。",
+    llmReviewUnconfiguredHint:
+      "请先配置模型。启用后，full 检测会将待扫描 Skill 的文件内容发送到所选模型端点；本地端点的数据留在本机，规则判定始终保留。",
     schedule: {
       title: "扫描计划",
       enabled: "自动扫描",

@@ -140,6 +140,7 @@ export interface ComposeRulesEnvelopeOptions {
   readonly locale: string;
   readonly mode: InsightMode;
   readonly enhancerAvailable: boolean;
+  readonly autoEnhanceAuthorized?: boolean;
   readonly now: () => number;
 }
 
@@ -187,6 +188,10 @@ export function composeRulesEnvelope(
     generatedAt: new Date(options.now()).toISOString(),
     source: "rules",
     canEnhance: options.enhancerAvailable && mode !== "rules",
+    autoEnhance:
+      options.enhancerAvailable &&
+      mode === "enhanced-auto" &&
+      options.autoEnhanceAuthorized === true,
   };
 }
 

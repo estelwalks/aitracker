@@ -99,9 +99,9 @@ export const settings = {
     },
     llmReview: "AI-assisted detection",
     llmReviewHint:
-      "In addition to static rules, use the configured model to add a sanitized supplementary analysis; it never rewrites the verdict or downgrades severity.",
+      "When enabled, full detection sends the scanned Skill file contents to the selected model endpoint. Data sent to a local endpoint stays on this device. Rule-based findings are always retained.",
     llmReviewUnconfiguredHint:
-      "Configure a model to enable AI-assisted detection",
+      "Configure a model first. When enabled, full detection sends scanned Skill file contents to the selected endpoint; local endpoints keep the data on this device, and rule-based findings are always retained.",
     schedule: {
       title: "Scan schedule",
       enabled: "Automatic scanning",

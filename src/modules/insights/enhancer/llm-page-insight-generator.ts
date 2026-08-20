@@ -75,7 +75,9 @@ export function createLLMInsightGenerator(options: {
   return {
     async generate(request) {
       const requestId = crypto.randomUUID();
-      const payload: InsightEnhancementInput = {
+      // Adapter version is a local cache concern and preferences/profile data
+      // are server-side controls. Neither belongs in the provider payload.
+      const payload = {
         surface: request.surface,
         locale: request.locale,
         candidates: request.candidates,

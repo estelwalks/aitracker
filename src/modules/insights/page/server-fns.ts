@@ -21,6 +21,7 @@ import {
   type InsightPreference,
   type InsightScope,
   type InsightSurfaceId,
+  INSIGHT_AUTO_CONSENT_VERSION,
 } from "./contracts.ts";
 
 const ENTITY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -56,6 +57,24 @@ export interface InsightPreferenceView {
   readonly profileId: string | null;
   readonly consentVersion: string | null;
   readonly dailyCallLimit: number | null;
+}
+
+export interface GetInsightPreferencesInput {
+  readonly surfaceId?: InsightSurfaceId;
+}
+
+export function parseGetInsightPreferencesInput(
+  input: unknown,
+): GetInsightPreferencesInput {
+  if (input == null) return {};
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new AppError("errors.generic");
+  }
+  const surfaceId = (input as Record<string, unknown>).surfaceId;
+  if (surfaceId !== undefined && !isSurfaceId(surfaceId)) {
+    throw new AppError("errors.generic");
+  }
+  return surfaceId === undefined ? {} : { surfaceId };
 }
 
 function isSurfaceId(value: unknown): value is InsightSurfaceId {
@@ -220,6 +239,25 @@ export const enhancePageInsight = createServerFn({ method: "POST" })
     });
   });
 
+/** Renderer-safe preference read; never returns a secret or provider endpoint. */
+export const getInsightPreferences = createServerFn({ method: "GET" })
+  .validator(parseGetInsightPreferencesInput)
+  .handler(async ({ data }): Promise<InsightPreferenceView> => {
+    const { getCompositionRoot } =
+      await import("../../../app/composition.server.ts");
+    const root = await getCompositionRoot();
+    const preference = root.database.features.insights.getEffectivePreference(
+      data.surfaceId ?? "settings",
+    );
+    return {
+      scopeKey: preference.scopeKey,
+      mode: preference.mode,
+      profileId: preference.profileId,
+      consentVersion: preference.consentVersion,
+      dailyCallLimit: preference.dailyCallLimit,
+    };
+  });
+
 export const setInsightPreferences = createServerFn({ method: "POST" })
   .validator((input: unknown): SetInsightPreferencesInput =>
     parseSetInsightPreferencesInput(input),
@@ -241,11 +279,19 @@ export const setInsightPreferences = createServerFn({ method: "POST" })
     }
 
     const scopeKey = data.surfaceId ? `surface:${data.surfaceId}` : "global";
-    const consentVersion = data.consentVersion ?? null;
+    const mode = data.mode ?? "rules";
+    if (
+      mode === "enhanced-auto" &&
+      data.consentVersion !== INSIGHT_AUTO_CONSENT_VERSION
+    ) {
+      throw new AppError("errors.generic");
+    }
+    const consentVersion =
+      mode === "enhanced-auto" ? INSIGHT_AUTO_CONSENT_VERSION : null;
     const nowMs = Date.now();
     const preference: InsightPreference = {
       scopeKey,
-      mode: data.mode ?? "rules",
+      mode,
       profileId,
       consentVersion,
       consentedAtMs: consentVersion != null ? nowMs : null,

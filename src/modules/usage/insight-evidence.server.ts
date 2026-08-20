@@ -102,6 +102,7 @@ function composeTrackerCandidates(
       evidenceRefs: ["tracker.topProject"],
       allowedActionIds: ["open_tracker"],
       actionId: "open_tracker",
+      remoteEligible: false,
     });
   }
 
