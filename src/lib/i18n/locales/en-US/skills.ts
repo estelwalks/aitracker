@@ -25,6 +25,11 @@ export const skills = {
     external: "External",
     other: "Other",
   },
+  agent: {
+    all: "All Agents",
+    prevGroup: "Previous agents",
+    nextGroup: "Next agents",
+  },
   summary: {
     assets: "Assets",
     installations: "{count} installations",

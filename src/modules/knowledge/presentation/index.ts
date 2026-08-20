@@ -6,10 +6,11 @@ export type KnowledgeViewModel = KnowledgeModuleContract;
 export type MemoryType = "profile" | "task";
 
 /**
- * Renderer-safe memory hub read model. The projection intentionally carries
- * only privacy-filtered metadata: the knowledge module never persists the
- * content (it is hashed on write), so `summary` comes exclusively from the
- * version's provenance summaries — never the original conversation body.
+ * Renderer-safe memory hub read model. The projection carries privacy-filtered
+ * metadata plus the memory product body: the module hashes raw content on
+ * write and never persists conversation content (CLEAN_ROOM); the only
+ * persisted body is the AI-distilled / manually entered memory itself.
+ * `summary` comes from the version's provenance summaries.
  */
 export interface MemoryEntry {
   readonly assetId: string;
@@ -26,6 +27,11 @@ export interface MemoryEntry {
   readonly project?: string;
   /** 安全摘要：蒸馏条目为 provenance 摘要，手动条目为正文截断摘要。 */
   readonly summary: string;
+  /**
+   * 记忆正文（FR-014 标题+正文）：蒸馏/手动记忆持久化的完整产物；旧条目无
+   * content 时回退到 provenance 摘要。仅记忆产物，绝不包含原始对话。
+   */
+  readonly body?: string;
   readonly origin: "distill" | "manual";
   readonly createdAt: string;
   readonly updatedAt: string;

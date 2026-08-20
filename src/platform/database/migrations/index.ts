@@ -18,9 +18,11 @@
 
 import { PLATFORM_MIGRATION_0004_SQL } from "./0004_business_assets.ts";
 import { PLATFORM_MIGRATION_0005_SQL } from "./0005_search_wsl.ts";
+import { PLATFORM_MIGRATION_0006_SQL } from "./0006_memory_body.ts";
 
 export { PLATFORM_MIGRATION_0004_SQL } from "./0004_business_assets.ts";
 export { PLATFORM_MIGRATION_0005_SQL } from "./0005_search_wsl.ts";
+export { PLATFORM_MIGRATION_0006_SQL } from "./0006_memory_body.ts";
 
 /** One immutable, forward-only migration. */
 export interface MigrationDefinition {
@@ -582,7 +584,12 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
     name: "0005_search_wsl",
     sql: PLATFORM_MIGRATION_0005_SQL,
   },
+  {
+    version: 6,
+    name: "0006_memory_body",
+    sql: PLATFORM_MIGRATION_0006_SQL,
+  },
 ];
 
 /** Highest version this build knows how to migrate to. */
-export const LATEST_MIGRATION_VERSION = 5;
+export const LATEST_MIGRATION_VERSION = 6;

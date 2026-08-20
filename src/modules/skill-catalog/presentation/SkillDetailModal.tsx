@@ -35,7 +35,7 @@ import {
   type SkillAgent,
   type SkillFileEntry,
 } from "../query.ts";
-import type { SkillCardSecurity } from "./SkillCard.tsx";
+import type { SkillCardSecurity } from "./SkillListRow.tsx";
 import { formatSizeBytes } from "./skill-format.ts";
 
 /** Browser download of a single text file (no server round-trip needed). */

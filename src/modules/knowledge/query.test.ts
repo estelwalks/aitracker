@@ -48,12 +48,13 @@ function fixture() {
   return { repository, scope };
 }
 
-test("distilled versions project to origin distill with a provenance-only summary", async () => {
+test("distilled versions project the persisted memory body, never conversation content", async () => {
   const { repository, scope } = fixture();
   const draft = await repository.createDraft({
     kind: "memory",
     title: "Distilled note",
-    content: "private conversation body",
+    content: "Distilled memory about node_modules handling",
+    persistContent: true,
     provenance: [
       {
         sourceRef: "session:claude-code:abc123" as never,
@@ -75,9 +76,11 @@ test("distilled versions project to origin distill with a provenance-only summar
   assert.equal(entry.origin, "distill");
   assert.equal(entry.source, "distill");
   assert.equal(entry.summary, "Distilled from selected session metadata");
-  // The conversation body must never leak into the read model.
-  assert.equal(entry.summary.includes("private conversation body"), false);
-  assert.equal("body" in entry, false);
+  // FR-014: the hub carries the full distilled memory body, not a fragment.
+  assert.equal(entry.body, "Distilled memory about node_modules handling");
+  // Raw conversation content never leaks into the read model.
+  assert.equal(entry.body.includes("private conversation"), false);
+  assert.equal(entry.summary.includes("private conversation"), false);
 });
 
 test("manual entries keep the decoded source/type/project and truncated summary", async () => {
@@ -100,6 +103,10 @@ test("manual entries keep the decoded source/type/project and truncated summary"
   assert.equal(created.entry?.project, "trusttools");
   assert.equal(
     created.entry?.summary,
+    "A task memory about splitting components beyond 200 lines.",
+  );
+  assert.equal(
+    created.entry?.body,
     "A task memory about splitting components beyond 200 lines.",
   );
   assert.equal(created.entry?.status, "approved");
@@ -142,6 +149,7 @@ test("update creates the next version with edited metadata and re-hashed body", 
   assert.equal(updated.entry?.source, "Cursor");
   assert.equal(updated.entry?.project, "sparkle");
   assert.equal(updated.entry?.summary, "edited body text");
+  assert.equal(updated.entry?.body, "edited body text");
 
   const entries = (await listMemoryAssetsFrom(scope)).entries;
   assert.equal(entries.length, 1);
@@ -193,9 +201,17 @@ test("createMemory validator rejects empty and overlong titles and bodies", () =
       validateCreateMemoryInput({
         type: "profile",
         title: "ok",
-        body: "b".repeat(4001),
+        body: "b".repeat(24001),
       }),
     /errors.memory.invalidInput/,
+  );
+  assert.deepEqual(
+    validateCreateMemoryInput({
+      type: "profile",
+      title: "ok",
+      body: "b".repeat(24000),
+    }),
+    { type: "profile", title: "ok", body: "b".repeat(24000) },
   );
   assert.throws(
     () => validateCreateMemoryInput({ type: "bogus", title: "ok", body: "x" }),
@@ -248,7 +264,7 @@ test("archiveMemory validator only accepts opaque asset ids", () => {
   );
 });
 
-test("toMemoryEntry never exposes content and defaults legacy entries safely", () => {
+test("toMemoryEntry defaults legacy entries safely (no content, no provenance)", () => {
   const entry = toMemoryEntry({
     versionId: "legacy:v1",
     assetId: "legacy",
@@ -267,6 +283,7 @@ test("toMemoryEntry never exposes content and defaults legacy entries safely", (
   assert.equal(entry.origin, "manual");
   assert.equal(entry.source, "unknown");
   assert.equal(entry.summary, "");
+  assert.equal(entry.body, "");
   assert.equal(entry.type, "profile");
   assert.ok(!("content" in entry));
 });

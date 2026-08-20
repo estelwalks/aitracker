@@ -145,7 +145,7 @@ test("dev service appends through its SQLite persistence port without clobbering
   const { home, data } = await fixture();
   const persistence = memoryPersistence([historyEntry("desktop-1")]);
 
-  const service = createDevSecurityScannerService({
+  const service = await createDevSecurityScannerService({
     homeDirectory: home,
     locale: () => "zh-CN",
     scanner: stubScanner(),
@@ -190,7 +190,7 @@ test("dev secret adapter round-trips without creating a persistence authority", 
 
 test("full scan without a configured model returns model-required", async () => {
   const { home } = await fixture();
-  const service = createDevSecurityScannerService({
+  const service = await createDevSecurityScannerService({
     homeDirectory: home,
     locale: () => "zh-CN",
     persistence: memoryPersistence(),
@@ -207,7 +207,7 @@ test("full scan without a configured model returns model-required", async () => 
 test("quick global scan completes and persists a history entry with a report", async () => {
   const { home } = await fixture();
   const requests: unknown[] = [];
-  const service = createDevSecurityScannerService({
+  const service = await createDevSecurityScannerService({
     homeDirectory: home,
     locale: () => "en-US",
     scanner: stubScanner(requests),

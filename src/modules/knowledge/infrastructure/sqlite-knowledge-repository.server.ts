@@ -25,7 +25,7 @@ import type {
 const ASSET_COLUMNS = `asset_id, kind, title, current_version, status,
   security_verdict, created_at_ms, updated_at_ms, revision`;
 const VERSION_COLUMNS = `version_id, asset_id, version, kind, title, content_ref,
-  content_hash, created_by, status, security_verdict, created_at_ms,
+  content_hash, content, created_by, status, security_verdict, created_at_ms,
   updated_at_ms, audit_action, audit_actor`;
 
 function withTransaction<T>(database: SqliteDatabasePort, work: () => T): T {
@@ -60,6 +60,11 @@ function safeHash(value: string): ContentHash {
   return value as ContentHash;
 }
 
+// Only summaries carrying an actual credential VALUE are refused (OpenAI-style
+// key, long bearer token, assigned secret). Technical prose like "npm run
+// build" or "curl /api/v1" must not block a distilled memory's approval.
+const SECRET_VALUE_RE =
+  /(?:sk-[A-Za-z0-9_-]{10,}|bearer\s+[A-Za-z0-9._~-]{12,}|(?:api[_-]?key|token|password|secret)\s*[:=]\s*\S{8,})/i;
 function normalizeProvenance(
   items: readonly Provenance[] | undefined,
 ): readonly Provenance[] {
@@ -69,12 +74,7 @@ function normalizeProvenance(
       "sourceRef",
     ) as Provenance["sourceRef"];
     const summary = item.summary?.trim().slice(0, 160);
-    if (
-      summary &&
-      /(?:\/|\\|token|bearer|sk-|api[_-]?key|\b(?:node|npm|pnpm|yarn)\s)/i.test(
-        summary,
-      )
-    ) {
+    if (summary && SECRET_VALUE_RE.test(summary)) {
       throw new TypeError("provenance summary is invalid");
     }
     if (!Number.isSafeInteger(Date.parse(item.capturedAt)))
@@ -143,6 +143,9 @@ function versionFromRow(
     title: sqliteText(row.title),
     contentRef: sqliteText(row.content_ref),
     contentHash: safeHash(sqliteText(row.content_hash)),
+    ...(sqliteNullableText(row.content)
+      ? { content: sqliteText(row.content) }
+      : {}),
     provenance: provenanceFor(database, versionId),
     createdBy: sqliteText(row.created_by),
     status: sqliteText(row.status) as KnowledgeVersion["status"],
@@ -293,6 +296,12 @@ export function createSqliteKnowledgeRepository(
         const actor = safe(input.actor ?? createdBy, "actor");
         const versionId = `${assetId}:v${version}`;
         const provenance = normalizeProvenance(input.provenance);
+        // Memory-kind entries persist their display body (PRD FR-014); all
+        // other flows stay hashed-only (NULL content).
+        const persistedContent =
+          input.persistContent && input.content !== undefined
+            ? input.content
+            : null;
         database
           .prepare(
             `INSERT INTO knowledge_assets
@@ -316,8 +325,9 @@ export function createSqliteKnowledgeRepository(
           .prepare(
             `INSERT INTO knowledge_versions
           (version_id, asset_id, version, kind, title, content_ref, content_hash,
-           created_by, status, security_verdict, created_at_ms, updated_at_ms,
-           audit_action, audit_actor) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, 'draft', ?)`,
+           content, created_by, status, security_verdict, created_at_ms,
+           updated_at_ms, audit_action, audit_actor)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, 'draft', ?)`,
           )
           .run(
             versionId,
@@ -327,6 +337,7 @@ export function createSqliteKnowledgeRepository(
             title,
             contentRef,
             contentHash,
+            persistedContent,
             createdBy,
             input.securityVerdict ?? null,
             at,
