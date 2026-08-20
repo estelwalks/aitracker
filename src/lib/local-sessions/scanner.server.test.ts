@@ -6,6 +6,7 @@ import test from "node:test";
 import { constants, zstdCompressSync } from "node:zlib";
 
 import { ENV } from "../app-config";
+import { normalizeProjectPath } from "../local-usage/project-path.ts";
 import { compileToolRegistry } from "../tool-registry/registry.ts";
 import {
   __resetSessionReaders,
@@ -1040,7 +1041,7 @@ test("DSH: parses session.jsonl (compression none) with turns/project/tools", as
     assert.equal(session.title, "Refactor scanner");
     assert.equal(session.model, "deepseek-v4-flash");
     assert.equal(session.projectKey, "trusttools_webapp");
-    assert.equal(session.projectRef, cwd);
+    assert.equal(session.projectRef, "~/trusttools_webapp");
     assert.equal(session.turns, 1);
     assert.equal(session.editTurns, 1);
     assert.equal(session.subagentCalls, 1);
@@ -1091,5 +1092,41 @@ test("DSH: decodes a zstd session log through the shared dsh-zstd reader", async
     assert.equal(session.totals.inputTokens, 140);
     assert.equal(session.resumeSafe, true);
     assertPrivacyClean(session);
+  });
+});
+
+test("session projectRef normalizes identically to usage event projects", async () => {
+  await withTempHome(async (home) => {
+    const cwd = join(home, "acme");
+    // Use Claude Code's layout (simplest) to exercise the shared normalization
+    // applied by scanLocalSessions to every scanned session record.
+    const projectDir = join(home, ".claude", "projects", "-demo-acme");
+    await mkdir(projectDir, { recursive: true });
+    const sessionId = "claude-cccccccc-cccc-cccc-cccc-cccccccccccc";
+    await writeFile(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T09:00:00.000Z",
+          sessionId,
+          cwd,
+          type: "assistant",
+          message: {
+            role: "assistant",
+            model: "claude-sonnet-4",
+            usage: { input_tokens: 10, output_tokens: 5 },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    const session = soleSession(summary.sessions);
+
+    // The scanner normalizes HOME-relative cwd exactly like the usage scanner
+    // normalizes event.project, so both collapse to the same project key.
+    assert.equal(session.projectRef, normalizeProjectPath(cwd, home));
+    assert.equal(session.projectRef, "~/acme");
+    assert.equal(session.projectKey, "acme");
   });
 });

@@ -260,6 +260,56 @@ test("dashboard project session aggregates classify by projectRef and drop non-w
   );
 });
 
+test("normalized session projectRef joins usage events under one project key", () => {
+  // scanLocalSessions normalizes projectRef with normalizeProjectPath, so a
+  // HOME-relative cwd becomes ~/… exactly like the usage scanner's
+  // event.project. The classification index is keyed by that normalized form,
+  // so byProjectDay must join it to the same label as usage events.
+  const normalizedRef = `~/example/work/${APP_ID}`;
+  const classifications = new Map<string, DashboardProjectClassification>([
+    [normalizedRef, { kind: "workspace", label: APP_ID }],
+  ]);
+
+  assert.deepEqual(
+    aggregateDashboardProjectSessions(
+      [
+        {
+          projectKey: APP_ID,
+          projectRef: normalizedRef,
+          source: "codex",
+          startedAt: "2026-08-10T10:00:00+08:00",
+          turns: 6,
+          editTurns: 2,
+          subagentCalls: 3,
+        },
+      ],
+      classifications,
+    ),
+    [
+      {
+        project: APP_ID,
+        source: "codex",
+        date: "2026-08-10",
+        count: 1,
+        turns: 6,
+        editTurns: 2,
+        subagentCalls: 3,
+      },
+    ],
+  );
+
+  // The same normalized ref through the usage-event path collapses to the
+  // same label, so the project overview's session column can look it up.
+  const usage = toDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      details: [{ ...rawSnapshot.details[0]!, project: normalizedRef }],
+    },
+    classifications,
+  );
+  assert.equal(usage.details[0]?.project, APP_ID);
+});
+
 test("dashboard V2 keeps installation detection when Claude has no usage events", () => {
   const result = toDashboardV2Snapshot({
     snapshot: toDashboardSnapshot({
