@@ -4,17 +4,14 @@ import { toast } from "sonner";
 import { useI18n } from "../../../lib/i18n/context";
 
 /**
- * Shared report body actions (copy / print / export-markdown) extracted so
- * the inline body card reuses them instead of duplicating the clipboard /
- * print-window / Blob logic. `body` is user-authored markdown or a persisted
- * report body — nothing here touches the network.
+ * Shared clipboard and Markdown export actions. The reports page only uses
+ * export; the transcript report dialog also offers clipboard copy.
  */
 export function useReportActions(
   body: string,
   fallbackTitle: string,
 ): {
   copy: () => Promise<void>;
-  print: () => void;
   exportMd: () => void;
 } {
   const { t } = useI18n();
@@ -27,17 +24,6 @@ export function useReportActions(
       toast.error(t("common.failed"));
     }
   }, [body, fallbackTitle, t]);
-
-  const print = useCallback(() => {
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(
-      `<title>${fallbackTitle.replace(/[<>&]/g, "")}</title><pre style="font:12px/1.6 ui-monospace,monospace;padding:2rem;white-space:pre-wrap">${body.replace(/</g, "&lt;")}</pre>`,
-    );
-    win.document.close();
-    win.focus();
-    win.print();
-  }, [body, fallbackTitle]);
 
   const exportMd = useCallback(() => {
     const safeName = (fallbackTitle || "report")
@@ -56,7 +42,7 @@ export function useReportActions(
     toast.success(t("common.reports.editor.exportMd"));
   }, [body, fallbackTitle, t]);
 
-  return { copy, print, exportMd };
+  return { copy, exportMd };
 }
 
 /**

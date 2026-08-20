@@ -1,21 +1,26 @@
 import { useState } from "react";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
 
 import { TTButton } from "../../../components/tt";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
 import { useI18n } from "../../../lib/i18n/context";
-import { TYPE_COLORS } from "./memory-meta";
+import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
+
+function download(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 /**
  * P6-T6-05: the memory editor is loaded on demand (React.lazy) so the shared
- * shell never carries the form. It renders only when the user creates or
- * edits a memory entry.
+ * shell never carries the form. It mirrors the V3.0 prototype EditModal:
+ * "是什么" 类型 chips + 一句话标题 + 说明，底部 取消 / 导出 MD / 保存。
  */
 export function MemoryForm({
   item,
@@ -29,146 +34,115 @@ export function MemoryForm({
   onSubmit: (input: MemoryCreateInput) => void;
 }) {
   const { t } = useI18n();
-  const [type, setType] = useState<MemoryType>(item?.type ?? "profile");
+  const [type, setType] = useState<MemoryType>(item?.type ?? "task");
   const [title, setTitle] = useState(item?.title ?? "");
   const [body, setBody] = useState(item?.summary ?? "");
-  const [source, setSource] = useState(item?.source ?? "Claude Code");
-  const [project, setProject] = useState(item?.project ?? "");
-  const ok = title.trim().length > 0 && body.trim().length > 0;
   const editingExisting = item != null;
+  const ok = title.trim().length > 0 && body.trim().length > 0;
+
+  const save = () =>
+    onSubmit({
+      type,
+      title: title.trim(),
+      body: body.trim(),
+      // 编辑时保留原来源/项目（provenance 不变）；新建缺省为 manual。
+      source: item?.source,
+      project: item?.project,
+    });
+
+  const exportMd = () => {
+    const safeName = (title.trim() || "memory")
+      .replace(/[^\p{L}\p{N} _-]/gu, "")
+      .trim()
+      .slice(0, 60);
+    const frontmatter = [
+      "---",
+      `type: ${type}`,
+      `title: ${title.replace(/\n/g, " ") || "memory"}`,
+      `source: ${item?.source ?? "manual"}`,
+      ...(item?.project ? [`project: ${item.project}`] : []),
+      "---",
+      "",
+      body.trim(),
+    ].join("\n");
+    download(`${safeName || "memory"}.md`, frontmatter);
+    toast.success(t("memory.exportMd"));
+  };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {editingExisting ? t("memory.editTitle") : t("memory.add")}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          {editingExisting ? (
-            <div className="flex items-center gap-2">
-              <span
-                className="rounded-full px-2 py-0.5 font-mono text-[10px]"
-                style={{
-                  background: `color-mix(in oklab, ${TYPE_COLORS[item.type]} 16%, transparent)`,
-                  color: TYPE_COLORS[item.type],
-                }}
+    <MemoryModal
+      title={editingExisting ? t("memory.editTitle") : t("memory.add")}
+      onClose={onClose}
+      footer={
+        <>
+          <TTButton onClick={onClose} disabled={busy}>
+            {t("memory.cancel")}
+          </TTButton>
+          {editingExisting && (
+            <TTButton onClick={exportMd} disabled={busy}>
+              <Download className="size-3.5" />
+              {t("memory.exportMd")}
+            </TTButton>
+          )}
+          <TTButton variant="primary" onClick={save} disabled={!ok || busy}>
+            {t("memory.form.save")}
+          </TTButton>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="tt-label mb-1.5">{t("memory.form.type")}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {(["profile", "task"] as const).map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                onClick={() => setType(candidate)}
+                className={`rounded-sm border px-2.5 py-1.5 text-left text-[12px] transition-colors ${
+                  type === candidate
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-surface"
+                }`}
               >
-                {item.type === "profile"
-                  ? t("memory.typeProfile")
-                  : t("memory.typeTask")}
-              </span>
-              <span className="font-mono text-[10.5px] text-muted-foreground">
-                {item.type === "profile"
-                  ? t("memory.form.typeProfileDesc")
-                  : t("memory.form.typeTaskDesc")}
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              {(["profile", "task"] as const).map((candidate) => (
-                <button
-                  key={candidate}
-                  type="button"
-                  onClick={() => setType(candidate)}
-                  className="rounded-lg px-3 py-1.5 text-[12px] transition-colors"
-                  style={
-                    type === candidate
-                      ? {
-                          background: `color-mix(in oklab, ${TYPE_COLORS[candidate]} 16%, transparent)`,
-                          color: TYPE_COLORS[candidate],
-                        }
-                      : undefined
-                  }
-                >
+                <span className="font-medium">
                   {candidate === "profile"
                     ? t("memory.typeProfile")
                     : t("memory.typeTask")}
-                </button>
-              ))}
-              <span className="font-mono text-[10.5px] text-muted-foreground">
-                {type === "profile"
-                  ? t("memory.form.typeProfileDesc")
-                  : t("memory.form.typeTaskDesc")}
-              </span>
-            </div>
-          )}
-
-          <label className="block space-y-1">
-            <span className="font-mono text-[10.5px] text-muted-foreground">
-              {t("memory.form.title")}
-            </span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={256}
-              placeholder={t("memory.form.titlePlaceholder")}
-              className="w-full rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] outline-none"
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="font-mono text-[10.5px] text-muted-foreground">
-              {t("memory.form.body")}
-            </span>
-            <textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              rows={5}
-              maxLength={4000}
-              placeholder={t("memory.form.bodyPlaceholder")}
-              className="w-full resize-y rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] leading-6 outline-none"
-            />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block space-y-1">
-              <span className="font-mono text-[10.5px] text-muted-foreground">
-                {t("memory.form.source")}
-              </span>
-              <input
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                maxLength={128}
-                placeholder={t("memory.form.sourcePlaceholder")}
-                className="w-full rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] outline-none"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="font-mono text-[10.5px] text-muted-foreground">
-                {t("memory.form.project")}
-              </span>
-              <input
-                value={project}
-                onChange={(event) => setProject(event.target.value)}
-                maxLength={128}
-                placeholder={t("memory.form.projectPlaceholder")}
-                className="w-full rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] outline-none"
-              />
-            </label>
+                </span>
+                <span className="ml-1.5 text-[11px] text-muted-foreground">
+                  {candidate === "profile"
+                    ? t("memory.form.typeProfileDesc")
+                    : t("memory.form.typeTaskDesc")}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
-        <DialogFooter>
-          <TTButton variant="ghost" onClick={onClose} disabled={busy}>
-            {t("memory.cancel")}
-          </TTButton>
-          <button
-            type="button"
-            disabled={!ok || busy}
-            onClick={() =>
-              onSubmit({
-                type,
-                title: title.trim(),
-                body: body.trim(),
-                source: source.trim() || "manual",
-                ...(project.trim() ? { project: project.trim() } : {}),
-              })
-            }
-            className="rounded-sm bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-40"
-          >
-            {t("memory.form.save")}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+        <div>
+          <div className="tt-label mb-1.5">{t("memory.form.title")}</div>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            maxLength={256}
+            placeholder={t("memory.form.titlePlaceholder")}
+            className="h-8 w-full rounded-sm border border-border bg-surface-2 px-2 text-[13px] outline-none focus:border-primary"
+          />
+        </div>
+
+        <div>
+          <div className="tt-label mb-1.5">{t("memory.form.body")}</div>
+          <textarea
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            rows={5}
+            maxLength={4000}
+            placeholder={t("memory.form.bodyPlaceholder")}
+            className="w-full rounded-sm border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed outline-none focus:border-primary"
+          />
+        </div>
+      </div>
+    </MemoryModal>
   );
 }

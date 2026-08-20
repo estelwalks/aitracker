@@ -55,6 +55,9 @@ const app = (): ReportsApplication => ({
   readContent: async () => {
     throw new Error("unused");
   },
+  saveContent: async () => {
+    throw new Error("unused");
+  },
   approve: async () => {
     throw new Error("unused");
   },
@@ -262,7 +265,7 @@ test("immediate generation is delegated through the public reports application",
   });
 });
 
-test("offline and disabled modes never invoke generation", async () => {
+test("offline mode still invokes generation (deterministic draft); disabled mode blocks it", async () => {
   let calls = 0;
   const reports = {
     ...app(),
@@ -284,7 +287,7 @@ test("offline and disabled modes never invoke generation", async () => {
   const disabledResult = await disabled.generateNow({
     definitionId: "reports.daily",
   });
-  assert.equal(offlineResult.ok, false);
+  assert.equal(offlineResult.ok, true);
   assert.equal(disabledResult.ok, false);
-  assert.equal(calls, 0);
+  assert.equal(calls, 1);
 });

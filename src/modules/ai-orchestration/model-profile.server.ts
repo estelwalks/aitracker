@@ -27,6 +27,8 @@ import type {
 } from "../../platform/persistence/contracts.ts";
 import { NodeAtomicJsonStore } from "../../platform/persistence/infrastructure/node-atomic-json-store.ts";
 import {
+  defaultAuth,
+  effectiveAuth,
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
@@ -42,6 +44,7 @@ import {
   type ModelProfileValidation,
   type ModelProfileView,
   type ModelListResult,
+  type ProfileAuth,
   type ProfileProtocol,
 } from "./model-profile.ts";
 import type {
@@ -65,6 +68,7 @@ const StoredProfileSchema = z
     apiKey: z.string().min(8).max(512).optional(),
     endpoint: z.string().min(1).max(2048).optional(),
     model: z.string().min(1).max(120).optional(),
+    auth: z.enum(["x-api-key", "bearer"]).optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -122,14 +126,26 @@ function chatRequestBody(
 function chatHeaders(
   protocol: ProfileProtocol,
   apiKey: string,
+  auth?: ProfileAuth,
 ): Record<string, string> {
-  return protocol === "anthropic"
-    ? {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      }
-    : { "content-type": "application/json", authorization: `Bearer ${apiKey}` };
+  const scheme = auth ?? defaultAuth(protocol);
+  if (protocol === "anthropic") {
+    return scheme === "bearer"
+      ? {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+          "anthropic-version": "2023-06-01",
+        }
+      : {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        };
+  }
+  return {
+    "content-type": "application/json",
+    authorization: `Bearer ${apiKey}`,
+  };
 }
 
 export function chatUrl(protocol: ProfileProtocol, endpoint: string): string {
@@ -147,10 +163,15 @@ export function modelListUrl(endpoint: string): string {
 function listHeaders(
   protocol: ProfileProtocol,
   apiKey: string,
+  auth?: ProfileAuth,
 ): Record<string, string> {
-  return protocol === "anthropic"
-    ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
-    : { authorization: `Bearer ${apiKey}` };
+  const scheme = auth ?? defaultAuth(protocol);
+  if (protocol === "anthropic") {
+    return scheme === "bearer"
+      ? { authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01" }
+      : { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
+  }
+  return { authorization: `Bearer ${apiKey}` };
 }
 
 /** Well-known model ids per provider host, used as an offline fallback. */
@@ -321,6 +342,7 @@ export function createModelProfileRepository(
           name,
           mode: input.mode,
           protocol,
+          auth: input.auth ?? existing.auth ?? defaultAuth(protocol),
           ...(input.apiKey?.trim()
             ? { apiKey: input.apiKey.trim() }
             : existing.apiKey
@@ -350,6 +372,7 @@ export function createModelProfileRepository(
           mode: input.mode,
           protocol,
           apiKey: input.apiKey?.trim(),
+          auth: effectiveAuth({ mode: input.mode, protocol, auth: input.auth }),
           ...(input.mode === "official"
             ? { endpoint: OFFICIAL_ENDPOINT, model: OFFICIAL_MODEL }
             : {
@@ -419,7 +442,11 @@ export function createModelProfileRepository(
           chatUrl(effective.protocol, effective.endpoint),
           {
             method: "POST",
-            headers: chatHeaders(effective.protocol, effective.apiKey),
+            headers: chatHeaders(
+              effective.protocol,
+              effective.apiKey,
+              effective.auth,
+            ),
             body: chatRequestBody(
               effective.protocol,
               effective.model,
@@ -456,7 +483,11 @@ export function createModelProfileRepository(
       try {
         const response = await fetchImpl(modelListUrl(effective.endpoint), {
           method: "GET",
-          headers: listHeaders(effective.protocol, effective.apiKey),
+          headers: listHeaders(
+            effective.protocol,
+            effective.apiKey,
+            effective.auth,
+          ),
           signal: controller.signal,
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -495,6 +526,7 @@ async function resolveTestConfig(
   apiKey: string;
   endpoint: string;
   model: string;
+  auth: ProfileAuth;
 }> {
   let mode = input.mode;
   let protocol = effectiveProtocol(input.mode, input.protocol);
@@ -504,6 +536,8 @@ async function resolveTestConfig(
     (mode === "official" ? OFFICIAL_ENDPOINT : protocolMeta[protocol].endpoint);
   let model =
     mode === "official" ? OFFICIAL_MODEL : (input.model?.trim() ?? "");
+  let storedAuth: ProfileAuth | undefined;
+  let storedProtocol: ProfileProtocol | undefined;
 
   if (!apiKey && input.id != null) {
     const file = await read();
@@ -515,9 +549,13 @@ async function resolveTestConfig(
       if (!input.model?.trim() && stored.model) model = stored.model;
       mode = stored.mode;
       protocol = stored.protocol;
+      storedAuth = stored.auth;
+      storedProtocol = stored.protocol;
     }
   }
-  return { mode, protocol, apiKey, endpoint, model };
+  const auth =
+    input.auth ?? storedAuth ?? defaultAuth(storedProtocol ?? protocol);
+  return { mode, protocol, apiKey, endpoint, model, auth };
 }
 
 /** Default file path under the current data root. */
@@ -577,7 +615,11 @@ export function createProfileBackedProvider(options: {
         `${request.prompt.template}\n\n${request.input.text}`.trim();
       const response = await fetchImpl(chatUrl(profile.protocol, endpoint), {
         method: "POST",
-        headers: chatHeaders(profile.protocol, profile.apiKey),
+        headers: chatHeaders(
+          profile.protocol,
+          profile.apiKey,
+          effectiveAuth(profile),
+        ),
         body: chatRequestBody(profile.protocol, model, content, 1024),
         signal: request.signal,
       });

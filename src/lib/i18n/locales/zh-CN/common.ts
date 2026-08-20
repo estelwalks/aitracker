@@ -50,7 +50,6 @@ export const common = {
     emptyTitle: "暂无简报",
     emptyDesc: "首次生成后，简报将在此处列出。",
     generate: "生成简报",
-    generateHint: "生成能力将在后续版本接入调度器。",
     kindDaily: "日报",
     kindWeekly: "周报",
     updatedAt: "更新于 {time}",

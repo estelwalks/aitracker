@@ -63,6 +63,12 @@ export const settings = {
     modelPlaceholder: "例：deepseek-chat",
     requestPath: "リクエストパス",
     authMethod: "認証方式",
+    authLabel: "認証ヘッダー",
+    authXApiKey: "x-api-key ヘッダー",
+    authXApiKeyHint: "Anthropic 標準：x-api-key を送信",
+    authBearer: "Bearer トークン",
+    authBearerHint:
+      "Authorization: Bearer を要求するゲートウェイ用（社内 DeepSeek 等）",
     listModels: "モデル一覧を取得",
     listingModels: "取得中…",
     selectModel: "モデルを選択…",

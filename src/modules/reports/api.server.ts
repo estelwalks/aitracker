@@ -22,6 +22,7 @@ import type {
 import type {
   ReportContent,
   ReportDefinitionSummary,
+  ReportPeriod,
   ReportRun,
   ReportSummary,
   ReportsApplication,
@@ -165,30 +166,36 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
 }
 
 /**
- * Trigger a draft report generation. Honest gate: generation depends solely on
- * the active S-500 model profile (real model call); without one the transport
- * reports `{ triggered: false }` (the UI keeps the button disabled). When an
- * active profile exists its id is passed through so the profile-backed
- * provider performs the real call.
+ * Trigger a draft report generation. Generation always runs: when an active
+ * S-500 model profile exists its id is passed so the profile-backed provider
+ * performs a real model call; without one the generation adapter produces a
+ * deterministic Chinese draft from the real collected session context
+ * (status `offline`), which is still a usable, editable report. The UI reads
+ * `feed.offline` to show the honest "未配置模型" banner, but never blocks
+ * generation on it.
  */
-export async function generateReport(definitionId: string): Promise<{
+export async function generateReport(
+  definitionId: string,
+  period?: ReportPeriod,
+): Promise<{
   triggered: boolean;
+  reportId?: string;
   errorCode?: string;
 }> {
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
   const activeProfile = await root.modelProfiles.getActiveView();
-  if (!activeProfile) return { triggered: false };
   const result = await root.reports.generate({
     definitionId,
     trigger: "manual",
     modelId: activeProfile?.id,
+    period,
   });
   if (!result.ok) {
     return { triggered: false, errorCode: result.error.code };
   }
-  return { triggered: true };
+  return { triggered: true, reportId: result.value.reportId };
 }
 
 /**
@@ -204,4 +211,17 @@ export async function getReportBody(
   const root = await getCompositionRoot();
   const result = await root.reports.readContent(reportId);
   return result.ok ? result.value : null;
+}
+
+export async function saveReportBody(
+  reportId: string,
+  body: string,
+): Promise<{ saved: boolean; content?: ReportContent; errorCode?: string }> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const result = await root.reports.saveContent(reportId, body);
+  return result.ok
+    ? { saved: true, content: result.value }
+    : { saved: false, errorCode: result.error.code };
 }
