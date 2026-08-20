@@ -49,27 +49,13 @@ const toolDisplayById = new Map(
 export function DashboardDeltaChip({
   value,
   points = false,
-  absolute = null,
   className = "",
 }: {
   value?: number | null;
   points?: boolean;
-  /** 上一周期为 0 时的绝对新增数（百分比无定义，显示 "+N"） */
-  absolute?: number | null;
   className?: string;
 }) {
   const { format, t } = useI18n();
-  if (absolute != null && Number.isFinite(absolute)) {
-    return (
-      <span
-        className={`inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--color-ok)] ${className}`}
-        title={t("dashboard.kpi.vsPrevious")}
-      >
-        <ArrowUpRight className="size-3" strokeWidth={2.2} />+
-        {format.formatNumber(absolute)}
-      </span>
-    );
-  }
   if (value == null || !Number.isFinite(value)) {
     return (
       <span className="font-mono text-[10px] text-muted-foreground">
@@ -332,6 +318,7 @@ export function DashboardMetricGrid({
           ? t("dashboard.v2.eventCount", { count: view.totals.events })
           : format.formatUsd(view.estimatedCostUsd),
       delta: view.comparison.tokens.deltaPercent,
+      alwaysBaseline: true,
     },
     {
       icon: CircleDollarSign,
@@ -348,6 +335,7 @@ export function DashboardMetricGrid({
               month: format.formatUsd((view.estimatedCostUsd / days) * 30),
             }),
       delta: view.comparison.cost.deltaPercent,
+      alwaysBaseline: true,
     },
     {
       icon: Activity,
@@ -365,7 +353,6 @@ export function DashboardMetricGrid({
               ),
             }),
       delta: view.comparison.sessions.deltaPercent,
-      absoluteDelta: view.comparison.sessions.absoluteDelta,
       alwaysBaseline: true,
     },
     {
@@ -383,6 +370,7 @@ export function DashboardMetricGrid({
             }),
       delta: view.comparison.cacheRate.deltaPoints,
       deltaPoints: true,
+      alwaysBaseline: true,
     },
     {
       icon: Wrench,
@@ -479,11 +467,9 @@ export function DashboardMetricGrid({
               <strong className="tt-num min-w-0 flex-1 truncate text-[22px] leading-none font-black tracking-tight">
                 {card.value}
               </strong>
-              {card.delta != null ||
-              ("absoluteDelta" in card && card.absoluteDelta != null) ? (
+              {card.delta != null ? (
                 <DashboardDeltaChip
                   value={card.delta}
-                  absolute={"absoluteDelta" in card ? card.absoluteDelta : null}
                   points={"deltaPoints" in card && card.deltaPoints === true}
                   className="shrink-0"
                 />

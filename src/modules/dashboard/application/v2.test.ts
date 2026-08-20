@@ -359,6 +359,9 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.comparison.events.previous, 4);
   assert.equal(view.comparison.sessions.previous, 2);
   assert.equal(view.comparison.sessions.deltaPercent, 50);
+  // 费用环比同样只暴露百分比（pricingAvailable 且无 unknownEvents）。
+  assert.equal(view.comparison.cost.previous != null, true);
+  assert.equal(view.comparison.cost.deltaPercent != null, true);
   assert.equal(view.comparison.cacheRate.deltaPoints, -6.666666666666666);
   assert.equal(view.cacheSavingsUsd != null && view.cacheSavingsUsd > 0, true);
   assert.equal(view.models[0]?.estimatedCostUsd != null, true);
@@ -372,7 +375,7 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.projectCount, 2);
 });
 
-test("sessions comparison falls back to absolute delta when the previous window had none", () => {
+test("sessions comparison hides the delta when the previous window had none", () => {
   const noPreviousSessions: DashboardV2Snapshot = {
     ...snapshot,
     sessions: {
@@ -390,9 +393,78 @@ test("sessions comparison falls back to absolute delta when the previous window 
     "2026-08-10",
     "2026-08-11",
   );
-  assert.equal(view.comparison.sessions.previous, 0);
+  // 上一周期为 0：百分比无定义，不展示任何具体数值（无 chip）。
+  assert.equal(view.comparison.sessions.previous, null);
   assert.equal(view.comparison.sessions.deltaPercent, null);
-  assert.equal(view.comparison.sessions.absoluteDelta, 4);
+});
+
+test("token and cost comparison leave the delta null when the previous window had none", () => {
+  const noPrevious: DashboardV2Snapshot = {
+    ...snapshot,
+    pricingAvailable: true,
+    events: [
+      {
+        ...snapshot.events[0]!,
+        timestamp: "2026-08-10T10:00:00.000Z",
+      },
+      {
+        ...snapshot.events[0]!,
+        timestamp: "2026-08-11T10:00:00.000Z",
+      },
+    ],
+  };
+  const view = createDashboardV2View(
+    noPrevious,
+    "custom",
+    "2026-08-10",
+    "2026-08-11",
+  );
+
+  // 上一窗口无 token/费用 → 百分比无定义，不展示任何具体数值（无 chip）。
+  assert.equal(view.comparison.tokens.previous, null);
+  assert.equal(view.comparison.tokens.deltaPercent, null);
+  assert.equal(view.comparison.cost.previous, null);
+  assert.equal(view.comparison.cost.deltaPercent, null);
+});
+
+test("cache rate comparison reports percentage points against the previous window", () => {
+  const event = (
+    timestamp: string,
+    cached: number,
+    input: number,
+  ): DashboardV2Snapshot["events"][number] => ({
+    ...snapshot.events[0]!,
+    timestamp,
+    inputTokens: input,
+    cachedInputTokens: cached,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    totalTokens: input + cached,
+  });
+  const withCache: DashboardV2Snapshot = {
+    ...snapshot,
+    events: [
+      event("2026-08-08T10:00:00.000Z", 50, 50),
+      event("2026-08-08T11:00:00.000Z", 50, 50),
+      event("2026-08-09T10:00:00.000Z", 50, 50),
+      event("2026-08-09T11:00:00.000Z", 50, 50),
+      event("2026-08-10T10:00:00.000Z", 25, 75),
+      event("2026-08-10T11:00:00.000Z", 25, 75),
+      event("2026-08-11T10:00:00.000Z", 25, 75),
+      event("2026-08-11T11:00:00.000Z", 25, 75),
+    ],
+  };
+  const view = createDashboardV2View(
+    withCache,
+    "custom",
+    "2026-08-10",
+    "2026-08-11",
+  );
+
+  // 上一窗口缓存率 50%，当前 25% → 环比 -25 个百分点。
+  assert.equal(view.comparison.cacheRate.previous, 50);
+  assert.equal(view.comparison.cacheRate.deltaPoints, -25);
+  assert.equal(view.comparison.cacheRate.deltaPercent, null);
 });
 
 test("Dashboard V2 keeps unavailable context distinct from an observed zero", () => {
