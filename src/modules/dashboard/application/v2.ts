@@ -775,21 +775,26 @@ export function createDashboardV2View(
       ? filterV2Events(snapshot.events, calendarFrom, calendarTo)
       : [];
   const calendar = calendarFor(daily(calendarEvents), calendarTo);
-  const tokenComparison = comparableDelta(
-    totals.totalTokens,
-    previousTotals.totalTokens,
-    totals.events,
-    previousTotals.events,
-  );
-  const eventComparison = comparableDelta(
-    totals.events,
-    previousTotals.events,
-    totals.events,
-    previousTotals.events,
-  );
+  const tokenComparison = previousRange
+    ? comparableDelta(
+        totals.totalTokens,
+        previousTotals.totalTokens,
+        totals.events,
+        previousTotals.events,
+      )
+    : { previous: null, deltaPercent: null };
+  const eventComparison = previousRange
+    ? comparableDelta(
+        totals.events,
+        previousTotals.events,
+        totals.events,
+        previousTotals.events,
+      )
+    : { previous: null, deltaPercent: null };
   const currentCacheRate = observedCacheRate(totals);
   const previousCacheRate = observedCacheRate(previousTotals);
   const cacheComparable =
+    previousRange != null &&
     currentCacheRate != null &&
     (previousCacheRate != null || previousTotals.events === 0);
   const cacheDeltaPercent =
@@ -801,6 +806,7 @@ export function createDashboardV2View(
           : 0
         : ((currentCacheRate - previousCacheRate) / previousCacheRate) * 100;
   const costComparable =
+    previousRange != null &&
     cost != null &&
     previousCost != null &&
     cost.unknownEvents === 0 &&
