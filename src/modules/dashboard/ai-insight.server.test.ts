@@ -215,6 +215,37 @@ test("Anthropic request uses the messages endpoint, x-api-key auth and system te
   assert.equal(JSON.stringify(result).includes("llm.example.test"), false);
 });
 
+test("already-complete provider endpoints are not duplicated", async () => {
+  const urls: string[] = [];
+  const openai = createDashboardAIInsightService({
+    resolveConfig: async () => ({
+      ...openaiConfig,
+      endpoint: "https://llm.example.test/v1/chat/completions",
+    }),
+    fetch: (async (url) => {
+      urls.push(String(url));
+      return completion(validOutput());
+    }) as typeof fetch,
+  });
+  const anthropic = createDashboardAIInsightService({
+    resolveConfig: async () => ({
+      ...anthropicConfig,
+      endpoint: "https://llm.example.test/v1/messages",
+    }),
+    fetch: (async (url) => {
+      urls.push(String(url));
+      return anthropicCompletion(validOutput());
+    }) as typeof fetch,
+  });
+
+  assert.equal((await openai.refresh(input())).status, "ready");
+  assert.equal((await anthropic.refresh(input())).status, "ready");
+  assert.deepEqual(urls, [
+    "https://llm.example.test/v1/chat/completions",
+    "https://llm.example.test/v1/messages",
+  ]);
+});
+
 test("each refresh re-resolves the profile and rebuilds the provider", async () => {
   const configs = [openaiConfig, anthropicConfig];
   let index = 0;

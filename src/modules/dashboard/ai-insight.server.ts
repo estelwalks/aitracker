@@ -328,11 +328,13 @@ async function resolveActiveProfileConfig(): Promise<DashboardAIInsightRuntimeCo
 }
 
 function openAIEndpoint(endpoint: string): string {
-  return `${endpoint.replace(/\/+$/u, "")}/chat/completions`;
+  const base = endpoint.replace(/\/+$/u, "");
+  return /\/chat\/completions$/u.test(base) ? base : `${base}/chat/completions`;
 }
 
 function anthropicEndpoint(endpoint: string): string {
-  return `${endpoint.replace(/\/+$/u, "")}/messages`;
+  const base = endpoint.replace(/\/+$/u, "");
+  return /\/messages$/u.test(base) ? base : `${base}/messages`;
 }
 
 function openAIHeaders(

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { createServer, type IncomingMessage } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +15,7 @@ import {
 import { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 import type { AIExecutionResult } from "../ai-orchestration/contracts.ts";
 import type { CandidateOutput } from "./contracts.ts";
+import type { SessionSummary } from "../sessions/contracts.ts";
 import {
   loadDistillation,
   saveCandidateAsSkill,
@@ -115,6 +118,8 @@ test("configured profile is selected automatically and starts through the profil
       model: "test-model",
       apiKey: "test-api-key",
     });
+    const activated = await root.modelProfiles.setActive(profile.id);
+    assert.equal(activated.ok, true);
     const view = await loadDistillation("zh-CN");
     assert.equal(view.activeModelId, profile.id);
     assert.ok(view.modelOptions.some((item) => item.id === profile.id));
@@ -139,6 +144,122 @@ test("configured profile is selected automatically and starts through the profil
       assert.deepEqual(request, { modelId: profile.id, providerId: "profile" });
     } finally {
       root.distillation.start = originalStart;
+    }
+  });
+});
+
+test("distillation uses the active profile endpoint and API key for a real run", async () => {
+  await withIsolatedRoot(async () => {
+    let receivedBody = "";
+    let receivedAuth = "";
+    const server = createServer((req: IncomingMessage, res) => {
+      receivedAuth = String(req.headers.authorization ?? "");
+      let raw = "";
+      req.on("data", (chunk: Buffer) => {
+        raw += chunk.toString("utf8");
+      });
+      req.on("end", () => {
+        receivedBody = raw;
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            choices: [{ message: { content: "Distilled knowledge note." } }],
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+
+    try {
+      const root = await getCompositionRoot();
+      const profile = await root.modelProfiles.upsert({
+        name: "distillation-integration-profile",
+        mode: "custom",
+        protocol: "openai",
+        endpoint: `http://127.0.0.1:${port}/v1`,
+        model: "distillation-test-model",
+        apiKey: "sk-distillation-123456",
+      });
+      assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
+
+      const session: SessionSummary = {
+        sessionId: "s1",
+        source: "codex",
+        title: "Integration session",
+        projectKey: "demo",
+        model: "source-model",
+        startedAt: "2026-08-07T00:00:00.000Z",
+        endedAt: "2026-08-07T00:01:00.000Z",
+        durationMs: 60_000,
+        turns: 1,
+        editTurns: 0,
+        retryTurns: 0,
+        totals: {
+          inputTokens: 1,
+          outputTokens: 1,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          reasoningOutputTokens: 0,
+          totalTokens: 2,
+        },
+        cost: {
+          knownUsd: 0,
+          estimatedUsd: 0,
+          cacheSavingsUsd: 0,
+          pricedEvents: 0,
+          estimatedEvents: 0,
+          unknownEvents: 0,
+          unknownModels: [],
+          complete: true,
+        },
+        subagentCalls: 0,
+        status: "available",
+        statusReason: null,
+        resumeAvailable: true,
+      };
+      const originalQuery = root.sessions.query;
+      root.sessions.query = async () => ({
+        ok: true as const,
+        value: {
+          generatedAt: new Date().toISOString(),
+          page: 1,
+          pageSize: 100,
+          total: 1,
+          totalPages: 1,
+          sessions: [session],
+        },
+      });
+      try {
+        const result = await root.distillation.start({
+          requestId: "distill:integration",
+          selection: { sessionRefs: [{ source: "codex", sessionId: "s1" }] },
+          modelId: profile.id,
+          providerId: "profile",
+          kind: "memory",
+          prompt: {
+            id: "distillation.memory",
+            version: 2,
+            template: "Return a concise knowledge note.",
+          },
+        });
+        assert.equal(result.ok, true);
+        const payload = JSON.parse(receivedBody) as {
+          model?: string;
+          messages?: Array<{ content?: string }>;
+        };
+        assert.equal(receivedAuth, "Bearer sk-distillation-123456");
+        assert.equal(payload.model, "distillation-test-model");
+        assert.match(payload.messages?.[0]?.content ?? "", /knowledge note/);
+      } finally {
+        root.sessions.query = originalQuery;
+      }
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
     }
   });
 });
