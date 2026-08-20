@@ -6,7 +6,10 @@ import { SESSION_TOOL_IDS } from "./types.ts";
 
 describe("P4-T4 session whitelist derivation", () => {
   it("session sources derive from the registry resume capability", () => {
-    assert.deepEqual([...listSessionTools()], ["claude-code", "codex", "grok"]);
+    assert.deepEqual(
+      [...listSessionTools()],
+      ["claude-code", "codex", "grok", "dsh"],
+    );
   });
 
   it("compile-time SessionSource mirror stays in sync with the registry (P1-3)", () => {

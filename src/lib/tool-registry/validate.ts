@@ -38,6 +38,7 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "claude-session-v1",
   "codex-session-v1",
   "grok-session-v1",
+  "dsh-session-v1",
 ]);
 
 export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([
