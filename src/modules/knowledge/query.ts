@@ -32,7 +32,9 @@ export type {
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const TITLE_MAX = 256;
-const BODY_MAX = 4_000;
+// Aligns with distillation MAX_SUMMARY so a distilled memory (up to 24k chars)
+// can be re-saved after editing without being rejected at the API boundary.
+const BODY_MAX = 24_000;
 const FIELD_MAX = 128;
 
 function record(value: unknown): Record<string, unknown> {
@@ -123,7 +125,7 @@ export const getMemoryAssets = createServerFn({ method: "GET" }).handler(
   },
 );
 
-/** Create a manual memory entry (body hashed, only summary persisted). */
+/** Create a manual memory entry (body hashed + persisted as the memory body). */
 export const createMemory = createServerFn({ method: "POST" })
   .validator(validateCreateMemoryInput)
   .handler(async ({ data }): Promise<MemoryActionResponse> => {
@@ -131,7 +133,7 @@ export const createMemory = createServerFn({ method: "POST" })
     return createMemoryAsset(data);
   });
 
-/** Update an existing memory entry (new version; body re-hashed). */
+/** Update an existing memory entry (new version; body re-hashed + persisted). */
 export const updateMemory = createServerFn({ method: "POST" })
   .validator(validateUpdateMemoryInput)
   .handler(async ({ data }): Promise<MemoryActionResponse> => {

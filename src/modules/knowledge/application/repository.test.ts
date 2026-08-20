@@ -90,7 +90,7 @@ test("expected revision detects conflicts and duplicate lookup only suggests", a
   assert.equal(suggestions.ok && suggestions.value.length, 1);
 });
 
-test("provenance and durable fields never accept paths, commands or credentials", async () => {
+test("provenance and durable fields reject paths and credential values, allow technical prose", async () => {
   const { repository } = fixture();
   await assert.rejects(() =>
     repository.createDraft({
@@ -107,6 +107,7 @@ test("provenance and durable fields never accept paths, commands or credentials"
       ],
     }),
   );
+  // A real credential VALUE (assigned secret) is still refused…
   await assert.rejects(() =>
     repository.createDraft({
       kind: "memory",
@@ -118,11 +119,51 @@ test("provenance and durable fields never accept paths, commands or credentials"
           sourceRef: "session:1" as never,
           sourceType: "session",
           capturedAt: "2026-08-07T00:00:00Z",
-          summary: "npm run private",
+          summary: "token=sk-live-abcdefghijklmnopqrstuvwxyz0123456789",
         },
       ],
     }),
   );
+  // …while everyday technical prose ("npm run", "node_modules", "/api/v1")
+  // must be approved (the Bug A regression this relaxes).
+  const allowed = await repository.createDraft({
+    kind: "memory",
+    title: "safe",
+    content: "x",
+    createdBy: "user",
+    provenance: [
+      {
+        sourceRef: "session:1" as never,
+        sourceType: "session",
+        capturedAt: "2026-08-07T00:00:00Z",
+        summary: "npm run build in node_modules, curl /api/v1",
+      },
+    ],
+  });
+  assert.equal(allowed.ok, true);
+});
+
+test("createDraft persists the body only when persistContent opts in", async () => {
+  const fixtureState = fixture();
+  const { repository } = fixtureState;
+  const persisted = await repository.createDraft({
+    kind: "memory",
+    title: "Memory",
+    content: "fullbody",
+    persistContent: true,
+    createdBy: "user",
+  });
+  assert.equal(persisted.ok, true);
+  assert.equal(persisted.ok && persisted.value.content, "fullbody");
+
+  const hashedOnly = await repository.createDraft({
+    kind: "brief",
+    title: "Brief",
+    content: "capabilitytext",
+    createdBy: "user",
+  });
+  assert.equal(hashedOnly.ok, true);
+  assert.equal("content" in (hashedOnly.ok ? hashedOnly.value : {}), false);
 });
 
 test("createDraft stamps the security verdict onto the version and asset, and transitions preserve it", async () => {

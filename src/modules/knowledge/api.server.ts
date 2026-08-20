@@ -2,9 +2,11 @@
  * Knowledge transport adapter for the memory hub. Server-only: wires the
  * composition root's knowledge repository into the renderer-safe memory read
  * model and the create/update/archive actions. Only privacy-safe projections
- * cross this boundary — asset metadata, provenance summaries and truncated
- * manual summaries. The knowledge module hashes content on write and never
- * persists it, so raw bodies are never read or returned here (CLEAN_ROOM).
+ * cross this boundary — asset metadata, provenance summaries, and the memory
+ * body. The knowledge module hashes raw content on write and never persists
+ * conversation content (CLEAN_ROOM); the ONLY persisted body is the
+ * AI-distilled / manually entered memory product itself (`persistContent`),
+ * which the hub card and Markdown export show in full.
  *
  * Manual entries store their display metadata in provenance `sourceRef`s:
  * - `manual:<source>`  — the user-typed source tool name
@@ -100,9 +102,10 @@ function provenanceFor(input: MemoryCreateInput, now: string): Provenance[] {
 /**
  * Pure projection of a knowledge version into the renderer-safe memory entry.
  * `source` derives from the first provenance's `sourceType` (session → the
- * "distill" token; manual → the decoded `manual:<source>` name), `summary`
- * comes only from provenance summaries, and `origin` marks session-sourced
- * entries as distilled. Never returns content.
+ * "distill" token; manual → the decoded `manual:<source>` name), `body` is the
+ * persisted memory product (falling back to the provenance summary for legacy
+ * rows), and `origin` marks session-sourced entries as distilled. Never
+ * returns conversation content.
  */
 export function toMemoryEntry(version: KnowledgeVersion): MemoryEntry {
   const first = version.provenance[0];
@@ -129,6 +132,7 @@ export function toMemoryEntry(version: KnowledgeVersion): MemoryEntry {
         UNKNOWN_SOURCE,
     project: projectItem ? decodeAfter(projectItem, PREFIX_PROJECT) : undefined,
     summary: first?.summary ?? "",
+    body: version.content ?? first?.summary ?? "",
     origin: isDistill ? "distill" : "manual",
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
@@ -173,9 +177,10 @@ export async function listMemoryAssetsFrom(
 }
 
 /**
- * Create + approve a manual memory entry. The body is hashed by the
- * repository and never persisted; only its 200-char provenance summary is
- * stored (validated by the repository's privacy filter).
+ * Create + approve a manual memory entry. The body is hashed by the repository
+ * AND persisted as the version's display body (`persistContent`) so the hub
+ * card and export show the full memory; provenance keeps a short source
+ * excerpt (validated by the repository's privacy filter).
  */
 export async function createMemoryEntry(
   input: MemoryCreateInput,
@@ -187,6 +192,7 @@ export async function createMemoryEntry(
       kind: "memory",
       title: input.title,
       content: input.body,
+      persistContent: true,
       provenance: provenanceFor(input, now),
       createdBy: "user",
       actor: "user",
@@ -223,6 +229,7 @@ export async function updateMemoryEntry(
       kind: "memory",
       title: input.title,
       content: input.body,
+      persistContent: true,
       provenance: provenanceFor(input, now),
       createdBy: "user",
       actor: "user",

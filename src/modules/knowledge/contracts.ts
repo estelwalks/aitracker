@@ -30,6 +30,13 @@ export interface KnowledgeVersion {
   readonly title: string;
   readonly contentRef: string;
   readonly contentHash: ContentHash;
+  /**
+   * Persisted display body, populated only when the caller opted in via
+   * `CreateDraftInput.persistContent` (memory-kind entries: the AI-distilled
+   * or manually entered memory product). Never raw conversation content — that
+   * stays hashed-only. Legacy/other-kind rows omit it.
+   */
+  readonly content?: string;
   readonly provenance: readonly Provenance[];
   readonly createdBy: string;
   readonly status: KnowledgeStatus;
@@ -61,10 +68,20 @@ export interface CreateDraftInput {
   readonly assetId?: string;
   readonly kind: KnowledgeAssetKind;
   readonly title: string;
-  /** Ephemeral content; it is hashed and never persisted by this module. */
+  /**
+   * Display body. Always hashed for integrity; additionally persisted as the
+   * version's `content` when `persistContent` is set (memory-kind entries).
+   * Raw conversation content must never be persisted — only the approved,
+   * safety-filtered memory product.
+   */
   readonly content?: string;
   readonly contentRef?: string;
   readonly contentHash?: ContentHash;
+  /**
+   * When true, `content` is stored on the version so consumers can project the
+   * full body. Intentionally opt-in: keeps non-memory flows hashed-only.
+   */
+  readonly persistContent?: boolean;
   readonly provenance?: readonly Provenance[];
   /** Security verdict stamped onto the new version (e.g. from a distillation gate). */
   readonly securityVerdict?: AssetVerdict;

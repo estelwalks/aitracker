@@ -17,10 +17,29 @@ import type {
 } from "../sessions/contracts.ts";
 
 const OPAQUE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const UNSAFE =
-  /(?:\/Users\/|\/home\/|[A-Za-z]:\\|\\\\|\b(?:npm|pnpm|yarn|node|git)\s+|\b(?:bearer\s+|sk-|pk-)[A-Za-z0-9_-]{8,}|\b(?:api[_-]?key|password|secret|credential|authorization)\b)/i;
+/**
+ * Redaction (not wholesale rejection) for distilled text. Everyday technical
+ * prose — "npm run", "git 工作流", "API key 的安全管理" — is retained; only
+ * genuine private fragments are removed so the distilled persona / task memory
+ * keeps its content (Bug: the previous all-or-nothing regex collapsed any
+ * node/npm/git mention into a useless placeholder). Mirror of the knowledge
+ * module's provenance filter: identity-revealing absolute paths → `~/`,
+ * credential VALUES → `[REDACTED]`.
+ */
+const PRIVATE_PATH_RE =
+  /(?:\/Users\/[A-Za-z0-9._-]+|\/home\/[A-Za-z0-9._-]+|[A-Za-z]:(?:\\[^\s"'<>|\\]*)+|\\\\[A-Za-z0-9._-]+\\[^\s"'<>|\\]+)/g;
+const CREDENTIAL_VALUE_RE =
+  /(?:sk-[A-Za-z0-9_-]{8,}|pk-[A-Za-z0-9_-]{8,}|bearer\s+[A-Za-z0-9._~-]{12,}|(?:api[_-]?key|password|secret|token)\s*[:=]\s*[A-Za-z0-9._~/+=-]{8,})/gi;
 const MAX_TITLE = 120;
 const MAX_SUMMARY = 24_000;
+
+function sanitizeDistilledText(value: string): string {
+  // Replace the path root with a bare `~` (no trailing slash) so the remaining
+  // path joins cleanly: /Users/me/project → ~/project.
+  return value
+    .replace(PRIVATE_PATH_RE, "~")
+    .replace(CREDENTIAL_VALUE_RE, "[REDACTED]");
+}
 
 export function isOpaqueSessionRef(ref: SessionRef): boolean {
   return OPAQUE.test(ref.source) && OPAQUE.test(ref.sessionId);
@@ -104,8 +123,8 @@ export function controlledSessionSummary(
 }
 
 export function safeText(value: string, maxLength: number): string {
-  const trimmed = value.trim().slice(0, maxLength);
-  return !trimmed || UNSAFE.test(trimmed) ? "[REDACTED]" : trimmed;
+  const sanitized = sanitizeDistilledText(value).trim().slice(0, maxLength);
+  return !sanitized ? "[REDACTED]" : sanitized;
 }
 
 export function controlledContext(
@@ -145,7 +164,7 @@ export function candidateText(
   kind: CandidateOutput["kind"],
 ): string {
   const text = result.response?.text?.trim();
-  if (!text || UNSAFE.test(text)) {
+  if (!text) {
     const asset =
       kind === "skill"
         ? "skill package"
@@ -158,7 +177,14 @@ export function candidateText(
               : "task memory";
     return `Distilled ${asset} for ${rows.length} selected session${rows.length === 1 ? "" : "s"}.`;
   }
-  return text.slice(0, MAX_SUMMARY);
+  // Keep the distilled prose; redact only private fragments (paths → ~/,
+  // credential values → [REDACTED]). A realistic developer persona that
+  // mentions node/npm/git must flow through to the memory module intact.
+  const sanitized = sanitizeDistilledText(text).trim();
+  if (!sanitized) {
+    return `Distilled ${kind === "persona" ? "persona memory" : kind === "memory" ? "task memory" : kind} for ${rows.length} selected session${rows.length === 1 ? "" : "s"}.`;
+  }
+  return sanitized.slice(0, MAX_SUMMARY);
 }
 
 export function candidateTitle(

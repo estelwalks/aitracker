@@ -65,7 +65,7 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-/** 单条记忆导出 MD：frontmatter + 摘要，浏览器本地下载（不触碰网络）。 */
+/** 单条记忆导出 MD：frontmatter + 完整正文（FR-014），浏览器本地下载（不触碰网络）。 */
 function downloadMemoryMarkdown(item: MemoryEntry) {
   const safeName = (item.title || "memory")
     .replace(/[^\p{L}\p{N} _-]/gu, "")
@@ -81,7 +81,7 @@ function downloadMemoryMarkdown(item: MemoryEntry) {
     `updatedAt: ${item.updatedAt}`,
     "---",
     "",
-    item.summary || "",
+    (item.body ?? item.summary) || "",
   ].join("\n");
   download(`${safeName || "memory"}.md`, frontmatter);
 }
@@ -134,10 +134,14 @@ export function MemoryPage() {
       .filter((item) => (source === "all" ? true : item.source === source))
       .filter((item) => {
         if (!keyword) return true;
-        // 占位文案与原型一致（搜「正文」）：本地只投影摘要、绝不返回对话正文
-        // （CLEAN_ROOM），摘要即正文的安全投影，因此仍搜 title/summary/
-        // source/project 即可覆盖同样的检索意图。
-        return [item.title, item.summary, sourceLabel(item, t), item.project]
+        // 与原型一致（搜「正文」）：搜 title/正文/来源/项目。正文是记忆产物
+        // （FR-014），绝不返回对话正文（CLEAN_ROOM）。
+        return [
+          item.title,
+          item.body ?? item.summary,
+          sourceLabel(item, t),
+          item.project,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -151,7 +155,13 @@ export function MemoryPage() {
       Boolean,
     );
     const rank = (token: string) =>
-      token === "distill" ? 0 : token === "manual" ? 1 : token === "unknown" ? 2 : 3;
+      token === "distill"
+        ? 0
+        : token === "manual"
+          ? 1
+          : token === "unknown"
+            ? 2
+            : 3;
     return tokens.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   }, [entries]);
 
@@ -557,7 +567,7 @@ function MemoryCard({
       </div>
 
       <p className="mt-2.5 line-clamp-3 min-h-[3.2em] text-[12.5px] leading-relaxed text-muted-foreground">
-        {item.summary || "—"}
+        {(item.body ?? item.summary) || "—"}
       </p>
 
       <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2.5">

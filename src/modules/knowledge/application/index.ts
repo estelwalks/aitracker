@@ -37,6 +37,12 @@ const safeHash = (value: string): KnowledgeVersion["contentHash"] => {
     throw new TypeError("contentHash is invalid");
   return value as KnowledgeVersion["contentHash"];
 };
+// Only reject summaries carrying an actual credential VALUE (OpenAI-style key,
+// a long bearer token, or an assigned secret). Plain technical prose — "npm
+// run build", "node_modules", "curl /api/v1", "JWT token 过期" — is allowed so
+// real distilled memories can be approved.
+const SECRET_VALUE_RE =
+  /(?:sk-[A-Za-z0-9_-]{10,}|bearer\s+[A-Za-z0-9._~-]{12,}|(?:api[_-]?key|token|password|secret)\s*[:=]\s*\S{8,})/i;
 const safeProvenance = (
   input: CreateDraftInput["provenance"],
 ): readonly Provenance[] =>
@@ -45,10 +51,7 @@ const safeProvenance = (
     if (/token|bearer|sk-|api[_-]?key/i.test(sourceRef))
       throw new TypeError("sourceRef is invalid");
     const summary = item.summary?.trim().slice(0, 160);
-    if (
-      summary &&
-      /(?:\/|\\|token|bearer|sk-|api[_-]?key|node\s|npm\s)/i.test(summary)
-    )
+    if (summary && SECRET_VALUE_RE.test(summary))
       throw new TypeError("provenance summary is invalid");
     return {
       ...item,
@@ -171,6 +174,11 @@ export function createKnowledgeRepository(
           title,
           contentRef: safe(contentRef, "contentRef"),
           contentHash: normalizedHash,
+          // Memory-kind entries persist their display body (PRD FR-014); all
+          // other flows stay hashed-only.
+          ...(input.persistContent && input.content !== undefined
+            ? { content: input.content }
+            : {}),
           provenance: clone(safeProvenance(input.provenance)),
           createdBy,
           status: "draft",

@@ -283,7 +283,7 @@ test("approval is the only path that invokes knowledge; cancellation closes the 
   assert.equal((await state.app.cancel(candidateId)).ok, false);
 });
 
-test("sensitive titles and model responses are not retained in candidate output", async () => {
+test("sensitive titles and model responses are redacted, not wholesale dropped", async () => {
   const { app } = setup(
     execution("completed", "/Users/me/project; npm run private sk-123456789"),
     [
@@ -298,10 +298,15 @@ test("sensitive titles and model responses are not retained in candidate output"
   );
   assert.equal(result.ok, true);
   const serialized = JSON.stringify(result);
+  // Private fragments are removed: absolute paths → ~/, credential value gone.
   assert.doesNotMatch(
     serialized,
-    /\/Users\/|\/home\/|npm run|sk-123456789|C:\\\\private/,
+    /\/Users\/|\/home\/|sk-123456789|C:\\\\private/,
   );
+  // Everyday technical prose survives so the distilled persona/task content
+  // actually flows into the memory module (regression for the UNSAFE regex
+  // that collapsed any node/npm/git mention into a placeholder).
+  assert.match(serialized, /npm run/);
 });
 
 test("cancelled requests do not invoke the model", async () => {
