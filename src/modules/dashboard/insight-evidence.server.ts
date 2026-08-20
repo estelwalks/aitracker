@@ -18,6 +18,7 @@ import {
   metricEvidence,
   metricValue,
 } from "../../app/insights/evidence-util.server.ts";
+import { getMonitoringSecuritySummary } from "../../app/security-summary.server.ts";
 import type {
   InsightCandidate,
   InsightEvidenceBundle,
@@ -30,37 +31,52 @@ function composeDashboardCandidates(
 ): readonly InsightCandidate[] {
   const risk = metricValue(bundle, "dashboard.securityRisk");
   const assessed = metricValue(bundle, "dashboard.securityAssessed");
+  const events = metricValue(bundle, "dashboard.events");
+  const tokens = metricValue(bundle, "dashboard.tokens");
+  const sessions = metricValue(bundle, "dashboard.sessions");
+
+  const candidates: InsightCandidate[] = [];
 
   if (risk != null && risk > 0) {
-    return [
-      {
-        id: "dashboard.security-risk",
-        severity: "risk",
-        factKey: "insights.page.dashboard.dashboard-security-risk",
-        factParams: { count: risk },
-        evidenceRefs: ["dashboard.securityRisk"],
-        allowedActionIds: ["open_security"],
-        actionId: "open_security",
-      },
-    ];
+    candidates.push({
+      id: "dashboard.security-risk",
+      severity: "risk",
+      factKey: "insights.page.dashboard.dashboard-security-risk",
+      factParams: { count: risk },
+      evidenceRefs: ["dashboard.securityRisk"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+      mandatory: true,
+    });
+  } else if (assessed != null && assessed > 0) {
+    candidates.push({
+      id: "dashboard.security-safe",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-security-safe",
+      factParams: {},
+      evidenceRefs: ["dashboard.securityAssessed"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+    });
   }
 
-  if (assessed != null && assessed > 0) {
-    return [
-      {
-        id: "dashboard.security-safe",
-        severity: "info",
-        factKey: "insights.page.dashboard.dashboard-security-safe",
-        factParams: {},
-        evidenceRefs: ["dashboard.securityAssessed"],
-        allowedActionIds: ["open_security"],
-        actionId: "open_security",
+  if ((events != null && events > 0) || (tokens != null && tokens > 0)) {
+    candidates.push({
+      id: "dashboard.usage",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-usage",
+      factParams: {
+        events: events ?? 0,
+        sessions: sessions ?? 0,
       },
-    ];
+      evidenceRefs: ["dashboard.events", "dashboard.tokens", "dashboard.sessions"],
+      allowedActionIds: ["open_sessions", "open_distill"],
+      actionId: "open_sessions",
+    });
   }
 
-  return [
-    {
+  if (candidates.length === 0) {
+    candidates.push({
       id: "dashboard.empty",
       severity: "info",
       factKey: "insights.page.dashboard.dashboard-empty",
@@ -68,8 +84,10 @@ function composeDashboardCandidates(
       evidenceRefs: [],
       allowedActionIds: ["open_sources"],
       actionId: "open_sources",
-    },
-  ];
+    });
+  }
+
+  return candidates;
 }
 
 async function loadDashboardEvidence(scope: InsightScope) {
@@ -80,7 +98,7 @@ async function loadDashboardEvidence(scope: InsightScope) {
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const { usageSnapshot, sessionSnapshot, monitoring } = root;
+  const { usageSnapshot, sessionSnapshot } = root;
 
   await usageSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
@@ -121,15 +139,9 @@ async function loadDashboardEvidence(scope: InsightScope) {
     ),
   );
 
-  let monitoringStatus: Awaited<ReturnType<typeof monitoring.status>> | null =
-    null;
-  try {
-    monitoringStatus = await monitoring.status();
-  } catch {
-    monitoringStatus = null;
-  }
-  if (monitoringStatus?.security != null) {
-    const security = monitoringStatus.security;
+  const securitySummary = await getMonitoringSecuritySummary();
+  if (securitySummary != null) {
+    const security = securitySummary;
     evidence.push(
       metricEvidence(
         "dashboard.securityAssessed",
