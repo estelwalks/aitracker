@@ -18,7 +18,6 @@ function MarketRoute() {
         surfaceId="market"
         variant="hero"
         title={t("insights.title")}
-        rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
       <MarketPanel initial={initial} />

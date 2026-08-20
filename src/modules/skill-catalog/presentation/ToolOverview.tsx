@@ -924,7 +924,6 @@ export function ToolOverview({
         variant="hero"
         surfaceId="agents"
         title={heroTitle}
-        rotateLabel={t("skills.agentOverview.rotateInsight")}
         dotsLabel={t("insights.dots")}
       />
 

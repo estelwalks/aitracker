@@ -202,6 +202,7 @@ export const dashboard = {
     securityAttention: "{count} 项关注",
     securityClean: "正常",
     securityScanSummary: "已扫描 {assessed} / {discovered} 个本地资产",
+    securitySafeUnsafe: "{safe} 安全 · {unsafe} 不安全",
     assetsLabel: "Skill 资产",
     distillationAssetsLabel: "蒸馏资产",
     assetSkillCount: "Skill {count}",

@@ -235,7 +235,6 @@ export function MemoryPage() {
         surfaceId="memory"
         variant="hero"
         title={t("memory.insightTitle")}
-        rotateLabel={t("memory.insightRotate")}
         dotsLabel={t("memory.insightDots")}
       />
 

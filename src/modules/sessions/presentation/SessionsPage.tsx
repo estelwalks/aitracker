@@ -280,7 +280,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         surfaceId="chats"
         variant="hero"
         title={t("insights.title")}
-        rotateLabel={t("insights.rotate")}
         dotsLabel={t("insights.dots")}
       />
 
