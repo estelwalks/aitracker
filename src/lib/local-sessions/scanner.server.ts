@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 
 import { ENV } from "../app-config";
 import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
+import { normalizeProjectPath } from "../local-usage/project-path.ts";
 import {
   getDefaultRegistry,
   getSessionPlanFor,
@@ -1485,9 +1486,16 @@ export async function scanLocalSessions(
     }),
   );
 
-  const sessions = dedupeAndSort(perTool.flat()).sort((left, right) =>
-    right.startedAt.localeCompare(left.startedAt),
-  );
+  const sessions = dedupeAndSort(perTool.flat())
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
+    // Normalize each record's projectRef the same way the usage scanner
+    // normalizes `event.project` (HOME-relative paths become ~/…), so the
+    // dashboard classification index and project aggregation join sessions to
+    // usage events under one key instead of a raw cwd that misses the index.
+    .map((session) => ({
+      ...session,
+      projectRef: normalizeProjectPath(session.projectRef, homeDirectory),
+    }));
 
   return {
     generatedAt: now.toISOString(),

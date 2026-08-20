@@ -64,7 +64,7 @@ export interface SessionRecord {
   title: string;
   /** basename of cwd — used as the project grouping key. */
   projectKey: string;
-  /** raw cwd; the UI normalizes $HOME to ~/. */
+  /** cwd normalized like usage events (~/… under HOME); used to join sessions to usage project rows. */
   projectRef: string;
   model: string | null;
   /** ISO timestamp of the earliest record. */
