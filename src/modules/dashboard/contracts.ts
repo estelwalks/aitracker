@@ -273,14 +273,6 @@ export interface DashboardV2MetricDelta {
   readonly deltaPercent: number | null;
 }
 
-export interface DashboardV2SessionDelta extends DashboardV2MetricDelta {
-  /**
-   * Absolute session increase when the previous window had none (0 → N);
-   * a percentage is undefined there, so the chip shows "+N" instead.
-   */
-  readonly absoluteDelta: number | null;
-}
-
 export interface DashboardV2CacheDelta extends DashboardV2MetricDelta {
   /** Cache rate is compared in percentage points, rather than token volume. */
   readonly deltaPoints: number | null;
@@ -289,7 +281,7 @@ export interface DashboardV2CacheDelta extends DashboardV2MetricDelta {
 export interface DashboardV2Comparison {
   readonly tokens: DashboardV2MetricDelta;
   readonly events: DashboardV2MetricDelta;
-  readonly sessions: DashboardV2SessionDelta;
+  readonly sessions: DashboardV2MetricDelta;
   readonly cost: DashboardV2MetricDelta;
   readonly cacheRate: DashboardV2CacheDelta;
 }
