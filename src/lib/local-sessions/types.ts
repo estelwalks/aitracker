@@ -3,9 +3,9 @@
  *
  * A `SessionRecord` is a privacy-preserving summary of one resumable session
  * from one of the registry-declared session tools (currently Claude Code,
- * Codex, and Grok Build). Only metadata is captured — ids, timestamps, model,
- * cwd, token totals, and turn counts. Conversation content (prompts,
- * responses, tool I/O) is never read or persisted.
+ * Codex, Grok Build, and DeepSeek Harness). Only metadata is captured — ids,
+ * timestamps, model, cwd, token totals, and turn counts. Conversation content
+ * (prompts, responses, tool I/O) is never read or persisted.
  */
 
 /**
@@ -15,7 +15,12 @@
  * `(string & {})` branch keeps the type open for future tools while still
  * allowing exhaustiveness where needed (same pattern as `UsageReaderKey`).
  */
-export const SESSION_TOOL_IDS = ["claude-code", "codex", "grok"] as const;
+export const SESSION_TOOL_IDS = [
+  "claude-code",
+  "codex",
+  "grok",
+  "dsh",
+] as const;
 
 export type SessionSource = (typeof SESSION_TOOL_IDS)[number] | (string & {});
 
