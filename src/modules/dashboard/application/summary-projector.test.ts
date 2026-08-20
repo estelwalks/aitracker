@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { DashboardV2Snapshot, DashboardV2Event } from "../contracts.ts";
+import { windowToView } from "../summary-contracts.ts";
 import { createDashboardV2View } from "./v2.ts";
 import { createDashboardSummaryProjector } from "./summary-projector.ts";
 
@@ -209,6 +210,30 @@ test("custom window matches golden custom view and is cached", () => {
     to: "2026-07-10",
   });
   assert.equal(again, custom);
+});
+
+test("summary projector and windowToView preserve positive cache savings", () => {
+  const snap = snapshot([
+    event(0, {
+      cachedInputTokens: 1_000_000,
+      inputTokens: 0,
+      totalTokens: 1_000_050,
+    }),
+  ]);
+  const projector = createDashboardSummaryProjector();
+  const summary = projector.build({ snapshot: snap, locale: "zh-CN" });
+  const golden = createDashboardV2View(snap, "all");
+
+  assert.equal(
+    golden.cacheSavingsUsd != null && golden.cacheSavingsUsd > 0,
+    true,
+  );
+  assert.equal(summary.windows.all.cacheSavingsUsd, golden.cacheSavingsUsd);
+  assert.equal(
+    windowToView(summary.windows.all, { ...summary, monitoring: null })
+      .cacheSavingsUsd,
+    golden.cacheSavingsUsd,
+  );
 });
 
 test("same revision is served from cache without recomputation", () => {
