@@ -101,6 +101,10 @@ export function createSqliteSessionSnapshotRepository(
               knownUsd: n(row.known_microusd) / 1_000_000,
             }));
           return {
+            collectorVersion:
+              generation.source_fingerprint === "sessions-v2-dsh"
+                ? "sessions-v2-dsh"
+                : undefined,
             generatedAt:
               msToIso(generation.generated_at_ms) ?? new Date(0).toISOString(),
             sessions,
