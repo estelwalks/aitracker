@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "../../../lib/crypto/sha256.ts";
 import { catalogs, getMessage } from "../../../lib/i18n/messages.ts";
 import { normalizeLocale } from "../../../lib/i18n/locale.ts";
 import { INSIGHT_ACTIONS } from "./action-registry.ts";
@@ -213,10 +213,6 @@ function stableStringify(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value);
-}
-
-function sha256Hex(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 /** Canonical scope identity: only `range` and `entityId` participate. */
