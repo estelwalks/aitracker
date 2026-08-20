@@ -5,7 +5,6 @@
  * candidate facts only. `assertPayloadSafe` is the final outbound audit point:
  * a secret, path, command, injection, or entity name never reaches the model.
  */
-import { randomUUID } from "node:crypto";
 import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
 import type {
   AIExecutionStatus,
@@ -75,7 +74,7 @@ export function createLLMInsightGenerator(options: {
 
   return {
     async generate(request) {
-      const requestId = randomUUID();
+      const requestId = crypto.randomUUID();
       const payload: InsightEnhancementInput = {
         surface: request.surface,
         locale: request.locale,
