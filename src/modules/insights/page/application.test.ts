@@ -88,7 +88,7 @@ function makeEnhancer(result: InsightEnhancementResult): InsightEnhancerPort {
   };
 }
 
-test("read returns a complete rules envelope in default rules mode", async () => {
+test("read returns a complete local envelope when default enhancement has no enhancer", async () => {
   const app = createPageInsightsApplication({ adapters: [makeAdapter()] });
   const env = await app.read("dashboard", { range: "today" }, "zh-CN");
   assert.equal(env.surfaceId, "dashboard");

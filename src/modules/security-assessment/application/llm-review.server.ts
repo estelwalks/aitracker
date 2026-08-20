@@ -219,12 +219,12 @@ async function readLlmReviewPreference(): Promise<boolean> {
     const { getCompositionRoot } =
       await import("../../../app/composition.server.ts");
     const root = await getCompositionRoot();
-    return (
-      root.database.features.appPreferences.get(SECURITY_LLM_REVIEW_PREF_KEY)
-        ?.value === true
+    const stored = root.database.features.appPreferences.get(
+      SECURITY_LLM_REVIEW_PREF_KEY,
     );
+    return stored === undefined ? true : stored.value === true;
   } catch {
-    return false;
+    return true;
   }
 }
 

@@ -8,7 +8,7 @@ export const nav = {
   distill: "蒸留ワークベンチ",
   reports: "デイリーレポート",
   memoryHub: "メモリ",
-  guard: "セキュリティと防御",
+  guard: "セキュリティ検査",
   tracker: "バーンランキング",
   skillHub: "スキル管理",
   market: "Skill マーケット",

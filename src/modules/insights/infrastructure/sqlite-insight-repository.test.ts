@@ -81,6 +81,40 @@ test("surface preference overrides global", (t) => {
   assert.equal(repository.getEffectivePreference("tracker").mode, "rules");
 });
 
+test("fresh databases default insight enhancement to enabled", (t) => {
+  const repository = createSqliteInsightRepository(fixture(t));
+  assert.deepEqual(repository.getEffectivePreference("dashboard"), {
+    scopeKey: "global",
+    mode: "enhanced-auto",
+    profileId: null,
+    consentVersion: "1",
+    consentedAtMs: 0,
+    dailyCallLimit: null,
+    updatedAtMs: 0,
+  });
+});
+
+test("insight toggle preference persists local-rules and enhanced-auto modes", (t) => {
+  const repository = createSqliteInsightRepository(fixture(t));
+  const base = {
+    scopeKey: "global",
+    profileId: null,
+    consentVersion: null,
+    consentedAtMs: null,
+    dailyCallLimit: null,
+    updatedAtMs: 20,
+  };
+
+  repository.setPreference({ ...base, mode: "enhanced-auto", updatedAtMs: 21 });
+  assert.equal(
+    repository.getEffectivePreference("dashboard").mode,
+    "enhanced-auto",
+  );
+
+  repository.setPreference({ ...base, mode: "rules", updatedAtMs: 22 });
+  assert.equal(repository.getEffectivePreference("dashboard").mode, "rules");
+});
+
 test("rules mode writes no enhancement cache", (t) => {
   const host = fixture(t);
   const repository = createSqliteInsightRepository(host);

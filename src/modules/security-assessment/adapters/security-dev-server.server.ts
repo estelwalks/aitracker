@@ -26,7 +26,6 @@ import {
   projectDesktopSecurityHistory,
 } from "../../../app/desktop-state-broker.server.ts";
 import { getCompositionRoot } from "../../../app/composition.server.ts";
-import { SECURITY_LLM_REVIEW_PREF_KEY } from "../llm-review.contracts.ts";
 
 /**
  * Browser-dev-only security backend.
@@ -164,16 +163,12 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
     },
     async modelConfig() {
       const root = await getCompositionRoot();
-      const enabled =
-        root.database.features.appPreferences.get(SECURITY_LLM_REVIEW_PREF_KEY)
-          ?.value === true;
-      if (!enabled) return undefined;
       const active = await root.modelProfiles.getActiveView();
       if (!active) return undefined;
       const profile = (await root.modelProfiles.getProfileForExecution(
         active.id,
       )) as StoredModelProfile | null;
-      return toSecurityModelConfig(profile, enabled);
+      return toSecurityModelConfig(profile, true);
     },
   };
 }
@@ -191,16 +186,16 @@ export function createDevSecurityScannerService(
   return import("../../../../electron/security-scanner-service.js").then(
     ({ SecurityScannerService }) =>
       new SecurityScannerService({
-    homeDirectory: options.homeDirectory,
-    locale: options.locale ?? (() => currentDevLocale),
-    env: options.env ?? process.env,
-    secretStorage: options.secretStorage ?? createDevSecretStorage(),
-    persistence: options.persistence ?? createDevScannerPersistence(),
-    ...(options.now ? { now: options.now } : {}),
-    ...(options.scanner ? { scanner: options.scanner } : {}),
-    ...(options.beforeOpenFile
-      ? { beforeOpenFile: options.beforeOpenFile }
-      : {}),
+        homeDirectory: options.homeDirectory,
+        locale: options.locale ?? (() => currentDevLocale),
+        env: options.env ?? process.env,
+        secretStorage: options.secretStorage ?? createDevSecretStorage(),
+        persistence: options.persistence ?? createDevScannerPersistence(),
+        ...(options.now ? { now: options.now } : {}),
+        ...(options.scanner ? { scanner: options.scanner } : {}),
+        ...(options.beforeOpenFile
+          ? { beforeOpenFile: options.beforeOpenFile }
+          : {}),
       }),
   );
 }

@@ -12,7 +12,7 @@ export function SecurityCard({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl bg-card shadow-[var(--elev-1)]">
+    <section className="overflow-hidden rounded-xl bg-card">
       <header className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-4">
         <div>
           <h2 className="text-[13px] font-semibold tracking-tight">{title}</h2>
