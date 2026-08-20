@@ -83,9 +83,6 @@ export function resolveAgentRoots(
   return roots;
 }
 
-const DATA_DIR = join(homedir(), APP_DATA_DIR);
-const BLACKLIST_FILE = join(DATA_DIR, "skill-blacklist.json");
-const ORIGINS_FILE = join(DATA_DIR, "skill-origins.json");
 const MARKET_API = `${MARKET_API_BASE}/skills`;
 // Market-evidence freshness comes from the public runtime policy source
 // (`skillMarketEvidence.freshForMinutes`); the old 5-minute magic constant
@@ -184,6 +181,90 @@ interface MarketOriginsFile {
   installations: Record<string, MarketOrigin>;
 }
 
+export interface SkillStateRepository {
+  readOrigins(): Promise<MarketOriginsFile>;
+  writeOrigins(value: MarketOriginsFile): Promise<void>;
+  readBlacklist(): Promise<string[]>;
+  writeBlacklist(names: string[]): Promise<void>;
+}
+
+const SKILL_STATE_NAMESPACE = "skill-state";
+const ORIGINS_STATE_KEY = "market-origins";
+const BLACKLIST_STATE_KEY = "blacklist";
+
+async function defaultSkillStateRepository(): Promise<SkillStateRepository> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const cache = (await getCompositionRoot()).database.features.httpCache;
+  return {
+    async readOrigins() {
+      const stored = (
+        await cache.get<MarketOriginsFile>(
+          SKILL_STATE_NAMESPACE,
+          ORIGINS_STATE_KEY,
+        )
+      )?.payload ?? { version: 1, installations: {} };
+      return {
+        ...stored,
+        installations: Object.fromEntries(
+          Object.entries(stored.installations).map(([key, origin]) => [
+            key,
+            {
+              ...origin,
+              source: {
+                ...origin.source,
+                url: `https://github.com/${origin.source.repoOwner}/${origin.source.repoName}`,
+              },
+            },
+          ]),
+        ),
+      };
+    },
+    async writeOrigins(value) {
+      const now = Date.now();
+      const stored = {
+        ...value,
+        installations: Object.fromEntries(
+          Object.entries(value.installations).map(([key, origin]) => [
+            key,
+            {
+              ...origin,
+              source: { ...origin.source, url: null },
+            },
+          ]),
+        ),
+      };
+      await cache.put({
+        namespace: SKILL_STATE_NAMESPACE,
+        key: ORIGINS_STATE_KEY,
+        payload: stored,
+        fetchedAtMs: now,
+        expiresAtMs: Number.MAX_SAFE_INTEGER,
+      });
+    },
+    async readBlacklist() {
+      return (
+        (await cache.get<string[]>(SKILL_STATE_NAMESPACE, BLACKLIST_STATE_KEY))
+          ?.payload ?? []
+      );
+    },
+    async writeBlacklist(names) {
+      const now = Date.now();
+      await cache.put({
+        namespace: SKILL_STATE_NAMESPACE,
+        key: BLACKLIST_STATE_KEY,
+        payload: [...new Set(names)].sort(),
+        fetchedAtMs: now,
+        expiresAtMs: Number.MAX_SAFE_INTEGER,
+      });
+    },
+  };
+}
+
+function originKey(path: string): string {
+  return createHash("sha256").update(resolve(path)).digest("hex");
+}
+
 export interface MarketSkillOriginInput {
   name: string;
   slug: string;
@@ -213,6 +294,7 @@ interface ScanOptions {
   env?: Record<string, string | undefined>;
   /** P5-T5-03: real cancellation; checked before and during scans. */
   signal?: AbortSignal;
+  stateRepository?: SkillStateRepository;
 }
 
 function agentInstallationFacts(
@@ -343,30 +425,10 @@ function frontmatterSource(
   };
 }
 
-async function readOrigins(
-  filePath = ORIGINS_FILE,
-): Promise<MarketOriginsFile> {
-  try {
-    const parsed = JSON.parse(
-      await readFile(filePath, "utf8"),
-    ) as MarketOriginsFile;
-    if (parsed.version !== 1 || typeof parsed.installations !== "object")
-      throw new Error();
-    return parsed;
-  } catch {
-    return { version: 1, installations: {} };
-  }
-}
-
-async function writeOrigins(
-  value: MarketOriginsFile,
-  filePath = ORIGINS_FILE,
-): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
-  await writeFile(filePath, JSON.stringify(value, null, 2), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+async function skillState(options: {
+  stateRepository?: SkillStateRepository;
+}): Promise<SkillStateRepository> {
+  return options.stateRepository ?? defaultSkillStateRepository();
 }
 
 function normalizedVersion(value: string | null | undefined): number[] | null {
@@ -554,6 +616,7 @@ function containsParentTraversal(path: string): boolean {
 interface SkillOpOptions {
   homeDirectory?: string;
   dataDirectory?: string;
+  stateRepository?: SkillStateRepository;
 }
 
 /** 解析注入的数据目录:显式 dataDirectory 优先,否则跟随 homeDirectory。 */
@@ -707,7 +770,7 @@ async function recordSkill(
   if (!context.descriptions.has(name)) {
     context.descriptions.set(name, frontmatter.description ?? null);
   }
-  const origin = context.origins.installations[resolve(skillPath)];
+  const origin = context.origins.installations[originKey(skillPath)];
   const version = frontmatter.version ?? origin?.localVersion ?? null;
   const evidence = updateEvidence({ version, origin });
   const current = context.installations.get(name) ?? [];
@@ -800,36 +863,6 @@ async function scanInstallations(
   return { installations, descriptions };
 }
 
-async function readBlacklist(filePath = BLACKLIST_FILE): Promise<string[]> {
-  try {
-    const value = JSON.parse(await readFile(filePath, "utf8")) as unknown;
-    return Array.isArray(value)
-      ? [
-          ...new Set(
-            value.filter((item): item is string => typeof item === "string"),
-          ),
-        ].sort()
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeBlacklist(
-  names: string[],
-  filePath = BLACKLIST_FILE,
-): Promise<void> {
-  await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
-  await writeFile(
-    filePath,
-    JSON.stringify([...new Set(names)].sort(), null, 2),
-    {
-      encoding: "utf8",
-      mode: 0o600,
-    },
-  );
-}
-
 export async function scanLocalSkills(
   options: ScanOptions = {},
 ): Promise<SkillSnapshot> {
@@ -837,10 +870,10 @@ export async function scanLocalSkills(
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
   const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
-  const dataDirectory = options.dataDirectory ?? DATA_DIR;
+  const state = await skillState(options);
   const [origins, blacklist, installationFacts] = await Promise.all([
-    readOrigins(join(dataDirectory, "skill-origins.json")),
-    readBlacklist(join(dataDirectory, "skill-blacklist.json")),
+    state.readOrigins(),
+    state.readBlacklist(),
     detectToolInstallations(AI_TOOLS, homeDirectory),
   ]);
   const agents = agentInstallationFacts(installationFacts);
@@ -1005,7 +1038,7 @@ async function copySkillToAgent(
     process.env,
   );
   const name = safeSkillName(basename(input.sourcePath).replace(/\.md$/i, ""));
-  if ((await readBlacklist()).includes(name))
+  if ((await (await skillState(options)).readBlacklist()).includes(name))
     throw new AppError("errors.skills.blacklisted");
 
   const sourceStat = await lstat(input.sourcePath);
@@ -1066,15 +1099,15 @@ export async function installLocalSkill(
     },
     options,
   );
-  const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
-  const origins = await readOrigins(originsFile);
-  const sourceOrigin = origins.installations[resolve(input.sourcePath)];
+  const state = await skillState(options);
+  const origins = await state.readOrigins();
+  const sourceOrigin = origins.installations[originKey(input.sourcePath)];
   if (sourceOrigin) {
-    origins.installations[resolve(targetPath)] = {
+    origins.installations[originKey(targetPath)] = {
       ...sourceOrigin,
       installedAt: new Date().toISOString(),
     };
-    await writeOrigins(origins, originsFile);
+    await state.writeOrigins(origins);
   }
 }
 
@@ -1111,9 +1144,9 @@ export async function installMarketSkill(
     repoPath: input.origin.repoPath,
     slug: input.origin.slug,
   };
-  const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
-  const origins = await readOrigins(originsFile);
-  origins.installations[resolve(targetPath)] = {
+  const state = await skillState(options);
+  const origins = await state.readOrigins();
+  origins.installations[originKey(targetPath)] = {
     source,
     installedAt: now,
     localVersion,
@@ -1123,7 +1156,7 @@ export async function installMarketSkill(
     latestRemoteUpdatedAt: input.origin.updatedAt ?? null,
     checkedAt: now,
   };
-  await writeOrigins(origins, originsFile);
+  await state.writeOrigins(origins);
 }
 
 function marketRecord(value: unknown): Record<string, unknown> | null {
@@ -1139,14 +1172,14 @@ function optionalRemoteString(value: unknown): string | null {
 export async function refreshMarketSkillEvidence(
   options: {
     dataDirectory?: string;
+    stateRepository?: SkillStateRepository;
     fetcher?: typeof fetch;
     now?: Date;
     force?: boolean;
   } = {},
 ): Promise<boolean> {
-  const dataDirectory = options.dataDirectory ?? DATA_DIR;
-  const filePath = join(dataDirectory, "skill-origins.json");
-  const origins = await readOrigins(filePath);
+  const state = await skillState(options);
+  const origins = await state.readOrigins();
   const now = options.now ?? new Date();
   const dueOrigins = Object.entries(origins.installations).filter(
     ([, origin]) => {
@@ -1220,7 +1253,7 @@ export async function refreshMarketSkillEvidence(
       clearTimeout(timeout);
     }
   }
-  if (changed) await writeOrigins(origins, filePath);
+  if (changed) await state.writeOrigins(origins);
   return changed;
 }
 
@@ -1313,15 +1346,15 @@ export async function syncLocalSkill(
         },
         options,
       );
-      const originsFile = join(dataDirectoryFor(options), "skill-origins.json");
-      const origins = await readOrigins(originsFile);
-      const sourceOrigin = origins.installations[resolve(input.sourcePath)];
+      const state = await skillState(options);
+      const origins = await state.readOrigins();
+      const sourceOrigin = origins.installations[originKey(input.sourcePath)];
       if (sourceOrigin) {
-        origins.installations[resolve(targetPath)] = {
+        origins.installations[originKey(targetPath)] = {
           ...sourceOrigin,
           installedAt: new Date().toISOString(),
         };
-        await writeOrigins(origins, originsFile);
+        await state.writeOrigins(origins);
       }
       succeeded.push({ agent, path: targetPath });
     } catch (error) {
@@ -1349,11 +1382,13 @@ export async function syncLocalSkill(
 export async function setSkillBlacklisted(
   name: string,
   blocked: boolean,
+  options: SkillOpOptions = {},
 ): Promise<void> {
   const safeName = safeSkillName(name);
-  const current = await readBlacklist();
+  const state = await skillState(options);
+  const current = await state.readBlacklist();
   const next = blocked
     ? [...new Set([...current, safeName])]
     : current.filter((item) => item !== safeName);
-  await writeBlacklist(next);
+  await state.writeBlacklist(next);
 }

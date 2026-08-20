@@ -1,17 +1,7 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-
 import type { MarketListResult } from "./types.ts";
-import { APP_DATA_DIR } from "../app-config";
 
-const CACHE_VERSION = 1;
-const CACHE_FILE = join(homedir(), APP_DATA_DIR, "cache", "market-v1.json");
-
-interface MarketCache {
-  version: number;
-  entries: Record<string, MarketListResult>;
-}
+const SQLITE_NAMESPACE = "skill-market";
+const SQLITE_TTL_MS = 30 * 60 * 1_000;
 
 export function marketCacheKey(
   page: number,
@@ -23,44 +13,35 @@ export function marketCacheKey(
   return `${page}:${limit}:${search.toLocaleLowerCase()}:${sort ?? "stars"}:${tags ?? ""}`;
 }
 
-async function readCacheFile(): Promise<MarketCache> {
-  try {
-    const parsed = JSON.parse(await readFile(CACHE_FILE, "utf8")) as unknown;
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "version" in parsed &&
-      parsed.version === CACHE_VERSION &&
-      "entries" in parsed &&
-      typeof parsed.entries === "object" &&
-      parsed.entries !== null
-    ) {
-      return parsed as MarketCache;
-    }
-  } catch {
-    return { version: CACHE_VERSION, entries: {} };
-  }
-  return { version: CACHE_VERSION, entries: {} };
-}
-
 export async function readMarketCache(
   key: string,
 ): Promise<MarketListResult | null> {
-  const cache = await readCacheFile();
-  return cache.entries[key] ?? null;
+  const cache = await resolveSqliteCache();
+  return (
+    (await cache.get<MarketListResult>(SQLITE_NAMESPACE, key))?.payload ?? null
+  );
 }
 
 export async function writeMarketCache(
   key: string,
   result: MarketListResult,
 ): Promise<void> {
-  const cache = await readCacheFile();
-  cache.entries[key] = result;
-  const temporaryFile = `${CACHE_FILE}.${process.pid}.tmp`;
-  await mkdir(dirname(CACHE_FILE), { recursive: true, mode: 0o700 });
-  await writeFile(temporaryFile, JSON.stringify(cache), {
-    encoding: "utf8",
-    mode: 0o600,
+  const fetchedAtMs = Date.parse(result.fetchedAt);
+  if (!Number.isFinite(fetchedAtMs)) {
+    throw new TypeError("Market cache fetchedAt is invalid");
+  }
+  const cache = await resolveSqliteCache();
+  await cache.put({
+    namespace: SQLITE_NAMESPACE,
+    key,
+    payload: result,
+    fetchedAtMs,
+    expiresAtMs: fetchedAtMs + SQLITE_TTL_MS,
   });
-  await rename(temporaryFile, CACHE_FILE);
+}
+
+async function resolveSqliteCache() {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  return (await getCompositionRoot()).database.features.httpCache;
 }

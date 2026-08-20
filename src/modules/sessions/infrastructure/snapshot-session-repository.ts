@@ -6,7 +6,7 @@ import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
  * coordinator.
  *
  * The sessions page and the distillation transport previously went through
- * `createLegacySessionRepository`, which re-ran the full local session scan on
+ * `createSessionRepository`, which re-ran the full local session scan on
  * every query. This adapter reads the persisted snapshot index (O(1) after
  * hydrate) so page queries never scan. An empty snapshot triggers one
  * non-blocking background refresh and returns an empty list immediately —

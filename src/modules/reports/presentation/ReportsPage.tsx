@@ -15,9 +15,13 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
+import {
+  getPreference,
+  removePreference,
+} from "../../../lib/preferences/client.ts";
 import {
   addPeriods,
   dayKeyOf,
@@ -66,8 +70,6 @@ const KINDS: {
   },
 ];
 
-type Saved = { md: string; at: number };
-
 type GenerationFailureKey =
   | "reports.body.generationFailed"
   | "reports.body.generationTimedOut"
@@ -88,38 +90,6 @@ function generationFailureKey(errorCode?: string): GenerationFailureKey {
 }
 
 const mdKey = (key: string) => `tt.report.${key}.md`;
-
-/**
- * Report drafts used to be stored as JSON (`{ md, at }`), while the shared
- * autosave hook stores the Markdown string directly. Accept both formats so a
- * saved draft never masks a generated report merely because parsing failed.
- */
-function readSavedDraft(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (raw === null) return null;
-    try {
-      const legacy = JSON.parse(raw) as Partial<Saved>;
-      if (legacy && typeof legacy === "object" && typeof legacy.md === "string")
-        return legacy.md;
-    } catch {
-      // Current autosave format is raw Markdown, which is not JSON.
-    }
-    return raw;
-  } catch {
-    return null;
-  }
-}
-
-function removeSavedDraft(key: string) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    /* localStorage unavailable — drafts are best-effort */
-  }
-}
 
 /** Mirror of the prototype's `Period` shape, derived from a period key. */
 interface PeriodModel {
@@ -288,7 +258,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
     const q = query.trim().toLowerCase();
     if (!q) return periods;
     return periods.filter((item) => {
-      const saved = readSavedDraft(mdKey(item.key)) ?? "";
       const hasReport = feed.reports.some(
         (report) =>
           report.generatedAt &&
@@ -303,68 +272,29 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         item.label.toLocaleLowerCase().includes(q) ||
         item.from.includes(q) ||
         item.short.toLocaleLowerCase().includes(q) ||
-        saved.toLocaleLowerCase().includes(q) ||
         hasReport
       );
     });
   }, [periods, query, kind, feed.reports]);
-
-  const insightLines = useMemo(() => {
-    const lines: string[] = [];
-    if (feed.reportCount > 0) {
-      lines.push(
-        t("reports.insight.reports", {
-          count: format.formatNumber(feed.reportCount),
-        }),
-      );
-    }
-    if (feed.runCount > 0) {
-      lines.push(
-        t("reports.insight.runs", {
-          count: format.formatNumber(feed.runCount),
-        }),
-      );
-    }
-    if (feed.density.total > 0) {
-      lines.push(
-        t("reports.insight.sessions", {
-          count: format.formatNumber(feed.density.total),
-        }),
-      );
-    }
-    if (generateBlocked) {
-      lines.push(t("reports.insight.modelNotConfigured"));
-    }
-    if (lines.length === 0) lines.push(t("reports.insight.empty"));
-    return lines;
-  }, [
-    feed.reportCount,
-    feed.runCount,
-    feed.density.total,
-    generateBlocked,
-    t,
-    format,
-  ]);
 
   /* Load the body for the selected period: saved draft first, else the
      persisted report body (read-only from the server). */
   useEffect(() => {
     setMode("preview");
     dirtyRef.current = false;
-    const saved = readSavedDraft(mdKey(selectedKey));
-    if (saved !== null) {
-      setBody(saved);
-      return;
-    }
     const report = activeReport;
-    if (!report?.reportId) {
-      setBody("");
-      return;
-    }
     let cancelled = false;
-    getReportBody({ data: { reportId: report.reportId } })
-      .then((content) => {
-        if (!cancelled) setBody(content?.body ?? "");
+    void getPreference(mdKey(selectedKey))
+      .then(async (saved) => {
+        if (typeof saved === "string") return saved;
+        if (!report?.reportId) return "";
+        return (
+          (await getReportBody({ data: { reportId: report.reportId } }))
+            ?.body ?? ""
+        );
+      })
+      .then((nextBody) => {
+        if (!cancelled) setBody(nextBody);
       })
       .catch(() => {
         if (!cancelled) setBody("");
@@ -400,7 +330,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         return;
       }
       dirtyRef.current = false;
-      removeSavedDraft(mdKey(selectedKey));
+      void removePreference(mdKey(selectedKey));
       flush();
       toast.success(t("reports.body.save"));
     } catch {
@@ -450,7 +380,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
 
       // A period-scoped browser edit belongs to the previous report. It must
       // not shadow the freshly generated server draft.
-      removeSavedDraft(mdKey(selectedKey));
+      void removePreference(mdKey(selectedKey));
       setPreferredReport({ selection, reportId: result.reportId });
       setMode("preview");
       dirtyRef.current = false;
@@ -472,10 +402,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const prevKey = addPeriods(kind, selectedKey, -1);
   return (
     <div className="space-y-4 pb-12">
-      <JarvisInsight
+      <InsightCard
+        surfaceId="reports"
+        variant="hero"
         title={t("reports.insight.title")}
-        lines={insightLines}
-        rotateLabel={t("reports.insight.rotate")}
         dotsLabel={t("reports.insight.dots")}
       />
 

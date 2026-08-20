@@ -27,7 +27,7 @@ import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
-import { JarvisInsight } from "../../../components/JarvisInsight.tsx";
+import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
 import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
@@ -36,7 +36,6 @@ import type {
   DashboardV2BreakdownRow,
   DashboardV2CalendarPoint,
   DashboardV2HeroView,
-  DashboardV2Insight,
   DashboardV2Tool,
   DashboardV2View,
 } from "../contracts.ts";
@@ -50,27 +49,13 @@ const toolDisplayById = new Map(
 export function DashboardDeltaChip({
   value,
   points = false,
-  absolute = null,
   className = "",
 }: {
   value?: number | null;
   points?: boolean;
-  /** 上一周期为 0 时的绝对新增数（百分比无定义，显示 "+N"） */
-  absolute?: number | null;
   className?: string;
 }) {
   const { format, t } = useI18n();
-  if (absolute != null && Number.isFinite(absolute)) {
-    return (
-      <span
-        className={`inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--color-ok)] ${className}`}
-        title={t("dashboard.kpi.vsPrevious")}
-      >
-        <ArrowUpRight className="size-3" strokeWidth={2.2} />+
-        {format.formatNumber(absolute)}
-      </span>
-    );
-  }
   if (value == null || !Number.isFinite(value)) {
     return (
       <span className="font-mono text-[10px] text-muted-foreground">
@@ -113,76 +98,14 @@ function DashboardNewChip({ className = "" }: { className?: string }) {
   );
 }
 
-function insightMessage(
-  insight: DashboardV2Insight,
-  t: ReturnType<typeof useI18n>["t"],
-  format: ReturnType<typeof useI18n>["format"],
-  context: { range: string; live: number },
-) {
-  switch (insight.kind) {
-    case "usage":
-      return t("dashboard.v2.insights.usage", {
-        range: context.range,
-        live: context.live,
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-      });
-    case "cache":
-      return t("dashboard.v2.insights.cache", {
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-        rate: format.formatPercent(Math.round(insight.cacheRate ?? 0)),
-      });
-    case "cost":
-      return t("dashboard.v2.insights.cost", {
-        tokens: format.formatTokens(insight.tokens ?? 0),
-        calls: format.formatNumber(insight.calls ?? 0),
-        cost: format.formatUsd(insight.estimatedCostUsd ?? 0),
-        tool: insight.toolName ?? t("dashboard.v2.unknownTool"),
-        pct: format.formatPercent(Math.round(insight.pct ?? 0)),
-      });
-    case "security":
-      return insight.riskCount
-        ? t("dashboard.v2.insights.securityRisk", { count: insight.riskCount })
-        : insight.scanned != null
-          ? t("dashboard.v2.insights.securityClean", {
-              scanned: insight.scanned,
-            })
-          : t("dashboard.v2.insights.securityCleanNoScan");
-    case "monitoring":
-      return t("dashboard.v2.insights.monitoring");
-    case "empty":
-      return t("dashboard.v2.insights.empty");
-  }
-}
-
-/** Renderer accepts server-composed insights as-is; a future LLM adapter only needs to supply this contract. */
-export function DashboardJarvisInsight({
-  hero,
-  rangeLabel,
-}: {
-  hero: DashboardV2HeroView;
-  rangeLabel: string;
-}) {
-  const { t, format } = useI18n();
-  // Thin wrapper over the shared Jarvis insight card: every dashboard
-  // insight is composed server-side, then rendered with the hero variant.
-  const lines = useMemo(
-    () =>
-      hero.insights.length
-        ? hero.insights.map((insight) =>
-            insightMessage(insight, t, format, {
-              range: rangeLabel,
-              live: hero.monitoring.liveTools,
-            }),
-          )
-        : [t("dashboard.v2.insights.empty")],
-    [format, hero, rangeLabel, t],
-  );
+/** Dashboard hero consumes the shared page-insight envelope (M5 double mode). */
+export function DashboardJarvisInsight() {
+  const { t } = useI18n();
   return (
-    <JarvisInsight
+    <InsightCard
+      surfaceId="dashboard"
       variant="hero"
       title={t("dashboard.v2.heroTitle")}
-      lines={lines}
-      rotateLabel={t("dashboard.v2.rotateInsight")}
       dotsLabel={t("dashboard.v2.insightDotsAria")}
     />
   );
@@ -220,9 +143,13 @@ export function DashboardTrustHero({
   const securitySub =
     security == null
       ? t("dashboard.v2.securityNotScanned")
-      : t("dashboard.v2.securityScanSummary", {
-          assessed: security.assessedAssetCount,
-          discovered: security.discoveredAssetCount,
+      : t("dashboard.v2.securitySafeUnsafe", {
+          safe: security.cleanCount,
+          unsafe:
+            security.suspiciousCount +
+            security.dangerousCount +
+            security.unknownCount +
+            security.failedAssetCount,
         });
   const todaySub =
     today.estimatedCostUsd == null
@@ -391,6 +318,7 @@ export function DashboardMetricGrid({
           ? t("dashboard.v2.eventCount", { count: view.totals.events })
           : format.formatUsd(view.estimatedCostUsd),
       delta: view.comparison.tokens.deltaPercent,
+      alwaysBaseline: true,
     },
     {
       icon: CircleDollarSign,
@@ -407,6 +335,7 @@ export function DashboardMetricGrid({
               month: format.formatUsd((view.estimatedCostUsd / days) * 30),
             }),
       delta: view.comparison.cost.deltaPercent,
+      alwaysBaseline: true,
     },
     {
       icon: Activity,
@@ -424,7 +353,6 @@ export function DashboardMetricGrid({
               ),
             }),
       delta: view.comparison.sessions.deltaPercent,
-      absoluteDelta: view.comparison.sessions.absoluteDelta,
       alwaysBaseline: true,
     },
     {
@@ -442,6 +370,7 @@ export function DashboardMetricGrid({
             }),
       delta: view.comparison.cacheRate.deltaPoints,
       deltaPoints: true,
+      alwaysBaseline: true,
     },
     {
       icon: Wrench,
@@ -538,11 +467,9 @@ export function DashboardMetricGrid({
               <strong className="tt-num min-w-0 flex-1 truncate text-[22px] leading-none font-black tracking-tight">
                 {card.value}
               </strong>
-              {card.delta != null ||
-              ("absoluteDelta" in card && card.absoluteDelta != null) ? (
+              {card.delta != null ? (
                 <DashboardDeltaChip
                   value={card.delta}
-                  absolute={"absoluteDelta" in card ? card.absoluteDelta : null}
                   points={"deltaPoints" in card && card.deltaPoints === true}
                   className="shrink-0"
                 />

@@ -1,15 +1,17 @@
 import { z } from "zod";
 
-import type { AtomicJsonStore } from "../../platform/persistence/contracts.ts";
-import {
-  monitoringModuleId,
-  type MonitoringStatus,
-  type MonitoringStatusStore,
-} from "./contracts.ts";
+import { monitoringModuleId, type MonitoringStatus } from "./contracts.ts";
 
 const collectorSchema = z
   .object({
-    id: z.enum(["usage", "skills", "sessions", "security", "exchange"]),
+    id: z.enum([
+      "usage",
+      "skills",
+      "sessions",
+      "security",
+      "exchange",
+      "installation",
+    ]),
     state: z.enum(["idle", "running", "healthy", "degraded", "failed"]),
     pending: z.boolean(),
     lastStartedAt: z.string().datetime({ offset: true }).optional(),
@@ -52,16 +54,3 @@ export const monitoringStatusSchema = {
     return parsed as MonitoringStatus;
   },
 };
-
-export function createAtomicMonitoringStatusStore(
-  store: AtomicJsonStore<MonitoringStatus | null>,
-): MonitoringStatusStore {
-  return {
-    async load() {
-      return (await store.read()).value ?? undefined;
-    },
-    async save(status) {
-      await store.write(status);
-    },
-  };
-}

@@ -1,4 +1,5 @@
 import { err, ok, type Result } from "../../../shared/result.ts";
+import { RENDERER_SAFE_RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
 import type {
   GetSourceHealthRequest,
   SourceHealth,
@@ -9,15 +10,9 @@ import type {
   SourcesApplicationErrorCode,
 } from "../contracts.ts";
 
-/**
- * Display-only freshness label for the Sources health view ("fresh" vs
- * "stale" badge on the page). This is a presentation heuristic, NOT a
- * snapshot freshness or refresh cycle — per the runtime-policy governance
- * rule (设计文档 §3.4 规则 7) local UI parameters stay in their module;
- * the underlying data freshness comes from
- * `runtime-policy.source.json` -> snapshotPolicies.
- */
-const DEFAULT_MAX_AGE_MS = 5 * 60 * 1000;
+/** Keep the Sources badge aligned with the Usage snapshot it primarily shows. */
+export const DEFAULT_MAX_AGE_MS =
+  RENDERER_SAFE_RUNTIME_POLICY.snapshotPolicies.usage.freshForMinutes * 60_000;
 
 function freshness(
   timestamp: string | undefined,

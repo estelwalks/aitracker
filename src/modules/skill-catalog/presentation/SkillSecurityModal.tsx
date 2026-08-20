@@ -42,7 +42,7 @@ function verdictDisplay(verdict: SecurityVerdict): {
 /**
  * Real security history for a single skill, driven by the same SecurityClient
  * the /security page and the card KPIs use (never the stale `lib/security`
- * localStorage store). Shows past scans with verdict and finding counts, or a
+ * SQLite-backed security history). Shows past scans with verdict and finding counts, or a
  * CTA to the security page when nothing is recorded.
  */
 export function SkillSecurityModal({

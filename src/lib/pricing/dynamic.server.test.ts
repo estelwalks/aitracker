@@ -4,7 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import type { ExchangeRateCache } from "../../platform/snapshot-runtime/exchange-rate.server.ts";
 import { buildPricingSnapshot } from "./dynamic.server.ts";
+
+/** In-memory exchange-rate cache so the refresh never reaches the SQLite composition root. */
+function memoryCache(): ExchangeRateCache {
+  let value: Awaited<ReturnType<ExchangeRateCache["read"]>>;
+  return {
+    async read() {
+      return value;
+    },
+    async write(next) {
+      value = next;
+    },
+  };
+}
 
 /**
  * Model prices are resolved offline from the rule-pack registry (resolve.ts);
@@ -31,6 +45,7 @@ test("refresh loads latest exchange rate and stamps the offline rule-pack versio
       homeDirectory,
       now: new Date("2026-07-28T12:00:00.000Z"),
       fetcher,
+      cache: memoryCache(),
       refreshExchange: true,
     });
     assert.equal(snapshot.exchangeRateSource, "live");

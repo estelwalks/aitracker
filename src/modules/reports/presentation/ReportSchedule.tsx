@@ -33,7 +33,7 @@ function summaryFor(
  * 自动定时生成 (ReportSchedule). When never configured it renders the first-run
  * guide card ("开启自动定时生成"); once saved it shows a status bar + switch +
  * cadence/time/weekday settings. Persistence is `tt.report.schedule` (Electron
- * prefs when available, else localStorage) and every save/toggle syncs the
+ * SQLite application preferences) and every save/toggle syncs the
  * config into the task scheduler's `reports.generate` preference (Story B-200)
  * — see `report-schedule.ts`. A sync failure shows an error toast but never
  * blocks the local save.

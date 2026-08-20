@@ -203,7 +203,7 @@ test("scan schedule reads agent and dir scope fields from the companion", async 
   assert.equal(schedule.dir, null);
 });
 
-test("scan schedule defaults agents and dir for legacy 5-field responses", async () => {
+test("scan schedule rejects incomplete persisted responses", async () => {
   const client = await connectBrowserSecurityClient({
     location,
     fetchFn: async (input) => {
@@ -219,10 +219,7 @@ test("scan schedule defaults agents and dir for legacy 5-field responses", async
     },
   });
   assert.ok(client);
-  const schedule = await client.getScanSchedule();
-  assert.equal(schedule.scope, "all");
-  assert.deepEqual(schedule.agents, []);
-  assert.equal(schedule.dir, null);
+  await assert.rejects(client.getScanSchedule());
 });
 
 test("setScanSchedule posts the full widened schedule including agents and dir", async () => {

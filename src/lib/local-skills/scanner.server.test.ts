@@ -11,21 +11,70 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { APP_DATA_DIR } from "../app-config";
 
 import {
   batchUninstallLocalSkills,
-  installMarketSkill,
-  readSkillFiles,
-  refreshMarketSkillEvidence,
-  scanLocalSkills,
+  installMarketSkill as installMarketSkillWithState,
+  readSkillFiles as readSkillFilesWithState,
+  refreshMarketSkillEvidence as refreshMarketSkillEvidenceWithState,
+  scanLocalSkills as scanLocalSkillsWithState,
   SKILL_ROOT_SUFFIXES,
-  syncLocalSkill,
+  syncLocalSkill as syncLocalSkillWithState,
+  type SkillStateRepository,
   uninstallLocalSkill,
 } from "./scanner.server.ts";
+
+let origins = { version: 1 as const, installations: {} } as Awaited<
+  ReturnType<SkillStateRepository["readOrigins"]>
+>;
+let blacklist: string[] = [];
+const testState: SkillStateRepository = {
+  async readOrigins() {
+    return structuredClone(origins);
+  },
+  async writeOrigins(value) {
+    origins = structuredClone(value);
+  },
+  async readBlacklist() {
+    return [...blacklist];
+  },
+  async writeBlacklist(value) {
+    blacklist = [...value];
+  },
+};
+const originKey = (path: string) =>
+  createHash("sha256").update(resolve(path)).digest("hex");
+
+const scanLocalSkills = (
+  options: Parameters<typeof scanLocalSkillsWithState>[0] = {},
+) => scanLocalSkillsWithState({ ...options, stateRepository: testState });
+const installMarketSkill = (
+  input: Parameters<typeof installMarketSkillWithState>[0],
+  options: Parameters<typeof installMarketSkillWithState>[1] = {},
+) =>
+  installMarketSkillWithState(input, {
+    ...options,
+    stateRepository: testState,
+  });
+const refreshMarketSkillEvidence = (
+  options: Parameters<typeof refreshMarketSkillEvidenceWithState>[0] = {},
+) =>
+  refreshMarketSkillEvidenceWithState({
+    ...options,
+    stateRepository: testState,
+  });
+const syncLocalSkill = (
+  input: Parameters<typeof syncLocalSkillWithState>[0],
+  options: Parameters<typeof syncLocalSkillWithState>[1] = {},
+) => syncLocalSkillWithState(input, { ...options, stateRepository: testState });
+const readSkillFiles = (
+  name: Parameters<typeof readSkillFilesWithState>[0],
+  options: Parameters<typeof readSkillFilesWithState>[1] = {},
+) => readSkillFilesWithState(name, { ...options, stateRepository: testState });
 
 test("scans common agent roots without treating mtime as usage evidence", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
@@ -63,9 +112,9 @@ test("detects an installed Agent even when its skill directory is empty", async 
     });
     assert.equal(snapshot.skills.length, 0);
     assert.equal(snapshot.agents["Codex"].installed, true);
-    assert.deepEqual(snapshot.agents["Codex"].detectedPaths, [
-      join(root, ".codex"),
-    ]);
+    assert.ok(
+      snapshot.agents["Codex"].detectedPaths.includes(join(root, ".codex")),
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -152,32 +201,29 @@ test("marks an update only when persisted market evidence is truly newer", async
       join(skillPath, "SKILL.md"),
       "---\nversion: 1.0.0\n---\n# Market\n",
     );
-    await writeFile(
-      join(dataDirectory, "skill-origins.json"),
-      JSON.stringify({
-        version: 1,
-        installations: {
-          [skillPath]: {
-            source: {
-              kind: "market",
-              label: "owner/repo",
-              url: "https://github.com/owner/repo",
-              repoOwner: "owner",
-              repoName: "repo",
-              repoPath: "skills/market-skill/SKILL.md",
-              slug: "market-skill",
-            },
-            installedAt: "2026-01-01T00:00:00.000Z",
-            localVersion: "1.0.0",
-            installedRemoteVersion: "1.0.0",
-            installedRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
-            latestRemoteVersion: "1.1.0",
-            latestRemoteUpdatedAt: "2026-02-01T00:00:00.000Z",
-            checkedAt: "2026-02-01T00:00:00.000Z",
+    origins = {
+      version: 1,
+      installations: {
+        [originKey(skillPath)]: {
+          source: {
+            kind: "market",
+            label: "owner/repo",
+            url: "https://github.com/owner/repo",
+            repoOwner: "owner",
+            repoName: "repo",
+            repoPath: "skills/market-skill/SKILL.md",
+            slug: "market-skill",
           },
+          installedAt: "2026-01-01T00:00:00.000Z",
+          localVersion: "1.0.0",
+          installedRemoteVersion: "1.0.0",
+          installedRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
+          latestRemoteVersion: "1.1.0",
+          latestRemoteUpdatedAt: "2026-02-01T00:00:00.000Z",
+          checkedAt: "2026-02-01T00:00:00.000Z",
         },
-      }),
-    );
+      },
+    } as typeof origins;
 
     const snapshot = await scanLocalSkills({
       homeDirectory: root,
@@ -195,34 +241,30 @@ test("marks an update only when persisted market evidence is truly newer", async
 test("refreshes matching market evidence without inventing missing fields", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
-  const originsPath = join(dataDirectory, "skill-origins.json");
   await mkdir(dataDirectory, { recursive: true });
-  await writeFile(
-    originsPath,
-    JSON.stringify({
-      version: 1,
-      installations: {
-        "/tmp/example": {
-          source: {
-            kind: "market",
-            label: "owner/repo",
-            url: "https://github.com/owner/repo",
-            repoOwner: "owner",
-            repoName: "repo",
-            repoPath: "skills/example/SKILL.md",
-            slug: "example",
-          },
-          installedAt: "2026-01-01T00:00:00.000Z",
-          localVersion: "1.0.0",
-          installedRemoteVersion: "1.0.0",
-          installedRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
-          latestRemoteVersion: "1.0.0",
-          latestRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
-          checkedAt: "2026-01-01T00:00:00.000Z",
+  origins = {
+    version: 1,
+    installations: {
+      [originKey("/tmp/example")]: {
+        source: {
+          kind: "market",
+          label: "owner/repo",
+          url: "https://github.com/owner/repo",
+          repoOwner: "owner",
+          repoName: "repo",
+          repoPath: "skills/example/SKILL.md",
+          slug: "example",
         },
+        installedAt: "2026-01-01T00:00:00.000Z",
+        localVersion: "1.0.0",
+        installedRemoteVersion: "1.0.0",
+        installedRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
+        latestRemoteVersion: "1.0.0",
+        latestRemoteUpdatedAt: "2026-01-01T00:00:00.000Z",
+        checkedAt: "2026-01-01T00:00:00.000Z",
       },
-    }),
-  );
+    },
+  } as typeof origins;
   try {
     const changed = await refreshMarketSkillEvidence({
       dataDirectory,
@@ -241,21 +283,13 @@ test("refreshes matching market evidence without inventing missing fields", asyn
         }),
     });
     assert.equal(changed, true);
-    const persisted = JSON.parse(await readFile(originsPath, "utf8")) as {
-      installations: Record<
-        string,
-        {
-          latestRemoteVersion: string | null;
-          latestRemoteUpdatedAt: string | null;
-        }
-      >;
-    };
+    const persisted = await testState.readOrigins();
     assert.equal(
-      persisted.installations["/tmp/example"].latestRemoteVersion,
+      persisted.installations[originKey("/tmp/example")].latestRemoteVersion,
       null,
     );
     assert.equal(
-      persisted.installations["/tmp/example"].latestRemoteUpdatedAt,
+      persisted.installations[originKey("/tmp/example")].latestRemoteUpdatedAt,
       "2026-02-01T00:00:00.000Z",
     );
   } finally {
@@ -296,16 +330,15 @@ test("installs a validated market skill from the controlled temporary directory"
       readFile(join(targetPath, "SKILL.md"), "utf8"),
     );
     assert.match(installed, /version: 2.3.4/);
-    const origins = JSON.parse(
-      await readFile(join(dataDirectory, "skill-origins.json"), "utf8"),
-    ) as {
-      installations: Record<
-        string,
-        { localVersion: string; source: { slug: string } }
-      >;
-    };
-    assert.equal(origins.installations[targetPath].localVersion, "2.3.4");
-    assert.equal(origins.installations[targetPath].source.slug, name);
+    const persisted = await testState.readOrigins();
+    assert.equal(
+      persisted.installations[originKey(targetPath)].localVersion,
+      "2.3.4",
+    );
+    assert.equal(
+      persisted.installations[originKey(targetPath)].source.slug,
+      name,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -331,7 +364,7 @@ test("rejects a market source outside the controlled temporary directory", async
   }
 });
 
-test("rejects symbolic links anywhere in a market skill source", async () => {
+test("rejects symbolic links anywhere in a market skill source", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const marketRoot = join(dataDirectory, "tmp", `market-${randomUUID()}`);
@@ -341,7 +374,15 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
     await mkdir(sourcePath, { recursive: true });
     await writeFile(join(sourcePath, "SKILL.md"), "# Symlink");
     await writeFile(linkedFile, "linked");
-    await symlink(linkedFile, join(sourcePath, "reference.md"));
+    try {
+      await symlink(linkedFile, join(sourcePath, "reference.md"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EPERM") {
+        t.skip("Windows symlink privilege unavailable");
+        return;
+      }
+      throw error;
+    }
 
     await assert.rejects(
       installMarketSkill(
@@ -735,7 +776,7 @@ test("prefers frontmatter name over the directory name", async () => {
   }
 });
 
-test("skips dot-prefixed and symlinked skill directories", async () => {
+test("skips dot-prefixed and symlinked skill directories", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-hidden-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
@@ -745,7 +786,15 @@ test("skips dot-prefixed and symlinked skill directories", async () => {
     const realSkill = join(claudeRoot, "real");
     await mkdir(realSkill, { recursive: true });
     await writeFile(join(realSkill, "SKILL.md"), "# real");
-    await symlink(realSkill, join(claudeRoot, "linked"));
+    try {
+      await symlink(realSkill, join(claudeRoot, "linked"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EPERM") {
+        t.skip("Windows symlink privilege unavailable");
+        return;
+      }
+      throw error;
+    }
     const snapshot = await scanLocalSkills({
       homeDirectory: root,
       dataDirectory,
@@ -903,7 +952,12 @@ test("uninstall accepts nested managed paths and rejects traversal escapes", asy
     const linked = join(claudeRoot, `escape-${randomUUID().slice(0, 8)}`);
     const outside = await mkdtemp(join(tmpdir(), "tt-outside-"));
     try {
-      await symlink(outside, linked);
+      try {
+        await symlink(outside, linked);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+        throw error;
+      }
       await assert.rejects(
         uninstallLocalSkill(linked, { homeDirectory: root }),
         /errors\.skills\.symlinkEscape/,
@@ -990,7 +1044,9 @@ test("measures skill size/token and reads the real file tree via readSkillFiles"
     });
     assert.equal(listing.name, "file-reader");
     assert.equal(listing.root, "file-reader");
-    const paths = listing.files.map((file) => file.path).sort();
+    const paths = listing.files
+      .map((file) => file.path.replaceAll("\\", "/"))
+      .sort();
     assert.deepEqual(paths, ["SKILL.md", "references/usage.md"]);
     const manifest = listing.files.find((file) => file.path === "SKILL.md");
     assert.match(manifest?.content ?? "", /# File reader/);

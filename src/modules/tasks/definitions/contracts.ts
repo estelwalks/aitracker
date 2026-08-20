@@ -4,7 +4,6 @@ export const JOB_EXECUTOR_KEYS = [
   "refresh-usage-v1",
   "refresh-skills-v1",
   "refresh-sessions-v1",
-  "monitor-security-v1",
   "apply-retention-v1",
   "generate-report-v1",
   "refresh-exchange-v1",

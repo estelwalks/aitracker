@@ -1,12 +1,15 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
 
-import { APP_DATA_DIR, ENV } from "../../../lib/app-config.ts";
+import type { ModelConfig } from "skill-scanner";
+
+import { ENV } from "../../../lib/app-config.ts";
+import type { PreferenceValue } from "../../settings/infrastructure/sqlite-preference-repository.server.ts";
 import { createNodeRuntimeIdentity } from "../../../platform/runtime/node-runtime-identity.ts";
-import type { DesktopLocale } from "../../../../electron/contracts";
+import type {
+  DesktopLocale,
+  SecurityScanHistoryEntry,
+  SecurityScanSchedule,
+} from "../../../../electron/contracts";
 import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
@@ -14,8 +17,15 @@ import {
 import {
   SecurityScannerService,
   type SecretStoragePort,
+  type SecurityScannerPersistence,
   type SecurityScannerServiceOptions,
 } from "../../../../electron/security-scanner-service";
+import {
+  DESKTOP_HISTORY_KEY,
+  DESKTOP_SCHEDULE_KEY,
+  projectDesktopSecurityHistory,
+} from "../../../app/desktop-state-broker.server.ts";
+import { getCompositionRoot } from "../../../app/composition.server.ts";
 
 /**
  * Browser-dev-only security backend.
@@ -25,31 +35,15 @@ import {
  * `http://127.0.0.1:*` origin — falls back to `null` there. This module is
  * wired into `src/server.ts` (the Nitro fetch handler) so `/api/security/*`
  * requests made against the dev server are served by the *same* production
- * `SecurityScannerService` the Electron desktop app uses, with a dev-only
- * plaintext secret store and the *same* data directory (`~/.trusttools/`) —
- * the browser and the desktop app therefore read and write one shared scan
- * history (`security-scan-history.json`) and one shared scan schedule.
- *
- * Trade-off (accepted deliberately): the desktop app and the dev server each
- * serialize their own history appends in-process only, so if both processes
- * run a scan at the same moment the later atomic rename can overwrite the
- * other's most recent entries (files never corrupt). History entries are
- * written redacted, so cross-process reads need no shared secret.
+ * `SecurityScannerService` the Electron desktop app uses. History, schedule,
+ * and model configuration are obtained from the server-owned SQLite runtime;
+ * this module never creates a second database writer or a file fallback.
  *
  * It is named `*.server.ts` so TanStack Start / Nitro keep it off the browser
  * bundle. The runtime-kind gate below additionally prevents activation inside
  * Electron, where `local-web-server.ts` already short-circuits
  * `/api/security/*` before this handler runs.
  */
-
-/** Filename (inside `dataDirectory`) that holds the dev plaintext API key. */
-const DEV_API_KEY_FILENAME = "security-dev-api-key";
-
-/** Legacy isolated dev data directory (pre shared-history layout). */
-const LEGACY_DEV_DATA_DIR = "security-dev";
-
-/** Mirror of the scanner service's history cap. */
-const MAX_HISTORY_ENTRIES = 200;
 
 /** Key used to mirror the singleton on `globalThis` so it survives Vite HMR. */
 const DEV_SERVICE_GLOBAL = "__TRUSTTOOLS_SECURITY_DEV_SERVICE__";
@@ -82,44 +76,97 @@ function writeDevServiceCache(value: SecurityScannerService | undefined): void {
 }
 
 /**
- * Dev-only secret storage. The raw key is persisted in plaintext under
- * `<dataDirectory>/security-dev-api-key` with mode `0o600`; there is no
- * Electron `safeStorage` in the web/dev runtime.
- *
- * The `SecretStoragePort` contract is synchronous, so the on-disk write is
- * fire-and-forget (via `node:fs/promises` `writeFile`) and `decrypt` reads
- * back through an in-memory mirror / synchronous `readFileSync` fallback.
+ * The scanner no longer owns API-key persistence. Model credentials are read
+ * from the SQLite model-profile repository by `createDevScannerPersistence`.
+ * This adapter only satisfies the scanner's capability port and performs no
+ * filesystem or browser-storage access.
  */
-export function createDevSecretStorage(
-  dataDirectory: string,
-): SecretStoragePort {
-  const keyPath = join(dataDirectory, DEV_API_KEY_FILENAME);
-  // In-memory mirror so the synchronous port never depends on the async write.
-  let cachedKey: string | undefined;
-
+export function createDevSecretStorage(): SecretStoragePort {
   return {
-    // Dev-only: no Electron safeStorage.
     isEncryptionAvailable: () => true,
-    encrypt(value: string): string {
-      cachedKey = value;
-      void mkdir(dataDirectory, { recursive: true, mode: 0o700 })
-        .then(() =>
-          writeFile(keyPath, value, { encoding: "utf8", mode: 0o600 }),
-        )
-        .catch(() => undefined);
-      return Buffer.from(value, "utf8").toString("base64");
+    encrypt: (value) => Buffer.from(value, "utf8").toString("base64"),
+    decrypt: (value) => Buffer.from(value, "base64").toString("utf8"),
+  };
+}
+
+interface StoredModelProfile {
+  readonly mode: "official" | "custom";
+  readonly protocol: "openai" | "anthropic";
+  readonly apiKey?: string;
+  readonly endpoint?: string;
+  readonly model?: string;
+}
+
+function toModelConfig(
+  profile: StoredModelProfile | null,
+): ModelConfig | undefined {
+  if (!profile?.apiKey) return undefined;
+  const provider = profile.mode === "official" ? "openai" : profile.protocol;
+  const endpoint =
+    profile.mode === "official"
+      ? "https://api.deepseek.com/v1"
+      : (profile.endpoint ??
+        (profile.protocol === "anthropic"
+          ? "https://api.anthropic.com/v1"
+          : "https://api.openai.com/v1"));
+  const model = profile.mode === "official" ? "deepseek-chat" : profile.model;
+  if (!model) throw new Error("Active model profile has no model");
+  return {
+    provider,
+    endpoint,
+    apiKey: profile.apiKey,
+    liteModel: model,
+    proModel: model,
+    timeoutMs: 120_000,
+    maxAgentTurns: 8,
+  };
+}
+
+/** Server-process persistence adapter; all writes use the sole SQLite runtime. */
+export function createDevScannerPersistence(): SecurityScannerPersistence {
+  return {
+    async readHistory() {
+      const root = await getCompositionRoot();
+      return structuredClone(
+        (root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)
+          ?.value ?? []) as unknown as SecurityScanHistoryEntry[],
+      );
     },
-    decrypt(value: string): string {
-      if (cachedKey === undefined) {
-        try {
-          cachedKey = readFileSync(keyPath, "utf8");
-        } catch {
-          // Config may reference a key from before the dev store existed;
-          // the value itself is the base64 of the raw key.
-          cachedKey = Buffer.from(value, "base64").toString("utf8");
-        }
-      }
-      return cachedKey;
+    async writeHistory(entries) {
+      const root = await getCompositionRoot();
+      root.database.features.appPreferences.set({
+        key: DESKTOP_HISTORY_KEY,
+        value: projectDesktopSecurityHistory(entries),
+        updatedAtMs: Date.now(),
+      });
+    },
+    async clearHistory() {
+      const root = await getCompositionRoot();
+      root.database.features.appPreferences.remove(DESKTOP_HISTORY_KEY);
+    },
+    async readSchedule() {
+      const root = await getCompositionRoot();
+      return structuredClone(
+        (root.database.features.appPreferences.get(DESKTOP_SCHEDULE_KEY)
+          ?.value ?? null) as unknown as SecurityScanSchedule | null,
+      );
+    },
+    async writeSchedule(schedule) {
+      const root = await getCompositionRoot();
+      root.database.features.appPreferences.set({
+        key: DESKTOP_SCHEDULE_KEY,
+        value: schedule as unknown as PreferenceValue,
+        updatedAtMs: Date.now(),
+      });
+    },
+    async modelConfig() {
+      const root = await getCompositionRoot();
+      const active = await root.modelProfiles.getActiveView();
+      if (!active) return undefined;
+      const profile = (await root.modelProfiles.getProfileForExecution(
+        active.id,
+      )) as StoredModelProfile | null;
+      return toModelConfig(profile);
     },
   };
 }
@@ -127,88 +174,25 @@ export function createDevSecretStorage(
 /**
  * Wraps the production Electron scanner service with web/dev defaults. Callers
  * may override `scanner`/`now`/`beforeOpenFile`/`env`/`secretStorage`/`locale`
- * for tests; `homeDirectory`/`dataDirectory` are always required.
+ * for tests; `homeDirectory` is always required.
  */
 export function createDevSecurityScannerService(
   options: Partial<SecurityScannerServiceOptions> & {
     readonly homeDirectory: string;
-    readonly dataDirectory: string;
   },
 ): SecurityScannerService {
   return new SecurityScannerService({
     homeDirectory: options.homeDirectory,
-    dataDirectory: options.dataDirectory,
     locale: options.locale ?? (() => currentDevLocale),
     env: options.env ?? process.env,
-    secretStorage:
-      options.secretStorage ?? createDevSecretStorage(options.dataDirectory),
+    secretStorage: options.secretStorage ?? createDevSecretStorage(),
+    persistence: options.persistence ?? createDevScannerPersistence(),
     ...(options.now ? { now: options.now } : {}),
     ...(options.scanner ? { scanner: options.scanner } : {}),
     ...(options.beforeOpenFile
       ? { beforeOpenFile: options.beforeOpenFile }
       : {}),
   });
-}
-
-/**
- * One-time migration from the legacy isolated dev history
- * (`~/.trusttools/security-dev/security-scan-history.json`) into the shared
- * history file (`~/.trusttools/security-scan-history.json`), so scans made
- * through the old dev backend are not lost when the two histories merge.
- * Ids are deduplicated and the merged list is capped at the scanner service's
- * history limit. The legacy file is left in place untouched.
- *
- * Runs synchronously before the dev service singleton is constructed so a
- * scan can never race the merge, and failures are non-fatal (the service
- * still starts).
- */
-export function migrateLegacyDevHistory(homeDirectory: string): void {
-  const sharedPath = join(
-    homeDirectory,
-    APP_DATA_DIR,
-    "security-scan-history.json",
-  );
-  const legacyPath = join(
-    homeDirectory,
-    APP_DATA_DIR,
-    LEGACY_DEV_DATA_DIR,
-    "security-scan-history.json",
-  );
-  let legacy: unknown;
-  try {
-    legacy = JSON.parse(readFileSync(legacyPath, "utf8"));
-  } catch {
-    return; // no legacy history to migrate
-  }
-  const legacyEntries = Array.isArray(
-    (legacy as { entries?: unknown })?.entries,
-  )
-    ? (legacy as { entries: Array<{ id?: unknown }> }).entries
-    : [];
-  if (legacyEntries.length === 0) return;
-
-  let sharedEntries: Array<{ id?: unknown }> = [];
-  try {
-    const shared = JSON.parse(readFileSync(sharedPath, "utf8")) as {
-      entries?: Array<{ id?: unknown }>;
-    };
-    if (Array.isArray(shared.entries)) sharedEntries = shared.entries;
-  } catch {
-    // no shared history yet — migrate everything
-  }
-  const known = new Set(sharedEntries.map((entry) => entry.id));
-  const missing = legacyEntries.filter((entry) => !known.has(entry.id));
-  if (missing.length === 0) return;
-  const merged = [...missing, ...sharedEntries].slice(0, MAX_HISTORY_ENTRIES);
-
-  mkdirSync(dirname(sharedPath), { recursive: true, mode: 0o700 });
-  const temporary = `${sharedPath}.${process.pid}.${randomUUID()}.migrate.tmp`;
-  writeFileSync(
-    temporary,
-    `${JSON.stringify({ version: 1, entries: merged }, null, 2)}\n`,
-    { encoding: "utf8", mode: 0o600 },
-  );
-  renameSync(temporary, sharedPath);
 }
 
 /**
@@ -236,14 +220,8 @@ export function getDevSecurityScannerService(): SecurityScannerService | null {
   }
 
   const homeDirectory = process.env[ENV.USAGE_HOME] ?? homedir();
-  // Shared with the Electron client: the browser and the desktop app read and
-  // write the same scan history and schedule. The one-time migration pulls the
-  // legacy isolated dev history (security-dev/) into the shared file first.
-  const dataDirectory = join(homeDirectory, APP_DATA_DIR);
-  migrateLegacyDevHistory(homeDirectory);
   const service = createDevSecurityScannerService({
     homeDirectory,
-    dataDirectory,
   });
   devSecurityScanner = service;
   writeDevServiceCache(service);

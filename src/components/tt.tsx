@@ -1,6 +1,8 @@
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 
+import { useI18n } from "../lib/i18n/context";
+
 /** Shared compact input for module toolbars and data views. */
 export function SearchInput({
   value,
@@ -229,8 +231,8 @@ export function Pagination({
   pageCount,
   onChange,
   rangeLabel,
-  prevLabel = "上一页",
-  nextLabel = "下一页",
+  prevLabel,
+  nextLabel,
   className = "",
 }: {
   page: number;
@@ -241,6 +243,9 @@ export function Pagination({
   nextLabel?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
+  const resolvedPrev = prevLabel ?? t("common.pagination.previous");
+  const resolvedNext = nextLabel ?? t("common.pagination.next");
   const safePageCount = Math.max(1, pageCount);
   const current = Math.min(Math.max(1, page), safePageCount);
 
@@ -263,12 +268,12 @@ export function Pagination({
           type="button"
           disabled={current <= 1}
           onClick={() => onChange(current - 1)}
-          aria-label={prevLabel}
-          title={prevLabel}
+          aria-label={resolvedPrev}
+          title={resolvedPrev}
           className={stepButton}
         >
           <ChevronLeft className="size-3" />
-          {prevLabel}
+          {resolvedPrev}
         </button>
         {nums.map((p, idx) => (
           <span key={p} className="flex items-center gap-1">
@@ -293,11 +298,11 @@ export function Pagination({
           type="button"
           disabled={current >= safePageCount}
           onClick={() => onChange(current + 1)}
-          aria-label={nextLabel}
-          title={nextLabel}
+          aria-label={resolvedNext}
+          title={resolvedNext}
           className={stepButton}
         >
-          {nextLabel}
+          {resolvedNext}
           <ChevronRight className="size-3" />
         </button>
       </div>

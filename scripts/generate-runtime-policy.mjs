@@ -91,7 +91,7 @@ export interface RendererSafeRuntimePolicy {
     readonly maxFileOperations: number;
     readonly maxProjectClassifiers: number;
   };
-  readonly rollout: { readonly defaultStage: "legacy" | "shadow" | "compact-read-model" | "snapshot-read" | "unified-refresh" | "new-default" };
+  readonly rollout: { readonly defaultStage: "compact-read-model" | "snapshot-read" | "unified-refresh" | "new-default" };
 }
 
 const FORBIDDEN_SERIALIZED_TOKENS = ["executor", "url", "command", "path", "network", "timeoutMs", "retry"] as const;

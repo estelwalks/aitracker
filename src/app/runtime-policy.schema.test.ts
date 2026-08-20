@@ -38,7 +38,7 @@ test("runtime policy accepts the embedded source", () => {
     maxProjectClassifiers: 8,
   });
   assert.equal(parsed.rollout.defaultStage, "new-default");
-  assert.equal(parsed.scheduledJobs.tasks.length, 8);
+  assert.equal(parsed.scheduledJobs.tasks.length, 7);
 });
 
 test("every snapshot policy key is present and has positive values", () => {
@@ -68,6 +68,16 @@ test("unknown top-level and nested fields are rejected", () => {
   (unknownJob.scheduledJobs.tasks[0] as unknown as { bogus?: number }).bogus =
     1;
   assert.throws(() => RuntimePolicySourceSchema.parse(unknownJob));
+});
+
+test("removed legacy/shadow rollout stages are rejected", () => {
+  const legacy = clone(VALID);
+  legacy.rollout.defaultStage = "legacy" as never;
+  assert.throws(() => RuntimePolicySourceSchema.parse(legacy));
+
+  const shadow = clone(VALID);
+  shadow.rollout.defaultStage = "shadow" as never;
+  assert.throws(() => RuntimePolicySourceSchema.parse(shadow));
 });
 
 test("negative, zero and out-of-range values are rejected", () => {

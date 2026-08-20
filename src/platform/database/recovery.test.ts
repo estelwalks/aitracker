@@ -27,7 +27,7 @@ import { DatabaseError, TRUSTTOOLS_APPLICATION_ID } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { checkIntegrity } from "./integrity.server.ts";
 import { readSchemaVersion, runMigrations } from "./migration-runner.server.ts";
-import { MIGRATIONS } from "./migrations/index.ts";
+import { LATEST_MIGRATION_VERSION, MIGRATIONS } from "./migrations/index.ts";
 import {
   createEmptyDatabaseWithMarker,
   planRecovery,
@@ -181,7 +181,7 @@ test("planRecovery returns backup-available without touching disk, and restore c
     versionsProvider: versionsProvider(),
   });
   t.after(() => restored.close());
-  assert.equal(readSchemaVersion(restored), 1);
+  assert.equal(readSchemaVersion(restored), LATEST_MIGRATION_VERSION);
   assert.equal(readFlag(restored, "flag"), '"kept"');
   const health = checkIntegrity(restored);
   assert.equal(health.integrityOk, true);
@@ -290,7 +290,7 @@ test("restoreFromBackup recovers a corrupted database and keeps the replaced fil
     versionsProvider: versionsProvider(),
   });
   t.after(() => reopened.close());
-  assert.equal(readSchemaVersion(reopened), 1);
+  assert.equal(readSchemaVersion(reopened), LATEST_MIGRATION_VERSION);
   assert.equal(readFlag(reopened, "flag"), '"recover-me"');
   const health = checkIntegrity(reopened);
   assert.equal(health.integrityOk, true);
@@ -483,6 +483,20 @@ test("restoreFromBackup rejects a foreign application_id and accepts the AITrack
     isDatabaseError("invalid-argument"),
   );
 
+  // An unstamped file is also not a restorable AITracker backup, even when
+  // every table and migration row otherwise matches.
+  await stamp(0);
+  await assert.rejects(
+    () =>
+      restoreFromBackup({
+        databasePath: join(directory, "restored.db"),
+        backupPath: backup.path,
+        backupsDirectory,
+        confirmedByUser: true,
+      }),
+    isDatabaseError("invalid-argument"),
+  );
+
   // The value migration 0001 stamps is accepted.
   await stamp(TRUSTTOOLS_APPLICATION_ID);
   const result = await restoreFromBackup({
@@ -533,6 +547,94 @@ test("restoreFromBackup rejects a ledger that diverges from the known migrations
     isDatabaseError("migration-reverted"),
   );
   assert.equal(existsSync(join(directory, "restored.db")), false);
+});
+
+test("restoreFromBackup rejects user_version and manifest versions that disagree with the ledger", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+  });
+  const target = join(directory, "restored.db");
+
+  patchManifest(backupsDirectory, (index) => {
+    index[basename(backup.path)].schemaVersion = 99;
+  });
+  await assert.rejects(
+    () =>
+      restoreFromBackup({
+        databasePath: target,
+        backupPath: backup.path,
+        backupsDirectory,
+        confirmedByUser: true,
+      }),
+    isDatabaseError("migration-reverted"),
+  );
+
+  patchManifest(backupsDirectory, (index) => {
+    index[basename(backup.path)].schemaVersion = LATEST_MIGRATION_VERSION;
+  });
+  const raw = new DatabaseSync(backup.path);
+  try {
+    raw.exec("PRAGMA user_version = 99");
+  } finally {
+    raw.close();
+  }
+  patchManifest(backupsDirectory, (index) => {
+    index[basename(backup.path)].sha256 = "pending";
+    index[basename(backup.path)].sizeBytes = statSync(backup.path).size;
+  });
+  const sha256 = await sha256OfFile(backup.path);
+  patchManifest(backupsDirectory, (index) => {
+    index[basename(backup.path)].sha256 = sha256;
+  });
+  await assert.rejects(
+    () =>
+      restoreFromBackup({
+        databasePath: target,
+        backupPath: backup.path,
+        backupsDirectory,
+        confirmedByUser: true,
+      }),
+    isDatabaseError("migration-reverted"),
+  );
+});
+
+test("restoreFromBackup rejects an empty migration ledger even when application_id is stamped", async (t) => {
+  const { host, directory } = openMigratedDb(t);
+  const backupsDirectory = join(directory, "backups");
+  const backup = await createOnlineBackup({
+    host,
+    backupsDirectory,
+    appVersion: APP_VERSION,
+    sqliteVersion: SQLITE_VERSION,
+  });
+  const raw = new DatabaseSync(backup.path);
+  try {
+    raw.exec("DELETE FROM schema_migrations; PRAGMA user_version = 0");
+  } finally {
+    raw.close();
+  }
+  const sha256 = await sha256OfFile(backup.path);
+  patchManifest(backupsDirectory, (index) => {
+    index[basename(backup.path)].sha256 = sha256;
+    index[basename(backup.path)].sizeBytes = statSync(backup.path).size;
+    index[basename(backup.path)].schemaVersion = 0;
+  });
+
+  await assert.rejects(
+    () =>
+      restoreFromBackup({
+        databasePath: join(directory, "restored.db"),
+        backupPath: backup.path,
+        backupsDirectory,
+        confirmedByUser: true,
+      }),
+    isDatabaseError("invalid-argument"),
+  );
 });
 
 test("a restore that fails validation compensates and leaves the live database in place", async (t) => {
@@ -598,7 +700,7 @@ test("createEmptyDatabaseWithMarker sets a corrupt database aside and marks the 
   });
 
   assert.equal(result.databasePath, databasePath);
-  assert.equal(result.schemaVersion, 1);
+  assert.equal(result.schemaVersion, LATEST_MIGRATION_VERSION);
   assert.deepEqual(result.marker, {
     createdAtMs: 1_700_000_000_000,
     reason: "no-verified-backup",
@@ -616,7 +718,7 @@ test("createEmptyDatabaseWithMarker sets a corrupt database aside and marks the 
     versionsProvider: versionsProvider(),
   });
   t.after(() => reopened.close());
-  assert.equal(readSchemaVersion(reopened), 1);
+  assert.equal(readSchemaVersion(reopened), LATEST_MIGRATION_VERSION);
   assert.equal(readFlag(reopened, "flag"), undefined, "the DB is empty");
   const marker = readFlag(reopened, RECOVERY_MARKER_FLAG_KEY);
   assert.ok(marker !== undefined);

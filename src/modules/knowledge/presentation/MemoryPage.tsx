@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { JarvisInsight } from "../../../components/JarvisInsight";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
@@ -128,19 +128,6 @@ export function MemoryPage() {
       });
   }, [entries, q, type, t]);
 
-  const jarvisLines = useMemo(() => {
-    if (counts.total === 0) return [t("memory.insightEmpty")];
-    return [
-      t("memory.insightTotal", {
-        total: counts.total,
-        profile: counts.profile,
-        task: counts.task,
-      }),
-      t("memory.insightMeaning"),
-      t("memory.insightDistill"),
-    ];
-  }, [counts, t]);
-
   const distillCount = useMemo(
     () => entries.filter((item) => item.origin === "distill").length,
     [entries],
@@ -244,10 +231,10 @@ export function MemoryPage() {
 
   return (
     <div className="space-y-4 pb-12">
-      <JarvisInsight
+      <InsightCard
+        surfaceId="memory"
+        variant="hero"
         title={t("memory.insightTitle")}
-        lines={jarvisLines}
-        rotateLabel={t("memory.insightRotate")}
         dotsLabel={t("memory.insightDots")}
       />
 

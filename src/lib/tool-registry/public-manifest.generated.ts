@@ -587,7 +587,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
         "usage": "native",
         "skills": "unsupported",
         "agents": "unsupported",
-        "sessions": "unsupported",
+        "sessions": "resume",
         "market": "unsupported",
         "security": "unsupported"
       }

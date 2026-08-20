@@ -96,6 +96,11 @@ export const settings = {
       desc: "사용 가능한 보안 검사 서비스가 없습니다(데스크톱 앱 또는 로컬 컴패니언 미연결). 자동 검사 일정을 저장하려면 해당 서비스가 필요합니다.",
       retry: "다시 연결",
     },
+    llmReview: "AI 보조 검사",
+    llmReviewHint:
+      "정적 규칙에 더해, 구성된 모델로 보고서의 비식별화된 보충 분석을 수행합니다. 판정을 바꾸거나 심각도를 낮추지 않습니다.",
+    llmReviewUnconfiguredHint:
+      "모델을 구성하면 AI 보조 검사를 활성화할 수 있습니다",
     schedule: {
       title: "검사 일정",
       enabled: "자동 검사",
@@ -206,6 +211,53 @@ export const settings = {
   updateFailed: "버전 정보를 가져올 수 없습니다",
   viewRelease: "릴리스 페이지 보기",
   sourceRepo: "소스 저장소",
+  insight: {
+    enhanced: "AI 강화",
+    enhance: "표현 강화",
+    enhancing: "강화 중…",
+    unavailableHint: "모델이 설정되지 않아 강화할 수 없습니다(설정에서 구성)",
+    severity: {
+      info: "정보",
+      attention: "주의",
+      risk: "위험",
+    },
+    status: {
+      rules: "로컬 규칙만",
+      "enhanced-cached": "AI 강화 · 캐시",
+      "enhanced-ready": "AI 강화",
+      "enhancer-unavailable": "강화 서비스를 사용할 수 없음",
+      "budget-exceeded": "일일 호출 한도 도달",
+      timeout: "강화 시간 초과",
+      "enhancer-failed": "강화 실패",
+      "invalid-output": "강화 결과가 올바르지 않음",
+      stale: "데이터가 오래되었을 수 있음",
+    },
+    section: {
+      title: "오늘의 인사이트",
+      desc: "인사이트 생성 방식을 선택하세요: 로컬 규칙만 사용하거나 모델로 표현을 강화합니다.",
+      mode: "생성 방식",
+      modeRules: "로컬 규칙만",
+      modeRulesDesc: "로컬 규칙만으로 생성하며 모델을 호출하지 않습니다.",
+      modeManual: "수동 강화",
+      modeManualDesc: "「표현 강화」를 누를 때만 모델을 호출합니다.",
+      modeAuto: "자동 강화",
+      modeAutoDesc: "인사이트를 열 때 자동으로 모델을 호출합니다.",
+      profile: "강화 Profile",
+      profileHint:
+        "강화에 사용할 모델. 비어 있으면 현재 활성 모델을 사용합니다.",
+      profileEmpty:
+        "아직 모델이 설정되지 않았습니다——위 모델 설정에서 추가하세요",
+      consent: "자동 강화 허용",
+      consentRequired: "자동 강화를 저장하려면 허용이 필요합니다",
+      consentDesc:
+        "허용하면 자동 강화는 비식별화된 집계 통계(오늘 토큰, 도구 수, 세션 수, 보안 수치)와 현재 페이지 ID를 전송합니다. 대화 내용, 파일 경로, API 키, 개인 정보는 절대 전송하지 않습니다.",
+      dailyLimit: "일일 호출 한도",
+      dailyLimitHint: "비워 두면 기본 30회(서버에서 적용)",
+      save: "저장",
+      saved: "인사이트 설정을 저장했습니다",
+      saveFailed: "인사이트 설정 저장에 실패했습니다",
+    },
+  },
   toast: {
     autoLaunchDesktopOnly:
       "로그인 시 실행은 데스크톱 앱에서만 설정할 수 있습니다",
@@ -223,5 +275,7 @@ export const settings = {
     resetDone: "앱 설정과 보안 기록 {count}개를 초기화했습니다",
     resetDoneBrowser: "브라우저의 앱 설정과 보안 기록을 초기화했습니다",
     resetFailed: "앱 설정 초기화에 실패했습니다",
+    llmReviewSaved: "AI 보조 검사 설정을 저장했습니다",
+    llmReviewSaveFailed: "AI 보조 검사 설정 저장에 실패했습니다",
   },
 } as const;

@@ -17,10 +17,9 @@
  *
  * Run via `npm run check:i18n` or directly: node scripts/check-hardcoded-text.mjs [--report]
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { execFileSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const reportOnly = process.argv.includes("--report");
@@ -106,15 +105,27 @@ function isDataValueLine(line) {
 }
 
 function listFiles() {
-  const out = execFileSync(
-    "find",
-    ["src/routes", "src/components", "-name", "*.tsx", "-o", "-name", "*.ts"],
-    { cwd: root, encoding: "utf8" },
-  );
-  return out
-    .split("\n")
-    .filter(Boolean)
-    .filter((f) => !f.endsWith(".test.ts"));
+  // Node-native recursive walk — cross-platform. The previous `find -name`
+  // approach relied on a Unix shell that is not available on Windows, where
+  // Git Bash's find.exe mangles the `*.tsx` glob (MSYS argument conversion).
+  const files = [];
+  for (const dir of ["src/routes", "src/components"]) {
+    let entries;
+    try {
+      entries = readdirSync(join(root, dir), {
+        recursive: true,
+        encoding: "utf8",
+      });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.endsWith(".tsx") || entry.endsWith(".ts")) {
+        files.push(`${dir}/${entry.replaceAll("\\", "/")}`);
+      }
+    }
+  }
+  return files.filter((f) => !f.endsWith(".test.ts"));
 }
 
 const violations = [];
