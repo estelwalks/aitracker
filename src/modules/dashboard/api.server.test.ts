@@ -7,9 +7,34 @@ import type { DashboardProjectClassification } from "./project-classification.se
 import {
   aggregateDashboardProjectSessions,
   aggregateDashboardSourceSessions,
+  shouldRefreshDashboardSessions,
   toDashboardSnapshot,
   toDashboardV2Snapshot,
 } from "./api.server.ts";
+import { createDashboardV2View } from "./application/v2.ts";
+
+test("dashboard refreshes a fresh legacy session snapshot when usage has DSH", () => {
+  assert.equal(
+    shouldRefreshDashboardSessions({
+      status: "fresh",
+      generatedAt: "2026-08-10T00:00:00.000Z",
+      sessionSources: ["codex"],
+      usageSources: ["codex", "dsh"],
+      nowMs: Date.parse("2026-08-10T00:01:00.000Z"),
+    }),
+    true,
+  );
+  assert.equal(
+    shouldRefreshDashboardSessions({
+      status: "fresh",
+      generatedAt: "2026-08-10T00:00:45.000Z",
+      sessionSources: ["codex"],
+      usageSources: ["codex", "dsh"],
+      nowMs: Date.parse("2026-08-10T00:01:00.000Z"),
+    }),
+    false,
+  );
+});
 
 const rawSnapshot: LocalUsageSnapshot = {
   generatedAt: "2026-08-10T00:00:00.000Z",
@@ -308,6 +333,67 @@ test("normalized session projectRef joins usage events under one project key", (
     classifications,
   );
   assert.equal(usage.details[0]?.project, APP_ID);
+});
+
+test("DeepSeek Harness sessions map to the dashboard project row", () => {
+  const projectRef = `~/example/work/${APP_ID}`;
+  const classifications = new Map<string, DashboardProjectClassification>([
+    [projectRef, { kind: "workspace", label: APP_ID }],
+  ]);
+  const usage = toDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      sources: [{ ...rawSnapshot.sources[0]!, source: "dsh" }],
+      details: [
+        { ...rawSnapshot.details[0]!, source: "dsh", project: projectRef },
+      ],
+    },
+    classifications,
+  );
+  const v2 = toDashboardV2Snapshot({
+    snapshot: usage,
+    skills: { available: true, count: 0, generatedAt: null },
+    sessions: {
+      available: true,
+      generatedAt: "2026-08-10T00:00:00.000Z",
+      byProjectDay: aggregateDashboardProjectSessions(
+        [
+          {
+            projectKey: APP_ID,
+            source: "dsh",
+            startedAt: "2026-08-10T10:00:00.000Z",
+            turns: 1,
+            editTurns: 0,
+            subagentCalls: 0,
+          },
+        ],
+        classifications,
+      ),
+      bySourceDay: aggregateDashboardSourceSessions([
+        {
+          source: "dsh",
+          startedAt: "2026-08-10T10:00:00.000Z",
+          turns: 1,
+          editTurns: 0,
+          subagentCalls: 0,
+        },
+      ]),
+    },
+    pricingAvailable: false,
+    outputAvailability: {
+      securityRuns: { count: null, available: false },
+      distillationOutputs: { count: null, available: false },
+      distillationBreakdown: { capability: null, memory: null },
+      dailyReports: { count: null, available: false },
+      weeklyReports: { count: null, available: false },
+      monthlyReports: { count: null, available: false },
+    },
+  });
+  const view = createDashboardV2View(v2, "custom", "2026-08-10", "2026-08-10");
+
+  assert.equal(view.tools.find((tool) => tool.id === "dsh")?.events, 1);
+  assert.equal(view.projects[0]?.key, APP_ID);
+  assert.equal(view.projects[0]?.sessions, 1);
 });
 
 test("dashboard V2 keeps installation detection when Claude has no usage events", () => {

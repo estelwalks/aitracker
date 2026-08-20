@@ -36,7 +36,7 @@ export const getDashboardCustomWindow = createServerFn({ method: "GET" })
     return loadDashboardCustomWindow(data);
   });
 
-/** Light status probe for the first-scan empty state (≤ a few hundred bytes). */
+/** Light status probe for the first-scan/stale state (≤ a few hundred bytes). */
 export interface DashboardSnapshotStatus {
   readonly revision: string | null;
   readonly status: "empty" | "fresh" | "stale" | "failed" | "refreshing";
@@ -45,21 +45,37 @@ export interface DashboardSnapshotStatus {
 
 /**
  * P4 (fix): the dashboard polls this tiny status probe while it shows the
- * first-scan empty state; when a revision lands the route loader re-runs so
- * real data replaces the shell without a manual reload. Reads only the Usage
- * snapshot coordinator (O(1)) — never a scan.
+ * first-scan empty or stale state; when either the usage or session revision
+ * changes the route loader re-runs so real data replaces the shell without a
+ * manual reload. Reads only snapshot coordinators (O(1)) — never a scan.
  */
 export const getDashboardSnapshotStatus = createServerFn({ method: "GET" })
   .validator((value: Locale) => value)
   .handler(async ({ data }): Promise<DashboardSnapshotStatus> => {
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
-    const { usageSnapshot } = await getCompositionRoot();
-    await usageSnapshot.ensureHydrated();
+    const { usageSnapshot, sessionSnapshot } = await getCompositionRoot();
+    await Promise.all([
+      usageSnapshot.ensureHydrated(),
+      sessionSnapshot.ensureHydrated(),
+    ]);
     const latest = usageSnapshot.readLatest();
+    const sessions = sessionSnapshot.readLatest();
+    const status =
+      latest.status === "stale" || sessions.status === "stale"
+        ? "stale"
+        : latest.status === "empty" || sessions.status === "empty"
+          ? "empty"
+          : latest.status === "failed" || sessions.status === "failed"
+            ? "failed"
+            : latest.status === "refreshing" || sessions.status === "refreshing"
+              ? "refreshing"
+              : "fresh";
     return {
-      revision: latest.revision,
-      status: latest.status,
-      generatedAt: latest.generatedAt,
+      // The usage revision remains the legacy field; a session-only refresh
+      // is represented by the combined status and causes the loader to run.
+      revision: latest.revision ?? sessions.revision,
+      status,
+      generatedAt: latest.generatedAt ?? sessions.generatedAt,
     };
   });

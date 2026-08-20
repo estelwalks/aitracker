@@ -244,6 +244,61 @@ test("Dashboard V2 does not invent unavailable session or pricing values", () =>
   assert.equal(view.estimatedCostUsd, null);
 });
 
+test("Dashboard V2 maps multiple project sessions and reports zero when none exist", () => {
+  const multiProject: DashboardV2Snapshot = {
+    ...snapshot,
+    events: [
+      { ...snapshot.events[0]!, project: "alpha" },
+      {
+        ...snapshot.events[0]!,
+        project: "beta",
+        timestamp: "2026-08-10T11:00:00.000Z",
+      },
+    ],
+    sessions: {
+      available: true,
+      generatedAt: "2026-08-10T12:00:00.000Z",
+      byProjectDay: [
+        {
+          project: "alpha",
+          source: "dsh",
+          date: "2026-08-10",
+          count: 2,
+          ...emptyWorkflow,
+        },
+      ],
+      bySourceDay: [
+        {
+          source: "dsh",
+          date: "2026-08-10",
+          count: 2,
+          ...emptyWorkflow,
+        },
+      ],
+    },
+  };
+
+  const view = createDashboardV2View(
+    multiProject,
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+  assert.equal(view.sessions, 2);
+  assert.equal(
+    view.projects.find((project) => project.key === "alpha")?.sessions,
+    2,
+  );
+  assert.equal(
+    view.projects.find((project) => project.key === "beta")?.sessions,
+    0,
+  );
+  assert.equal(
+    view.projects.some((project) => project.sessions == null),
+    false,
+  );
+});
+
 test("Dashboard V2 preserves catalog detection while keeping activity range-specific", () => {
   const view = createDashboardV2View(
     {
@@ -375,7 +430,7 @@ test("Dashboard V2 derives safe previous-window, model and project aggregates", 
   assert.equal(view.projectCount, 2);
 });
 
-test("sessions comparison hides the delta when the previous window had none", () => {
+test("sessions comparison uses a percentage when the previous window had none", () => {
   const noPreviousSessions: DashboardV2Snapshot = {
     ...snapshot,
     sessions: {
@@ -393,9 +448,8 @@ test("sessions comparison hides the delta when the previous window had none", ()
     "2026-08-10",
     "2026-08-11",
   );
-  // 上一周期为 0：百分比无定义，不展示任何具体数值（无 chip）。
-  assert.equal(view.comparison.sessions.previous, null);
-  assert.equal(view.comparison.sessions.deltaPercent, null);
+  assert.equal(view.comparison.sessions.previous, 0);
+  assert.equal(view.comparison.sessions.deltaPercent, 100);
 });
 
 test("token and cost comparison leave the delta null when the previous window had none", () => {
@@ -420,11 +474,10 @@ test("token and cost comparison leave the delta null when the previous window ha
     "2026-08-11",
   );
 
-  // 上一窗口无 token/费用 → 百分比无定义，不展示任何具体数值（无 chip）。
-  assert.equal(view.comparison.tokens.previous, null);
-  assert.equal(view.comparison.tokens.deltaPercent, null);
-  assert.equal(view.comparison.cost.previous, null);
-  assert.equal(view.comparison.cost.deltaPercent, null);
+  assert.equal(view.comparison.tokens.previous, 0);
+  assert.equal(view.comparison.tokens.deltaPercent, 100);
+  assert.equal(view.comparison.cost.previous, 0);
+  assert.equal(view.comparison.cost.deltaPercent, 100);
 });
 
 test("cache rate comparison reports percentage points against the previous window", () => {
@@ -461,10 +514,10 @@ test("cache rate comparison reports percentage points against the previous windo
     "2026-08-11",
   );
 
-  // 上一窗口缓存率 50%，当前 25% → 环比 -25 个百分点。
+  // 上一窗口缓存率 50%，当前 25% → 相对环比 -50%。
   assert.equal(view.comparison.cacheRate.previous, 50);
   assert.equal(view.comparison.cacheRate.deltaPoints, -25);
-  assert.equal(view.comparison.cacheRate.deltaPercent, null);
+  assert.equal(view.comparison.cacheRate.deltaPercent, -50);
 });
 
 test("Dashboard V2 keeps unavailable context distinct from an observed zero", () => {
