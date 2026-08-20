@@ -6,6 +6,7 @@ import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import { listModelProfiles } from "../../../modules/ai-orchestration/index";
+import { getSecurityLlmReviewAvailability } from "../llm-review.server-fns";
 import {
   getDesktopSecurityClient,
   type SecurityClient,
@@ -136,13 +137,15 @@ export function SecurityAssessmentPage() {
   // configuration (S-500); no separate security model config exists anymore.
   useEffect(() => {
     let disposed = false;
-    void listModelProfiles()
-      .then((result) => {
+    void Promise.all([listModelProfiles(), getSecurityLlmReviewAvailability()])
+      .then(([result, availability]) => {
         if (disposed) return;
         const active = result.profiles.find(
           (profile) => profile.id === result.activeProfileId,
         );
-        setModelConfigured(Boolean(active?.apiKeyMasked));
+        setModelConfigured(
+          availability.enabled && Boolean(active?.apiKeyMasked),
+        );
       })
       .catch(() => {
         // No profile → deep scan stays unavailable; fall back to quick.

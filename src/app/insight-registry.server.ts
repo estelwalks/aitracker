@@ -107,6 +107,13 @@ export async function createPageInsightsApplicationForRoot(
           ? { id: active.id, label: active.name ?? active.id }
           : null;
       },
+      resolveProfile: async (profileId) => {
+        const views = await deps.modelProfiles.listViews();
+        const selected = views.find((view) => view.id === profileId);
+        return selected
+          ? { id: selected.id, label: selected.name ?? selected.id }
+          : null;
+      },
       now: () => Date.now(),
     });
   }

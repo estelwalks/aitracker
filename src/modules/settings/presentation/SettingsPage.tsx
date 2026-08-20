@@ -29,6 +29,7 @@ import {
 } from "../../../lib/i18n/locale";
 import { themes, useTheme } from "../../../lib/theme";
 import { useVersionCheck } from "../../../lib/version-check";
+import { InsightCard } from "../../insights/page/presentation/insight-card";
 import {
   listPreferences,
   removePreference,
@@ -399,6 +400,8 @@ export function SettingsPage({
         title={t("settings.pageHeader")}
         desc={t("settings.pageHeaderDesc")}
       />
+
+      <InsightCard surfaceId="settings" variant="hero" />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
         <Panel bodyClassName="p-2">
