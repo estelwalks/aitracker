@@ -29,8 +29,8 @@ import {
   segmentMarkdown,
 } from "../domain.ts";
 import { localDateKey, type DistillQuota } from "../quota.ts";
+import { compactSegmentMaterials } from "../compression.ts";
 
-const MAX_SELECTION = 8;
 /** Marker separating the controlled metadata context from user-picked segments. */
 const SEGMENT_SECTION = "--- 用户选择片段 ---";
 
@@ -66,17 +66,12 @@ function validRequest(request: DistillationRequest): boolean {
   const refs = request.selection.sessionRefs;
   if (!request.requestId || !request.modelId || !request.prompt || !refs.length)
     return false;
-  if (
-    refs.length > MAX_SELECTION ||
-    refs.some((ref) => !isOpaqueSessionRef(ref))
-  )
-    return false;
+  if (refs.some((ref) => !isOpaqueSessionRef(ref))) return false;
   const keys = refs.map((ref) => `${ref.source}:${ref.sessionId}`);
   if (new Set(keys).size !== keys.length) return false;
 
   const segments = request.selection.segments;
   if (segments == null || segments.length === 0) return true;
-  if (segments.length > MAX_SELECTION) return false;
   if (segments.some((segment) => !isValidSegmentRef(segment))) return false;
   // Every segment must point at a session that is part of the selection so
   // the distilled material always carries its controlled metadata context.
@@ -222,9 +217,10 @@ export function createDistillationApplication(
         ports.transcriptPort,
         titles,
       );
+      const compactedMaterials = compactSegmentMaterials(materials);
       const segmentBlock =
-        materials.length > 0
-          ? `\n\n${SEGMENT_SECTION}\n${segmentMarkdown(materials)}`
+        compactedMaterials.length > 0
+          ? `\n\n${SEGMENT_SECTION}\n${segmentMarkdown(compactedMaterials)}`
           : "";
       const aiRequest: AIRequest = {
         requestId: request.requestId,
@@ -240,10 +236,20 @@ export function createDistillationApplication(
       try {
         execution = await ports.ai.execute(aiRequest);
       } catch {
+        if (isRealModelRequest(request))
+          return err("errors.distillation.aiFailed");
         execution = fallbackExecution(aiRequest);
       }
       if (request.signal?.aborted || execution.summary.status === "cancelled")
         return err("errors.distillation.cancelled");
+      // A real-model run that did not actually complete (provider error,
+      // timeout, silent fallback) must not fabricate a "distilled" result —
+      // surface the failure honestly instead.
+      if (
+        isRealModelRequest(request) &&
+        execution.summary.status !== "completed"
+      )
+        return err("errors.distillation.aiFailed");
       // Record one real-model call for today once the run actually completes.
       // A failed write must never fail the run; offline runs never get here.
       if (realModel && ports.quota) {
@@ -259,6 +265,7 @@ export function createDistillationApplication(
         controlled,
         execution,
         now().toISOString(),
+        request.kind,
       );
       candidates.set(candidateOutput.candidateId, candidateOutput);
       await persist(candidateOutput);
@@ -281,19 +288,44 @@ export function createDistillationApplication(
         return err("errors.distillation.notWaiting");
       if (!ports.knowledge)
         return err("errors.distillation.knowledgeUnavailable");
+      // FR-026 修正：蒸馏记忆在记忆库正确分类——persona→画像(type:profile)、
+      // memory→任务记忆(type:task)，复用 knowledge/api.server.ts 的 `type:` 前缀
+      // 约定，让 toMemoryEntry 投影出正确类型。能力类产物（brief/skill/prompt）
+      // 不打 type 前缀，记忆库不展示它们。
+      const typeRef =
+        current.kind === "persona"
+          ? "type:profile"
+          : current.kind === "memory"
+            ? "type:task"
+            : undefined;
       const draft = await ports.knowledge.createDraft({
         kind:
-          current.kind === "memory" || current.kind === "brief"
-            ? current.kind
-            : "snippet",
+          current.kind === "memory" || current.kind === "persona"
+            ? "memory"
+            : current.kind === "brief"
+              ? "brief"
+              : "snippet",
         title: current.title,
         content: current.summary,
-        provenance: current.selectedSessionRefs.map((ref) => ({
-          sourceRef: `session:${ref.source}:${ref.sessionId}` as never,
-          sourceType: "session" as const,
-          capturedAt: current.generatedAt,
-          summary: "Distilled from selected session metadata",
-        })),
+        provenance: [
+          ...current.selectedSessionRefs.map((ref) => ({
+            sourceRef: `session:${ref.source}:${ref.sessionId}` as never,
+            sourceType: "session" as const,
+            capturedAt: current.generatedAt,
+            // 候选摘要已由 domain 做过安全过滤（UNSAFE 正则），直接作为
+            // provenance 摘要，让记忆库卡片展示真实内容而非固定占位文案。
+            summary: current.summary.slice(0, 200),
+          })),
+          ...(typeRef
+            ? [
+                {
+                  sourceRef: typeRef as never,
+                  sourceType: "session" as const,
+                  capturedAt: current.generatedAt,
+                },
+              ]
+            : []),
+        ],
         createdBy: actor,
         actor,
       });
@@ -306,6 +338,8 @@ export function createDistillationApplication(
       const updated: CandidateOutput = {
         ...current,
         approvalState: "approved",
+        // 批准即落知识库，记录资产链接（记忆资产 → 记忆库条目），随候选持久化。
+        knowledgeAssetId: approved.value.assetId,
       };
       candidates.set(candidateId, updated);
       await persist(updated);

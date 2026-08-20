@@ -76,38 +76,11 @@ export const common = {
     pageTitle: "증류 워크벤치",
     pageDesc:
       "선택한 세션의 메타데이터에서 지식 초안을 추출하여 승인 후 지식 라이브러리에 기록합니다. 마스킹된 세션 요약만 읽으며, 대화 본문은 읽지 않습니다.",
-    selectSessions: "세션 선택(최대 {max}개)",
-    start: "증류 시작",
-    startHint: "시작하려면 세션을 하나 이상 선택하세요.",
     noSessions: "증류할 수 있는 세션이 없습니다",
     noSessionsDesc: "로컬 세션이 스캔되지 않으면 목록이 비어 있습니다.",
-    selected: "{count}개 선택됨",
-    candidate: "후보",
-    approve: "승인 후 지식에 기록",
-    cancel: "취소",
-    candidateNote:
-      "후보는 서버 메모리에 보관되며 새로고침 후 유지되지 않습니다. 후보가 영속화된 후에 전체 승인 UI를 제공합니다.",
     selectedTurns: "{count}턴",
     modeQuick: "빠른 모드",
     modePro: "고급 설정",
-    metricMaterial: "선택한 소재",
-    metricTurns: "소재 턴",
-    metricRuns: "증류 횟수",
-    metricApproved: "승인됨",
-    openMaterial: "소재 라이브러리 열기",
-    materialDrawerTitle: "증류 소재 선택",
     materialSearch: "세션 / 프로젝트 검색…",
-    materialSegmentUnavailable:
-      "현재 버전은 세션 단위 소재 선택만 지원합니다. 단일 메시지 내용은 읽지 않습니다(개인정보 경계).",
-    modelOffline: "오프라인 폴백",
-    modelNotConfigured:
-      "LLM 미설정 · 증류 결과는 결정적 오프라인 폴백으로 생성됩니다",
-    runHint: "세션을 하나 이상 선택한 후 증류하세요.",
-    expMode: "모드",
-    expTime: "생성 시간",
-    expOfflineNotice:
-      "이 후보는 결정적 오프라인 폴백으로 생성되었습니다. LLM을 구성하면 실제 모델 출력을 얻을 수 있습니다.",
-    saveAndManage: "저장 후 Skill 관리로 이동",
-    estimatedTokens: "약 {count} tokens",
   },
 } as const;

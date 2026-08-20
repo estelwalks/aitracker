@@ -14,10 +14,10 @@ import type {
 import { PersistedCandidateSchema } from "./candidate-schemas.ts";
 
 const COLUMNS = `candidate_id, kind, title, summary, mode, approval_state,
-  generated_at_ms, ai_request_id, execution_model_id, execution_provider_id,
-  execution_prompt_version_id, execution_prompt_version, execution_status,
-  execution_used_fallback, execution_cost_confidence, execution_cost_microusd,
-  execution_cost_reason, execution_error_code`;
+  generated_at_ms, knowledge_asset_id, ai_request_id, execution_model_id,
+  execution_provider_id, execution_prompt_version_id, execution_prompt_version,
+  execution_status, execution_used_fallback, execution_cost_confidence,
+  execution_cost_microusd, execution_cost_reason, execution_error_code`;
 
 function transaction<T>(database: SqliteDatabasePort, work: () => T): T {
   const tx = database.transaction();
@@ -73,6 +73,9 @@ function fromRow(
     approvalState: sqliteText(row.approval_state),
     selectedSessionRefs: refs(database, sqliteText(row.candidate_id)),
     generatedAt: iso(row.generated_at_ms),
+    ...(sqliteNullableText(row.knowledge_asset_id)
+      ? { knowledgeAssetId: sqliteText(row.knowledge_asset_id) }
+      : {}),
     execution: {
       requestId: sqliteText(row.ai_request_id),
       modelId: sqliteText(row.execution_model_id),
@@ -137,13 +140,15 @@ export function createSqliteCandidatePersistence(
         .prepare(
           `INSERT INTO distillation_candidates
       (candidate_id, kind, title, summary, mode, approval_state, generated_at_ms,
-       ai_request_id, execution_model_id, execution_provider_id,
-       execution_prompt_version_id, execution_prompt_version, execution_status,
-       execution_used_fallback, execution_cost_confidence, execution_cost_microusd,
-       execution_cost_reason, execution_error_code, approved_at_ms, cancelled_at_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       knowledge_asset_id, ai_request_id, execution_model_id,
+       execution_provider_id, execution_prompt_version_id,
+       execution_prompt_version, execution_status, execution_used_fallback,
+       execution_cost_confidence, execution_cost_microusd, execution_cost_reason,
+       execution_error_code, approved_at_ms, cancelled_at_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (candidate_id) DO UPDATE SET kind=excluded.kind, title=excluded.title,
         summary=excluded.summary, mode=excluded.mode, approval_state=excluded.approval_state,
+        knowledge_asset_id=excluded.knowledge_asset_id,
         execution_status=excluded.execution_status,
         execution_used_fallback=excluded.execution_used_fallback,
         execution_cost_confidence=excluded.execution_cost_confidence,
@@ -160,6 +165,7 @@ export function createSqliteCandidatePersistence(
           candidate.mode,
           candidate.approvalState,
           epoch(candidate.generatedAt),
+          candidate.knowledgeAssetId ?? null,
           candidate.execution.requestId,
           candidate.execution.modelId,
           candidate.execution.providerId ?? null,

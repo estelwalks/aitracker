@@ -34,6 +34,8 @@ export interface SessionSummary {
   readonly title: string;
   /** Stable basename/group key; this is not a filesystem path. */
   readonly projectKey: string;
+  /** True when the session's project is a real git repository root. */
+  readonly isGitProject?: boolean;
   readonly model: string | null;
   readonly startedAt: string;
   readonly endedAt: string;

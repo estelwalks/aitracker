@@ -78,6 +78,10 @@ export const errors = {
     skillExists: "同名の Skill が既に存在します。別の名前を選択してください",
     quotaExceeded:
       "今日の公式モデル蒸留枠は使い切りました（1 日 {limit} 回）。明日以降に再試行するか、モデル管理をご確認ください",
+    noModelConfigured:
+      "利用可能な AI モデルが設定されていません。「設定 → モデル」で API キー付きモデルを追加（または ANTHROPIC_API_KEY 環境変数を設定）してから蒸留してください。",
+    aiFailed:
+      "AI モデル呼び出しに失敗し、蒸留結果は生成されませんでした。モデル設定またはネットワークを確認して再試行してください。",
   },
   modelProfile: {
     nameRequired: "設定名を入力してください",
@@ -95,6 +99,8 @@ export const errors = {
     testTimeout: "接続テストがタイムアウトしました（5 秒）",
     listFailed:
       "モデル一覧の取得に失敗しました。エンドポイント、API Key、ネットワークを確認してください",
+    safeStorageUnavailable:
+      "API Key を安全に保存できませんでした：ホストのシークレットストアを利用できません（データディレクトリが書き込み不可、または暗号化の初期化に失敗）",
   },
   pricing: {
     modelListInvalid: "モデルリストが不正です",

@@ -79,6 +79,7 @@ export function toPublicSession(record: SessionRecord): SessionSummary {
     source: record.source,
     title: safeTitle(record.title, record.source),
     projectKey: safeText(record.projectKey, 80) || "unknown",
+    isGitProject: record.isGitProject === true,
     model: safeModel(record.model),
     startedAt: record.startedAt,
     endedAt: record.endedAt,

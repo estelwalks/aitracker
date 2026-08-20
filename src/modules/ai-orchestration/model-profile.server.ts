@@ -81,8 +81,11 @@ function chatHeaders(
 
 export function chatUrl(protocol: ProfileProtocol, endpoint: string): string {
   const base = endpoint.replace(/\/+$/, "");
+  if (/\/(?:chat\/completions|messages)$/u.test(base)) return base;
   return protocol === "anthropic"
-    ? `${base}/messages`
+    ? /\/v\d+$/u.test(base)
+      ? `${base}/messages`
+      : `${base}/v1/messages`
     : `${base}/chat/completions`;
 }
 
@@ -148,6 +151,80 @@ export interface ModelProfileRepository {
  * A missing/expired profile or transport failure throws, letting the executor
  * fall back to its deterministic offline response (status `fallback`).
  */
+/**
+ * Read a real model connection straight from the host environment — the
+ * workbench's built-in "默认/官方" option. Returns null when no credential is
+ * present. Priority: `ANTHROPIC_AUTH_TOKEN`, then `ANTHROPIC_API_KEY`; base
+ * and model default to Anthropic's public API.
+ */
+export function getEnvProviderConfig(): {
+  readonly key: string;
+  readonly base: string;
+  readonly model: string;
+} | null {
+  const key =
+    process.env.ANTHROPIC_AUTH_TOKEN?.trim() ||
+    process.env.ANTHROPIC_API_KEY?.trim() ||
+    "";
+  if (!key) return null;
+  return {
+    key,
+    base: process.env.ANTHROPIC_BASE_URL?.trim() || "https://api.anthropic.com",
+    model:
+      process.env.ANTHROPIC_MODEL?.trim() ||
+      process.env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() ||
+      "claude-sonnet-4-5",
+  };
+}
+
+/** `/messages` against a base that may or may not already carry `/v1`. */
+function anthropicChatUrl(base: string): string {
+  const clean = base.replace(/\/+$/, "");
+  return /\/v\d+$/.test(clean) ? `${clean}/messages` : `${clean}/v1/messages`;
+}
+
+/**
+ * Provider adapter backed by the host environment's Anthropic-compatible
+ * credentials (`getEnvProviderConfig`). Registered in the composition root
+ * under the stable id `env`; the workbench routes the built-in "默认" model
+ * here. Presence of a credential is the availability gate; a transport failure
+ * throws, letting the executor surface an honest error instead of a silent
+ * fallback result.
+ */
+export function createEnvBackedProvider(options?: {
+  readonly fetchFn?: typeof fetch;
+}): AIModelProvider {
+  const fetchImpl = options?.fetchFn ?? fetch;
+  return {
+    providerId: "env",
+    async invoke(request: AIProviderRequest): Promise<AIResponse> {
+      const config = getEnvProviderConfig();
+      if (!config) throw new Error("env provider not configured");
+      const content =
+        `${request.prompt.template}\n\n${request.input.text}`.trim();
+      const response = await fetchImpl(anthropicChatUrl(config.base), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${config.key}`,
+          "anthropic-version": "2023-06-01",
+        },
+        body: chatRequestBody("anthropic", config.model, content, 8192),
+        signal: request.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = parseChatText("anthropic", await response.text());
+      if (!text) throw new Error("empty model response");
+      return {
+        providerId: "env",
+        modelId: request.modelId,
+        text,
+        finishReason: "stop",
+      };
+    },
+  };
+}
+
 export function createProfileBackedProvider(options: {
   readonly resolve: (profileId: string) => Promise<ModelProfile | undefined>;
   readonly fetchFn?: typeof fetch;
@@ -170,11 +247,12 @@ export function createProfileBackedProvider(options: {
           profile.apiKey,
           effectiveAuth(profile),
         ),
-        body: chatRequestBody(profile.protocol, model, content, 1024),
+        body: chatRequestBody(profile.protocol, model, content, 8192),
         signal: request.signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = parseChatText(profile.protocol, await response.text());
+      if (!text) throw new Error("empty model response");
       return {
         providerId: "profile",
         modelId: request.modelId,

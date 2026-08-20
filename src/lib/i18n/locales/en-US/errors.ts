@@ -71,6 +71,10 @@ export const errors = {
     skillExists: "A Skill with this name already exists; choose another",
     quotaExceeded:
       "Today's official-model distillation quota is used up ({limit} per day). Try again tomorrow or manage your models",
+    noModelConfigured:
+      "No usable AI model is configured. Add a model with an API key in Settings → Models (or set the ANTHROPIC_API_KEY environment variable) before distilling.",
+    aiFailed:
+      "The AI model call failed and no distillation result was produced. Check the model configuration or your network and retry.",
   },
   modelProfile: {
     nameRequired: "Enter a profile name",
@@ -89,6 +93,8 @@ export const errors = {
     testTimeout: "Connection test timed out (5 seconds)",
     listFailed:
       "Failed to fetch the model list. Check the endpoint, API key and network",
+    safeStorageUnavailable:
+      "Could not store the API key securely: the host secret store is unavailable (data directory not writable or encryption failed to initialize)",
   },
   pricing: {
     modelListInvalid: "Invalid model list",

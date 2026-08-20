@@ -77,38 +77,11 @@ export const common = {
     pageTitle: "Distillation Workbench",
     pageDesc:
       "Distill knowledge drafts from the metadata of selected sessions and write them to the knowledge library after approval. Only sanitized session summaries are read — never the conversation content.",
-    selectSessions: "Select sessions (up to {max})",
-    start: "Start distillation",
-    startHint: "Select at least one session to start.",
     noSessions: "No sessions available to distill",
     noSessionsDesc: "When no local sessions are scanned, the list is empty.",
-    selected: "{count} selected",
-    candidate: "Candidate",
-    approve: "Approve & write to knowledge",
-    cancel: "Cancel",
-    candidateNote:
-      "Candidates are kept in server memory and are not retained after refresh; the full approval UI will arrive once candidates are persisted.",
     selectedTurns: "{count} turns",
     modeQuick: "Quick mode",
     modePro: "Advanced",
-    metricMaterial: "Selected material",
-    metricTurns: "Material turns",
-    metricRuns: "Distill runs",
-    metricApproved: "Approved",
-    openMaterial: "Open material library",
-    materialDrawerTitle: "Choose distillation material",
     materialSearch: "Search sessions / projects…",
-    materialSegmentUnavailable:
-      "This version selects material per session only; single message content is not read (privacy boundary).",
-    modelOffline: "Offline fallback",
-    modelNotConfigured:
-      "No LLM configured · distillation output will be a deterministic offline fallback",
-    runHint: "Pick at least one session, then distill.",
-    expMode: "Mode",
-    expTime: "Generated",
-    expOfflineNotice:
-      "This candidate was produced by the deterministic offline fallback. Configure an LLM for real model output.",
-    saveAndManage: "Save & go to Skill management",
-    estimatedTokens: "~{count} tokens",
   },
 } as const;
