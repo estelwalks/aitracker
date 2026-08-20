@@ -663,9 +663,10 @@ export function createDashboardV2View(
       )
     : [];
   const previousTotals = totalsFor(previousEvents);
-  const cost = snapshot.pricingAvailable
-    ? estimateUsageCost(events.map(({ context: _context, ...event }) => event))
-    : null;
+  const localCost = estimateUsageCost(
+    events.map(({ context: _context, ...event }) => event),
+  );
+  const cost = snapshot.pricingAvailable ? localCost : null;
   const previousCost = snapshot.pricingAvailable
     ? estimateUsageCost(
         previousEvents.map(({ context: _context, ...event }) => event),
@@ -849,7 +850,12 @@ export function createDashboardV2View(
     totals,
     estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
     estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
-    cacheSavingsUsd: cost ? cost.cacheSavingsUsd : null,
+    // Cache savings is a locally derivable observation, even when the full
+    // cost estimate is unavailable. Keep the unavailable state for zero
+    // savings so the card does not present a misleading "$0" amount.
+    cacheSavingsUsd:
+      cost?.cacheSavingsUsd ??
+      (localCost.cacheSavingsUsd > 0 ? localCost.cacheSavingsUsd : null),
     cacheRate: currentCacheRate,
     comparison: {
       tokens: tokenComparison,
