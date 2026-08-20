@@ -40,6 +40,8 @@ export const insights = {
         "오늘 {agents}개 Agent가 근무하며 {blocked}회 위험을 차단, 약 {hours}시간을 절약했고 {distillable}개 세션을 증류할 수 있습니다.",
       "dashboard-assets":
         "주력 Agent「{name}」이(가) 사용량의 {rate}를 차지합니다. 나머지는 사용이 적어 균형 배분을 고려하세요.",
+      "dashboard-usage":
+        "오늘 {events}개의 사용 이벤트와 {sessions}개의 세션을 수집했습니다. 세션에서 확인하거나 증류할 수 있습니다.",
       "dashboard-security-safe":
         "오늘 보안 위험이 발견되지 않았습니다. 스캔된 항목은 모두 통과했습니다.",
       "dashboard-security-risk":

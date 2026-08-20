@@ -16,6 +16,7 @@ import {
   metricValue,
   statusEvidence,
 } from "../../app/insights/evidence-util.server.ts";
+import { getMonitoringSecuritySummary } from "../../app/security-summary.server.ts";
 import type {
   InsightCandidate,
   InsightEvidenceBundle,
@@ -87,12 +88,7 @@ export const securityInsightAdapter: PageInsightAdapter = {
     const nowMs = Date.now();
     const observedAt = new Date(nowMs).toISOString();
 
-    const { getCompositionRoot } =
-      await import("../../app/composition.server.ts");
-    const { monitoring } = await getCompositionRoot();
-
-    const status = await monitoring.status().catch(() => null);
-    const security = status?.security;
+    const security = await getMonitoringSecuritySummary();
     if (security == null) {
       return emptyBundle("security", scope, observedAt, true);
     }

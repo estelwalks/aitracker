@@ -9,6 +9,7 @@ export const PAGE_RULE_IDS: Record<InsightSurfaceId, readonly string[]> = {
   dashboard: [
     "dashboard-watch",
     "dashboard-assets",
+    "dashboard-usage",
     "dashboard-security-safe",
     "dashboard-security-risk",
     "dashboard-efficiency",
