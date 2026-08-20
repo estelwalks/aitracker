@@ -1,0 +1,23 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "reasonix",
+  "display": { "name": "Reasonix", "nameZh": "Reasonix", "icon": "other", "color": "#06b6d4" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "detection": {
+    "locations": [
+      { "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".reasonix" },
+      { "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".reasonix/stats" },
+      { "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".reasonix/sessions" },
+      { "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".reasonix/projects" }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter", "reader": "generic-jsonl",
+      "paths": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".reasonix/sessions", "glob": "**/*.jsonl", "format": "jsonl" }]
+    },
+    "skills": "unsupported", "agents": "unsupported", "sessions": { "mode": "unsupported" }, "market": "unsupported", "security": "unsupported"
+  },
+  "modelObservation": { "modelField": "model" }
+}
