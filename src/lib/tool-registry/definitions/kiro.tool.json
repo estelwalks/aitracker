@@ -24,6 +24,42 @@
         ],
         "base": "home",
         "path": ".kiro"
+      },
+      {
+        "targets": [
+          "macos"
+        ],
+        "base": "appData",
+        "path": "Kiro/User/globalStorage/kiro.kiroagent"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "appDataRoaming",
+        "path": "Kiro/User/globalStorage/kiro.kiroagent"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "Kiro/User/globalStorage/kiro.kiroagent"
+      },
+      {
+        "targets": [
+          "macos"
+        ],
+        "base": "appData",
+        "path": "kiro-cli"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "dataHome",
+        "path": "kiro-cli"
       }
     ]
   },

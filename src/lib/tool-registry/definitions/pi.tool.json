@@ -24,6 +24,16 @@
         ],
         "base": "home",
         "path": ".pi"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".pi/agent/sessions"
       }
     ]
   },

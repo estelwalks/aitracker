@@ -76,6 +76,8 @@ const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
   desktop: "sources.type.desktop",
 };
 
+const SOURCES_PAGE_SIZE = 6;
+
 export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const { t, format } = useI18n();
   const [summary, setSummary] = useState(initial);
@@ -83,6 +85,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const [migrationSource, setMigrationSource] =
     useState<SourcesQueryEntry | null>(null);
   const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
   );
@@ -105,6 +108,12 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           entry.paths.some((path) => path.toLocaleLowerCase().includes(kw))),
     );
   }, [summary.entries, keyword, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / SOURCES_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageEntries = filtered.slice(
+    (currentPage - 1) * SOURCES_PAGE_SIZE,
+    currentPage * SOURCES_PAGE_SIZE,
+  );
   async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
@@ -160,7 +169,10 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
             <Search className="size-3.5 text-muted-foreground" />
             <input
               value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
+              onChange={(event) => {
+                setKeyword(event.target.value);
+                setPage(1);
+              }}
               placeholder={t("sources.searchToolOrPath")}
               aria-label={t("sources.searchToolOrPath")}
               className="w-40 bg-transparent font-mono text-[11px] outline-none placeholder:text-muted-foreground"
@@ -240,7 +252,10 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
             <button
               key={filter.key}
               type="button"
-              onClick={() => setStatusFilter(filter.key)}
+              onClick={() => {
+                setStatusFilter(filter.key);
+                setPage(1);
+              }}
               className={`tt-num inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface text-muted-foreground hover:text-foreground"}`}
             >
               {t(filter.labelKey)}
@@ -263,7 +278,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           />
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {filtered.map((entry) => (
+            {pageEntries.map((entry) => (
               <SourceCard
                 key={entry.id}
                 entry={entry}
@@ -271,6 +286,34 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
               />
             ))}
           </div>
+        )}
+        {filtered.length > SOURCES_PAGE_SIZE && (
+          <nav
+            aria-label="数据来源分页"
+            className="mt-4 flex items-center justify-center gap-3 border-t border-border pt-3"
+          >
+            <button
+              type="button"
+              aria-label="上一页"
+              disabled={currentPage === 1}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:opacity-40"
+            >
+              ←
+            </button>
+            <span className="tt-num text-[11px] text-muted-foreground">
+              {currentPage} / {pageCount}
+            </span>
+            <button
+              type="button"
+              aria-label="下一页"
+              disabled={currentPage === pageCount}
+              onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+              className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:opacity-40"
+            >
+              →
+            </button>
+          </nav>
         )}
       </section>
 
@@ -328,7 +371,10 @@ function SourceCard({
   const canMigrate = entry.skillCount !== null && entry.skillCount > 0;
 
   return (
-    <article className="rounded-xl bg-surface-2/60 p-3.5 transition-colors hover:bg-surface-2">
+    <article
+      data-testid={`source-card-${entry.id}`}
+      className="rounded-xl bg-surface-2/60 p-3.5 transition-colors hover:bg-surface-2"
+    >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`size-1.5 shrink-0 rounded-sm ${meta.dot}`} />

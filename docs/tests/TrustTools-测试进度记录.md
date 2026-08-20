@@ -4,16 +4,17 @@
 |------|-----|
 | 文档类型 | 测试进度记录 (TEST-PROGRESS) |
 | 项目名称 | TrustTools |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 创建日期 | 2026-08-21 00:47:34 |
-| 更新日期 | 2026-08-21 00:47:34 |
-| 生成工具 | agile-feature-dev |
+| 更新日期 | 2026-08-21 01:21:33 |
+| 生成工具 | agile-feature-dev + system-test-automation |
 | 文档状态 | 草稿 |
 
 ## 修订记录
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.1 | 2026-08-21 01:21:33 | 补全参考项目 agent 数据目录、增加 Windows/macOS 来源页投影、补充全系统 E2E 并修复离线 SSR 与 Windows Home 隔离问题 |
 | v1.0 | 2026-08-21 00:47:34 | 完成模型配置、调用链、开关、Windows 兼容性和真实模型 smoke test 记录 |
 
 ---
@@ -115,3 +116,61 @@
 ## 7. 发布建议
 
 LLM 配置相关代码和测试可以提交。正式发布前仍建议在 macOS CI/实体机执行一次 `npm run build:desktop` 和 Electron 启动 smoke test，并单独安排全局品牌一致性门禁与外部 API E2E 的清理批次。
+
+## 8. Agent 数据来源与原型对齐（v1.1）
+
+本轮以 `D:\Dev\token-monitor` 的本地数据来源清单和 `docs\V3.0_TrustTools\project-sparkle-hub-92-c957c2e6-main-4` 原型为对照，完成了注册表、路径投影、来源页分页和全系统浏览器回归。
+
+### 8.1 Agent 覆盖
+
+注册表从原有 30 个可见工具扩展到 36 个，新增：Qwen、Command Code、Proma、Qoder CN、Reasonix、Cherry Studio。原有 agent 的路径探测也同步扩展，包括 Antigravity、Cline、Cursor、GitHub Copilot、Grok、Hermes、Kiro、Kilo Code、OpenCode、Pi、ZCode、Zed 等。
+
+| 能力 | 结果 |
+|------|------|
+| 可见 agent 注册表 | 36/36 |
+| 原生 usage reader | 8 |
+| 通用 JSONL/适配器 reader | 12 |
+| 模型观测注册 | 36/36 |
+| 参考项目本地 agent 清单映射 | 已覆盖 |
+| Qoder CN | 已识别目录；SQLite 专用 schema reader 待后续提供真实 schema 后接入 |
+
+### 8.2 Windows/macOS 实际目录投影
+
+来源页现在按照当前运行平台从注册表解析真实目录，页面只展示 HOME 下的安全相对路径（例如 `~/AppData/Roaming/...`），不会把用户名、密钥或外部环境覆盖路径泄露到浏览器。
+
+| 平台 | 已验证目录类型 |
+|------|----------------|
+| Windows | `%APPDATA%` / `~/AppData/Roaming`、`%LOCALAPPDATA%` / `~/AppData/Local`、`~/.config`、`~/.agent` |
+| macOS | `~/Library/Application Support`、`~/Library/Logs`、`~/.config`、`~/.agent` |
+| Linux | XDG 目录已保留在注册表；按项目平台策略显示为 planned，不宣称本机实测支持 |
+
+### 8.3 Sources 页面
+
+来源页按原型补齐搜索、状态筛选、平台目录展示、卡片稳定 test id 与每页 6 条的分页导航。未安装 agent 仍显示其已知目录，便于用户按本机实际路径确认安装状态；已安装状态仍由真实扫描结果决定。
+
+## 9. 本轮自动化测试结果
+
+| 测试/门禁 | 结果 |
+|-----------|------|
+| `npm run test:unit` | 1450 passed / 4 skipped / 0 failed |
+| agent 注册表、平台路径、来源投影定向测试 | 53/53 passed |
+| `npm run test:scripts` | 30/30 passed |
+| `npx tsc --noEmit` | 通过 |
+| `npm run verify:tool-registry` | 通过，36 个 JSON 定义与生成文件一致 |
+| `npm run build` | 通过 |
+| `npx playwright test -c playwright.config.empty-home.ts tests/e2e/full-system-smoke.spec.ts` | 14/14 passed |
+
+全系统 E2E 覆盖首页、Agents、Skills、安全检测、设置、记忆、会话、日报、蒸馏、市场、Tracker、数据来源和 Widget 共 13 个路由，并额外验证来源页搜索、状态筛选、Windows 平台目录和分页交互。
+
+## 10. 本轮发现并修复的问题
+
+1. 市场接口离线时 `/market` SSR 直接返回 500。已增加安全的空市场降级，离线时页面仍可访问。
+2. 来源页 E2E 在 hydration 前操作分页，导致测试不稳定。已等待 locale/hydration 完成，并使用实际控件文案与稳定 test id。
+3. Windows 下显式传入临时 Home 的扫描仍会额外读取宿主 `USERPROFILE/HOME`。已修复为显式隔离 Home 时只扫描该目录与显式 additional roots，默认生产路径行为不变。
+4. 注册表生成器和校验器原先写死 30 个工具。已改为以 manifest 数量和注册表内容校验，后续新增 agent 不再需要修改硬编码计数。
+
+## 11. 结论与剩余边界
+
+本轮功能代码、注册表、来源页和自动化测试均已通过验证，可提交。真实模型调用证据见本报告 v1.0 的第 2 节；本轮新增 E2E 使用隔离空 Home 和离线降级，避免把宿主机数据或外部市场服务当成测试成功条件。
+
+剩余边界是：当前环境为 Windows，macOS 已完成路径解析与平台矩阵测试，但未在真实 macOS 主机执行原生打包；Qoder CN 已支持目录识别，SQLite 数据解析需基于真实 schema 单独实现；4 个跳过用例是 Windows 符号链接/Unix 权限能力限制，不是业务失败。

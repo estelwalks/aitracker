@@ -37,6 +37,26 @@
         ],
         "base": "appDataRoaming",
         "path": "Code/User/globalStorage/saoudrizwan.claude-dev"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".cline/data/sessions"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/tasks"
       }
     ]
   },

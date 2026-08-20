@@ -31,6 +31,12 @@
     { "id": "anythingllm", "path": "anythingllm.tool.json" },
     { "id": "dsh", "path": "dsh.tool.json" },
     { "id": "aipy", "path": "aipy.tool.json" },
-    { "id": "cline", "path": "cline.tool.json" }
+    { "id": "cline", "path": "cline.tool.json" },
+    { "id": "qwen", "path": "qwen.tool.json" },
+    { "id": "commandcode", "path": "commandcode.tool.json" },
+    { "id": "proma", "path": "proma.tool.json" },
+    { "id": "qodercn", "path": "qodercn.tool.json" },
+    { "id": "reasonix", "path": "reasonix.tool.json" },
+    { "id": "cherrystudio", "path": "cherrystudio.tool.json" }
   ]
 }

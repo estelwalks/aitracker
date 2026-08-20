@@ -14,9 +14,29 @@ interface MarketLoader extends MarketListResult {
 export const Route = createFileRoute("/market")({
   loader: async ({ location }): Promise<MarketLoader> => {
     const locale = resolveLocaleFromSearch(location.search);
-    const market = await getMarketSkills({
-      data: { page: 1, limit: 12, search: "", sort: "downloads" },
-    });
+    let market: Awaited<ReturnType<typeof getMarketSkills>>;
+    try {
+      market = await getMarketSkills({
+        data: { page: 1, limit: 12, search: "", sort: "downloads" },
+      });
+    } catch {
+      // The market is an optional network integration. A cold/offline desktop
+      // must still render the page shell and its local empty state instead of
+      // turning a transient timeout into an SSR 500.
+      market = {
+        skills: [],
+        pagination: { page: 1, limit: 12, total: 0, pages: 1 },
+        source: "cache",
+        fetchedAt: new Date().toISOString(),
+        warning: null,
+        stats: {
+          totalSkills: 0,
+          officialCount: 0,
+          totalDownloads: 0,
+          installedCount: 0,
+        },
+      };
+    }
     return { locale, ...market };
   },
   head: ({ loaderData }) => ({

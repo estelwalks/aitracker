@@ -34,6 +34,26 @@
         ],
         "base": "home",
         "path": ".oh-my-pi"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".omp/agent/sessions"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".oh-my-pi/agent/sessions"
       }
     ]
   },

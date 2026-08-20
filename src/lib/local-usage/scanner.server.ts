@@ -2497,7 +2497,7 @@ export async function scanLocalUsage(
     });
   };
   const windowsEnvironmentHomes =
-    process.platform === "win32"
+    process.platform === "win32" && options.homeDirectory == null
       ? [
           process.env.USERPROFILE,
           process.env.HOME,

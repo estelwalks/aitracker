@@ -24,6 +24,16 @@
         ],
         "base": "home",
         "path": ".kimi"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".kimi-code"
       }
     ]
   },
@@ -53,6 +63,18 @@
           ],
           "base": "home",
           "path": ".kimi/logs",
+          "glob": "**/*.jsonl",
+          "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".kimi-code/sessions",
           "glob": "**/*.jsonl",
           "format": "jsonl"
         }

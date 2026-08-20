@@ -24,6 +24,26 @@
         ],
         "base": "home",
         "path": ".zcode"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".zcode/projects"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".zcode/cli/db/db.sqlite"
       }
     ]
   },

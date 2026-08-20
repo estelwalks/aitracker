@@ -578,20 +578,20 @@ describe("shared policy packs (TC-POL-001)", () => {
     assert.equal(pack.defaultStatus.macos, "supported");
   });
 
-  test("manifest lists all 30 tools in frozen UI order", () => {
+  test("manifest lists all built-in tools in frozen UI order", () => {
     // The manifest sits in definitions/ (it lists the definitions dir), not _shared/.
     const pack = JSON.parse(
       readFileSync(join(here, "definitions/manifest.json"), "utf8"),
     ) as {
       tools: { id: string; path: string }[];
     };
-    assert.equal(pack.tools.length, 30);
+    assert.equal(pack.tools.length, 36);
     assert.equal(pack.tools[0].id, "claude-code");
     assert.equal(pack.tools[27].id, "dsh");
     assert.equal(pack.tools[28].id, "aipy");
     assert.equal(pack.tools[29].id, "cline");
     const ids = new Set(pack.tools.map((t) => t.id));
-    assert.equal(ids.size, 30, "ids must be unique");
+    assert.equal(ids.size, 36, "ids must be unique");
     for (const t of pack.tools) {
       assert.equal(
         t.path,
