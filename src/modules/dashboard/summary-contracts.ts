@@ -47,6 +47,7 @@ export interface DashboardWindowSummary {
   readonly totals: LocalUsageTotals;
   readonly estimatedCostUsd: number | null;
   readonly estimatedCostIsPartial: boolean;
+  readonly cacheSavingsUsd: number | null;
   readonly cacheRate: number | null;
   readonly comparison: DashboardV2Comparison;
   readonly sessions: number | null;
@@ -132,7 +133,7 @@ export function windowToView(
     totals: window.totals,
     estimatedCostUsd: window.estimatedCostUsd,
     estimatedCostIsPartial: window.estimatedCostIsPartial,
-    cacheSavingsUsd: null,
+    cacheSavingsUsd: window.cacheSavingsUsd,
     cacheRate: window.cacheRate,
     comparison: window.comparison,
     sessions: window.sessions,
