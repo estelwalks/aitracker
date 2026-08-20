@@ -32,8 +32,8 @@ export async function getMonitoringSecuritySummary(): Promise<MonitoringSecurity
   if (status?.security) return status.security;
 
   try {
-    const raw = root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)
-      ?.value;
+    const raw =
+      root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)?.value;
     if (!Array.isArray(raw) || raw.length === 0) return null;
     const history = (raw as unknown as SecurityScanHistoryEntry[]).map(
       historyView,
