@@ -66,6 +66,13 @@ export interface InsightCandidate {
   readonly allowedActionIds: readonly InsightActionId[];
   readonly actionId?: InsightActionId;
   readonly mandatory?: boolean;
+  /**
+   * Set to false when the rendered fact contains a local entity name (for
+   * example a project, session, or custom Skill). The candidate still
+   * participates in local rule ranking/fallback, but is never serialized into
+   * the remote enhancement payload.
+   */
+  readonly remoteEligible?: boolean;
 }
 
 export interface InsightEnvelopeLine {
@@ -99,6 +106,8 @@ export interface InsightEnvelope {
   readonly generatedAt: string;
   readonly source: "rules" | "enhanced";
   readonly canEnhance: boolean;
+  /** Renderer hint only. True after the server validated auto mode + consent. */
+  readonly autoEnhance: boolean;
   readonly modelLabel?: string;
 }
 
@@ -111,7 +120,12 @@ export interface PageInsightAdapter {
 
 export interface InsightEnhancementInput {
   readonly surface: InsightSurfaceId;
+  /** Actual evidence adapter version; participates in cache identity only. */
+  readonly adapterVersion: number;
   readonly locale: string;
+  /** Effective preference projection. The server, never the renderer, sets it. */
+  readonly profileId?: string | null;
+  readonly dailyCallLimit?: number | null;
   readonly candidates: readonly {
     readonly id: string;
     readonly severity: InsightSeverity;
@@ -144,6 +158,9 @@ export interface InsightEnhancerPort {
   readonly id: string;
   enhance(input: InsightEnhancementInput): Promise<InsightEnhancementResult>;
 }
+
+/** Current wording/version required before aggregate facts may be sent automatically. */
+export const INSIGHT_AUTO_CONSENT_VERSION = "1";
 
 export type InsightMode = "rules" | "enhanced-manual" | "enhanced-auto";
 

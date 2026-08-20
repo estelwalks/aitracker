@@ -24,6 +24,7 @@ import {
 import {
   chatUrl,
   createProfileBackedProvider,
+  createModelProfileNetworkOperations,
   modelListUrl,
   type ModelProfileRepository,
 } from "./model-profile.server.ts";
@@ -187,6 +188,9 @@ test("validateModelProfileInput rejects invalid mode / protocol / model", () => 
 
 test("validateModelProfileInput accepts valid custom and official payloads", () => {
   assert.deepEqual(validateModelProfileInput(VALID_CUSTOM), { ok: true });
+  assert.deepEqual(validateModelProfileInput({ mode: "official" }), {
+    ok: true,
+  });
   assert.deepEqual(
     validateModelProfileInput({
       mode: "official",
@@ -207,7 +211,7 @@ test("effective helpers: official fixes protocol/endpoint/model", () => {
   assert.equal(effectiveProtocol("custom", "anthropic"), "anthropic");
   assert.equal(
     effectiveEndpoint({ mode: "official" }),
-    "https://api.deepseek.com/v1",
+    "https://api.deepseek.com",
   );
   assert.equal(
     effectiveEndpoint({ mode: "custom", protocol: "openai" }),
@@ -242,9 +246,140 @@ test("chatUrl/modelListUrl build protocol-specific endpoints", () => {
   );
 });
 
+test("model profile network test builds OpenAI request and returns latency", async () => {
+  let seenUrl = "";
+  let seenInit: RequestInit | undefined;
+  const network = createModelProfileNetworkOperations({
+    timeoutMs: 100,
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      seenInit = init;
+      return jsonResponse({ choices: [{ message: { content: "OK" } }] });
+    }),
+  });
+
+  const result = await network.test(VALID_CUSTOM);
+  assert.equal(result.ok, true);
+  assert.equal(typeof result.latencyMs, "number");
+  assert.equal(seenUrl, "https://api.deepseek.com/v1/chat/completions");
+  assert.equal(
+    (seenInit?.headers as Record<string, string>).authorization,
+    `Bearer ${VALID_KEY}`,
+  );
+  assert.deepEqual(JSON.parse(String(seenInit?.body)), {
+    model: "deepseek-chat",
+    max_tokens: 16,
+    messages: [{ role: "user", content: "Reply with OK." }],
+  });
+});
+
+test("model profile network test builds Anthropic x-api-key request", async () => {
+  let seenUrl = "";
+  let seenHeaders: Record<string, string> = {};
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      seenHeaders = init.headers as Record<string, string>;
+      return jsonResponse({ content: [{ type: "text", text: "OK" }] });
+    }),
+  });
+
+  const result = await network.test({
+    mode: "custom",
+    protocol: "anthropic",
+    name: "Claude",
+    apiKey: "sk-ant-0987654321",
+    endpoint: "https://api.anthropic.com/v1",
+    model: "claude-sonnet-4",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(seenUrl, "https://api.anthropic.com/v1/messages");
+  assert.equal(seenHeaders["x-api-key"], "sk-ant-0987654321");
+  assert.equal(seenHeaders["anthropic-version"], "2023-06-01");
+});
+
+test("model profile network test accepts successful provider responses without a chat envelope", async () => {
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async () => new Response(null, { status: 204 })),
+  });
+
+  const result = await network.test(VALID_CUSTOM);
+  assert.equal(result.ok, true);
+  assert.equal(typeof result.latencyMs, "number");
+});
+
+test("model profile list returns remote ids without exposing the key", async () => {
+  let seenUrl = "";
+  const network = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async (url, init) => {
+      seenUrl = url;
+      assert.equal(
+        (init.headers as Record<string, string>).authorization,
+        `Bearer ${VALID_KEY}`,
+      );
+      return jsonResponse({
+        data: [{ id: "gpt-4o" }, { id: "gpt-4o" }, { id: "bad model" }],
+      });
+    }),
+  });
+  const result = await network.listModels(VALID_CUSTOM);
+  assert.deepEqual(result, {
+    ok: true,
+    models: ["gpt-4o"],
+    source: "remote",
+    message: "Fetched 1 models from the remote endpoint.",
+  });
+  assert.equal(seenUrl, "https://api.deepseek.com/v1/models");
+  assert.equal(JSON.stringify(result).includes(VALID_KEY), false);
+});
+
+test("model profile list accepts common provider envelopes and model field names", async () => {
+  const payloads = [
+    [{ name: "llama-3.3" }, { model: "qwen-plus" }],
+    { models: [{ id: "gpt-4o" }] },
+    { result: [{ id: "claude-sonnet-4-5" }] },
+  ] as const;
+
+  for (const payload of payloads) {
+    const network = createModelProfileNetworkOperations({
+      fetchFn: mockFetch(async () => jsonResponse(payload)),
+    });
+    const result = await network.listModels(VALID_CUSTOM);
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "remote");
+  }
+});
+
+test("model profile list falls back on HTTP failure and test maps timeout", async () => {
+  const httpFailure = createModelProfileNetworkOperations({
+    fetchFn: mockFetch(async () => new Response("no", { status: 503 })),
+  });
+  const failed = await httpFailure.listModels(VALID_CUSTOM);
+  assert.equal(failed.ok, true);
+  assert.equal(failed.source, "fallback");
+  assert.deepEqual(failed.models, ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]);
+
+  const timeout = createModelProfileNetworkOperations({
+    timeoutMs: 5,
+    fetchFn: ((_, init) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(new Error("aborted")),
+          {
+            once: true,
+          },
+        );
+      })) as typeof fetch,
+  });
+  const timedOut = await timeout.test(VALID_CUSTOM);
+  assert.equal(timedOut.errorCode, "errors.modelProfile.testTimeout");
+  assert.equal(typeof timedOut.latencyMs, "number");
+});
+
 // ── SQLite repository lifecycle ─────────────────────────────────────────────
 
-test("sqlite repository: upsert creates a key-free view and activates it", async (t) => {
+test("sqlite repository: upsert creates a key-free view without activating it", async (t) => {
   await withRepo(t, async (repository) => {
     const view = await repository.upsert(VALID_CUSTOM);
     assert.match(view.id, /^m-/);
@@ -256,13 +391,14 @@ test("sqlite repository: upsert creates a key-free view and activates it", async
     const list = await repository.listViews();
     assert.equal(list.length, 1);
     assert.equal(list[0]!.id, view.id);
-    assert.equal(await repository.getActiveView().then((a) => a?.id), view.id);
+    assert.equal(await repository.getActiveView(), null);
   });
 });
 
 test("sqlite repository: update keeps createdAt and stored key when key is blank", async (t) => {
   await withRepo(t, async (repository) => {
     const created = await repository.upsert(VALID_CUSTOM);
+    await repository.setActive(created.id);
     const updated = await repository.upsert({
       ...VALID_CUSTOM,
       id: created.id,
@@ -274,6 +410,10 @@ test("sqlite repository: update keeps createdAt and stored key when key is blank
     assert.equal(updated.name, "Renamed");
     assert.equal(updated.model, "deepseek-reasoner");
     assert.equal(updated.createdAt, created.createdAt);
+    assert.equal(
+      await repository.getActiveView().then((active) => active?.id),
+      created.id,
+    );
     // The stored key survives a blank-key edit (decrypted via the codec).
     const full = await repository.getProfileForExecution(created.id);
     assert.equal(full?.apiKey, VALID_KEY);
@@ -286,6 +426,44 @@ test("sqlite repository: update keeps createdAt and stored key when key is blank
     const replaced = await repository.getProfileForExecution(created.id);
     assert.equal(replaced?.apiKey, "sk-new-key-123456");
   });
+});
+
+test("sqlite repository: auth round-trips and blank-key test uses the stored key", async (t) => {
+  let received: ModelProfileInput | undefined;
+  const directory = mkdtempSync(join(tmpdir(), "tt-model-profile-auth-"));
+  const host = DatabaseHost.open({
+    path: join(directory, "platform.db"),
+    versionsProvider: {
+      getVersions: () => ({ nodeVersion: "24.19.0", sqliteVersion: "99.0.0" }),
+    },
+  });
+  runMigrations({ database: host, appVersion: "test" });
+  t.after(() => host.close());
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const repository = createSqliteModelProfileRepository({
+    database: host,
+    secretCodec: codec,
+    testProfile: async (input) => {
+      received = input;
+      return { ok: true, latencyMs: 1 };
+    },
+  });
+
+  const saved = await repository.upsert({ ...VALID_CUSTOM, auth: "x-api-key" });
+  assert.equal(saved.auth, "x-api-key");
+  assert.equal(
+    (await repository.getProfileForExecution(saved.id))?.auth,
+    "x-api-key",
+  );
+  const result = await repository.test({
+    ...VALID_CUSTOM,
+    id: saved.id,
+    apiKey: "",
+    auth: undefined,
+  });
+  assert.deepEqual(result, { ok: true, latencyMs: 1 });
+  assert.equal(received?.apiKey, VALID_KEY);
+  assert.equal(received?.auth, "x-api-key");
 });
 
 test("sqlite repository: listViews never contains the apiKey anywhere", async (t) => {
@@ -312,6 +490,7 @@ test("sqlite repository: remove deletes, clears the secret and activates the sur
   await withRepo(t, async (repository, host) => {
     const first = await repository.upsert({ ...VALID_CUSTOM, name: "A" });
     const second = await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    await repository.setActive(second.id);
     assert.equal(
       await repository.getActiveView().then((a) => a?.id),
       second.id,
@@ -356,7 +535,14 @@ test("sqlite repository: remove deletes, clears the secret and activates the sur
 test("sqlite repository: maintains a single active profile", async (t) => {
   await withRepo(t, async (repository, host) => {
     await repository.upsert({ ...VALID_CUSTOM, name: "A" });
-    await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    const second = await repository.upsert({ ...VALID_CUSTOM, name: "B" });
+    assert.equal(
+      host
+        .prepare("SELECT COUNT(*) AS n FROM model_profiles WHERE is_active = 1")
+        .get()?.n,
+      0n,
+    );
+    await repository.setActive(second.id);
     assert.equal(
       host
         .prepare("SELECT COUNT(*) AS n FROM model_profiles WHERE is_active = 1")
@@ -389,7 +575,7 @@ test("sqlite repository: setActive switches and rejects unknown ids", async (t) 
   });
 });
 
-test("sqlite repository: official mode stores the fixed preset endpoint/model", async (t) => {
+test("sqlite repository: official mode stores the fixed preset and encrypted key", async (t) => {
   await withRepo(t, async (repository) => {
     const view = await repository.upsert({
       mode: "official",
@@ -397,10 +583,22 @@ test("sqlite repository: official mode stores the fixed preset endpoint/model", 
       apiKey: VALID_KEY,
     });
     assert.equal(view.protocol, "openai");
-    assert.equal(view.endpoint, "https://api.deepseek.com/v1");
+    assert.equal(view.endpoint, "https://api.deepseek.com");
     assert.equal(view.model, "deepseek-chat");
     const full = await repository.getProfileForExecution(view.id);
     assert.equal(full?.apiKey, VALID_KEY);
+  });
+});
+
+test("sqlite repository: keyless official profiles cannot be created or activated", async (t) => {
+  await withRepo(t, async (repository) => {
+    await assert.rejects(
+      () => repository.upsert({ mode: "official" }),
+      (error: unknown) =>
+        error instanceof Error &&
+        (error as { code?: unknown }).code ===
+          "errors.modelProfile.apiKeyRequired",
+    );
   });
 });
 

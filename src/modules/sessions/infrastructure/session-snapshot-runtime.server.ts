@@ -6,6 +6,9 @@ import type { SnapshotRepository } from "../../../platform/snapshot-runtime/cont
 import type { SnapshotRefreshPort } from "../../../platform/snapshot-runtime/contracts.ts";
 import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
 
+/** Bump when the session registry/path/parser contract changes. */
+export const SESSION_COLLECTOR_VERSION = "sessions-v2-dsh";
+
 /**
  * P3-T3-01: Session snapshot coordinator.
  *
@@ -49,7 +52,7 @@ export interface SessionSnapshotRuntime {
     readonly warningCodes: readonly string[];
   }>;
   requestRefresh(request: {
-    reason: "startup" | "schedule" | "manual" | "event" | "empty";
+    reason: "startup" | "schedule" | "manual" | "event" | "empty" | "stale";
     signal?: AbortSignal;
   }): Promise<void>;
   invalidate(): Promise<void>;
@@ -60,12 +63,14 @@ export interface SessionSnapshotRuntime {
 export function createSessionSnapshotRuntime(
   options: SessionSnapshotRuntimeOptions,
 ): SessionSnapshotRuntime {
-  const collect =
+  let collectorVersionChecked = false;
+  const collectSource =
     options.collect ??
     (async ({ signal }) => {
       if (signal?.aborted) {
         return {
           data: {
+            collectorVersion: SESSION_COLLECTOR_VERSION,
             generatedAt: new Date().toISOString(),
             sessions: [],
             density: [],
@@ -88,6 +93,7 @@ export function createSessionSnapshotRuntime(
       }));
       return {
         data: {
+          collectorVersion: SESSION_COLLECTOR_VERSION,
           generatedAt: new Date().toISOString(),
           sessions,
           density: buildSessionDensity(sessions),
@@ -96,6 +102,26 @@ export function createSessionSnapshotRuntime(
         scannedItems: sessions.length,
       };
     });
+
+  const collect = async (
+    request: Parameters<
+      NonNullable<SessionSnapshotRuntimeOptions["collect"]>
+    >[0],
+  ) => {
+    const result = await collectSource(request);
+    return {
+      ...result,
+      // Persist the scanner contract version in the generic generation
+      // fingerprint column as well; SQLite reloads the envelope metadata but
+      // intentionally does not persist arbitrary runtime-only fields.
+      sourceFingerprint: SESSION_COLLECTOR_VERSION,
+      data: {
+        ...result.data,
+        collectorVersion:
+          result.data.collectorVersion ?? SESSION_COLLECTOR_VERSION,
+      },
+    };
+  };
 
   const coordinator = createSnapshotCoordinator<SessionSnapshotData>({
     repository: options.repository,
@@ -117,11 +143,27 @@ export function createSessionSnapshotRuntime(
     warningCodes: view.warningCodes,
   });
 
+  const ensureHydrated = async (): Promise<void> => {
+    await coordinator.ensureHydrated();
+    if (collectorVersionChecked) return;
+    collectorVersionChecked = true;
+    const latest = coordinator.readLatest();
+    if (
+      latest.data != null &&
+      latest.data.collectorVersion !== SESSION_COLLECTOR_VERSION
+    ) {
+      // Keep the old data readable, but force the next refresh path to collect
+      // with the current registry/path/parser implementation. This is the
+      // upgrade path for snapshots created before DSH support was complete.
+      await coordinator.invalidate({ reason: "startup" });
+    }
+  };
+
   return {
     get refreshing() {
       return coordinator.refreshing;
     },
-    ensureHydrated: () => coordinator.ensureHydrated(),
+    ensureHydrated,
     readLatest: () => toView(coordinator.readLatest()),
     refreshNow: (signal) => coordinator.refreshNow(signal).then(toView),
     requestRefresh: (request) => coordinator.requestRefresh(request),

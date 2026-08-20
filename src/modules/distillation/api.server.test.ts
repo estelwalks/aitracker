@@ -13,7 +13,11 @@ import {
 import { SKILL_AGENTS } from "../../lib/local-skills/types.ts";
 import type { AIExecutionResult } from "../ai-orchestration/contracts.ts";
 import type { CandidateOutput } from "./contracts.ts";
-import { loadDistillation, saveCandidateAsSkill } from "./api.server.ts";
+import {
+  loadDistillation,
+  saveCandidateAsSkill,
+  startDistillation,
+} from "./api.server.ts";
 
 const execution = (): AIExecutionResult => ({
   summary: {
@@ -87,13 +91,55 @@ test("loadDistillation returns an empty but honest read model on a fresh root", 
     assert.deepEqual(view.candidates, []);
     assert.equal(view.stats.runs, 0);
     assert.equal(view.stats.approved, 0);
-    assert.ok(view.modelOptions.some((m) => m.id === "offline"));
+    assert.deepEqual(view.modelOptions, [
+      { id: "offline", label: "offline", offline: true },
+    ]);
+    assert.equal(view.activeModelId, "offline");
     // B-600: the server-side quota ledger is always projected; a fresh root
     // reports zero used calls against the configured daily limit.
     assert.ok(view.quota, "quota projection must be present");
     assert.equal(view.quota.used, 0);
     assert.equal(view.quota.limit, 20);
     assert.equal(view.quota.remaining, 20);
+  });
+});
+
+test("configured profile is selected automatically and starts through the profile provider", async () => {
+  await withIsolatedRoot(async () => {
+    const root = await getCompositionRoot();
+    const profile = await root.modelProfiles.upsert({
+      mode: "custom",
+      name: "Test profile",
+      protocol: "openai",
+      endpoint: "https://models.example.test/v1",
+      model: "test-model",
+      apiKey: "test-api-key",
+    });
+    const view = await loadDistillation("zh-CN");
+    assert.equal(view.activeModelId, profile.id);
+    assert.ok(view.modelOptions.some((item) => item.id === profile.id));
+    assert.ok(!view.modelOptions.some((item) => item.id === "default"));
+
+    let request: { modelId: string; providerId?: string } | undefined;
+    const originalStart = root.distillation.start;
+    root.distillation.start = async (input) => {
+      request = { modelId: input.modelId, providerId: input.providerId };
+      return {
+        ok: true,
+        value: {
+          requestId: "distill:test",
+          status: "waiting-approval",
+          candidate: candidate("run-1"),
+        },
+      };
+    };
+    try {
+      const result = await startDistillation({ sessionRefs: [] });
+      assert.equal(result.ok, true);
+      assert.deepEqual(request, { modelId: profile.id, providerId: "profile" });
+    } finally {
+      root.distillation.start = originalStart;
+    }
   });
 });
 

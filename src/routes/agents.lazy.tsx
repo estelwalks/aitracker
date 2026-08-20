@@ -7,6 +7,13 @@ export const Route = createLazyFileRoute("/agents")({
 });
 
 function AgentsRoute() {
-  const { usage, ...initial } = Route.useLoaderData();
-  return <SkillsPage initial={initial} usage={usage} showWorkspace={false} />;
+  const { usage, securityVerdicts, ...initial } = Route.useLoaderData();
+  return (
+    <SkillsPage
+      initial={initial}
+      usage={usage}
+      securityVerdicts={securityVerdicts}
+      showWorkspace={false}
+    />
+  );
 }

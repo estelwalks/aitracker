@@ -48,11 +48,9 @@ const toolDisplayById = new Map(
 
 export function DashboardDeltaChip({
   value,
-  points = false,
   className = "",
 }: {
   value?: number | null;
-  points?: boolean;
   className?: string;
 }) {
   const { format, t } = useI18n();
@@ -79,21 +77,6 @@ export function DashboardDeltaChip({
       <ArrowIcon className="size-3" strokeWidth={2.2} />
       {value > 0 ? "+" : ""}
       {format.formatPercent(value)}
-      {points ? " pt" : ""}
-    </span>
-  );
-}
-
-/** 上一区间无用量时的「新增」标记（0 → N，百分比无定义）。 */
-function DashboardNewChip({ className = "" }: { className?: string }) {
-  const { t } = useI18n();
-  return (
-    <span
-      className={`inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--color-ok)] ${className}`}
-      title={t("dashboard.kpi.vsPrevious")}
-    >
-      <ArrowUpRight className="size-3" strokeWidth={2.2} />
-      {t("dashboard.v2.newLabel")}
     </span>
   );
 }
@@ -128,14 +111,18 @@ export function DashboardTrustHero({
     0,
     hero.monitoring.detectedTools - view.activeTools,
   );
+  const distilledSkillCount =
+    view.outputAvailability.distillationBreakdown.capability;
   const skillPart =
-    view.skills == null
+    distilledSkillCount == null
       ? t("dashboard.kpi.unavailable")
-      : t("dashboard.v2.assetSkillCount", { count: view.skills });
+      : t("dashboard.v2.assetSkillCount", { count: distilledSkillCount });
+  const distilledMemoryCount =
+    view.outputAvailability.distillationBreakdown.memory;
   const memoryPart =
-    view.memoryCount == null
+    distilledMemoryCount == null
       ? t("dashboard.kpi.unavailable")
-      : t("dashboard.v2.assetMemoryCount", { count: view.memoryCount });
+      : t("dashboard.v2.assetMemoryCount", { count: distilledMemoryCount });
   const securityValue =
     security == null
       ? t("common.unknown")
@@ -368,9 +355,9 @@ export function DashboardMetricGrid({
           : t("dashboard.v2.cacheSavingsAmount", {
               amount: format.formatUsd(view.cacheSavingsUsd),
             }),
-      delta: view.comparison.cacheRate.deltaPoints,
-      deltaPoints: true,
+      delta: view.comparison.cacheRate.deltaPercent,
       alwaysBaseline: true,
+      baselineLabel: view.period === "all" ? undefined : baselineLabel,
     },
     {
       icon: Wrench,
@@ -449,13 +436,15 @@ export function DashboardMetricGrid({
     >
       {cards.map((card) => {
         const Icon = card.icon;
+        const cardBaselineLabel =
+          "baselineLabel" in card ? card.baselineLabel : baselineLabel;
         // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
         const showBaseline =
-          baselineLabel &&
+          cardBaselineLabel &&
           (card.delta != null ||
             ("alwaysBaseline" in card && card.alwaysBaseline === true));
         const hintLine = showBaseline
-          ? `${card.hint} · ${baselineLabel}`
+          ? `${card.hint} · ${cardBaselineLabel}`
           : card.hint;
         return (
           <article key={card.label} className="dashboard-metric-card">
@@ -468,11 +457,7 @@ export function DashboardMetricGrid({
                 {card.value}
               </strong>
               {card.delta != null ? (
-                <DashboardDeltaChip
-                  value={card.delta}
-                  points={"deltaPoints" in card && card.deltaPoints === true}
-                  className="shrink-0"
-                />
+                <DashboardDeltaChip value={card.delta} className="shrink-0" />
               ) : null}
             </div>
             <p
@@ -581,8 +566,10 @@ export function DashboardRangePicker({
             setOpen(false);
           }}
         >
-          <label>
-            {t("dashboard.header.customFrom")}
+          <label className="space-y-1">
+            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+              {t("dashboard.header.customFrom")}
+            </span>
             <input
               type="date"
               name="from"
@@ -590,10 +577,13 @@ export function DashboardRangePicker({
               value={draftFrom}
               max={draftTo}
               onChange={(event) => setDraftFrom(event.target.value)}
+              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
             />
           </label>
-          <label>
-            {t("dashboard.header.customTo")}
+          <label className="space-y-1">
+            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+              {t("dashboard.header.customTo")}
+            </span>
             <input
               type="date"
               name="to"
@@ -601,12 +591,13 @@ export function DashboardRangePicker({
               value={draftTo}
               min={draftFrom}
               onChange={(event) => setDraftTo(event.target.value)}
+              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={!draftFrom || !draftTo || draftFrom > draftTo}
-            className="col-span-2 mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
+            className="col-span-2 mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Check className="size-3.5" strokeWidth={2.2} />
             {t("common.confirm")}
@@ -630,8 +621,23 @@ export function DashboardToolSwitcher({
 }) {
   const { t } = useI18n();
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const toolOrderRef = useRef<string[]>([]);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
+  const orderedTools = useMemo(() => {
+    const currentIds = new Set(tools.map((tool) => tool.id));
+    const retainedIds = toolOrderRef.current.filter((id) => currentIds.has(id));
+    const newIds = tools
+      .map((tool) => tool.id)
+      .filter((id) => !retainedIds.includes(id));
+    const order = [...retainedIds, ...newIds];
+    toolOrderRef.current = order;
+    const byId = new Map(tools.map((tool) => [tool.id, tool]));
+    return order.flatMap((id) => {
+      const tool = byId.get(id);
+      return tool ? [tool] : [];
+    });
+  }, [tools]);
 
   const updateArrows = () => {
     const el = trackRef.current;
@@ -653,7 +659,7 @@ export function DashboardToolSwitcher({
       observer.disconnect();
       el.removeEventListener("scroll", updateArrows);
     };
-  }, [tools.length]);
+  }, [orderedTools.length]);
 
   const scrollRail = (direction: number) => {
     trackRef.current?.scrollBy({
@@ -699,7 +705,7 @@ export function DashboardToolSwitcher({
           <LayoutGrid className="size-4" strokeWidth={1.8} />
           {t("dashboard.context.allTools")}
         </button>
-        {tools.map((tool) => {
+        {orderedTools.map((tool) => {
           // 优先使用工具注册表配置的品牌图标/配色，未配置时回退名称启发式
           const color = tool.color ?? brandColorOf(tool.name);
           return (
@@ -810,10 +816,6 @@ export function DashboardModelDonut({
         {item.deltaPercent != null ? (
           <span className="shrink-0">
             <DashboardDeltaChip value={item.deltaPercent} />
-          </span>
-        ) : item.absoluteDelta != null && item.absoluteDelta > 0 ? (
-          <span className="shrink-0">
-            <DashboardNewChip />
           </span>
         ) : null}
       </div>
@@ -1009,11 +1011,11 @@ export function DashboardProjectOverview({
                 >
                   {t("dashboard.v2.projectShareCol")}
                 </th>
-                <th
-                  className="px-3 py-2.5 font-medium"
-                  style={{ textAlign: "right" }}
-                >
-                  {t("dashboard.v2.projectPerSessionCol")}
+                <th className="px-3 py-2.5 text-right font-medium">
+                  {t("dashboard.v2.projectTokensCol")}
+                </th>
+                <th className="px-3 py-2.5 text-right font-medium">
+                  {t("dashboard.v2.projectSessionsCol")}
                 </th>
                 <th
                   className="px-4 py-2.5 font-medium"
@@ -1046,8 +1048,9 @@ export function DashboardProjectOverview({
                     {format.formatPercent(item.share)}
                   </td>
                   <td className="tt-num px-3 py-3 text-right text-muted-foreground">
-                    {format.formatTokens(item.tokens)}{" "}
-                    <span className="opacity-40">/</span>{" "}
+                    {format.formatTokens(item.tokens)}
+                  </td>
+                  <td className="tt-num px-3 py-3 text-right text-muted-foreground">
                     {item.sessions == null
                       ? t("dashboard.kpi.unavailable")
                       : format.formatNumber(item.sessions)}
@@ -1058,8 +1061,6 @@ export function DashboardProjectOverview({
                         value={item.deltaPercent}
                         className="justify-end"
                       />
-                    ) : item.absoluteDelta != null && item.absoluteDelta > 0 ? (
-                      <DashboardNewChip />
                     ) : (
                       <DashboardDeltaChip
                         value={null}
@@ -1298,9 +1299,12 @@ export function DashboardContribHeatmap({
         <p>
           {t("dashboard.v2.calendarHint", {
             count: focusStats.activeDays,
-            tokens: format.formatTokens(focusStats.totalTokens),
           })}{" "}
-          · {t("dashboard.v2.streakHint", { count: focusStats.longestStreak })}
+          · {t("dashboard.v2.streakHint", { count: focusStats.longestStreak })}{" "}
+          ·{" "}
+          {t("dashboard.v2.calendarTotalTokens", {
+            tokens: format.formatTokens(focusStats.totalTokens),
+          })}
         </p>
       </header>
       <div

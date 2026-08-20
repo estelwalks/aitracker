@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { buildSessionDensity } from "./session-snapshot.contracts.ts";
 import { createSessionSnapshotRuntime } from "./session-snapshot-runtime.server.ts";
+import { SESSION_COLLECTOR_VERSION } from "./session-snapshot-runtime.server.ts";
 import { createSnapshotEnvelopeRepository } from "../../../test-support/snapshot-envelope-repository.ts";
 import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contracts.ts";
 
@@ -153,7 +154,50 @@ test("T3-01: runtime refresh commits a snapshot and readLatest is O(1)", async (
   // dashboard adapter can classify sessions into usage-event project labels.
   assert.equal(latest.data?.sessions[0]?.projectRef, "/private/work/project-a");
   assert.equal(latest.data?.density.length, 1);
+  assert.equal(latest.data?.collectorVersion, SESSION_COLLECTOR_VERSION);
   assert.ok(latest.revision);
+});
+
+test("legacy session snapshots are invalidated for the current collector", async () => {
+  const store = memoryStore<SnapshotEnvelope<SessionSnapshotData>>({
+    schemaVersion: 1,
+    revision: "legacy",
+    generatedAt: "2026-08-01T00:00:00.000Z",
+    sourceFingerprint: null,
+    status: "fresh",
+    data: {
+      generatedAt: "2026-08-01T00:00:00.000Z",
+      sessions: [session("legacy", "codex", "2026-08-01T00:00:00.000Z")],
+      density: [],
+    },
+    diagnostics: {
+      lastAttemptAt: "2026-08-01T00:00:00.000Z",
+      lastSuccessAt: "2026-08-01T00:00:00.000Z",
+      warningCodes: [],
+    },
+  } satisfies SnapshotEnvelope<SessionSnapshotData>);
+  const repository = createSnapshotEnvelopeRepository({
+    store,
+    emptyEnvelope: EMPTY,
+    schema: { currentVersion: 1, parse: (value: unknown) => value as never },
+  });
+  const refreshReasons: string[] = [];
+  const runtime = createSessionSnapshotRuntime({
+    repository,
+    now: () => Date.parse("2026-08-01T00:10:00.000Z"),
+    requestRefresh: {
+      async requestRefresh(request) {
+        refreshReasons.push(request.reason);
+      },
+    },
+    collect: async () => ({
+      data: { generatedAt: "t", sessions: [], density: [] },
+    }),
+  });
+
+  await runtime.ensureHydrated();
+  assert.equal(runtime.readLatest().status, "stale");
+  assert.deepEqual(refreshReasons, ["startup"]);
 });
 
 test("T3-01: collector failure keeps last-known-good", async () => {

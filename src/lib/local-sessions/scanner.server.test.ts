@@ -1231,6 +1231,36 @@ test("DSH: decodes a zstd session log through the shared dsh-zstd reader", async
   });
 });
 
+test("DSH: session summary counts all sessions across workspaces", async () => {
+  await withTempHome(async (home) => {
+    const secondSessionId = "66666666-7777-8888-9999-aaaaaaaaaaaa";
+    for (const [workspace, sessionId] of [
+      ["project-a", DSH_SESSION_ID],
+      ["project-b", secondSessionId],
+    ] as const) {
+      const sessionDir = join(home, ".dsh", "sessions", workspace, sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      const records = dshRecords(join(home, workspace));
+      records[0] = { ...records[0], id: sessionId };
+      await writeFile(
+        join(sessionDir, "session.jsonl"),
+        `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      );
+    }
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(summary.total, 2);
+    assert.deepEqual(
+      summary.sessions.map((session) => session.source),
+      ["dsh", "dsh"],
+    );
+    assert.deepEqual(
+      new Set(summary.sessions.map((session) => session.projectKey)),
+      new Set(["project-a", "project-b"]),
+    );
+  });
+});
+
 test("session projectRef normalizes identically to usage event projects", async () => {
   await withTempHome(async (home) => {
     const cwd = join(home, "acme");

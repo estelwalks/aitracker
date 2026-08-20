@@ -12,7 +12,6 @@ import {
 } from "../query/desktop-client";
 import { getBrowserSecurityClient } from "../query/browser-client";
 import { AutoScanGuide } from "./components/AutoScanGuide";
-import { RuntimeBlockPanel } from "./components/RuntimeBlockPanel";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus, type ScanStatusNav } from "./components/ScanStatus";
 import { ScanTaskDetail } from "./components/ScanTaskDetail";
@@ -30,7 +29,6 @@ import {
   latestScanEntries,
   summarizeReports,
   type SecurityHistoryView,
-  type SecurityRuntimeCapabilityView,
   type SecurityScanMode,
   type SecurityScanStateView,
   type SecurityScanTaskView,
@@ -59,9 +57,6 @@ export function SecurityAssessmentPage() {
   const [scanState, setScanState] = useState<SecurityScanStateView>(IDLE_STATE);
   const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
   const [modelConfigured, setModelConfigured] = useState(false);
-  const [runtime, setRuntime] = useState<SecurityRuntimeCapabilityView | null>(
-    null,
-  );
   const [selectedReport, setSelectedReport] =
     useState<SecurityHistoryView | null>(null);
   const [selectedTask, setSelectedTask] = useState<SecurityScanTaskView | null>(
@@ -103,17 +98,14 @@ export function SecurityAssessmentPage() {
       }
       if (client.transport === "desktop") setConnection("available");
       try {
-        const [nextSkills, nextState, nextHistory, nextRuntime] =
-          await Promise.all([
-            client.listSkills(),
-            client.getStatus(),
-            client.getHistory(),
-            client.getRuntimeCapability(),
-          ]);
+        const [nextSkills, nextState, nextHistory] = await Promise.all([
+          client.listSkills(),
+          client.getStatus(),
+          client.getHistory(),
+        ]);
         setSkills(nextSkills);
         setScanState(nextState);
         setHistory(nextHistory);
-        setRuntime(nextRuntime);
         setConnection("available");
       } catch (error) {
         if (client.transport === "companion") {
@@ -133,15 +125,17 @@ export function SecurityAssessmentPage() {
   }, [refresh]);
 
   // Deep scans use the effective model profile from Settings → Model
-  // configuration (S-500); no separate security model config exists anymore.
+  // configuration (S-500). This is intentionally independent from the
+  // optional report-level AI supplement toggle.
   useEffect(() => {
     let disposed = false;
     void listModelProfiles()
       .then((result) => {
         if (disposed) return;
-        const active = result.profiles.find(
-          (profile) => profile.id === result.activeProfileId,
-        );
+        const active =
+          result.profiles.find(
+            (profile) => profile.id === result.activeProfileId,
+          ) ?? result.profiles[0];
         setModelConfigured(Boolean(active?.apiKeyMasked));
       })
       .catch(() => {
@@ -201,10 +195,7 @@ export function SecurityAssessmentPage() {
   }, [scanState.status, t]);
 
   const latest = latestHistory(history);
-  const riskKinds = runtime?.riskKinds ?? SECURITY_RISK_KINDS;
-  // Deduplicated skills ever scanned in the real history (drives the runtime
-  // panel's honest "static scans" row — no fabricated runtime blocks).
-  const scannedSkills = summarizeReports(history).total;
+  const riskKinds = SECURITY_RISK_KINDS;
   const latestEntries = useMemo(() => latestScanEntries(history), [history]);
   const latestTotals = useMemo(
     () => summarizeReports(latestEntries),
@@ -273,7 +264,7 @@ export function SecurityAssessmentPage() {
   }, [reportError, t]);
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-2 pb-12">
       {connection === "unavailable" ? (
         <section className="grid min-h-[520px] place-items-center rounded-3xl bg-card p-8 text-center shadow-[var(--elev-1)]">
           <div className="max-w-lg">
@@ -331,7 +322,6 @@ export function SecurityAssessmentPage() {
             scanCount={countScanTasks(history)}
             dimensions={riskKinds.length}
             latestFinishedAt={latest?.finishedAt}
-            runtime={runtime}
             riskKinds={riskKinds}
             onGo={goTo}
           />
@@ -342,27 +332,20 @@ export function SecurityAssessmentPage() {
               onOpenReport={setSelectedReport}
             />
           </div>
-          {!isScanActive(scanState.status) && latest != null && (
-            <RuntimeBlockPanel
-              runtime={runtime}
-              scannedSkills={scannedSkills}
-              riskKindCount={riskKinds.length}
-            />
-          )}
           <div ref={historyRef}>
             <ScanHistory entries={history} onOpenTask={setSelectedTask} />
           </div>
         </>
       )}
 
-      {isScanActive(scanState.status) && (
-        <ScanVortex
-          state={scanState}
-          skills={skills}
-          riskKinds={riskKinds}
-          onCancel={() => void cancelScan()}
-        />
-      )}
+      <ScanVortex
+        active={isScanActive(scanState.status)}
+        state={scanState}
+        skills={skills}
+        history={history}
+        riskKinds={riskKinds}
+        onCancel={() => void cancelScan()}
+      />
 
       {selectedTask && (
         <ScanTaskDetail

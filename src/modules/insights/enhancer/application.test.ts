@@ -5,6 +5,7 @@ import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
 import type {
   AIExecutionResult,
   AIExecutionStatus,
+  AIRequest,
 } from "../../ai-orchestration/contracts.ts";
 import type {
   InsightCacheIdentity,
@@ -96,15 +97,21 @@ class FakeInsightRepository implements SqliteInsightRepository {
 
 function fakeAI(
   program: () => AIExecutionResult | Promise<AIExecutionResult>,
-): { ai: AIExecutorPort; calls: () => number } {
+): {
+  ai: AIExecutorPort;
+  calls: () => number;
+  requests: () => readonly AIRequest[];
+} {
   let count = 0;
+  const captured: AIRequest[] = [];
   const ai: AIExecutorPort = {
-    async execute() {
+    async execute(request) {
       count += 1;
+      captured.push(request);
       return program();
     },
   };
-  return { ai, calls: () => count };
+  return { ai, calls: () => count, requests: () => captured };
 }
 
 function completedResult(text: string): AIExecutionResult {
@@ -158,6 +165,7 @@ function input(
 ): InsightEnhancerInput {
   return {
     surface: "dashboard",
+    adapterVersion: 1,
     locale: "zh-CN",
     candidates: [
       {
@@ -245,6 +253,27 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
 });
 
+test("adapterVersion isolates the enhancement cache identity", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const target = enhancer(ai, repository);
+
+  assert.equal(
+    (await target.enhance(input({ adapterVersion: 3 }))).status,
+    "enhanced-ready",
+  );
+  assert.equal(
+    (await target.enhance(input({ adapterVersion: 4 }))).status,
+    "enhanced-ready",
+  );
+  assert.equal(calls(), 2);
+  assert.equal(repository.saved.length, 2);
+  assert.notEqual(
+    repository.saved[0]?.scopeHash,
+    repository.saved[1]?.scopeHash,
+  );
+});
+
 test("timeout returns timeout with no lines", async () => {
   const { ai, calls } = fakeAI(() => statusResult("timeout"));
   const target = enhancer(ai, new FakeInsightRepository());
@@ -270,6 +299,47 @@ test("budget exceeded blocks the model call", async () => {
   const result = await target.enhance(input());
   assert.equal(result.status, "budget-exceeded");
   assert.deepEqual(result.lines, []);
+  assert.equal(calls(), 0);
+});
+
+test("effective preference daily limit overrides the enhancer default", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = enhancer(ai, new FakeInsightRepository(), {
+    dailyCallLimit: 30,
+  });
+  const result = await target.enhance(input({ dailyCallLimit: 0 }));
+  assert.equal(result.status, "budget-exceeded");
+  assert.equal(calls(), 0);
+});
+
+test("effective preference profile is resolved instead of the active profile", async () => {
+  const { ai, requests } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = createInsightEnhancer({
+    ai,
+    repository: new FakeInsightRepository(),
+    resolveActiveProfile: () =>
+      Promise.resolve({ id: "active", label: "Active" }),
+    resolveProfile: async (id) =>
+      id === "selected" ? { id, label: "Selected" } : null,
+    now: () => FIXED_NOW,
+  });
+  const result = await target.enhance(input({ profileId: "selected" }));
+  assert.equal(result.status, "enhanced-ready");
+  assert.equal(requests()[0]?.modelId, "selected");
+  assert.equal(result.modelLabel, "Selected");
+});
+
+test("unknown effective preference profile makes no model call", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = createInsightEnhancer({
+    ai,
+    repository: new FakeInsightRepository(),
+    resolveActiveProfile: resolveProfile,
+    resolveProfile: async () => null,
+    now: () => FIXED_NOW,
+  });
+  const result = await target.enhance(input({ profileId: "missing" }));
+  assert.equal(result.status, "enhancer-unavailable");
   assert.equal(calls(), 0);
 });
 

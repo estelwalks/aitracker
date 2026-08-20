@@ -187,6 +187,8 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
         return t("dashboard.v2.baselineLastNDays", { count: 7 });
       case "30d":
         return t("dashboard.v2.baselineLastNDays", { count: 30 });
+      case "all":
+        return undefined;
       default:
         return t("dashboard.v2.baselinePrevious");
     }
