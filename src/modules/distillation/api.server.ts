@@ -72,6 +72,11 @@ export async function loadDistillation(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
+  // The material picker must reflect the current local Claude/Codex logs, not
+  // a still-fresh snapshot created by an older scanner version. Wait for the
+  // shared collector so fallback titles and newly discovered sessions are in
+  // the exact snapshot queried below.
+  await root.sessionSnapshot.requestRefresh({ reason: "manual" });
   const [page, candidates] = await Promise.all([
     root.sessions.query({ page: 1, pageSize: 100 }),
     root.distillation.listAll(),

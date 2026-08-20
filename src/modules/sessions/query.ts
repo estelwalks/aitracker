@@ -187,12 +187,12 @@ export const getSessionsQuery = createServerFn({ method: "GET" })
     return loadSessionsPage(data);
   });
 
-/** Refresh is explicit for UI feedback; it runs the same real scanner query. */
+/** Refresh is explicit for UI feedback and waits for a new scanner snapshot. */
 export const refreshSessionsQuery = createServerFn({ method: "POST" })
   .validator(validateSessionsPageInput)
   .handler(async ({ data }) => {
-    const { loadSessionsPage } = await import("./api.server.ts");
-    return loadSessionsPage(data);
+    const { refreshSessionsPage } = await import("./api.server.ts");
+    return refreshSessionsPage(data);
   });
 
 export const getSessionDetailQuery = createServerFn({ method: "GET" })

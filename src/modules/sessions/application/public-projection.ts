@@ -5,8 +5,8 @@ const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const UNSAFE_TEXT =
   /(?:[A-Za-z]:[\\/]|(?:^|\s)\/(?:[^\s/]+\/)*[^\s/]+|\b(?:bearer|token|secret|password|api[_-]?key|authorization)\b|\b(?:curl|wget|rm|chmod|powershell|bash|zsh|npm|node|git)\s+)/i;
 
-function safeText(value: string, maximum: number): string {
-  const normalized = Array.from(value, (character) => {
+function normalizedText(value: string, maximum: number): string {
+  return Array.from(value, (character) => {
     const code = character.codePointAt(0) ?? 0;
     return code <= 31 || code === 127 ? " " : character;
   })
@@ -14,7 +14,46 @@ function safeText(value: string, maximum: number): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maximum);
+}
+
+function safeText(value: string, maximum: number): string {
+  const normalized = normalizedText(value, maximum);
   return UNSAFE_TEXT.test(normalized) ? "" : normalized;
+}
+
+function fallbackTitle(source: string): string {
+  switch (source) {
+    case "claude-code":
+      return "Claude Code session";
+    case "codex":
+      return "Codex session";
+    case "grok":
+      return "Grok session";
+    default:
+      return "AI session";
+  }
+}
+
+/** Redact unsafe fragments without throwing away the whole useful title. */
+function safeTitle(value: string, source: string): string {
+  const redacted = normalizedText(value, 240)
+    .replace(/https?:\/\/\S+/giu, "[link]")
+    .replace(/[A-Za-z]:[\\/]+[^\s"'<>]*/gu, "[path]")
+    .replace(/(?:^|\s)\/(?:[^\s/]+\/)*[^\s"'<>]*/gu, " [path]")
+    .replace(
+      /\b(?:bearer\s+\S+|(?:api[_-]?key|token|password|secret|authorization)\s*[:=]?\s*\S*)/giu,
+      "[sensitive]",
+    )
+    .replace(
+      /\b(?:curl|wget|rm|chmod|powershell|bash|zsh|npm|node|git)\s+/giu,
+      "",
+    )
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 120);
+  return redacted && !UNSAFE_TEXT.test(redacted)
+    ? redacted
+    : fallbackTitle(source);
 }
 
 function safeModel(value: string | null): string | null {
@@ -38,7 +77,7 @@ export function toPublicSession(record: SessionRecord): SessionSummary {
     // the server boundary and they cannot be opened or resumed.
     sessionId: resumableId ? record.sessionId : "unavailable",
     source: record.source,
-    title: safeText(record.title, 120),
+    title: safeTitle(record.title, record.source),
     projectKey: safeText(record.projectKey, 80) || "unknown",
     model: safeModel(record.model),
     startedAt: record.startedAt,
