@@ -3,9 +3,13 @@ import test from "node:test";
 
 import { toSkillSnapshotData } from "./skill-snapshot.contracts.ts";
 import { createSkillSnapshotRuntime } from "./skill-snapshot-runtime.server.ts";
-import { createSnapshotEnvelopeRepository } from "../../../platform/snapshot-runtime/envelope-repository.ts";
-import type { AtomicJsonStore } from "../../../platform/persistence/contracts.ts";
+import { createSnapshotEnvelopeRepository } from "../../../test-support/snapshot-envelope-repository.ts";
 import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contracts.ts";
+
+interface DocumentStore<T> {
+  read(): Promise<{ value: T; source: string; schemaVersion: number }>;
+  write(value: T): Promise<void>;
+}
 import type { SkillSnapshotData } from "./skill-snapshot.contracts.ts";
 import type { SkillSnapshot as LegacySkillSnapshot } from "../../../lib/local-skills/types.ts";
 
@@ -72,7 +76,7 @@ function legacySnapshot(): LegacySkillSnapshot {
   };
 }
 
-function memoryStore<T>(initial: T): AtomicJsonStore<T> {
+function memoryStore<T>(initial: T): DocumentStore<T> {
   let value = initial;
   return {
     async read() {

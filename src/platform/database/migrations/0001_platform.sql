@@ -1,6 +1,6 @@
 -- TrustTools local storage database — migration 0001 "platform".
 --
--- Authoritative source text for the first-wave 11 tables (architecture
+-- Authoritative source text for the new-project 10 tables (architecture
 -- §5.1 / §5.2 / §5.10). Every table is STRICT; creation order follows the
 -- foreign-key dependency order and schema_migrations comes first because the
 -- migration runner writes its ledger row inside the same transaction.
@@ -31,28 +31,6 @@ CREATE TABLE schema_migrations (
   applied_at_ms INTEGER NOT NULL CHECK (applied_at_ms >= 0),
   duration_ms INTEGER NOT NULL CHECK (duration_ms >= 0)
 ) STRICT;
-
-CREATE TABLE data_migration_runs (
-  run_id TEXT PRIMARY KEY,
-  source_kind TEXT NOT NULL CHECK (
-    source_kind IN ('atomic-json', 'electron-prefs', 'security-json', 'cache-json')
-  ),
-  source_path_hash TEXT NOT NULL,
-  source_schema_version INTEGER,
-  status TEXT NOT NULL DEFAULT 'running' CHECK (
-    status IN ('running', 'succeeded', 'failed', 'skipped')
-  ),
-  started_at_ms INTEGER CHECK (started_at_ms IS NULL OR started_at_ms >= 0),
-  finished_at_ms INTEGER CHECK (finished_at_ms IS NULL OR finished_at_ms >= 0),
-  rows_read INTEGER NOT NULL DEFAULT 0 CHECK (rows_read >= 0),
-  rows_written INTEGER NOT NULL DEFAULT 0 CHECK (rows_written >= 0),
-  rows_skipped INTEGER NOT NULL DEFAULT 0 CHECK (rows_skipped >= 0),
-  error_code TEXT,
-  source_fingerprint TEXT NOT NULL
-) STRICT;
-
-CREATE UNIQUE INDEX idx_data_migration_runs_idempotency
-  ON data_migration_runs (source_kind, source_path_hash, source_fingerprint);
 
 -- value_json carries a content "forbidden zone" CHECK (§9-4 / §14.4) so a raw
 -- SQL write — not just the repository guard — still refuses drive-letter paths,

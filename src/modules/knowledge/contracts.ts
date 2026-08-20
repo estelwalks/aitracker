@@ -1,8 +1,5 @@
 import type { Result } from "../../shared/result.ts";
-import type {
-  AtomicJsonStore,
-  Clock,
-} from "../../platform/persistence/contracts.ts";
+import type { Clock } from "../../platform/persistence/contracts.ts";
 import type { AssetVerdict } from "../security-assessment/contracts.ts";
 
 export const knowledgeModuleId = "knowledge" as const;
@@ -81,7 +78,7 @@ export interface KnowledgeFilter {
 }
 
 /**
- * P4-T4-03: batch list summary. One AtomicJsonStore read produces the page —
+ * P4-T4-03: batch list summary. One repository read produces the page —
  * never a per-asset read (no N+1). `cursor` is the last `updatedAt` value of
  * the previous page; pass it back to fetch the next page (stable order).
  */
@@ -170,7 +167,10 @@ export interface KnowledgeRepository {
 }
 
 export interface KnowledgeRepositoryOptions {
-  readonly store: AtomicJsonStore<KnowledgeDocument>;
+  readonly store: {
+    read(): Promise<{ readonly value: KnowledgeDocument }>;
+    write(value: KnowledgeDocument): Promise<void>;
+  };
   readonly clock: Clock;
   readonly hash: HashPort;
 }

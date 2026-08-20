@@ -7,9 +7,10 @@ import type { SessionSummary } from "../contracts.ts";
  * transcript content) plus pre-aggregated report density rows so Reports can
  * paginate over one snapshot read instead of re-scanning per page.
  *
- * `SessionSnapshotRecord` additionally carries the server-only raw `projectRef`
- * (cwd) so the dashboard adapter can classify sessions into the same project
- * labels as usage events. The reference never crosses to the browser:
+ * `SessionSnapshotRecord` additionally carries the server-only `projectRef`
+ * (cwd normalized like usage events, ~/… under HOME) so the dashboard adapter
+ * can classify sessions into the same project labels as usage events. The
+ * reference never crosses to the browser:
  * `snapshot-session-repository` strips it at the query boundary and the
  * dashboard reduces it to display-safe aggregates. It mirrors what the usage
  * snapshot already persists for events (`details[].project`), so no new path

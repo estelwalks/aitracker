@@ -1,6 +1,6 @@
 import type { ReportDocument, ReportRun, ReportStore } from "../contracts.ts";
 
-/** Test adapter and an embeddable local adapter; a durable server adapter can wrap AtomicJsonStore. */
+/** Test adapter and embeddable in-memory repository. */
 export function createInMemoryReportStore(): ReportStore & {
   readonly runs: readonly ReportRun[];
   readonly documents: readonly ReportDocument[];

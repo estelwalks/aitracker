@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -204,12 +204,11 @@ test("DSH native reader extracts provider usage from zstd session logs", async (
     assert.equal(dshTotals.reasoningOutputTokens, 5);
     assert.equal(dshTotals.events, 2);
 
-    // Privacy: the persistent cache must never store message/system content.
-    const cachePayload = await readFile(
-      join(f.cacheDirectory, "local-usage-index-v10.json"),
-      "utf8",
+    // The index is now an in-process, rebuildable cache: no app-owned JSON
+    // sidecar is created, so raw message/system content cannot be persisted.
+    await assert.rejects(
+      access(join(f.cacheDirectory, "local-usage-index-v10.json")),
     );
-    assert.doesNotMatch(cachePayload, /TOP_SECRET|TOOL_ARGUMENTS/);
 
     // Incremental rescan reuses the cached parse.
     const second = await scanLocalUsage({

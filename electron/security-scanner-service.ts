@@ -1,20 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import {
-  lstat,
-  mkdir,
-  open,
-  opendir,
-  readFile,
-  realpath,
-  rename,
-  stat,
-  unlink,
-  writeFile,
-} from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
-
-import { APP_DATA_DIR } from "./app-config.js";
+import { lstat, open, opendir, realpath, stat } from "node:fs/promises";
+import { basename, join, relative, resolve, sep } from "node:path";
 
 import {
   ModelConfigSchema,
@@ -95,9 +82,9 @@ export interface SecretStoragePort {
 
 export interface SecurityScannerServiceOptions {
   readonly homeDirectory: string;
-  readonly dataDirectory: string;
   readonly locale: () => DesktopLocale;
   readonly secretStorage: SecretStoragePort;
+  readonly persistence?: SecurityScannerPersistence;
   readonly env?: Record<string, string | undefined>;
   readonly now?: () => Date;
   readonly scanner?: typeof scanSkill;
@@ -105,12 +92,21 @@ export interface SecurityScannerServiceOptions {
   readonly beforeOpenFile?: (path: string) => Promise<void>;
 }
 
+export interface SecurityScannerPersistence {
+  readHistory(): Promise<SecurityScanHistoryEntry[]>;
+  writeHistory(entries: readonly SecurityScanHistoryEntry[]): Promise<void>;
+  clearHistory(): Promise<void>;
+  readSchedule(): Promise<SecurityScanSchedule | null>;
+  writeSchedule(schedule: SecurityScanSchedule): Promise<void>;
+  modelConfig(): Promise<ModelConfig | undefined>;
+}
+
 interface CollectedSkill {
   files: SkillFile[];
   hostSkipped: SecurityScanReportDto["skippedFiles"];
 }
 
-/** Default automatic-scan schedule (also the migration target for the legacy `{ enabled, cycle }` shape). */
+/** Default automatic-scan schedule for a new SQLite database with no row. */
 const DEFAULT_SCAN_SCHEDULE: SecurityScanSchedule = {
   enabled: true,
   cycle: "daily",
@@ -146,32 +142,25 @@ function parseSchedule(input: unknown): SecurityScanSchedule {
     !(SECURITY_SCAN_CYCLES as readonly string[]).includes(cycle)
   )
     throw new TypeError("Unsupported scan cycle");
-  // Legacy `{ enabled, cycle }` documents (from the pre-extension version) omit
-  // time/scope/notify/agents/dir; fill the extended fields with the defaults
-  // here so the read path migrates them transparently.
-  const time =
-    value.time === undefined ? DEFAULT_SCAN_SCHEDULE.time : value.time;
+  const time = value.time;
   if (typeof time !== "string" || !TIME_PATTERN.test(time))
     throw new TypeError("Scan schedule time must be a 24h HH:MM string");
-  const scope =
-    value.scope === undefined ? DEFAULT_SCAN_SCHEDULE.scope : value.scope;
+  const scope = value.scope;
   if (
     typeof scope !== "string" ||
     !(SECURITY_SCAN_SCOPES as readonly string[]).includes(scope)
   )
     throw new TypeError("Unsupported scan scope");
-  const agents =
-    value.agents === undefined ? DEFAULT_SCAN_SCHEDULE.agents : value.agents;
+  const agents = value.agents;
   if (
     !Array.isArray(agents) ||
     agents.some((item) => typeof item !== "string" || !item.trim())
   )
     throw new TypeError("Scan schedule agents must be an array of strings");
-  const dir = value.dir === undefined ? DEFAULT_SCAN_SCHEDULE.dir : value.dir;
+  const dir = value.dir;
   if (dir !== null && typeof dir !== "string")
     throw new TypeError("Scan schedule dir must be a string or null");
-  const notify =
-    value.notify === undefined ? DEFAULT_SCAN_SCHEDULE.notify : value.notify;
+  const notify = value.notify;
   if (typeof notify !== "boolean")
     throw new TypeError("Scan schedule notify must be a boolean");
   return {
@@ -479,16 +468,6 @@ function parseHistoryEntry(
   };
 }
 
-async function atomicWrite(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
-  await rename(temporary, path);
-}
-
 function emptyState(): SecurityScanState {
   return {
     scanId: null,
@@ -515,8 +494,7 @@ function cloneState(state: SecurityScanState): SecurityScanState {
 
 export class SecurityScannerService {
   readonly #options: SecurityScannerServiceOptions;
-  readonly #historyPath: string;
-  readonly #schedulePath: string;
+  readonly #persistence: SecurityScannerPersistence;
   readonly #trusted = new Map<string, TrustedSkill>();
   #state = emptyState();
   #cancelRequested = false;
@@ -528,14 +506,15 @@ export class SecurityScannerService {
 
   constructor(options: SecurityScannerServiceOptions) {
     this.#options = options;
-    this.#historyPath = join(
-      options.dataDirectory,
-      "security-scan-history.json",
-    );
-    this.#schedulePath = join(
-      options.dataDirectory,
-      "security-scan-schedule.json",
-    );
+    const testPersistence = (
+      options.secretStorage as SecretStoragePort & {
+        readonly testPersistence?: SecurityScannerPersistence;
+      }
+    ).testPersistence;
+    const persistence = options.persistence ?? testPersistence;
+    if (!persistence)
+      throw new Error("SQLite security scanner persistence is required");
+    this.#persistence = persistence;
   }
 
   getRuntimeCapability(): SecurityRuntimeCapability {
@@ -776,11 +755,7 @@ export class SecurityScannerService {
       this.#cancelRequested = true;
       this.#state = emptyState();
       await this.#activeRun?.catch(() => undefined);
-      await this.#withHistoryLock(() =>
-        unlink(this.#historyPath).catch((error: NodeJS.ErrnoException) => {
-          if (error.code !== "ENOENT") throw error;
-        }),
-      );
+      await this.#withHistoryLock(() => this.#persistence.clearHistory());
       if (this.#epoch === clearEpoch) this.#cancelRequested = false;
     } finally {
       this.#clearing = false;
@@ -795,7 +770,7 @@ export class SecurityScannerService {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     return this.#withScheduleLock(async () => {
       const parsed = parseSchedule(input);
-      await atomicWrite(this.#schedulePath, parsed);
+      await this.#persistence.writeSchedule(parsed);
       return structuredClone(parsed);
     });
   }
@@ -1180,31 +1155,16 @@ export class SecurityScannerService {
   }
 
   async #readHistory(
-    exactSecretsOverride?: readonly string[],
+    exactSecretsOverride: readonly string[] = [],
   ): Promise<HistoryDocument> {
-    try {
-      const currentModel =
-        exactSecretsOverride === undefined
-          ? await this.#modelConfig()
-          : undefined;
-      const exactSecrets =
-        exactSecretsOverride ??
-        (currentModel?.apiKey ? [currentModel.apiKey] : []);
-      const value = JSON.parse(
-        await readFile(this.#historyPath, "utf8"),
-      ) as HistoryDocument;
-      if (value.version !== HISTORY_VERSION || !Array.isArray(value.entries))
-        throw new Error();
-      return {
-        version: HISTORY_VERSION,
-        entries: value.entries
-          .map((entry) => parseHistoryEntry(entry, exactSecrets))
-          .filter((entry): entry is SecurityScanHistoryEntry => entry != null)
-          .slice(0, MAX_HISTORY),
-      };
-    } catch {
-      return { version: HISTORY_VERSION, entries: [] };
-    }
+    const entries = await this.#persistence.readHistory();
+    return {
+      version: HISTORY_VERSION,
+      entries: entries
+        .map((entry) => parseHistoryEntry(entry, exactSecretsOverride))
+        .filter((entry): entry is SecurityScanHistoryEntry => entry != null)
+        .slice(0, MAX_HISTORY),
+    };
   }
 
   async #appendHistory(
@@ -1216,13 +1176,9 @@ export class SecurityScannerService {
       if (!isActive()) return;
       const current = await this.#readHistory(exactSecrets);
       if (!isActive()) return;
-      await atomicWrite(this.#historyPath, {
-        version: HISTORY_VERSION,
-        entries: [...entries.reverse(), ...current.entries].slice(
-          0,
-          MAX_HISTORY,
-        ),
-      } satisfies HistoryDocument);
+      await this.#persistence.writeHistory(
+        [...entries.reverse(), ...current.entries].slice(0, MAX_HISTORY),
+      );
     });
   }
 
@@ -1249,15 +1205,10 @@ export class SecurityScannerService {
   }
 
   async #readSchedule(): Promise<SecurityScanSchedule> {
-    try {
-      // Legacy `{ enabled, cycle }` documents migrate through `parseSchedule`'s
-      // default filling of time/scope/notify; corrupt files fall back below.
-      return parseSchedule(
-        JSON.parse(await readFile(this.#schedulePath, "utf8")),
-      );
-    } catch {
-      return { ...DEFAULT_SCAN_SCHEDULE };
-    }
+    const stored = await this.#persistence.readSchedule();
+    return stored == null
+      ? { ...DEFAULT_SCAN_SCHEDULE }
+      : parseSchedule(stored);
   }
 
   /**
@@ -1269,58 +1220,8 @@ export class SecurityScannerService {
    * callers treat as "no model available" (full scans become model-required).
    */
   async #modelConfig(): Promise<ModelConfig | undefined> {
-    try {
-      const value = JSON.parse(
-        await readFile(
-          join(
-            this.#options.homeDirectory,
-            APP_DATA_DIR,
-            "tasks",
-            "model-profiles.v1.json",
-          ),
-          "utf8",
-        ),
-      ) as {
-        profiles?: Array<{
-          id: string;
-          mode: "official" | "custom";
-          protocol: "openai" | "anthropic";
-          apiKey?: string;
-          endpoint?: string;
-          model?: string;
-        }>;
-        activeProfileId?: string | null;
-      };
-      const profile =
-        value.profiles?.find((item) => item.id === value.activeProfileId) ??
-        value.profiles?.[0];
-      if (!profile) return undefined;
-      const apiKey = profile.apiKey?.trim();
-      if (!apiKey) return undefined;
-      const provider: "openai" | "anthropic" =
-        profile.mode === "official" ? "openai" : profile.protocol;
-      const endpoint =
-        profile.mode === "official"
-          ? "https://api.deepseek.com/v1"
-          : profile.endpoint?.trim() ||
-            (profile.protocol === "anthropic"
-              ? "https://api.anthropic.com/v1"
-              : "https://api.openai.com/v1");
-      // One model for everything: the light and advanced tiers are unified.
-      const model =
-        profile.mode === "official" ? "deepseek-chat" : profile.model?.trim();
-      if (!model) return undefined;
-      return ModelConfigSchema.parse({
-        provider,
-        endpoint,
-        apiKey,
-        liteModel: model,
-        proModel: model,
-        timeoutMs: 120_000,
-      });
-    } catch {
-      return undefined;
-    }
+    const value = await this.#persistence.modelConfig();
+    return value == null ? undefined : ModelConfigSchema.parse(value);
   }
 
   #now(): string {

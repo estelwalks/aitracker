@@ -13,7 +13,7 @@ import type {
   DashboardV2ContextCounts,
   DashboardV2ContextAvailability,
   DashboardV2Event,
-  DashboardV2SessionDelta,
+  DashboardV2MetricDelta,
   DashboardV2Snapshot,
   DashboardV2TrendPoint,
   DashboardV2View,
@@ -815,18 +815,18 @@ export function createDashboardV2View(
         previousRange.toDate,
       )
     : null;
-  // 上一周期为 0 时百分比无定义，改用绝对新增数（0 → N）展示。
-  const sessionsComparison: DashboardV2SessionDelta =
-    currentSessions != null && previousSessions != null && currentSessions > 0
-      ? previousSessions > 0
-        ? {
-            previous: previousSessions,
-            deltaPercent:
-              ((currentSessions - previousSessions) / previousSessions) * 100,
-            absoluteDelta: null,
-          }
-        : { previous: 0, deltaPercent: null, absoluteDelta: currentSessions }
-      : { previous: null, deltaPercent: null, absoluteDelta: null };
+  // 上一周期为 0 或不可比时不展示任何具体数值（百分比无定义，仅保留基准文案）。
+  const sessionsComparison: DashboardV2MetricDelta =
+    currentSessions != null &&
+    previousSessions != null &&
+    currentSessions > 0 &&
+    previousSessions > 0
+      ? {
+          previous: previousSessions,
+          deltaPercent:
+            ((currentSessions - previousSessions) / previousSessions) * 100,
+        }
+      : { previous: null, deltaPercent: null };
 
   return {
     period,

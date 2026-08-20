@@ -94,7 +94,7 @@ function fromProfile(profile: ModelProfileView | null): FormState {
 /**
  * S-500 「通用 AI 模型 Profile」设置区块：多 Profile 列表（激活 / 删除）、
  * 新增 / 编辑表单与「测试连接」。所有读写走 server fns；API Key 只存在
- * 服务端（0600 文件），这里的表单值仅用于提交与测试，绝不写 localStorage。
+ * 服务端 SQLite 凭据仓库，这里的表单值仅用于提交与测试，不在浏览器持久化。
  */
 export function ModelProfilesSection() {
   const { t } = useI18n();

@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { FileCode2, RotateCcw, ShieldCheck, Wrench } from "lucide-react";
+import {
+  FileCode2,
+  RotateCcw,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 
 import { TTButton } from "../../../../components/tt";
 import {
@@ -11,6 +17,8 @@ import {
 } from "../../../../components/ui/dialog";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
+import { useSecurityLlmReview } from "../use-security-llm-review";
+import type { SecurityLlmReviewConfidence } from "../../llm-review.contracts";
 import {
   severityCounts,
   skippedReasonCode,
@@ -64,6 +72,12 @@ const severityLabelKeys: Record<SecuritySeverity, MessageKey> = {
   low: "security.center.severity.low",
 };
 
+const llmConfidenceKeys: Record<SecurityLlmReviewConfidence, MessageKey> = {
+  low: "security.center.llm.confidenceLow",
+  medium: "security.center.llm.confidenceMedium",
+  high: "security.center.llm.confidenceHigh",
+};
+
 const skipReasonKeys: Record<SecuritySkippedReasonCode, MessageKey> = {
   fileUnavailable: "security.center.skipReason.fileUnavailable",
   symbolicLink: "security.center.skipReason.symbolicLink",
@@ -96,6 +110,7 @@ export function SkillReportModal({
 }) {
   const { t } = useI18n();
   const report = entry.report;
+  const llm = useSecurityLlmReview(entry);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -141,6 +156,76 @@ export function SkillReportModal({
                   <p className="mt-1.5 rounded-xl bg-surface-2/50 px-3.5 py-2.5 text-[12.5px] leading-relaxed">
                     {report.summary}
                   </p>
+                </section>
+              )}
+
+              {(llm.review != null || llm.canRequest || llm.degraded) && (
+                <section className="rounded-xl bg-surface px-4 py-4 ring-1 ring-border/50">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="font-mono text-[10.5px] font-semibold text-muted-foreground uppercase">
+                      {t("security.center.llm.title")}
+                    </h4>
+                    <span className="rounded-sm border border-border px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+                      {t("security.center.llm.disclaimer")}
+                    </span>
+                  </div>
+
+                  {llm.review == null ? (
+                    <div className="mt-2.5 space-y-2">
+                      {llm.degraded && (
+                        <p className="text-[12px] text-muted-foreground">
+                          {t("security.center.llm.failed")}
+                        </p>
+                      )}
+                      <TTButton
+                        variant="ghost"
+                        size="sm"
+                        onClick={llm.request}
+                        disabled={llm.loading || !llm.canRequest}
+                      >
+                        <Sparkles className="size-3.5" />
+                        {llm.loading
+                          ? t("security.center.llm.loading")
+                          : t("security.center.llm.trigger")}
+                      </TTButton>
+                    </div>
+                  ) : (
+                    <div className="mt-2.5 space-y-2.5">
+                      <p className="text-[12.5px] leading-relaxed">
+                        {llm.review.summary}
+                      </p>
+                      {llm.review.dimensions.length > 0 && (
+                        <ul className="space-y-1.5">
+                          {llm.review.dimensions.map((dimension) => (
+                            <li
+                              key={dimension.kind}
+                              className="flex items-start gap-2"
+                            >
+                              <span className="mt-0.5 shrink-0 rounded-sm bg-surface-2 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+                                {dimension.kind}
+                              </span>
+                              <span className="text-[12px] leading-relaxed">
+                                {dimension.analysis}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-muted-foreground">
+                        <span>
+                          {t("security.center.llm.confidence")}:{" "}
+                          {t(llmConfidenceKeys[llm.review.confidence])}
+                        </span>
+                        {llm.review.modelLabel && (
+                          <span>
+                            {t("security.center.llm.modelLabel", {
+                              label: llm.review.modelLabel,
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
 

@@ -1,10 +1,6 @@
 import { z } from "zod";
 
 import { JOB_DEFINITIONS } from "../definitions/job-catalog.generated.ts";
-import type {
-  AtomicJsonStore,
-  Clock,
-} from "../../../platform/persistence/contracts.ts";
 import { createTaskId, isTaskId, type TaskId } from "../../../shared/ids.ts";
 
 export const TASK_PREFERENCES_SCHEMA_VERSION = 2 as const;
@@ -142,17 +138,6 @@ export interface TaskRunRepository {
   rotate(): Promise<void>;
 }
 
-export interface TaskPreferenceRepositoryOptions {
-  readonly store: AtomicJsonStore<TaskPreferencesFile>;
-  readonly clock?: Clock;
-}
-
-export interface TaskRunRepositoryOptions {
-  readonly store: AtomicJsonStore<TaskRunsFile>;
-  readonly clock?: Clock;
-  readonly maxEntries?: number;
-}
-
 export const DEFAULT_TASK_PREFERENCES: TaskPreferencesFile = {
   schemaVersion: TASK_PREFERENCES_SCHEMA_VERSION,
   updatedAt: "1970-01-01T00:00:00.000Z",
@@ -195,33 +180,11 @@ export function validateSchedule(taskId: string, schedule: Schedule): Schedule {
   return parsed;
 }
 
-export function preferenceSchema(clock: Clock = { now: () => new Date() }) {
+export function preferenceSchema() {
   return {
     currentVersion: TASK_PREFERENCES_SCHEMA_VERSION,
-    migrations: [
-      {
-        fromVersion: 1,
-        toVersion: 2,
-        migrate(value: unknown) {
-          const legacy = value as { updatedAt?: unknown; tasks?: unknown };
-          return {
-            updatedAt:
-              typeof legacy.updatedAt === "string"
-                ? legacy.updatedAt
-                : clock.now().toISOString(),
-            tasks:
-              legacy.tasks && typeof legacy.tasks === "object"
-                ? legacy.tasks
-                : {},
-          };
-        },
-      },
-    ],
     parse(value: unknown): TaskPreferencesFile {
-      const file = TaskPreferencesFileSchema.parse({
-        schemaVersion: TASK_PREFERENCES_SCHEMA_VERSION,
-        ...(value as object),
-      });
+      const file = TaskPreferencesFileSchema.parse(value);
       for (const [taskId, preference] of Object.entries(file.tasks)) {
         validateTaskId(taskId);
         if (preference.schedule) validateSchedule(taskId, preference.schedule);

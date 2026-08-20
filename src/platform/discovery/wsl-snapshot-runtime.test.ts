@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createWslSnapshotRuntime } from "./wsl-snapshot-runtime.server.ts";
-import { createSnapshotEnvelopeRepository } from "../snapshot-runtime/envelope-repository.ts";
-import type { AtomicJsonStore } from "../persistence/contracts.ts";
+import { createSnapshotEnvelopeRepository } from "../../test-support/snapshot-envelope-repository.ts";
 import type { SnapshotEnvelope } from "../snapshot-runtime/contracts.ts";
+
+interface DocumentStore<T> {
+  read(): Promise<{ value: T; source: string; schemaVersion: number }>;
+  write(value: T): Promise<void>;
+}
 import type { WslTopology } from "./wsl-topology.server.ts";
 
 const EMPTY: SnapshotEnvelope<WslTopology> = {
@@ -23,7 +27,7 @@ const EMPTY: SnapshotEnvelope<WslTopology> = {
 
 function memoryStore(
   initial: unknown,
-): AtomicJsonStore<SnapshotEnvelope<WslTopology>> {
+): DocumentStore<SnapshotEnvelope<WslTopology>> {
   let value = initial as SnapshotEnvelope<WslTopology> | null;
   return {
     async read() {

@@ -1833,7 +1833,15 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "skills": "unsupported",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "resume",
+        "reader": "dsh-session-v1",
+        "command": [
+          "dsh",
+          "--profile",
+          "tui",
+          "--resume",
+          "{sessionId}"
+        ]
       },
       "market": "unsupported",
       "security": "unsupported"
@@ -1928,7 +1936,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ]
         },
         "maxFileSizeBytes": 536870912,
-        "query": "SELECT\n  e.time AS timestamp,\n  e.task_id AS sessionId,\n  COALESCE(NULLIF(e.model, ''), NULLIF(t.model, ''), 'unknown') AS model,\n  COALESCE(NULLIF(t.workdir, ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(e.usage, '$.input_tokens'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.output_tokens'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.reasoning_tokens'), 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.total_tokens'), 0) AS INTEGER) AS totalTokens\nFROM task_event e\nLEFT JOIN task t ON t.id = e.task_id\nWHERE e.usage IS NOT NULL AND e.usage <> ''"
+        "query": "SELECT\n  e.time AS timestamp,\n  e.task_id AS sessionId,\n  COALESCE(NULLIF(e.model, ''), NULLIF(t.model, ''), 'unknown') AS model,\n  COALESCE(NULLIF(w.workdir, ''), NULLIF(t.workdir, ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(e.usage, '$.input_tokens'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.output_tokens'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.reasoning_tokens'), 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.total_tokens'), 0) AS INTEGER) AS totalTokens\nFROM task_event e\nLEFT JOIN task t ON t.id = e.task_id\nLEFT JOIN workspace w ON w.id = t.workspace_id\nWHERE e.usage IS NOT NULL AND e.usage <> ''"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -2191,7 +2199,6 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
     "maxDiscoveredEntriesPerSource": 30000,
     "maxJsonlLineLength": 16777216,
     "futureTimestampToleranceMs": 86400000,
-    "cacheFileName": "local-usage-index-v10.json",
     "cacheNote": "The implementation cache version (PERSISTENT_CACHE_VERSION) and the registry fingerprint stay in TypeScript; changing either invalidates the persistent cache."
   },
   "skillMarketPolicy": {
@@ -2386,4 +2393,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "753dfd0d004bf445";
+export const TOOL_REGISTRY_VERSION: string = "92b317e5e3bf6df3";

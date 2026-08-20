@@ -6,6 +6,11 @@ export const common = {
   confirm: "确认",
   delete: "删除",
   retry: "重试",
+  chunkLoadFailed: "内容加载失败",
+  pagination: {
+    previous: "上一页",
+    next: "下一页",
+  },
   backHome: "返回首页",
   refresh: "刷新",
   refreshing: "刷新中...",

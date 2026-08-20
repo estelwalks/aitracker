@@ -10,6 +10,7 @@ test("installation facts use only catalog probe roots", () => {
     AI_TOOLS,
     new Set([`${home}/.codex`, `${home}/Library/Application Support/Cursor`]),
     home,
+    "macos",
   );
   assert.equal(facts.find((fact) => fact.id === "codex")?.installed, true);
   assert.equal(facts.find((fact) => fact.id === "cursor")?.installed, true);

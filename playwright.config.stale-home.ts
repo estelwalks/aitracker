@@ -1,3 +1,6 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -5,15 +8,14 @@ import { defineConfig, devices } from "playwright/test";
 
 /**
  * Dedicated config for the stale-snapshot page-performance scenarios (T7-04).
- * Starts a Vite dev server with `TRUSTTOOLS_USAGE_HOME` pointing at the
- * committed fixture home (`tests/fixtures/e2e/stale-home`) that contains a
- * pre-seeded, 7-day-old usage snapshot envelope — pages must render the stale
- * snapshot immediately (last-known-good) instead of blocking on a re-scan or
- * falling into the load-failed boundary.
+ * Seeds a throwaway home (temp dir) with a stale usage + skills snapshot in
+ * SQLite, then starts a Vite dev server with `TRUSTTOOLS_USAGE_HOME` pointing at
+ * it. Pages must render the stale snapshot immediately (last-known-good)
+ * instead of blocking on a re-scan or falling into the load-failed boundary.
  *
- * The fixture home also ships an empty skill-snapshot envelope so the /agents
- * read path never triggers a background `skills.refresh` (which would scan the
- * real machine and write into the committed fixture).
+ * The seeded skills snapshot keeps the /agents read path from triggering a
+ * background `skills.refresh` (which would scan the real machine and write into
+ * the throwaway home).
  *
  * Run: `npx playwright test -c playwright.config.stale-home.ts performance-stale-offline.spec.ts`
  */
@@ -21,13 +23,14 @@ import { defineConfig, devices } from "playwright/test";
 // Port differs from the default config (41737) and empty-home (41738) so the
 // dedicated configs can run side by side without port collisions.
 const port = 41739;
-const staleHome = join(
+const seedScript = join(
   dirname(fileURLToPath(import.meta.url)),
-  "tests",
-  "fixtures",
+  "scripts",
   "e2e",
-  "stale-home",
+  "seed-stale-home.mjs",
 );
+const staleHome = mkdtempSync(join(tmpdir(), "tt-stale-home-"));
+execFileSync(process.execPath, [seedScript, staleHome], { stdio: "inherit" });
 
 // The env vars must also reach the test process (specs read them to decide
 // whether to skip), not just the web server.

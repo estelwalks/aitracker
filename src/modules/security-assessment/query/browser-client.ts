@@ -234,10 +234,8 @@ const scanScheduleSchema = z
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u),
     scope: z.enum(["all", "agent", "dir"]),
     notify: z.boolean(),
-    // Legacy schedules predate these fields; the defaults keep old GET
-    // responses parseable while .strict() still rejects stray keys.
-    agents: z.array(z.string()).default([]),
-    dir: z.string().nullable().default(null),
+    agents: z.array(z.string()),
+    dir: z.string().nullable(),
   })
   .strict();
 

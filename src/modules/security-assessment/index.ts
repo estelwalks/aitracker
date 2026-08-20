@@ -109,3 +109,28 @@ export {
   isCompanionOrigin,
   type CompanionSecurityClientError,
 } from "./query/browser-client";
+
+// Optional LLM review supplement (M4): browser-safe contracts, aggregate
+// builder and the explicit POST server functions.
+export {
+  SECURITY_LLM_REVIEW_PREF_KEY,
+  SECURITY_LLM_DIMENSIONS,
+  buildSecurityLlmReviewAggregate,
+  securityLlmDimensionOfRiskKind,
+  securityLlmDimensionOfChineseKind,
+  type SecurityLlmDimension,
+  type SecurityLlmDimensionHit,
+  type SecurityLlmReviewAggregate,
+  type SecurityLlmReview,
+  type SecurityLlmReviewDimension,
+  type SecurityLlmReviewConfidence,
+  type SecurityLlmReviewResult,
+  type SecurityLlmReviewStatus,
+  type SecurityLlmReviewAvailability,
+  type SecurityLlmReviewRequest,
+} from "./llm-review.contracts";
+export {
+  getSecurityLlmReview,
+  getSecurityLlmReviewAvailability,
+  setSecurityLlmReviewEnabled,
+} from "./llm-review.server-fns";

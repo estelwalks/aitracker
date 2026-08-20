@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type {
-  AtomicJsonReadResult,
-  AtomicJsonStore,
-  Clock,
-} from "../../platform/persistence/contracts.ts";
+import type { Clock } from "../../platform/persistence/contracts.ts";
 import type { KnowledgeDocument } from "./contracts.ts";
 import { createKnowledgeRepository } from "./application/index.ts";
 import {
@@ -20,6 +16,11 @@ import {
   validateCreateMemoryInput,
 } from "./query.ts";
 
+interface DocumentStore<T> {
+  read(): Promise<{ value: T; source: "stored"; schemaVersion: number }>;
+  write(value: T): Promise<void>;
+}
+
 function fixture() {
   let value: KnowledgeDocument = {
     schemaVersion: 1,
@@ -27,8 +28,8 @@ function fixture() {
     assets: [],
     versions: [],
   };
-  const store: AtomicJsonStore<KnowledgeDocument> = {
-    async read(): Promise<AtomicJsonReadResult<KnowledgeDocument>> {
+  const store: DocumentStore<KnowledgeDocument> = {
+    async read() {
       return { value, source: "stored", schemaVersion: 1 };
     },
     async write(next) {

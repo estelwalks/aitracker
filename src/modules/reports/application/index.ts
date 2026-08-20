@@ -28,6 +28,8 @@ export interface ReportsApplicationOptions {
   readonly context: ReportContextPort;
   readonly generation: ReportGenerationPort;
   readonly content?: ReportContentStore;
+  /** Persist report bodies inline through `store` (used by SQLite). */
+  readonly inlineContent?: boolean;
   readonly definitions?: readonly ReportDefinition[];
   readonly now?: () => Date;
   readonly createId?: (prefix: string) => string;
@@ -71,7 +73,7 @@ export function createReportsApplication(
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? defaultId;
   const memoryContent = new Map<string, string>();
-  const content: ReportContentStore = options.content ?? {
+  const fallbackContent: ReportContentStore = {
     async create(document, body) {
       const file = `${document.reportId.replace(/[^A-Za-z0-9_-]/g, "-")}.md`;
       memoryContent.set(file, body);
@@ -88,12 +90,17 @@ export function createReportsApplication(
       return file;
     },
   };
+  const content: ReportContentStore | undefined = options.inlineContent
+    ? undefined
+    : (options.content ?? fallbackContent);
 
   const bodyFor = async (document: ReportDocument): Promise<string> => {
-    if (document.contentFile) return content.read(document.contentFile);
+    if (document.contentFile)
+      return (content ?? fallbackContent).read(document.contentFile);
     if (document.body === undefined) throw new Error("report content missing");
-    // Legacy reports.v1.json compatibility: first successful read creates the
-    // Markdown file, then atomically updates metadata without the inline body.
+    // Legacy inline-document compatibility: the first successful read creates
+    // the Markdown file, then updates metadata without the inline body.
+    if (!content) return document.body;
     const contentFile = await content.create(document, document.body);
     const { body: _legacyBody, ...metadata } = document;
     await options.store.saveDocument({ ...metadata, contentFile });
@@ -165,11 +172,10 @@ export function createReportsApplication(
       evidence: [],
       assets: [],
     };
-    const contentFile = await content.create(
-      document,
-      "Draft awaiting report generation.",
-    );
-    const persisted = { ...document, contentFile };
+    const draftBody = "Draft awaiting report generation.";
+    const persisted = content
+      ? { ...document, contentFile: await content.create(document, draftBody) }
+      : { ...document, body: draftBody };
     await options.store.saveDocument(persisted);
     return ok(toReportSummary(persisted, definition));
   };
@@ -248,8 +254,9 @@ export function createReportsApplication(
       evidence: context.evidence,
       assets: context.assets ?? [],
     };
-    const contentFile = await content.create(document, body);
-    const persisted = { ...document, contentFile };
+    const persisted = content
+      ? { ...document, contentFile: await content.create(document, body) }
+      : { ...document, body };
     await options.store.saveDocument(persisted);
     return ok(toReportSummary(persisted, definition));
   };
@@ -270,13 +277,18 @@ export function createReportsApplication(
     );
     if (!definition) return err("errors.reports.notFound");
     try {
-      const contentFile = document.contentFile
-        ? await content.replace(document, body)
-        : await content.create(document, body);
-      const { body: _legacyBody, ...metadata } = document;
-      // The new Markdown revision is durable before the metadata reference is
-      // switched, so readers see either the complete old or complete new file.
-      await options.store.saveDocument({ ...metadata, contentFile });
+      if (content) {
+        const contentFile = document.contentFile
+          ? await content.replace(document, body)
+          : await content.create(document, body);
+        const { body: _legacyBody, ...metadata } = document;
+        // The new Markdown revision is durable before the metadata reference
+        // is switched, so readers see either the complete old or new file.
+        await options.store.saveDocument({ ...metadata, contentFile });
+      } else {
+        const { contentFile: _legacyFile, ...metadata } = document;
+        await options.store.saveDocument({ ...metadata, body });
+      }
       return ok({
         reportId,
         definitionId: document.definitionId,
