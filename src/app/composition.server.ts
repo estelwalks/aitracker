@@ -34,7 +34,6 @@ import {
   offlineProvider,
 } from "../modules/ai-orchestration/provider-registry.ts";
 import {
-  createEnvBackedProvider,
   createProfileBackedProvider,
   type ModelProfileRepository,
 } from "../modules/ai-orchestration/model-profile.server.ts";
@@ -438,7 +437,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // a real model call while every renderer-facing read stays key-free.
   const modelProfiles = databaseRuntime.features.modelProfiles;
   const aiRegistry = createProviderRegistry([offlineProvider]);
-  aiRegistry.register(createEnvBackedProvider());
   aiRegistry.register(
     createProfileBackedProvider({
       resolve: (profileId) => modelProfiles.getProfileForExecution(profileId),

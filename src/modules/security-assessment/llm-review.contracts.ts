@@ -92,8 +92,13 @@ export interface SecurityLlmReviewAvailability {
   readonly enabled: boolean;
 }
 
-/** Explicit user-triggered request. `assetRef` is used only as the cache key. */
+/** Browser request: only an opaque identifier for an authoritative history row. */
 export interface SecurityLlmReviewRequest {
+  readonly historyEntryId: string;
+}
+
+/** Server-only input rebuilt from persisted security history. */
+export interface SecurityLlmReviewAggregateRequest {
   readonly assetRef: string;
   readonly aggregate: SecurityLlmReviewAggregate;
 }

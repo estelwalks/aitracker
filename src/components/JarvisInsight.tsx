@@ -73,6 +73,7 @@ export function JarvisInsight({
   actions,
   pills,
   variant = "hero",
+  headingLevel = 1,
   severity,
   severityLabel,
   source,
@@ -102,6 +103,8 @@ export function JarvisInsight({
   pills?: ReactNode;
   /** hero = the shared page-level prototype card; inline = compact embedding. */
   variant?: "hero" | "inline";
+  /** Semantic heading level; the Agent prototype uses h2 inside the page. */
+  headingLevel?: 1 | 2;
   /** Current line severity; renders a neutral info/attention/risk badge. */
   severity?: JarvisSeverity;
   /** Localized label for the severity badge (optional). */
@@ -120,6 +123,7 @@ export function JarvisInsight({
   actionLabel?: string;
 }) {
   const hero = variant === "hero";
+  const Heading = headingLevel === 2 ? "h2" : "h1";
   const safeLines = useMemo(
     () => lines.filter((line) => line.length > 0),
     [lines],
@@ -275,7 +279,13 @@ export function JarvisInsight({
             >
               <Icon
                 className={hero ? "size-5" : "size-4"}
-                style={hero ? { color: "var(--color-ok)" } : undefined}
+                style={
+                  accent
+                    ? { color: accent }
+                    : hero
+                      ? { color: "var(--color-ok)" }
+                      : undefined
+                }
                 strokeWidth={1.7}
               />
             </span>
@@ -284,11 +294,11 @@ export function JarvisInsight({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {title ? (
-              <h1
+              <Heading
                 className={`${hero ? "text-[15px]" : "text-[13px]"} font-semibold tracking-tight`}
               >
                 {title}
-              </h1>
+              </Heading>
             ) : null}
             {severityBadge}
             {enhancedMark}

@@ -45,6 +45,7 @@ import { SkillDetailModal } from "./SkillDetailModal.tsx";
 import { SkillSecurityModal } from "./SkillSecurityModal.tsx";
 import { SyncTargetModal } from "./SyncTargetModal.tsx";
 import { ToolOverview } from "./ToolOverview";
+import type { SecuritySkillVerdictReadModel } from "../../security-assessment/query/agent-verdicts";
 
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
@@ -54,6 +55,8 @@ export type SkillsPageProps = {
   showToolOverview?: boolean;
   /** Real security-detection summary (skill name → risk-finding count). */
   security?: SkillsSecurityView;
+  /** Latest safe-scan verdict per Skill, used by the Agent overview KPI. */
+  securityVerdicts?: SecuritySkillVerdictReadModel;
   /** Real distillation activity for the KPI row + banner. */
   distillation?: SkillsDistillationView;
 };
@@ -78,6 +81,7 @@ export function SkillsPage({
   showWorkspace = true,
   showToolOverview = true,
   security,
+  securityVerdicts,
   distillation,
 }: SkillsPageProps) {
   const { t, format } = useI18n();
@@ -436,7 +440,14 @@ export function SkillsPage({
 
   return (
     <div className="space-y-4">
-      {showToolOverview && usage ? <ToolOverview usage={usage} /> : null}
+      {showToolOverview && usage ? (
+        <ToolOverview
+          usage={usage}
+          workspaceSummary={initial.workspace.summary}
+          skillSnapshot={snapshot}
+          securityVerdicts={securityVerdicts}
+        />
+      ) : null}
 
       {showWorkspace ? (
         <>

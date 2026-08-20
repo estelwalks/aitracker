@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  buildSecurityLlmReviewAggregate,
   type SecurityLlmReview,
   type SecurityLlmReviewAvailability,
 } from "../llm-review.contracts";
@@ -61,15 +60,9 @@ export function useSecurityLlmReview(
     if (report == null || loading) return;
     setLoading(true);
     setDegraded(false);
-    const aggregate = buildSecurityLlmReviewAggregate({
-      verdict: report.verdict,
-      rulesVersion: report.rulesVersion,
-      findings: report.findings,
-    });
     void getSecurityLlmReview({
       data: {
-        assetRef: report.contentHash ?? entry.scanId,
-        aggregate,
+        historyEntryId: entry.id,
       },
     })
       .then((result) => {

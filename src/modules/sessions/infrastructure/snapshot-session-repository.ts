@@ -27,7 +27,7 @@ export interface SessionSnapshotReader {
    * (single-flight against scheduled runs, run records, heavy budget).
    */
   requestRefresh(request: {
-    reason: "startup" | "schedule" | "manual" | "event" | "empty";
+    reason: "startup" | "schedule" | "manual" | "event" | "empty" | "stale";
     signal?: AbortSignal;
   }): Promise<void>;
 }
@@ -44,6 +44,11 @@ export function createSnapshotSessionRepository(
         // Empty snapshot: fire-and-forget task-runtime refresh, never block.
         void reader.requestRefresh({ reason: "empty", signal }).catch(() => {});
         return [];
+      }
+      if (latest.status === "stale") {
+        // The query remains O(1) and serves last-known-good data while the
+        // current scanner refreshes through the unified task runtime.
+        void reader.requestRefresh({ reason: "stale", signal }).catch(() => {});
       }
       // Strip the server-only cwd reference before summaries cross the query
       // boundary (sessions page, distillation transport). The dashboard reads

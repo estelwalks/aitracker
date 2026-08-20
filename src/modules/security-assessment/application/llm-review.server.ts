@@ -25,7 +25,7 @@ import {
   type SecurityLlmReview,
   type SecurityLlmReviewAggregate,
   type SecurityLlmReviewAvailability,
-  type SecurityLlmReviewRequest,
+  type SecurityLlmReviewAggregateRequest,
 } from "../llm-review.contracts.ts";
 
 const REVIEW_TTL_MS = 5 * 60 * 1000;
@@ -219,12 +219,12 @@ async function readLlmReviewPreference(): Promise<boolean> {
     const { getCompositionRoot } =
       await import("../../../app/composition.server.ts");
     const root = await getCompositionRoot();
-    return (
-      root.database.features.appPreferences.get(SECURITY_LLM_REVIEW_PREF_KEY)
-        ?.value === true
+    const stored = root.database.features.appPreferences.get(
+      SECURITY_LLM_REVIEW_PREF_KEY,
     );
+    return stored === undefined ? true : stored.value === true;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -245,13 +245,15 @@ export interface SecurityLlmReviewServiceOptions {
 
 export interface SecurityLlmReviewService {
   /** Explicit user-triggered path; the sole method that may invoke a model. */
-  review(request: SecurityLlmReviewRequest): Promise<SecurityLlmReview | null>;
+  review(
+    request: SecurityLlmReviewAggregateRequest,
+  ): Promise<SecurityLlmReview | null>;
   /** Read-only; never invokes a provider. */
   availability(): Promise<SecurityLlmReviewAvailability>;
 }
 
 function cacheKey(
-  request: SecurityLlmReviewRequest,
+  request: SecurityLlmReviewAggregateRequest,
   profileId: string,
 ): string {
   return `${request.assetRef}|${request.aggregate.rulesVersion}|${profileId}`;

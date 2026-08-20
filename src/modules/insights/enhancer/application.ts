@@ -45,7 +45,6 @@ export const INSIGHT_ENHANCER_ID = "insight-enhancer";
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAILY_CALL_LIMIT = 30;
-const ADAPTER_VERSION = 1;
 /** The enhancer is the "enhanced" path; manual vs auto is interchangeable for
  * cache purposes (only "rules" is treated differently by the repository). */
 const ENHANCEMENT_CACHE_MODE: InsightMode = "enhanced-manual";
@@ -85,6 +84,10 @@ export interface InsightEnhancerOptions {
   readonly repository: SqliteInsightRepository;
   /** Resolves the active model profile. `null` disables the enhancer. */
   readonly resolveActiveProfile?: () => Promise<ActiveInsightProfile | null>;
+  /** Resolves an explicitly selected effective-preference profile. */
+  readonly resolveProfile?: (
+    profileId: string,
+  ) => Promise<ActiveInsightProfile | null>;
   readonly now?: () => number;
   /** Cache TTL. Defaults to 24h. */
   readonly ttlMs?: number;
@@ -171,6 +174,7 @@ export function createInsightEnhancer(
   const ai = options.ai;
   const repository = options.repository;
   const resolveActiveProfile = options.resolveActiveProfile;
+  const resolveProfile = options.resolveProfile;
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
   const dailyCallLimit = options.dailyCallLimit ?? DEFAULT_DAILY_CALL_LIMIT;
@@ -295,7 +299,13 @@ export function createInsightEnhancer(
   ): Promise<InsightEnhancementResult> {
     let profile: ActiveInsightProfile | null = null;
     try {
-      profile = resolveActiveProfile ? await resolveActiveProfile() : null;
+      profile = input.profileId
+        ? resolveProfile
+          ? await resolveProfile(input.profileId)
+          : null
+        : resolveActiveProfile
+          ? await resolveActiveProfile()
+          : null;
     } catch {
       profile = null;
     }
@@ -317,7 +327,7 @@ export function createInsightEnhancer(
           surface: input.surface,
           locale: input.locale,
           dateKey,
-          adapterVersion: ADAPTER_VERSION,
+          adapterVersion: input.adapterVersion,
         }),
       ),
     );
@@ -353,7 +363,8 @@ export function createInsightEnhancer(
 
     const budgetKey = `${dateKey}:${profile.id}`;
     const used = calls.get(budgetKey) ?? 0;
-    if (used >= dailyCallLimit) {
+    const effectiveDailyCallLimit = input.dailyCallLimit ?? dailyCallLimit;
+    if (used >= effectiveDailyCallLimit) {
       return { status: "budget-exceeded", lines: [] };
     }
     calls.set(budgetKey, used + 1);

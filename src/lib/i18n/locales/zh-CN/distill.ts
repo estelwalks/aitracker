@@ -200,5 +200,5 @@ export const distill = {
   },
   anotherHistoryResults: "另有 {count} 次历史结果 · 查看",
   noModelHint:
-    "尚未配置 AI 模型。请在「设置 → 模型」添加带 API Key 的模型（或设置 ANTHROPIC_API_KEY 环境变量），否则蒸馏无法产出真实结果。",
+    "尚未配置 AI 模型。请在「设置 → 模型」添加带 API Key 的模型，否则蒸馏无法产出真实结果。",
 } as const;

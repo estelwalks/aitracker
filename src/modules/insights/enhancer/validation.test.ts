@@ -13,6 +13,7 @@ function input(
 ): InsightEnhancementInput {
   return {
     surface: "dashboard",
+    adapterVersion: 1,
     locale: "zh-CN",
     candidates: [
       {
