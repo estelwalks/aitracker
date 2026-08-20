@@ -1,28 +1,24 @@
-import { FolderOpen, Rocket, Save, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
-import { Panel, TTButton } from "../../../../components/tt";
+import { Panel } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 
 export const DISTILL_GUIDE_KEY = "tt.distill.guide";
 
 const STEPS = [
   {
-    icon: FolderOpen,
     titleKey: "distill.guideStep1",
     descKey: "distill.guideStep1Desc",
   },
   {
-    icon: Sparkles,
     titleKey: "distill.guideStep2",
     descKey: "distill.guideStep2Desc",
   },
   {
-    icon: Save,
     titleKey: "distill.guideStep3",
     descKey: "distill.guideStep3Desc",
   },
   {
-    icon: Rocket,
     titleKey: "distill.guideStep4",
     descKey: "distill.guideStep4Desc",
   },
@@ -31,8 +27,9 @@ const STEPS = [
 /**
  * First-run guide overlay (V3.0 prototype). Covers the content area with a
  * centred card explaining the four-step distillation flow: 选素材 → 跑蒸馏 →
- * 存为 Skill → 同步到工具. Dismissal is recorded in localStorage so it shows
- * once per browser/install.
+ * 存为 Skill → 同步到工具. Steps use the prototype's chart-1 numbered circles
+ * and a foreground CTA. Dismissal is recorded in localStorage so it shows once
+ * per browser/install.
  */
 export function DistillGuide({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -56,18 +53,20 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
         <ol className="space-y-4">
           {STEPS.map((step, index) => (
             <li key={step.titleKey} className="flex items-start gap-3">
-              <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-foreground">
-                <step.icon className="size-3.5" />
+              <span
+                className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full font-mono text-[10px] font-semibold"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--chart-1) 18%, transparent)",
+                  color: "var(--chart-1)",
+                }}
+              >
+                {index + 1}
               </span>
               <div className="min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {index + 1}
-                  </span>
-                  <span className="text-[13px] font-medium">
-                    {t(step.titleKey)}
-                  </span>
-                </div>
+                <span className="block text-[13px] font-medium">
+                  {t(step.titleKey)}
+                </span>
                 <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
                   {t(step.descKey)}
                 </p>
@@ -76,9 +75,13 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
           ))}
         </ol>
         <div className="mt-6 flex justify-end">
-          <TTButton variant="primary" onClick={onClose}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 font-mono text-[11.5px] font-semibold text-background transition-opacity hover:opacity-90"
+          >
             {t("distill.guideStart")}
-          </TTButton>
+          </button>
         </div>
       </Panel>
     </div>

@@ -14,6 +14,18 @@
 export type ProfileMode = "official" | "custom";
 export type ProfileProtocol = "openai" | "anthropic";
 
+/**
+ * Auth header scheme used against the endpoint. Some Anthropic-format gateways
+ * (e.g. company proxies in front of DeepSeek) require `Authorization: Bearer`
+ * instead of the stock `x-api-key` header.
+ */
+export type ProfileAuth = "x-api-key" | "bearer";
+
+/** Default auth scheme for a protocol (openai → Bearer, anthropic → x-api-key). */
+export function defaultAuth(protocol: ProfileProtocol): ProfileAuth {
+  return protocol === "anthropic" ? "x-api-key" : "bearer";
+}
+
 /** Model used by the built-in official DeepSeek profile preset. */
 export const OFFICIAL_MODEL = "deepseek-chat";
 export const OFFICIAL_ENDPOINT = "https://api.deepseek.com/v1";
@@ -60,6 +72,8 @@ export interface ModelProfile {
   readonly apiKey?: string;
   readonly endpoint?: string;
   readonly model?: string;
+  /** Auth header scheme; defaults to the protocol default when absent. */
+  readonly auth?: ProfileAuth;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -76,6 +90,7 @@ export interface ModelProfileView {
   readonly apiKeyMasked: boolean;
   readonly endpoint: string | null;
   readonly model: string | null;
+  readonly auth: ProfileAuth;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -90,6 +105,7 @@ export interface ModelProfileInput {
   readonly apiKey?: string;
   readonly endpoint?: string;
   readonly model?: string;
+  readonly auth?: ProfileAuth;
 }
 
 export type ModelProfileErrorCode =
@@ -157,6 +173,17 @@ export function effectiveModel(profile: {
 }): string | undefined {
   if (profile.mode === "official") return OFFICIAL_MODEL;
   return profile.model?.trim() || undefined;
+}
+
+/** Effective auth scheme (official → Bearer, custom → stored or protocol default). */
+export function effectiveAuth(profile: {
+  readonly mode: ProfileMode;
+  readonly protocol?: ProfileProtocol;
+  readonly auth?: ProfileAuth;
+}): ProfileAuth {
+  return profile.mode === "official"
+    ? "bearer"
+    : (profile.auth ?? defaultAuth(profile.protocol ?? "openai"));
 }
 
 function validUrl(value: string): boolean {
@@ -235,6 +262,7 @@ export function toModelProfileView(profile: ModelProfile): ModelProfileView {
     apiKeyMasked: Boolean(profile.apiKey && profile.apiKey.length > 0),
     endpoint: profile.endpoint?.trim() || null,
     model: profile.model?.trim() || null,
+    auth: effectiveAuth(profile),
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };

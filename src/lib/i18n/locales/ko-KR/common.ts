@@ -53,7 +53,6 @@ export const common = {
     emptyTitle: "브리핑 없음",
     emptyDesc: "생성 후 브리핑이 여기에 표시됩니다.",
     generate: "브리핑 생성",
-    generateHint: "생성 기능은 향후 릴리스에서 스케줄러에 연결됩니다.",
     kindDaily: "일일",
     kindWeekly: "주간",
     updatedAt: "업데이트 {time}",

@@ -1,25 +1,38 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
 import {
   dayKeyOf,
-  monthKeyOf,
   periodKeyOf,
   periodStartDate,
-  sumPeriodDensity,
   type PeriodGranularity,
   type SessionDensity,
 } from "../period.ts";
 
-const WEEKDAY_LABELS = [1, 2, 3, 4, 5, 6, 0]; // Mon-first; 0 = Sunday
+const DAY = 86400000;
+const WEEK_HEAD = ["一", "二", "三", "四", "五", "六", "日"];
+
+/** Compact pill label for the toggle button (mirrors the prototype's `short`). */
+function shortLabel(granularity: PeriodGranularity, key: string): string {
+  const start = periodStartDate(granularity, key);
+  if (!start) return key;
+  if (granularity === "day") {
+    return `${start.getMonth() + 1}/${start.getDate()}`;
+  }
+  if (granularity === "week") {
+    return `${start.getMonth() + 1}/${start.getDate()}周`;
+  }
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const densityOpacity = (n: number) =>
+  n === 0 ? 0 : n <= 2 ? 0.35 : n <= 5 ? 0.6 : n <= 9 ? 0.8 : 1;
 
 /**
- * PeriodCalendar — a lightweight day/week/month picker for the report header.
- * Every date cell shows a real session-density dot (scaled by count) from the
- * loader's `SessionDensity`; clicking a day/week/month selects the report
- * period. The month view sweeps the last 12 months ending at the displayed
- * month; the day/week views render the displayed month with a Mon-first grid.
+ * 桌面端日历选择器（V3.0 原型对齐）：日 / 周 / 月三种粒度，带会话密度点。
+ * 自包含：按钮（CalendarDays + 短标签）展开下拉，点选后回调 `onSelect`。
+ * 密度全部来自 loader 的 `SessionDensity`（真实会话，绝不做假数据）。
  */
 export function PeriodCalendar({
   granularity,
@@ -34,282 +47,248 @@ export function PeriodCalendar({
   now: Date;
   onSelect: (key: string) => void;
 }) {
-  const { t, format } = useI18n();
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
   const initialMonth = useMemo(() => {
     const start = periodStartDate(granularity, selectedKey) ?? now;
     return new Date(start.getFullYear(), start.getMonth(), 1);
   }, [granularity, selectedKey, now]);
-  const [viewMonth, setViewMonth] = useState<Date>(initialMonth);
+  const [cursor, setCursor] = useState(initialMonth);
 
-  const densityByDay = density.days;
-  const selectedToday = periodKeyOf(granularity, now);
+  useEffect(() => setCursor(initialMonth), [initialMonth]);
 
-  const dayCells = useMemo(() => {
-    const first = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
-    const mondayOffset = (first.getDay() + 6) % 7;
-    const gridStart = new Date(
-      first.getFullYear(),
-      first.getMonth(),
-      first.getDate() - mondayOffset,
-    );
-    const cells: Array<{ date: Date; key: string; count: number }> = [];
-    for (let index = 0; index < 42; index += 1) {
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (event: MouseEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const todayKey = dayKeyOf(now);
+
+  const cells = useMemo(() => {
+    if (granularity === "month") return [];
+    const first = new Date(year, month, 1);
+    const lead = (first.getDay() + 6) % 7;
+    const gridStart = new Date(year, month, 1 - lead);
+    return Array.from({ length: 42 }, (_, index) => {
       const date = new Date(
         gridStart.getFullYear(),
         gridStart.getMonth(),
         gridStart.getDate() + index,
       );
-      cells.push({
+      const key = dayKeyOf(date);
+      return {
+        key,
+        day: date.getDate(),
         date,
-        key: dayKeyOf(date),
-        count: densityByDay[dayKeyOf(date)]?.count ?? 0,
-      });
-    }
-    return cells;
-  }, [viewMonth, densityByDay]);
+        inMonth: date.getMonth() === month,
+        future: key > todayKey,
+        n: density.days[key]?.count ?? 0,
+      };
+    });
+  }, [granularity, year, month, todayKey, density]);
 
-  const weekRows = useMemo(() => {
-    const first = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
-    const mondayOffset = (first.getDay() + 6) % 7;
-    const gridStart = new Date(
-      first.getFullYear(),
-      first.getMonth(),
-      first.getDate() - mondayOffset,
-    );
-    const rows: Array<{ key: string; start: Date; end: Date; count: number }> =
-      [];
-    for (let index = 0; index < 6; index += 1) {
-      const start = new Date(
-        gridStart.getFullYear(),
-        gridStart.getMonth(),
-        gridStart.getDate() + index * 7,
-      );
-      const end = new Date(
-        start.getFullYear(),
-        start.getMonth(),
-        start.getDate() + 6,
-      );
-      rows.push({
-        key: dayKeyOf(start),
-        start,
-        end,
-        count: sumPeriodDensity(density, "week", dayKeyOf(start)).count,
-      });
-    }
-    return rows;
-  }, [viewMonth, density]);
+  const weekRange = useMemo(() => {
+    if (granularity !== "week") return null;
+    const start = periodStartDate("week", selectedKey);
+    if (!start) return null;
+    const from = dayKeyOf(start);
+    const to = dayKeyOf(new Date(start.getTime() + 6 * DAY));
+    return { from, to };
+  }, [granularity, selectedKey]);
 
-  const monthCells = useMemo(() => {
-    const cells: Array<{ key: string; date: Date; count: number }> = [];
-    for (let offset = 11; offset >= 0; offset -= 1) {
-      const date = new Date(
-        viewMonth.getFullYear(),
-        viewMonth.getMonth() - offset,
-        1,
-      );
-      cells.push({
-        key: monthKeyOf(date),
-        date,
-        count: sumPeriodDensity(density, "month", monthKeyOf(date)).count,
-      });
-    }
-    return cells;
-  }, [viewMonth, density]);
+  const shiftCursor = (delta: number) =>
+    setCursor(new Date(year, month + delta, 1));
 
-  const monthLabel = format.formatDate(viewMonth, {
-    year: "numeric",
-    month: "long",
-  });
-  const shiftMonth = (delta: number) =>
-    setViewMonth(
-      new Date(viewMonth.getFullYear(), viewMonth.getMonth() + delta, 1),
-    );
+  const pick = (dayKey: string) => {
+    onSelect(periodKeyOf(granularity, new Date(`${dayKey}T00:00:00`)));
+    setOpen(false);
+  };
 
-  const todayKey = dayKeyOf(now);
+  const monthLabel = `${year} 年 ${month + 1} 月`;
+  const goTodayLabel =
+    granularity === "day"
+      ? t("reports.header.goToday")
+      : granularity === "week"
+        ? t("reports.header.goWeek")
+        : t("reports.header.goMonth");
 
   return (
-    <div className="w-[300px] rounded-xl bg-card p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
-      <div className="mb-2 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => shiftMonth(-1)}
-          aria-label="prev"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-        >
-          <ChevronLeft className="size-3.5" />
-        </button>
-        <span className="text-[12px] font-medium">{monthLabel}</span>
-        <button
-          type="button"
-          onClick={() => shiftMonth(1)}
-          aria-label="next"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-        >
-          <ChevronRight className="size-3.5" />
-        </button>
-      </div>
+    <div className="relative" ref={box}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        title={t("reports.calendar.toggle")}
+        className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11.5px] transition-colors ${
+          open
+            ? "bg-surface-2 text-foreground"
+            : "bg-surface-2/70 text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <CalendarDays className="size-3.5" strokeWidth={1.8} />
+        {shortLabel(granularity, selectedKey)}
+      </button>
 
-      {granularity === "day" && (
-        <>
-          <div className="mb-1 grid grid-cols-7 gap-0.5 text-center text-[10px] text-muted-foreground">
-            {WEEKDAY_LABELS.map((day) => (
-              <span key={day}>
-                {day === 0 ? "日" : `周${"一二三四五六"[day - 1]}`}
-              </span>
-            ))}
+      {open && (
+        <div className="absolute top-full left-0 z-40 mt-2 w-[268px] rounded-xl bg-card p-3 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.65)] ring-1 ring-border/70 backdrop-blur-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => shiftCursor(-1)}
+              className="rounded-full bg-surface-2 p-1 hover:opacity-80"
+              aria-label="prev"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+            <span className="tt-num font-mono text-[12px] tracking-tight">
+              {monthLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => shiftCursor(1)}
+              className="rounded-full bg-surface-2 p-1 hover:opacity-80"
+              aria-label="next"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
           </div>
-          <div className="grid grid-cols-7 gap-0.5">
-            {dayCells.map((cell) => {
-              const inMonth = cell.date.getMonth() === viewMonth.getMonth();
-              const selected = cell.key === selectedKey;
-              const today = cell.key === todayKey;
-              return (
-                <button
-                  key={cell.key}
-                  type="button"
-                  onClick={() => onSelect(cell.key)}
-                  className={`flex h-9 flex-col items-center justify-center gap-0.5 rounded-md text-[11px] transition-colors ${
-                    selected
-                      ? "bg-primary text-primary-foreground"
-                      : inMonth
-                        ? "hover:bg-surface-2"
-                        : "text-muted-foreground/50 hover:bg-surface-2"
-                  }`}
-                >
-                  <span
-                    className={
-                      today && !selected ? "font-semibold text-primary" : ""
-                    }
+
+          {granularity === "month" ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Array.from({ length: 12 }, (_, index) => {
+                const key = `${year}-${String(index + 1).padStart(2, "0")}`;
+                const active =
+                  periodStartDate("month", selectedKey)?.getMonth() === index;
+                const future =
+                  `${year}-${String(index + 1).padStart(2, "0")}` >
+                  todayKey.slice(0, 7);
+                const inMonthCount = Object.entries(density.days).reduce(
+                  (sum, [dayKey, metric]) =>
+                    dayKey.startsWith(key) ? sum + metric.count : sum,
+                  0,
+                );
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={future}
+                    onClick={() => pick(`${key}-01`)}
+                    className={`flex flex-col items-center gap-1 rounded-lg py-2 font-mono text-[11.5px] transition-colors disabled:opacity-25 ${
+                      active
+                        ? "bg-primary font-medium text-primary-foreground"
+                        : "bg-surface-2/60 hover:bg-surface-2"
+                    }`}
                   >
-                    {cell.date.getDate()}
+                    <span>{index + 1} 月</span>
+                    <span
+                      className="size-1 rounded-full bg-primary"
+                      style={{
+                        opacity:
+                          inMonthCount > 0 ? densityOpacity(inMonthCount) : 0,
+                        visibility: inMonthCount > 0 ? "visible" : "hidden",
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <div className="mb-1 grid grid-cols-7 text-center font-mono text-[10px] text-muted-foreground/70">
+                {WEEK_HEAD.map((weekday) => (
+                  <span key={weekday} className="py-1">
+                    {weekday}
                   </span>
-                  <span className="flex h-1 items-center justify-center">
-                    {cell.count > 0 && (
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-y-0.5">
+                {cells.map((cell) => {
+                  const inRange =
+                    weekRange &&
+                    cell.key >= weekRange.from &&
+                    cell.key <= weekRange.to;
+                  const isEdge =
+                    weekRange &&
+                    (cell.key === weekRange.from || cell.key === weekRange.to);
+                  const selectedDay =
+                    granularity === "day" && cell.key === selectedKey;
+                  const isToday = cell.key === todayKey;
+                  return (
+                    <button
+                      key={cell.key}
+                      type="button"
+                      disabled={cell.future}
+                      onClick={() => pick(cell.key)}
+                      className={`relative flex h-8 flex-col items-center justify-center font-mono text-[11.5px] transition-colors disabled:opacity-20 ${
+                        granularity === "week" && inRange ? "bg-surface-2" : ""
+                      } ${granularity === "week" && cell.key === weekRange?.from ? "rounded-l-lg" : ""} ${
+                        granularity === "week" && cell.key === weekRange?.to
+                          ? "rounded-r-lg"
+                          : ""
+                      } ${!inRange ? "rounded-lg hover:bg-surface-2/60" : ""} ${
+                        cell.inMonth ? "" : "text-muted-foreground/35"
+                      }`}
+                    >
                       <span
-                        className="size-1 rounded-full"
-                        style={{
-                          backgroundColor: selected
-                            ? "currentColor"
-                            : "var(--color-ok)",
-                          opacity: Math.min(1, 0.35 + cell.count * 0.12),
-                        }}
-                        title={t("reports.calendar.density", {
-                          count: cell.count,
-                        })}
+                        className={`flex size-6 items-center justify-center rounded-full ${
+                          selectedDay
+                            ? "bg-primary font-semibold text-primary-foreground"
+                            : isToday
+                              ? "ring-1 ring-primary/60"
+                              : ""
+                        }`}
+                      >
+                        {cell.day}
+                      </span>
+                      <span
+                        className="mt-0.5 size-1 rounded-full bg-primary"
+                        style={{ opacity: densityOpacity(cell.n) }}
                       />
-                    )}
-                  </span>
-                </button>
-              );
-            })}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {granularity === "week"
+                ? t("reports.calendar.weekHint")
+                : granularity === "month"
+                  ? t("reports.calendar.monthHint")
+                  : t("reports.calendar.dayHint")}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onSelect(periodKeyOf(granularity, now));
+                setOpen(false);
+              }}
+              className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] hover:opacity-80"
+            >
+              {goTodayLabel}
+            </button>
           </div>
-        </>
-      )}
-
-      {granularity === "week" && (
-        <div className="space-y-1">
-          {weekRows.map((row) => {
-            const selected = row.key === selectedKey;
-            return (
-              <button
-                key={row.key}
-                type="button"
-                onClick={() => onSelect(row.key)}
-                className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] transition-colors ${
-                  selected
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-surface-2"
-                }`}
-              >
-                <span className="tt-num font-mono">
-                  {format.formatDate(row.start, {
-                    month: "2-digit",
-                    day: "2-digit",
-                  })}
-                  {" – "}
-                  {format.formatDate(row.end, {
-                    month: "2-digit",
-                    day: "2-digit",
-                  })}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  {row.count > 0 && (
-                    <span
-                      className="size-1.5 rounded-full"
-                      style={{
-                        backgroundColor: selected
-                          ? "currentColor"
-                          : "var(--color-ok)",
-                      }}
-                    />
-                  )}
-                  <span className="tt-num opacity-80">
-                    {row.count > 0
-                      ? t("reports.calendar.density", { count: row.count })
-                      : t("reports.calendar.empty")}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
         </div>
       )}
-
-      {granularity === "month" && (
-        <div className="grid grid-cols-3 gap-1.5">
-          {monthCells.map((cell) => {
-            const selected = cell.key === selectedKey;
-            return (
-              <button
-                key={cell.key}
-                type="button"
-                onClick={() => onSelect(cell.key)}
-                className={`flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] transition-colors ${
-                  selected
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-surface-2"
-                }`}
-              >
-                <span className="font-medium">
-                  {format.formatDate(cell.date, {
-                    year: "2-digit",
-                    month: "short",
-                  })}
-                </span>
-                <span className="flex items-center gap-1">
-                  {cell.count > 0 && (
-                    <span
-                      className="size-1 rounded-full"
-                      style={{
-                        backgroundColor: selected
-                          ? "currentColor"
-                          : "var(--color-ok)",
-                      }}
-                    />
-                  )}
-                  <span className="tt-num opacity-80">
-                    {cell.count > 0 ? cell.count : "·"}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
-        <span>{t("reports.calendar.dotHint")}</span>
-        <button
-          type="button"
-          onClick={() => {
-            if (selectedToday) onSelect(selectedToday);
-            setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
-          }}
-          className="rounded-md px-1.5 py-0.5 hover:bg-surface-2 hover:text-foreground"
-        >
-          {t("reports.calendar.today")}
-        </button>
-      </div>
     </div>
   );
 }

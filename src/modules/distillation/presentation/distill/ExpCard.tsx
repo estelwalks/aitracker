@@ -65,6 +65,31 @@ function sourceNames(candidate: CandidateOutput): string {
     .trim();
 }
 
+/** 原型 Act 胶囊按钮（rounded-full bg-surface-2）。 */
+function Act({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: typeof Pencil;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1.5 text-[11.5px] transition-opacity hover:opacity-80 disabled:opacity-40"
+    >
+      <Icon className="size-3.5" />
+      {label}
+    </button>
+  );
+}
+
 function SkillFileBrowser({
   root,
   value,
@@ -121,14 +146,13 @@ function SkillFileBrowser({
 }
 
 /**
- * Persisted result card aligned with the prototype (lines 1808-1958): a kind
- * color badge, the selected-material meta line, and — for approved candidates
- * — a save modal with a multi-select install-target grid (E-500). The server
- * save fn writes one agent per call, so the modal loops over the selected
- * targets and reports partial failures honestly.
+ * Persisted result card aligned with the prototype ExpCard (lines 1808-1958):
+ * kind-color blur circle, saved chip, Act pill actions and a kind-colored save
+ * button. Memory assets render in the memory-card style and lead to the memory
+ * library; capability assets keep the skill file browser + install dialog.
  *
- * Real progress: candidates only exist after the synchronous server run, so
- * no card ever shows a running state; the in-flight "蒸馏中…" placeholder is
+ * Real progress: candidates only exist after the synchronous server run, so no
+ * card ever shows a running state; the in-flight "蒸馏中…" placeholder is
  * rendered by the page instead of faking a percentage here.
  */
 export function ExpCard({
@@ -209,10 +233,15 @@ export function ExpCard({
   return (
     <>
       <article
-        className="relative overflow-hidden rounded-xl bg-card ring-1 ring-border/60"
+        className="relative overflow-hidden rounded-xl bg-card"
         style={{ boxShadow: `inset 3px 0 0 ${badge.color}` }}
       >
-        <header className="flex flex-wrap items-center gap-2 px-4 py-3">
+        {/* 原型右上角模糊色圈（原型 1828-1831） */}
+        <div
+          className="pointer-events-none absolute -top-16 right-0 size-40 rounded-full opacity-[0.14] blur-3xl"
+          style={{ background: badge.color }}
+        />
+        <header className="relative flex flex-wrap items-center gap-2 px-4 py-3">
           <span
             className="rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold"
             style={{
@@ -229,7 +258,7 @@ export function ExpCard({
             {approvalLabel(candidate.approvalState, t)}
           </StatusBadge>
         </header>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 pb-3 font-mono text-[10px] text-muted-foreground">
+        <div className="relative flex flex-wrap gap-x-4 gap-y-1 px-4 pb-3 font-mono text-[10px] text-muted-foreground">
           <span>{format.formatDateTime(candidate.generatedAt, false)}</span>
           <span>
             {t("common.distillation.expMode")}: {candidate.mode}
@@ -243,83 +272,141 @@ export function ExpCard({
             </span>
           )}
           <span>{candidate.candidateId}</span>
+          {approved && (
+            <span
+              className="rounded-full px-2 py-0.5 font-semibold"
+              style={{
+                background:
+                  "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                color: "var(--chart-1)",
+              }}
+            >
+              {memoryAsset
+                ? t("distill.expSavedMemory")
+                : t("distill.expSavedSkill")}
+            </span>
+          )}
         </div>
 
         {offline && (
-          <div className="mx-4 mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-warn">
+          <div className="relative mx-4 mb-3 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-warn">
             {t("common.distillation.expOfflineNotice")}
           </div>
         )}
 
-        <div className="px-4 pb-3">
-          <SkillFileBrowser
-            root={suggestSkillName(candidate.title)}
-            value={draft}
-            editing={editing}
-            onChange={setDraft}
-          />
-          {editing && (
-            <p className="mt-1.5 text-[10.5px] text-muted-foreground">
-              {t("distill.editHint")}
-            </p>
-          )}
-        </div>
-
-        <footer className="flex flex-wrap items-center gap-2 px-4 pb-4">
-          <TTButton
-            variant="ghost"
-            onClick={() => setEditing((value) => !value)}
-          >
-            {editing ? (
-              <FileCode2 className="size-3.5" />
-            ) : (
-              <Pencil className="size-3.5" />
+        {memoryAsset ? (
+          <div className="relative px-4 pb-3">
+            <div
+              className="rounded-xl bg-surface-2 p-3"
+              style={{ boxShadow: `inset 3px 0 0 ${badge.color}` }}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles
+                  className="size-3.5 shrink-0"
+                  style={{ color: badge.color }}
+                />
+                <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+                  {candidate.title}
+                </p>
+                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {t(badge.labelKey)}
+                </span>
+              </div>
+              {editing ? (
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={8}
+                  className="mt-2 min-h-[120px] w-full resize-y bg-transparent text-[12.5px] leading-7 outline-none"
+                />
+              ) : (
+                <p className="tt-scroll mt-2 max-h-[380px] overflow-auto text-[12.5px] leading-7 text-foreground/85">
+                  {draft}
+                </p>
+              )}
+            </div>
+            {editing && (
+              <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+                {t("distill.editHint")}
+              </p>
             )}
-            {editing ? t("distill.expBrowse") : t("distill.expEdit")}
-          </TTButton>
+          </div>
+        ) : (
+          <div className="relative px-4 pb-3">
+            <SkillFileBrowser
+              root={suggestSkillName(candidate.title)}
+              value={draft}
+              editing={editing}
+              onChange={setDraft}
+            />
+            {editing && (
+              <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+                {t("distill.editHint")}
+              </p>
+            )}
+          </div>
+        )}
+
+        <footer className="relative flex flex-wrap items-center gap-2 px-4 pb-4">
+          <Act
+            icon={editing ? FileCode2 : Pencil}
+            label={editing ? t("distill.expBrowse") : t("distill.expEdit")}
+            onClick={() => setEditing((value) => !value)}
+          />
           {pending && (
             <>
-              <TTButton variant="primary" disabled={busy} onClick={onApprove}>
-                <Check className="size-3.5" />{" "}
-                {t("common.distillation.approve")}
-              </TTButton>
-              <TTButton variant="danger" disabled={busy} onClick={onCancel}>
-                <X className="size-3.5" /> {t("common.distillation.cancel")}
-              </TTButton>
+              <Act
+                icon={Check}
+                label={t("common.distillation.approve")}
+                onClick={onApprove}
+                disabled={busy}
+              />
+              <Act
+                icon={X}
+                label={t("common.distillation.cancel")}
+                onClick={onCancel}
+                disabled={busy}
+              />
             </>
           )}
           {!approved && (
-            <TTButton variant="ghost" disabled={busy} onClick={onRegenerate}>
-              <RefreshCw className="size-3.5" /> {t("distill.expRegenerate")}
-            </TTButton>
+            <Act
+              icon={RefreshCw}
+              label={t("distill.expRegenerate")}
+              onClick={onRegenerate}
+              disabled={busy}
+            />
           )}
-          {approved && (
+          {approved && memoryAsset && (
+            <Link to="/memory" className="ml-auto">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: badge.color }}
+              >
+                <ArrowRight className="size-3.5" /> {t("distill.memoryGo")}
+              </span>
+            </Link>
+          )}
+          {approved && !memoryAsset && (
             <>
-              <TTButton
-                variant="primary"
-                disabled={busy}
+              <button
+                type="button"
                 onClick={() => {
                   setSaveName(suggestSkillName(candidate.title));
                   setSaveTargets([...SKILL_AGENTS]);
                   setSaveOpen(true);
                 }}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: badge.color }}
               >
                 <Rocket className="size-3.5" /> {t("distill.expSaveInstall")}
-              </TTButton>
-              {memoryAsset ? (
-                <Link to="/memory" className="ml-auto">
-                  <TTButton variant="ghost">
-                    <ArrowRight className="size-3.5" /> {t("distill.memoryGo")}
-                  </TTButton>
-                </Link>
-              ) : (
-                <Link to="/skills" className="ml-auto">
-                  <TTButton variant="ghost">
-                    <Sparkles className="size-3.5" />{" "}
-                    {t("common.distillation.saveAndManage")}
-                  </TTButton>
-                </Link>
-              )}
+              </button>
+              <Link to="/skills" className="ml-auto">
+                <Act
+                  icon={Sparkles}
+                  label={t("common.distillation.saveAndManage")}
+                />
+              </Link>
             </>
           )}
         </footer>

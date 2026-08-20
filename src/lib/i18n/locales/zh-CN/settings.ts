@@ -58,6 +58,12 @@ export const settings = {
     modelPlaceholder: "例如：deepseek-chat",
     requestPath: "请求路径",
     authMethod: "鉴权方式",
+    authLabel: "鉴权请求头",
+    authXApiKey: "x-api-key 请求头",
+    authXApiKeyHint: "Claude 官方标准：携带 x-api-key 头",
+    authBearer: "Bearer 令牌",
+    authBearerHint:
+      "网关要求 Authorization: Bearer 时选择（如内网 DeepSeek 网关）",
     listModels: "获取模型列表",
     listingModels: "获取中…",
     selectModel: "选择模型…",

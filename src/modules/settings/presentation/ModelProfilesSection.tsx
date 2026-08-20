@@ -25,9 +25,11 @@ import {
   upsertModelProfile,
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
+  defaultAuth,
   protocolMeta,
   type ModelProfileInput,
   type ModelProfileView,
+  type ProfileAuth,
 } from "../../ai-orchestration/index.ts";
 
 interface FormState {
@@ -35,6 +37,7 @@ interface FormState {
   readonly name: string;
   readonly mode: "official" | "custom";
   readonly protocol: "openai" | "anthropic";
+  readonly auth: ProfileAuth;
   readonly apiKey: string;
   readonly endpoint: string;
   readonly model: string;
@@ -48,6 +51,7 @@ const EMPTY_FORM: FormState = {
   name: "",
   mode: "official",
   protocol: "openai",
+  auth: "x-api-key",
   apiKey: "",
   endpoint: "",
   model: "",
@@ -62,6 +66,7 @@ function toInput(form: FormState): ModelProfileInput {
     ...(form.name.trim() ? { name: form.name.trim() } : {}),
     mode: form.mode,
     ...(form.mode === "custom" ? { protocol: form.protocol } : {}),
+    ...(form.mode === "custom" ? { auth: form.auth } : {}),
     ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
     ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
     ...(form.model.trim() ? { model: form.model.trim() } : {}),
@@ -75,6 +80,7 @@ function fromProfile(profile: ModelProfileView | null): FormState {
         name: profile.name,
         mode: profile.mode,
         protocol: profile.protocol,
+        auth: profile.auth,
         apiKey: "",
         endpoint: profile.endpoint ?? "",
         model: profile.model ?? "",
@@ -155,6 +161,7 @@ export function ModelProfilesSection() {
           id: form.id ?? undefined,
           mode: form.mode,
           protocol: form.protocol,
+          auth: form.auth,
           ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
           ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
         },
@@ -510,6 +517,7 @@ export function ModelProfilesSection() {
                           setForm((current) => ({
                             ...current,
                             protocol,
+                            auth: defaultAuth(protocol),
                             models: [],
                           }))
                         }
@@ -537,6 +545,45 @@ export function ModelProfilesSection() {
                     ))}
                   </div>
                 </div>
+
+                {form.protocol === "anthropic" && (
+                  <div>
+                    <div className="tt-label mb-1.5">
+                      {t("settings.modelProfiles.authLabel")}
+                    </div>
+                    <div className="grid gap-2 @md:grid-cols-2">
+                      {(["x-api-key", "bearer"] as const).map((auth) => (
+                        <button
+                          key={auth}
+                          type="button"
+                          onClick={() =>
+                            setForm((current) => ({ ...current, auth }))
+                          }
+                          className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${
+                            form.auth === auth
+                              ? "border-primary bg-primary/10"
+                              : "border-border hover:border-border-strong"
+                          }`}
+                        >
+                          <span className="block text-[12px] text-foreground">
+                            {t(
+                              auth === "x-api-key"
+                                ? "settings.modelProfiles.authXApiKey"
+                                : "settings.modelProfiles.authBearer",
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                            {t(
+                              auth === "x-api-key"
+                                ? "settings.modelProfiles.authXApiKeyHint"
+                                : "settings.modelProfiles.authBearerHint",
+                            )}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid gap-3 @md:grid-cols-2">
                   <div className="min-w-0">
@@ -673,7 +720,11 @@ export function ModelProfilesSection() {
                       {t("settings.modelProfiles.authMethod")}
                     </dt>
                     <dd className="truncate text-foreground">
-                      {protocolMeta[form.protocol].auth}
+                      {form.protocol === "openai"
+                        ? "Authorization: Bearer <API Key>"
+                        : form.auth === "bearer"
+                          ? "Authorization: Bearer <API Key> · anthropic-version: 2023-06-01"
+                          : protocolMeta[form.protocol].auth}
                     </dd>
                   </div>
                 </dl>

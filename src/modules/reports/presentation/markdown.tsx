@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
 /**
- * 轻量 Markdown 渲染器（移植自 V3.0 原型 MarkdownView，并补充围栏代码块）。
+ * 轻量 Markdown 渲染器（逐字对齐 V3.0 原型 MarkdownView 的样式类，并补充围栏代码块）。
  *
- * 纯函数 + React 元素：SSR 安全（不触碰 DOM、不用 dangerouslySetInnerHTML，
- * 特殊字符由 React 自动转义），零外部依赖。行内支持 **粗体** 与 `行内代码`；
- * 块级支持标题 / 列表 / 表格 / 引用 / 围栏代码块 / 段落。排版样式由外层
- * `.tt-md` 容器统一提供，这里只产出语义化元素。
+ * 原型未用 react-markdown 等框架，而是手写渲染器并把排版类直接写死在每个标签上
+ * （表格 tt-table、引用 chart-1 边框、标题字号等），因此预览区无需外层 .tt-md 也能
+ * 还原同样的视觉效果。纯函数 + React 元素：SSR 安全（不触碰 DOM、不用
+ * dangerouslySetInnerHTML），零外部依赖。行内支持 **粗体** 与 `行内代码`；块级支持
+ * 标题 / 列表 / 表格 / 引用 / 围栏代码块 / 段落。
  */
 
 const INLINE_TOKEN = /(\*\*[^*]+\*\*|`[^`]+`)/g;
@@ -39,10 +40,22 @@ function inline(source: string, key: string): ReactNode[] {
     const token = match[0];
     if (token.startsWith("**")) {
       nodes.push(
-        <strong key={`${key}-b${index}`}>{token.slice(2, -2)}</strong>,
+        <strong
+          key={`${key}-b${index}`}
+          className="font-semibold text-foreground"
+        >
+          {token.slice(2, -2)}
+        </strong>,
       );
     } else {
-      nodes.push(<code key={`${key}-c${index}`}>{token.slice(1, -1)}</code>);
+      nodes.push(
+        <code
+          key={`${key}-c${index}`}
+          className="rounded bg-surface-2 px-1 py-px font-mono text-[11.5px]"
+        >
+          {token.slice(1, -1)}
+        </code>,
+      );
     }
     last = match.index + token.length;
     index += 1;
@@ -58,10 +71,19 @@ function Heading({
   level: 1 | 2 | 3 | 4;
   children: ReactNode;
 }) {
-  if (level === 1) return <h1>{children}</h1>;
-  if (level === 2) return <h2>{children}</h2>;
-  if (level === 3) return <h3>{children}</h3>;
-  return <h4>{children}</h4>;
+  const size =
+    level === 1
+      ? "text-[17px]"
+      : level === 2
+        ? "text-[14.5px]"
+        : level === 3
+          ? "text-[13px]"
+          : "text-[12.5px]";
+  const className = `mt-5 mb-2 font-semibold tracking-tight first:mt-0 ${size}`;
+  if (level === 1) return <h1 className={className}>{children}</h1>;
+  if (level === 2) return <h2 className={className}>{children}</h2>;
+  if (level === 3) return <h3 className={className}>{children}</h3>;
+  return <h4 className={className}>{children}</h4>;
 }
 
 export function MarkdownView({ source }: { source: string }) {
@@ -87,8 +109,13 @@ export function MarkdownView({ source }: { source: string }) {
       }
       i += 1; // 跳过闭合围栏（可能到文件末尾）
       out.push(
-        <pre key={`f${i}`}>
-          <code>{buffer.join("\n")}</code>
+        <pre
+          key={`f${i}`}
+          className="my-3 overflow-x-auto rounded-lg border border-border bg-surface-2 px-3 py-2.5"
+        >
+          <code className="block font-mono text-[12px] leading-relaxed">
+            {buffer.join("\n")}
+          </code>
         </pre>,
       );
       continue;
@@ -104,12 +131,20 @@ export function MarkdownView({ source }: { source: string }) {
         i += 1;
       }
       out.push(
-        <div key={`t${i}`} className="tt-xscroll overflow-x-auto">
-          <table>
+        <div
+          key={`t${i}`}
+          className="tt-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2/60"
+        >
+          <table className="tt-table w-full min-w-[520px] text-[12px]">
             <thead>
               <tr>
                 {head.map((cell, n) => (
-                  <th key={n}>{inline(cell, `th${n}`)}</th>
+                  <th
+                    key={n}
+                    className={`px-3 py-2 font-mono text-[10.5px] tracking-[0.06em] text-muted-foreground uppercase ${n ? "text-right" : "text-left"}`}
+                  >
+                    {inline(cell, `th${n}`)}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -117,7 +152,12 @@ export function MarkdownView({ source }: { source: string }) {
               {rows.map((row, n) => (
                 <tr key={n}>
                   {row.map((cell, k) => (
-                    <td key={k}>{inline(cell, `td${n}-${k}`)}</td>
+                    <td
+                      key={k}
+                      className={`px-3 py-2 ${k ? "text-right font-mono" : "text-left"}`}
+                    >
+                      {inline(cell, `td${n}-${k}`)}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -148,7 +188,11 @@ export function MarkdownView({ source }: { source: string }) {
         i += 1;
       }
       out.push(
-        <blockquote key={`q${i}`}>
+        <blockquote
+          key={`q${i}`}
+          className="my-3 rounded-lg bg-surface-2/60 px-3 py-2 text-[12px] leading-relaxed text-muted-foreground"
+          style={{ borderLeft: "2px solid var(--chart-1)" }}
+        >
           {inline(buffer.join(" "), `q${i}`)}
         </blockquote>,
       );
@@ -168,9 +212,19 @@ export function MarkdownView({ source }: { source: string }) {
       ));
       out.push(
         ordered ? (
-          <ol key={`l${i}`}>{items}</ol>
+          <ol
+            key={`l${i}`}
+            className="my-2 list-decimal space-y-1.5 pl-5 text-[12.5px] leading-6"
+          >
+            {items}
+          </ol>
         ) : (
-          <ul key={`l${i}`}>{items}</ul>
+          <ul
+            key={`l${i}`}
+            className="my-2 list-disc space-y-1.5 pl-5 text-[12.5px] leading-6"
+          >
+            {items}
+          </ul>
         ),
       );
       continue;
@@ -190,7 +244,14 @@ export function MarkdownView({ source }: { source: string }) {
       buffer.push(lines[i]);
       i += 1;
     }
-    out.push(<p key={`p${i}`}>{inline(buffer.join(" "), `p${i}`)}</p>);
+    out.push(
+      <p
+        key={`p${i}`}
+        className="my-2 text-[12.5px] leading-7 text-muted-foreground"
+      >
+        {inline(buffer.join(" "), `p${i}`)}
+      </p>,
+    );
   }
 
   return <div className="max-w-none">{out}</div>;

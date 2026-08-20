@@ -64,14 +64,17 @@ export interface ReportRun {
   readonly evidence: readonly EvidenceRef[];
 }
 
-/** Private persisted report body. Keep this type in server/application code. */
+/** Persisted report metadata. New records reference a local Markdown file. */
 export interface ReportDocument {
   readonly reportId: string;
   readonly runId: string;
   readonly definitionId: string;
   readonly status: ReportStatus;
   readonly title: string;
-  readonly body: string;
+  /** Relative filename under the configured reports directory. */
+  readonly contentFile?: string;
+  /** Legacy v1 inline body. Readable and lazily migrated; never set on new records. */
+  readonly body?: string;
   readonly generatedAt: string;
   readonly templateVersion: number;
   readonly evidence: readonly EvidenceRef[];
@@ -121,16 +124,64 @@ export interface ReportStore {
   listRuns(): Promise<readonly ReportRun[]>;
 }
 
+/** Server-only durable Markdown content storage. */
+export interface ReportContentStore {
+  create(document: ReportDocument, body: string): Promise<string>;
+  read(contentFile: string): Promise<string>;
+  /** Write a new immutable revision and return its relative filename. */
+  replace(document: ReportDocument, body: string): Promise<string>;
+}
+
+/**
+ * Structured, display-safe report figures aggregated from real session data
+ * (counts/tokens/cost by source, plus the display-safe project keys). Never
+ * raw sessions, absolute paths or conversation content — every field here is
+ * an aggregate safe to persist and to render.
+ */
+export interface ReportStats {
+  /** Display label for the covered period, e.g. "今日 2026-08-19". */
+  readonly periodLabel: string;
+  readonly sessions: number;
+  readonly turns: number;
+  readonly tokens: number;
+  readonly costUsd: number;
+  readonly edits: number;
+  readonly durationMin: number;
+  readonly bySource: readonly {
+    readonly source: string;
+    readonly sessions: number;
+    readonly tokens: number;
+    readonly costUsd: number;
+    readonly edits: number;
+    readonly durationMin: number;
+  }[];
+  /** Display-safe project keys present in the period (no paths). */
+  readonly projects: readonly string[];
+}
+
 export interface ReportContext {
   readonly evidence: readonly EvidenceRef[];
   /** Controlled, already-redacted context; never raw sessions or paths. */
   readonly summary: string;
   readonly assets?: readonly AssetRef[];
+  /** Optional structured figures for the deterministic offline draft. */
+  readonly stats?: ReportStats;
+}
+
+/**
+ * The period a report is generated for. When absent the report covers the
+ * current period (today / the current week). Day and week keys are local-time
+ * `YYYY-MM-DD` (a week key is its Monday); a month key is `YYYY-MM`.
+ */
+export interface ReportPeriod {
+  readonly granularity: "day" | "week" | "month";
+  readonly key: string;
 }
 
 export interface ReportContextPort {
   collect(input: {
     readonly definition: ReportDefinition;
+    readonly period?: ReportPeriod;
   }): Promise<ReportContext>;
 }
 
@@ -165,6 +216,8 @@ export interface ReportsApplication {
   get(reportId: string): Promise<Result<ReportSummary>>;
   /** Redacted generated body for inline preview/editing (renderer-safe). */
   readContent(reportId: string): Promise<Result<ReportContent>>;
+  /** Persist an edited Markdown body to the report's local file. */
+  saveContent(reportId: string, body: string): Promise<Result<ReportContent>>;
   approve(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   archive(reportId: string, actor: string): Promise<Result<ReportSummary>>;
   /** Enumerate persisted reports (newest first). */
@@ -189,6 +242,8 @@ export interface GenerateReportInput {
   readonly budgetUsd?: number;
   /** Active S-500 model profile id; routes generation to the real model. */
   readonly modelId?: string;
+  /** Target period for the report. Absent = current period (manual schedule). */
+  readonly period?: ReportPeriod;
 }
 
 export interface ReportsModuleContract {

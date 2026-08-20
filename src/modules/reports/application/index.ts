@@ -12,18 +12,22 @@ import type {
   ReportCountsByKind,
   ReportDefinition,
   ReportDocument,
+  ReportPeriod,
   ReportRun,
   ReportStore,
   ReportsApplication,
   ReportSummary,
   ReportContextPort,
+  ReportContentStore,
   ReportGenerationPort,
 } from "../contracts.ts";
+import { periodStartDate } from "../period.ts";
 
 export interface ReportsApplicationOptions {
   readonly store: ReportStore;
   readonly context: ReportContextPort;
   readonly generation: ReportGenerationPort;
+  readonly content?: ReportContentStore;
   readonly definitions?: readonly ReportDefinition[];
   readonly now?: () => Date;
   readonly createId?: (prefix: string) => string;
@@ -37,6 +41,18 @@ function safeActor(actor: string): string {
   if (!/^[A-Za-z0-9._:-]{1,120}$/.test(value))
     throw new TypeError("actor is invalid");
   return value;
+}
+
+/**
+ * Local-time anchor inside the target period (midday of the period's start
+ * day). Using it as `generatedAt` makes the persisted report archive to the
+ * selected day/week/month instead of "now". Null when the key is malformed.
+ */
+function periodAnchorDate(period: ReportPeriod): Date | null {
+  const start = periodStartDate(period.granularity, period.key);
+  if (!start) return null;
+  start.setHours(12, 0, 0, 0);
+  return start;
 }
 
 function definitionOf(
@@ -54,6 +70,35 @@ export function createReportsApplication(
   const definitions = options.definitions ?? BUILTIN_REPORT_DEFINITIONS;
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? defaultId;
+  const memoryContent = new Map<string, string>();
+  const content: ReportContentStore = options.content ?? {
+    async create(document, body) {
+      const file = `${document.reportId.replace(/[^A-Za-z0-9_-]/g, "-")}.md`;
+      memoryContent.set(file, body);
+      return file;
+    },
+    async read(file) {
+      const body = memoryContent.get(file);
+      if (body === undefined) throw new Error("report content not found");
+      return body;
+    },
+    async replace(document, body) {
+      const file = `${document.reportId.replace(/[^A-Za-z0-9_-]/g, "-")}-${crypto.randomUUID()}.md`;
+      memoryContent.set(file, body);
+      return file;
+    },
+  };
+
+  const bodyFor = async (document: ReportDocument): Promise<string> => {
+    if (document.contentFile) return content.read(document.contentFile);
+    if (document.body === undefined) throw new Error("report content missing");
+    // Legacy reports.v1.json compatibility: first successful read creates the
+    // Markdown file, then atomically updates metadata without the inline body.
+    const contentFile = await content.create(document, document.body);
+    const { body: _legacyBody, ...metadata } = document;
+    await options.store.saveDocument({ ...metadata, contentFile });
+    return document.body;
+  };
 
   const get = async (reportId: string): Promise<Result<ReportSummary>> => {
     const document = await options.store.getDocument(reportId);
@@ -75,14 +120,18 @@ export function createReportsApplication(
       (item) => item.definitionId === document.definitionId,
     );
     if (!definition) return err("errors.reports.notFound");
+    let body: string;
+    try {
+      body = await bodyFor(document);
+    } catch {
+      return err("errors.reports.contentReadFailed");
+    }
     return ok({
       reportId: document.reportId,
       definitionId: document.definitionId,
       kind: definition.kind,
       title: document.title,
-      // `body` was redacted by `safeReportText` at write time; it is generated
-      // report content, never raw sessions/paths/secrets.
-      body: document.body,
+      body,
       generatedAt: document.generatedAt,
     });
   };
@@ -111,14 +160,18 @@ export function createReportsApplication(
       definitionId: definition.definitionId,
       status: "draft",
       title: definition.title,
-      body: "Draft awaiting report generation.",
       generatedAt: startedAt,
       templateVersion: definition.template.version,
       evidence: [],
       assets: [],
     };
-    await options.store.saveDocument(document);
-    return ok(toReportSummary(document, definition));
+    const contentFile = await content.create(
+      document,
+      "Draft awaiting report generation.",
+    );
+    const persisted = { ...document, contentFile };
+    await options.store.saveDocument(persisted);
+    return ok(toReportSummary(persisted, definition));
   };
 
   const generate = async (
@@ -137,7 +190,10 @@ export function createReportsApplication(
     await options.store.createRun(run);
     let context;
     try {
-      context = await options.context.collect({ definition });
+      context = await options.context.collect({
+        definition,
+        period: input.period,
+      });
     } catch {
       await options.store.updateRun({
         ...run,
@@ -147,10 +203,7 @@ export function createReportsApplication(
         retryable: true,
         evidence: [],
       });
-      const previous = await options.store.latest(definition.definitionId);
-      return previous
-        ? ok(toReportSummary(previous, definition))
-        : err("errors.reports.contextFailed");
+      return err("errors.reports.contextFailed");
     }
     const result = await options.generation.generate({
       definition,
@@ -169,10 +222,7 @@ export function createReportsApplication(
     };
     await options.store.updateRun(finalRun);
     if (result.status === "failed" || result.status === "budget-exceeded") {
-      const previous = await options.store.latest(definition.definitionId);
-      return previous
-        ? ok(toReportSummary(previous, definition))
-        : err(result.errorCode ?? "errors.reports.generationFailed");
+      return err(result.errorCode ?? "errors.reports.generationFailed");
     }
     let body: string;
     try {
@@ -184,20 +234,60 @@ export function createReportsApplication(
       body =
         "Offline report fallback: generated content was withheld by the privacy policy.";
     }
+    const generatedAt = input.period
+      ? (periodAnchorDate(input.period) ?? new Date(finishedAt)).toISOString()
+      : finishedAt;
     const document: ReportDocument = {
       reportId: createId("report"),
       runId: run.runId,
       definitionId: definition.definitionId,
       status: "draft",
       title: definition.title,
-      body,
-      generatedAt: finishedAt,
+      generatedAt,
       templateVersion: definition.template.version,
       evidence: context.evidence,
       assets: context.assets ?? [],
     };
-    await options.store.saveDocument(document);
-    return ok(toReportSummary(document, definition));
+    const contentFile = await content.create(document, body);
+    const persisted = { ...document, contentFile };
+    await options.store.saveDocument(persisted);
+    return ok(toReportSummary(persisted, definition));
+  };
+
+  const saveContent = async (
+    reportId: string,
+    body: string,
+  ): Promise<Result<ReportContent>> => {
+    if (
+      body.includes("\0") ||
+      new TextEncoder().encode(body).byteLength > 2 * 1024 * 1024
+    )
+      return err("errors.reports.invalidContent");
+    const document = await options.store.getDocument(reportId);
+    if (!document) return err("errors.reports.notFound");
+    const definition = definitions.find(
+      (item) => item.definitionId === document.definitionId,
+    );
+    if (!definition) return err("errors.reports.notFound");
+    try {
+      const contentFile = document.contentFile
+        ? await content.replace(document, body)
+        : await content.create(document, body);
+      const { body: _legacyBody, ...metadata } = document;
+      // The new Markdown revision is durable before the metadata reference is
+      // switched, so readers see either the complete old or complete new file.
+      await options.store.saveDocument({ ...metadata, contentFile });
+      return ok({
+        reportId,
+        definitionId: document.definitionId,
+        kind: definition.kind,
+        title: document.title,
+        body,
+        generatedAt: document.generatedAt,
+      });
+    } catch {
+      return err("errors.reports.contentWriteFailed");
+    }
   };
 
   const transition = async (
@@ -229,6 +319,20 @@ export function createReportsApplication(
   const list = async (): Promise<Result<readonly ReportSummary[]>> => {
     try {
       const documents = await options.store.listDocuments();
+      // Opening the reports page should make the whole archive portable, not
+      // only reports opened individually. Migrate sequentially because the
+      // metadata store uses read-modify-write; concurrent migrations could
+      // otherwise overwrite one another. Each row is best-effort so one bad
+      // legacy record never blanks the report list.
+      for (const document of documents) {
+        if (!document.contentFile && document.body !== undefined) {
+          try {
+            await bodyFor(document);
+          } catch {
+            // The original metadata remains readable/listable for retry later.
+          }
+        }
+      }
       return ok(
         documents.flatMap((document) => {
           const definition = definitions.find(
@@ -284,6 +388,7 @@ export function createReportsApplication(
     generate,
     get,
     readContent,
+    saveContent,
     approve: (id, actor) => transition(id, actor, "approved"),
     archive: (id, actor) => transition(id, actor, "archived"),
     list,
