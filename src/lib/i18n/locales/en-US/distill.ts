@@ -213,5 +213,5 @@ export const distill = {
   },
   anotherHistoryResults: "Another {count} historical results · View",
   noModelHint:
-    "No AI model is configured. Add a model with an API key in Settings → Models (or set the ANTHROPIC_API_KEY environment variable) — otherwise distillation cannot produce a real result.",
+    "No AI model is configured. Add a model with an API key in Settings → Models — otherwise distillation cannot produce a real result.",
 } as const;

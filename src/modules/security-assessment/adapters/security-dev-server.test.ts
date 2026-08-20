@@ -266,7 +266,7 @@ test("quick global scan completes and persists a history entry with a report", a
 test("dev automatic scans stay quick when disabled and become full only when enabled", async () => {
   const { home } = await fixture();
   const disabledRequests: unknown[] = [];
-  const disabled = createDevSecurityScannerService({
+  const disabled = await createDevSecurityScannerService({
     homeDirectory: home,
     scanner: stubScanner(disabledRequests),
     persistence: memoryPersistence(),
@@ -277,7 +277,7 @@ test("dev automatic scans stay quick when disabled and become full only when ena
   assert.equal("model" in (disabledRequests[0] as object), false);
 
   const enabledRequests: unknown[] = [];
-  const enabled = createDevSecurityScannerService({
+  const enabled = await createDevSecurityScannerService({
     homeDirectory: home,
     scanner: stubScanner(enabledRequests),
     persistence: memoryPersistence([], configuredModel),

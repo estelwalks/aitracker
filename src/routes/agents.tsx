@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
+import { getSecuritySkillVerdicts } from "../modules/security-assessment/query/agent-verdicts";
 import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
@@ -14,11 +15,12 @@ export const Route = createFileRoute("/agents")({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }) => {
-    const [data, usage] = await Promise.all([
+    const [data, usage, securityVerdicts] = await Promise.all([
       getSkillWorkspace(),
       getAgentUsageOverview({ data: { locale: deps.locale } }),
+      getSecuritySkillVerdicts(),
     ]);
-    return { ...data, usage, locale: deps.locale };
+    return { ...data, usage, securityVerdicts, locale: deps.locale };
   },
   staleTime: 30_000,
   gcTime: 5 * 60_000,

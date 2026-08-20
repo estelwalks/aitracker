@@ -7,7 +7,7 @@ export const nav = {
   distill: "蒸馏工作台",
   reports: "日报周报",
   memoryHub: "记忆",
-  guard: "安全与防御",
+  guard: "安全检测",
   tracker: "燃烧榜",
   skillHub: "Skill 管理",
   market: "安全市场",

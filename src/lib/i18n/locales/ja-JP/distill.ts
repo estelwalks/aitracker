@@ -211,5 +211,5 @@ export const distill = {
   },
   anotherHistoryResults: "他 {count} 件の履歴結果 · 表示",
   noModelHint:
-    "AI モデルが設定されていません。「設定 → モデル」で API キー付きモデルを追加（または ANTHROPIC_API_KEY 環境変数を設定）しないと、蒸留で実際の結果を生成できません。",
+    "AI モデルが設定されていません。「設定 → モデル」で API キー付きモデルを追加しないと、蒸留で実際の結果を生成できません。",
 } as const;

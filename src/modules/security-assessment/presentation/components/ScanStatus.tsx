@@ -5,7 +5,6 @@ import {
   Layers,
   Loader2,
   ShieldCheck,
-  ShieldOff,
   ShieldX,
 } from "lucide-react";
 import { useState } from "react";
@@ -17,7 +16,6 @@ import {
   isScanActive,
   relativeTimeParts,
   type SecurityRiskKind,
-  type SecurityRuntimeCapabilityView,
   type SecurityScanStateView,
   type SecurityTotals,
 } from "../security-view";
@@ -76,7 +74,6 @@ export function ScanStatus({
   scanCount,
   dimensions,
   latestFinishedAt,
-  runtime,
   riskKinds,
   onGo,
 }: {
@@ -85,7 +82,6 @@ export function ScanStatus({
   scanCount: number;
   dimensions: number;
   latestFinishedAt?: string | null;
-  runtime: SecurityRuntimeCapabilityView | null;
   riskKinds: readonly SecurityRiskKind[];
   onGo: (key: ScanStatusNav) => void;
 }) {
@@ -95,12 +91,9 @@ export function ScanStatus({
   const unsafe = totals.warn + totals.danger + totals.unknown + totals.failed;
   const settled =
     state.progress.completed + state.progress.failed + state.progress.skipped;
-  const detectionOnly =
-    runtime?.activeDefense === false &&
-    runtime?.capability === "detection-only";
 
   return (
-    <section className="overflow-hidden rounded-2xl bg-card shadow-[var(--elev-1)]">
+    <section className="overflow-hidden rounded-xl bg-card">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 pt-4">
         <h2 className="text-[13px] font-semibold tracking-tight">
           {t("security.center.status.title")}
@@ -194,12 +187,6 @@ export function ScanStatus({
           <span className="min-w-0 flex-1 truncate">
             {t("security.center.status.dimensionsFooter", { dimensions })}
           </span>
-          {detectionOnly && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[10px] text-muted-foreground">
-              <ShieldOff className="size-3" strokeWidth={2} />
-              {t("security.center.status.detectionOnly")}
-            </span>
-          )}
           <ChevronDown
             className={`size-4 shrink-0 transition-transform ${
               dimsOpen ? "rotate-180" : ""
@@ -249,8 +236,7 @@ function Cell({
   color?: string;
   onClick?: () => void;
 }) {
-  const base =
-    "rounded-lg bg-surface px-4 py-3.5 text-left ring-1 ring-border/50";
+  const base = "rounded-xl bg-surface px-4 py-3.5 text-left";
   const inner = (
     <>
       <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">

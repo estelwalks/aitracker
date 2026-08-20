@@ -10,6 +10,7 @@ import {
 import { bigintToSafeNumber } from "../../../platform/database/infrastructure/node-sqlite-database.server.ts";
 import {
   effectiveProtocol,
+  defaultAuth,
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
   toModelProfileView,
@@ -153,6 +154,7 @@ interface ProfileRow {
   readonly name: string;
   readonly mode: "official" | "custom";
   readonly protocol: ProfileProtocol;
+  readonly auth: "x-api-key" | "bearer" | null;
   readonly endpoint: string | null;
   readonly model: string | null;
   readonly secret_id: string | null;
@@ -167,6 +169,7 @@ function readProfileRow(row: Readonly<Record<string, unknown>>): ProfileRow {
     typeof row.name !== "string" ||
     (row.mode !== "official" && row.mode !== "custom") ||
     (row.protocol !== "openai" && row.protocol !== "anthropic") ||
+    (row.auth !== null && row.auth !== "x-api-key" && row.auth !== "bearer") ||
     (row.endpoint !== null && typeof row.endpoint !== "string") ||
     (row.model !== null && typeof row.model !== "string") ||
     (row.secret_id !== null && typeof row.secret_id !== "string")
@@ -180,9 +183,14 @@ function profileWithoutSecret(row: ProfileRow): ModelProfile {
     id: row.profile_id,
     name: row.name,
     mode: row.mode,
-    protocol: row.protocol,
-    ...(row.endpoint ? { endpoint: row.endpoint } : {}),
-    ...(row.model ? { model: row.model } : {}),
+    protocol: row.mode === "official" ? "openai" : row.protocol,
+    ...(row.auth ? { auth: row.auth } : {}),
+    ...(row.mode === "official"
+      ? { endpoint: OFFICIAL_ENDPOINT, model: OFFICIAL_MODEL }
+      : {
+          ...(row.endpoint ? { endpoint: row.endpoint } : {}),
+          ...(row.model ? { model: row.model } : {}),
+        }),
     createdAt: new Date(safeNumber(row.created_at_ms)).toISOString(),
     updatedAt: new Date(safeNumber(row.updated_at_ms)).toISOString(),
   };
@@ -196,7 +204,7 @@ function toSafeView(row: ProfileRow): ModelProfileView {
   };
 }
 
-const PROFILE_COLUMNS = `profile_id, name, mode, protocol, endpoint, model, secret_id,
+const PROFILE_COLUMNS = `profile_id, name, mode, protocol, auth, endpoint, model, secret_id,
   is_active, created_at_ms, updated_at_ms`;
 
 export interface SqliteModelProfileRepositoryOptions {
@@ -232,26 +240,34 @@ export function createSqliteModelProfileRepository(
     return row ? readProfileRow(row) : undefined;
   }
 
+  async function readFullProfile(
+    id: string,
+  ): Promise<ModelProfile | undefined> {
+    const row = getRow(id);
+    if (!row) return undefined;
+    const profile = profileWithoutSecret(row);
+    if (!row.secret_id) return profile;
+    const encrypted = secrets.getEncrypted(row.secret_id);
+    if (!encrypted) return profile;
+    const apiKey = await options.secretCodec.decrypt(encrypted);
+    return { ...profile, ...(apiKey ? { apiKey } : {}) };
+  }
+
   return {
     async listViews() {
       return listRows().map(toSafeView);
     },
     async getActiveView() {
       const rows = listRows();
-      const row =
-        rows.find((candidate) => safeNumber(candidate.is_active) === 1) ??
-        rows[0];
+      const row = rows.find(
+        (candidate) =>
+          safeNumber(candidate.is_active) === 1 &&
+          (candidate.mode !== "official" || candidate.secret_id !== null),
+      );
       return row ? toSafeView(row) : null;
     },
     async getProfileForExecution(id) {
-      const row = getRow(id);
-      if (!row) return undefined;
-      const profile = profileWithoutSecret(row);
-      if (!row.secret_id) return profile;
-      const encrypted = secrets.getEncrypted(row.secret_id);
-      if (!encrypted) return profile;
-      const apiKey = await options.secretCodec.decrypt(encrypted);
-      return { ...profile, ...(apiKey ? { apiKey } : {}) };
+      return readFullProfile(id);
     },
     async upsert(input) {
       const isUpdate = input.id !== undefined;
@@ -260,12 +276,20 @@ export function createSqliteModelProfileRepository(
       const existing = input.id ? getRow(input.id) : undefined;
       if (isUpdate && !existing)
         throw new ModelProfileError("errors.modelProfile.notFound");
+      if (
+        (input.mode === "custom" || input.mode === "official") &&
+        !input.apiKey?.trim() &&
+        !existing?.secret_id
+      ) {
+        throw new ModelProfileError("errors.modelProfile.apiKeyRequired");
+      }
       const profileId = existing?.profile_id ?? `m-${randomUUID()}`;
       const timestamp = now();
       assertEpoch(timestamp);
       const createdAtMs = existing
         ? safeNumber(existing.created_at_ms)
         : timestamp;
+      const isActive = existing && safeNumber(existing.is_active) === 1 ? 1 : 0;
       const name = (
         input.name?.trim() ||
         (input.mode === "official"
@@ -291,17 +315,12 @@ export function createSqliteModelProfileRepository(
         }
         database
           .prepare(
-            "UPDATE model_profiles SET is_active = 0 WHERE is_active = 1",
-          )
-          .run();
-        database
-          .prepare(
             `INSERT INTO model_profiles
-          (profile_id, name, mode, protocol, endpoint, model, secret_id, is_active, created_at_ms, updated_at_ms)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            (profile_id, name, mode, protocol, auth, endpoint, model, secret_id, is_active, created_at_ms, updated_at_ms)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (profile_id) DO UPDATE SET name=excluded.name, mode=excluded.mode,
-            protocol=excluded.protocol, endpoint=excluded.endpoint, model=excluded.model,
-            secret_id=excluded.secret_id, is_active=1, updated_at_ms=excluded.updated_at_ms`,
+            protocol=excluded.protocol, auth=excluded.auth, endpoint=excluded.endpoint, model=excluded.model,
+            secret_id=excluded.secret_id, is_active=excluded.is_active, updated_at_ms=excluded.updated_at_ms`,
           )
           .run(
             profileId,
@@ -309,22 +328,29 @@ export function createSqliteModelProfileRepository(
             input.mode,
             protocol,
             input.mode === "official"
+              ? "bearer"
+              : (input.auth ?? existing?.auth ?? defaultAuth(protocol)),
+            input.mode === "official"
               ? OFFICIAL_ENDPOINT
               : input.endpoint?.trim() || null,
             input.mode === "official"
               ? OFFICIAL_MODEL
               : input.model?.trim() || null,
             secretId,
+            isActive,
             BigInt(createdAtMs),
             BigInt(timestamp),
           );
       });
+      if (input.mode === "official" && existing?.secret_id)
+        secrets.removeIfUnreferenced(existing.secret_id);
       return toSafeView(getRow(profileId)!);
     },
     async remove(id) {
       const existing = getRow(id);
       if (!existing)
         return { ok: false, errorCode: "errors.modelProfile.notFound" };
+      const wasActive = safeNumber(existing.is_active) === 1;
       withTransaction(database, () => {
         database
           .prepare("DELETE FROM model_profiles WHERE profile_id = ?")
@@ -334,7 +360,7 @@ export function createSqliteModelProfileRepository(
             "SELECT profile_id FROM model_profiles ORDER BY created_at_ms, profile_id LIMIT 1",
           )
           .get();
-        if (next && typeof next.profile_id === "string") {
+        if (wasActive && next && typeof next.profile_id === "string") {
           database
             .prepare(
               "UPDATE model_profiles SET is_active = 1 WHERE profile_id = ?",
@@ -347,8 +373,11 @@ export function createSqliteModelProfileRepository(
       return { ok: true };
     },
     async setActive(id) {
-      if (!getRow(id))
+      const target = getRow(id);
+      if (!target)
         return { ok: false, errorCode: "errors.modelProfile.notFound" };
+      if (target.mode === "official" && target.secret_id === null)
+        return { ok: false, errorCode: "errors.modelProfile.apiKeyRequired" };
       withTransaction(database, () => {
         database
           .prepare(
@@ -366,12 +395,36 @@ export function createSqliteModelProfileRepository(
     async test(input) {
       if (!options.testProfile)
         return { ok: false, errorCode: "errors.modelProfile.testFailed" };
-      return options.testProfile(input);
+      return options.testProfile(await resolveInputWithStoredSecret(input));
     },
     async listModels(input) {
       if (!options.listModels)
         return { ok: false, errorCode: "errors.modelProfile.listFailed" };
-      return options.listModels(input);
+      return options.listModels(await resolveInputWithStoredSecret(input));
     },
   };
+
+  async function resolveInputWithStoredSecret(
+    input: ModelProfileInput,
+  ): Promise<ModelProfileInput> {
+    if (!input.id || input.apiKey?.trim()) return input;
+    const stored = await readFullProfile(input.id);
+    if (!stored) return input;
+    return {
+      ...input,
+      protocol: input.protocol ?? stored.protocol,
+      ...(input.endpoint?.trim()
+        ? {}
+        : stored.endpoint
+          ? { endpoint: stored.endpoint }
+          : {}),
+      ...(input.model?.trim()
+        ? {}
+        : stored.model
+          ? { model: stored.model }
+          : {}),
+      auth: input.auth ?? stored.auth ?? defaultAuth(stored.protocol),
+      ...(stored.apiKey ? { apiKey: stored.apiKey } : {}),
+    };
+  }
 }

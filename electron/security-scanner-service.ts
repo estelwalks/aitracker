@@ -110,7 +110,7 @@ interface CollectedSkill {
 const DEFAULT_SCAN_SCHEDULE: SecurityScanSchedule = {
   enabled: true,
   cycle: "daily",
-  time: "03:00",
+  time: "10:00",
   scope: "all",
   agents: [],
   dir: null,

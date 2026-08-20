@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Loader2, RefreshCw, Trash2, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -12,33 +12,40 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../../../components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../../../components/ui/dialog";
 import { StatusBadge, TTButton } from "../../../components/tt";
-import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
+import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import {
   deleteModelProfile,
   listModelProfiles,
   listRemoteModels,
+  OFFICIAL_ENDPOINT,
+  OFFICIAL_MODEL,
+  OFFICIAL_MODEL_DISPLAY_NAME,
+  protocolMeta,
   setActiveModelProfile,
   testModelProfile,
   upsertModelProfile,
-  OFFICIAL_ENDPOINT,
-  OFFICIAL_MODEL,
-  defaultAuth,
-  protocolMeta,
   type ModelProfileInput,
   type ModelProfileView,
-  type ProfileAuth,
+  type ProfileMode,
 } from "../../ai-orchestration/index.ts";
 
 interface FormState {
   readonly id: string | null;
   readonly name: string;
-  readonly mode: "official" | "custom";
+  readonly mode: ProfileMode;
   readonly protocol: "openai" | "anthropic";
-  readonly auth: ProfileAuth;
   readonly apiKey: string;
+  readonly storedApiKey: boolean;
   readonly endpoint: string;
   readonly model: string;
   readonly models: string[];
@@ -49,10 +56,10 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   id: null,
   name: "",
-  mode: "official",
+  mode: "custom",
   protocol: "openai",
-  auth: "x-api-key",
   apiKey: "",
+  storedApiKey: false,
   endpoint: "",
   model: "",
   models: [],
@@ -60,72 +67,91 @@ const EMPTY_FORM: FormState = {
   listMsg: "",
 };
 
-const AUTOSAVE_DEBOUNCE_MS = 900;
+const OFFICIAL_ENTRY_ID = "__official_model__";
 
 function toInput(form: FormState): ModelProfileInput {
   return {
     ...(form.id ? { id: form.id } : {}),
-    ...(form.name.trim() ? { name: form.name.trim() } : {}),
+    ...(form.mode === "custom" && form.name.trim()
+      ? { name: form.name.trim() }
+      : {}),
     mode: form.mode,
     ...(form.mode === "custom" ? { protocol: form.protocol } : {}),
-    ...(form.mode === "custom" ? { auth: form.auth } : {}),
     ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
-    ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
-    ...(form.model.trim() ? { model: form.model.trim() } : {}),
+    ...(form.mode === "custom" && form.endpoint.trim()
+      ? { endpoint: form.endpoint.trim() }
+      : {}),
+    ...(form.mode === "custom" && form.model.trim()
+      ? { model: form.model.trim() }
+      : {}),
   };
 }
 
-function fromProfile(profile: ModelProfileView | null): FormState {
-  return profile
-    ? {
-        id: profile.id,
-        name: profile.name,
-        mode: profile.mode,
-        protocol: profile.protocol,
-        auth: profile.auth,
-        apiKey: "",
-        endpoint: profile.endpoint ?? "",
-        model: profile.model ?? "",
-        models: [],
-        listing: false,
-        listMsg: "",
-      }
-    : EMPTY_FORM;
+function fromProfile(profile: ModelProfileView): FormState {
+  return {
+    id: profile.id,
+    name: profile.name,
+    mode: "custom",
+    protocol: profile.protocol,
+    apiKey: "",
+    storedApiKey: profile.apiKeyMasked,
+    endpoint: profile.endpoint ?? "",
+    model: profile.model ?? "",
+    models: [],
+    listing: false,
+    listMsg: "",
+  };
 }
 
-/**
- * S-500 「通用 AI 模型 Profile」设置区块：多 Profile 列表（激活 / 删除）、
- * 新增 / 编辑表单与「测试连接」。所有读写走 server fns；API Key 只存在
- * 服务端 SQLite 凭据仓库，这里的表单值仅用于提交与测试，不在浏览器持久化。
- */
+function fromOfficialProfile(profile: ModelProfileView): FormState {
+  return {
+    id: profile.id === OFFICIAL_ENTRY_ID ? null : profile.id,
+    name: profile.name,
+    mode: "official",
+    protocol: "openai",
+    apiKey: "",
+    storedApiKey: profile.apiKeyMasked,
+    endpoint: OFFICIAL_ENDPOINT,
+    model: OFFICIAL_MODEL,
+    models: [],
+    listing: false,
+    listMsg: "",
+  };
+}
+
+function officialEntry(name: string): ModelProfileView {
+  return {
+    id: OFFICIAL_ENTRY_ID,
+    name,
+    mode: "official",
+    protocol: "openai",
+    apiKeyMasked: false,
+    endpoint: OFFICIAL_ENDPOINT,
+    model: OFFICIAL_MODEL,
+    auth: "bearer",
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
 export function ModelProfilesSection() {
   const { t } = useI18n();
   const [profiles, setProfiles] = useState<ModelProfileView[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [autoSaveState, setAutoSaveState] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<ModelProfileView | null>(
     null,
   );
-  const lastSavedSnapshotRef = useRef<string>("");
 
   const load = async () => {
     try {
       const result = await listModelProfiles();
       setProfiles([...result.profiles]);
       setActiveId(result.activeProfileId);
-      const activeProfile =
-        result.profiles.find((profile) => profile.id === result.activeProfileId) ??
-        result.profiles[0] ??
-        null;
-      lastSavedSnapshotRef.current = activeProfile
-        ? JSON.stringify(toInput(fromProfile(activeProfile)))
-        : "";
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
@@ -139,91 +165,46 @@ export function ModelProfilesSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const keyOk =
-    form.apiKey.trim().length === 0 || form.apiKey.trim().length >= 8;
-  const formValid =
-    keyOk &&
-    (form.mode === "custom"
-      ? form.name.trim().length > 0 && form.model.trim().length > 0
-      : true) &&
-    (form.id != null || form.apiKey.trim().length >= 8);
-
-  const activeView =
-    profiles.find((profile) => profile.id === activeId) ?? null;
-
-  const formSnapshot = JSON.stringify(toInput(form));
-
-  const describeProfile = (view: ModelProfileView | null): string => {
-    if (!view) return "—";
-    if (view.mode === "official") {
-      return `${t("settings.modelProfiles.officialDefault")} · ${OFFICIAL_MODEL}`;
-    }
-    const protocolLabel =
-      view.protocol === "anthropic"
-        ? t("settings.modelProfiles.protocolAnthropic")
-        : t("settings.modelProfiles.protocolOpenai");
-    return `${protocolLabel} · ${view.model ?? "—"}`;
+  const official = useMemo(
+    () =>
+      profiles.find((profile) => profile.mode === "official") ??
+      officialEntry(t("settings.modelProfiles.modeOfficial")),
+    [profiles, t],
+  );
+  const displayProfiles = useMemo(
+    () => [
+      official,
+      ...profiles.filter((profile) => profile.mode === "custom"),
+    ],
+    [official, profiles],
+  );
+  const updateForm = (patch: Partial<FormState>) => {
+    setForm((current) => ({ ...current, ...patch }));
   };
 
-  const canList = form.apiKey.trim() !== "" || form.id != null;
-
-  const loadModels = async () => {
-    if (!canList || form.listing) return;
-    setForm((current) => ({ ...current, listing: true, listMsg: "" }));
-    try {
-      const result = await listRemoteModels({
-        data: {
-          id: form.id ?? undefined,
-          mode: form.mode,
-          protocol: form.protocol,
-          auth: form.auth,
-          ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
-          ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
-        },
-      });
-      const nextModels = [...(result.models ?? [])];
-      setForm((current) => ({
-        ...current,
-        models: nextModels,
-        listing: false,
-        listMsg: result.ok
-          ? result.source === "remote"
-            ? t("settings.modelProfiles.listModelsDone", {
-                count: nextModels.length,
-              })
-            : t("settings.modelProfiles.listModelsFallback")
-          : "",
-        model: current.model.trim()
-          ? current.model
-          : (nextModels[0] ?? current.model),
-      }));
-      if (!result.ok && result.errorCode) {
-        toast.error(t(result.errorCode as MessageKey));
-      }
-    } catch (error) {
-      const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
-      setForm((current) => ({ ...current, listing: false }));
-    }
-  };
-
-  const startNew = () => {
-    lastSavedSnapshotRef.current = "";
-    setAutoSaveState("idle");
+  const openNew = () => {
     setForm(EMPTY_FORM);
+    setDialogOpen(true);
   };
 
   const editProfile = (profile: ModelProfileView) => {
-    lastSavedSnapshotRef.current = JSON.stringify(
-      toInput(fromProfile(profile)),
-    );
-    setAutoSaveState("idle");
+    if (profile.mode !== "custom") return;
     setForm(fromProfile(profile));
+    setDialogOpen(true);
   };
 
-  const chooseProfile = async (profile: ModelProfileView) => {
-    if (profile.id === activeId) return;
+  const openOfficial = (profile: ModelProfileView) => {
+    setForm(fromOfficialProfile(profile));
+    setDialogOpen(true);
+  };
+
+  const activateProfile = async (profile: ModelProfileView) => {
+    if (profile.mode === "official" && !profile.apiKeyMasked) {
+      openOfficial(profile);
+      return;
+    }
     try {
+      if (profile.id === activeId) return;
       const result = await setActiveModelProfile({ data: { id: profile.id } });
       if (!result.ok) {
         toast.error(
@@ -243,32 +224,49 @@ export function ModelProfilesSection() {
     }
   };
 
-  const doDelete = async () => {
-    if (!deleteTarget) return;
-    setSaving(true);
+  const formValid =
+    form.mode === "official"
+      ? form.apiKey.trim().length >= 8 || form.storedApiKey
+      : form.name.trim().length > 0 &&
+        form.model.trim().length > 0 &&
+        (form.apiKey.trim().length === 0 || form.apiKey.trim().length >= 8) &&
+        (form.id !== null || form.apiKey.trim().length >= 8);
+
+  const loadModels = async () => {
+    if (form.mode !== "custom") return;
+    if (form.listing || (form.apiKey.trim() === "" && form.id === null)) return;
+    setForm((current) => ({ ...current, listing: true, listMsg: "" }));
     try {
-      const result = await deleteModelProfile({
-        data: { id: deleteTarget.id },
+      const result = await listRemoteModels({
+        data: {
+          id: form.id ?? undefined,
+          mode: "custom",
+          protocol: form.protocol,
+          ...(form.endpoint.trim() ? { endpoint: form.endpoint.trim() } : {}),
+          ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
+        },
       });
-      if (!result.ok) {
-        toast.error(
-          result.errorCode
-            ? t(result.errorCode as MessageKey)
-            : t("common.failed"),
-        );
-        return;
+      const models = [...(result.models ?? [])];
+      setForm((current) => ({
+        ...current,
+        models,
+        listing: false,
+        listMsg: result.ok
+          ? result.source === "remote"
+            ? t("settings.modelProfiles.listModelsDone", {
+                count: models.length,
+              })
+            : t("settings.modelProfiles.listModelsFallback")
+          : "",
+        model: current.model.trim() || models[0] || current.model,
+      }));
+      if (!result.ok && result.errorCode) {
+        toast.error(t(result.errorCode as MessageKey));
       }
-      toast.success(
-        t("settings.modelProfiles.deletedToast", { name: deleteTarget.name }),
-      );
-      if (form.id === deleteTarget.id) setForm(EMPTY_FORM);
-      await load();
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
-    } finally {
-      setSaving(false);
-      setDeleteTarget(null);
+      setForm((current) => ({ ...current, listing: false }));
     }
   };
 
@@ -298,16 +296,11 @@ export function ModelProfilesSection() {
   };
 
   const doSave = async () => {
+    if (!formValid) return;
     setSaving(true);
     try {
-      const currentApiKey = form.apiKey;
       const saved = await upsertModelProfile({ data: toInput(form) });
-      const nextForm = {
-        ...fromProfile(saved),
-        apiKey: currentApiKey,
-      };
-      lastSavedSnapshotRef.current = JSON.stringify(toInput(nextForm));
-      setForm(nextForm);
+      setDialogOpen(false);
       toast.success(
         t("settings.modelProfiles.savedToast", { name: saved.name }),
       );
@@ -320,258 +313,212 @@ export function ModelProfilesSection() {
     }
   };
 
-  useEffect(() => {
-    if (loading || testing || saving || deleteTarget) return;
-    if (!formValid) return;
-    if (formSnapshot === lastSavedSnapshotRef.current) return;
-    const trimmedApiKey = form.apiKey.trim();
-    if (form.id == null && trimmedApiKey.length < 8) return;
-
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        setAutoSaveState("saving");
-        try {
-          const currentApiKey = form.apiKey;
-          const saved = await upsertModelProfile({ data: toInput(form) });
-          const nextForm = {
-            ...fromProfile(saved),
-            apiKey: currentApiKey,
-          };
-          lastSavedSnapshotRef.current = JSON.stringify(toInput(nextForm));
-          setProfiles((current) => {
-            const next = current.filter((item) => item.id !== saved.id);
-            return [...next, saved];
-          });
-          setActiveId(saved.id);
-          setForm((current) => {
-            return current.id === saved.id || current.id == null
-              ? nextForm
-              : current;
-          });
-          setAutoSaveState("saved");
-        } catch {
-          setAutoSaveState("error");
-        }
-      })();
-    }, AUTOSAVE_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    deleteTarget,
-    form,
-    form.id,
-    form.apiKey,
-    formSnapshot,
-    formValid,
-    loading,
-      saving,
-      testing,
-  ]);
-
-  useEffect(() => {
-    if (autoSaveState !== "saved" && autoSaveState !== "error") return;
-    const timer = window.setTimeout(() => setAutoSaveState("idle"), 1800);
-    return () => window.clearTimeout(timer);
-  }, [autoSaveState]);
+  const doDelete = async () => {
+    if (!deleteTarget || deleteTarget.mode === "official") return;
+    setSaving(true);
+    try {
+      const result = await deleteModelProfile({
+        data: { id: deleteTarget.id },
+      });
+      if (!result.ok) {
+        toast.error(
+          result.errorCode
+            ? t(result.errorCode as MessageKey)
+            : t("common.failed"),
+        );
+        return;
+      }
+      toast.success(
+        t("settings.modelProfiles.deletedToast", { name: deleteTarget.name }),
+      );
+      await load();
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
+    } finally {
+      setSaving(false);
+      setDeleteTarget(null);
+    }
+  };
 
   return (
     <>
-      <div className="grid gap-3 xl:grid-cols-[240px_minmax(0,1fr)]">
-        {/* 左：Profile 列表 */}
-        <div className="flex flex-col rounded-sm border border-border bg-surface-2">
-          <div className="border-b border-border px-3 py-2">
-            <span className="tt-label">
-              {t("settings.modelProfiles.count", { count: profiles.length })}
-            </span>
-          </div>
-          {loading ? (
-            <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
-              {t("common.loading")}
-            </div>
-          ) : profiles.length === 0 ? (
-            <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">
-              <div>{t("settings.modelProfiles.empty")}</div>
-              <div className="mt-1 text-[11px] text-muted-foreground/70">
-                {t("settings.modelProfiles.emptyHint")}
-              </div>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {profiles.map((profile) => {
-                const active = profile.id === activeId;
-                return (
-                  <li
-                    key={profile.id}
-                    className={`group flex items-start gap-2 px-3 py-2 text-[12px] transition-colors ${
-                      active ? "bg-accent/50" : "hover:bg-accent/30"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      title={t("settings.modelProfiles.activateTitle")}
-                      aria-pressed={active}
-                      onClick={() => void chooseProfile(profile)}
-                      className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-sm border transition-colors ${
-                        active ? "border-primary" : "border-border-strong"
-                      }`}
-                    >
-                      {active && (
-                        <span className="size-2 rounded-sm bg-primary" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => editProfile(profile)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate font-medium">
-                          {profile.name}
-                        </span>
-                        {active && (
-                          <StatusBadge tone="primary">
-                            {t("settings.modelProfiles.active")}
-                          </StatusBadge>
-                        )}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
-                        {profile.mode === "official"
-                          ? `DeepSeek · ${OFFICIAL_MODEL}`
-                          : `${t(
-                              profile.protocol === "anthropic"
-                                ? "settings.modelProfiles.protocolAnthropic"
-                                : "settings.modelProfiles.protocolOpenai",
-                            )} · ${profile.model ?? "—"}`}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground/70">
-                        {profile.apiKeyMasked
-                          ? "••••••••"
-                          : t("settings.modelProfiles.missingKey")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      title={t("settings.modelProfiles.delete")}
-                      onClick={() => setDeleteTarget(profile)}
-                      className="mt-0.5 rounded-sm p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-danger/10 hover:text-danger"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </li>
-                );
+      <section className="rounded-sm border border-border bg-surface-2">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+          <div className="min-w-0">
+            <span className="tt-label block truncate">
+              {t("settings.modelProfiles.count", {
+                count:
+                  profiles.length +
+                  (profiles.some((profile) => profile.mode === "official")
+                    ? 0
+                    : 1),
               })}
-            </ul>
-          )}
-          <div className="mt-auto border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
-            {t("settings.modelProfiles.currentActive")}：
-            <span className="tt-num text-foreground">
-              {describeProfile(activeView)}
             </span>
           </div>
+          <TTButton size="sm" variant="ghost" onClick={openNew}>
+            {t("settings.modelProfiles.add")}
+          </TTButton>
         </div>
 
-        {/* 右：新增 / 编辑表单 */}
-        <div className="flex flex-col rounded-sm border border-border bg-surface-2">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="tt-label min-w-0 truncate">
-              {form.id
-                ? t("settings.modelProfiles.formTitleEdit", {
-                    name: form.name || "—",
-                  })
-                : t("settings.modelProfiles.formTitleNew")}
-            </span>
-            <span className="tt-num text-[11px] text-muted-foreground">
-              {autoSaveState === "saving"
-                ? t("settings.status.saving")
-                : autoSaveState === "saved"
-                  ? "已自动保存"
-                  : autoSaveState === "error"
-                    ? "自动保存失败"
-                    : ""}
-            </span>
+        {loading ? (
+          <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
+            {t("common.loading")}
           </div>
-
-          <div className="@container space-y-3 p-3">
-            {/* 模式选择 */}
-            <div className="grid gap-2 @md:grid-cols-2">
-              {(
-                [
-                  {
-                    v: "official",
-                    label: t("settings.modelProfiles.modeOfficialCard"),
-                    desc: t("settings.modelProfiles.officialDesc", {
-                      endpoint: OFFICIAL_ENDPOINT,
-                      model: OFFICIAL_MODEL,
-                    }),
-                  },
-                  {
-                    v: "custom",
-                    label: t("settings.modelProfiles.modeCustomCard"),
-                    desc: t("settings.modelProfiles.modeCustomCardDesc"),
-                  },
-                ] as const
-              ).map((option) => (
-                <label
-                  key={option.v}
-                  className={`flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5 transition-colors ${
-                    form.mode === option.v
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-border-strong"
-                  }`}
+        ) : (
+          <ul className="divide-y divide-border/60">
+            {displayProfiles.map((profile) => {
+              const active =
+                profile.id === activeId &&
+                (profile.mode !== "official" || profile.apiKeyMasked);
+              const isOfficial = profile.mode === "official";
+              const endpoint = isOfficial
+                ? OFFICIAL_ENDPOINT
+                : (profile.endpoint ?? protocolMeta[profile.protocol].endpoint);
+              const model = isOfficial
+                ? OFFICIAL_MODEL_DISPLAY_NAME
+                : (profile.model ?? "—");
+              return (
+                <li
+                  key={profile.id}
+                  className={`flex items-start gap-3 px-3 py-2.5 text-[12px] transition-colors ${active ? "bg-accent/50" : "hover:bg-accent/30"}`}
                 >
-                  <input
-                    type="radio"
-                    name="ai-mode"
-                    checked={form.mode === option.v}
-                    onChange={() =>
-                      setForm((current) => ({
-                        ...current,
-                        mode: option.v,
-                        protocol:
-                          option.v === "official" ? "openai" : current.protocol,
-                      }))
-                    }
-                    className="mt-0.5 accent-[var(--color-primary)]"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-[13px]">{option.label}</span>
-                    <span className="tt-num block text-[11px] text-muted-foreground">
-                      {option.desc}
+                  <div className="min-w-0 flex-1 text-left">
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate font-medium">
+                        {isOfficial
+                          ? t("settings.modelProfiles.modeOfficial")
+                          : profile.name}
+                      </span>
+                      {active && (
+                        <StatusBadge tone="primary">
+                          {t("settings.modelProfiles.active")}
+                        </StatusBadge>
+                      )}
                     </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+                    <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+                      {endpoint} · {model}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    <TTButton
+                      size="sm"
+                      variant={active ? "primary" : "ghost"}
+                      disabled={active}
+                      onClick={() => void activateProfile(profile)}
+                    >
+                      {active
+                        ? t("settings.modelProfiles.active")
+                        : t("settings.modelProfiles.enable")}
+                    </TTButton>
+                    <TTButton
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        isOfficial
+                          ? openOfficial(profile)
+                          : editProfile(profile)
+                      }
+                    >
+                      {t("settings.modelProfiles.edit")}
+                    </TTButton>
+                    <TTButton
+                      size="sm"
+                      variant="ghost"
+                      disabled={isOfficial}
+                      title={
+                        isOfficial
+                          ? t("settings.modelProfiles.officialDeleteDisabled")
+                          : t("settings.modelProfiles.delete")
+                      }
+                      onClick={() => {
+                        if (!isOfficial) {
+                          setDeleteTarget(profile);
+                        }
+                      }}
+                    >
+                      {t("settings.modelProfiles.delete")}
+                    </TTButton>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-            {form.mode === "official" && (
-              <div>
-                <div className="tt-label mb-1">
-                  {t("settings.modelProfiles.apiKeyLabel")}{" "}
-                  <span className="text-danger">*</span>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !saving && !testing) {
+            setDialogOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {form.mode === "official"
+                ? t("settings.modelProfiles.officialFormTitle")
+                : form.id
+                  ? t("settings.modelProfiles.formTitleEdit", {
+                      name: form.name || "—",
+                    })
+                  : t("settings.modelProfiles.formTitleNew")}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {form.mode === "official" ? (
+              <>
+                <div>
+                  <div className="tt-label mb-1">
+                    {t("settings.modelProfiles.apiKeyLabel")}{" "}
+                    <span className="text-danger">*</span>
+                  </div>
+                  <input
+                    type="password"
+                    value={form.apiKey}
+                    onChange={(event) =>
+                      updateForm({ apiKey: event.target.value })
+                    }
+                    placeholder={t("settings.modelProfiles.apiKeyPlaceholder")}
+                    autoComplete="new-password"
+                    className="security-config-input"
+                  />
+                  {form.storedApiKey && (
+                    <p className="mt-1 text-[10.5px] text-muted-foreground">
+                      {t("settings.modelProfiles.apiKeyConfigured")}
+                    </p>
+                  )}
                 </div>
-                <input
-                  type="password"
-                  value={form.apiKey}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      apiKey: event.target.value,
-                    }))
-                  }
-                  placeholder={t("settings.modelProfiles.apiKeyPlaceholder")}
-                  autoComplete="new-password"
-                  className="security-config-input"
-                />
-                <p className="mt-1 text-[10.5px] text-muted-foreground">
-                  {form.id
-                    ? t("settings.modelProfiles.apiKeyConfigured")
-                    : t("settings.modelProfiles.apiKeyHint")}
-                </p>
-              </div>
-            )}
-
-            {form.mode === "custom" && (
-              <div className="space-y-3 rounded-sm border border-border bg-surface-2 p-3">
+                <dl className="space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0">
+                      {t("settings.modelProfiles.apiFormatLabel")}
+                    </dt>
+                    <dd className="text-foreground">
+                      {t("settings.modelProfiles.protocolOpenai")}
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0">
+                      {t("settings.modelProfiles.endpointLabel")}
+                    </dt>
+                    <dd className="text-foreground">{OFFICIAL_ENDPOINT}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0">
+                      {t("settings.modelProfiles.modelLabel")}
+                    </dt>
+                    <dd className="text-foreground">
+                      {OFFICIAL_MODEL_DISPLAY_NAME}
+                    </dd>
+                  </div>
+                </dl>
+              </>
+            ) : (
+              <>
                 <div>
                   <div className="tt-label mb-1">
                     {t("settings.modelProfiles.nameLabel")}{" "}
@@ -580,42 +527,30 @@ export function ModelProfilesSection() {
                   <input
                     value={form.name}
                     onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
+                      updateForm({ name: event.target.value })
                     }
                     placeholder={t("settings.modelProfiles.namePlaceholder")}
                     maxLength={64}
                     className="security-config-input"
                   />
-                  <p className="mt-1 text-[10.5px] text-muted-foreground">
-                    {t("settings.modelProfiles.nameHint")}
-                  </p>
                 </div>
 
                 <div>
                   <div className="tt-label mb-1.5">
-                    {t("settings.modelProfiles.protocolLabel")}
+                    {t("settings.modelProfiles.apiFormatLabel")}
                   </div>
-                  <div className="grid gap-2 @md:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {(["openai", "anthropic"] as const).map((protocol) => (
                       <button
                         key={protocol}
                         type="button"
                         onClick={() =>
-                          setForm((current) => ({
-                            ...current,
+                          updateForm({
                             protocol,
-                            auth: defaultAuth(protocol),
                             models: [],
-                          }))
+                          })
                         }
-                        className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${
-                          form.protocol === protocol
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:border-border-strong"
-                        }`}
+                        className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${form.protocol === protocol ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"}`}
                       >
                         <span className="block text-[12px] text-foreground">
                           {t(
@@ -636,46 +571,7 @@ export function ModelProfilesSection() {
                   </div>
                 </div>
 
-                {form.protocol === "anthropic" && (
-                  <div>
-                    <div className="tt-label mb-1.5">
-                      {t("settings.modelProfiles.authLabel")}
-                    </div>
-                    <div className="grid gap-2 @md:grid-cols-2">
-                      {(["x-api-key", "bearer"] as const).map((auth) => (
-                        <button
-                          key={auth}
-                          type="button"
-                          onClick={() =>
-                            setForm((current) => ({ ...current, auth }))
-                          }
-                          className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${
-                            form.auth === auth
-                              ? "border-primary bg-primary/10"
-                              : "border-border hover:border-border-strong"
-                          }`}
-                        >
-                          <span className="block text-[12px] text-foreground">
-                            {t(
-                              auth === "x-api-key"
-                                ? "settings.modelProfiles.authXApiKey"
-                                : "settings.modelProfiles.authBearer",
-                            )}
-                          </span>
-                          <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                            {t(
-                              auth === "x-api-key"
-                                ? "settings.modelProfiles.authXApiKeyHint"
-                                : "settings.modelProfiles.authBearerHint",
-                            )}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid gap-3 @md:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="min-w-0">
                     <div className="tt-label mb-1">
                       {t("settings.modelProfiles.apiKeyLabel")}
@@ -684,10 +580,7 @@ export function ModelProfilesSection() {
                       type="password"
                       value={form.apiKey}
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          apiKey: event.target.value,
-                        }))
+                        updateForm({ apiKey: event.target.value })
                       }
                       placeholder={t(
                         "settings.modelProfiles.apiKeyPlaceholder",
@@ -695,6 +588,11 @@ export function ModelProfilesSection() {
                       autoComplete="new-password"
                       className="security-config-input"
                     />
+                    {form.storedApiKey && (
+                      <p className="mt-1 text-[10.5px] text-muted-foreground">
+                        {t("settings.modelProfiles.apiKeyConfigured")}
+                      </p>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="tt-label mb-1">
@@ -703,10 +601,7 @@ export function ModelProfilesSection() {
                     <input
                       value={form.endpoint}
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          endpoint: event.target.value,
-                        }))
+                        updateForm({ endpoint: event.target.value })
                       }
                       placeholder={protocolMeta[form.protocol].endpoint}
                       type="url"
@@ -723,7 +618,10 @@ export function ModelProfilesSection() {
                     </span>
                     <button
                       type="button"
-                      disabled={!canList || form.listing}
+                      disabled={
+                        form.listing ||
+                        (form.apiKey.trim() === "" && form.id === null)
+                      }
                       onClick={() => void loadModels()}
                       className="tt-num flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
                     >
@@ -738,16 +636,13 @@ export function ModelProfilesSection() {
                     </button>
                   </div>
                   {form.models.length > 0 ? (
-                    <div className="grid gap-2 @md:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <select
                         value={
                           form.models.includes(form.model) ? form.model : ""
                         }
                         onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            model: event.target.value,
-                          }))
+                          updateForm({ model: event.target.value })
                         }
                         className="security-config-input"
                       >
@@ -763,10 +658,7 @@ export function ModelProfilesSection() {
                       <input
                         value={form.model}
                         onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            model: event.target.value,
-                          }))
+                          updateForm({ model: event.target.value })
                         }
                         placeholder={t("settings.modelProfiles.manualModel")}
                         maxLength={120}
@@ -777,10 +669,7 @@ export function ModelProfilesSection() {
                     <input
                       value={form.model}
                       onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          model: event.target.value,
-                        }))
+                        updateForm({ model: event.target.value })
                       }
                       placeholder={t("settings.modelProfiles.modelFetchHint", {
                         model: OFFICIAL_MODEL,
@@ -805,34 +694,20 @@ export function ModelProfilesSection() {
                       {protocolMeta[form.protocol].path}
                     </dd>
                   </div>
-                  <div className="flex gap-2">
-                    <dt className="w-16 shrink-0">
-                      {t("settings.modelProfiles.authMethod")}
-                    </dt>
-                    <dd className="truncate text-foreground">
-                      {form.protocol === "openai"
-                        ? "Authorization: Bearer <API Key>"
-                        : form.auth === "bearer"
-                          ? "Authorization: Bearer <API Key> · anthropic-version: 2023-06-01"
-                          : protocolMeta[form.protocol].auth}
-                    </dd>
-                  </div>
                 </dl>
-              </div>
+              </>
             )}
           </div>
 
-          <div className="mt-auto flex flex-wrap justify-end gap-2 border-t border-border px-3 py-2">
-            {form.id && (
-              <TTButton
-                size="sm"
-                variant="ghost"
-                onClick={startNew}
-                disabled={saving || testing}
-              >
-                {t("settings.modelProfiles.cancelEdit")}
-              </TTButton>
-            )}
+          <DialogFooter className="mt-2 flex-wrap gap-2">
+            <TTButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={saving || testing}
+            >
+              {t("common.cancel")}
+            </TTButton>
             <TTButton
               size="sm"
               onClick={() => void doTest()}
@@ -851,16 +726,14 @@ export function ModelProfilesSection() {
               size="sm"
               variant="primary"
               onClick={() => void doSave()}
-              disabled={!formValid || saving || testing}
+              disabled={!formValid || saving}
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
-              {form.id
-                ? t("settings.modelProfiles.saveEdit")
-                : t("settings.modelProfiles.saveNew")}
+              {t("common.save")}
             </TTButton>
-          </div>
-        </div>
-      </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={deleteTarget != null}

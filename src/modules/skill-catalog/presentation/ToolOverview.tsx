@@ -10,7 +10,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChevronDown, ChevronRight, Info } from "lucide-react";
+import {
+  Boxes,
+  ChevronDown,
+  ChevronRight,
+  Coins,
+  Info,
+  MessagesSquare,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
 import { InsightCard } from "../../insights/page/presentation/insight-card";
@@ -19,16 +28,212 @@ import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
 import type { LocalUsageToolCategory } from "../../../lib/local-usage/types";
 import { cn } from "../../../lib/utils";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated";
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import { getAgentUsageOverview } from "../usage-overview-query";
+import type { SkillSnapshot } from "../query";
+import type { SecuritySkillVerdictReadModel } from "../../security-assessment/query/agent-verdicts";
 import type {
   ToolOverviewBreakdownRow,
   ToolOverviewCard,
   ToolOverviewView,
+  SkillWorkspaceSummary,
 } from "../application";
 
 const DASH = "—";
 const BADGE_STEP = 240;
+
+type AgentMetricsProps = {
+  selected: ToolOverviewCard | null;
+  cards: readonly ToolOverviewCard[];
+  models: readonly ToolOverviewBreakdownRow[];
+  workspaceSummary?: Pick<
+    SkillWorkspaceSummary,
+    "skillCount" | "availableAgentCount"
+  >;
+  skillSnapshot?: SkillSnapshot;
+  securityVerdicts?: SecuritySkillVerdictReadModel;
+};
+
+type AgentSecurityStatus = {
+  safe: number;
+  total: number;
+};
+
+function normalizeAgentLabel(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function securityStatusForAgent(
+  selected: ToolOverviewCard | null,
+  snapshot: SkillSnapshot | undefined,
+  verdicts: SecuritySkillVerdictReadModel | undefined,
+): AgentSecurityStatus {
+  if (selected == null || snapshot == null) return { safe: 0, total: 0 };
+
+  const manifestTool = PUBLIC_TOOL_MANIFEST.tools.find(
+    (tool) => tool.id === selected.id,
+  );
+  const candidateLabels = [
+    selected.id,
+    selected.name,
+    manifestTool?.name,
+    manifestTool?.nameZh,
+  ].filter((label): label is string => Boolean(label));
+  const normalizedCandidates = new Set(
+    candidateLabels.map(normalizeAgentLabel),
+  );
+  const matchesCandidate = (label: string) => {
+    const normalized = normalizeAgentLabel(label);
+    return [...normalizedCandidates].some(
+      (candidate) =>
+        normalized === candidate ||
+        normalized.startsWith(candidate) ||
+        candidate.startsWith(normalized),
+    );
+  };
+  const matchingAgents = new Set(
+    [
+      ...Object.keys(snapshot.agents),
+      ...snapshot.skills.flatMap((skill) =>
+        skill.installations.map((installation) => installation.agent),
+      ),
+    ]
+      .filter(matchesCandidate)
+      .map(normalizeAgentLabel),
+  );
+  if (matchingAgents.size === 0) return { safe: 0, total: 0 };
+
+  const installed = snapshot.skills.filter((skill) =>
+    skill.installations.some((installation) =>
+      matchingAgents.has(normalizeAgentLabel(installation.agent)),
+    ),
+  );
+  const safe = installed.reduce(
+    (count, skill) =>
+      count + (verdicts?.byName[skill.name] === "allow" ? 1 : 0),
+    0,
+  );
+  const legacySafe = Math.min(
+    verdicts?.legacyGeneric.safe ?? 0,
+    installed.length - safe,
+  );
+  return { safe: safe + Math.max(legacySafe, 0), total: installed.length };
+}
+
+/** 原型 AgentMetricCards：只展示当前真实 read-model 能证明的汇总值。 */
+function AgentMetricCards({
+  selected,
+  cards,
+  models,
+  workspaceSummary,
+  skillSnapshot,
+  securityVerdicts,
+}: AgentMetricsProps) {
+  const { t, format } = useI18n();
+  const totalTokens = cards.reduce((sum, card) => sum + card.tokens, 0);
+  const selectedShare =
+    selected == null || totalTokens === 0
+      ? null
+      : Math.round((selected.tokens / totalTokens) * 100);
+  const totalSessions = cards.reduce(
+    (sum, card) => sum + (card.sessions ?? 0),
+    0,
+  );
+  const knownCosts = models.flatMap((row) =>
+    row.estimatedCostUsd == null ? [] : [row.estimatedCostUsd],
+  );
+  const cost =
+    knownCosts.length === 0
+      ? DASH
+      : format.formatUsd(knownCosts.reduce((sum, value) => sum + value, 0));
+  const securityStatus = securityStatusForAgent(
+    selected,
+    skillSnapshot,
+    securityVerdicts,
+  );
+
+  const metrics: readonly {
+    icon: LucideIcon;
+    label: string;
+    value: string;
+    sub: string;
+  }[] = [
+    {
+      icon: Coins,
+      label: t("skills.agentOverview.metrics.usage"),
+      value: selected == null ? DASH : format.formatTokens(selected.tokens),
+      sub:
+        selectedShare == null
+          ? DASH
+          : t("skills.agentOverview.metrics.usageShare", {
+              percent: selectedShare,
+              cost,
+            }),
+    },
+    {
+      icon: MessagesSquare,
+      label: t("skills.agentOverview.metrics.sessions"),
+      value:
+        selected?.sessions == null
+          ? DASH
+          : format.formatNumber(selected.sessions),
+      sub: t("skills.agentOverview.metrics.sessionsShare", {
+        count: totalSessions,
+      }),
+    },
+    {
+      icon: Boxes,
+      label: t("skills.agentOverview.metrics.skills"),
+      value:
+        selected == null || skillSnapshot == null
+          ? DASH
+          : format.formatNumber(securityStatus.total),
+      sub:
+        workspaceSummary == null
+          ? t("skills.agentOverview.metrics.skillsUnavailable")
+          : t("skills.agentOverview.metrics.skillsShare", {
+              count: workspaceSummary.availableAgentCount,
+            }),
+    },
+    {
+      icon: ShieldCheck,
+      label: t("skills.agentOverview.metrics.security"),
+      value: `${securityStatus.safe}/${securityStatus.total}`,
+      sub: t("skills.agentOverview.metrics.securityHint"),
+    },
+  ];
+
+  return (
+    <div className="overflow-hidden bg-card">
+      <div className="grid grid-cols-2 gap-px bg-[var(--rowline)] sm:grid-cols-4">
+        {metrics.map(({ icon: Icon, label, value, sub }) => (
+          <div
+            key={label}
+            className="bg-[var(--card)] px-4 py-3.5 transition-colors hover:bg-surface-2"
+          >
+            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+              <Icon className="size-3" strokeWidth={1.8} />
+              {label}
+            </div>
+            <div className="tt-num mt-2 truncate font-mono text-[22px] leading-none font-black tracking-tight">
+              {value}
+            </div>
+            <div
+              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+              title={sub}
+            >
+              {sub}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function daysAgo(days: number): string {
   const date = new Date();
@@ -75,17 +280,14 @@ function ToolBadgeWall({
     trackRef.current?.scrollBy({ left: dir * BADGE_STEP, behavior: "smooth" });
   };
 
-  const arrowClass =
-    "absolute top-1/2 z-30 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg border border-border bg-card text-foreground shadow-md transition-[background,transform] hover:scale-[1.06] hover:bg-surface-2";
-
   return (
-    <div className="relative sticky top-14 z-20 -mx-1 bg-background/85 px-1 py-2 backdrop-blur-[10px]">
+    <div className="tt-agentbar sticky top-14 z-20 -mx-1 px-1 py-2">
       {canLeft && (
         <button
           type="button"
           aria-label={t("skills.agentOverview.scrollLeft")}
           onClick={() => scrollBy(-1)}
-          className={`${arrowClass} left-1.5`}
+          className="tt-ab-arrow tt-ab-arrow-left"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
@@ -99,20 +301,10 @@ function ToolBadgeWall({
         </button>
       )}
       {canLeft && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 z-[25] w-7"
-          style={{
-            background:
-              "linear-gradient(to right, var(--color-background), transparent)",
-          }}
-        />
+        <span aria-hidden="true" className="tt-ab-fade tt-ab-fade-left" />
       )}
 
-      <div
-        ref={trackRef}
-        className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
+      <div ref={trackRef} className="tt-ab-track flex gap-2 overflow-x-auto">
         {cards.map((card) => {
           const color = card.color ?? brandColorOf(card.name);
           const on = selectedId === card.id;
@@ -132,7 +324,7 @@ function ToolBadgeWall({
               type="button"
               onClick={() => onPick(card.id)}
               className={cn(
-                "relative flex shrink-0 snap-start items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                "tt-ab-item relative flex shrink-0 snap-start items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
                 on ? "bg-surface-2" : "bg-card hover:bg-surface-2",
               )}
               style={
@@ -186,21 +378,14 @@ function ToolBadgeWall({
       </div>
 
       {canRight && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-[25] w-7"
-          style={{
-            background:
-              "linear-gradient(to left, var(--color-background), transparent)",
-          }}
-        />
+        <span aria-hidden="true" className="tt-ab-fade tt-ab-fade-right" />
       )}
       {canRight && (
         <button
           type="button"
           aria-label={t("skills.agentOverview.scrollRight")}
           onClick={() => scrollBy(1)}
-          className={`${arrowClass} right-1.5`}
+          className="tt-ab-arrow tt-ab-arrow-right"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
@@ -517,6 +702,22 @@ function ContextTreePanel({
           children: [],
         },
         {
+          id: "messages-cache-read",
+          label: t("skills.agentOverview.contextCacheRead"),
+          tokens: compose.cachedInputTokens,
+          calls: null,
+          pct: pct(compose.cachedInputTokens),
+          children: [],
+        },
+        {
+          id: "messages-cache-write",
+          label: t("skills.agentOverview.contextCacheWrite"),
+          tokens: compose.cacheCreationInputTokens,
+          calls: null,
+          pct: pct(compose.cacheCreationInputTokens),
+          children: [],
+        },
+        {
           id: "messages-output",
           label: t("skills.agentOverview.contextAssistantResponse"),
           tokens: compose.outputTokens,
@@ -806,8 +1007,17 @@ function ToolModelPanel({
  */
 export function ToolOverview({
   usage,
+  workspaceSummary,
+  skillSnapshot,
+  securityVerdicts,
 }: {
   usage: AgentUsageOverviewReadModel;
+  workspaceSummary?: Pick<
+    SkillWorkspaceSummary,
+    "skillCount" | "availableAgentCount"
+  >;
+  skillSnapshot?: SkillSnapshot;
+  securityVerdicts?: SecuritySkillVerdictReadModel;
 }) {
   const { t, format } = useI18n();
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
@@ -839,6 +1049,7 @@ export function ToolOverview({
         },
       }),
     initialData: usage,
+    initialDataUpdatedAt: 0,
     staleTime: 30_000,
   });
   const toolOverview: ToolOverviewView = toolQuery.view;
@@ -865,6 +1076,7 @@ export function ToolOverview({
       }),
     enabled: selectedId != null,
     initialData: selectedId == null ? undefined : usage,
+    initialDataUpdatedAt: selectedId == null ? undefined : 0,
     staleTime: 30_000,
   });
   const detailOverview: ToolOverviewView = detailQuery?.view ?? toolOverview;
@@ -919,12 +1131,24 @@ export function ToolOverview({
       : `${selected.name} · ${t("skills.agentOverview.dedicatedInsight")}`;
 
   return (
-    <section className="space-y-5 pb-12">
+    <section className="space-y-4 pb-12">
       <InsightCard
         variant="hero"
         surfaceId="agents"
         title={heroTitle}
         dotsLabel={t("insights.dots")}
+        rotateLabel={t("skills.agentOverview.rotateInsight")}
+        headingLevel={2}
+        showSeverity={false}
+      />
+
+      <AgentMetricCards
+        selected={selected}
+        cards={toolOverview.cards}
+        models={toolOverview.models}
+        workspaceSummary={workspaceSummary}
+        skillSnapshot={skillSnapshot}
+        securityVerdicts={securityVerdicts}
       />
 
       <ToolBadgeWall

@@ -123,24 +123,12 @@ export async function loadDistillation(
             : !!profile.endpoint,
       });
     }
-    const { getEnvProviderConfig } =
-      await import("../ai-orchestration/model-profile.server.ts");
-    const envConfig = getEnvProviderConfig();
-    if (envConfig) {
-      modelOptions.unshift({
-        id: "default",
-        label: envConfig.model,
-        vendor: "官方",
-        sub: envConfig.base,
-        ok: true,
-      });
-    }
     modelOptions.push({
       id: "offline",
       label: "offline",
       offline: true as const,
     });
-    const activeModelId = activeProfile?.id ?? (envConfig ? "default" : "offline");
+    const activeModelId = activeProfile?.id ?? "offline";
     return {
       sessions,
       candidates,
@@ -180,29 +168,17 @@ export async function startDistillation(
   const root = await getCompositionRoot();
   const refs = Array.isArray(input?.sessionRefs) ? input.sessionRefs : [];
   const segments = Array.isArray(input?.segments) ? input.segments : [];
-  // The page forwards the selected model. "default" is the built-in model backed
-  // by the host environment's Anthropic-compatible credentials; a saved S-500
-  // profile id routes to the profile-backed provider. The explicit "offline"
-  // option is a real, supported mode — it keeps providerId undefined so the
-  // registry's default offline provider produces a deterministic candidate (the
-  // domain's `isRealModelRequest` treats it as non-real). Only an id that
-  // resolves to no model (a deleted/unknown profile) is rejected honestly
+  // The page forwards the selected model. When omitted, use the shared active
+  // saved profile; with no profile configured, use the explicit offline mode.
+  // A profile id must resolve through the server-only execution accessor before
+  // routing to the profile-backed provider. Unknown/deleted ids are rejected
   // instead of silently fabricating a fallback result.
-  const modelId = input.modelId?.trim() || "default";
+  const modelId =
+    input.modelId?.trim() ||
+    (await root.modelProfiles.getActiveView())?.id ||
+    "offline";
   let providerId: string | undefined;
-  // The request modelId doubles as the label surfaced on the result card, so the
-  // env route substitutes the real model name (e.g. "deepseek-v4-flash") for the
-  // generic "default" option id.
-  let effectiveModelId = modelId;
-  if (modelId === "default") {
-    const { getEnvProviderConfig } =
-      await import("../ai-orchestration/model-profile.server.ts");
-    const envConfig = getEnvProviderConfig();
-    if (envConfig) {
-      providerId = "env";
-      effectiveModelId = envConfig.model;
-    }
-  } else if (modelId !== "offline") {
+  if (modelId !== "offline") {
     const profile = await root.modelProfiles.getProfileForExecution(modelId);
     if (profile) providerId = "profile";
   }
@@ -214,7 +190,7 @@ export async function startDistillation(
       sessionRefs: refs,
       ...(segments.length > 0 ? { segments } : {}),
     },
-    modelId: effectiveModelId,
+    modelId,
     kind: input.kind,
     providerId,
     prompt: {
