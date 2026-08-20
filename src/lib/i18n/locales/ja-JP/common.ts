@@ -79,39 +79,12 @@ export const common = {
     pageTitle: "蒸留ワークベンチ",
     pageDesc:
       "選択したセッションのメタデータからナレッジ草案を抽出し、承認後にナレッジライブラリへ書き込みます。読み取るのはマスキング済みのセッション概要のみで、会話本文は読み取りません。",
-    selectSessions: "セッションを選択（最大 {max} 件）",
-    start: "蒸留を開始",
-    startHint: "開始するにはセッションを 1 件以上選択してください。",
     noSessions: "蒸留可能なセッションがありません",
     noSessionsDesc:
       "ローカルセッションがスキャンされていない場合、リストは空です。",
-    selected: "{count} 件選択",
-    candidate: "候補",
-    approve: "承認してナレッジに書き込む",
-    cancel: "キャンセル",
-    candidateNote:
-      "候補はサーバーメモリに保持され、リロード後は失われます。候補が永続化された時点で完全な承認 UI を提供します。",
     selectedTurns: "{count} ターン",
     modeQuick: "クイックモード",
     modePro: "詳細設定",
-    metricMaterial: "選択済み素材",
-    metricTurns: "素材ターン",
-    metricRuns: "蒸留回数",
-    metricApproved: "承認済み",
-    openMaterial: "素材ライブラリを開く",
-    materialDrawerTitle: "蒸留素材を選択",
     materialSearch: "セッション / プロジェクトを検索…",
-    materialSegmentUnavailable:
-      "現在のバージョンはセッション単位での素材選択のみ対応です。単一メッセージの内容は読み取りません（プライバシー境界）。",
-    modelOffline: "オフライン回退",
-    modelNotConfigured:
-      "LLM 未設定 · 蒸留結果は決定的なオフライン回退で生成されます",
-    runHint: "セッションを 1 つ以上選択してから蒸留してください。",
-    expMode: "モード",
-    expTime: "生成時刻",
-    expOfflineNotice:
-      "この候補は決定的なオフライン回退で生成されました。LLM を設定すると実際のモデル出力が得られます。",
-    saveAndManage: "保存して Skill 管理へ",
-    estimatedTokens: "約 {count} tokens",
   },
 } as const;

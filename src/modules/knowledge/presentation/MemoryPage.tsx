@@ -1,4 +1,4 @@
-import { Brain, Download, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { Brain, Download, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   lazy,
   Suspense,
@@ -15,7 +15,12 @@ import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import { archiveMemory, getMemoryAssets, updateMemory } from "../query";
+import {
+  archiveMemory,
+  createMemory,
+  getMemoryAssets,
+  updateMemory,
+} from "../query";
 import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
 
@@ -34,6 +39,14 @@ function sourceLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
   if (item.source === "distill") return t("memory.sourceDistill");
   if (item.source === "unknown") return t("memory.sourceUnknown");
   return item.source;
+}
+
+/** FR-024 来源分组的显示名：固定 token 走 i18n，工具名原样显示。 */
+function sourceTokenLabel(token: string, t: ReturnType<typeof useI18n>["t"]) {
+  if (token === "distill") return t("memory.sourceDistill");
+  if (token === "manual") return t("memory.originManual");
+  if (token === "unknown") return t("memory.sourceUnknown");
+  return token;
 }
 
 function typeLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
@@ -89,7 +102,10 @@ export function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [type, setType] = useState<TypeFilter>("all");
+  // FR-024：来源分组筛选。取值 "all" 或某个来源 token（distill / manual / 工具名）。
+  const [source, setSource] = useState<string>("all");
   const [editing, setEditing] = useState<MemoryEntry | null>(null);
+  const [creating, setCreating] = useState(false);
   const [confirmDel, setConfirmDel] = useState<MemoryEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -115,6 +131,7 @@ export function MemoryPage() {
     const keyword = q.trim().toLowerCase();
     return entries
       .filter((item) => (type === "all" ? true : item.type === type))
+      .filter((item) => (source === "all" ? true : item.source === source))
       .filter((item) => {
         if (!keyword) return true;
         // 占位文案与原型一致（搜「正文」）：本地只投影摘要、绝不返回对话正文
@@ -126,7 +143,17 @@ export function MemoryPage() {
           .toLowerCase()
           .includes(keyword);
       });
-  }, [entries, q, type, t]);
+  }, [entries, q, type, source, t]);
+
+  // FR-024：来源分组——固定 token（distill/manual/unknown）置前，工具名按字母序。
+  const sourceOptions = useMemo(() => {
+    const tokens = [...new Set(entries.map((item) => item.source))].filter(
+      Boolean,
+    );
+    const rank = (token: string) =>
+      token === "distill" ? 0 : token === "manual" ? 1 : token === "unknown" ? 2 : 3;
+    return tokens.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  }, [entries]);
 
   const distillCount = useMemo(
     () => entries.filter((item) => item.origin === "distill").length,
@@ -197,6 +224,27 @@ export function MemoryPage() {
     }
   }
 
+  /** FR-025：手动新增一条记忆（body 服务端 hash，仅存摘要）。 */
+  async function handleCreate(input: MemoryCreateInput) {
+    setBusy(true);
+    try {
+      const result = await createMemory({ data: input });
+      if (!result.ok || !result.entry) {
+        toast.error(errorMessage(result.errorCode));
+        return;
+      }
+      setCreating(false);
+      // counts 来自服务端投影，重新拉取保证统计准确。
+      await reload();
+      toast.success(t("memory.added"));
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDelete(assetId: string) {
     setBusy(true);
     try {
@@ -227,7 +275,7 @@ export function MemoryPage() {
     }
   }
 
-  const filtered = q.trim() !== "" || type !== "all";
+  const filtered = q.trim() !== "" || type !== "all" || source !== "all";
 
   return (
     <div className="space-y-4 pb-12">
@@ -303,18 +351,56 @@ export function MemoryPage() {
             </button>
           ))}
         </div>
+        {/* FR-024：按来源分组（全部 / 蒸馏 / 手动 / 工具名） */}
+        <div className="inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-sm border border-border bg-surface-2 p-0.5">
+          <button
+            key="all"
+            type="button"
+            onClick={() => setSource("all")}
+            className={`rounded-sm px-2.5 py-1 text-xs transition-colors ${
+              source === "all"
+                ? "bg-primary/15 font-medium text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("memory.allSources")}
+          </button>
+          {sourceOptions.map((token) => (
+            <button
+              key={token}
+              type="button"
+              onClick={() => setSource(token)}
+              className={`rounded-sm px-2.5 py-1 text-xs transition-colors ${
+                source === token
+                  ? "bg-primary/15 font-medium text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {sourceTokenLabel(token, t)}
+            </button>
+          ))}
+        </div>
         {filtered && (
           <button
             type="button"
             onClick={() => {
               setQ("");
               setType("all");
+              setSource("all");
             }}
             className="shrink-0 rounded-full px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
           >
             {t("memory.reset")}
           </button>
         )}
+        <TTButton
+          size="sm"
+          onClick={() => setCreating(true)}
+          className="ml-auto shrink-0"
+        >
+          <Plus className="size-3.5" strokeWidth={2} />
+          {t("memory.add")}
+        </TTButton>
       </div>
 
       {/* 列表头 */}
@@ -378,6 +464,27 @@ export function MemoryPage() {
               busy={busy}
               onClose={() => setEditing(null)}
               onSubmit={(input) => handleUpdate(editing.assetId, input)}
+            />
+          </Suspense>
+        </ChunkErrorBoundary>
+      )}
+
+      {creating && (
+        <ChunkErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60">
+                <span className="text-[12.5px] text-muted-foreground">
+                  {t("common.loading")}
+                </span>
+              </div>
+            }
+          >
+            <MemoryForm
+              item={null}
+              busy={busy}
+              onClose={() => setCreating(false)}
+              onSubmit={(input) => void handleCreate(input)}
             />
           </Suspense>
         </ChunkErrorBoundary>

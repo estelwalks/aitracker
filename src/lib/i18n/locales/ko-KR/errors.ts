@@ -72,6 +72,10 @@ export const errors = {
     skillExists: "같은 이름의 Skill이 이미 있습니다. 다른 이름을 사용하세요",
     quotaExceeded:
       "오늘 공식 모델 증류 한도를 모두 사용했습니다(하루 {limit}회). 내일 다시 시도하거나 모델 관리를 확인하세요",
+    noModelConfigured:
+      "사용 가능한 AI 모델이 구성되지 않았습니다. 「설정 → 모델」에서 API 키가 있는 모델을 추가하거나 ANTHROPIC_API_KEY 환경 변수를 설정한 후 증류하세요.",
+    aiFailed:
+      "AI 모델 호출에 실패하여 증류 결과가 생성되지 않았습니다. 모델 설정 또는 네트워크를 확인한 후 다시 시도하세요.",
   },
   modelProfile: {
     nameRequired: "설정 이름을 입력하세요",
@@ -89,6 +93,8 @@ export const errors = {
     testTimeout: "연결 테스트 시간 초과(5초)",
     listFailed:
       "모델 목록을 가져오지 못했습니다. 엔드포인트, API Key, 네트워크를 확인하세요",
+    safeStorageUnavailable:
+      "API Key를 안전하게 저장할 수 없습니다: 호스트 비밀 저장소를 사용할 수 없습니다(데이터 디렉터리를 쓸 수 없거나 암호화 초기화 실패)",
   },
   pricing: {
     modelListInvalid: "모델 목록이 올바르지 않습니다",

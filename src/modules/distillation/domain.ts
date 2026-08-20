@@ -20,7 +20,7 @@ const OPAQUE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const UNSAFE =
   /(?:\/Users\/|\/home\/|[A-Za-z]:\\|\\\\|\b(?:npm|pnpm|yarn|node|git)\s+|\b(?:bearer\s+|sk-|pk-)[A-Za-z0-9_-]{8,}|\b(?:api[_-]?key|password|secret|credential|authorization)\b)/i;
 const MAX_TITLE = 120;
-const MAX_SUMMARY = 4_000;
+const MAX_SUMMARY = 24_000;
 
 export function isOpaqueSessionRef(ref: SessionRef): boolean {
   return OPAQUE.test(ref.source) && OPAQUE.test(ref.sessionId);
@@ -142,18 +142,52 @@ export function modeForExecution(result: AIExecutionResult): DistillationMode {
 export function candidateText(
   result: AIExecutionResult,
   rows: readonly ControlledSessionSummary[],
+  kind: CandidateOutput["kind"],
 ): string {
   const text = result.response?.text?.trim();
   if (!text || UNSAFE.test(text)) {
-    return `Distilled summary for ${rows.length} selected session${rows.length === 1 ? "" : "s"}.`;
+    const asset =
+      kind === "skill"
+        ? "skill package"
+        : kind === "brief"
+          ? "workflow"
+          : kind === "prompt"
+            ? "prompt template"
+            : kind === "persona"
+              ? "persona memory"
+              : "task memory";
+    return `Distilled ${asset} for ${rows.length} selected session${rows.length === 1 ? "" : "s"}.`;
   }
   return text.slice(0, MAX_SUMMARY);
 }
 
 export function candidateTitle(
   rows: readonly ControlledSessionSummary[],
+  kind: CandidateOutput["kind"],
 ): string {
-  return `Distilled summary (${rows.length} session${rows.length === 1 ? "" : "s"})`;
+  const projectKeys = [...new Set(rows.map((row) => row.projectKey))].filter(
+    Boolean,
+  );
+  const lead = projectKeys[0] ?? rows[0]?.title ?? "Session";
+  const suffix =
+    projectKeys.length > 1
+      ? ` +${projectKeys.length - 1} projects`
+      : rows.length > 1
+        ? ` · ${rows.length} sessions`
+        : "";
+  switch (kind) {
+    case "skill":
+      return `${lead} Skill Package${suffix}`;
+    case "brief":
+      return `${lead} Workflow${suffix}`;
+    case "prompt":
+      return `${lead} Prompt Template${suffix}`;
+    case "persona":
+      return `${lead} Persona Memory${suffix}`;
+    case "memory":
+    default:
+      return `${lead} Task Memory${suffix}`;
+  }
 }
 
 export function publicExecution(result: AIExecutionResult): AIExecutionSummary {
@@ -170,12 +204,13 @@ export function candidate(
   rows: readonly ControlledSessionSummary[],
   result: AIExecutionResult,
   now: string,
+  kind: CandidateOutput["kind"] = "memory",
 ): CandidateOutput {
   return {
     candidateId,
-    kind: "memory",
-    title: candidateTitle(rows),
-    summary: candidateText(result, rows),
+    kind,
+    title: candidateTitle(rows, kind),
+    summary: candidateText(result, rows, kind),
     mode: modeForExecution(result),
     approvalState: "waiting-approval",
     selectedSessionRefs: cloneRefs(refs),

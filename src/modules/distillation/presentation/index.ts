@@ -7,6 +7,9 @@ export interface DistillationSessionItem {
   readonly sessionId: string;
   readonly title: string;
   readonly projectKey: string;
+  /** True when the session's project is a real git repository root (not a
+   *  plain folder). Only git-backed projects appear under "by project". */
+  readonly isGitProject?: boolean;
   readonly model: string | null;
   readonly startedAt: string;
   readonly endedAt: string;
@@ -33,7 +36,21 @@ export interface DistillationViewModel {
     id: string;
     label: string;
     offline?: boolean;
+    /** Vendor group shown in the picker dropdown header (官方 / Anthropic / …). */
+    vendor?: string;
+    /** Secondary mono text under the model name (model or endpoint). */
+    sub?: string;
+    /** True for the official-mode profile; only official models gate on quota. */
+    official?: boolean;
+    /** True when the profile has a usable endpoint (status dot). */
+    ok?: boolean;
   }[];
+  /**
+   * The server-resolved preferred real model for new runs. This should track
+   * the active S-500 profile when one exists; otherwise it may fall back to
+   * the built-in env-backed model or `offline`.
+   */
+  readonly activeModelId?: string;
   /**
    * Server-side daily quota for real-model distillation calls (Story B-600).
    * `null` when the quota ledger is unavailable; the UI then falls back to
@@ -49,7 +66,7 @@ export interface DistillationViewModel {
 }
 
 export interface DistillationStartInput {
-  /** Opaque session refs to distill from (max 8, no duplicates). */
+  /** Opaque session refs to distill from (no duplicates). */
   readonly sessionRefs: ReadonlyArray<{
     readonly source: string;
     readonly sessionId: string;
@@ -66,10 +83,12 @@ export interface DistillationStartInput {
     readonly startIndex: number;
     readonly endIndex: number;
   }>;
-  /** Optional model id; defaults to the offline model when omitted. */
+  /** Optional model id; defaults to the built-in model when omitted. */
   readonly modelId?: string;
   /** Optional custom prompt template; defaults to the built-in summary prompt. */
   readonly promptText?: string;
+  /** Output kind this run should produce (prototype 出产物). Absent → memory. */
+  readonly kind?: "memory" | "brief" | "prompt" | "persona" | "skill";
 }
 
 export interface DistillationStartResponse {
@@ -96,6 +115,11 @@ export interface DistillationSaveSkillInput {
    * candidate's safety-filtered summary.
    */
   readonly content?: string;
+  /** Complete generated package. Paths are validated below the target root. */
+  readonly files?: ReadonlyArray<{
+    readonly path: string;
+    readonly content: string;
+  }>;
 }
 
 export interface DistillationSaveSkillResponse {

@@ -1490,6 +1490,7 @@ async function fragmentToRecord(
     title: fragment.title || fragment.fallbackTitle,
     projectKey: projectKeyFromCwd(projectRef),
     projectRef,
+    isGitProject: gitRoot != null,
     model: fragment.model,
     startedAt,
     endedAt,

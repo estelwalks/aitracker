@@ -37,6 +37,15 @@ export function MemoryForm({
   const [type, setType] = useState<MemoryType>(item?.type ?? "task");
   const [title, setTitle] = useState(item?.title ?? "");
   const [body, setBody] = useState(item?.summary ?? "");
+  // 来源/项目可编辑（FR-025：录入一条记忆可选类型、标题/正文并标来源/项目）。
+  // 蒸馏条目的 source token（distill）不是工具名，编辑时不预填，缺省回落到
+  // manual——用户编辑即视为把这条记忆收归手动管理。
+  const [source, setSource] = useState(
+    item?.source && item.source !== "distill" && item.source !== "unknown"
+      ? item.source
+      : "",
+  );
+  const [project, setProject] = useState(item?.project ?? "");
   const editingExisting = item != null;
   const ok = title.trim().length > 0 && body.trim().length > 0;
 
@@ -45,9 +54,8 @@ export function MemoryForm({
       type,
       title: title.trim(),
       body: body.trim(),
-      // 编辑时保留原来源/项目（provenance 不变）；新建缺省为 manual。
-      source: item?.source,
-      project: item?.project,
+      ...(source.trim() ? { source: source.trim() } : {}),
+      ...(project.trim() ? { project: project.trim() } : {}),
     });
 
   const exportMd = () => {
@@ -59,8 +67,8 @@ export function MemoryForm({
       "---",
       `type: ${type}`,
       `title: ${title.replace(/\n/g, " ") || "memory"}`,
-      `source: ${item?.source ?? "manual"}`,
-      ...(item?.project ? [`project: ${item.project}`] : []),
+      `source: ${source.trim() || "manual"}`,
+      ...(project.trim() ? [`project: ${project.trim()}`] : []),
       "---",
       "",
       body.trim(),
@@ -141,6 +149,29 @@ export function MemoryForm({
             placeholder={t("memory.form.bodyPlaceholder")}
             className="w-full rounded-sm border border-border bg-surface-2 px-2 py-1.5 text-[13px] leading-relaxed outline-none focus:border-primary"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="tt-label mb-1.5">{t("memory.form.source")}</div>
+            <input
+              value={source}
+              onChange={(event) => setSource(event.target.value)}
+              maxLength={128}
+              placeholder={t("memory.form.sourcePlaceholder")}
+              className="h-8 w-full rounded-sm border border-border bg-surface-2 px-2 text-[13px] outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <div className="tt-label mb-1.5">{t("memory.form.project")}</div>
+            <input
+              value={project}
+              onChange={(event) => setProject(event.target.value)}
+              maxLength={128}
+              placeholder={t("memory.form.projectPlaceholder")}
+              className="h-8 w-full rounded-sm border border-border bg-surface-2 px-2 text-[13px] outline-none focus:border-primary"
+            />
+          </div>
         </div>
       </div>
     </MemoryModal>

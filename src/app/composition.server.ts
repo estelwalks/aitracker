@@ -34,10 +34,12 @@ import {
   offlineProvider,
 } from "../modules/ai-orchestration/provider-registry.ts";
 import {
+  createEnvBackedProvider,
   createProfileBackedProvider,
   type ModelProfileRepository,
 } from "../modules/ai-orchestration/model-profile.server.ts";
 import type { ModelSecretCodec } from "../modules/ai-orchestration/infrastructure/sqlite-model-profile-repository.server.ts";
+import { createFileSecretCodec } from "../modules/ai-orchestration/infrastructure/file-secret-codec.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
 import type { ReportsApplication } from "../modules/reports/index.ts";
@@ -224,14 +226,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const databaseRuntime = await createDatabaseRuntime({
     dataRoot,
     clock,
-    secretCodec: secretCodecOverride ?? {
-      async encrypt() {
-        throw new Error("errors.modelProfile.safeStorageUnavailable");
-      },
-      async decrypt() {
-        throw new Error("errors.modelProfile.safeStorageUnavailable");
-      },
-    },
+    secretCodec: secretCodecOverride ?? createFileSecretCodec({ dataRoot }),
   });
   const {
     preferences,
@@ -443,6 +438,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   // a real model call while every renderer-facing read stays key-free.
   const modelProfiles = databaseRuntime.features.modelProfiles;
   const aiRegistry = createProviderRegistry([offlineProvider]);
+  aiRegistry.register(createEnvBackedProvider());
   aiRegistry.register(
     createProfileBackedProvider({
       resolve: (profileId) => modelProfiles.getProfileForExecution(profileId),
@@ -469,7 +465,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
             dateKey: new Date(finishedAtMs).toISOString().slice(0, 10),
             capability,
             profileKey:
-              request.providerId === "profile" ? request.modelId : "offline",
+              request.providerId === "profile"
+                ? request.modelId
+                : (request.providerId ?? "offline"),
           },
           dailyCallLimit: null,
           execution: {

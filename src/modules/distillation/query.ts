@@ -34,15 +34,12 @@ export type {
 };
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const MAX_SELECTION = 8;
 
 function validateSessionRefs(value: unknown): {
   source: string;
   sessionId: string;
 }[] {
   if (!Array.isArray(value) || value.length === 0)
-    throw new AppError("errors.distillation.invalidSelection");
-  if (value.length > MAX_SELECTION)
     throw new AppError("errors.distillation.invalidSelection");
   const refs = value.map((item) => {
     if (
@@ -79,8 +76,6 @@ function validateSegments(value: unknown): {
 }[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value) || value.length === 0)
-    throw new AppError("errors.distillation.invalidSelection");
-  if (value.length > MAX_SELECTION)
     throw new AppError("errors.distillation.invalidSelection");
   const segments = value.map((item) => {
     const record = item as {
@@ -143,11 +138,22 @@ export function validateStartDistillationInput(
     (input as { promptText: string }).promptText.trim().length > 0
       ? (input as { promptText: string }).promptText.trim().slice(0, 4_000)
       : undefined;
+  // Output kind (prototype 出产物): skill/workflow/prompt/profile/task. Unknown
+  // values are dropped so the server keeps its memory default.
+  const rawKind = (input as { kind?: unknown })?.kind;
+  const kind =
+    typeof rawKind === "string" &&
+    (["memory", "brief", "prompt", "persona", "skill"] as const).includes(
+      rawKind as "memory" | "brief" | "prompt" | "persona" | "skill",
+    )
+      ? (rawKind as "memory" | "brief" | "prompt" | "persona" | "skill")
+      : undefined;
   return {
     sessionRefs: refs,
     ...(segments.length > 0 ? { segments } : {}),
     ...(modelId ? { modelId } : {}),
     ...(promptText ? { promptText } : {}),
+    ...(kind ? { kind } : {}),
   };
 }
 
@@ -234,11 +240,28 @@ export const saveCandidateAsSkill = createServerFn({ method: "POST" })
       typeof input?.content === "string" && input.content.trim().length > 0
         ? input.content.trim().slice(0, 16_000)
         : undefined;
+    const files = Array.isArray(input.files)
+      ? input.files
+          .filter(
+            (file) =>
+              file != null &&
+              typeof file.path === "string" &&
+              typeof file.content === "string" &&
+              file.path.trim().length > 0 &&
+              file.content.length > 0,
+          )
+          .slice(0, 32)
+          .map((file) => ({
+            path: file.path.trim().slice(0, 240),
+            content: file.content.slice(0, 64_000),
+          }))
+      : undefined;
     return {
       candidateId: input.candidateId,
       skillName: input.skillName.trim().slice(0, 64),
       targetAgent: input.targetAgent.trim(),
       ...(content ? { content } : {}),
+      ...(files?.length ? { files } : {}),
     };
   })
   .handler(async ({ data }): Promise<DistillationSaveSkillResponse> => {
