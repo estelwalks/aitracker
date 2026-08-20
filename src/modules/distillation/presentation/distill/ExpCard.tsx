@@ -109,7 +109,10 @@ export interface PkgFile {
   readonly content: string;
 }
 
-function capabilityLabel(candidate: CandidateOutput, t: ReturnType<typeof useI18n>["t"]): string {
+function capabilityLabel(
+  candidate: CandidateOutput,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   return t(kindMeta(candidate.kind).labelKey);
 }
 
