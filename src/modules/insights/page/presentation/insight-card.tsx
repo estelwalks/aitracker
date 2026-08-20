@@ -50,6 +50,9 @@ export function InsightCard({
   accent,
   icon,
   dotsLabel,
+  rotateLabel,
+  headingLevel = 1,
+  showSeverity = true,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
@@ -58,6 +61,9 @@ export function InsightCard({
   readonly accent?: string;
   readonly icon?: LucideIcon;
   readonly dotsLabel?: string;
+  readonly rotateLabel?: string;
+  readonly headingLevel?: 1 | 2;
+  readonly showSeverity?: boolean;
 }) {
   const { locale, t } = useI18n();
   const { lines, loading, envelope } = usePageInsight({
@@ -72,7 +78,7 @@ export function InsightCard({
   if (lines.length === 0) return null;
 
   const textLines = lines.map((line) => line.text);
-  const topSeverity = lines[0]?.severity;
+  const topSeverity = showSeverity ? lines[0]?.severity : undefined;
 
   return (
     <JarvisInsight
@@ -88,6 +94,8 @@ export function InsightCard({
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
       dotsLabel={dotsLabel}
+      rotateLabel={rotateLabel}
+      headingLevel={headingLevel}
     />
   );
 }

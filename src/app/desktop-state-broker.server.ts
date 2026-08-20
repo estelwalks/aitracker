@@ -38,6 +38,20 @@ function enumValue(
     : fallback;
 }
 
+/** Preserve a renderer-safe Skill name without ever persisting a filesystem path. */
+function safeSkillName(value: unknown): string {
+  const cleaned = Array.from(String(value ?? ""), (character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 31 || code === 127 ? " " : character;
+  })
+    .join("")
+    .trim();
+  if (!cleaned || cleaned.includes("/") || cleaned.includes("\\")) {
+    return "Skill";
+  }
+  return cleaned.slice(0, 160);
+}
+
 async function body(request: Request): Promise<Record<string, unknown>> {
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES)
@@ -60,7 +74,7 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
       id: String(entry.id ?? "").slice(0, 160),
       scanId: String(entry.scanId ?? "").slice(0, 80),
       skillRef: String(entry.skillRef ?? "").slice(0, 80),
-      skillName: "Skill",
+      skillName: safeSkillName(entry.skillName),
       mode: entry.mode === "full" ? "full" : "quick",
       trigger: entry.trigger === "automatic" ? "automatic" : "manual",
       locale: enumValue(

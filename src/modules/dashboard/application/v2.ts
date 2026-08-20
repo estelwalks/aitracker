@@ -28,7 +28,7 @@ import type { MonitoringStatus } from "../../monitoring/index.ts";
 const liveWindowMs = 15 * 60 * 1000;
 const heartbeatWindowMs = 20 * 60 * 1000;
 /** Avoid presenting a one-event fluctuation as a meaningful period comparison. */
-const minimumComparableEvents = 2;
+const minimumComparableEvents = 1;
 
 const emptyTotals = (): LocalUsageTotals => ({
   events: 0,
@@ -96,7 +96,6 @@ function ranked(
       estimatedCostIsPartial: false,
       previousTokens: null,
       deltaPercent: null,
-      absoluteDelta: null,
       sessions: null,
     }));
 }
@@ -268,27 +267,28 @@ function enrichRows(
       (event) => (keyOf(event) || "unknown") === row.key,
     );
     const previousTotals = totalsFor(previous);
-    const comparable =
-      related.length >= minimumComparableEvents &&
-      previous.length >= minimumComparableEvents &&
-      previousTotals.totalTokens > 0;
+    const comparable = related.length >= minimumComparableEvents;
+    const deltaPercent = comparable
+      ? previousTotals.totalTokens > 0
+        ? ((row.tokens - previousTotals.totalTokens) /
+            previousTotals.totalTokens) *
+          100
+        : row.tokens > 0
+          ? 100
+          : 0
+      : null;
     return {
       ...row,
       share: totalTokens === 0 ? 0 : (row.tokens / totalTokens) * 100,
       estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
       estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
       previousTokens: comparable ? previousTotals.totalTokens : null,
-      deltaPercent: comparable
-        ? ((row.tokens - previousTotals.totalTokens) /
-            previousTotals.totalTokens) *
-          100
-        : null,
-      // 上一区间无该模型用量时百分比无定义，用绝对新增量兜底（0 → N）。
-      absoluteDelta:
-        !comparable && previousTotals.totalTokens === 0 && row.tokens > 0
-          ? row.tokens
-          : null,
-      sessions: projectSessions?.get(row.key) ?? null,
+      deltaPercent,
+      // A readable session snapshot means zero is an observed value for a
+      // project with no sessions in the selected range. Null is reserved for
+      // an unavailable session snapshot.
+      sessions:
+        projectSessions == null ? null : (projectSessions.get(row.key) ?? 0),
     };
   });
 }
@@ -351,7 +351,6 @@ function topWithRest(
       ),
       previousTokens: null,
       deltaPercent: null,
-      absoluteDelta: null,
       sessions: nullableSum(tail.map((row) => row.sessions)),
     },
   ];
@@ -594,16 +593,17 @@ function comparableDelta(
   currentEvents: number,
   previousEvents: number,
 ): { previous: number | null; deltaPercent: number | null } {
-  if (
-    currentEvents < minimumComparableEvents ||
-    previousEvents < minimumComparableEvents ||
-    previous <= 0
-  ) {
+  if (previous < 0) {
     return { previous: null, deltaPercent: null };
   }
   return {
     previous,
-    deltaPercent: ((current - previous) / previous) * 100,
+    deltaPercent:
+      previous === 0
+        ? current > 0
+          ? 100
+          : 0
+        : ((current - previous) / previous) * 100,
   };
 }
 
@@ -663,9 +663,10 @@ export function createDashboardV2View(
       )
     : [];
   const previousTotals = totalsFor(previousEvents);
-  const cost = snapshot.pricingAvailable
-    ? estimateUsageCost(events.map(({ context: _context, ...event }) => event))
-    : null;
+  const localCost = estimateUsageCost(
+    events.map(({ context: _context, ...event }) => event),
+  );
+  const cost = snapshot.pricingAvailable ? localCost : null;
   const previousCost = snapshot.pricingAvailable
     ? estimateUsageCost(
         previousEvents.map(({ context: _context, ...event }) => event),
@@ -775,26 +776,38 @@ export function createDashboardV2View(
       ? filterV2Events(snapshot.events, calendarFrom, calendarTo)
       : [];
   const calendar = calendarFor(daily(calendarEvents), calendarTo);
-  const tokenComparison = comparableDelta(
-    totals.totalTokens,
-    previousTotals.totalTokens,
-    totals.events,
-    previousTotals.events,
-  );
-  const eventComparison = comparableDelta(
-    totals.events,
-    previousTotals.events,
-    totals.events,
-    previousTotals.events,
-  );
+  const tokenComparison = previousRange
+    ? comparableDelta(
+        totals.totalTokens,
+        previousTotals.totalTokens,
+        totals.events,
+        previousTotals.events,
+      )
+    : { previous: null, deltaPercent: null };
+  const eventComparison = previousRange
+    ? comparableDelta(
+        totals.events,
+        previousTotals.events,
+        totals.events,
+        previousTotals.events,
+      )
+    : { previous: null, deltaPercent: null };
   const currentCacheRate = observedCacheRate(totals);
   const previousCacheRate = observedCacheRate(previousTotals);
   const cacheComparable =
+    previousRange != null &&
     currentCacheRate != null &&
-    previousCacheRate != null &&
-    totals.events >= minimumComparableEvents &&
-    previousTotals.events >= minimumComparableEvents;
+    (previousCacheRate != null || previousTotals.events === 0);
+  const cacheDeltaPercent =
+    currentCacheRate == null || !cacheComparable
+      ? null
+      : previousCacheRate == null || previousCacheRate === 0
+        ? currentCacheRate > 0
+          ? 100
+          : 0
+        : ((currentCacheRate - previousCacheRate) / previousCacheRate) * 100;
   const costComparable =
+    previousRange != null &&
     cost != null &&
     previousCost != null &&
     cost.unknownEvents === 0 &&
@@ -817,14 +830,15 @@ export function createDashboardV2View(
     : null;
   // 上一周期为 0 或不可比时不展示任何具体数值（百分比无定义，仅保留基准文案）。
   const sessionsComparison: DashboardV2MetricDelta =
-    currentSessions != null &&
-    previousSessions != null &&
-    currentSessions > 0 &&
-    previousSessions > 0
+    currentSessions != null && previousSessions != null
       ? {
           previous: previousSessions,
           deltaPercent:
-            ((currentSessions - previousSessions) / previousSessions) * 100,
+            previousSessions > 0
+              ? ((currentSessions - previousSessions) / previousSessions) * 100
+              : currentSessions > 0
+                ? 100
+                : 0,
         }
       : { previous: null, deltaPercent: null };
 
@@ -836,7 +850,12 @@ export function createDashboardV2View(
     totals,
     estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
     estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,
-    cacheSavingsUsd: cost ? cost.cacheSavingsUsd : null,
+    // Cache savings is a locally derivable observation, even when the full
+    // cost estimate is unavailable. Keep the unavailable state for zero
+    // savings so the card does not present a misleading "$0" amount.
+    cacheSavingsUsd:
+      cost?.cacheSavingsUsd ??
+      (localCost.cacheSavingsUsd > 0 ? localCost.cacheSavingsUsd : null),
     cacheRate: currentCacheRate,
     comparison: {
       tokens: tokenComparison,
@@ -845,9 +864,9 @@ export function createDashboardV2View(
       cost: costComparison,
       cacheRate: {
         previous: cacheComparable ? previousCacheRate : null,
-        deltaPercent: null,
+        deltaPercent: cacheDeltaPercent,
         deltaPoints: cacheComparable
-          ? currentCacheRate - previousCacheRate
+          ? currentCacheRate - (previousCacheRate ?? 0)
           : null,
       },
     },

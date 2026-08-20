@@ -24,6 +24,32 @@ import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
 
+const SESSION_SOURCE_IDS = new Set(["claude-code", "codex", "grok", "dsh"]);
+const SESSION_REFRESH_GRACE_MS = 30_000;
+
+/** Refresh a valid snapshot when usage already contains a newly supported
+ * session source that the persisted snapshot does not contain. */
+export function shouldRefreshDashboardSessions(input: {
+  readonly status: "empty" | "fresh" | "stale" | "refreshing" | "failed";
+  readonly generatedAt: string | null;
+  readonly sessionSources: readonly string[];
+  readonly usageSources: readonly string[];
+  readonly nowMs?: number;
+}): boolean {
+  if (input.status === "stale" || input.status === "failed") return true;
+  if (input.status === "empty" || input.status === "refreshing") return false;
+  const missingSource = input.usageSources.some(
+    (source) =>
+      SESSION_SOURCE_IDS.has(source) && !input.sessionSources.includes(source),
+  );
+  if (!missingSource) return false;
+  const generatedMs = input.generatedAt ? Date.parse(input.generatedAt) : NaN;
+  return (
+    !Number.isFinite(generatedMs) ||
+    (input.nowMs ?? Date.now()) - generatedMs >= SESSION_REFRESH_GRACE_MS
+  );
+}
+
 function projectKey(project: string): string {
   const normalized = project.replaceAll("\\", "/").replace(/\/+$/u, "");
   if (!normalized || normalized === "~" || normalized === "unknown")
@@ -67,15 +93,31 @@ export function aggregateDashboardProjectSessions(
     // Use the same final-segment projection as usage events. Codex session
     // projectKey can be a display fallback while projectRef carries the
     // authoritative cwd; neither raw value crosses this adapter.
-    const projectRef = session.projectRef ?? session.projectKey;
-    const classification = classifications.get(projectRef);
+    const projectRef = session.projectRef?.trim() || null;
+    const directClassification = projectRef
+      ? classifications.get(projectRef)
+      : undefined;
+    // Older persisted session snapshots only contain the safe projectKey.
+    // Recover those rows only through a verified workspace label already
+    // present in the classification index; never promote an unclassified
+    // path or expose the reference itself.
+    const classification =
+      directClassification ??
+      (projectRef == null
+        ? [...classifications.values()].find(
+            (candidate) =>
+              candidate.kind === "workspace" &&
+              candidate.label === session.projectKey,
+          )
+        : undefined);
     if (
       classification?.kind !== undefined &&
       classification.kind !== "workspace"
     ) {
       continue;
     }
-    const project = classification?.label ?? projectKey(projectRef);
+    const project =
+      classification?.label ?? projectKey(projectRef ?? session.projectKey);
     const key = `${project}\u0000${session.source}\u0000${date}`;
     const current = counts.get(key) ?? {
       count: 0,
@@ -546,13 +588,35 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   // (O(1) — no scanner, no wsl.exe, no PATH probing on the query path).
   const { sessionSnapshot, skillSnapshot, installationSnapshot } =
     await getRootForUsage();
-  const [sessionLatest, skillLatest, installationLatest] = await Promise.all([
-    sessionSnapshot.ensureHydrated().then(() => sessionSnapshot.readLatest()),
-    skillSnapshot.ensureHydrated().then(() => skillSnapshot.readLatest()),
-    installationSnapshot
-      .ensureHydrated()
-      .then(() => installationSnapshot.readLatest()),
-  ]);
+  const [initialSessionLatest, skillLatest, installationLatest] =
+    await Promise.all([
+      sessionSnapshot.ensureHydrated().then(() => sessionSnapshot.readLatest()),
+      skillSnapshot.ensureHydrated().then(() => skillSnapshot.readLatest()),
+      installationSnapshot
+        .ensureHydrated()
+        .then(() => installationSnapshot.readLatest()),
+    ]);
+  let sessionLatest = initialSessionLatest;
+  const usageSources = [
+    ...new Set(rawSnapshot.details.map((event) => event.source)),
+  ];
+  const sessionSources = [
+    ...new Set(
+      sessionLatest.data?.sessions.map((session) => session.source) ?? [],
+    ),
+  ];
+  if (
+    shouldRefreshDashboardSessions({
+      status: sessionLatest.status,
+      generatedAt: sessionLatest.generatedAt,
+      sessionSources,
+      usageSources,
+    })
+  ) {
+    // Refresh inline when a valid old snapshot predates a session-capable
+    // source (notably DSH), so the current dashboard response is correct.
+    sessionLatest = await sessionSnapshot.refreshNow();
+  }
   // Mirror the sessions-page empty-state (loader rule 4): when no session
   // snapshot exists yet, fire a NON-BLOCKING refresh through the unified task
   // runtime instead of stalling the first dashboard response. The page keeps
@@ -560,6 +624,10 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   // next loader round without a manual reload.
   if (sessionLatest.data == null) {
     void sessionSnapshot.requestRefresh({ reason: "empty" }).catch(() => {});
+  } else if (sessionLatest.status === "stale") {
+    // Serve last-known-good data without blocking the page, but make sure a
+    // scanner/parser/registry upgrade or an expired cache is collected now.
+    void sessionSnapshot.requestRefresh({ reason: "stale" }).catch(() => {});
   }
   const hasSessionData = sessionLatest.data != null;
   const sessionSummaries = sessionLatest.data?.sessions ?? [];
@@ -617,6 +685,22 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   const { classificationService } = await getCompositionRoot();
   const projectClassifications =
     await classificationService.resolve(projectRefs);
+  // A usage snapshot can predate the classification index (for example after
+  // an app upgrade). Keep this response useful through the safe fallback in
+  // `toDashboardSnapshot`, while backfilling only the raw usage refs in the
+  // background so later responses can restore verified workspace filtering.
+  const missingUsageRefs = [
+    ...new Set(
+      rawSnapshot.details
+        .map((event) => event.project)
+        .filter((ref) => !projectClassifications.has(ref)),
+    ),
+  ];
+  if (missingUsageRefs.length > 0) {
+    void classificationService
+      .classifyIncrementally(missingUsageRefs)
+      .catch(() => {});
+  }
   const snapshot = toDashboardSnapshot(rawSnapshot, projectClassifications);
   const skills =
     skillsResult.status === "fulfilled"

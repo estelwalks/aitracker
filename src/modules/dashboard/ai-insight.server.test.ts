@@ -11,6 +11,7 @@ import type { DashboardV2Snapshot } from "./contracts.ts";
 
 const openaiConfig: DashboardAIInsightRuntimeConfig = {
   protocol: "openai",
+  auth: "bearer",
   endpoint: "https://llm.example.test/v1",
   apiKey: "test-key-123456",
   model: "trusted-model",
@@ -18,6 +19,7 @@ const openaiConfig: DashboardAIInsightRuntimeConfig = {
 
 const anthropicConfig: DashboardAIInsightRuntimeConfig = {
   protocol: "anthropic",
+  auth: "x-api-key",
   endpoint: "https://llm.example.test/v1",
   apiKey: "test-key-123456",
   model: "claude-model",

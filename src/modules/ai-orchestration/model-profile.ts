@@ -8,7 +8,9 @@
  *
  * Validation rules: URL protocol http/https without embedded credentials,
  * model charset/length, plus the S-500 spec: name 1..64, model 1..120,
- * apiKey 8..512.
+ * apiKey 8..512 for profiles. Official profiles use the built-in managed
+ * preset for their endpoint/protocol/model, while their API key is still
+ * supplied by the user and stored server-side.
  */
 
 export type ProfileMode = "official" | "custom";
@@ -28,7 +30,9 @@ export function defaultAuth(protocol: ProfileProtocol): ProfileAuth {
 
 /** Model used by the built-in official DeepSeek profile preset. */
 export const OFFICIAL_MODEL = "deepseek-chat";
-export const OFFICIAL_ENDPOINT = "https://api.deepseek.com/v1";
+/** Product-facing label shown beneath the official model entry. */
+export const OFFICIAL_MODEL_DISPLAY_NAME = "DeepSeek-V4-Flash";
+export const OFFICIAL_ENDPOINT = "https://api.deepseek.com";
 export const OFFICIAL_PROTOCOL: ProfileProtocol = "openai";
 
 /** Max length constraints shared by validation and the settings form. */
@@ -210,8 +214,10 @@ function validKey(value: string): boolean {
 }
 
 /**
- * Validate a form payload. `isUpdate` relaxes only the API-key rule: on edit an
- * empty key means "keep the stored secret" (the key is never echoed back).
+ * Validate a form payload. Official profiles use the managed preset for all
+ * non-secret configuration. The repository additionally checks that an
+ * official profile has a stored key before activating it. For edits, an empty
+ * key means "keep the stored secret" (the key is never echoed back).
  */
 export function validateModelProfileInput(
   input: ModelProfileInput,
@@ -242,7 +248,7 @@ export function validateModelProfileInput(
   }
 
   const apiKey = input.apiKey?.trim() ?? "";
-  if (!isUpdate && apiKey.length === 0)
+  if (input.mode === "custom" && !isUpdate && apiKey.length === 0)
     return { ok: false, errorCode: "errors.modelProfile.apiKeyRequired" };
   if (apiKey.length > 0 && !validKey(apiKey))
     return apiKey.length < PROFILE_API_KEY_MIN
@@ -258,10 +264,10 @@ export function toModelProfileView(profile: ModelProfile): ModelProfileView {
     id: profile.id,
     name: profile.name,
     mode: profile.mode,
-    protocol: profile.protocol,
+    protocol: effectiveProtocol(profile.mode, profile.protocol),
     apiKeyMasked: Boolean(profile.apiKey && profile.apiKey.length > 0),
-    endpoint: profile.endpoint?.trim() || null,
-    model: profile.model?.trim() || null,
+    endpoint: effectiveEndpoint(profile),
+    model: effectiveModel(profile) ?? null,
     auth: effectiveAuth(profile),
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,

@@ -5,6 +5,7 @@ import {
   parseEnhancePageInsightInput,
   parseGetPageInsightInput,
   parseSetInsightPreferencesInput,
+  parseGetInsightPreferencesInput,
 } from "../../modules/insights/page/server-fns.ts";
 
 const VALID_BASE = { surfaceId: "dashboard", locale: "zh-CN", scope: {} };
@@ -109,6 +110,18 @@ test("setInsightPreferences accepts valid input and defaults mode to rules", () 
       dailyCallLimit: 10,
       surfaceId: "dashboard",
     },
+  );
+});
+
+test("getInsightPreferences accepts an optional registered surface only", () => {
+  assert.deepEqual(parseGetInsightPreferencesInput(undefined), {});
+  assert.deepEqual(parseGetInsightPreferencesInput({}), {});
+  assert.deepEqual(parseGetInsightPreferencesInput({ surfaceId: "settings" }), {
+    surfaceId: "settings",
+  });
+  assert.throws(
+    () => parseGetInsightPreferencesInput({ surfaceId: "bogus" }),
+    /AppError/,
   );
 });
 

@@ -110,7 +110,7 @@ interface CollectedSkill {
 const DEFAULT_SCAN_SCHEDULE: SecurityScanSchedule = {
   enabled: true,
   cycle: "daily",
-  time: "03:00",
+  time: "10:00",
   scope: "all",
   agents: [],
   dir: null,
@@ -279,6 +279,18 @@ const SKIP_REASON_CODES = new Set<
   "scanner-skip",
 ]);
 
+const EMPTY_TOKEN_USAGE = {
+  status: "not_applicable" as const,
+  requestCount: 0,
+  reportedRequestCount: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  totalTokens: 0,
+  cachedInputTokens: 0,
+  byModel: {},
+  byBranch: {},
+};
+
 /**
  * Stable content hash over the collected files, mirroring the `skill-scanner`
  * package's `contentHash`: sorted relative paths + NUL + content. Two install
@@ -302,6 +314,10 @@ function sanitizeReport(
   const rawSkipped = report.skippedFiles;
   const parsed = ScanSkillReportSchema.parse({
     ...report,
+    // Renderer-safe history DTOs created before token usage became mandatory
+    // do not expose accounting data. Keep them readable without weakening the
+    // scanner's validation of newly returned reports.
+    tokenUsage: "tokenUsage" in report ? report.tokenUsage : EMPTY_TOKEN_USAGE,
     skippedFiles: rawSkipped.map((item) => ({
       path: item.path,
       reason: item.reason,

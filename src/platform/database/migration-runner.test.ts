@@ -21,6 +21,7 @@ import {
   MIGRATIONS,
   PLATFORM_MIGRATION_0001_SQL,
 } from "./migrations/index.ts";
+import { PLATFORM_MIGRATION_0007_SQL } from "./migrations/0007_model_profile_auth.ts";
 
 /** Enough of node:test's TestContext for the shared test bed. */
 interface TestScope {
@@ -475,4 +476,53 @@ test("the inline SQL stays byte-identical to migrations/0001_platform.sql", () =
     (match) => match[1],
   );
   assert.deepEqual([...created].sort(), [...FIRST_WAVE_TABLES]);
+});
+
+test("migration 0007 adds auth and keeps legacy rows protocol-default compatible", (t) => {
+  const host = openHost(t);
+  runMigrations({
+    database: host,
+    appVersion: APP_VERSION,
+    definitions: MIGRATIONS.slice(0, 6),
+  });
+  host
+    .prepare(
+      `INSERT INTO model_profiles
+        (profile_id, name, mode, protocol, endpoint, model, secret_id, is_active, created_at_ms, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      "legacy-profile",
+      "Legacy",
+      "custom",
+      "anthropic",
+      "https://example.invalid/v1",
+      "claude-sonnet-4",
+      null,
+      0,
+      1n,
+      1n,
+    );
+
+  runMigrations({ database: host, appVersion: APP_VERSION });
+  const authColumn = host
+    .prepare(
+      "SELECT name, dflt_value FROM pragma_table_info('model_profiles') WHERE name = 'auth'",
+    )
+    .get();
+  assert.equal(authColumn?.name, "auth");
+  assert.equal(authColumn?.dflt_value, null);
+  const legacy = host
+    .prepare("SELECT auth FROM model_profiles WHERE profile_id = ?")
+    .get("legacy-profile");
+  assert.equal(legacy?.auth, null);
+
+  const sqlFile = readFileSync(
+    new URL("./migrations/0007_model_profile_auth.sql", import.meta.url),
+    "utf8",
+  );
+  assert.equal(
+    normalizeMigrationSql(sqlFile),
+    normalizeMigrationSql(PLATFORM_MIGRATION_0007_SQL),
+  );
 });

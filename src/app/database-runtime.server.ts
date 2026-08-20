@@ -9,6 +9,7 @@ import {
   createSqliteModelProfileRepository,
   type ModelSecretCodec,
 } from "../modules/ai-orchestration/infrastructure/sqlite-model-profile-repository.server.ts";
+import { createModelProfileNetworkOperations } from "../modules/ai-orchestration/model-profile.server.ts";
 import { createSqliteClassificationIndexRepository } from "../modules/dashboard/sqlite-classification-index.server.ts";
 import { createSqliteCandidatePersistence } from "../modules/distillation/infrastructure/sqlite-candidate-store.server.ts";
 import { createSqliteDistillQuotaStore } from "../modules/distillation/infrastructure/sqlite-quota-store.server.ts";
@@ -45,6 +46,7 @@ export interface CreateDatabaseRuntimeOptions {
   readonly databasePath?: string;
   readonly versionsProvider?: RuntimeVersionsProvider;
   readonly secretCodec: ModelSecretCodec;
+  readonly modelProfileFetch?: typeof fetch;
 }
 
 /** Opens the sole application persistence authority. Any failure is fatal. */
@@ -64,6 +66,11 @@ export async function createDatabaseRuntime(
       appVersion: APP_VERSION,
     });
     assertHealthy(host);
+    const modelProfileNetwork = createModelProfileNetworkOperations({
+      ...(options.modelProfileFetch
+        ? { fetchFn: options.modelProfileFetch }
+        : {}),
+    });
     const hmacKey = createHash("sha256")
       .update(`trusttools:${options.dataRoot}`)
       .digest();
@@ -117,6 +124,8 @@ export async function createDatabaseRuntime(
       modelProfiles: createSqliteModelProfileRepository({
         database: host,
         secretCodec: options.secretCodec,
+        testProfile: modelProfileNetwork.test,
+        listModels: modelProfileNetwork.listModels,
       }),
     };
     let closed = false;

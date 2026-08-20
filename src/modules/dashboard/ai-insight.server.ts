@@ -19,6 +19,7 @@ import {
   createAiExecutor,
   createProviderRegistry,
   createRegistryRouter,
+  effectiveAuth,
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
@@ -129,6 +130,7 @@ export interface DashboardAIInsightAvailability {
  */
 export interface DashboardAIInsightRuntimeConfig {
   readonly protocol: "openai" | "anthropic";
+  readonly auth: "x-api-key" | "bearer";
   readonly endpoint: string;
   readonly apiKey: string;
   readonly model: string;
@@ -313,7 +315,13 @@ async function resolveActiveProfileConfig(): Promise<DashboardAIInsightRuntimeCo
     const endpoint = effectiveEndpoint(profile);
     const model = effectiveModel(profile);
     if (!endpoint || !model) return null;
-    return { protocol, endpoint, apiKey: profile.apiKey, model };
+    return {
+      protocol,
+      auth: effectiveAuth(profile),
+      endpoint,
+      apiKey: profile.apiKey,
+      model,
+    };
   } catch {
     return null;
   }
@@ -327,17 +335,27 @@ function anthropicEndpoint(endpoint: string): string {
   return `${endpoint.replace(/\/+$/u, "")}/messages`;
 }
 
-function openAIHeaders(apiKey: string): Record<string, string> {
-  return {
-    "content-type": "application/json",
-    authorization: `Bearer ${apiKey}`,
-  };
+function openAIHeaders(
+  apiKey: string,
+  auth: "x-api-key" | "bearer",
+): Record<string, string> {
+  return auth === "x-api-key"
+    ? { "content-type": "application/json", "x-api-key": apiKey }
+    : {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      };
 }
 
-function anthropicHeaders(apiKey: string): Record<string, string> {
+function anthropicHeaders(
+  apiKey: string,
+  auth: "x-api-key" | "bearer",
+): Record<string, string> {
   return {
     "content-type": "application/json",
-    "x-api-key": apiKey,
+    ...(auth === "x-api-key"
+      ? { "x-api-key": apiKey }
+      : { authorization: `Bearer ${apiKey}` }),
     "anthropic-version": "2023-06-01",
   };
 }
@@ -357,8 +375,8 @@ function createDashboardAIInsightProvider(
         {
           method: "POST",
           headers: anthropic
-            ? anthropicHeaders(config.apiKey)
-            : openAIHeaders(config.apiKey),
+            ? anthropicHeaders(config.apiKey, config.auth)
+            : openAIHeaders(config.apiKey, config.auth),
           body: JSON.stringify(
             anthropic
               ? {

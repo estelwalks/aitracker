@@ -38,3 +38,29 @@ test("settings route delegates rendering to the module presentation", () => {
     /function SettingsPage|useAppSettings|AlertDialog/,
   );
 });
+
+test("model settings follow the prototype's official entry and modal form layout", () => {
+  const source = readFileSync(
+    new URL("./presentation/ModelProfilesSection.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /settings\.modelProfiles\.add/);
+  assert.match(source, /<Dialog/);
+  assert.match(source, /OFFICIAL_ENTRY_ID/);
+  assert.match(source, /OFFICIAL_ENDPOINT/);
+  assert.match(source, /form\.mode === "custom"/);
+  assert.doesNotMatch(source, /form\.mode === "official" &&/);
+  assert.match(source, /t\("common\.save"\)/);
+  assert.match(source, /disabled=\{!formValid \|\| saving\}/);
+  assert.doesNotMatch(source, /testPassed|setTestPassed/);
+  assert.doesNotMatch(source, /modeCustomCardDesc/);
+  assert.doesNotMatch(source, /saveNew|saveEdit/);
+  assert.match(source, /OFFICIAL_MODEL_DISPLAY_NAME/);
+  assert.match(source, /settings\.modelProfiles\.enable/);
+  assert.match(source, /settings\.modelProfiles\.officialDeleteDisabled/);
+  assert.match(source, /disabled=\{isOfficial\}/);
+  assert.match(source, /\{endpoint\} · \{model\}/);
+  assert.doesNotMatch(source, /settings\.modelProfiles\.authLabel/);
+  assert.match(source, /setForm\(\(current\)/);
+  assert.doesNotMatch(source, /currentActive/);
+});

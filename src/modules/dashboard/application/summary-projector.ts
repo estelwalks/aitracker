@@ -139,6 +139,7 @@ function windowFromView(
     totals: view.totals,
     estimatedCostUsd: view.estimatedCostUsd,
     estimatedCostIsPartial: view.estimatedCostIsPartial,
+    cacheSavingsUsd: view.cacheSavingsUsd,
     cacheRate: view.cacheRate,
     comparison: view.comparison,
     sessions: view.sessions,

@@ -8,6 +8,7 @@ import { createPageInsightsApplication } from "./application.ts";
 import type {
   InsightCandidate,
   InsightEnhancementResult,
+  InsightEnhancementInput,
   InsightEnhancerPort,
   InsightMode,
   InsightStorePort,
@@ -59,7 +60,12 @@ function makeAdapter(
   };
 }
 
-function makeStore(mode: InsightMode = "rules"): InsightStorePort {
+function makeStore(
+  mode: InsightMode = "rules",
+  overrides: Partial<
+    ReturnType<InsightStorePort["getEffectivePreference"]>
+  > = {},
+): InsightStorePort {
   return {
     getEffectivePreference: () => ({
       scopeKey: "global",
@@ -69,6 +75,7 @@ function makeStore(mode: InsightMode = "rules"): InsightStorePort {
       consentedAtMs: null,
       dailyCallLimit: null,
       updatedAtMs: 0,
+      ...overrides,
     }),
     setPreference: () => {},
   };
@@ -81,7 +88,7 @@ function makeEnhancer(result: InsightEnhancementResult): InsightEnhancerPort {
   };
 }
 
-test("read returns a complete rules envelope in default rules mode", async () => {
+test("read returns a complete local envelope when default enhancement has no enhancer", async () => {
   const app = createPageInsightsApplication({ adapters: [makeAdapter()] });
   const env = await app.read("dashboard", { range: "today" }, "zh-CN");
   assert.equal(env.surfaceId, "dashboard");
@@ -128,8 +135,8 @@ test("enhance success replaces analysis and keeps fact key/params", async () => 
   assert.equal(c1.analysis, "risk analysis");
   assert.equal(c1.key, "insights.page.dashboard.dashboard-security-risk");
   assert.deepEqual(c1.params, { count: 2 });
-  assert.equal(c1.action?.id, "open_distill");
-  assert.equal(c1.action?.labelKey, "insights.actions.distill");
+  assert.equal(c1.action?.id, "open_security");
+  assert.equal(c1.action?.labelKey, "insights.actions.security");
 
   const c2 = env.lines.find((line) => line.id === "c2");
   assert.ok(c2);
@@ -149,7 +156,11 @@ test("enhance failure keeps rules lines identical to read", async () => {
     const app = createPageInsightsApplication({
       adapters: [makeAdapter()],
       enhancer: makeEnhancer({ status, lines: [] }),
-      store: makeStore("enhanced-auto"),
+      store: makeStore("enhanced-auto", {
+        consentVersion: "1",
+        consentedAtMs: 1,
+      }),
+      now: () => 2,
     });
     const readEnv = await app.read("dashboard", { range: "today" }, "zh-CN");
     const env = await app.enhance(
@@ -195,6 +206,255 @@ test("enhance in rules mode or without enhancer returns enhancer-unavailable", a
     { locale: "zh-CN", reason: "auto" },
   );
   assert.equal(noEnhancerEnv.status, "enhancer-unavailable");
+});
+
+test("enhancement reason cannot bypass the effective mode or auto consent", async () => {
+  let calls = 0;
+  const enhancer: InsightEnhancerPort = {
+    id: "counting",
+    async enhance() {
+      calls += 1;
+      return { status: "enhanced-ready", lines: [] };
+    },
+  };
+  for (const [mode, reason, overrides] of [
+    ["rules", "manual", {}],
+    ["enhanced-manual", "auto", {}],
+    ["enhanced-auto", "manual", { consentVersion: "1", consentedAtMs: 1 }],
+    ["enhanced-auto", "auto", { consentVersion: null, consentedAtMs: null }],
+  ] as const) {
+    const app = createPageInsightsApplication({
+      adapters: [makeAdapter()],
+      enhancer,
+      store: makeStore(mode, overrides),
+      now: () => 2,
+    });
+    const env = await app.enhance("dashboard", {}, { locale: "zh-CN", reason });
+    assert.equal(env.status, "enhancer-unavailable");
+  }
+  assert.equal(calls, 0);
+});
+
+test("effective profile and daily limit are forwarded to the enhancer", async () => {
+  let captured: InsightEnhancementInput | undefined;
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: {
+      id: "capture",
+      async enhance(input) {
+        captured = input;
+        return { status: "enhancer-failed", lines: [] };
+      },
+    },
+    store: makeStore("enhanced-manual", {
+      profileId: "profile-selected",
+      dailyCallLimit: 7,
+    }),
+  });
+  await app.enhance("dashboard", {}, { locale: "zh-CN", reason: "manual" });
+  assert.equal(captured?.profileId, "profile-selected");
+  assert.equal(captured?.dailyCallLimit, 7);
+  assert.equal(captured?.adapterVersion, 1);
+});
+
+test("model selection and order control non-mandatory lines while mandatory safety stays first", async () => {
+  const adapter = makeAdapter();
+  const originalCompose = adapter.composeCandidates;
+  const rankedAdapter: PageInsightAdapter = {
+    ...adapter,
+    composeCandidates(bundle) {
+      return [
+        ...originalCompose(bundle),
+        {
+          id: "c3",
+          severity: "attention",
+          factKey: "insights.page.dashboard.dashboard-watch",
+          factParams: { agents: 7, blocked: 0, hours: 1, distillable: 0 },
+          evidenceRefs: ["e1"],
+          allowedActionIds: [],
+        },
+        {
+          id: "c4",
+          severity: "risk",
+          factKey: "insights.page.dashboard.dashboard-watch",
+          factParams: { agents: 8, blocked: 0, hours: 1, distillable: 0 },
+          evidenceRefs: ["e1"],
+          allowedActionIds: [],
+        },
+      ];
+    },
+  };
+  const app = createPageInsightsApplication({
+    adapters: [rankedAdapter],
+    enhancer: makeEnhancer({
+      status: "enhanced-ready",
+      lines: [
+        { candidateId: "c3", analysis: "attention selected first" },
+        { candidateId: "c2", analysis: "info selected second" },
+        { candidateId: "c1", analysis: "mandatory returned last" },
+      ],
+    }),
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    {
+      locale: "zh-CN",
+      reason: "manual",
+    },
+  );
+  assert.deepEqual(
+    env.lines.map((line) => line.id),
+    ["c1", "c3", "c2"],
+  );
+  assert.equal(env.lines.length, 3);
+  assert.equal(env.lines[0]?.severity, "risk");
+});
+
+test("local entity candidates remain as rule fallback but never enter enhancement payload", async () => {
+  let captured: InsightEnhancementInput | undefined;
+  const adapter = makeAdapter();
+  const privacyAdapter: PageInsightAdapter = {
+    ...adapter,
+    composeCandidates(bundle) {
+      return [
+        {
+          id: "private-project",
+          severity: "attention",
+          factKey: "insights.page.tracker.tracker-top-project",
+          factParams: { name: "Project Aurora Secret" },
+          evidenceRefs: ["e1"],
+          allowedActionIds: ["open_tracker"],
+          actionId: "open_tracker",
+          remoteEligible: false,
+        },
+        ...adapter.composeCandidates(bundle),
+      ];
+    },
+  };
+  const app = createPageInsightsApplication({
+    adapters: [privacyAdapter],
+    enhancer: {
+      id: "capture",
+      async enhance(input) {
+        captured = input;
+        return {
+          status: "enhanced-ready",
+          lines: [{ candidateId: "c1", analysis: "safe analysis" }],
+        };
+      },
+    },
+    store: makeStore("enhanced-manual"),
+  });
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    {
+      locale: "zh-CN",
+      reason: "manual",
+    },
+  );
+
+  assert.ok(captured);
+  assert.equal(JSON.stringify(captured.candidates).includes("Aurora"), false);
+  assert.equal(
+    captured.candidates.some((candidate) => candidate.id === "private-project"),
+    false,
+  );
+  const local = env.lines.find((line) => line.id === "private-project");
+  assert.deepEqual(local?.params, { name: "Project Aurora Secret" });
+  assert.equal(local?.source, "rules");
+});
+
+test("evidence changing during generation discards the old enhancement", async () => {
+  let reads = 0;
+  const baseAdapter = makeAdapter();
+  const changingAdapter: PageInsightAdapter = {
+    ...baseAdapter,
+    async loadEvidence(scope) {
+      reads += 1;
+      return {
+        surfaceId: "dashboard",
+        scope,
+        observedAt: `2026-08-07T00:00:0${reads}.000Z`,
+        evidence: [
+          {
+            id: "e1",
+            kind: "metric",
+            value: reads,
+            observedAt: `2026-08-07T00:00:0${reads}.000Z`,
+            freshness: "fresh",
+            sensitivity: "aggregate",
+          },
+        ],
+      };
+    },
+    composeCandidates(bundle) {
+      const count = Number(bundle.evidence[0]?.value ?? 0);
+      return [
+        {
+          id: "c1",
+          severity: "risk",
+          factKey: "insights.page.dashboard.dashboard-security-risk",
+          factParams: { count },
+          evidenceRefs: ["e1"],
+          allowedActionIds: ["open_security"],
+          mandatory: true,
+        },
+      ];
+    },
+  };
+  const app = createPageInsightsApplication({
+    adapters: [changingAdapter],
+    enhancer: makeEnhancer({
+      status: "enhanced-ready",
+      lines: [{ candidateId: "c1", analysis: "old analysis" }],
+    }),
+    store: makeStore("enhanced-manual"),
+  });
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    {
+      locale: "zh-CN",
+      reason: "manual",
+    },
+  );
+
+  assert.equal(reads, 2);
+  assert.equal(env.status, "rules");
+  assert.equal(env.source, "rules");
+  assert.deepEqual(env.lines[0]?.params, { count: 2 });
+  assert.equal(env.lines[0]?.analysis, undefined);
+});
+
+test("read advertises auto enhancement only with current valid consent", async () => {
+  const enhancer = makeEnhancer({ status: "enhanced-ready", lines: [] });
+  const authorized = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer,
+    store: makeStore("enhanced-auto", {
+      consentVersion: "1",
+      consentedAtMs: 1,
+    }),
+    now: () => 2,
+  });
+  assert.equal(
+    (await authorized.read("dashboard", {}, "zh-CN")).autoEnhance,
+    true,
+  );
+  const stale = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer,
+    store: makeStore("enhanced-auto", {
+      consentVersion: "old",
+      consentedAtMs: 1,
+    }),
+    now: () => 2,
+  });
+  assert.equal((await stale.read("dashboard", {}, "zh-CN")).autoEnhance, false);
 });
 
 test("read throws AppError when the surface has no adapter", async () => {

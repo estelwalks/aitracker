@@ -97,9 +97,11 @@ interface StoredModelProfile {
   readonly model?: string;
 }
 
-function toModelConfig(
+export function toSecurityModelConfig(
   profile: StoredModelProfile | null,
+  enabled: boolean,
 ): ModelConfig | undefined {
+  if (!enabled) return undefined;
   if (!profile?.apiKey) return undefined;
   const provider = profile.mode === "official" ? "openai" : profile.protocol;
   const endpoint =
@@ -166,7 +168,7 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
       const profile = (await root.modelProfiles.getProfileForExecution(
         active.id,
       )) as StoredModelProfile | null;
-      return toModelConfig(profile);
+      return toSecurityModelConfig(profile, true);
     },
   };
 }
@@ -184,16 +186,16 @@ export function createDevSecurityScannerService(
   return import("../../../../electron/security-scanner-service.js").then(
     ({ SecurityScannerService }) =>
       new SecurityScannerService({
-    homeDirectory: options.homeDirectory,
-    locale: options.locale ?? (() => currentDevLocale),
-    env: options.env ?? process.env,
-    secretStorage: options.secretStorage ?? createDevSecretStorage(),
-    persistence: options.persistence ?? createDevScannerPersistence(),
-    ...(options.now ? { now: options.now } : {}),
-    ...(options.scanner ? { scanner: options.scanner } : {}),
-    ...(options.beforeOpenFile
-      ? { beforeOpenFile: options.beforeOpenFile }
-      : {}),
+        homeDirectory: options.homeDirectory,
+        locale: options.locale ?? (() => currentDevLocale),
+        env: options.env ?? process.env,
+        secretStorage: options.secretStorage ?? createDevSecretStorage(),
+        persistence: options.persistence ?? createDevScannerPersistence(),
+        ...(options.now ? { now: options.now } : {}),
+        ...(options.scanner ? { scanner: options.scanner } : {}),
+        ...(options.beforeOpenFile
+          ? { beforeOpenFile: options.beforeOpenFile }
+          : {}),
       }),
   );
 }

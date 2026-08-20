@@ -110,7 +110,8 @@ export {
   type CompanionSecurityClientError,
 } from "./query/browser-client";
 
-// Optional LLM review supplement (M4): browser-safe contracts, aggregate
+// Optional LLM review supplement (M4): browser-safe opaque history reference,
+// server-authoritative aggregate reconstruction,
 // builder and the explicit POST server functions.
 export {
   SECURITY_LLM_REVIEW_PREF_KEY,
@@ -128,6 +129,7 @@ export {
   type SecurityLlmReviewStatus,
   type SecurityLlmReviewAvailability,
   type SecurityLlmReviewRequest,
+  type SecurityLlmReviewAggregateRequest,
 } from "./llm-review.contracts";
 export {
   getSecurityLlmReview,

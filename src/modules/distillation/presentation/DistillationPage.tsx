@@ -247,8 +247,8 @@ export function DistillationPage({
   const selectedModel = initial.modelOptions.find(
     (option) => option.id === modelId,
   );
-  // True when at least one real (non-offline) model is available — the built-in
-  // env-backed model or a saved profile. When false, every run is blocked with
+  // True when at least one real (non-offline) model is available — a saved
+  // profile. When false, every run is blocked with
   // `errors.distillation.noModelConfigured`, so the page shows a config hint.
   const hasRealModel = initial.modelOptions.some((option) => !option.offline);
   // Prototype parity: the official model gates on its daily quota in both
@@ -287,9 +287,8 @@ export function DistillationPage({
     () =>
       // 历史弹窗的「查看」可能指向刷新后从持久化恢复的候选（不在 sessionIds），
       // 先从全量 candidates 解析，否则回退到本次会话首个结果。
-      (viewId
-        ? candidates.find((c) => c.candidateId === viewId)
-        : undefined) ?? sessionCandidates[0],
+      (viewId ? candidates.find((c) => c.candidateId === viewId) : undefined) ??
+      sessionCandidates[0],
     [candidates, sessionCandidates, viewId],
   );
 
@@ -440,8 +439,8 @@ export function DistillationPage({
   function handleStart() {
     setViewId(null);
     // Quick mode also forwards the selected model: the page defaults `modelId`
-    // to the first real (non-offline) option — the built-in env-backed model or
-    // the first saved profile — so one-click runs reach a real model. The
+    // to the active saved profile or offline, so one-click runs use the shared
+    // model source. The
     // selected output type travels as `kind` so the result card renders the
     // right asset class (skill/workflow/prompt vs persona/memory).
     void runDistillation(selectedItems.map(toRef), {

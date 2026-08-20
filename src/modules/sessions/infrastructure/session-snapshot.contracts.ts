@@ -35,6 +35,12 @@ export type SessionSnapshotRecord = SessionSummary & {
 };
 
 export interface SessionSnapshotData {
+  /**
+   * Scanner contract version. A persisted snapshot from an older scanner is
+   * readable as last-known-good data, but must not be treated as current.
+   */
+  /** Optional only for legacy envelopes created before versioning existed. */
+  readonly collectorVersion?: string;
   readonly generatedAt: string;
   readonly sessions: readonly SessionSnapshotRecord[];
   /** Pre-aggregated density for report projections (T3-01). */

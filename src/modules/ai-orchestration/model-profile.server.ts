@@ -18,6 +18,8 @@ import {
   effectiveAuth,
   effectiveEndpoint,
   effectiveModel,
+  effectiveProtocol,
+  validateModelProfileInput,
   type ModelListResult,
   type ModelProfile,
   type ModelProfileErrorCode,
@@ -94,6 +96,218 @@ export function modelListUrl(endpoint: string): string {
   return `${endpoint.replace(/\/+$/, "")}/models`;
 }
 
+const MODEL_PROFILE_NETWORK_TIMEOUT_MS = 12_000;
+const KNOWN_MODEL_FALLBACKS: Record<ProfileProtocol, readonly string[]> = {
+  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
+  anthropic: [
+    "claude-sonnet-4-5",
+    "claude-3-7-sonnet-latest",
+    "claude-3-5-haiku-latest",
+  ],
+};
+const OFFICIAL_MODEL_FALLBACKS = [
+  "deepseek-chat",
+  "deepseek-reasoner",
+] as const;
+
+class ModelProfileNetworkTimeout extends Error {
+  readonly name = "ModelProfileNetworkTimeout";
+}
+
+function endpointIsValid(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      value.length <= 2048 &&
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeNetworkMessage(error: unknown): string {
+  if (error instanceof ModelProfileNetworkTimeout) return "request timed out";
+  if (error instanceof Error && error.message) {
+    return error.message.replace(/[\\\r\n]/gu, " ").slice(0, 160);
+  }
+  return "request failed";
+}
+
+async function withNetworkTimeout<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new ModelProfileNetworkTimeout("request timed out"));
+    }, timeoutMs);
+  });
+  const operationPromise = operation(controller.signal).catch(
+    (error: unknown) => {
+      // Fetch implementations commonly reject with AbortError after the
+      // controller is aborted. Preserve the stable timeout code in that race.
+      if (controller.signal.aborted)
+        throw new ModelProfileNetworkTimeout("request timed out");
+      throw error;
+    },
+  );
+  try {
+    return await Promise.race([operationPromise, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function parseRemoteModelIds(payload: unknown): string[] {
+  if (Array.isArray(payload)) {
+    return parseRemoteModelIds({ models: payload });
+  }
+  if (!payload || typeof payload !== "object") return [];
+  const data =
+    (payload as { data?: unknown; models?: unknown; result?: unknown }).data ??
+    (payload as { models?: unknown }).models ??
+    (payload as { result?: unknown }).result;
+  if (!Array.isArray(data)) return [];
+  const ids = data
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (!item || typeof item !== "object") return "";
+      const record = item as {
+        id?: unknown;
+        model?: unknown;
+        name?: unknown;
+      };
+      const id = record.id ?? record.model ?? record.name;
+      return typeof id === "string" ? id : "";
+    })
+    .map((id) => id.trim())
+    .filter((id) => /^[A-Za-z0-9._:/-]{1,120}$/u.test(id));
+  return [...new Set(ids)];
+}
+
+export interface ModelProfileNetworkOperations {
+  readonly test: (input: ModelProfileInput) => Promise<ModelProfileTestResult>;
+  readonly listModels: (input: ModelProfileInput) => Promise<ModelListResult>;
+}
+
+/** Server-side provider calls used by the SQLite repository actions. */
+export function createModelProfileNetworkOperations(options?: {
+  readonly fetchFn?: typeof fetch;
+  readonly timeoutMs?: number;
+}): ModelProfileNetworkOperations {
+  const fetchImpl = options?.fetchFn ?? fetch;
+  const timeoutMs = options?.timeoutMs ?? MODEL_PROFILE_NETWORK_TIMEOUT_MS;
+
+  async function test(
+    input: ModelProfileInput,
+  ): Promise<ModelProfileTestResult> {
+    const validation = validateModelProfileInput(input, input.id !== undefined);
+    if (!validation.ok) return validation;
+    const apiKey = input.apiKey?.trim() ?? "";
+    if (!apiKey)
+      return { ok: false, errorCode: "errors.modelProfile.apiKeyRequired" };
+    const protocol = effectiveProtocol(input.mode, input.protocol);
+    const endpoint = effectiveEndpoint(input);
+    const model = effectiveModel(input);
+    if (!model)
+      return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
+    if (!endpointIsValid(endpoint))
+      return { ok: false, errorCode: "errors.modelProfile.invalidUrl" };
+
+    const startedAt = Date.now();
+    try {
+      const response = await withNetworkTimeout(
+        (signal) =>
+          fetchImpl(chatUrl(protocol, endpoint), {
+            method: "POST",
+            headers: chatHeaders(protocol, apiKey, effectiveAuth(input)),
+            body: chatRequestBody(protocol, model, "Reply with OK.", 16),
+            signal,
+          }),
+        timeoutMs,
+      );
+      const latencyMs = Math.max(0, Date.now() - startedAt);
+      if (!response.ok)
+        return {
+          ok: false,
+          latencyMs,
+          errorCode: "errors.modelProfile.testFailed",
+        };
+      // A successful HTTP response is sufficient for a connectivity test.
+      // Providers differ in their response envelope (and some gateways return
+      // an empty body), while the request itself has already exercised the
+      // configured endpoint, protocol and credential.
+      return { ok: true, latencyMs };
+    } catch (error) {
+      return {
+        ok: false,
+        latencyMs: Math.max(0, Date.now() - startedAt),
+        errorCode:
+          error instanceof ModelProfileNetworkTimeout
+            ? "errors.modelProfile.testTimeout"
+            : "errors.modelProfile.testFailed",
+      };
+    }
+  }
+
+  async function listModels(
+    input: ModelProfileInput,
+  ): Promise<ModelListResult> {
+    const endpoint = effectiveEndpoint(input);
+    const protocol = effectiveProtocol(input.mode, input.protocol);
+    const fallback =
+      input.mode === "official"
+        ? OFFICIAL_MODEL_FALLBACKS
+        : KNOWN_MODEL_FALLBACKS[protocol];
+    const fallbackResult = (reason: string): ModelListResult => ({
+      ok: true,
+      models: fallback,
+      source: "fallback",
+      message: `Remote model list unavailable (${reason}); showing known ${protocol} models.`,
+      errorCode: "errors.modelProfile.listFailed",
+    });
+    const apiKey = input.apiKey?.trim() ?? "";
+    if (!apiKey) return fallbackResult("API key is missing");
+    if (!endpointIsValid(endpoint))
+      return fallbackResult("base URL is invalid");
+
+    try {
+      const response = await withNetworkTimeout(
+        (signal) =>
+          fetchImpl(modelListUrl(endpoint), {
+            method: "GET",
+            headers: chatHeaders(protocol, apiKey, effectiveAuth(input)),
+            signal,
+          }),
+        timeoutMs,
+      );
+      if (!response.ok) return fallbackResult(`HTTP ${response.status}`);
+      const payload = await withNetworkTimeout(
+        () => response.json(),
+        timeoutMs,
+      );
+      const ids = parseRemoteModelIds(payload);
+      if (ids.length === 0) return fallbackResult("empty response");
+      return {
+        ok: true,
+        models: ids,
+        source: "remote",
+        message: `Fetched ${ids.length} models from the remote endpoint.`,
+      };
+    } catch (error) {
+      return fallbackResult(safeNetworkMessage(error));
+    }
+  }
+
+  return { test, listModels };
+}
+
 function parseChatText(protocol: ProfileProtocol, raw: string): string {
   try {
     const json: unknown = JSON.parse(raw);
@@ -125,7 +339,7 @@ export interface ModelProfileRepository {
    * Never call this from a renderer-visible path.
    */
   getProfileForExecution(id: string): Promise<ModelProfile | undefined>;
-  /** Create or update a profile; a new profile becomes active. */
+  /** Create or update a profile without changing the active profile. */
   upsert(input: ModelProfileInput): Promise<ModelProfileView>;
   /** Remove a profile; deleting the active one activates the first survivor. */
   remove(
@@ -151,80 +365,6 @@ export interface ModelProfileRepository {
  * A missing/expired profile or transport failure throws, letting the executor
  * fall back to its deterministic offline response (status `fallback`).
  */
-/**
- * Read a real model connection straight from the host environment — the
- * workbench's built-in "默认/官方" option. Returns null when no credential is
- * present. Priority: `ANTHROPIC_AUTH_TOKEN`, then `ANTHROPIC_API_KEY`; base
- * and model default to Anthropic's public API.
- */
-export function getEnvProviderConfig(): {
-  readonly key: string;
-  readonly base: string;
-  readonly model: string;
-} | null {
-  const key =
-    process.env.ANTHROPIC_AUTH_TOKEN?.trim() ||
-    process.env.ANTHROPIC_API_KEY?.trim() ||
-    "";
-  if (!key) return null;
-  return {
-    key,
-    base: process.env.ANTHROPIC_BASE_URL?.trim() || "https://api.anthropic.com",
-    model:
-      process.env.ANTHROPIC_MODEL?.trim() ||
-      process.env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() ||
-      "claude-sonnet-4-5",
-  };
-}
-
-/** `/messages` against a base that may or may not already carry `/v1`. */
-function anthropicChatUrl(base: string): string {
-  const clean = base.replace(/\/+$/, "");
-  return /\/v\d+$/.test(clean) ? `${clean}/messages` : `${clean}/v1/messages`;
-}
-
-/**
- * Provider adapter backed by the host environment's Anthropic-compatible
- * credentials (`getEnvProviderConfig`). Registered in the composition root
- * under the stable id `env`; the workbench routes the built-in "默认" model
- * here. Presence of a credential is the availability gate; a transport failure
- * throws, letting the executor surface an honest error instead of a silent
- * fallback result.
- */
-export function createEnvBackedProvider(options?: {
-  readonly fetchFn?: typeof fetch;
-}): AIModelProvider {
-  const fetchImpl = options?.fetchFn ?? fetch;
-  return {
-    providerId: "env",
-    async invoke(request: AIProviderRequest): Promise<AIResponse> {
-      const config = getEnvProviderConfig();
-      if (!config) throw new Error("env provider not configured");
-      const content =
-        `${request.prompt.template}\n\n${request.input.text}`.trim();
-      const response = await fetchImpl(anthropicChatUrl(config.base), {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${config.key}`,
-          "anthropic-version": "2023-06-01",
-        },
-        body: chatRequestBody("anthropic", config.model, content, 8192),
-        signal: request.signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const text = parseChatText("anthropic", await response.text());
-      if (!text) throw new Error("empty model response");
-      return {
-        providerId: "env",
-        modelId: request.modelId,
-        text,
-        finishReason: "stop",
-      };
-    },
-  };
-}
-
 export function createProfileBackedProvider(options: {
   readonly resolve: (profileId: string) => Promise<ModelProfile | undefined>;
   readonly fetchFn?: typeof fetch;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { INSIGHT_SURFACE_IDS } from "./contracts.ts";
@@ -61,4 +61,16 @@ test("the sitemap file is explicitly excluded from the surface registry", () => 
   assert.ok(files.includes("sitemap[.]xml.ts"), "sitemap file should exist");
   const registered = new Set(Object.values(SURFACE_ROUTE_FILES));
   assert.equal(registered.has("sitemap[.]xml.ts"), false);
+});
+
+test("settings page keeps the insight surface off the top-level settings hero", () => {
+  const source = readFileSync(
+    path.resolve(
+      ROUTES_DIR,
+      "../modules/settings/presentation/SettingsPage.tsx",
+    ),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /InsightCard/);
+  assert.match(source, /<InsightSettingsSection\s*\/>/);
 });

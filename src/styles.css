@@ -62,11 +62,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* 四语言字体回退栈:中文/日文/韩文依次回退,数字与代码继续 JetBrains Mono */
+  /* 与原型一致：Inter 负责界面字形，JetBrains Mono 负责数字与代码 */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Yu Gothic UI",
-    "Yu Gothic", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans KR",
-    "Malgun Gothic", "Microsoft YaHei", "Apple SD Gothic Neo", system-ui,
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
     sans-serif;
   --font-mono:
     "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
@@ -81,6 +79,7 @@
   --surface: oklch(0.225 0.005 265);
   --surface-2: oklch(0.27 0.006 265);
   --card: oklch(0.196 0.005 265);
+  --rowline: color-mix(in oklab, var(--foreground) 5%, transparent);
   --elev-1: 0 1px 1px oklch(0 0 0 / 0.5), 0 10px 26px -18px oklch(0 0 0 / 0.9);
   --elev-2:
     0 2px 6px oklch(0 0 0 / 0.55), 0 22px 48px -24px oklch(0 0 0 / 0.95);
@@ -128,6 +127,9 @@
   --sidebar-accent-foreground: oklch(1 0 0);
   --sidebar-border: oklch(0.27 0 0);
   --sidebar-ring: oklch(0.7 0 0);
+  --scan-a: 1;
+  --scan-line: oklch(0.72 0.12 162 / 0.26);
+  --scan-line-soft: oklch(0.72 0.12 162 / 0.14);
 }
 
 /* 亮色主题：白天 / 会议展示 */
@@ -144,6 +146,7 @@
     0 18px 40px -20px oklch(0.4 0.02 258 / 0.45);
   --hairline: inset 0 1px 0 oklch(1 0 0 / 0.9);
   --card: oklch(1 0 0);
+  --rowline: color-mix(in oklab, var(--foreground) 6%, transparent);
   --card-foreground: oklch(0.24 0.02 258);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.02 258);
@@ -167,6 +170,9 @@
   --sidebar-accent: oklch(0.93 0.01 250);
   --sidebar-accent-foreground: oklch(0.24 0.02 258);
   --sidebar-border: oklch(0.9 0.008 255);
+  --scan-a: 2.6;
+  --scan-line: oklch(0.5 0.09 162 / 0.5);
+  --scan-line-soft: oklch(0.5 0.09 162 / 0.28);
 }
 
 /* 高对比度：投影 / 大屏 / 视力辅助 */
@@ -176,6 +182,7 @@
   --surface: oklch(0.12 0 0);
   --surface-2: oklch(0.18 0 0);
   --card: oklch(0.1 0 0);
+  --rowline: color-mix(in oklab, var(--foreground) 8%, transparent);
   --card-foreground: oklch(1 0 0);
   --popover: oklch(0.1 0 0);
   --popover-foreground: oklch(1 0 0);
@@ -208,6 +215,7 @@
   --surface: oklch(0.238 0.023 70);
   --surface-2: oklch(0.272 0.026 70);
   --card: oklch(0.238 0.023 70);
+  --rowline: color-mix(in oklab, var(--foreground) 6%, transparent);
   --card-foreground: oklch(0.925 0.028 82);
   --popover: oklch(0.25 0.024 70);
   --popover-foreground: oklch(0.925 0.028 82);
@@ -300,7 +308,11 @@
   line-height: 1;
   white-space: nowrap;
   color: var(--color-muted-foreground);
-  background-color: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 5%,
+    transparent
+  );
   transition:
     background-color 0.16s ease,
     color 0.16s ease,
@@ -313,7 +325,11 @@
 
 @utility tt-chip-on {
   color: var(--color-foreground);
-  background-color: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 12%,
+    transparent
+  );
   font-weight: 500;
 }
 
@@ -329,7 +345,11 @@
   line-height: 1;
   white-space: nowrap;
   color: var(--color-muted-foreground);
-  background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 6%,
+    transparent
+  );
 }
 
 /* 统一的下拉筛选控件：与 tt-chip 同高、同字号 */
@@ -340,13 +360,20 @@
   font-size: 11.5px;
   line-height: 1;
   color: var(--color-foreground);
-  background-color: color-mix(in oklab, var(--color-foreground) 5%, transparent);
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 5%,
+    transparent
+  );
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
     linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-position:
     right 0.9rem center,
     right 0.62rem center;
-  background-size: 4px 4px, 4px 4px;
+  background-size:
+    4px 4px,
+    4px 4px;
   background-repeat: no-repeat;
   appearance: none;
   outline: none;
@@ -354,7 +381,11 @@
   transition: background-color 0.16s ease;
 
   &:hover {
-    background-color: color-mix(in oklab, var(--color-foreground) 9%, transparent);
+    background-color: color-mix(
+      in oklab,
+      var(--color-foreground) 9%,
+      transparent
+    );
   }
 }
 
@@ -371,9 +402,15 @@
   padding: 3px;
   border-radius: 9999px;
   backdrop-filter: blur(18px) saturate(170%);
-  background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-foreground) 14%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 16%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 6%,
+    transparent
+  );
+  border: 1px solid
+    color-mix(in oklab, var(--color-foreground) 14%, transparent);
+  box-shadow: inset 0 1px 0
+    color-mix(in oklab, var(--color-foreground) 16%, transparent);
 }
 
 @utility tt-seg-item {
@@ -397,18 +434,27 @@
 
   &:hover {
     color: var(--color-foreground);
-    background-color: color-mix(in oklab, var(--color-foreground) 6%, transparent);
+    background-color: color-mix(
+      in oklab,
+      var(--color-foreground) 6%,
+      transparent
+    );
   }
 }
 
 @utility tt-seg-on {
   color: var(--color-foreground);
   font-weight: 500;
-  background-color: color-mix(in oklab, var(--color-foreground) 20%, transparent);
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 20%,
+    transparent
+  );
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 30%, transparent),
     inset 0 -1px 0 color-mix(in oklab, var(--color-foreground) 8%, transparent),
-    0 6px 16px -10px color-mix(in oklab, var(--color-foreground) 55%, transparent);
+    0 6px 16px -10px
+      color-mix(in oklab, var(--color-foreground) 55%, transparent);
 }
 
 /* Markdown 排版：报告 / 蒸馏预览等富文本渲染复用 */
@@ -566,12 +612,12 @@
   }
 
   & th {
-    height: 2.375rem;
-    padding-inline: 0.875rem;
+    padding: 0.6rem 0.875rem;
     color: var(--color-muted-foreground);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.075em;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
     text-align: left;
     text-transform: uppercase;
     white-space: nowrap;
@@ -737,6 +783,81 @@
   max-width: 1720px;
 }
 
+/* Agent 概览的横向切换条：与原型保持同一套覆盖式滚动控件。 */
+.tt-agentbar {
+  position: sticky;
+  display: block;
+  background: color-mix(in oklab, var(--color-background) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.tt-ab-track {
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+
+.tt-ab-track::-webkit-scrollbar {
+  display: none;
+}
+
+.tt-ab-item {
+  scroll-snap-align: start;
+}
+
+.tt-ab-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 30;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-foreground);
+  background: color-mix(in oklab, var(--color-card) 92%, transparent);
+  box-shadow: 0 2px 8px color-mix(in oklab, #000 25%, transparent);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+
+.tt-ab-arrow:hover {
+  transform: translateY(-50%) scale(1.06);
+  background: var(--color-surface-2);
+}
+
+.tt-ab-arrow-left {
+  left: 6px;
+}
+
+.tt-ab-arrow-right {
+  right: 6px;
+}
+
+.tt-ab-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 25;
+  width: 28px;
+  pointer-events: none;
+}
+
+.tt-ab-fade-left {
+  left: 0;
+  background: linear-gradient(to right, var(--color-background), transparent);
+}
+
+.tt-ab-fade-right {
+  right: 0;
+  background: linear-gradient(to left, var(--color-background), transparent);
+}
+
 .dashboard-insight-hero {
   position: relative;
   overflow: hidden;
@@ -755,6 +876,21 @@
   pointer-events: none;
   border-radius: 9999px;
   filter: blur(64px);
+}
+
+/* Security keeps the existing hero footprint while using the prototype's
+   severity-aware glow and denser internal composition. */
+.security-briefing-card {
+  min-height: 152.75px;
+}
+
+.security-briefing-card::before {
+  background: var(--briefing-tone, var(--color-ok));
+}
+
+.security-briefing-card::after {
+  background: var(--color-primary);
+  opacity: 0.075;
 }
 
 .dashboard-insight-hero::before {
@@ -1119,7 +1255,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
-  width: min(18rem, 92vw);
+  width: min(280px, 92vw);
   padding: 0.75rem;
   border-radius: 0.75rem;
   background: var(--color-card);
@@ -1127,15 +1263,17 @@
 }
 .dashboard-range-popover label {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.25rem;
   color: var(--color-muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-family: var(--font-sans);
 }
 .dashboard-range-popover input {
   width: 100%;
   min-width: 0;
   background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
 }
 
 .dashboard-metric-grid {
@@ -1444,8 +1582,10 @@
 
 .tt-xscroll > table th {
   color: var(--color-muted-foreground);
-  font-size: 0.6875rem;
-  letter-spacing: 0.065em;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
   white-space: nowrap;
 }
 
@@ -1768,6 +1908,121 @@
 
 .tt-app-shell {
   background: var(--color-background);
+}
+
+@keyframes tt-vx-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tt-vx-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes tt-result-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tt-signal {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes tt-ripple {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes tt-radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tt-blip {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  4% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+  14% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  34%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tt-risk-ping {
+  0% {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+  40% {
+    opacity: 0.8;
+    transform: scale(3.2);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(4.6);
+  }
+}
+
+@keyframes tt-risk-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-40px, 220px) scale(0.6);
+  }
 }
 
 /* 呼吸动画基础类；今日洞察仅将它挂载到 Logo。 */

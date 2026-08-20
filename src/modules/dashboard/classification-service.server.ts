@@ -39,12 +39,12 @@ export function createClassificationService(options: {
       const result = new Map<string, DashboardProjectClassification>();
       for (const ref of unique) {
         const entry = found.get(ref);
-        result.set(
-          ref,
-          entry
-            ? { kind: entry.kind, label: entry.label }
-            : { kind: "unknown", label: "unknown" },
-        );
+        // A missing entry means classification is pending, not that the
+        // reference was verified as unknown. Omit it so the dashboard can
+        // retain its safe display fallback while the index is backfilled.
+        if (entry) {
+          result.set(ref, { kind: entry.kind, label: entry.label });
+        }
       }
       return result;
     },

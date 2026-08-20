@@ -204,14 +204,14 @@ export function SettingsPage({
     useState(false);
   const [clearingData, setClearingData] = useState(false);
   const [llmReviewConfigured, setLlmReviewConfigured] = useState(false);
-  const [llmReviewEnabled, setLlmReviewEnabled] = useState(false);
+  const [llmReviewEnabled, setLlmReviewEnabled] = useState(true);
   const [llmReviewLoading, setLlmReviewLoading] = useState(true);
 
   const update = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
 
-  // Optional LLM review supplement (M4): master toggle. Unconfigured (no
-  // active model profile) keeps the toggle off and shows a silent hint.
+  // Optional LLM review supplement (M4): master toggle. It defaults on; an
+  // unconfigured model still degrades to the local rule result.
   useEffect(() => {
     let disposed = false;
     getSecurityLlmReviewAvailability()
@@ -223,7 +223,7 @@ export function SettingsPage({
       .catch(() => {
         if (disposed) return;
         setLlmReviewConfigured(false);
-        setLlmReviewEnabled(false);
+        setLlmReviewEnabled(true);
       })
       .finally(() => {
         if (!disposed) setLlmReviewLoading(false);
@@ -400,8 +400,8 @@ export function SettingsPage({
         desc={t("settings.pageHeaderDesc")}
       />
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
-        <Panel bodyClassName="p-2">
+      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
+        <Panel className="min-w-0" bodyClassName="p-2">
           {categories.map((item) => (
             <button
               key={item}
@@ -417,7 +417,7 @@ export function SettingsPage({
           ))}
         </Panel>
 
-        <Panel title={t(categoryKeys[category])}>
+        <Panel className="min-w-0" title={t(categoryKeys[category])}>
           {category === "通用" && (
             <div>
               <Field
@@ -678,6 +678,7 @@ export function SettingsPage({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+              <InsightSettingsSection />
             </div>
           )}
 
@@ -700,7 +701,7 @@ export function SettingsPage({
                   <Toggle
                     value={llmReviewEnabled}
                     onChange={(enabled) => void changeLlmReview(enabled)}
-                    disabled={!llmReviewConfigured || llmReviewLoading}
+                    disabled={llmReviewLoading}
                   />
                 </Field>
               </div>
@@ -752,7 +753,6 @@ export function SettingsPage({
           {category === "模型配置" && (
             <div>
               <ModelProfilesSection />
-              <InsightSettingsSection />
             </div>
           )}
 
