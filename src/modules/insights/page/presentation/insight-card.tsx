@@ -13,14 +13,8 @@ import type { LucideIcon } from "lucide-react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { useI18n } from "../../../../lib/i18n/context";
-import type {
-  InsightScope,
-  InsightSurfaceId,
-} from "../contracts";
-import {
-  insightSeverityLabelKey,
-  usePageInsight,
-} from "./use-page-insight";
+import type { InsightScope, InsightSurfaceId } from "../contracts";
+import { insightSeverityLabelKey, usePageInsight } from "./use-page-insight";
 
 function InsightSkeleton({ variant }: { variant: "hero" | "inline" }) {
   const hero = variant === "hero";
