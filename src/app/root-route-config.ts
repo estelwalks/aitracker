@@ -1,6 +1,11 @@
 import appCss from "../styles.css?url";
 import { APP_NAME, brandParams } from "../lib/app-config";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import {
+  catalogFor,
+  getMessage,
+  loadCatalog,
+  type Translations,
+} from "../lib/i18n/messages";
 import {
   mapSystemCurrency,
   resolveCurrencyFromSearch,
@@ -15,6 +20,8 @@ import {
 
 export interface RootLoaderData {
   readonly locale: Locale;
+  /** The active locale only; it seeds browser i18n without loading all locales. */
+  readonly catalog: Translations;
   readonly displayCurrency: Currency;
   readonly rates: RatesSnapshot | null;
 }
@@ -25,14 +32,13 @@ export async function rootLoader({
   location: { search: Record<string, unknown> };
 }): Promise<RootLoaderData> {
   const locale = resolveLocaleFromSearch(location.search);
-  let rates: RatesSnapshot | null = null;
-  try {
-    rates = await getRatesSnapshot({ data: false });
-  } catch {
-    /* best effort */
-  }
+  const [catalog, rates] = await Promise.all([
+    loadCatalog(locale),
+    getRatesSnapshot({ data: false }).catch(() => null),
+  ]);
   return {
     locale,
+    catalog,
     displayCurrency: resolveCurrencyFromSearch(
       location.search,
       mapSystemCurrency(locale),
@@ -43,28 +49,24 @@ export async function rootLoader({
 
 export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
   const locale = loaderData?.locale ?? "zh-CN";
+  const catalog = loaderData?.catalog ?? catalogFor(locale);
   return {
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: getMessage(catalogs[locale], "meta.title", brandParams) },
+      { title: getMessage(catalog, "meta.title", brandParams) },
       {
         name: "description",
-        content: getMessage(catalogs[locale], "meta.description", brandParams),
+        content: getMessage(catalog, "meta.description", brandParams),
       },
       { name: "author", content: APP_NAME },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      {
-        rel: "preconnect",
-        href: "https://fonts.googleapis.com",
-      },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap",
-      },
+      // Desktop starts must remain offline-safe. The CSS font stacks prefer
+      // the platform's native UI and monospace fonts, avoiding a remote font
+      // request that can hold up text settling on an offline machine.
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],

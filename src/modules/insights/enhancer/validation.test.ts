@@ -86,6 +86,17 @@ test("L1 strips a ```json fence before parsing", () => {
   assert.equal(result.ok, true);
 });
 
+test("L1 accepts a valid JSON object after a reasoning wrapper", () => {
+  const response =
+    "<think>Check the supplied aggregate facts before answering.</think>\n" +
+    "Here is the requested JSON:\n" +
+    text([{ candidateId: "c1", analysis: "请优先处理安全告警" }]);
+
+  const result = validateEnhancementOutput(response, input());
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.output[0]?.candidateId, "c1");
+});
+
 test("L2 rejects a widget surface with more than one line", () => {
   const result = validateEnhancementOutput(
     text([

@@ -5,6 +5,10 @@ import type {
   DashboardSummaryQueryInput,
   DashboardSummaryReadModel,
 } from "./summary-contracts.ts";
+import {
+  resolveDashboardSnapshotStatus,
+  type DashboardSnapshotRefreshStatus,
+} from "./snapshot-status.ts";
 
 /**
  * Browser-safe RPC for the compact dashboard summary read model (P1-T1-04).
@@ -39,7 +43,7 @@ export const getDashboardCustomWindow = createServerFn({ method: "GET" })
 /** Light status probe for the first-scan/stale state (≤ a few hundred bytes). */
 export interface DashboardSnapshotStatus {
   readonly revision: string | null;
-  readonly status: "empty" | "fresh" | "stale" | "failed" | "refreshing";
+  readonly status: DashboardSnapshotRefreshStatus;
   readonly generatedAt: string | null;
 }
 
@@ -61,16 +65,10 @@ export const getDashboardSnapshotStatus = createServerFn({ method: "GET" })
     ]);
     const latest = usageSnapshot.readLatest();
     const sessions = sessionSnapshot.readLatest();
-    const status =
-      latest.status === "stale" || sessions.status === "stale"
-        ? "stale"
-        : latest.status === "empty" || sessions.status === "empty"
-          ? "empty"
-          : latest.status === "failed" || sessions.status === "failed"
-            ? "failed"
-            : latest.status === "refreshing" || sessions.status === "refreshing"
-              ? "refreshing"
-              : "fresh";
+    const status = resolveDashboardSnapshotStatus({
+      usage: latest,
+      sessions,
+    });
     return {
       // The usage revision remains the legacy field; a session-only refresh
       // is represented by the combined status and causes the loader to run.
@@ -78,4 +76,20 @@ export const getDashboardSnapshotStatus = createServerFn({ method: "GET" })
       status,
       generatedAt: latest.generatedAt ?? sessions.generatedAt,
     };
+  });
+
+/** Explicit user retry for a failed first scan; it never reads local data inline. */
+export const retryDashboardSnapshotInitialization = createServerFn({
+  method: "POST",
+})
+  .validator((value: Locale) => value)
+  .handler(async ({ data }): Promise<void> => {
+    void data;
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const { usageSnapshot, sessionSnapshot } = await getCompositionRoot();
+    await Promise.all([
+      usageSnapshot.requestRefresh({ reason: "manual" }),
+      sessionSnapshot.requestRefresh({ reason: "manual" }),
+    ]);
   });
