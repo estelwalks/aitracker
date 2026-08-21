@@ -400,7 +400,7 @@ export function SettingsPage({
         desc={t("settings.pageHeaderDesc")}
       />
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
         <Panel className="min-w-0" bodyClassName="p-2">
           {categories.map((item) => (
             <button
