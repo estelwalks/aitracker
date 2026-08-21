@@ -21,6 +21,7 @@ export {
   getMarketSkills,
   MARKET_AGENTS,
   requestApprovedSkillInstall,
+  requestMarketSkillUninstall,
 } from "./query.ts";
 export type {
   InstallSkillResult,

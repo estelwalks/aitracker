@@ -85,6 +85,7 @@ export const sessions = {
     duration: "时长",
     cost: "费用",
     turns: "轮次",
+    turnsShort: "{count} 轮",
     edits: "改动",
     resumeDirHint: "恢复仅由本地受控服务执行，不会向浏览器公开命令或目录。",
     statusReason: "状态说明：",

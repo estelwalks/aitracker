@@ -59,6 +59,7 @@ export function toSkillSnapshotData(
       id: skill.id,
       name: skill.name,
       description: skill.description,
+      form: skill.form ?? null,
       lastUsedAt: skill.lastUsedAt,
       sizeBytes: skill.sizeBytes,
       tokenEstimate: skill.tokenEstimate,

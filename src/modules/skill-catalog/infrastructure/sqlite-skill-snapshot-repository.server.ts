@@ -8,6 +8,7 @@ import {
   msToIso,
 } from "../../../platform/database/snapshot-generation.server.ts";
 import type { SnapshotRepository } from "../../../platform/snapshot-runtime/contracts.ts";
+import type { SkillForm } from "../../../lib/local-skills/types.ts";
 import type { SkillSnapshotData } from "./skill-snapshot.contracts.ts";
 
 export interface SqliteSkillSnapshotRepositoryOptions {
@@ -52,6 +53,7 @@ export function createSqliteSkillSnapshotRepository(
               name: String(row.name),
               description:
                 row.description == null ? null : String(row.description),
+              form: row.form == null ? null : (String(row.form) as SkillForm),
               lastUsedAt: msToIso(row.last_used_at_ms),
               sizeBytes: n(row.size_bytes),
               tokenEstimate: n(row.token_estimate),
@@ -127,7 +129,7 @@ export function createSqliteSkillSnapshotRepository(
           }
           for (const skill of data.skills) {
             database
-              .prepare("INSERT INTO skills VALUES (?, ?, ?, ?, ?, ?, ?)")
+              .prepare("INSERT INTO skills VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
               .run(
                 snapshotId,
                 skill.id,
@@ -136,6 +138,7 @@ export function createSqliteSkillSnapshotRepository(
                 isoToMs(skill.lastUsedAt),
                 skill.sizeBytes,
                 skill.tokenEstimate,
+                skill.form ?? null,
               );
             skill.installations.forEach((installation, sequence) => {
               const installationRef = hashSensitiveRef(

@@ -29,16 +29,12 @@ export const market = {
   },
   stats: {
     totalSkills: "등록된 Skill",
-    officialCount: "공식",
     passRate: "보안 통과",
     passRatePage: "이 페이지 통과율",
     installedCount: "설치됨",
-    totalDownloads: "총 다운로드",
     hintCurrentPage: "현재 페이지 통계",
     hintLocalInstalled: "이 기기에 설치됨",
-    hintOfficial: "공식 팀 유지관리",
     hintDomains: "{count}개 분류",
-    hintDownloads: "총 다운로드 {count}",
   },
   search: {
     placeholder: "Skill 이름, 소스 경로 또는 기능 검색",
@@ -47,13 +43,11 @@ export const market = {
     perPage: "페이지당 {count}개 · {page}페이지",
   },
   sort: {
-    hot: "인기",
     latest: "최신",
     rating: "평점 높은 순",
-    tokens: "Token 사용량",
+    security: "보안 점수 높은 순",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
-    downloads: "다운로드 수",
   },
   list: {
     title: "Skill 목록 ({count})",
@@ -71,7 +65,6 @@ export const market = {
     actions: "작업",
   },
   installed: "설치됨",
-  official: "공식",
   domainAll: "전체",
   card: {
     detail: "상세",
@@ -85,13 +78,12 @@ export const market = {
     tokens: "컨텍스트 Token",
     securityPass: "보안 스캔 통과 · 안전하게 설치할 수 있습니다",
     infoTitle: "설치 정보",
-    lastScanned: "마지막 스캔",
   },
   metric: {
-    downloads: "다운로드 수",
-    tokenUsage: "Token 사용량",
     size: "크기",
     stars: "Star",
+    securityScore: "보안 점수",
+    securityLevel: "보안 수준",
   },
   security: {
     score: "보안 점수 {score}",
@@ -101,6 +93,11 @@ export const market = {
   },
   install: {
     button: "설치",
+    to: "{agent}에 설치",
+    uninstallFrom: "{agent}에서 제거",
+    installedAt: "{agent}에 설치됨",
+    selectAll: "전체 선택",
+    clearAll: "전체 해제",
     expandAll: "모두 표시 {count}",
     expandMore: "{count}개 더",
     toSelected: "선택한 도구에 설치",
@@ -109,6 +106,7 @@ export const market = {
     succeeded: "설치 성공",
     failed: "설치 실패",
     success: "{agent}에 설치됨",
+    uninstalled: "{agent}에서 제거됨",
     downloading: "다운로드 및 스캔 중…",
     failure: {
       scanBlocked:
@@ -120,16 +118,15 @@ export const market = {
     },
   },
   drawer: {
-    viewRepo: "원본 저장소 보기",
     viewSource: "소스 코드 보기",
     securityNotice:
       "보안 스캔 통과 · 악성 URL, 위험한 명령, 민감한 정보가 검출되지 않았습니다",
     commandExample: "설치 명령 예시",
-    contextTokens: "컨텍스트 Token",
     lastUpdated: "최근 업데이트",
     permissionClaim: "권한 선언",
     networkClaim: "네트워크 선언",
-    selectAgent: "설치 대상을 선택하세요 (단일 선택, {count}개 도구 지원)",
+    selectAgent:
+      "설치 대상을 선택하세요 (다중 선택·전체 선택 지원, {count}개 도구)",
     agentNotInstalled: "미설치",
   },
   pagination: {

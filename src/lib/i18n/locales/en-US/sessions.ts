@@ -88,6 +88,7 @@ export const sessions = {
     duration: "Duration",
     cost: "Cost",
     turns: "Turns",
+    turnsShort: "{count} turns",
     edits: "Edits",
     resumeDirHint:
       "Recovery runs through a controlled local service; no command or directory is exposed to the browser.",

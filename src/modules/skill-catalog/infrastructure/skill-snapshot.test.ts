@@ -47,6 +47,7 @@ function legacySnapshot(): LegacySkillSnapshot {
         id: "skill-1",
         name: "My Skill",
         description: "desc",
+        form: "package",
         lastUsedAt: null,
         sizeBytes: 1024,
         tokenEstimate: 256,

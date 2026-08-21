@@ -20,11 +20,13 @@ import { PLATFORM_MIGRATION_0004_SQL } from "./0004_business_assets.ts";
 import { PLATFORM_MIGRATION_0005_SQL } from "./0005_search_wsl.ts";
 import { PLATFORM_MIGRATION_0006_SQL } from "./0006_memory_body.ts";
 import { PLATFORM_MIGRATION_0007_SQL } from "./0007_model_profile_auth.ts";
+import { PLATFORM_MIGRATION_0008_SQL } from "./0008_skill_form.ts";
 
 export { PLATFORM_MIGRATION_0004_SQL } from "./0004_business_assets.ts";
 export { PLATFORM_MIGRATION_0005_SQL } from "./0005_search_wsl.ts";
 export { PLATFORM_MIGRATION_0006_SQL } from "./0006_memory_body.ts";
 export { PLATFORM_MIGRATION_0007_SQL } from "./0007_model_profile_auth.ts";
+export { PLATFORM_MIGRATION_0008_SQL } from "./0008_skill_form.ts";
 
 /** One immutable, forward-only migration. */
 export interface MigrationDefinition {
@@ -596,7 +598,12 @@ export const MIGRATIONS: readonly MigrationDefinition[] = [
     name: "0007_model_profile_auth",
     sql: PLATFORM_MIGRATION_0007_SQL,
   },
+  {
+    version: 8,
+    name: "0008_skill_form",
+    sql: PLATFORM_MIGRATION_0008_SQL,
+  },
 ];
 
 /** Highest version this build knows how to migrate to. */
-export const LATEST_MIGRATION_VERSION = 7;
+export const LATEST_MIGRATION_VERSION = 8;

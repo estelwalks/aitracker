@@ -15,19 +15,21 @@ test("parseMarketApiResponse maps real API fields without inventing rating or ve
         repo_name: "repo",
         repo_path: "skills/safe-skill/SKILL.md",
         description: "Description",
-        description_zh: "描述",
-        install_count: 42,
+        short_description: "Short description",
         security_score: 98,
-        security_level: "LOW",
-        verdict: "allow",
+        security_level: "low",
+        stars: 210,
         tags: ["testing"],
+        updated_at: "2026-08-01T00:00:00.000Z",
       },
     ],
     pagination: { page: 1, limit: 20, total: 1, pages: 1 },
   });
 
-  assert.equal(parsed.skills[0]?.descriptionZh, "描述");
-  assert.equal(parsed.skills[0]?.installCount, 42);
+  assert.equal(parsed.skills[0]?.shortDescription, "Short description");
+  assert.equal(parsed.skills[0]?.securityScore, 98);
+  assert.equal(parsed.skills[0]?.securityLevel, "low");
+  assert.equal(parsed.skills[0]?.stars, 210);
   assert.equal(parsed.skills[0]?.rating, null);
   assert.equal(parsed.skills[0]?.version, null);
   assert.deepEqual(parsed.pagination, {
@@ -49,7 +51,7 @@ test("parseMarketApiResponse rejects malformed contracts", () => {
   );
 });
 
-test("parseMarketApiResponse extracts token_estimate.total_tokens and defaults size to null", () => {
+test("parseMarketApiResponse ignores legacy stats fields and defaults size to null", () => {
   const parsed = parseMarketApiResponse({
     success: true,
     data: [
@@ -60,29 +62,20 @@ test("parseMarketApiResponse extracts token_estimate.total_tokens and defaults s
         repo_owner: "o",
         repo_name: "r",
         repo_path: "p",
-        install_count: 1,
-        token_estimate: {
-          total_tokens: 414,
-          skill_md_tokens: 414,
-        },
-      },
-      {
-        id: 10,
-        name: "u",
-        slug: "u",
-        repo_owner: "o",
-        repo_name: "r",
-        repo_path: "p",
-        install_count: 0,
-        // 无 token_estimate
+        description: "D",
+        // 外接 API v1 不再返回安装数/token 估算/官方标记等不准统计字段。
+        install_count: 999,
+        token_estimate: { total_tokens: 414 },
+        is_official: true,
       },
     ],
-    pagination: { page: 1, limit: 20, total: 2, pages: 1 },
+    pagination: { page: 1, limit: 20, total: 1, pages: 1 },
   });
 
-  assert.equal(parsed.skills[0]?.tokens, 414);
   assert.equal(parsed.skills[0]?.size, null);
-  assert.equal(parsed.skills[1]?.tokens, null);
+  assert.equal(parsed.skills[0]?.securityScore, null);
+  assert.equal(parsed.skills[0]?.stars, null);
+  assert.equal(parsed.skills[0]?.shortDescription, null);
 });
 
 test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
@@ -109,12 +102,17 @@ test("parseMarketQuery enforces pagination, search bounds, and sort", () => {
     },
   );
   assert.deepEqual(
-    parseMarketQuery({ page: 1, limit: 14, search: "", sort: "tokens" }),
+    parseMarketQuery({
+      page: 1,
+      limit: 14,
+      search: "",
+      sort: "security_score",
+    }),
     {
       page: 1,
       limit: 14,
       search: "",
-      sort: "tokens",
+      sort: "security_score",
       tags: [],
       forceRefresh: false,
     },

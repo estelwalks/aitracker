@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Rocket,
   Save,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -18,8 +19,10 @@ import { toast } from "sonner";
 import { useI18n } from "../../../../lib/i18n/context";
 import { SKILL_AGENTS } from "../../../../lib/local-skills/types";
 import type { CandidateOutput } from "../../contracts";
+import type { DistillConfigModelOption } from "./DistillConfig.tsx";
 import type { DistillationSessionItem } from "../index.ts";
 import { saveCandidateAsSkill } from "../../query";
+import { qualifySkillFiles, type SkillQualification } from "../../qualify.ts";
 import { md } from "./markdown";
 import { isMemoryKind, kindMeta } from "./out-types.ts";
 import { resolveCandidateSource } from "./source-resolve.ts";
@@ -348,6 +351,18 @@ function SaveModal({
   const [targets, setTargets] = useState<string[]>(() => [...SKILL_AGENTS]);
   const [saving, setSaving] = useState(false);
   const kindLabel = capabilityLabel(candidate, t);
+  // 生成后自动质检：保存前实时展示产物是否合格与原因。
+  const qualification = useMemo<SkillQualification | null>(() => {
+    if (
+      candidate.kind !== "skill" &&
+      candidate.kind !== "prompt" &&
+      candidate.kind !== "brief"
+    )
+      return null;
+    const files = buildSkillFiles(draft, candidate);
+    if (files.length === 0) return null;
+    return qualifySkillFiles(files, candidate.kind);
+  }, [candidate, draft]);
 
   async function handleSave() {
     if (!name.trim() || targets.length === 0) return;
@@ -402,6 +417,67 @@ function SaveModal({
             className="w-full rounded-lg bg-surface-2 px-3 py-2 text-[12.5px] outline-none"
           />
         </div>
+        {qualification && (
+          <div
+            className={`rounded-lg border px-3 py-2.5 text-[11.5px] ${
+              qualification.pass
+                ? "border-ok/40 bg-ok/10 text-ok"
+                : "border-warn/40 bg-warn/10 text-warn"
+            }`}
+          >
+            <div className="flex items-center gap-2 font-medium">
+              <ShieldCheck className="size-3.5" />
+              {qualification.pass
+                ? `质检合格${
+                    qualification.checks.filter(
+                      (c) => c.severity === "warn" && !c.pass,
+                    ).length > 0
+                      ? ` · ${
+                          qualification.checks.filter(
+                            (c) => c.severity === "warn" && !c.pass,
+                          ).length
+                        } 条建议`
+                      : ""
+                  }`
+                : `质检不合格（${
+                    qualification.checks.filter(
+                      (c) => c.severity === "error" && !c.pass,
+                    ).length
+                  } 项）`}
+            </div>
+            {qualification.checks.some((c) => !c.pass) && (
+              <ul className="mt-1.5 space-y-0.5">
+                {qualification.checks
+                  .filter((check) => !check.pass)
+                  .map((check) => (
+                    <li
+                      key={check.id}
+                      className="flex items-start gap-1.5 font-mono text-[10.5px]"
+                    >
+                      <span
+                        className={
+                          check.severity === "error"
+                            ? "text-warn"
+                            : "text-amber-500"
+                        }
+                      >
+                        ✗
+                      </span>
+                      <span className="text-foreground/80">
+                        {check.label}
+                        {check.severity === "warn" ? "（建议）" : ""}
+                      </span>
+                      {check.detail ? (
+                        <span className="text-muted-foreground">
+                          · {check.detail}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        )}
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="block text-[11px] text-muted-foreground">
@@ -580,18 +656,26 @@ function SavedGuide({ name, onClose }: { name: string; onClose: () => void }) {
 export function ExpCard({
   candidate,
   sessions,
+  modelOptions,
   busy,
   onRegenerate,
 }: {
   candidate: CandidateOutput;
   sessions: readonly DistillationSessionItem[];
+  /** 模型选项(profile id → 可读名称)，用于把 m-xxx 转成模型名。 */
+  modelOptions: readonly DistillConfigModelOption[];
   busy: boolean;
   onRegenerate: () => void;
 }) {
   const { t, format } = useI18n();
   const memoryAsset = isMemoryKind(candidate.kind);
   const badge = kindMeta(candidate.kind);
-  const modelLabel = candidate.execution.modelId ?? candidate.mode;
+  const modelLabel =
+    modelOptions.find((o) => o.id === candidate.execution.modelId)?.label ??
+    (candidate.execution.modelId &&
+    !/^m-[A-Za-z0-9-]+$/i.test(candidate.execution.modelId)
+      ? candidate.execution.modelId
+      : candidate.mode);
   const kindLabel = t(badge.labelKey);
   // 阶段 A2 后完成即审批,记忆类自动入库 —— saved chip 恒按审批态显示。
   const saved = candidate.approvalState === "approved";
@@ -697,10 +781,12 @@ export function ExpCard({
                     className="mt-2 min-h-[120px] w-full resize-y bg-transparent text-[12.5px] leading-7 outline-none"
                   />
                 ) : (
-                  <div
-                    className="tt-md mt-2 text-[12.5px] text-foreground/85"
-                    dangerouslySetInnerHTML={{ __html: md(draft) }}
-                  />
+                  // 原型 1909：记忆正文按纯文本展示，不做 markdown 渲染——否则
+                  // 正文开头的 "# 任务记忆" 会渲染成卡片内嵌标题，和徽标/加粗
+                  // 标题重复（“渲染了 2 次 / 样式嵌套”）。
+                  <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-7 text-foreground/85">
+                    {draft}
+                  </p>
                 )}
               </div>
             </div>
@@ -790,12 +876,17 @@ export function ExpCard({
 /** 并排对比弹窗（原型 CompareModal 2034-2049）：Modal wide + markdown 渲染。 */
 export function CandidateCompareDialog({
   candidates,
+  modelOptions,
   onClose,
 }: {
   candidates: readonly [CandidateOutput, CandidateOutput];
+  modelOptions: readonly DistillConfigModelOption[];
   onClose: () => void;
 }) {
   const { t, format } = useI18n();
+  const modelLabelOf = (candidate: CandidateOutput) =>
+    modelOptions.find((o) => o.id === candidate.execution.modelId)?.label ??
+    candidate.mode;
   return (
     <Modal onClose={onClose} title={t("distill.compare")} wide>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -805,9 +896,8 @@ export function CandidateCompareDialog({
             className="tt-scroll max-h-[60vh] overflow-y-auto rounded-xl bg-surface-2 p-3"
           >
             <div className="font-mono text-[10.5px] text-muted-foreground">
-              {t(kindMeta(candidate.kind).labelKey)} ·{" "}
-              {candidate.execution.modelId ?? candidate.mode} ·{" "}
-              {format.formatDateTime(candidate.generatedAt, false)}
+              {t(kindMeta(candidate.kind).labelKey)} · {modelLabelOf(candidate)}{" "}
+              · {format.formatDateTime(candidate.generatedAt, false)}
             </div>
             <div
               className="tt-md mt-2"

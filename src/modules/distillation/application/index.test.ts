@@ -670,3 +670,54 @@ test("counts() buckets distilled knowledge assets into capability and memory", a
   assert.deepEqual(await app.counts(), { capability: 2, memory: 1 });
   assert.equal(await app.count(), 3);
 });
+
+test("生成兜底：质检不合格重试并携带反馈，通过后返回", async () => {
+  const bad =
+    '<folder name="Bad_Skill">\n<file path="SKILL.md">---\nname: Bad_Skill\ndescription: 这是一个不合格的技能 TODO\n---\n# Bad\n</file>\n</folder>';
+  const good =
+    '<folder name="Good_Skill">\n<file path="SKILL.md">---\nname: Good_Skill\ndescription: 提供编写高质量文档的指导与建议，辅助用户产出内容，帮助整理结构，输出规范格式，方便直接使用。\n---\n# Good Skill\n\n使用说明与核心运行指令。\n</file>\n</folder>';
+  const templates: string[] = [];
+  let call = 0;
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({
+      list: async () => [session("s1"), session("s2")],
+    }),
+    ai: {
+      execute: async (req) => {
+        templates.push(req.prompt.template);
+        call += 1;
+        return execution("completed", call === 1 ? bad : good);
+      },
+    },
+    createCandidateId: () => "candidate-1",
+    now: () => new Date("2026-08-07T00:02:00.000Z"),
+  });
+  const result = await app.start(request({ kind: "skill" }));
+  assert.ok(result.ok);
+  assert.equal(call, 2);
+  assert.match(templates[1] ?? "", /质检反馈/);
+  assert.match(result.value.candidate?.summary ?? "", /Good_Skill/);
+});
+
+test("生成兜底：多次不合格强制输出最后一次，不阻塞", async () => {
+  const bad =
+    '<folder name="Bad_Skill">\n<file path="SKILL.md">---\nname: Bad_Skill\ndescription: 这是一个不合格的技能 TODO\n---\n# Bad\n</file>\n</folder>';
+  let call = 0;
+  const app = createDistillationApplication({
+    sessions: createSessionQueryService({
+      list: async () => [session("s1"), session("s2")],
+    }),
+    ai: {
+      execute: async () => {
+        call += 1;
+        return execution("completed", bad);
+      },
+    },
+    createCandidateId: () => "candidate-1",
+    now: () => new Date("2026-08-07T00:02:00.000Z"),
+  });
+  const result = await app.start(request({ kind: "skill" }));
+  assert.ok(result.ok, "多次失败仍强制输出，不报错");
+  assert.equal(call, 3); // 首次 + 2 次重试
+  assert.equal(result.value.status, "waiting-approval");
+});

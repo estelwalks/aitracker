@@ -89,6 +89,7 @@ export const sessions = {
     duration: "所要時間",
     cost: "費用",
     turns: "ターン数",
+    turnsShort: "{count} ターン",
     edits: "編集回数",
     resumeDirHint:
       "復元は管理されたローカルサービスで実行され、コマンドやディレクトリはブラウザに公開されません。",
