@@ -6,6 +6,7 @@ import {
   composeLineText,
   ENHANCE_COOLDOWN_MS,
   insightActionPath,
+  insightFallbackStatusLabel,
   insightStatusLabel,
   type InsightActionId,
   type InsightEnvelopeStatus,
@@ -27,6 +28,33 @@ describe("insightStatusLabel", () => {
     for (const status of statuses) {
       assert.match(insightStatusLabel(status), /^settings\.insight\.status\./);
     }
+  });
+});
+
+describe("insightFallbackStatusLabel", () => {
+  it("explains model failures while leaving normal rule envelopes unmarked", () => {
+    assert.equal(
+      insightFallbackStatusLabel("enhancer-unavailable"),
+      "settings.insight.fallbackStatus.enhancer-unavailable",
+    );
+    assert.equal(
+      insightFallbackStatusLabel("budget-exceeded"),
+      "settings.insight.fallbackStatus.budget-exceeded",
+    );
+    assert.equal(
+      insightFallbackStatusLabel("timeout"),
+      "settings.insight.fallbackStatus.timeout",
+    );
+    assert.equal(
+      insightFallbackStatusLabel("enhancer-failed"),
+      "settings.insight.fallbackStatus.enhancer-failed",
+    );
+    assert.equal(
+      insightFallbackStatusLabel("invalid-output"),
+      "settings.insight.fallbackStatus.invalid-output",
+    );
+    assert.equal(insightFallbackStatusLabel("rules"), null);
+    assert.equal(insightFallbackStatusLabel("enhanced-ready"), null);
   });
 });
 
@@ -69,6 +97,36 @@ describe("composeLineText", () => {
     assert.equal(
       composeLineText(t, { key: "k", analysis: "模型补充说明" }),
       "k。模型补充说明",
+    );
+  });
+
+  it("does not duplicate an existing Chinese sentence mark", () => {
+    assert.equal(
+      composeLineText(() => "本地规则。", {
+        key: "k",
+        analysis: "模型补充说明",
+      }),
+      "本地规则。模型补充说明",
+    );
+  });
+
+  it("adds one space after an existing English sentence mark", () => {
+    assert.equal(
+      composeLineText(() => "Rule insight.", {
+        key: "k",
+        analysis: "Model analysis.",
+      }),
+      "Rule insight. Model analysis.",
+    );
+  });
+
+  it("adds a Chinese full stop when the base has no sentence mark", () => {
+    assert.equal(
+      composeLineText(() => "本地规则", {
+        key: "k",
+        analysis: "模型补充说明",
+      }),
+      "本地规则。模型补充说明",
     );
   });
 });
