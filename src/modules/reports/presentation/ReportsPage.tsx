@@ -471,7 +471,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                         {big}
                       </span>
                       {has && (
-                        <span className="size-1 shrink-0 rounded-full bg-ok" />
+                        <span className="size-2 shrink-0 rounded-full bg-ok ring-2 ring-ok/20" />
                       )}
                     </button>
                   );

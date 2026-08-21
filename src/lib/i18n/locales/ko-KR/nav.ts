@@ -1,8 +1,5 @@
 // AI 번역 초안, 검토 대기 (2026-08)
 export const nav = {
-  tier1: "작업대",
-  tier2: "인사이트 및 보안",
-  tier3: "스킬 라이브러리",
   home: "홈 개요",
   agents: "Agent 개요",
   distill: "증류 작업대",

@@ -756,39 +756,34 @@ export function ExpCard({
 
         {memoryAsset ? (
           <>
+            {/* 记忆/画像：标题与正文直接展示在外层卡片上，不再嵌套一层结果框，
+            避免“背景套结果展示框”的双层样式。正文按纯文本展示（原型 1909），
+            防止 "# 任务记忆"/"# 用户画像" 被渲染成内嵌标题重复出现。 */}
             <div className="relative px-4 pb-3">
-              <div
-                className="rounded-xl bg-surface-2 p-3"
-                style={{ boxShadow: `inset 3px 0 0 ${badge.color}` }}
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles
-                    className="size-3.5 shrink-0"
-                    style={{ color: badge.color }}
-                  />
-                  <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-                    {candidate.title}
-                  </p>
-                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                    {t(badge.labelKey)}
-                  </span>
-                </div>
-                {editing ? (
-                  <textarea
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    rows={8}
-                    className="mt-2 min-h-[120px] w-full resize-y bg-transparent text-[12.5px] leading-7 outline-none"
-                  />
-                ) : (
-                  // 原型 1909：记忆正文按纯文本展示，不做 markdown 渲染——否则
-                  // 正文开头的 "# 任务记忆" 会渲染成卡片内嵌标题，和徽标/加粗
-                  // 标题重复（“渲染了 2 次 / 样式嵌套”）。
-                  <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-7 text-foreground/85">
-                    {draft}
-                  </p>
-                )}
+              <div className="flex items-center gap-2">
+                <Sparkles
+                  className="size-3.5 shrink-0"
+                  style={{ color: badge.color }}
+                />
+                <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+                  {candidate.title}
+                </p>
+                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {t(badge.labelKey)}
+                </span>
               </div>
+              {editing ? (
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={8}
+                  className="mt-2 min-h-[120px] w-full resize-y bg-transparent text-[12.5px] leading-7 outline-none"
+                />
+              ) : (
+                <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-7 text-foreground/85">
+                  {draft}
+                </p>
+              )}
             </div>
             <div className="relative flex flex-wrap items-center gap-2 px-4 pb-4">
               <Act

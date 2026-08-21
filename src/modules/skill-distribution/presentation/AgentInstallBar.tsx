@@ -215,10 +215,10 @@ export function AgentInstallBar({
               onClick={() => handleClick(agent, on)}
               className={`flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                 isSelected
-                  ? "border-primary/40 bg-white/70 text-foreground dark:text-neutral-800"
+                  ? "border-ok/60 bg-ok/10 text-foreground"
                   : on
-                    ? "border-transparent bg-white/70 text-foreground dark:text-neutral-800"
-                    : "border-border bg-white/70 text-muted-foreground hover:text-foreground dark:text-neutral-500"
+                    ? "border-transparent bg-neutral-100 text-neutral-800"
+                    : "border-border bg-neutral-100 text-neutral-500 hover:border-ok/40 hover:text-neutral-800"
               }`}
             >
               {pending ? (
@@ -228,7 +228,7 @@ export function AgentInstallBar({
               )}
               <span className="truncate">{agent}</span>
               {multi && isSelected && (
-                <Check className="ml-auto size-4 shrink-0 text-primary" />
+                <Check className="ml-auto size-4 shrink-0 text-ok" />
               )}
             </button>
           );
