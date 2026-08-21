@@ -121,7 +121,7 @@ function composeSecurityCandidates(
 
 export const securityInsightAdapter: PageInsightAdapter = {
   surfaceId: "security",
-  adapterVersion: 1,
+  adapterVersion: 2,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();

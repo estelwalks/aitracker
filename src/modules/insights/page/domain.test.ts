@@ -6,9 +6,14 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   InsightSeverity,
+  InsightSurfaceId,
+  PageInsightAdapter,
 } from "./contracts.ts";
+import { INSIGHT_SURFACE_IDS } from "./contracts.ts";
 import {
   canonicalScopeHash,
+  composePageCandidates,
+  composeRemotePageCandidates,
   evidenceHash,
   isInsightSurfaceId,
   rankCandidates,
@@ -16,6 +21,7 @@ import {
   validateCandidates,
   validateEvidenceBundle,
 } from "./domain.ts";
+import { getPageRuleConfig } from "./rule-registry.ts";
 
 function evidence(
   id: string,
@@ -80,6 +86,92 @@ test("rankCandidates orders mandatory first, then severity, then stable, and tru
   assert.deepEqual(
     ranked.map((item) => item.id),
     ["mand-1", "risk-1", "risk-2", "attn-1"],
+  );
+});
+
+test("all thirteen complete pages supplement an empty evidence bundle to five-to-seven lines", () => {
+  const completeSurfaces = INSIGHT_SURFACE_IDS.filter(
+    (surface) => surface !== "widget",
+  );
+  assert.equal(completeSurfaces.length, 13);
+
+  for (const surfaceId of completeSurfaces) {
+    const adapter: PageInsightAdapter = {
+      surfaceId,
+      adapterVersion: 1,
+      loadEvidence: async () => bundle([], { surfaceId }),
+      composeCandidates: () => [],
+    };
+    const composed = composePageCandidates(adapter, bundle([], { surfaceId }));
+    assert.ok(composed.length >= 5 && composed.length <= 7, surfaceId);
+    assert.equal(getPageRuleConfig(surfaceId).maxLines, 7);
+  }
+
+  const widgetAdapter: PageInsightAdapter = {
+    surfaceId: "widget",
+    adapterVersion: 1,
+    loadEvidence: async () => bundle([], { surfaceId: "widget" }),
+    composeCandidates: () => [
+      candidate({
+        id: "widget-line",
+        factKey: "insights.page.widget.widget-broadcast-security",
+        factParams: { count: 0 },
+        evidenceRefs: [],
+      }),
+    ],
+  };
+  assert.equal(
+    composePageCandidates(widgetAdapter, bundle([], { surfaceId: "widget" }))
+      .length,
+    1,
+  );
+  assert.equal(getPageRuleConfig("widget").maxLines, 1);
+});
+
+test("remote candidates filter private facts before truncation and preserve mandatory rank", () => {
+  const surfaceId: InsightSurfaceId = "tracker";
+  const privateCandidates = Array.from({ length: 7 }, (_, index) =>
+    candidate({
+      id: `private-${index + 1}`,
+      severity: "risk",
+      factKey: "insights.page.tracker.tracker-top-project",
+      factParams: { name: `Private ${index + 1}` },
+      remoteEligible: false,
+    }),
+  );
+  const adapter: PageInsightAdapter = {
+    surfaceId,
+    adapterVersion: 1,
+    loadEvidence: async () => bundle([], { surfaceId }),
+    composeCandidates: () => privateCandidates,
+  };
+  const targetBundle = bundle([evidence("e1", 1)], { surfaceId });
+
+  const local = composePageCandidates(adapter, targetBundle);
+  const remote = composeRemotePageCandidates(adapter, targetBundle);
+  assert.equal(local.length, 7);
+  assert.equal(
+    local.every((item) => item.remoteEligible === false),
+    true,
+  );
+  assert.equal(remote.length, 5);
+  assert.equal(
+    remote.every((item) => item.remoteEligible !== false),
+    true,
+  );
+
+  const mandatoryAdapter: PageInsightAdapter = {
+    ...adapter,
+    composeCandidates: () => [
+      ...Array.from({ length: 7 }, (_, index) =>
+        candidate({ id: `risk-${index}`, severity: "risk" }),
+      ),
+      candidate({ id: "mandatory", mandatory: true, severity: "info" }),
+    ],
+  };
+  assert.equal(
+    composeRemotePageCandidates(mandatoryAdapter, targetBundle)[0]?.id,
+    "mandatory",
   );
 });
 

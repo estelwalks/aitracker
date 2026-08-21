@@ -65,7 +65,7 @@ function composeMemoryCandidates(
 
 export const memoryInsightAdapter: PageInsightAdapter = {
   surfaceId: "memory",
-  adapterVersion: 1,
+  adapterVersion: 2,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();

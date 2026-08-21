@@ -268,7 +268,7 @@ async function loadDashboardEvidence(scope: InsightScope) {
 
 export const dashboardInsightAdapter: PageInsightAdapter = {
   surfaceId: "dashboard",
-  adapterVersion: 1,
+  adapterVersion: 2,
   loadEvidence: loadDashboardEvidence,
   composeCandidates: composeDashboardCandidates,
 };

@@ -72,7 +72,7 @@ function composeSkillsCandidates(
 
 export const skillsInsightAdapter: PageInsightAdapter = {
   surfaceId: "skills",
-  adapterVersion: 1,
+  adapterVersion: 2,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();

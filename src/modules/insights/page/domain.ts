@@ -16,6 +16,7 @@ import {
   type PageInsightAdapter,
 } from "./contracts.ts";
 import { getPageRuleConfig } from "./rule-registry.ts";
+import { PAGE_SUPPLEMENTAL_CANDIDATES } from "./supplemental-candidates.ts";
 
 const EVIDENCE_ID_RE = /^[A-Za-z0-9._:-]{1,120}$/;
 const PATH_START_RE = /^(?:\/|[A-Za-z]:\\|\\)/;
@@ -134,6 +135,57 @@ export function rankCandidates(
   return sorted.slice(0, maxLines);
 }
 
+function collectPageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  const primary = filterValidCandidates(
+    bundle,
+    adapter.composeCandidates(bundle),
+  );
+  if (adapter.surfaceId === "widget") {
+    return primary;
+  }
+  const existingIds = new Set(primary.map((candidate) => candidate.id));
+  const supplemental = PAGE_SUPPLEMENTAL_CANDIDATES[adapter.surfaceId].filter(
+    (candidate) => !existingIds.has(candidate.id),
+  );
+  return [...primary, ...supplemental];
+}
+
+/**
+ * Compose the bounded local rule set. Real adapter facts retain their normal
+ * rank; page-specific guidance fills only genuine coverage gaps and never
+ * claims that measured activity occurred.
+ */
+export function composePageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  return rankCandidates(
+    collectPageCandidates(adapter, bundle),
+    getPageRuleConfig(adapter.surfaceId).maxLines,
+  );
+}
+
+/**
+ * Compose the remote-safe model input independently from the local rule set.
+ * Filtering happens before truncation so private high-priority facts cannot
+ * crowd safe supplemental candidates out of the model payload.
+ */
+export function composeRemotePageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  const remoteSafe = collectPageCandidates(adapter, bundle).filter(
+    (candidate) => candidate.remoteEligible !== false,
+  );
+  return rankCandidates(
+    remoteSafe,
+    getPageRuleConfig(adapter.surfaceId).maxLines,
+  );
+}
+
 export interface ComposeRulesEnvelopeOptions {
   readonly adapter: PageInsightAdapter;
   readonly bundle: InsightEvidenceBundle;
@@ -154,10 +206,7 @@ export function composeRulesEnvelope(
   const adapter = options.adapter;
   const bundle = options.bundle;
   const mode = options.mode;
-  const candidates = filterValidCandidates(
-    bundle,
-    adapter.composeCandidates(bundle),
-  );
+  const candidates = composePageCandidates(adapter, bundle);
   const maxLines = getPageRuleConfig(adapter.surfaceId).maxLines;
   const lines: InsightEnvelopeLine[] = rankCandidates(candidates, maxLines).map(
     (candidate) => ({

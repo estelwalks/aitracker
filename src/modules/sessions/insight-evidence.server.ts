@@ -293,14 +293,14 @@ async function loadChatDetailEvidence(scope: InsightScope) {
 
 export const chatsInsightAdapter: PageInsightAdapter = {
   surfaceId: "chats",
-  adapterVersion: 1,
+  adapterVersion: 2,
   loadEvidence: loadChatsEvidence,
   composeCandidates: composeChatsCandidates,
 };
 
 export const chatDetailInsightAdapter: PageInsightAdapter = {
   surfaceId: "chat-detail",
-  adapterVersion: 1,
+  adapterVersion: 2,
   loadEvidence: loadChatDetailEvidence,
   composeCandidates: composeChatDetailCandidates,
 };

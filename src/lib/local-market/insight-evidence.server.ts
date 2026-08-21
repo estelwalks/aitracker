@@ -81,7 +81,7 @@ function composeMarketCandidates(
 
 export const marketInsightAdapter: PageInsightAdapter = {
   surfaceId: "market",
-  adapterVersion: 1,
+  adapterVersion: 2,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
