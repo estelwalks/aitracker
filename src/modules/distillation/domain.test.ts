@@ -68,10 +68,7 @@ test("candidateText keeps realistic developer prose for persona and task kinds",
     "开发工程师画像：主力 node 与 npm 工程化，日常用 git 管理分支与 CI，偏好类型安全。";
   const task =
     "任务记录：用 npm 升级依赖、运行 lint 修复，并推进 monorepo 的迁移。";
-  assert.equal(
-    candidateText(aiResult(persona), [row], "persona"),
-    persona,
-  );
+  assert.equal(candidateText(aiResult(persona), [row], "persona"), persona);
   assert.equal(candidateText(aiResult(task), [row], "memory"), task);
 });
 
@@ -149,6 +146,9 @@ test("candidateTitle keeps a technical session lead", () => {
   // candidateTitle takes its lead from the project key; with none, it falls
   // back to the (safety-filtered) session title, which must survive intact.
   const noProject = { ...titled, projectKey: "" };
-  const title = candidateTitle([noProject], "persona" as CandidateOutput["kind"]);
+  const title = candidateTitle(
+    [noProject],
+    "persona" as CandidateOutput["kind"],
+  );
   assert.match(title, /git 分支整理与 npm 升级/);
 });

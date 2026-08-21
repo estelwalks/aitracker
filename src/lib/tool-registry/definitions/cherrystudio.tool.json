@@ -1,0 +1,32 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "cherrystudio",
+  "display": { "name": "Cherry Studio", "nameZh": "Cherry Studio", "icon": "other", "color": "#ec4899" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "detection": {
+    "locations": [
+      { "targets": ["macos"], "base": "appData", "path": "CherryStudio/Data/Agents/.claude/projects" },
+      { "targets": ["macos"], "base": "appData", "path": "CherryStudio/.claude/projects" },
+      { "targets": ["windows10", "windows11"], "base": "appDataRoaming", "path": "CherryStudio/Data/Agents/.claude/projects" },
+      { "targets": ["windows10", "windows11"], "base": "appDataRoaming", "path": "CherryStudio/.claude/projects" },
+      { "targets": ["linux"], "base": "configHome", "path": "CherryStudio/Data/Agents/.claude/projects" },
+      { "targets": ["linux"], "base": "configHome", "path": "CherryStudio/.claude/projects" }
+    ]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter", "reader": "generic-jsonl",
+      "paths": [
+        { "targets": ["macos"], "base": "appData", "path": "CherryStudio/Data/Agents/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" },
+        { "targets": ["macos"], "base": "appData", "path": "CherryStudio/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" },
+        { "targets": ["windows10", "windows11"], "base": "appDataRoaming", "path": "CherryStudio/Data/Agents/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" },
+        { "targets": ["windows10", "windows11"], "base": "appDataRoaming", "path": "CherryStudio/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" },
+        { "targets": ["linux"], "base": "configHome", "path": "CherryStudio/Data/Agents/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" },
+        { "targets": ["linux"], "base": "configHome", "path": "CherryStudio/.claude/projects", "glob": "**/*.jsonl", "format": "jsonl" }
+      ]
+    },
+    "skills": "unsupported", "agents": "unsupported", "sessions": { "mode": "unsupported" }, "market": "unsupported", "security": "unsupported"
+  },
+  "modelObservation": { "modelField": "model" }
+}
