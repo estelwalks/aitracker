@@ -19,10 +19,12 @@ import type {
   InsightEnhancementInput,
   InsightSurfaceId,
 } from "../page/contracts.ts";
+import { isInsightAnalysisUseful } from "../page/analysis-quality.ts";
 
-export const MAX_RESPONSE_TEXT_LENGTH = 4096;
+export const MAX_RESPONSE_TEXT_LENGTH = 8192;
 export const MAX_ANALYSIS_CHARS = 160;
-export const MAX_LINES = 3;
+export const MIN_LINES = 1;
+export const MAX_LINES = 10;
 export const WIDGET_MAX_LINES = 1;
 export const CANDIDATE_ID_MIN = 1;
 export const CANDIDATE_ID_MAX = 80;
@@ -225,25 +227,29 @@ type ParsedLine = {
   readonly actionId?: string;
 };
 
-function outputSchema(maxLines: number): z.ZodType<{ lines: ParsedLine[] }> {
+function outputSchema(
+  minLines: number,
+  maxLines: number,
+): z.ZodType<{ lines: ParsedLine[] }> {
+  const linesSchema = z.array(
+    z
+      .object({
+        candidateId: z
+          .string()
+          .trim()
+          .min(CANDIDATE_ID_MIN)
+          .max(CANDIDATE_ID_MAX),
+        analysis: z.string().trim().min(1).max(MAX_ANALYSIS_CHARS),
+        actionId: actionIdSchema.optional(),
+      })
+      .strict(),
+  );
   return z
     .object({
-      lines: z
-        .array(
-          z
-            .object({
-              candidateId: z
-                .string()
-                .trim()
-                .min(CANDIDATE_ID_MIN)
-                .max(CANDIDATE_ID_MAX),
-              analysis: z.string().trim().min(1).max(MAX_ANALYSIS_CHARS),
-              actionId: actionIdSchema.optional(),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(maxLines),
+      lines:
+        minLines === 0
+          ? linesSchema.max(maxLines)
+          : linesSchema.min(minLines).max(maxLines),
     })
     .strict();
 }
@@ -268,8 +274,21 @@ export function stripCodeFence(text: string): string {
     .trim();
 }
 
-function maxLinesFor(surface: InsightSurfaceId): number {
-  return surface === "widget" ? WIDGET_MAX_LINES : MAX_LINES;
+export function lineBoundsForInput(input: InsightEnhancementInput): {
+  readonly min: number;
+  readonly max: number;
+} {
+  const available = input.candidates.length;
+  if (available === 0) {
+    return { min: 0, max: 0 };
+  }
+  if (input.surface === "widget") {
+    return { min: WIDGET_MAX_LINES, max: WIDGET_MAX_LINES };
+  }
+  return {
+    min: Math.min(MIN_LINES, available),
+    max: Math.min(MAX_LINES, available),
+  };
 }
 
 export function validateEnhancementOutput(
@@ -289,9 +308,11 @@ export function validateEnhancementOutput(
   }
 
   // L2 — schema.
-  const parsedSchema = outputSchema(maxLinesFor(input.surface)).safeParse(
-    parsed,
-  );
+  const bounds = lineBoundsForInput(input);
+  if (bounds.max === 0) {
+    return { ok: false, stage: 2, reason: "no candidates are available" };
+  }
+  const parsedSchema = outputSchema(bounds.min, bounds.max).safeParse(parsed);
   if (!parsedSchema.success) {
     return {
       ok: false,
@@ -380,9 +401,21 @@ export function validateEnhancementOutput(
     }
   }
 
+  const usefulLines = lines.filter((line) => {
+    const candidate = candidatesById.get(line.candidateId)!;
+    return isInsightAnalysisUseful(candidate.fact, line.analysis);
+  });
+  if (usefulLines.length === 0) {
+    return {
+      ok: false,
+      stage: 5,
+      reason: "no incremental analysis remains after quality filtering",
+    };
+  }
+
   return {
     ok: true,
-    output: lines.map((line) => ({
+    output: usefulLines.map((line) => ({
       candidateId: line.candidateId,
       analysis: line.analysis,
       ...(line.actionId === undefined

@@ -26,43 +26,42 @@ function composeSkillsCandidates(
 ): readonly InsightCandidate[] {
   const count = metricValue(bundle, "skills.count");
   const enabled = metricValue(bundle, "skills.enabled");
+  const agents = metricValue(bundle, "skills.agents");
+  const outdated = metricValue(bundle, "skills.outdated");
+  const unassigned = metricValue(bundle, "skills.unassigned");
   const candidates: InsightCandidate[] = [];
-  if (count != null && count > 0) {
+  for (const [id, value, key, ref, param] of [
+    ["inventory", count, "skills-guide-inventory", "skills.count", "count"],
+    [
+      "enabled",
+      enabled,
+      "skills-guide-enablement",
+      "skills.enabled",
+      "enabled",
+    ],
+    ["agents", agents, "skills-guide-coverage", "skills.agents", "agents"],
+    [
+      "outdated",
+      outdated,
+      "skills-guide-updates",
+      "skills.outdated",
+      "outdated",
+    ],
+    [
+      "unassigned",
+      unassigned,
+      "skills-guide-safety",
+      "skills.unassigned",
+      "unassigned",
+    ],
+  ] as const) {
+    if (value == null) continue;
     candidates.push({
-      id: "skills.local",
-      severity: "info",
-      factKey: "insights.page.skills.skills-local",
-      factParams: { count },
-      evidenceRefs: ["skills.count"],
-      allowedActionIds: ["open_skills"],
-      actionId: "open_skills",
-    });
-    if (enabled != null) {
-      candidates.push({
-        id: "skills.enabled",
-        severity: "info",
-        factKey: "insights.page.skills.skills-enabled",
-        factParams: { count: enabled },
-        evidenceRefs: ["skills.enabled"],
-        allowedActionIds: ["open_skills"],
-        actionId: "open_skills",
-      });
-    }
-    candidates.push({
-      id: "skills.sync",
-      severity: "info",
-      factKey: "insights.page.skills.skills-sync",
-      factParams: {},
-      evidenceRefs: ["skills.count"],
-      allowedActionIds: ["open_skills"],
-      actionId: "open_skills",
-    });
-    candidates.push({
-      id: "skills.specific",
-      severity: "info",
-      factKey: "insights.page.skills.skills-specific",
-      factParams: {},
-      evidenceRefs: ["skills.count"],
+      id: `skills.${id}`,
+      severity: id === "outdated" && value > 0 ? "attention" : "info",
+      factKey: `insights.page.skills.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
       allowedActionIds: ["open_skills"],
       actionId: "open_skills",
     });
@@ -72,7 +71,7 @@ function composeSkillsCandidates(
 
 export const skillsInsightAdapter: PageInsightAdapter = {
   surfaceId: "skills",
-  adapterVersion: 1,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
@@ -104,6 +103,7 @@ export const skillsInsightAdapter: PageInsightAdapter = {
     const enabled = snapshot.skills.filter(
       (skill) => skill.installations.length > 0,
     ).length;
+    const unassigned = Math.max(0, snapshot.skills.length - enabled);
 
     return {
       surfaceId: "skills" as const,
@@ -134,6 +134,13 @@ export const skillsInsightAdapter: PageInsightAdapter = {
         metricEvidence(
           "skills.enabled",
           enabled,
+          observedAt,
+          freshness,
+          "count",
+        ),
+        metricEvidence(
+          "skills.unassigned",
+          unassigned,
           observedAt,
           freshness,
           "count",

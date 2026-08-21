@@ -27,8 +27,6 @@ import type {
   PageInsightAdapter,
 } from "../insights/page/contracts.ts";
 
-const LOW_CACHE_THRESHOLD = 40;
-
 function composeDashboardCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
@@ -37,6 +35,10 @@ function composeDashboardCandidates(
   const events = metricValue(bundle, "dashboard.events");
   const tokens = metricValue(bundle, "dashboard.tokens");
   const sessions = metricValue(bundle, "dashboard.sessions");
+  const activeSources = metricValue(bundle, "dashboard.activeSources");
+  const averageTokens = metricValue(bundle, "dashboard.averageTokensPerEvent");
+  const skillAssets = metricValue(bundle, "dashboard.skillAssets");
+  const knowledgeAssets = metricValue(bundle, "dashboard.knowledgeAssets");
 
   const candidates: InsightCandidate[] = [];
 
@@ -63,22 +65,63 @@ function composeDashboardCandidates(
     });
   }
 
-  if ((events != null && events > 0) || (tokens != null && tokens > 0)) {
+  if (events != null) {
     candidates.push({
       id: "dashboard.usage",
       severity: "info",
       factKey: "insights.page.dashboard.dashboard-usage",
-      factParams: {
-        events: events ?? 0,
-        sessions: sessions ?? 0,
-      },
-      evidenceRefs: [
-        "dashboard.events",
-        "dashboard.tokens",
-        "dashboard.sessions",
-      ],
+      factParams: { events },
+      evidenceRefs: ["dashboard.events"],
       allowedActionIds: ["open_sessions", "open_distill"],
       actionId: "open_sessions",
+    });
+  }
+
+  if (tokens != null) {
+    candidates.push({
+      id: "dashboard.tokens",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-guide-collection",
+      factParams: { tokens },
+      evidenceRefs: ["dashboard.tokens"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (sessions != null) {
+    candidates.push({
+      id: "dashboard.sessions",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-guide-sessions",
+      factParams: { count: sessions },
+      evidenceRefs: ["dashboard.sessions"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+  }
+
+  if (activeSources != null) {
+    candidates.push({
+      id: "dashboard.active-sources",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-guide-distill",
+      factParams: { count: activeSources },
+      evidenceRefs: ["dashboard.activeSources"],
+      allowedActionIds: ["open_sources"],
+      actionId: "open_sources",
+    });
+  }
+
+  if (averageTokens != null) {
+    candidates.push({
+      id: "dashboard.average-tokens",
+      severity: "info",
+      factKey: "insights.page.dashboard.dashboard-guide-concentration",
+      factParams: { average: averageTokens },
+      evidenceRefs: ["dashboard.averageTokensPerEvent"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
     });
   }
 
@@ -89,7 +132,7 @@ function composeDashboardCandidates(
   const topShareRate = metricValue(bundle, "dashboard.topShareRate");
   if (topSource != null && topShareRate != null) {
     candidates.push({
-      id: "dashboard.assets",
+      id: "dashboard.source-concentration",
       severity: "info",
       factKey: "insights.page.dashboard.dashboard-assets",
       factParams: { name: String(topSource.value), rate: topShareRate },
@@ -99,36 +142,15 @@ function composeDashboardCandidates(
     });
   }
 
-  const lowCacheSource = bundle.evidence.find(
-    (item) =>
-      item.id === "dashboard.lowCacheSource" && typeof item.value === "string",
-  );
-  const lowCacheRate = metricValue(bundle, "dashboard.lowCacheRate");
-  if (
-    lowCacheRate != null &&
-    lowCacheRate < LOW_CACHE_THRESHOLD &&
-    lowCacheSource != null
-  ) {
+  if (skillAssets != null && knowledgeAssets != null) {
     candidates.push({
-      id: "dashboard.efficiency",
-      severity: "attention",
-      factKey: "insights.page.dashboard.dashboard-efficiency",
-      factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
-      evidenceRefs: ["dashboard.lowCacheSource", "dashboard.lowCacheRate"],
-      allowedActionIds: ["open_tracker"],
-      actionId: "open_tracker",
-    });
-  }
-
-  if (candidates.length === 0) {
-    candidates.push({
-      id: "dashboard.empty",
+      id: "dashboard.asset-summary",
       severity: "info",
-      factKey: "insights.page.dashboard.dashboard-empty",
-      factParams: {},
-      evidenceRefs: [],
-      allowedActionIds: ["open_sources"],
-      actionId: "open_sources",
+      factKey: "insights.page.dashboard.dashboard-watch",
+      factParams: { skills: skillAssets, knowledge: knowledgeAssets },
+      evidenceRefs: ["dashboard.skillAssets", "dashboard.knowledgeAssets"],
+      allowedActionIds: ["open_skills", "open_memory"],
+      actionId: "open_skills",
     });
   }
 
@@ -143,7 +165,7 @@ async function loadDashboardEvidence(scope: InsightScope) {
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const { usageSnapshot, sessionSnapshot } = root;
+  const { usageSnapshot, sessionSnapshot, skillSnapshot } = root;
 
   await usageSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
@@ -171,8 +193,28 @@ async function loadDashboardEvidence(scope: InsightScope) {
       "tokens",
     ),
   ];
+  if (snapshot.events > 0) {
+    evidence.push(
+      metricEvidence(
+        "dashboard.averageTokensPerEvent",
+        Math.round(snapshot.totals.totalTokens / snapshot.events),
+        observedAt,
+        freshness,
+        "tokens",
+      ),
+    );
+  }
 
   const activeSources = snapshot.bySource.filter((source) => source.events > 0);
+  evidence.push(
+    metricEvidence(
+      "dashboard.activeSources",
+      activeSources.length,
+      observedAt,
+      freshness,
+      "count",
+    ),
+  );
   const topSource = activeSources.reduce(
     (best, source) =>
       best == null || source.totalTokens > best.totalTokens ? source : best,
@@ -196,45 +238,19 @@ async function loadDashboardEvidence(scope: InsightScope) {
     );
   }
 
-  const withCache = activeSources.filter((source) => source.inputTokens > 0);
-  const lowCache = withCache.reduce(
-    (best, source) => {
-      const rate = (source.cachedInputTokens / source.inputTokens) * 100;
-      return best == null || rate < best.rate
-        ? { key: source.key, rate }
-        : best;
-    },
-    undefined as { key: string; rate: number } | undefined,
-  );
-  if (lowCache != null) {
+  await sessionSnapshot.ensureHydrated();
+  const sessionsLatest = sessionSnapshot.readLatest();
+  if (sessionsLatest.data != null) {
     evidence.push(
-      statusEvidence(
-        "dashboard.lowCacheSource",
-        lowCache.key,
-        observedAt,
-        freshness,
-      ),
       metricEvidence(
-        "dashboard.lowCacheRate",
-        Math.round(lowCache.rate),
+        "dashboard.sessions",
+        sessionsLatest.data.sessions.length,
         observedAt,
-        freshness,
-        "percent",
+        freshnessOf(sessionsLatest.data.generatedAt, nowMs),
+        "count",
       ),
     );
   }
-
-  await sessionSnapshot.ensureHydrated();
-  const sessionsLatest = sessionSnapshot.readLatest();
-  evidence.push(
-    metricEvidence(
-      "dashboard.sessions",
-      sessionsLatest.data?.sessions.length ?? 0,
-      observedAt,
-      freshnessOf(sessionsLatest.data?.generatedAt ?? null, nowMs),
-      "count",
-    ),
-  );
 
   const securitySummary = await getMonitoringSecuritySummary();
   if (securitySummary != null) {
@@ -257,6 +273,32 @@ async function loadDashboardEvidence(scope: InsightScope) {
     );
   }
 
+  await skillSnapshot.ensureHydrated();
+  const skillsLatest = skillSnapshot.readLatest();
+  if (skillsLatest.data != null) {
+    evidence.push(
+      metricEvidence(
+        "dashboard.skillAssets",
+        skillsLatest.data.skills.length,
+        observedAt,
+        freshnessOf(skillsLatest.data.generatedAt, nowMs),
+        "count",
+      ),
+    );
+  }
+  const knowledge = await root.knowledge.list().catch(() => null);
+  if (knowledge?.ok) {
+    evidence.push(
+      metricEvidence(
+        "dashboard.knowledgeAssets",
+        knowledge.value.length,
+        observedAt,
+        "unknown",
+        "count",
+      ),
+    );
+  }
+
   return {
     surfaceId: "dashboard" as const,
     scope,
@@ -268,7 +310,7 @@ async function loadDashboardEvidence(scope: InsightScope) {
 
 export const dashboardInsightAdapter: PageInsightAdapter = {
   surfaceId: "dashboard",
-  adapterVersion: 1,
+  adapterVersion: 3,
   loadEvidence: loadDashboardEvidence,
   composeCandidates: composeDashboardCandidates,
 };
@@ -284,12 +326,6 @@ export const widgetInsightAdapter: PageInsightAdapter = {
   composeCandidates(bundle) {
     const risk = metricValue(bundle, "dashboard.securityRisk");
     const sessions = metricValue(bundle, "dashboard.sessions");
-    const lowCacheRate = metricValue(bundle, "dashboard.lowCacheRate");
-    const lowCacheSource = bundle.evidence.find(
-      (item) =>
-        item.id === "dashboard.lowCacheSource" &&
-        typeof item.value === "string",
-    );
     if (risk != null && risk > 0) {
       return [
         {
@@ -312,27 +348,12 @@ export const widgetInsightAdapter: PageInsightAdapter = {
         id: "widget.distill",
         severity: "info",
         factKey: "insights.page.widget.widget-broadcast-distill",
-        factParams: { count: sessions ?? 0 },
+        factParams: { count: sessions },
         evidenceRefs: ["dashboard.sessions"],
         allowedActionIds: ["open_distill"],
         actionId: "open_distill",
       },
     ];
-    if (
-      lowCacheRate != null &&
-      lowCacheRate < LOW_CACHE_THRESHOLD &&
-      lowCacheSource != null
-    ) {
-      candidates.push({
-        id: "widget.efficiency",
-        severity: "attention",
-        factKey: "insights.page.widget.widget-broadcast-efficiency",
-        factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
-        evidenceRefs: ["dashboard.lowCacheSource", "dashboard.lowCacheRate"],
-        allowedActionIds: ["open_tracker"],
-        actionId: "open_tracker",
-      });
-    }
     return candidates;
   },
 };

@@ -2,8 +2,9 @@
  * `usePageInsight` — the renderer hook for the 「今日洞察双模式」 page insight.
  *
  * First render fetches the surface envelope via `getPageInsight` (with cancel
- * protection), then exposes localized display lines, the enhance action (with a
- * 60s cooldown and silent failure), and the raw envelope for status/modelLabel.
+ * protection), then refreshes the mounted page's evidence every 3 hours.
+ * It also exposes localized display lines, the enhance action (with a 60s
+ * cooldown and silent failure), and the raw envelope for status/modelLabel.
  *
  * All heavy reading is delegated to the M3 server fns; this module never
  * touches the enhancer or read models directly.
@@ -27,6 +28,7 @@ import {
   composeLineText,
   ENHANCE_COOLDOWN_MS,
   insightActionPath,
+  insightFallbackStatusLabel,
   insightStatusLabel,
   type InsightActionPath,
 } from "./use-page-insight.pure";
@@ -36,6 +38,7 @@ export {
   composeLineText,
   ENHANCE_COOLDOWN_MS,
   insightActionPath,
+  insightFallbackStatusLabel,
   insightStatusLabel,
 };
 export type {
@@ -43,6 +46,28 @@ export type {
   ComposeTranslate,
   InsightActionPath,
 } from "./use-page-insight.pure";
+
+/** Evidence and auto-enhancement refresh period for the currently mounted page. */
+export const PAGE_INSIGHT_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000;
+
+export interface PageInsightRefreshTimer {
+  setInterval(callback: () => void, delayMs: number): number;
+  clearInterval(handle: number): void;
+}
+
+/**
+ * Starts the mounted-page refresh loop and returns its unmount cleanup.
+ * Exported so timer cadence and cleanup can be verified without rendering React.
+ */
+export function startPageInsightRefreshTimer(
+  refresh: () => void | Promise<void>,
+  timer: PageInsightRefreshTimer = window,
+): () => void {
+  const handle = timer.setInterval(() => {
+    void refresh();
+  }, PAGE_INSIGHT_REFRESH_INTERVAL_MS);
+  return () => timer.clearInterval(handle);
+}
 
 /** One localized, ready-to-render insight line. */
 export interface ResolvedInsightLine {
@@ -108,26 +133,37 @@ export function usePageInsight(
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(false);
-    void getPageInsight({
-      data: {
-        surfaceId,
-        locale,
-        scope: scopeData ?? {},
-      },
-    })
-      .then((next) => {
+    let refreshInFlight = false;
+
+    const refreshEvidence = async (initial: boolean): Promise<void> => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      if (initial) setLoading(true);
+      setError(false);
+      try {
+        const next = await getPageInsight({
+          data: {
+            surfaceId,
+            locale,
+            scope: scopeData ?? {},
+          },
+        });
         if (!cancelled) setEnvelope(next);
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      } finally {
+        refreshInFlight = false;
+        if (!cancelled && initial) setLoading(false);
+      }
+    };
+
+    void refreshEvidence(true);
+    const stopRefreshTimer = startPageInsightRefreshTimer(() =>
+      refreshEvidence(false),
+    );
     return () => {
       cancelled = true;
+      stopRefreshTimer();
     };
   }, [surfaceId, locale, scopeData]);
 

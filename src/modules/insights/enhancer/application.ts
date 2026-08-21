@@ -43,8 +43,14 @@ import {
 
 export const INSIGHT_ENHANCER_ID = "insight-enhancer";
 
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_DAILY_CALL_LIMIT = 30;
+/** Keep enhanced text aligned with the active page's 3-hour evidence cycle. */
+export const INSIGHT_ENHANCEMENT_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+/**
+ * Default budget for automatic enhancement: one page can refresh every
+ * 3 hours for 8 calls/day, while up to 14 first visits or page switches add
+ * 14 calls (22 baseline calls total), leaving headroom within 500.
+ */
+const DEFAULT_DAILY_CALL_LIMIT = 500;
 /** The enhancer is the "enhanced" path; manual vs auto is interchangeable for
  * cache purposes (only "rules" is treated differently by the repository). */
 const ENHANCEMENT_CACHE_MODE: InsightMode = "enhanced-manual";
@@ -89,9 +95,9 @@ export interface InsightEnhancerOptions {
     profileId: string,
   ) => Promise<ActiveInsightProfile | null>;
   readonly now?: () => number;
-  /** Cache TTL. Defaults to 24h. */
+  /** Cache TTL. Defaults to 3 hours. */
   readonly ttlMs?: number;
-  /** In-process daily call budget. Defaults to 30. */
+  /** In-process daily call budget. Defaults to 500. */
   readonly dailyCallLimit?: number;
   /** Merge concurrent same-scope calls into one promise. Defaults to true. */
   readonly singleflight?: boolean;
@@ -176,7 +182,7 @@ export function createInsightEnhancer(
   const resolveActiveProfile = options.resolveActiveProfile;
   const resolveProfile = options.resolveProfile;
   const now = options.now ?? Date.now;
-  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+  const ttlMs = options.ttlMs ?? INSIGHT_ENHANCEMENT_CACHE_TTL_MS;
   const dailyCallLimit = options.dailyCallLimit ?? DEFAULT_DAILY_CALL_LIMIT;
   const singleflight = options.singleflight ?? true;
   const recordExecution = options.recordExecution ?? (() => undefined);

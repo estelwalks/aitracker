@@ -3,6 +3,7 @@
  * separate module (no React, no server-fn imports) so they can be tested with
  * node:test in isolation and shared by any presentational wrapper.
  */
+import { isInsightAnalysisUseful } from "../analysis-quality.ts";
 
 /**
  * Severity of a single envelope line. Matches the frozen M1 contract
@@ -68,6 +69,24 @@ export function insightStatusLabel(status: InsightEnvelopeStatus): string {
   return STATUS_LABEL_KEYS[status];
 }
 
+const FALLBACK_STATUS_LABEL_KEYS: Partial<
+  Record<InsightEnvelopeStatus, string>
+> = {
+  "enhancer-unavailable":
+    "settings.insight.fallbackStatus.enhancer-unavailable",
+  "budget-exceeded": "settings.insight.fallbackStatus.budget-exceeded",
+  timeout: "settings.insight.fallbackStatus.timeout",
+  "enhancer-failed": "settings.insight.fallbackStatus.enhancer-failed",
+  "invalid-output": "settings.insight.fallbackStatus.invalid-output",
+};
+
+/** Localized, renderer-safe explanation when AI enhancement fell back to rules. */
+export function insightFallbackStatusLabel(
+  status: InsightEnvelopeStatus,
+): string | null {
+  return FALLBACK_STATUS_LABEL_KEYS[status] ?? null;
+}
+
 const ACTION_PATHS: Record<InsightActionId, InsightActionPath> = {
   open_security: "/security",
   open_distill: "/distill",
@@ -111,7 +130,9 @@ export function composeLineText(
   line: ComposableInsightLine,
 ): string {
   const base = t(line.key, line.params);
-  if (!line.analysis) return base;
+  if (!isInsightAnalysisUseful(base, line.analysis)) return base;
+  if (/[。！？…]$/u.test(base)) return `${base}${line.analysis}`;
+  if (/[.!?]$/u.test(base)) return `${base} ${line.analysis}`;
   return `${base}。${line.analysis}`;
 }
 
