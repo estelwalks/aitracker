@@ -23,7 +23,7 @@ import { isInsightAnalysisUseful } from "../page/analysis-quality.ts";
 
 export const MAX_RESPONSE_TEXT_LENGTH = 8192;
 export const MAX_ANALYSIS_CHARS = 160;
-export const MIN_LINES = 5;
+export const MIN_LINES = 1;
 export const MAX_LINES = 10;
 export const WIDGET_MAX_LINES = 1;
 export const CANDIDATE_ID_MIN = 1;

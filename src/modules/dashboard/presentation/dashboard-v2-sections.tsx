@@ -623,9 +623,8 @@ export function DashboardToolSwitcher({
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
-  // The server projection is already sorted by the selected window's usage.
-  // Keep that order on every refresh/range change instead of retaining the
-  // first render's order in a client-side id list.
+  // DashboardV2Page supplies the usage-sorted order. Keep it as-is instead of
+  // retaining the first render's order in a client-side id list.
   const orderedTools = useMemo(() => [...tools], [tools]);
 
   const updateArrows = () => {

@@ -13,13 +13,12 @@ import {
 import {
   INSIGHT_ACTION_IDS,
   MAX_ANALYSIS_CHARS,
-  MIN_LINES,
   MAX_LINES,
   WIDGET_MAX_LINES,
 } from "./validation.ts";
 
-export const INSIGHT_PROMPT_VERSION = 3;
-export const INSIGHT_OUTPUT_SCHEMA_VERSION = 3;
+export const INSIGHT_PROMPT_VERSION = 6;
+export const INSIGHT_OUTPUT_SCHEMA_VERSION = 6;
 export const INSIGHT_ALLOWED_LOCALES = [
   "zh-CN",
   "en-US",
@@ -29,12 +28,12 @@ export const INSIGHT_ALLOWED_LOCALES = [
 
 export interface InsightPrompt {
   readonly id: `insight.${InsightSurfaceId}`;
-  readonly version: 3;
+  readonly version: 6;
   readonly surfaceId: InsightSurfaceId;
   readonly maxLines: number;
   readonly maxAnalysisChars: number;
   readonly allowedLocales: readonly string[];
-  readonly outputSchemaVersion: 3;
+  readonly outputSchemaVersion: 6;
   readonly system: string;
   readonly policy: string;
 }
@@ -42,16 +41,23 @@ export interface InsightPrompt {
 const SHARED_SYSTEM = [
   `You are the ${APP_NAME} daily-insight analyst. The supplied fact is already shown to the user; your analysis must add decision-useful meaning instead of rewriting it.`,
   "Hard rules — violating any one invalidates the whole response:",
-  "1. Use only the supplied candidate facts. Never invent a cause, trend, comparison, availability state, collection state, or recommendation that the facts do not establish.",
-  "2. Do not repeat, paraphrase, summarize, or merely strengthen the candidate fact. Analysis must add a concrete implication, priority, trade-off, or action rationale that is directly supported by that same fact.",
-  "3. Treat unknown, unavailable, unobserved, or missing values as unknown. Never convert them to zero, none, low, healthy, or risky.",
-  "4. Never tell the user to confirm collection is running, prevent collection gaps, install or connect missing tools, maximize coverage, or perform generic optimization. Do not recommend work the user cannot verify from this page.",
-  "5. Keep each surface within its stated responsibility. Do not repeat diagnostics owned by another surface, even when a candidate sounds related.",
-  "6. Never echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
-  "7. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
-  "8. Every mandatory candidate must receive exactly one line — never drop it.",
-  "9. Respond with a single JSON object only: no markdown, no prose, no code fences. Answer in the request locale.",
-  "10. Never soften a risk: keep or raise the severity implied by each fact.",
+  "1. Analyze every candidate independently. For a line, use ONLY that candidate's fact; never borrow a number, ratio, entity, metric, condition, or conclusion from another candidate in the payload.",
+  "2. Never invent a cause, trend, comparison, availability state, missing state, collection state, configuration state, permission state, or recommendation that the current candidate fact does not establish.",
+  "3. Do not use external or assumed benchmarks such as common, typical, normal, industry, far above, or significantly higher unless the current candidate fact itself explicitly contains that threshold conclusion.",
+  "4. Do not speculate with may, might, likely, possibly, or equivalent wording. Do not fill a line with requests for more data, further confirmation, distinction, investigation, or verification. If the fact supports no incremental conclusion, omit that non-mandatory candidate.",
+  "5. Do not repeat, paraphrase, summarize, or merely strengthen the candidate fact. Analysis must add a concrete implication, priority, trade-off, or action rationale that is directly supported by that same fact.",
+  "6. Treat unknown, unavailable, unobserved, or missing values as unknown. Never convert them to zero, none, low, healthy, risky, unavailable, or missing.",
+  "7. Never tell the user to confirm collection is running, prevent collection gaps, install or connect missing tools, maximize coverage, or perform generic optimization. Do not recommend work the user cannot verify from this page.",
+  "8. Keep each surface within its stated responsibility. Do not repeat diagnostics owned by another surface, even when a candidate sounds related.",
+  "9. Never echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
+  "10. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
+  "11. Every mandatory candidate must receive exactly one line — never drop it. When its fact supports no incremental conclusion, provide only a directly supported priority or action rationale without speculation.",
+  "12. Quality is more important than line count. For non-mandatory candidates, omit the line when its own fact cannot support a genuinely incremental conclusion. Never add filler merely to reach five lines; fewer than five useful lines is correct.",
+  "13. Every output line must add a distinct conclusion. Never produce two lines with the same or synonymous implication, priority, recommendation, or rationale; keep only the stronger supported line.",
+  "14. Ground every metric word in the current candidate fact. In particular, never mention events or event volume unless that fact itself mentions events; another candidate cannot supply the metric.",
+  "15. Never fill a line by describing absent dimensions, data limitations, or prompt rules. Do not say that only a total-volume dimension is provided, that existing data only contains a dimension, or that assumptions are unnecessary or forbidden.",
+  "16. Do not call a number, count, source set, or quantity limited, few, small, high, or low unless the current fact explicitly provides that conclusion or an applicable threshold/share.",
+  "17. Respond with a single JSON object only: no markdown, no prose, no code fences. Answer in the request locale. Never soften a risk.",
 ].join("\n");
 
 const POLICIES: Record<InsightSurfaceId, string> = {
@@ -115,7 +121,7 @@ export function buildInsightPromptTemplate(entry: InsightPrompt): string {
       '>"}]}',
     entry.surfaceId === "widget"
       ? "Output exactly one line. Every mandatory candidate must appear; omit actionId when no action is appropriate."
-      : `When at least ${MIN_LINES} candidates are provided, output ${MIN_LINES}-${entry.maxLines} lines covering different policy dimensions. When fewer are provided, output every candidate. Every mandatory candidate must appear; omit actionId when no action is appropriate.`,
+      : `Output at most ${entry.maxLines} useful lines covering distinct policy dimensions. Aim for five or more only when that many candidates independently support distinct incremental conclusions; fewer than five is correct otherwise. Never pad, repeat, or paraphrase to reach a count. Every mandatory candidate must appear; omit actionId when no action is appropriate.`,
   ].join("\n");
 }
 
