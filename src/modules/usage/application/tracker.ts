@@ -258,19 +258,20 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
 }
 
 /**
- * Page totals must come from each source event exactly once. The ranking
- * boards intentionally project the same events into skill/project/session
- * dimensions, so summing their token or event columns would triple-count the
- * user's consumption. `entries` is the number of visible leaderboard rows,
- * while tokens/events remain source-of-truth totals.
+ * Page totals use the Skill leaderboard as their token source. Skill rows are
+ * the page's definition of attributable consumption; raw events without a
+ * Skill attribution must not inflate the displayed total.
  */
 export function trackerTotalsFromEvents(
   events: readonly LocalUsageEvent[],
-  boards: readonly TrackerBoard[],
+  boards: Readonly<Record<RoastDimension, TrackerBoard>>,
 ): { tokens: number; events: number; entries: number } {
   return {
-    tokens: events.reduce((total, event) => total + event.totalTokens, 0),
+    tokens: boards.skill.rows.reduce((total, row) => total + row.tokens, 0),
     events: events.length,
-    entries: boards.reduce((total, board) => total + board.rows.length, 0),
+    entries: (Object.values(boards) as readonly TrackerBoard[]).reduce(
+      (total, board) => total + board.rows.length,
+      0,
+    ),
   };
 }
