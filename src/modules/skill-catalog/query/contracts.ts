@@ -2,6 +2,7 @@ import type {
   BatchUninstallResult as LegacyBatchUninstallResult,
   LocalSkill as LegacyLocalSkill,
   SkillAgent as LegacySkillAgent,
+  SkillForm,
   SkillSnapshot as LegacySkillSnapshot,
   SkillSyncResult as LegacySkillSyncResult,
 } from "../../../lib/local-skills/types.ts";
@@ -95,6 +96,8 @@ export interface SkillSnapshotSkill {
   readonly id: string;
   readonly name: string;
   readonly description: string | null;
+  /** 形态；旧快照可能缺失（undefined），投影层归一化为 null。 */
+  readonly form?: SkillForm | null;
   readonly lastUsedAt: string | null;
   readonly sizeBytes: number;
   readonly tokenEstimate: number;

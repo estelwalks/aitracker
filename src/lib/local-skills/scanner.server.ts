@@ -46,6 +46,7 @@ import {
   type BatchUninstallResult,
   type LocalSkill,
   type SkillAgent,
+  type SkillForm,
   type SkillInstallation,
   type SkillSource,
   type SkillSnapshot,
@@ -83,7 +84,7 @@ export function resolveAgentRoots(
   return roots;
 }
 
-const MARKET_API = `${MARKET_API_BASE}/skills`;
+const MARKET_API = `${MARKET_API_BASE}/external-api/v1/skills`;
 // Market-evidence freshness comes from the public runtime policy source
 // (`skillMarketEvidence.freshForMinutes`); the old 5-minute magic constant
 // has been removed (T0-05).
@@ -751,12 +752,21 @@ async function findMarker(
   return null;
 }
 
+/** SKILL.md frontmatter `form` → 形态枚举（缺失视为完整包）。 */
+function formOf(frontmatter: Record<string, string>): SkillForm {
+  const raw = frontmatter.form?.trim().toLowerCase() ?? "";
+  if (raw.includes("workflow")) return "workflow";
+  if (raw.includes("prompt")) return "prompt";
+  return "package";
+}
+
 interface SkillWalkContext {
   agent: string;
   rule: SkillAgentRule;
   origins: MarketOriginsFile;
   installations: Map<string, SkillInstallation[]>;
   descriptions: Map<string, string | null>;
+  forms: Map<string, SkillForm>;
 }
 
 async function recordSkill(
@@ -769,6 +779,9 @@ async function recordSkill(
   const name = frontmatter.name?.trim() || basename(skillPath) || "Skill";
   if (!context.descriptions.has(name)) {
     context.descriptions.set(name, frontmatter.description ?? null);
+  }
+  if (!context.forms.has(name)) {
+    context.forms.set(name, formOf(frontmatter));
   }
   const origin = context.origins.installations[originKey(skillPath)];
   const version = frontmatter.version ?? origin?.localVersion ?? null;
@@ -841,9 +854,11 @@ async function scanInstallations(
 ): Promise<{
   installations: Map<string, SkillInstallation[]>;
   descriptions: Map<string, string | null>;
+  forms: Map<string, SkillForm>;
 }> {
   const installations = new Map<string, SkillInstallation[]>();
   const descriptions = new Map<string, string | null>();
+  const forms = new Map<string, SkillForm>();
   await Promise.all(
     SKILL_AGENTS.map(async (agent) => {
       const rule = RULE_BY_AGENT.get(agent);
@@ -854,13 +869,14 @@ async function scanInstallations(
         origins,
         installations,
         descriptions,
+        forms,
       };
       for (const root of roots[agent] ?? []) {
         await walkSkillDirectory(root, 0, context);
       }
     }),
   );
-  return { installations, descriptions };
+  return { installations, descriptions, forms };
 }
 
 export async function scanLocalSkills(
@@ -877,7 +893,7 @@ export async function scanLocalSkills(
     detectToolInstallations(AI_TOOLS, homeDirectory),
   ]);
   const agents = agentInstallationFacts(installationFacts);
-  const { installations, descriptions } = await scanInstallations(
+  const { installations, descriptions, forms } = await scanInstallations(
     roots,
     origins,
   );
@@ -890,6 +906,7 @@ export async function scanLocalSkills(
         id: name,
         name,
         description: descriptions.get(name) ?? null,
+        form: forms.get(name) ?? null,
         lastUsedAt:
           usage == null ? null : new Date(usage.lastUsedAt).toISOString(),
         sizeBytes: 0,
@@ -924,6 +941,7 @@ export async function scanLocalSkills(
         skills: skills.map((skill) => ({
           name: skill.name,
           description: skill.description,
+          form: skill.form,
           lastUsedAt: skill.lastUsedAt,
           installations: skill.installations,
         })),

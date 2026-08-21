@@ -127,6 +127,8 @@ export interface DistillationSaveSkillResponse {
   readonly agent?: string;
   /** Resolved SKILL.md path on success (already normalized). */
   readonly path?: string;
+  /** 保存时对产物做的自动质检结果。 */
+  readonly qualification?: import("../qualify.ts").SkillQualification;
 }
 
 export type { CandidateOutput };

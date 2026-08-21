@@ -5,8 +5,23 @@ import { useState } from "react";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { CandidateOutput } from "../../contracts";
 import type { DistillationSessionItem } from "../index.ts";
+import type { DistillConfigModelOption } from "./DistillConfig.tsx";
 import { kindMeta } from "./out-types.ts";
 import { resolveCandidateSource } from "./source-resolve.ts";
+
+/** 解析候选的执行模型为可读名称。找不到的 opaque 配置引用(m-xxx)不显示，避免
+ * 把无意义的模型 id 泄漏到历史列表。 */
+function modelLabelOf(
+  candidate: CandidateOutput,
+  options: readonly DistillConfigModelOption[],
+): string | null {
+  const id = candidate.execution.modelId;
+  if (!id) return candidate.mode;
+  const option = options.find((o) => o.id === id);
+  if (option) return option.label;
+  if (/^m-[A-Za-z0-9-]+$/i.test(id)) return null;
+  return id;
+}
 
 /**
  * 蒸馏历史弹窗,对齐原型(壳 1351-1398 + DistillHistoryCard 2231-2360):
@@ -17,6 +32,7 @@ export function DistillHistoryDialog({
   candidates,
   sessions,
   sessionIds,
+  modelOptions,
   onClose,
   onView,
 }: {
@@ -24,6 +40,8 @@ export function DistillHistoryDialog({
   sessions: readonly DistillationSessionItem[];
   /** 本页面会话内新产生的候选 id(「本次会话结果」区)。 */
   sessionIds: ReadonlySet<string>;
+  /** 模型选项(profile id → 可读名称)，用于把 m-xxx 转成模型名。 */
+  modelOptions: readonly DistillConfigModelOption[];
   onClose: () => void;
   onView: (candidateId: string) => void;
 }) {
@@ -90,7 +108,11 @@ export function DistillHistoryDialog({
               </div>
             </div>
           )}
-          <DistillHistoryCard runs={candidates} sessions={sessions} />
+          <DistillHistoryCard
+            runs={candidates}
+            sessions={sessions}
+            modelOptions={modelOptions}
+          />
         </div>
       </section>
     </div>
@@ -101,9 +123,11 @@ export function DistillHistoryDialog({
 function DistillHistoryCard({
   runs,
   sessions,
+  modelOptions,
 }: {
   runs: readonly CandidateOutput[];
   sessions: readonly DistillationSessionItem[];
+  modelOptions: readonly DistillConfigModelOption[];
 }) {
   const { t, format } = useI18n();
   const [page, setPage] = useState(1);
@@ -139,11 +163,11 @@ function DistillHistoryCard({
         {rows.map((candidate) => {
           const badge = kindMeta(candidate.kind);
           const saved = candidate.approvalState === "approved";
-          const model = candidate.execution.modelId ?? candidate.mode;
+          const model = modelLabelOf(candidate, modelOptions);
           const resolved = resolveCandidateSource(candidate, sessions);
           return (
             <div key={candidate.candidateId} className="px-4 py-2.5">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="flex min-w-0 items-center gap-x-3">
                 <button
                   type="button"
                   onClick={() =>
@@ -178,17 +202,8 @@ function DistillHistoryCard({
                 >
                   {candidate.title}
                 </button>
-                <span className="hidden font-mono text-[10.5px] text-muted-foreground sm:inline">
-                  {t("distill.histSegments", {
-                    count: candidate.selectedSessionRefs.length,
-                  })}{" "}
-                  · {model}
-                  {resolved.projectKeys.length > 0
-                    ? ` · ${resolved.projectKeys.join(" / ")}`
-                    : ""}
-                </span>
                 <span
-                  className="rounded-full px-2 py-0.5 font-mono text-[10px]"
+                  className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px]"
                   style={
                     saved
                       ? {
@@ -204,6 +219,27 @@ function DistillHistoryCard({
                 >
                   {saved ? t("distill.histSaved") : t("distill.histUnsaved")}
                 </span>
+              </div>
+              <div className="mt-1 flex min-w-0 items-center gap-x-2 pl-7 font-mono text-[10.5px] text-muted-foreground">
+                <span className="shrink-0">
+                  {t("distill.histSegments", {
+                    count: candidate.selectedSessionRefs.length,
+                  })}
+                </span>
+                {model ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="truncate">{model}</span>
+                  </>
+                ) : null}
+                {resolved.projectKeys.length > 0 ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="truncate">
+                      {resolved.projectKeys.join(" / ")}
+                    </span>
+                  </>
+                ) : null}
               </div>
               {openId === candidate.candidateId && (
                 <div className="mt-2 space-y-2 rounded-lg bg-surface-2/60 p-3">

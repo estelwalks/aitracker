@@ -41,6 +41,24 @@ function sanitizeDistilledText(value: string): string {
     .replace(CREDENTIAL_VALUE_RE, "[REDACTED]");
 }
 
+// The memory/persona prompts mandate a top-level H1 that duplicates the asset
+// type ("# 任务记忆" / "# 用户画像"), which the card's type badge already
+// carries. Stripping it keeps the stored body a clean document (the memory
+// title comes from the entry's `title`), so the card never reads as the
+// heading rendered twice. Mirrors the prototype's memory bodies, which have
+// no redundant heading.
+const REDUNDANT_HEADING_RE: Record<string, RegExp> = {
+  memory: /^#\s*任务记忆[ \t]*\n+/u,
+  persona: /^#\s*用户画像[ \t]*\n+/u,
+};
+function stripRedundantHeading(
+  value: string,
+  kind: CandidateOutput["kind"],
+): string {
+  const re = REDUNDANT_HEADING_RE[kind];
+  return re ? value.replace(re, "") : value;
+}
+
 export function isOpaqueSessionRef(ref: SessionRef): boolean {
   return OPAQUE.test(ref.source) && OPAQUE.test(ref.sessionId);
 }
@@ -180,7 +198,13 @@ export function candidateText(
   // Keep the distilled prose; redact only private fragments (paths → ~/,
   // credential values → [REDACTED]). A realistic developer persona that
   // mentions node/npm/git must flow through to the memory module intact.
-  const sanitized = sanitizeDistilledText(text).trim();
+  // A prompt-mandated redundant H1 ("# 任务记忆" / "# 用户画像") is dropped —
+  // the memory card's type badge already labels it, and without the strip the
+  // stored body's first line reads as a second title (title/body look swapped).
+  const sanitized = stripRedundantHeading(
+    sanitizeDistilledText(text),
+    kind,
+  ).trim();
   if (!sanitized) {
     return `Distilled ${kind === "persona" ? "persona memory" : kind === "memory" ? "task memory" : kind} for ${rows.length} selected session${rows.length === 1 ? "" : "s"}.`;
   }

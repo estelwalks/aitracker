@@ -9,6 +9,7 @@ import type {
 } from "../../sessions/contracts.ts";
 import type {
   CandidateOutput,
+  ControlledSessionSummary,
   DistillationApplication,
   DistillationAssetCounts,
   DistillationErrorCode,
@@ -28,6 +29,11 @@ import {
   isValidSegmentRef,
   segmentMarkdown,
 } from "../domain.ts";
+import {
+  buildFilesForQualification,
+  qualifySkillFiles,
+  type SkillQualification,
+} from "../qualify.ts";
 import { localDateKey, type DistillQuota } from "../quota.ts";
 import { compactSegmentMaterials } from "../compression.ts";
 
@@ -160,6 +166,61 @@ export function createDistillationApplication(
     ports.persistence?.save(candidate).catch(() => undefined) ??
     Promise.resolve();
 
+  /** 生成兜底：能力类产物（skill/brief/prompt）最多重试次数（首次 + 2 次修正）。 */
+  const MAX_QUALITY_RETRIES = 2;
+
+  /**
+   * 生成侧兜底：真实模型跑出结果后做一次自动质检，不合格就带上失败原因
+   * 追加到提示词重跑；多次仍不合格则强制输出最后一次结果（不再阻塞用户）。
+   * 非能力类（记忆/画像）或离线模式不做此循环。
+   */
+  async function runWithQualityFallback(
+    ai: NonNullable<DistillationPorts["ai"]>,
+    baseRequest: AIRequest,
+    kind: CandidateOutput["kind"],
+    rows: readonly ControlledSessionSummary[],
+  ): Promise<AIExecutionResult> {
+    if (kind !== "skill" && kind !== "brief" && kind !== "prompt")
+      return ai.execute(baseRequest);
+    let request = baseRequest;
+    const lastQualification: SkillQualification | null = null;
+    for (let attempt = 0; attempt <= MAX_QUALITY_RETRIES; attempt += 1) {
+      const execution = await ai.execute(request);
+      // 质检是兜底增强：构建/质检任何异常都直接返回结果，不让质检炸掉生成。
+      let qualification: SkillQualification | null = null;
+      try {
+        const summary = execution.response?.text?.trim() ?? "";
+        const files = buildFilesForQualification(
+          summary,
+          kind,
+          `${rows.length} 场会话蒸馏产物`,
+        );
+        qualification = qualifySkillFiles(files, kind);
+      } catch {
+        return execution;
+      }
+      if (qualification.pass) return execution;
+      // 最后一次仍不合格 → 强制输出（兜底），不再重试。
+      if (attempt >= MAX_QUALITY_RETRIES) return execution;
+      const failures = qualification.checks
+        .filter((check) => !check.pass)
+        .map(
+          (check) =>
+            `${check.label}${check.detail ? `（${check.detail}）` : ""}`,
+        )
+        .join("；");
+      request = {
+        ...request,
+        prompt: {
+          ...request.prompt,
+          template: `${request.prompt.template}\n\n【质检反馈·第 ${attempt + 1} 次】上次输出不合格：${failures}\n请针对上述问题修正后重新输出，不要解释、不要添加额外说明。`,
+        },
+      };
+    }
+    // 理论不可达；保底返回最后一次结果。
+    return ai.execute(request);
+  }
+
   return {
     async start(
       request,
@@ -234,7 +295,15 @@ export function createDistillationApplication(
       };
       let execution: AIExecutionResult;
       try {
-        execution = await ports.ai.execute(aiRequest);
+        // 生成兜底：真实模型 + 能力类产物带质检重试，多次不合格强制输出。
+        execution = isRealModelRequest(request)
+          ? await runWithQualityFallback(
+              ports.ai,
+              aiRequest,
+              request.kind ?? "memory",
+              controlled,
+            )
+          : await ports.ai.execute(aiRequest);
       } catch {
         if (isRealModelRequest(request))
           return err("errors.distillation.aiFailed");

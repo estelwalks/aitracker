@@ -9,6 +9,7 @@ import {
   formatMoney,
   formatNumber,
   formatPercent,
+  formatTime,
   formatTokens,
 } from "./format.ts";
 
@@ -33,6 +34,15 @@ test("formatPercent: 0-100 数值按 locale 输出百分比", () => {
   assert.equal(formatPercent("en-US", 0), "0%");
   assert.equal(formatPercent("en-US", 100), "100%");
   assert.equal(formatPercent("zh-CN", Number.NaN), "—");
+});
+
+test("formatTime: 24 小时制时分", () => {
+  const d = new Date(2026, 7, 3, 9, 12); // 2026-08-03 09:12 local
+  assert.equal(formatTime("zh-CN", d), "09:12");
+  assert.equal(formatTime("en-US", d), "09:12");
+  assert.equal(formatTime("ja-JP", d), "09:12");
+  assert.equal(formatTime("ko-KR", d), "09:12");
+  assert.equal(formatTime("zh-CN", "not-a-date"), "—");
 });
 
 test("formatDate: 四语言日期", () => {

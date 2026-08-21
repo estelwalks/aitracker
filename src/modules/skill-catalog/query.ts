@@ -58,6 +58,7 @@ function projectSnapshot(value: SkillSnapshotData): SkillSnapshot {
       id: skill.id,
       name: skill.name,
       description: skill.description,
+      form: skill.form ?? null,
       lastUsedAt: skill.lastUsedAt,
       sizeBytes: skill.sizeBytes,
       tokenEstimate: skill.tokenEstimate,
@@ -132,6 +133,21 @@ function resolveInstallation(value: LegacySkillSnapshot, ref: string) {
 export const getLocalSkills = createServerFn({ method: "GET" }).handler(
   async (): Promise<SkillSnapshot> =>
     projectSnapshot(await readSkillSnapshot()),
+);
+
+/**
+ * Forces a fresh on-disk scan and commits it to the cached snapshot. Used
+ * after install/uninstall so the UI reflects the new state immediately
+ * instead of re-reading the pre-operation cache.
+ */
+export const refreshSkillSnapshot = createServerFn({ method: "POST" }).handler(
+  async (): Promise<SkillSnapshot> => {
+    const { getCompositionRoot } =
+      await import("../../app/composition.server.ts");
+    const { skillSnapshot } = await getCompositionRoot();
+    await skillSnapshot.refreshNow();
+    return projectSnapshot(await readSkillSnapshot());
+  },
 );
 
 /**
@@ -259,4 +275,7 @@ export const requestApprovedSkillSync = createServerFn({ method: "POST" })
 
 export { updateSkillBlacklist } from "../../lib/local-skills/server-fns.ts";
 export { getSkillFiles } from "../../lib/local-skills/server-fns.ts";
-export type { SkillAgent as LocalSkillAgent } from "../../lib/local-skills/types.ts";
+export type {
+  SkillAgent as LocalSkillAgent,
+  SkillForm,
+} from "../../lib/local-skills/types.ts";

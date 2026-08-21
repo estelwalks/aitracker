@@ -161,6 +161,18 @@ export function totalsFromDaily(daily: LocalUsageDaily[]): LocalUsageTotals {
   );
 }
 
+/**
+ * 缓存命中率（口径说明）：
+ *   命中率 = cachedInputTokens / (inputTokens + cachedInputTokens + cacheCreationInputTokens) × 100%
+ * 其中：
+ *   - inputTokens             = 未命中缓存、实际计费的输入 token（已扣除缓存命中部分）
+ *   - cachedInputTokens       = 命中缓存的输入 token（按缓存价计费）
+ *   - cacheCreationInputTokens = 本次写入缓存的输入 token（首次/变化片段，缓存写入价）
+ * 分母是全部输入 token（含缓存命中与缓存写入），分子是命中缓存的 token。
+ * 分母为 0 时返回 0（无输入则不构成命中率）。
+ * 聚合层只产出原始计数（见各 scanner 的 totals），命中率属于展示层派生指标，
+ * 由展示层统一调用本函数，保证各处口径一致。
+ */
 export function cacheRate(counts: LocalTokenCounts): number {
   const inputTotal =
     counts.inputTokens +

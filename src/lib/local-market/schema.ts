@@ -10,12 +10,11 @@ import type {
 } from "./types.ts";
 
 const VALID_SORTS: readonly MarketSort[] = [
+  "security_score",
   "stars",
   "created_at",
   "name_asc",
   "name_desc",
-  "downloads",
-  "tokens",
 ];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -36,10 +35,6 @@ function optionalNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function optionalBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function nonNegativeInteger(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new AppError("errors.market.pagingFieldInvalid", { field });
@@ -55,40 +50,22 @@ function parseSkill(value: unknown): MarketSkill {
     name: requiredString(value.name, "name"),
     slug: requiredString(value.slug, "slug"),
     description: optionalString(value.description),
-    descriptionZh: optionalString(value.description_zh),
+    shortDescription: optionalString(value.short_description),
     repoOwner: requiredString(value.repo_owner, "repo_owner"),
     repoName: requiredString(value.repo_name, "repo_name"),
     repoPath: requiredString(value.repo_path, "repo_path"),
-    repoUrl: optionalString(value.repo_url),
-    branch: optionalString(value.branch),
-    installCount: optionalNumber(value.install_count),
     securityScore: optionalNumber(value.security_score),
     securityLevel: optionalString(value.security_level),
-    verdict: optionalString(value.verdict),
-    status: optionalString(value.status),
     stars: optionalNumber(value.stars),
     tags: Array.isArray(value.tags)
       ? value.tags.filter((tag): tag is string => typeof tag === "string")
       : [],
-    isOfficial: optionalBoolean(value.is_official),
-    isFeatured: optionalBoolean(value.is_featured),
     updatedAt: optionalString(value.updated_at),
-    lastScannedAt: optionalString(value.last_scanned_at),
-    tokens: tokenEstimate(value.token_estimate),
-    // 市场接口不在列表项返回体积字段；体积由调用方按需 HEAD 预取后回填。
+    // 外接 API 不返回安装数等不准统计字段，体积由调用方按需 HEAD 预取后回填。
     size: optionalNumber(value.size ?? value.compressed_bytes),
     version: null,
     rating: null,
   };
-}
-
-/**
- * 从市场接口的 token_estimate 对象中提取总 Token 数。
- * 接口返回 {total_tokens, ...}；缺失或形态不符时为 null。
- */
-function tokenEstimate(value: unknown): number | null {
-  if (!isRecord(value)) return null;
-  return optionalNumber(value.total_tokens);
 }
 
 function parsePagination(value: unknown): MarketPagination {

@@ -15,25 +15,16 @@ export interface MarketSkill {
   name: string;
   slug: string;
   description: string | null;
-  descriptionZh: string | null;
+  /** 简短描述（外接 API `short_description`）。 */
+  shortDescription: string | null;
   repoOwner: string;
   repoName: string;
   repoPath: string;
-  repoUrl: string | null;
-  branch: string | null;
-  installCount: number | null;
   securityScore: number | null;
   securityLevel: string | null;
-  verdict: string | null;
-  status: string | null;
   stars: number | null;
   tags: string[];
-  isOfficial: boolean | null;
-  isFeatured: boolean | null;
   updatedAt: string | null;
-  lastScannedAt: string | null;
-  /** Skill 上下文 Token 估算（来自市场接口 token_estimate.total_tokens）。 */
-  tokens: number | null;
   /** 压缩包体积（字节）；市场接口不返回，按需 HEAD 预取，缺失为 null。 */
   size: number | null;
   version: null;
@@ -48,12 +39,10 @@ export interface MarketPagination {
 }
 
 export type MarketSort =
-  "stars" | "created_at" | "name_asc" | "name_desc" | "downloads" | "tokens";
+  "security_score" | "stars" | "created_at" | "name_asc" | "name_desc";
 
 export interface MarketStats {
   totalSkills: number;
-  officialCount: number;
-  totalDownloads: number;
   installedCount: number;
 }
 

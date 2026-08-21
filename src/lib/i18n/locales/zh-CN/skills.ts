@@ -24,6 +24,12 @@ export const skills = {
     external: "外部",
     other: "其他",
   },
+  form: {
+    all: "全部形态",
+    package: "蒸馏skill",
+    workflow: "工作流",
+    prompt: "Prompt",
+  },
   agent: {
     all: "全部Agent",
     prevGroup: "上一组Agent",
@@ -325,6 +331,8 @@ export const skills = {
     exportDir: "导出目录",
     scanSecurity: "安全检测",
     syncToTools: "同步到工具",
+    installing: "安装中…",
+    installToSelected: "安装到所选工具",
     verifySecurity: "查看安全检测结果",
   },
   syncTarget: {

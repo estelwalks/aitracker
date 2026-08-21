@@ -17,7 +17,7 @@ export const Route = createFileRoute("/market")({
     let market: Awaited<ReturnType<typeof getMarketSkills>>;
     try {
       market = await getMarketSkills({
-        data: { page: 1, limit: 12, search: "", sort: "downloads" },
+        data: { page: 1, limit: 12, search: "", sort: "stars" },
       });
     } catch {
       // The market is an optional network integration. A cold/offline desktop
@@ -31,8 +31,6 @@ export const Route = createFileRoute("/market")({
         warning: null,
         stats: {
           totalSkills: 0,
-          officialCount: 0,
-          totalDownloads: 0,
           installedCount: 0,
         },
       };

@@ -26,6 +26,12 @@ export const skills = {
     external: "外部",
     other: "その他",
   },
+  form: {
+    all: "全形態",
+    package: "蒸留スキル",
+    workflow: "ワークフロー",
+    prompt: "Prompt",
+  },
   agent: {
     all: "すべてのAgent",
     prevGroup: "前のAgent",
@@ -338,6 +344,8 @@ export const skills = {
     exportDir: "ディレクトリをエクスポート",
     scanSecurity: "セキュリティチェック",
     syncToTools: "ツールに同期",
+    installing: "インストール中…",
+    installToSelected: "選択したツールにインストール",
     verifySecurity: "セキュリティ結果を確認",
   },
   syncTarget: {

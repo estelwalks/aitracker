@@ -9,7 +9,8 @@ import {
 import type { MarketListResult, MarketSkill, MarketSort } from "./types.ts";
 import type { SkillSnapshot } from "../local-skills/types.ts";
 
-const MARKET_API = MARKET_API_BASE;
+/** 外接 Skill API v1 列表根路径（文档：/api/external-api/v1/skills）。 */
+const MARKET_API = `${MARKET_API_BASE}/external-api/v1/skills`;
 const REQUEST_TIMEOUT_MS = 8_000;
 export const MARKET_QUERY_CACHE_TTL_MS = 30 * 60 * 1_000;
 
@@ -63,8 +64,8 @@ export function countInstalledMarketSkills(
 function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
   const sorted = [...skills];
   switch (sort) {
-    case "downloads":
-      sorted.sort((a, b) => (b.installCount ?? 0) - (a.installCount ?? 0));
+    case "security_score":
+      sorted.sort((a, b) => (b.securityScore ?? 0) - (a.securityScore ?? 0));
       break;
     case "created_at":
       sorted.sort((a, b) => {
@@ -75,9 +76,6 @@ function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
       break;
     case "stars":
       sorted.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
-      break;
-    case "tokens":
-      sorted.sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0));
       break;
     case "name_asc":
       sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -90,14 +88,11 @@ function sortSkills(skills: MarketSkill[], sort: MarketSort): MarketSkill[] {
 }
 
 function computeStats(
-  skills: MarketSkill[],
   total: number,
   installedCount: number,
 ): MarketListResult["stats"] {
   return {
     totalSkills: total,
-    officialCount: skills.filter((s) => s.isOfficial === true).length,
-    totalDownloads: skills.reduce((sum, s) => sum + (s.installCount ?? 0), 0),
     installedCount,
   };
 }
@@ -167,7 +162,7 @@ export async function fetchMarketSkills(
   );
 
   try {
-    const url = new URL(`${MARKET_API}/skills/search`);
+    const url = new URL(`${MARKET_API}/search`);
     url.searchParams.set("lang", "zh");
 
     const response = await (options.fetcher ?? fetch)(url, {
@@ -178,20 +173,12 @@ export async function fetchMarketSkills(
       },
       body: JSON.stringify({
         search: query.search,
-        mode: "fast",
         limit: query.limit,
         page: query.page,
         tags,
-        safety_level: null,
-        status: null,
-        language: null,
-        // 上游接口不识别 tokens 排序；交由本地 sortSkills 重排（downloads 亦走
-        // 上游专用字段，其余排序按 sort_by 透传）。
-        ...(sort === "downloads"
-          ? { sort }
-          : sort === "tokens"
-            ? {}
-            : { sort_by: sort }),
+        // 外接 API v1 的 sort_by 枚举：security_score/stars/created_at/name_asc/name_desc。
+        // 搜索默认去重由后端开关控制，调用方无需传 deduplicate。
+        sort_by: sort,
       }),
       signal: controller.signal,
     });
@@ -211,11 +198,7 @@ export async function fetchMarketSkills(
       source: "network",
       fetchedAt: (options.now?.() ?? new Date()).toISOString(),
       warning: null,
-      stats: computeStats(
-        sortedSkills,
-        parsed.pagination.total,
-        installedCount,
-      ),
+      stats: computeStats(parsed.pagination.total, installedCount),
     };
     await writeMarketCache(key, result).catch(() => undefined);
     return result;
@@ -243,7 +226,7 @@ export function buildDownloadUrl(skill: {
   const segments = [skill.repoOwner, skill.repoName, skill.slug].map(
     encodeURIComponent,
   );
-  const url = new URL(`${MARKET_API}/skills/${segments.join("/")}/download`);
+  const url = new URL(`${MARKET_API}/${segments.join("/")}/download`);
   url.searchParams.set("repo_path", skill.repoPath);
   return url;
 }

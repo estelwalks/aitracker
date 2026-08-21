@@ -257,7 +257,7 @@ export function Pagination({
   );
 
   const stepButton =
-    "inline-flex h-7 items-center justify-center gap-1.5 rounded-sm border border-border bg-surface-2 px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+    "inline-flex h-7 items-center justify-center gap-1.5 rounded-[6px] border border-border bg-surface-2 px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div
@@ -284,7 +284,7 @@ export function Pagination({
               type="button"
               aria-current={p === current ? "page" : undefined}
               onClick={() => onChange(p)}
-              className={`tt-num size-7 rounded-sm border text-[12px] transition-colors ${
+              className={`tt-num size-7 rounded-[6px] border text-[12px] transition-colors ${
                 p === current
                   ? "border-ok bg-ok/15 text-ok"
                   : "border-border hover:text-foreground"

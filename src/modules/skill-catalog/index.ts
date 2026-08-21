@@ -64,6 +64,7 @@ export {
   getLocalSkills,
   getSkillFiles,
   getSkillWorkspace,
+  refreshSkillSnapshot,
   requestApprovedBatchUninstall,
   requestApprovedSkillInstall,
   requestApprovedSkillSync,

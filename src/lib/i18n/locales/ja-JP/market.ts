@@ -30,16 +30,12 @@ export const market = {
   },
   stats: {
     totalSkills: "掲載 Skill",
-    officialCount: "公式",
     passRate: "セキュリティ通過",
     passRatePage: "このページの通過率",
     installedCount: "インストール済み",
-    totalDownloads: "総ダウンロード",
     hintCurrentPage: "現在のページの集計",
     hintLocalInstalled: "この端末にインストール済み",
-    hintOfficial: "公式チームがメンテナンス",
     hintDomains: "{count} カテゴリ",
-    hintDownloads: "総ダウンロード {count}",
   },
   search: {
     placeholder: "Skill 名、ソースパス、または機能を検索",
@@ -48,13 +44,11 @@ export const market = {
     perPage: "1 ページ {count} 件 · {page} ページ目",
   },
   sort: {
-    hot: "人気",
     latest: "最新",
     rating: "評価が高い",
-    tokens: "Token 使用量",
+    security: "セキュリティスコア上位",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
-    downloads: "ダウンロード数",
   },
   list: {
     title: "Skill 一覧（{count}）",
@@ -72,7 +66,6 @@ export const market = {
     actions: "操作",
   },
   installed: "インストール済み",
-  official: "公式",
   domainAll: "すべて",
   card: {
     detail: "詳細",
@@ -86,13 +79,12 @@ export const market = {
     tokens: "コンテキスト Token",
     securityPass: "セキュリティスキャン通過 · 安全にインストールできます",
     infoTitle: "インストール情報",
-    lastScanned: "最終スキャン",
   },
   metric: {
-    downloads: "ダウンロード数",
-    tokenUsage: "Token 使用量",
     size: "サイズ",
     stars: "Star",
+    securityScore: "セキュリティスコア",
+    securityLevel: "セキュリティレベル",
   },
   security: {
     score: "セキュリティスコア {score}",
@@ -102,6 +94,11 @@ export const market = {
   },
   install: {
     button: "インストール",
+    to: "{agent} にインストール",
+    uninstallFrom: "{agent} からアンインストール",
+    installedAt: "{agent} にインストール済み",
+    selectAll: "すべて選択",
+    clearAll: "すべて解除",
     expandAll: "すべて表示 {count}",
     expandMore: "あと {count} 個",
     toSelected: "選択したツールにインストール",
@@ -110,6 +107,7 @@ export const market = {
     succeeded: "インストール成功",
     failed: "インストール失敗",
     success: "{agent} にインストールしました",
+    uninstalled: "{agent} からアンインストールしました",
     downloading: "ダウンロード・スキャン中…",
     failure: {
       scanBlocked:
@@ -122,16 +120,14 @@ export const market = {
     },
   },
   drawer: {
-    viewRepo: "ソースリポジトリを表示",
     viewSource: "ソースコードを表示",
     securityNotice:
       "セキュリティスキャン通過 · 悪意のある URL、危険なコマンド、機密情報は検出されていません",
     commandExample: "インストールコマンド例",
-    contextTokens: "コンテキスト Token",
     lastUpdated: "最終更新",
     permissionClaim: "権限宣言",
     networkClaim: "ネットワーク宣言",
-    selectAgent: "インストール先を選択（単一選択、{count} ツール対応）",
+    selectAgent: "インストール先を選択（複数選択・全選択対応、{count} ツール）",
     agentNotInstalled: "未インストール",
   },
   pagination: {

@@ -75,9 +75,13 @@ const validResponse = {
       repo_owner: "owner",
       repo_name: "repo",
       repo_path: "skills/market-test-skill/SKILL.md",
-      install_count: 100,
-      is_official: true,
-      token_estimate: { total_tokens: 5000 },
+      description: "Market test skill",
+      short_description: "Short market test skill",
+      security_score: 95,
+      security_level: "low",
+      stars: 120,
+      tags: ["security"],
+      updated_at: "2026-08-01T00:00:00.000Z",
     },
     {
       id: 2,
@@ -86,9 +90,13 @@ const validResponse = {
       repo_owner: "owner2",
       repo_name: "repo2",
       repo_path: "skills/another-skill/SKILL.md",
-      install_count: 50,
-      is_official: false,
-      token_estimate: { total_tokens: 1000 },
+      description: "Another skill",
+      short_description: "Short another skill",
+      security_score: 60,
+      security_level: "medium",
+      stars: 80,
+      tags: ["dev"],
+      updated_at: "2026-07-01T00:00:00.000Z",
     },
   ],
   pagination: { page: 1, limit: 20, total: 2, pages: 1 },
@@ -119,7 +127,7 @@ test("fetchMarketSkills sends pagination, keyword, tags, and sort to the API", a
   );
 
   const url = new URL(requestedUrl);
-  assert.equal(url.pathname.endsWith("/skills/search"), true);
+  assert.equal(url.pathname.endsWith("/external-api/v1/skills/search"), true);
   assert.equal(url.searchParams.get("lang"), "zh");
   assert.equal(requestedBody.page, 1);
   assert.equal(requestedBody.limit, 20);
@@ -132,7 +140,7 @@ test("fetchMarketSkills sends pagination, keyword, tags, and sort to the API", a
 
 test("fetchMarketSkills computes stats from the response page", async () => {
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "", sort: "downloads" },
+    { page: 1, limit: 20, search: "", sort: "stars" },
     {
       ...noScan(),
       fetcher: async () =>
@@ -145,14 +153,12 @@ test("fetchMarketSkills computes stats from the response page", async () => {
 
   assert.ok(result.stats);
   assert.equal(result.stats.totalSkills, 2);
-  assert.equal(result.stats.officialCount, 1);
-  assert.equal(result.stats.totalDownloads, 150);
   assert.equal(result.stats.installedCount, 0);
 });
 
 test("fetchMarketSkills reports the injected local market install count", async () => {
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "", sort: "downloads" },
+    { page: 1, limit: 20, search: "", sort: "stars" },
     {
       installedCount: 3,
       skipFreshCache: true,
@@ -169,7 +175,7 @@ test("fetchMarketSkills reports the injected local market install count", async 
 
 test("fetchMarketSkills counts installed market skills from a real local snapshot", async () => {
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "", sort: "downloads" },
+    { page: 1, limit: 20, search: "", sort: "stars" },
     {
       localSnapshot: { skills: marketLocalSkills },
       skipFreshCache: true,
@@ -199,9 +205,9 @@ test("countInstalledMarketSkills counts each market Skill once regardless of cop
   assert.equal(countInstalledMarketSkills(marketLocalSkills), 2);
 });
 
-test("fetchMarketSkills sorts by downloads descending", async () => {
+test("fetchMarketSkills sorts by security score descending", async () => {
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "", sort: "downloads" },
+    { page: 1, limit: 20, search: "", sort: "security_score" },
     {
       ...noScan(),
       fetcher: async () =>
@@ -213,13 +219,15 @@ test("fetchMarketSkills sorts by downloads descending", async () => {
   );
 
   assert.equal(result.skills[0]?.name, "market-test-skill");
+  assert.equal(result.skills[0]?.securityScore, 95);
   assert.equal(result.skills[1]?.name, "another-skill");
+  assert.equal(result.skills[1]?.securityScore, 60);
 });
 
-test("fetchMarketSkills sorts by tokens locally without sending an unknown sort to the API", async () => {
+test("fetchMarketSkills forwards sort_by and omits legacy body fields", async () => {
   let requestedBody: Record<string, unknown> = {};
   const result = await fetchMarketSkills(
-    { page: 1, limit: 20, search: "", sort: "tokens" },
+    { page: 1, limit: 20, search: "", sort: "security_score" },
     {
       ...noScan(),
       fetcher: async (input, init) => {
@@ -237,19 +245,22 @@ test("fetchMarketSkills sorts by tokens locally without sending an unknown sort 
     },
   );
 
-  // 上游不识别 tokens 排序：请求体不携带 sort/sort_by，顺序由本地 sortSkills 决定。
-  assert.equal("sort" in requestedBody, false);
-  assert.equal("sort_by" in requestedBody, false);
+  // 外接 API v1 的 sort_by 枚举透传；mode/status/safety_level/language/deduplicate
+  // 等旧参数不再下发。
+  assert.equal(requestedBody.sort_by, "security_score");
+  assert.equal("mode" in requestedBody, false);
+  assert.equal("status" in requestedBody, false);
+  assert.equal("safety_level" in requestedBody, false);
+  assert.equal("language" in requestedBody, false);
+  assert.equal("deduplicate" in requestedBody, false);
   assert.equal(result.skills[0]?.name, "market-test-skill");
-  assert.equal(result.skills[0]?.tokens, 5000);
-  assert.equal(result.skills[1]?.name, "another-skill");
-  assert.equal(result.skills[1]?.tokens, 1000);
+  assert.equal(result.skills[0]?.securityScore, 95);
 });
 
 test("fetchMarketSkills falls back to the query cache when network fails", async () => {
   // 先以同一查询成功请求一次，写入缓存，使回退断言不依赖外部缓存状态。
   await fetchMarketSkills(
-    { page: 1, limit: 20, search: "测试", sort: "downloads" },
+    { page: 1, limit: 20, search: "测试", sort: "stars" },
     {
       ...noScan(),
       fetcher: async () =>
@@ -265,7 +276,7 @@ test("fetchMarketSkills falls back to the query cache when network fails", async
       page: 1,
       limit: 20,
       search: "测试",
-      sort: "downloads",
+      sort: "stars",
       forceRefresh: true,
     },
     {
@@ -284,7 +295,7 @@ test("fresh query cache avoids both list and size network requests", async () =>
     page: 1,
     limit: 20,
     search: `ttl-fresh-${process.pid}`,
-    sort: "downloads" as const,
+    sort: "stars" as const,
   };
   const now = Date.parse("2026-08-19T00:00:00.000Z");
   let requests = 0;
@@ -315,7 +326,7 @@ test("stale query cache refreshes from the network", async () => {
     page: 1,
     limit: 20,
     search: `ttl-stale-${process.pid}`,
-    sort: "downloads" as const,
+    sort: "stars" as const,
   };
   const now = Date.parse("2026-08-19T00:00:00.000Z");
   await fetchMarketSkills(query, {
@@ -343,7 +354,7 @@ test("forceRefresh bypasses a fresh query cache", async () => {
     page: 1,
     limit: 20,
     search: `ttl-force-${process.pid}`,
-    sort: "downloads" as const,
+    sort: "stars" as const,
   };
   const now = new Date("2026-08-19T00:00:00.000Z");
   await fetchMarketSkills(base, {

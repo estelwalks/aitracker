@@ -7,6 +7,17 @@ export type SessionSource = string;
 export type SessionStatus =
   "available" | "interrupted" | "lost" | "unavailable";
 
+/**
+ * 会话 token 聚合（聚合层产出，展示层只负责格式化/派生指标，不重复聚合）。
+ * 口径：
+ *   - inputTokens              = 未命中缓存的输入 token（原始输入已扣除缓存命中部分）
+ *   - outputTokens             = 输出 token（reasoning 是其子集，不重复计入）
+ *   - cachedInputTokens        = 命中缓存的输入 token
+ *   - cacheCreationInputTokens = 写入缓存的输入 token
+ *   - reasoningOutputTokens    = 推理输出 token（属于 outputTokens 的子集）
+ *   - totalTokens              = input + output + cachedInput + cacheCreation
+ * 缓存命中率等派生指标由展示层基于本结构计算（口径见 cacheRate），不在此层算。
+ */
 export interface SessionTokenTotals {
   readonly inputTokens: number;
   readonly outputTokens: number;

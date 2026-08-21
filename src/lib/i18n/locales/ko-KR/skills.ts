@@ -26,6 +26,12 @@ export const skills = {
     external: "외부",
     other: "기타",
   },
+  form: {
+    all: "전체 형태",
+    package: "증류 스킬",
+    workflow: "워크플로우",
+    prompt: "Prompt",
+  },
   agent: {
     all: "모든 Agent",
     prevGroup: "이전 Agent",
@@ -333,6 +339,8 @@ export const skills = {
     exportDir: "디렉터리 내보내기",
     scanSecurity: "보안 검사",
     syncToTools: "도구로 동기화",
+    installing: "설치 중…",
+    installToSelected: "선택한 도구에 설치",
     verifySecurity: "보안 결과 확인",
   },
   syncTarget: {

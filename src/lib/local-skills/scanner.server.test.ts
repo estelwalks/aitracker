@@ -723,6 +723,44 @@ test("recognizes the lowercase skill.md marker and reads its frontmatter", async
   }
 });
 
+test("reads the frontmatter form field for 形态 classification", async () => {
+  const root = await mkdtemp(join(tmpdir(), "tt-skills-form-"));
+  const dataDirectory = join(root, APP_DATA_DIR);
+  try {
+    await mkdir(join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "wf-pack"), {
+      recursive: true,
+    });
+    await mkdir(join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "plain"), {
+      recursive: true,
+    });
+    await mkdir(join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "a-prompt"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "wf-pack", "SKILL.md"),
+      "---\nname: wf-pack\nform: workflow-package\n---\n# W\n",
+    );
+    await writeFile(
+      join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "plain", "SKILL.md"),
+      "---\nname: plain\n---\n# P\n",
+    );
+    await writeFile(
+      join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "a-prompt", "SKILL.md"),
+      "---\nname: a-prompt\nform: prompt\n---\n# P\n",
+    );
+    const snapshot = await scanLocalSkills({
+      homeDirectory: root,
+      dataDirectory,
+    });
+    const byName = new Map(snapshot.skills.map((s) => [s.name, s.form]));
+    assert.equal(byName.get("wf-pack"), "workflow");
+    assert.equal(byName.get("a-prompt"), "prompt");
+    assert.equal(byName.get("plain"), "package");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("stops descending at maxDepth 3", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-depth-"));
   const dataDirectory = join(root, APP_DATA_DIR);

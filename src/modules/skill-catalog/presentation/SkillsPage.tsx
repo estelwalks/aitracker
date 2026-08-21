@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   Brain,
@@ -18,19 +25,20 @@ import {
   EmptyState,
   Pagination,
   SearchInput,
-  Stat,
   TTButton,
 } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import {
-  getLocalSkills,
+  refreshSkillSnapshot,
   requestApprovedBatchUninstall,
+  requestApprovedSkillInstall,
   requestApprovedSkillUninstall,
   updateSkillBlacklist,
   type LocalSkill,
   type SkillAgent,
+  type SkillForm,
   type SkillSnapshot,
   type SkillWorkspaceSnapshot,
 } from "../query";
@@ -90,11 +98,16 @@ export function SkillsPage({
   const [query, setQuery] = useState("");
   const [agent, setAgent] = useState<"all" | SkillAgent>("all");
   const [source, setSource] = useState<AssetSourceFilter>("all");
+  const [form, setForm] = useState<"all" | SkillForm>("all");
   const [sourceLabel, setSourceLabel] = useState("all");
   const [page, setPage] = useState(1);
   /** Agent 筛选行分页游标（原型第2行，一屏 9 个 + 全部）。 */
   const [agentPage, setAgentPage] = useState(0);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
+  /** 行内 Agent 安装/卸载进行中集合（keyed by skill.id，与安全市场一致）。 */
+  const [pendingAgents, setPendingAgents] = useState<
+    Record<string, Set<string>>
+  >({});
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null);
   const [syncTarget, setSyncTarget] = useState<SyncTargetState | null>(null);
   const [securityTarget, setSecurityTarget] = useState<string | null>(null);
@@ -113,7 +126,8 @@ export function SkillsPage({
   }, [snapshot]);
 
   const refresh = useCallback(async (message?: string) => {
-    const next = await getLocalSkills();
+    // 安装/卸载/同步后强制重新扫描，避免读到操作前的快照缓存。
+    const next = await refreshSkillSnapshot();
     snapshotRef.current = next;
     setSnapshot(next);
     setWorkspace(buildSkillWorkspace(next));
@@ -124,7 +138,9 @@ export function SkillsPage({
     setBusy(true);
     busyRef.current = true;
     try {
-      const next = await getLocalSkills();
+      // 「重新扫描」必须强制重扫磁盘（而不是读快照缓存），否则新字段/新
+      // 安装不会反映到页面。
+      const next = await refreshSkillSnapshot();
       snapshotRef.current = next;
       setSnapshot(next);
       setWorkspace(buildSkillWorkspace(next));
@@ -218,6 +234,19 @@ export function SkillsPage({
     };
   }, [workspace]);
 
+  // 原型对齐：形态（form）分段 tab 计数（全部形态/完整包/工作流/Prompt）。
+  const formCounts = useMemo(() => {
+    const map = new Map(
+      workspace.facets.forms.map((facet) => [facet.value, facet.count]),
+    );
+    return {
+      total: workspace.summary.skillCount,
+      package: map.get("package") ?? 0,
+      workflow: map.get("workflow") ?? 0,
+      prompt: map.get("prompt") ?? 0,
+    };
+  }, [workspace]);
+
   const securitySummary = security
     ? {
         scannedCount: security.byName.size,
@@ -233,15 +262,13 @@ export function SkillsPage({
           ((securitySummary?.scannedCount ?? 0) / summary.skillCount) * 100,
         )
       : 0;
-  const hasDistillActivity =
-    distillation != null &&
-    (distillation.approved > 0 || distillation.waiting > 0);
 
   const assets = useMemo(() => {
     const filtered = querySkillAssets(snapshot, {
       text: query,
       agent,
       source,
+      form,
       updateStatus: "all",
       sort: "name",
       direction: "asc",
@@ -279,6 +306,7 @@ export function SkillsPage({
         text: "",
         agent: "all",
         source: "all",
+        form: "all",
         updateStatus: "all",
         sort: "name",
         direction: "asc",
@@ -424,6 +452,61 @@ export function SkillsPage({
     }
   };
 
+  // --- 行内安装条（原型 AgentInstallBar）交互 ---
+
+  /** 点击单个 Agent：装一个 / 卸一个（sourceRef 取首个安装副本，同 SyncTargetModal）。 */
+  const toggleInstall = async (
+    skill: SkillAssetView,
+    agent: string,
+    next: boolean,
+  ) => {
+    setPendingAgents((prev) => {
+      const nextSet = new Set(prev[skill.id] ?? []);
+      nextSet.add(agent);
+      return { ...prev, [skill.id]: nextSet };
+    });
+    try {
+      if (next) {
+        const sourceRef = skill.installations[0]?.installationRef;
+        if (!sourceRef) return;
+        await requestApprovedSkillInstall({
+          data: {
+            confirmed: true,
+            installationRef: sourceRef,
+            targetAgent: agent as SkillAgent,
+          },
+        });
+        toast.success(
+          t("skills.toast.installedTo", { name: skill.name, agent }),
+        );
+      } else {
+        const installation = skill.installations.find(
+          (item) => item.agent === agent,
+        );
+        if (!installation) return;
+        await requestApprovedSkillUninstall({
+          data: {
+            confirmed: true,
+            installationRef: installation.installationRef,
+          },
+        });
+        toast.success(
+          t("skills.toast.uninstalledFrom", { name: skill.name, agent }),
+        );
+      }
+      await refresh();
+    } catch (error) {
+      const ui = toUiError(error);
+      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
+    } finally {
+      setPendingAgents((prev) => {
+        const nextSet = new Set(prev[skill.id] ?? []);
+        nextSet.delete(agent);
+        return { ...prev, [skill.id]: nextSet };
+      });
+    }
+  };
+
   // --- Card helpers ---
 
   const securityOf = (name: string): SkillCardSecurity | undefined => {
@@ -451,64 +534,64 @@ export function SkillsPage({
 
       {showWorkspace ? (
         <>
-          {/* KPI strip */}
-          <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
-              label={t("skills.kpi.localSkills")}
-              value={format.formatNumber(summary.skillCount)}
-              hint={t("skills.kpi.localSkillsHint", {
-                count: format.formatNumber(summary.installationCount),
-              })}
-            />
-            <Stat
-              label={t("skills.kpi.distilled")}
-              value={
-                distillation == null
-                  ? "—"
-                  : format.formatNumber(distillation.approved)
-              }
-              hint={t("skills.kpi.distilledHint")}
-            />
-            <Stat
-              label={t("skills.kpi.detected")}
-              value={
-                securitySummary == null
-                  ? "—"
-                  : format.formatNumber(securitySummary.scannedCount)
-              }
-              hint={t("skills.kpi.detectedHint", {
-                pct: format.formatNumber(securityCoveragePct),
-              })}
-            />
-            <Stat
-              label={t("skills.kpi.risks")}
-              value={
-                securitySummary == null
-                  ? "—"
-                  : format.formatNumber(securitySummary.riskCount)
-              }
-              hint={
-                securitySummary != null && securitySummary.riskCount > 0
-                  ? t("skills.kpi.risksHint")
-                  : t("skills.kpi.risksHintClean")
-              }
-            />
-          </div>
-
-          {/* Distillation activity banner (real counters) */}
-          {distillation != null && hasDistillActivity ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3">
-              <div className="min-w-0 flex-1 text-[13px] text-foreground">
-                {t("skills.banner.distillActive", {
-                  approved: format.formatNumber(distillation.approved),
-                  waiting: format.formatNumber(distillation.waiting),
-                })}
+          {/* KPI strip（原型瓦片样式） */}
+          <div className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                label: t("skills.kpi.localSkills"),
+                value: format.formatNumber(summary.skillCount),
+                hint: t("skills.kpi.localSkillsHint", {
+                  count: format.formatNumber(summary.installationCount),
+                }),
+              },
+              {
+                label: t("skills.kpi.distilled"),
+                value:
+                  distillation == null
+                    ? "—"
+                    : format.formatNumber(distillation.approved),
+                hint: t("skills.kpi.distilledHint"),
+              },
+              {
+                label: t("skills.kpi.detected"),
+                value:
+                  securitySummary == null
+                    ? "—"
+                    : format.formatNumber(securitySummary.scannedCount),
+                hint: t("skills.kpi.detectedHint", {
+                  pct: format.formatNumber(securityCoveragePct),
+                }),
+              },
+              {
+                label: t("skills.kpi.risks"),
+                value:
+                  securitySummary == null
+                    ? "—"
+                    : format.formatNumber(securitySummary.riskCount),
+                hint:
+                  securitySummary != null && securitySummary.riskCount > 0
+                    ? t("skills.kpi.risksHint")
+                    : t("skills.kpi.risksHintClean"),
+              },
+            ].map((kpi, index) => (
+              <div
+                key={kpi.label}
+                className={`min-w-0 px-4 py-3.5 transition-colors hover:bg-surface-2 ${
+                  index > 0 ? "border-l border-border/60" : ""
+                }`}
+              >
+                <div className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+                  {kpi.label}
+                </div>
+                <div className="tt-num mt-2 font-mono text-[22px] leading-none font-black tracking-tight">
+                  {kpi.value}
+                </div>
+                <div className="mt-1.5 truncate text-[11px] text-muted-foreground/80">
+                  {kpi.hint}
+                </div>
               </div>
-              <Link to="/distill">
-                <TTButton size="sm">{t("skills.banner.goDistill")}</TTButton>
-              </Link>
-            </div>
-          ) : null}
+            ))}
+          </div>
 
           {/* Filter bar */}
           <section className="space-y-2">
@@ -523,7 +606,8 @@ export function SkillsPage({
                 ariaLabel={t("skills.searchPlaceholder")}
                 className="min-w-0 flex-1"
               />
-              <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-surface-2/70 p-0.5">
+              {/* 原型 Segmented：细分段控件（rounded-sm + 边框 + 激活主色底） */}
+              <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
                 {(
                   [
                     {
@@ -551,9 +635,9 @@ export function SkillsPage({
                       setSource(option.v);
                       setPage(1);
                     }}
-                    className={`rounded-full px-2.5 py-1 text-[12px] font-medium whitespace-nowrap transition-colors ${
+                    className={`rounded-sm px-2.5 py-1 text-xs whitespace-nowrap transition-colors ${
                       source === option.v
-                        ? "bg-card text-foreground shadow-sm"
+                        ? "bg-primary/15 font-medium text-primary"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -561,24 +645,44 @@ export function SkillsPage({
                   </button>
                 ))}
               </div>
-              {(query ||
-                agent !== "all" ||
-                source !== "all" ||
-                sourceLabel !== "all") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery("");
-                    setAgent("all");
-                    setSource("all");
-                    setSourceLabel("all");
-                    setPage(1);
-                  }}
-                  className="shrink-0 rounded-full px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {t("skills.filter.reset")}
-                </button>
-              )}
+
+              {/* 原型 Segmented：形态（完整包/工作流/Prompt） */}
+              <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
+                {[
+                  {
+                    v: "all" as const,
+                    label: `${t("skills.form.all")} ${formCounts.total}`,
+                  },
+                  {
+                    v: "package" as const,
+                    label: `${t("skills.form.package")} ${formCounts.package}`,
+                  },
+                  {
+                    v: "workflow" as const,
+                    label: `${t("skills.form.workflow")} ${formCounts.workflow}`,
+                  },
+                  {
+                    v: "prompt" as const,
+                    label: `${t("skills.form.prompt")} ${formCounts.prompt}`,
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.v}
+                    type="button"
+                    onClick={() => {
+                      setForm(option.v);
+                      setPage(1);
+                    }}
+                    className={`rounded-sm px-2.5 py-1 text-xs whitespace-nowrap transition-colors ${
+                      form === option.v
+                        ? "bg-primary/15 font-medium text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -628,7 +732,7 @@ export function SkillsPage({
                 <>
                   {agentPageIndex > 0 && (
                     <>
-                      <span className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-background to-transparent" />
+                      <span className="pointer-events-none absolute inset-y-0 left-0 z-10 w-7 bg-gradient-to-r from-background to-transparent" />
                       <button
                         type="button"
                         aria-label={t("skills.agent.prevGroup")}
@@ -636,7 +740,7 @@ export function SkillsPage({
                         onClick={() =>
                           setAgentPage((p) => (p - 1 + agentPages) % agentPages)
                         }
-                        className="absolute top-1/2 left-1 z-20 grid size-6 -translate-y-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                        className="absolute top-1/2 left-1.5 z-20 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg bg-card/90 text-muted-foreground shadow-md transition-colors hover:bg-surface-2 hover:text-foreground"
                       >
                         <ChevronLeft className="size-3.5" />
                       </button>
@@ -644,7 +748,7 @@ export function SkillsPage({
                   )}
                   {agentPageIndex < agentPages - 1 && (
                     <>
-                      <span className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background to-transparent" />
+                      <span className="pointer-events-none absolute inset-y-0 right-0 z-10 w-7 bg-gradient-to-l from-background to-transparent" />
                       <button
                         type="button"
                         aria-label={t("skills.agent.nextGroup")}
@@ -652,7 +756,7 @@ export function SkillsPage({
                         onClick={() =>
                           setAgentPage((p) => (p + 1) % agentPages)
                         }
-                        className="absolute top-1/2 right-1 z-20 grid size-6 -translate-y-1/2 place-items-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                        className="absolute top-1/2 right-1.5 z-20 grid size-[26px] -translate-y-1/2 place-items-center rounded-lg bg-card/90 text-muted-foreground shadow-md transition-colors hover:bg-surface-2 hover:text-foreground"
                       >
                         <ChevronRight className="size-3.5" />
                       </button>
@@ -688,13 +792,13 @@ export function SkillsPage({
                   className="inline-flex items-center gap-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <span
-                    className={`flex size-4 items-center justify-center rounded-full ${
+                    className={`grid size-6 shrink-0 place-items-center rounded-[6px] transition-colors ${
                       allPagedChecked
                         ? "bg-foreground text-background"
                         : "bg-foreground/10"
                     }`}
                   >
-                    {allPagedChecked && <Check className="size-2.5" />}
+                    {allPagedChecked && <Check className="size-3" />}
                   </span>
                   {checkedIds.size > 0
                     ? t("skills.batch.selectedCount", {
@@ -797,8 +901,16 @@ export function SkillsPage({
                 )}
               </div>
 
-              {/* 原型对齐的列表行布局 */}
-              <ul className="overflow-hidden rounded-xl border border-border bg-card">
+              {/* 原型对齐的列表行布局（--rowline 细分隔线，同原型） */}
+              <ul
+                className="overflow-hidden rounded-xl border border-border bg-card"
+                style={
+                  {
+                    "--rowline":
+                      "color-mix(in oklab, var(--color-foreground) 6%, transparent)",
+                  } as CSSProperties
+                }
+              >
                 {paged.map((skill, index) => (
                   <SkillListRow
                     key={skill.id}
@@ -807,6 +919,11 @@ export function SkillsPage({
                     security={securityOf(skill.name)}
                     blacklisted={snapshot.blacklist.includes(skill.name)}
                     index={index}
+                    availableAgents={detectedAgentList}
+                    pendingAgents={pendingAgents[skill.id]}
+                    onToggleAgent={(agent, next) =>
+                      void toggleInstall(skill, agent, next)
+                    }
                     onSelect={() =>
                       toggleChecked(skill.id, !checkedIds.has(skill.id))
                     }
@@ -842,6 +959,7 @@ export function SkillsPage({
                   skills: [detailSkill],
                 })
               }
+              onInstalled={() => void refresh()}
               onRemove={() => openUninstall(detailSkill)}
               onOpenSecurity={() => {
                 const name = detailSkill.name;

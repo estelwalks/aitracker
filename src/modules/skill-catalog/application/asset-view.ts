@@ -1,3 +1,4 @@
+import type { SkillForm } from "../../../lib/local-skills/types.ts";
 import type {
   LocalSkill,
   SkillAgent,
@@ -58,6 +59,7 @@ export interface SkillWorkspaceFacets {
   readonly updates: readonly SkillWorkspaceFacet<
     Exclude<AssetUpdateFilter, "all">
   >[];
+  readonly forms: readonly SkillWorkspaceFacet<SkillForm>[];
 }
 
 /**
@@ -76,6 +78,7 @@ export interface SkillAssetFilters {
   readonly text: string;
   readonly agent: "all" | SkillAgent;
   readonly source: AssetSourceFilter;
+  readonly form: "all" | SkillForm;
   readonly updateStatus: AssetUpdateFilter;
   readonly sort: AssetSortKey;
   readonly direction: AssetSortDirection;
@@ -218,6 +221,7 @@ export function buildSkillWorkspace(snapshot: SkillSnapshot): SkillWorkspace {
       })),
       sources: countFacet(items.flatMap((item) => item.sourceKinds)),
       updates: countFacet(items.map((item) => item.updateStatus)),
+      forms: countFacet(items.map((item) => item.form ?? "package")),
     },
     items,
   };
@@ -243,6 +247,7 @@ export function querySkillAssets(
         skill.installedAgents.includes(filters.agent)) &&
       (filters.source === "all" ||
         skill.sourceKinds.includes(filters.source)) &&
+      (filters.form === "all" || (skill.form ?? "package") === filters.form) &&
       (filters.updateStatus === "all" ||
         skill.updateStatus === filters.updateStatus)
     );
