@@ -11,8 +11,8 @@
       "network": "allowed"
     },
     "usage": {
-      "freshForMinutes": 15,
-      "defaultRefreshMinutes": 15,
+      "freshForMinutes": 1,
+      "defaultRefreshMinutes": 1,
       "startupPolicy": "if-stale",
       "staleReadable": true,
       "manualRefresh": true,
@@ -90,9 +90,9 @@
         "id": "usage.refresh",
         "executorKey": "refresh-usage-v1",
         "category": "collection",
-        "defaultSchedule": { "kind": "interval", "minutes": 15 },
+        "defaultSchedule": { "kind": "interval", "minutes": 1 },
         "constraints": {
-          "minMinutes": 5,
+          "minMinutes": 1,
           "maxMinutes": 1440,
           "singleFlight": true
         },
