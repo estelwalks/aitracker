@@ -166,7 +166,7 @@ test("aggregateBoards: sums unique entries, tokens and events", () => {
   assert.equal(totals.entries, 1);
 });
 
-test("trackerTotalsFromEvents keeps consumption totals independent from ranking projections", () => {
+test("trackerTotalsFromEvents uses the Skill rows instead of raw event totals", () => {
   const events = [
     event({
       timestamp: "2026-08-01T00:00:00Z",
@@ -191,8 +191,15 @@ test("trackerTotalsFromEvents keeps consumption totals independent from ranking 
     buildBoard(events, "session"),
   ];
 
-  const totals = trackerTotalsFromEvents(events, boards);
-  assert.equal(totals.tokens, 500);
+  const totals = trackerTotalsFromEvents(events, {
+    skill: boards[0]!,
+    project: boards[1]!,
+    session: boards[2]!,
+  });
+  // The second event has no Skill attribution and must not be included. The
+  // project/session projections still contain it, but they are not the page
+  // total's source of truth.
+  assert.equal(totals.tokens, 300);
   assert.equal(totals.events, 2);
   assert.equal(totals.entries, 5);
 });
