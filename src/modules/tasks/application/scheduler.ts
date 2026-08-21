@@ -215,6 +215,33 @@ const DEFAULT_ENABLED_TASK_IDS = new Set([
   "installation.refresh",
 ]);
 
+/**
+ * The first run competes for one shared heavy-collector permit.  Keep the
+ * locally visible workspace data ahead of opportunistic network work so the
+ * native startup screen can finish meaningful initialization before the
+ * dashboard is shown.  Normal scheduled/manual runs still use their declared
+ * queue priority; this order only applies to the startup sweep.
+ */
+const STARTUP_TASK_ORDER = new Map<string, number>([
+  ["usage.refresh", 0],
+  ["sessions.refresh", 1],
+  ["skills.refresh", 2],
+  ["installation.refresh", 3],
+  ["exchange.refresh", 4],
+]);
+
+export function prioritizeStartupDefinitions(
+  catalog: readonly JobTypeDefinition[],
+): JobTypeDefinition[] {
+  return [...catalog].sort((left, right) => {
+    const leftPriority =
+      STARTUP_TASK_ORDER.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+    const rightPriority =
+      STARTUP_TASK_ORDER.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+    return leftPriority - rightPriority;
+  });
+}
+
 export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const clock = options.clock ?? new SystemClock();
   const catalog = options.catalog ?? JOB_DEFINITIONS;
@@ -509,7 +536,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       started = true;
       await withRuns(() => options.runs.recoverRunning());
       const now = clock.now();
-      for (const definition of catalog) {
+      for (const definition of prioritizeStartupDefinitions(catalog)) {
         if (definition.startupPolicy !== "if-stale") continue;
         const taskId = createTaskId(definition.id);
         const preference = await options.preferences.get(taskId);

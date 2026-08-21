@@ -4,8 +4,9 @@ import {
   HeadContent,
   Scripts,
   useRouter,
+  useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -51,9 +52,11 @@ export function RootComponent({
     <AppProviders
       queryClient={queryClient}
       initialLocale={loaderData.locale}
+      initialCatalog={loaderData.catalog}
       initialDisplayCurrency={loaderData.displayCurrency}
       initialRates={loaderData.rates}
     >
+      <NavigationPerformanceMarks />
       <PlatformPersistenceSeed />
       <AppShell>
         <Outlet />
@@ -65,6 +68,60 @@ export function RootComponent({
       />
     </AppProviders>
   );
+}
+
+/**
+ * User Timing entries make page-switch latency inspectable in Chromium's
+ * performance tools without persisting personal data or emitting telemetry.
+ */
+function NavigationPerformanceMarks() {
+  const status = useRouterState({ select: (state) => state.status });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const startedAt = useRef<number | null>(null);
+  const lastRenderedPath = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof performance === "undefined") return;
+    if (status === "pending") {
+      if (startedAt.current == null) {
+        startedAt.current = performance.now();
+        performance.mark("trusttools:navigation:start");
+      }
+      return;
+    }
+    if (startedAt.current == null) return;
+    performance.mark("trusttools:navigation:complete");
+    performance.measure(
+      `trusttools:navigation:${pathname}`,
+      "trusttools:navigation:start",
+      "trusttools:navigation:complete",
+    );
+    startedAt.current = null;
+  }, [pathname, status]);
+
+  // Pending state is intentionally absent for some cache hits. Record a
+  // separate post-commit marker after two frames so automated route tests can
+  // measure every actual sidebar click, including those fast paths.
+  useEffect(() => {
+    if (typeof performance === "undefined" || status === "pending") return;
+    if (lastRenderedPath.current === pathname) return;
+    let cancelled = false;
+    const firstFrame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        performance.mark(`trusttools:navigation:rendered:${pathname}`);
+        lastRenderedPath.current = pathname;
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(firstFrame);
+    };
+  }, [pathname, status]);
+
+  return null;
 }
 
 export function NotFoundComponent() {
