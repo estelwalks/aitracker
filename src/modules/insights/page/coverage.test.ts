@@ -63,7 +63,7 @@ test("the sitemap file is explicitly excluded from the surface registry", () => 
   assert.equal(registered.has("sitemap[.]xml.ts"), false);
 });
 
-test("settings page keeps the insight surface off the top-level settings hero", () => {
+test("settings page keeps only the insight settings toggle", () => {
   const source = readFileSync(
     path.resolve(
       ROUTES_DIR,

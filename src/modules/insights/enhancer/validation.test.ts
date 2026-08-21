@@ -98,18 +98,18 @@ test("L2 rejects a widget surface with more than one line", () => {
   if (!result.ok) assert.equal(result.stage, 2);
 });
 
-test("full-page line bounds require five to ten lines when ten candidates are available", () => {
+test("full-page line bounds allow one to ten lines when ten candidates are available", () => {
   const tenCandidateInput = input({ candidates: candidates(10) });
-  assert.deepEqual(lineBoundsForInput(tenCandidateInput), { min: 5, max: 10 });
+  assert.deepEqual(lineBoundsForInput(tenCandidateInput), { min: 1, max: 10 });
 
-  for (const count of [5, 10]) {
+  for (const count of [1, 3, 10]) {
     const result = validateEnhancementOutput(
       text(outputLines(count)),
       tenCandidateInput,
     );
     assert.equal(result.ok, true, `${count} lines should be accepted`);
   }
-  for (const count of [3, 4, 11]) {
+  for (const count of [0, 11]) {
     const result = validateEnhancementOutput(
       text(outputLines(count)),
       tenCandidateInput,
@@ -119,19 +119,60 @@ test("full-page line bounds require five to ten lines when ten candidates are av
   }
 });
 
-test("a full page with three candidates requires exactly three lines", () => {
+test("a full page with three candidates allows one to three lines", () => {
   const threeCandidateInput = input({ candidates: candidates(3) });
-  assert.deepEqual(lineBoundsForInput(threeCandidateInput), { min: 3, max: 3 });
-  assert.equal(
-    validateEnhancementOutput(text(outputLines(3)), threeCandidateInput).ok,
-    true,
+  assert.deepEqual(lineBoundsForInput(threeCandidateInput), { min: 1, max: 3 });
+  for (const count of [1, 2, 3]) {
+    assert.equal(
+      validateEnhancementOutput(text(outputLines(count)), threeCandidateInput)
+        .ok,
+      true,
+    );
+  }
+});
+
+test("seven candidates accept three independent non-mandatory lines", () => {
+  const optionalCandidates = candidates(7).map((candidate, index) => ({
+    ...candidate,
+    mandatory: false,
+    fact:
+      index === 0
+        ? "检测到高风险安全项"
+        : index === 1
+          ? "主来源占总 Token 的比例超过一半"
+          : index === 2
+            ? "剩余调用额度接近预设下限"
+            : candidate.fact,
+  }));
+  const result = validateEnhancementOutput(
+    text([
+      {
+        candidateId: "c1",
+        analysis: "应优先处置以缩短风险暴露时间",
+      },
+      {
+        candidateId: "c2",
+        analysis: "单一来源贡献过半消耗，调整该来源会直接影响整体用量",
+      },
+      {
+        candidateId: "c3",
+        analysis: "应优先保障关键任务，避免低优先级调用提前耗尽额度",
+      },
+    ]),
+    input({ candidates: optionalCandidates }),
   );
-  const short = validateEnhancementOutput(
-    text(outputLines(2)),
-    threeCandidateInput,
+
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.output.length, 3);
+});
+
+test("a full page with candidates rejects zero lines", () => {
+  const result = validateEnhancementOutput(
+    text([]),
+    input({ candidates: candidates(7) }),
   );
-  assert.equal(short.ok, false);
-  if (!short.ok) assert.equal(short.stage, 2);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.stage, 2);
 });
 
 test("widget requires exactly one line and zero candidates are never valid output", () => {
@@ -196,7 +237,7 @@ test("L3 rejects a duplicate candidateId", () => {
 
 test("L3 rejects a missing mandatory candidate", () => {
   const result = validateEnhancementOutput(
-    text(outputLines(5, 2)),
+    text(outputLines(3, 2)),
     input({ candidates: candidates(7) }),
   );
   assert.equal(result.ok, false);

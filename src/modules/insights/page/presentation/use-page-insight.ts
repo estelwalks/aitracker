@@ -2,7 +2,7 @@
  * `usePageInsight` — the renderer hook for the 「今日洞察双模式」 page insight.
  *
  * First render fetches the surface envelope via `getPageInsight` (with cancel
- * protection), then refreshes the mounted page's evidence every 30 minutes.
+ * protection), then refreshes the mounted page's evidence every 3 hours.
  * It also exposes localized display lines, the enhance action (with a 60s
  * cooldown and silent failure), and the raw envelope for status/modelLabel.
  *
@@ -48,7 +48,7 @@ export type {
 } from "./use-page-insight.pure";
 
 /** Evidence and auto-enhancement refresh period for the currently mounted page. */
-export const PAGE_INSIGHT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+export const PAGE_INSIGHT_REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 export interface PageInsightRefreshTimer {
   setInterval(callback: () => void, delayMs: number): number;

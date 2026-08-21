@@ -19,6 +19,7 @@ import {
   composePageCandidates,
   composeRemotePageCandidates,
   evidenceHash,
+  formatInsightFactParams,
   rankCandidates,
   resolveFactText,
 } from "./domain.ts";
@@ -225,7 +226,11 @@ export function createPageInsightsApplication(options: {
           id: candidate.id,
           severity: candidate.severity,
           key: candidate.factKey,
-          params: candidate.factParams,
+          params: formatInsightFactParams(
+            locale,
+            candidate.factKey,
+            candidate.factParams,
+          ),
           source: analysis === undefined ? "rules" : "enhanced",
           ...(analysis !== undefined ? { analysis } : {}),
           ...(action !== undefined ? { action } : {}),

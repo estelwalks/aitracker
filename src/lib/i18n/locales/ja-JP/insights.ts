@@ -41,11 +41,11 @@ export const insights = {
   page: {
     dashboard: {
       "dashboard-watch":
-        "今日は {agents} 個の Agent が稼働し、{blocked} 回のリスクを遮断、約 {hours} 時間を節約、{distillable} 件のセッションを蒸留できます。",
+        "現在のスナップショットには Skill 資産 {skills} 件、知識資産 {knowledge} 件があります。",
       "dashboard-assets":
-        "主力 Agent「{name}」が {rate} の使用量を占めています。他は低使用のため、配分の見直しをご検討ください。",
+        "最大利用 Agent「{name}」は総 tokens の {rate} を占めます。",
       "dashboard-usage":
-        "今日は {events} 件の使用イベントと {sessions} 件のセッションを収集しました。セッションで確認や蒸留ができます。",
+        "現在の範囲で {events} 件の使用イベントを収集しました。",
       "dashboard-security-safe":
         "本日はセキュリティリスクは見つかりませんでした。スキャン済み項目はすべて合格です。",
       "dashboard-security-risk":
@@ -55,37 +55,37 @@ export const insights = {
       "dashboard-empty":
         "まだセッションデータがありません。データソースからローカル Agent を接続してください。",
       "dashboard-guide-collection":
-        "データソースが継続して収集されていることを先に確認し、収集漏れによるダッシュボードの誤判断を防ぎましょう。",
+        "現在の範囲で {tokens} tokens を消費しました。",
       "dashboard-guide-sessions":
-        "セッションの稼働状況から、今日の作業に振り返りや継続が必要かを判断できます。",
+        "現在の範囲には {count} 件の AI セッションがあります。",
       "dashboard-guide-concentration":
-        "利用するソースが一部に偏っている場合は、主力ツールが適切な作業を担っているか見直しましょう。",
+        "1 利用イベントあたり平均 {average} tokens を消費しました。",
       "dashboard-guide-cache":
-        "キャッシュ効率からコンテキストの再利用状況が分かります。詳しくはバーンランキングで確認できます。",
+        "現在の範囲には {events} 件の利用イベントがあります。",
       "dashboard-guide-distill":
-        "今日の再利用可能なセッションを蒸留し、一度きりの成果を長く使える資産に変えましょう。",
+        "{count} 個の Agent が計測可能な利用イベントを生成しました。",
     },
     agents: {
       "agents-overview":
-        "{count} 個の Agent が稼働中。本日 {blocked} 回のリスクを遮断し、約 {hours} 時間を節約しました。",
+        "既存 Agent を {count} 個検出し、{active} 個に利用イベント、{inactive} 個にイベントがありません。",
       "agents-focus-prompt":
         "「{name}」はプロンプトの重複度が高いため、共通指示を抽出して token 消費を削減してください。",
       "agents-focus-cache":
         "「{name}」のキャッシュヒット率は {rate} のみです。コンテキスト再利用を有効化してください。",
       "agents-focus-security":
-        "「{name}」は直近 {count} 件のリスク操作があります。権限と設定を再確認してください。",
+        "{available} 個の既存 Agent でローカルデータを読み取れます。",
       "agents-prompt-guide":
-        "プロンプトを具体的に書くと、重複読み込みや手戻りが減り、token を節約できます。",
+        "最大利用の既存 Agent「{name}」は総 tokens の {rate} を占めます。",
       "agents-guide-coverage":
-        "ツールの網羅状況が Agent 一覧の完全性を左右します。未接続のローカルツールを先に追加しましょう。",
+        "インストール済み、読み取り可能、または利用イベントがある Agent を {count} 個検出しました。",
       "agents-guide-activity":
-        "稼働状況とセッション数を組み合わせると、常用中の Agent とインストールのみの Agent を区別できます。",
+        "既存 Agent には {count} 件のセッションが記録されています。",
       "agents-guide-prompt":
-        "プロンプトでは恒常的なルールと一時的なタスクを分け、重複するコンテキストを減らしましょう。",
+        "既存 Agent は {events} 件の利用イベントと {tokens} tokens を生成しました。",
       "agents-guide-cache":
-        "キャッシュの構成を確認すると、Agent が同じコンテキストを繰り返し読み込んでいないか分かります。",
+        "{available} 個の Agent でローカルデータを読み取れます。",
       "agents-guide-security":
-        "機能の拡張とともに露出範囲も広がるため、Agent の権限と Skill のリスクを併せて見直しましょう。",
+        "{count} 個の既存 Agent が利用イベントを生成しました。",
     },
     distill: {
       "distill-ready":
@@ -100,15 +100,12 @@ export const insights = {
       "distill-repeat":
         "繰り返しの多い Q&A は 1 つの Skill に固定でき、token を節約できます。",
       "distill-guide-intake":
-        "完了度が高く、再利用しやすいセッションを蒸留素材として優先しましょう。",
+        "本日の蒸留呼び出しは {used} / {limit} 回使用済みです。",
       "distill-guide-outputs":
-        "再利用方法に合わせて、手順はワークフロー、安定した機能は Skill として出力しましょう。",
-      "distill-guide-quota":
-        "生成前にモデルとクォータを確認し、蒸留ジョブが途中で止まらないようにしましょう。",
-      "distill-guide-reuse":
-        "承認済みの成果物は知識またはメモリに登録し、後から再利用できる状態にしましょう。",
-      "distill-guide-start":
-        "候補がない場合は、明確な結論があるセッションを会話ページから一つ選んで始めましょう。",
+        "蒸留ワークベンチには現在 {count} 件の知識資産があります。",
+      "distill-guide-quota": "本日はあと {count} 回蒸留を呼び出せます。",
+      "distill-guide-reuse": "{count} 件の蒸留結果が承認待ちです。",
+      "distill-guide-start": "蒸留候補キューには現在 {count} 件あります。",
     },
     reports: {
       "reports-highlights":
@@ -123,15 +120,11 @@ export const insights = {
       "reports-next":
         "レポートに「次のステップ」を追記すると、集計時に自動で引用されます。",
       "reports-guide-inventory":
-        "レポートのアーカイブから、完了済みの期間と振り返りが残っている期間を確認できます。",
-      "reports-guide-highlights":
-        "成果と主な変化を先にまとめ、その後に詳細を加えると読みやすいレポートになります。",
-      "reports-guide-security":
-        "一般的な利用状況に埋もれないよう、セキュリティ事象はレポート内で分けて記載しましょう。",
-      "reports-guide-workflow":
-        "下書き、編集、保存、エクスポートがレポート作成の一連の流れです。保存前に結論を確認しましょう。",
-      "reports-guide-next":
-        "対象期間のレポートがない場合は、直近でセッション活動があった期間から作成しましょう。",
+        "レポートライブラリには現在 {total} 件のレポートがあります。",
+      "reports-guide-highlights": "日報 {daily} 件、週報 {weekly} 件です。",
+      "reports-guide-security": "現在 {count} 件のレポートが下書きです。",
+      "reports-guide-workflow": "現在 {count} 件のレポートが承認済みです。",
+      "reports-guide-next": "現在 {count} 件のレポートがアーカイブ済みです。",
     },
     memory: {
       "memory-total":
@@ -143,15 +136,14 @@ export const insights = {
       "memory-kinds":
         "プロフィールはあなたが誰でどう働きたいかを、タスク記憶は私たちが決めたルールを覚えています。",
       "memory-guide-inventory":
-        "重要な取り決めがセッションに埋もれないよう、メモリ資産を検索可能かつ追跡可能に保ちましょう。",
+        "メモリライブラリには現在 {count} 件の資産があります。",
       "memory-guide-approval":
-        "未確認の内容が長期コンテキストに入らないよう、承認してからメモリを公開しましょう。",
+        "{approved} 件のメモリが承認または公開済みです。",
       "memory-guide-hygiene":
-        "古いメモリやリスクのあるメモリを定期的に整理し、誤ったコンテキストの再利用を減らしましょう。",
-      "memory-guide-types":
-        "長期的な好みはプロフィール、個別の制約はタスク記憶として分けて管理しましょう。",
+        "{unsafe} 件のメモリが疑わしいまたは危険と判定されています。",
+      "memory-guide-types": "{pending} 件のメモリが未承認または未公開です。",
       "memory-guide-distill":
-        "メモリが空の場合は、蒸留ワークベンチから確認済みの学びを一つ登録しましょう。",
+        "{safe} 件のメモリにはセキュリティリスク判定がありません。",
     },
     security: {
       "security-risk-top":
@@ -167,15 +159,15 @@ export const insights = {
       "security-history":
         "スキャン履歴は保存されます。問題発生時に前後バージョンを比較し、どの更新でリスクが入ったかを特定できます。",
       "security-guide-posture":
-        "件数の多さに惑わされず、高リスクの所見から先に対処し、その後に一般的な注意事項を確認しましょう。",
+        "最新の安全性サマリーには疑わしいまたは危険な資産が {risky} 件あります。",
       "security-guide-failures":
-        "スキャン失敗は確認範囲の死角を示すものであり、リスクがない証拠ではありません。",
+        "最新スキャンでは {failed} 件の資産評価に失敗しました。",
       "security-guide-coverage":
-        "有効な Skill と設定までスキャン対象に含め、漏れている項目は追加で確認しましょう。",
+        "最新スキャンは {discovered} 件を検出し、{assessed} 件を評価しました。",
       "security-guide-recency":
-        "古いスキャンは過去の状態しか示しません。インストールや更新の後は再スキャンしましょう。",
+        "最新の安全性サマリーは {time} に生成されました。",
       "security-guide-scan":
-        "結果がまだない場合は、ローカル静的スキャンを実行して安全性の基準を作りましょう。",
+        "最新スキャンでは {clean} 件の資産が合格しました。",
     },
     tracker: {
       "tracker-burn-leader":
@@ -192,15 +184,15 @@ export const insights = {
         "プロジェクト別では「{name}」の消費が最も多く、プロンプトテンプレートの最適化をご検討ください。",
       "tracker-empty": "今のところ目立った浪費はありません。",
       "tracker-guide-consumption":
-        "変化の原因を判断する前に、総消費量とイベントの稼働状況を比較しましょう。",
+        "現在の範囲で {events} 件のイベントが {tokens} tokens を消費しました。",
       "tracker-guide-waste":
-        "浪費を診断するときは、重複読み込み、手戻り、過剰な出力を優先して確認しましょう。",
+        "浪費指数が最も高いのは「{name}」で、指数は {rate} です。",
       "tracker-guide-cache":
-        "キャッシュ再利用率の低さは、固定的なコンテキストを繰り返し読み込んでいる可能性を示します。",
+        "{count} 件のソースが検証可能なキャッシュ項目を提供しています。",
       "tracker-guide-concentration":
-        "モデルやプロジェクトへの消費が偏っている場合は、タスクとプロンプトを個別に見直しましょう。",
+        "最大消費ソース「{name}」は総 tokens の {rate} を占めます。",
       "tracker-guide-optimize":
-        "最適化後も同じ期間を観測し、変更が実際に効果を上げたか確認しましょう。",
+        "1 利用イベントあたり平均 {average} tokens を消費しました。",
     },
     skills: {
       "skills-local": "ローカルに {count} 個のスキルがあります。",
@@ -213,15 +205,15 @@ export const insights = {
       "skills-specific":
         "Skill が具体的であるほどモデルはぶれにくく、token も節約できます。",
       "skills-guide-inventory":
-        "ローカル Skill の数と入手元を整理し、同じ機能が重複したままにならないようにしましょう。",
+        "ローカル Skill スナップショットには {count} 個の Skill があります。",
       "skills-guide-enablement":
-        "必要な Skill だけを有効にし、Agent に不要な機能が露出する範囲を減らしましょう。",
+        "{enabled} 個の Skill が少なくとも 1 つの Agent にインストールされています。",
       "skills-guide-coverage":
-        "Agent ごとに Skill の適用状況が異なると、同じタスクでも結果が変わることがあります。",
+        "インストール済み Agent を {agents} 個検出しました。",
       "skills-guide-updates":
-        "更新待ちの Skill は変更内容を確認してから、各 Agent へ同期するか判断しましょう。",
+        "{outdated} 件の Skill インストールに更新があります。",
       "skills-guide-safety":
-        "追加または変更した Skill は再スキャンし、旧バージョンの安全性評価を流用しないでください。",
+        "{unassigned} 個の Skill はどの Agent にもインストールされていません。",
     },
     market: {
       "market-installed":
@@ -233,15 +225,15 @@ export const insights = {
       "market-review":
         "インストール前に SKILL.md とバージョン履歴を確認し、使えないパッケージを避けてください。",
       "market-guide-installs":
-        "ローカルのインストール状況で所有済みの機能と候補を区別し、重複インストールを避けましょう。",
+        "マーケット由来の Skill を {installed} 個インストール済みです。",
       "market-guide-updates":
-        "利用中のコンポーネントを置き換える前に、マーケットのバージョン変更内容を確認しましょう。",
+        "{updates} 個のマーケット Skill に更新があります。",
       "market-guide-cache":
-        "キャッシュ済みのカタログはオフラインでも閲覧できますが、最新とは限りません。",
+        "ローカル市場キャッシュには {total} 件の項目があります。",
       "market-guide-review":
-        "マーケットの掲載情報は候補にすぎません。インストール前に内容と安全性を確認しましょう。",
+        "インストール済み市場 Skill のうち {current} 個には保留中の更新がありません。",
       "market-guide-install":
-        "インストール済みの項目がない場合は、用途が明確で確認済みの項目から始めましょう。",
+        "市場キャッシュは約 {hours} 時間前に取得されました。",
     },
     chats: {
       "chats-total": "{count} 件のセッションを収集しました。",
@@ -256,15 +248,14 @@ export const insights = {
       "chats-distill":
         "再利用できるセッションは蒸留ワークベンチへ。履歴を探すより Skill 化する方が早いです。",
       "chats-guide-inventory":
-        "セッション一覧には安全なメタデータだけが表示されるため、詳細を開く前の絞り込みに使えます。",
+        "セッションスナップショットには現在 {count} 件あります。",
       "chats-guide-sources":
-        "ソースで絞り込むと、稼働中の Agent や収集漏れをすばやく見つけられます。",
-      "chats-guide-recovery":
-        "セッションを継続、アーカイブ、蒸留する前に、復元可能な状態か確認しましょう。",
+        "これらのセッションは {count} 個の Agent ソースから来ています。",
+      "chats-guide-recovery": "現在 {count} 件のセッションが復元可能です。",
       "chats-guide-activity":
-        "ターン数と token の稼働状況から、さらに振り返る価値があるセッションを見つけられます。",
+        "全セッションの合計は {turns} ターン、{tokens} tokens です。",
       "chats-guide-distill":
-        "セッションがない場合はデータソースを確認し、明確な結論ができてから蒸留しましょう。",
+        "全セッションのアクティブ時間は約 {minutes} 分です。",
     },
     "chat-detail": {
       "chat-detail-turns":
@@ -275,15 +266,15 @@ export const insights = {
       "chat-detail-resume":
         "このセッションは復元してコンテキストを継続できます。復元コマンドにはプロジェクトパスが含まれます。",
       "chat-detail-guide-turns":
-        "ターン数は作業の進行度を示しますが、結論の質を示すものではありません。",
+        "このセッションには {count} 件の再試行ターンがあります。",
       "chat-detail-guide-tokens":
-        "token の稼働状況からコンテキストの規模を把握し、想定外の増加を見つけられます。",
+        "このセッションには {count} 回のサブ Agent 呼び出しがあります。",
       "chat-detail-guide-state":
-        "操作する前に、セッションの状態とメタデータの新しさを併せて判断しましょう。",
+        "このセッションのソースは「{source}」、ローカル状態は「{status}」です。",
       "chat-detail-guide-recovery":
-        "復元条件を満たすセッションだけを再開し、それ以外は読み取り専用のままにしましょう。",
+        "このセッションには編集操作を含むターンが {count} 件あります。",
       "chat-detail-guide-distill":
-        "結論を再利用できる場合は、本文を公開せずにメタデータから蒸留を開始できます。",
+        "このセッションのアクティブ時間は約 {minutes} 分です。",
     },
     widget: {
       "widget-broadcast-security":
@@ -303,22 +294,22 @@ export const insights = {
       "settings-local":
         "収集はすべてローカルで行われ、会話内容はアップロードされません。データソースで収集範囲を調整できます。",
       "settings-guide-model":
-        "拡張分析には、利用可能なモデルプロファイルと有効な認証情報の両方が必要です。",
+        "モデルプロファイルは {profiles} 件あり、{ready} 件に認証情報があります。",
       "settings-guide-enhancement":
-        "拡張スイッチはモデルによる書き換えだけを制御し、ローカルのルールインサイトは常に利用できます。",
+        "バックグラウンドジョブは {total} 件登録されています。",
       "settings-guide-schedules":
-        "収集やスキャンの重複を避けるため、定期ジョブは必要なものだけを有効にしましょう。",
+        "バックグラウンドジョブのうち {enabled} 件が有効です。",
       "settings-guide-retention":
-        "保持期間はローカル履歴の範囲を決めます。変更前に追跡が必要なデータを確認しましょう。",
+        "バックグラウンドジョブのうち {disabled} 件が無効です。",
       "settings-guide-privacy":
-        "設定と業務データはローカルに保存されます。データを消去する前に影響範囲を確認しましょう。",
+        "{ready} 件のモデルプロファイルに利用可能な認証情報があります。",
     },
     sources: {
       "sources-connected": "{count} 個のデータソースを接続済みです。",
       "sources-malformed":
         "{count} 行の異常データがあります。ログ形式を確認してください。",
       "sources-not-installed":
-        "{count} 件のツールが未インストールです。ダウンロードして接続してください。",
+        "{count} 件の検出ソースには分析可能なイベントがありません。",
       "sources-all-good":
         "全 {count} 件のソースが正常で、異常ログはありません。",
       "sources-rescan":
@@ -326,15 +317,15 @@ export const insights = {
       "sources-local":
         "すべての収集はローカルで行われ、会話内容がアップロードされることはありません。",
       "sources-guide-inventory":
-        "検出済みであることはツールの存在を示すだけで、分析可能なログがあるとは限りません。",
+        "ソーススナップショットにはレジストリソースが {total} 件あります。",
       "sources-guide-availability":
-        "インストール済み、ログあり、利用可能なイベントありは、それぞれ異なるソース状態です。",
+        "{available} 件のソースでローカルデータを読み取れます。",
       "sources-guide-logs":
-        "ログのないソースからは使用状況を分析できません。まずツールが実際に利用されているか確認しましょう。",
+        "{connected} 件のソースが分析可能なイベントを生成しました。",
       "sources-guide-rescan":
-        "ディレクトリやインストール状態を変更した後は再スキャンし、収集範囲を更新しましょう。",
+        "ソーススナップショットには形式異常が {malformed} 行あります。",
       "sources-guide-privacy":
-        "ソースページには集計状態とエラー件数だけを表示し、会話本文やローカルパスは公開しません。",
+        "インストールスナップショットは {installed} 個のインストール済みツールを検出しました。",
     },
   },
 } as const;

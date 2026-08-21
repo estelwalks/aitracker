@@ -26,68 +26,72 @@ function composeSettingsCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const profiles = metricValue(bundle, "settings.profiles");
-  const profileReady = bundle.evidence.find(
-    (item) => item.id === "settings.profileReady" && item.value === true,
-  );
+  const readyProfiles = metricValue(bundle, "settings.readyProfiles");
   const tasksEnabled = metricValue(bundle, "settings.tasksEnabled");
-
-  if (profiles != null && profiles === 0) {
-    return [
-      {
-        id: "settings.model-unconfigured",
-        severity: "attention",
-        factKey: "insights.page.settings.settings-model-unconfigured",
-        factParams: {},
-        evidenceRefs: ["settings.profiles"],
-        allowedActionIds: ["open_settings"],
-        actionId: "open_settings",
-      },
-    ];
+  const tasksTotal = metricValue(bundle, "settings.tasksTotal");
+  const tasksDisabled = metricValue(bundle, "settings.tasksDisabled");
+  const candidates: InsightCandidate[] = [];
+  if (profiles != null && readyProfiles != null) {
+    candidates.push({
+      id: "settings.models",
+      severity: readyProfiles === 0 ? "attention" : "info",
+      factKey: "insights.page.settings.settings-guide-model",
+      factParams: { profiles, ready: readyProfiles },
+      evidenceRefs: ["settings.profiles", "settings.readyProfiles"],
+      allowedActionIds: ["open_settings"],
+      actionId: "open_settings",
+    });
+    candidates.push({
+      id: "settings.credentials",
+      severity:
+        readyProfiles === profiles && profiles > 0 ? "info" : "attention",
+      factKey: "insights.page.settings.settings-guide-privacy",
+      factParams: { ready: readyProfiles },
+      evidenceRefs: ["settings.readyProfiles"],
+      allowedActionIds: ["open_settings"],
+      actionId: "open_settings",
+    });
   }
-
-  if (profileReady == null && profiles != null && profiles > 0) {
-    return [
-      {
-        id: "settings.model-unconfigured",
-        severity: "attention",
-        factKey: "insights.page.settings.settings-model-unconfigured",
-        factParams: {},
-        evidenceRefs: ["settings.profileReady"],
-        allowedActionIds: ["open_settings"],
-        actionId: "open_settings",
-      },
-    ];
+  for (const [id, value, key, ref, param] of [
+    [
+      "tasks",
+      tasksTotal,
+      "settings-guide-enhancement",
+      "settings.tasksTotal",
+      "total",
+    ],
+    [
+      "enabled",
+      tasksEnabled,
+      "settings-guide-schedules",
+      "settings.tasksEnabled",
+      "enabled",
+    ],
+    [
+      "disabled",
+      tasksDisabled,
+      "settings-guide-retention",
+      "settings.tasksDisabled",
+      "disabled",
+    ],
+  ] as const) {
+    if (value == null) continue;
+    candidates.push({
+      id: `settings.${id}`,
+      severity: "info",
+      factKey: `insights.page.settings.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
+      allowedActionIds: ["open_settings"],
+      actionId: "open_settings",
+    });
   }
-
-  if (profiles != null && profiles > 0) {
-    return [
-      {
-        id: "settings.scan-plan",
-        severity: "info",
-        factKey: "insights.page.settings.settings-scan-plan",
-        factParams: { count: tasksEnabled ?? 0 },
-        evidenceRefs: ["settings.tasksEnabled"],
-        allowedActionIds: ["open_settings"],
-        actionId: "open_settings",
-      },
-      {
-        id: "settings.local",
-        severity: "info",
-        factKey: "insights.page.settings.settings-local",
-        factParams: {},
-        evidenceRefs: ["settings.profiles"],
-        allowedActionIds: ["open_settings"],
-        actionId: "open_settings",
-      },
-    ];
-  }
-
-  return [];
+  return candidates;
 }
 
 export const settingsInsightAdapter: PageInsightAdapter = {
   surfaceId: "settings",
-  adapterVersion: 2,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
@@ -97,39 +101,71 @@ export const settingsInsightAdapter: PageInsightAdapter = {
       await import("../../app/composition.server.ts");
     const root = await getCompositionRoot();
 
-    const profiles = await root.modelProfiles.listViews().catch(() => []);
-    const profileReady = profiles.some((profile) => profile.apiKeyMasked);
+    const profiles = await root.modelProfiles.listViews().catch(() => null);
+    const readyProfiles =
+      profiles?.filter((profile) => profile.apiKeyMasked).length ?? null;
 
     const preferences = await root.taskApi.listPreferences().catch(() => null);
-    const tasksEnabled = preferences?.ok
-      ? preferences.value.filter((preference) => preference.enabled).length
-      : null;
+    const taskValues = preferences?.ok ? preferences.value : null;
+    const tasksEnabled =
+      taskValues?.filter((preference) => preference.enabled).length ?? null;
 
-    const evidence = [
-      metricEvidence(
-        "settings.profiles",
-        profiles.length,
-        observedAt,
-        "unknown",
-        "count",
-      ),
-      availabilityEvidence("settings.profileReady", profileReady, observedAt),
-      // A failing task read degrades to an honest 0 (never a fabricated count).
-      metricEvidence(
-        "settings.tasksEnabled",
-        tasksEnabled ?? 0,
-        observedAt,
-        "unknown",
-        "count",
-      ),
-    ];
+    const evidence = [];
+    if (profiles != null && readyProfiles != null) {
+      evidence.push(
+        metricEvidence(
+          "settings.profiles",
+          profiles.length,
+          observedAt,
+          "unknown",
+          "count",
+        ),
+        metricEvidence(
+          "settings.readyProfiles",
+          readyProfiles,
+          observedAt,
+          "unknown",
+          "count",
+        ),
+        availabilityEvidence(
+          "settings.profileReady",
+          readyProfiles > 0,
+          observedAt,
+        ),
+      );
+    }
+    if (taskValues != null && tasksEnabled != null) {
+      evidence.push(
+        metricEvidence(
+          "settings.tasksTotal",
+          taskValues.length,
+          observedAt,
+          "unknown",
+          "count",
+        ),
+        metricEvidence(
+          "settings.tasksEnabled",
+          tasksEnabled,
+          observedAt,
+          "unknown",
+          "count",
+        ),
+        metricEvidence(
+          "settings.tasksDisabled",
+          taskValues.length - tasksEnabled,
+          observedAt,
+          "unknown",
+          "count",
+        ),
+      );
+    }
 
     return {
       surfaceId: "settings" as const,
       scope,
       observedAt,
       evidence,
-      ...(tasksEnabled == null ? { partial: true } : {}),
+      ...(tasksEnabled == null || profiles == null ? { partial: true } : {}),
     };
   },
   composeCandidates: composeSettingsCandidates,

@@ -31,70 +31,53 @@ function composeSourcesCandidates(
 ): readonly InsightCandidate[] {
   const connected = metricValue(bundle, "sources.connected");
   const total = metricValue(bundle, "sources.total");
+  const available = metricValue(bundle, "sources.available");
+  const gaps = metricValue(bundle, "sources.gaps");
   const malformed = metricValue(bundle, "sources.malformed");
+  const installed = metricValue(bundle, "sources.installed");
   const candidates: InsightCandidate[] = [];
-
-  if (connected != null && connected > 0) {
+  for (const [id, value, key, ref, param] of [
+    ["inventory", total, "sources-guide-inventory", "sources.total", "total"],
+    [
+      "available",
+      available,
+      "sources-guide-availability",
+      "sources.available",
+      "available",
+    ],
+    [
+      "connected",
+      connected,
+      "sources-guide-logs",
+      "sources.connected",
+      "connected",
+    ],
+    ["gaps", gaps, "sources-not-installed", "sources.gaps", "count"],
+    [
+      "malformed",
+      malformed,
+      "sources-guide-rescan",
+      "sources.malformed",
+      "malformed",
+    ],
+    [
+      "installed",
+      installed,
+      "sources-guide-privacy",
+      "sources.installed",
+      "installed",
+    ],
+  ] as const) {
+    if (value == null) continue;
     candidates.push({
-      id: "sources.connected",
-      severity: "info",
-      factKey: "insights.page.sources.sources-connected",
-      factParams: { count: connected },
-      evidenceRefs: ["sources.connected"],
-      allowedActionIds: ["open_sources"],
-      actionId: "open_sources",
-    });
-    candidates.push({
-      id: "sources.rescan",
-      severity: "info",
-      factKey: "insights.page.sources.sources-rescan",
-      factParams: {},
-      evidenceRefs: ["sources.connected"],
-      allowedActionIds: ["open_sources"],
-      actionId: "open_sources",
-    });
-    candidates.push({
-      id: "sources.local",
-      severity: "info",
-      factKey: "insights.page.sources.sources-local",
-      factParams: {},
-      evidenceRefs: ["sources.connected"],
-      allowedActionIds: ["open_sources"],
-    });
-  }
-
-  if (total != null && connected != null && total > 0 && connected < total) {
-    const gaps = metricValue(bundle, "sources.gaps");
-    candidates.push({
-      id: "sources.not-installed",
-      severity: "attention",
-      factKey: "insights.page.sources.sources-not-installed",
-      factParams: { count: gaps ?? total - connected },
-      evidenceRefs: ["sources.gaps"],
-      allowedActionIds: ["open_sources"],
-      actionId: "open_sources",
-    });
-  }
-
-  if (malformed != null && malformed > 0) {
-    candidates.push({
-      id: "sources.malformed",
-      severity: "attention",
-      factKey: "insights.page.sources.sources-malformed",
-      factParams: { count: malformed },
-      evidenceRefs: ["sources.malformed"],
-      allowedActionIds: ["open_sources"],
-      actionId: "open_sources",
-    });
-  }
-
-  if (candidates.length === 0 && total != null && connected === total) {
-    candidates.push({
-      id: "sources.all-good",
-      severity: "info",
-      factKey: "insights.page.sources.sources-all-good",
-      factParams: { count: total },
-      evidenceRefs: ["sources.total"],
+      id: `sources.${id}`,
+      severity:
+        (id === "gaps" || id === "malformed") && value > 0
+          ? "attention"
+          : "info",
+      factKey: `insights.page.sources.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
       allowedActionIds: ["open_sources"],
       actionId: "open_sources",
     });
@@ -105,7 +88,7 @@ function composeSourcesCandidates(
 
 export const sourcesInsightAdapter: PageInsightAdapter = {
   surfaceId: "sources",
-  adapterVersion: 2,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();

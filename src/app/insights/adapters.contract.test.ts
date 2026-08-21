@@ -198,10 +198,13 @@ const FIXTURES: readonly AdapterFixture[] = [
     healthy: [
       ev("agents.activeSources", 4),
       ev("agents.totalSources", 8),
-      ev("agents.blocked", 0),
-      ev("agents.hours", 0),
-      ev("agents.lowCacheSource", "claude-code", "status"),
-      ev("agents.lowCacheRate", 20),
+      ev("agents.availableSources", 5),
+      ev("agents.inactiveSources", 4),
+      ev("agents.sessions", 3),
+      ev("agents.events", 30),
+      ev("agents.tokens", 200_000),
+      ev("agents.topSource", "claude-code", "status"),
+      ev("agents.topShareRate", 63),
     ],
   },
   {

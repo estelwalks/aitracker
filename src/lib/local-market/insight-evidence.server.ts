@@ -27,61 +27,67 @@ import { marketCacheKey, readMarketCache } from "./cache.server.ts";
 
 const DEFAULT_CACHE_KEY = marketCacheKey(1, 12, "", "downloads", "");
 
+export function cacheAgeHoursFrom(
+  fetchedAt: string,
+  nowMs: number,
+): number | null {
+  const fetchedAtMs = Date.parse(fetchedAt);
+  return Number.isFinite(fetchedAtMs)
+    ? Math.max(0, Math.floor((nowMs - fetchedAtMs) / 3_600_000))
+    : null;
+}
+
 function composeMarketCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const installed = metricValue(bundle, "market.installed");
   const updates = metricValue(bundle, "market.updates");
-  if (installed != null && installed > 0) {
-    const candidates: InsightCandidate[] = [
-      {
-        id: "market.installed",
-        severity: "info",
-        factKey: "insights.page.market.market-installed",
-        factParams: { count: installed },
-        evidenceRefs: ["market.installed"],
-        allowedActionIds: ["open_market"],
-        actionId: "open_market",
-      },
-    ];
-    if (updates != null && updates > 0) {
-      candidates.push({
-        id: "market.updates",
-        severity: "attention",
-        factKey: "insights.page.market.market-updates",
-        factParams: { count: updates },
-        evidenceRefs: ["market.updates"],
-        allowedActionIds: ["open_market"],
-        actionId: "open_market",
-      });
-    }
+  const current = metricValue(bundle, "market.current");
+  const cachedTotal = metricValue(bundle, "market.cachedTotal");
+  const cacheAgeHours = metricValue(bundle, "market.cacheAgeHours");
+  const candidates: InsightCandidate[] = [];
+  for (const [id, value, key, ref, param] of [
+    [
+      "installed",
+      installed,
+      "market-guide-installs",
+      "market.installed",
+      "installed",
+    ],
+    ["updates", updates, "market-guide-updates", "market.updates", "updates"],
+    ["current", current, "market-guide-review", "market.current", "current"],
+    [
+      "catalog",
+      cachedTotal,
+      "market-guide-cache",
+      "market.cachedTotal",
+      "total",
+    ],
+    [
+      "cache-age",
+      cacheAgeHours,
+      "market-guide-install",
+      "market.cacheAgeHours",
+      "hours",
+    ],
+  ] as const) {
+    if (value == null) continue;
     candidates.push({
-      id: "market.review",
-      severity: "info",
-      factKey: "insights.page.market.market-review",
-      factParams: {},
-      evidenceRefs: ["market.installed"],
+      id: `market.${id}`,
+      severity: id === "updates" && value > 0 ? "attention" : "info",
+      factKey: `insights.page.market.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
       allowedActionIds: ["open_market"],
       actionId: "open_market",
     });
-    return candidates;
   }
-  return [
-    {
-      id: "market.scan-first",
-      severity: "info",
-      factKey: "insights.page.market.market-scan-first",
-      factParams: {},
-      evidenceRefs: [],
-      allowedActionIds: ["open_market"],
-      actionId: "open_market",
-    },
-  ];
+  return candidates;
 }
 
 export const marketInsightAdapter: PageInsightAdapter = {
   surfaceId: "market",
-  adapterVersion: 2,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
@@ -107,22 +113,41 @@ export const marketInsightAdapter: PageInsightAdapter = {
       );
       return total + (hasAvailableUpdate ? 1 : 0);
     }, 0);
+    const installed = countInstalledMarketSkills(snapshot.skills);
     const evidence = [
       metricEvidence(
         "market.installed",
-        countInstalledMarketSkills(snapshot.skills),
+        installed,
         observedAt,
         freshness,
         "count",
       ),
       metricEvidence("market.updates", updates, observedAt, freshness, "count"),
+      metricEvidence(
+        "market.current",
+        Math.max(0, installed - updates),
+        observedAt,
+        freshness,
+        "count",
+      ),
     ];
 
-    const cached = await readMarketCache(DEFAULT_CACHE_KEY).catch(() => null);
-    evidence.push(
-      availabilityEvidence("market.cacheAvailable", cached != null, observedAt),
-    );
+    let cacheReadFailed = false;
+    const cached = await readMarketCache(DEFAULT_CACHE_KEY).catch(() => {
+      cacheReadFailed = true;
+      return null;
+    });
+    if (!cacheReadFailed) {
+      evidence.push(
+        availabilityEvidence(
+          "market.cacheAvailable",
+          cached != null,
+          observedAt,
+        ),
+      );
+    }
     if (cached != null && cached.pagination.total > 0) {
+      const cacheAgeHours = cacheAgeHoursFrom(cached.fetchedAt, nowMs);
       evidence.push(
         metricEvidence(
           "market.cachedTotal",
@@ -132,6 +157,17 @@ export const marketInsightAdapter: PageInsightAdapter = {
           "count",
         ),
       );
+      if (cacheAgeHours != null) {
+        evidence.push(
+          metricEvidence(
+            "market.cacheAgeHours",
+            cacheAgeHours,
+            observedAt,
+            freshnessOf(cached.fetchedAt, nowMs),
+            "count",
+          ),
+        );
+      }
     }
 
     return {
@@ -139,7 +175,7 @@ export const marketInsightAdapter: PageInsightAdapter = {
       scope,
       observedAt,
       evidence,
-      ...(cached == null ? { partial: true } : {}),
+      ...(cached == null || cacheReadFailed ? { partial: true } : {}),
     };
   },
   composeCandidates: composeMarketCandidates,
