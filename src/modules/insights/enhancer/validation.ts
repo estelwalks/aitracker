@@ -19,11 +19,12 @@ import type {
   InsightEnhancementInput,
   InsightSurfaceId,
 } from "../page/contracts.ts";
+import { isInsightAnalysisUseful } from "../page/analysis-quality.ts";
 
 export const MAX_RESPONSE_TEXT_LENGTH = 8192;
 export const MAX_ANALYSIS_CHARS = 160;
 export const MIN_LINES = 5;
-export const MAX_LINES = 7;
+export const MAX_LINES = 10;
 export const WIDGET_MAX_LINES = 1;
 export const CANDIDATE_ID_MIN = 1;
 export const CANDIDATE_ID_MAX = 80;
@@ -400,9 +401,21 @@ export function validateEnhancementOutput(
     }
   }
 
+  const usefulLines = lines.filter((line) => {
+    const candidate = candidatesById.get(line.candidateId)!;
+    return isInsightAnalysisUseful(candidate.fact, line.analysis);
+  });
+  if (usefulLines.length === 0) {
+    return {
+      ok: false,
+      stage: 5,
+      reason: "no incremental analysis remains after quality filtering",
+    };
+  }
+
   return {
     ok: true,
-    output: lines.map((line) => ({
+    output: usefulLines.map((line) => ({
       candidateId: line.candidateId,
       analysis: line.analysis,
       ...(line.actionId === undefined

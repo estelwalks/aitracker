@@ -13,6 +13,7 @@ import type {
   InsightPreference,
 } from "./contracts.ts";
 import { INSIGHT_AUTO_CONSENT_VERSION } from "./contracts.ts";
+import { isInsightAnalysisUseful } from "./analysis-quality.ts";
 import {
   composeRulesEnvelope,
   composePageCandidates,
@@ -197,7 +198,16 @@ export function createPageInsightsApplication(options: {
         const match = result.lines.find(
           (item) => item.candidateId === candidate.id,
         );
+        const analysis =
+          match?.analysis !== undefined &&
+          isInsightAnalysisUseful(
+            resolveFactText(locale, candidate),
+            match.analysis,
+          )
+            ? match.analysis.trim()
+            : undefined;
         const action =
+          analysis !== undefined &&
           match?.actionId !== undefined &&
           isInsightActionId(match.actionId) &&
           candidate.allowedActionIds.includes(match.actionId)
@@ -216,17 +226,18 @@ export function createPageInsightsApplication(options: {
           severity: candidate.severity,
           key: candidate.factKey,
           params: candidate.factParams,
-          source: match === undefined ? "rules" : "enhanced",
-          ...(match?.analysis !== undefined
-            ? { analysis: match.analysis }
-            : {}),
+          source: analysis === undefined ? "rules" : "enhanced",
+          ...(analysis !== undefined ? { analysis } : {}),
           ...(action !== undefined ? { action } : {}),
         };
       });
+      const hasUsefulEnhancement = lines.some(
+        (line) => line.source === "enhanced",
+      );
       return {
         ...base,
-        status: result.status,
-        source: "enhanced",
+        status: hasUsefulEnhancement ? result.status : "invalid-output",
+        source: hasUsefulEnhancement ? "enhanced" : "rules",
         lines,
         modelLabel: result.modelLabel,
       };
