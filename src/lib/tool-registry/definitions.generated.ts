@@ -252,6 +252,14 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".cursor"
+        },
+        {
+          "targets": [
+            "macos",
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "tokscale/cursor-cache"
         }
       ]
     },
@@ -305,6 +313,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "path": ".cursor",
             "glob": "**/*usage*.jsonl",
             "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "tokscale/cursor-cache",
+            "glob": "**/*.json",
+            "format": "json"
           }
         ]
       },
@@ -346,6 +364,42 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".kiro"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "Kiro/User/globalStorage/kiro.kiroagent"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "Kiro/User/globalStorage/kiro.kiroagent"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "Kiro/User/globalStorage/kiro.kiroagent"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "kiro-cli"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "dataHome",
+          "path": "kiro-cli"
         }
       ]
     },
@@ -477,6 +531,14 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "dataHome",
           "path": "opencode"
+        },
+        {
+          "targets": [
+            "macos",
+            "linux"
+          ],
+          "base": "dataHome",
+          "path": "opencode/storage/message"
         }
       ]
     },
@@ -562,6 +624,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".openclaw"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".openclaw/agents"
         }
       ]
     },
@@ -694,6 +766,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".hermes"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".hermes/state.db"
         }
       ]
     },
@@ -752,6 +834,36 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "configHome",
           "path": "github-copilot"
+        },
+        {
+          "targets": [
+            "macos",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".copilot"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "Code/User/workspaceStorage"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "Code/User/workspaceStorage"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "Code/User/workspaceStorage"
         }
       ]
     },
@@ -829,6 +941,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".kimi"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".kimi-code"
         }
       ]
     },
@@ -858,6 +980,18 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             ],
             "base": "home",
             "path": ".kimi/logs",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".kimi-code/sessions",
             "glob": "**/*.jsonl",
             "format": "jsonl"
           }
@@ -911,6 +1045,26 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".oh-my-pi"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".omp/agent/sessions"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".oh-my-pi/agent/sessions"
         }
       ]
     },
@@ -956,6 +1110,28 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".codebuddy"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "CodeBuddyExtension/Logs"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "Local/CodeBuddyExtension/Logs"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "dataHome",
+          "path": "CodeBuddyExtension/Logs"
         }
       ]
     },
@@ -1061,6 +1237,26 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".grok"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".grok/sessions"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".grok/logs"
         }
       ],
       "executable": {
@@ -1156,6 +1352,14 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "dataHome",
           "path": "kilo"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "Local/kilo"
         }
       ]
     },
@@ -1198,6 +1402,28 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "appData",
           "path": "Code/User/globalStorage/kilocode.kilo-code"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "Code/User/globalStorage/kilocode.kilo-code"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "Code/User/globalStorage/kilocode.kilo-code"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "home",
+          "path": ".vscode-server/data/User/globalStorage/kilocode.kilo-code"
         }
       ]
     },
@@ -1246,9 +1472,47 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
         },
         {
           "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".gemini/antigravity-ide"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".gemini/antigravity-backup"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".gemini/antigravity-cli/conversations"
+        },
+        {
+          "targets": [
             "macos"
           ],
           "base": "appData",
+          "path": "Antigravity"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
           "path": "Antigravity"
         }
       ]
@@ -1353,6 +1617,16 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".pi"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".pi/agent/sessions"
         }
       ]
     },
@@ -1522,6 +1796,14 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "dataHome",
           "path": "zed"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "userProfile",
+          "path": "Local/Zed/threads"
         }
       ]
     },
@@ -1663,6 +1945,13 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "dataHome",
           "path": "mimocode"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "orca/mimocode-hooks/shared/data"
         }
       ]
     },
@@ -1708,6 +1997,26 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "home",
           "path": ".zcode"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".zcode/projects"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".zcode/cli/db/db.sqlite"
         }
       ]
     },
@@ -1750,6 +2059,21 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "appData",
           "path": "anythingllm-desktop"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "AnythingLLM"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "anythingllm"
         }
       ]
     },
@@ -1989,6 +2313,26 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "appDataRoaming",
           "path": "Code/User/globalStorage/saoudrizwan.claude-dev"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".cline/data/sessions"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/tasks"
         }
       ]
     },
@@ -2025,6 +2369,471 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
             "path": "Code/User/globalStorage/saoudrizwan.claude-dev/tasks",
             "glob": "**/*.json",
             "format": "json"
+          }
+        ]
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "qwen",
+    "display": {
+      "name": "Qwen CLI",
+      "nameZh": "Qwen CLI",
+      "icon": "deepseek",
+      "color": "#615ced"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".qwen/projects"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".qwen/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ]
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "commandcode",
+    "display": {
+      "name": "Command Code",
+      "nameZh": "Command Code",
+      "icon": "other",
+      "color": "#8b5cf6"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".commandcode/projects"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".commandcode/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ]
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "proma",
+    "display": {
+      "name": "Proma",
+      "nameZh": "Proma",
+      "icon": "other",
+      "color": "#f97316"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".proma/agent-sessions"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".proma/agent-sessions",
+            "glob": "*.jsonl",
+            "format": "jsonl"
+          }
+        ]
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "qodercn",
+    "display": {
+      "name": "Qoder CN",
+      "nameZh": "Qoder CN",
+      "icon": "other",
+      "color": "#22c55e"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "QoderCN/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "QoderCN/SharedClientCache/cache/db/local.db"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "QoderCN/SharedClientCache/cache/db/local.db"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "unsupported"
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "reasonix",
+    "display": {
+      "name": "Reasonix",
+      "nameZh": "Reasonix",
+      "icon": "other",
+      "color": "#06b6d4"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".reasonix"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".reasonix/stats"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".reasonix/sessions"
+        },
+        {
+          "targets": [
+            "macos",
+            "windows10",
+            "windows11",
+            "linux"
+          ],
+          "base": "home",
+          "path": ".reasonix/projects"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos",
+              "windows10",
+              "windows11",
+              "linux"
+            ],
+            "base": "home",
+            "path": ".reasonix/sessions",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          }
+        ]
+      },
+      "skills": "unsupported",
+      "agents": "unsupported",
+      "sessions": {
+        "mode": "unsupported"
+      },
+      "market": "unsupported",
+      "security": "unsupported"
+    },
+    "modelObservation": {
+      "modelField": "model"
+    }
+  },
+  {
+    "$schema": "../tool-definition.schema.json",
+    "configVersion": 1,
+    "id": "cherrystudio",
+    "display": {
+      "name": "Cherry Studio",
+      "nameZh": "Cherry Studio",
+      "icon": "other",
+      "color": "#ec4899"
+    },
+    "platforms": {
+      "macos": "supported",
+      "windows": "supported",
+      "linux": "planned"
+    },
+    "detection": {
+      "locations": [
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "CherryStudio/Data/Agents/.claude/projects"
+        },
+        {
+          "targets": [
+            "macos"
+          ],
+          "base": "appData",
+          "path": "CherryStudio/.claude/projects"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "CherryStudio/Data/Agents/.claude/projects"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "CherryStudio/.claude/projects"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "CherryStudio/Data/Agents/.claude/projects"
+        },
+        {
+          "targets": [
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "CherryStudio/.claude/projects"
+        }
+      ]
+    },
+    "capabilities": {
+      "usage": {
+        "mode": "adapter",
+        "reader": "generic-jsonl",
+        "paths": [
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "CherryStudio/Data/Agents/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "macos"
+            ],
+            "base": "appData",
+            "path": "CherryStudio/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "CherryStudio/Data/Agents/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "windows10",
+              "windows11"
+            ],
+            "base": "appDataRoaming",
+            "path": "CherryStudio/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "CherryStudio/Data/Agents/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
+          },
+          {
+            "targets": [
+              "linux"
+            ],
+            "base": "configHome",
+            "path": "CherryStudio/.claude/projects",
+            "glob": "**/*.jsonl",
+            "format": "jsonl"
           }
         ]
       },
@@ -2388,9 +3197,33 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
       {
         "id": "cline",
         "path": "cline.tool.json"
+      },
+      {
+        "id": "qwen",
+        "path": "qwen.tool.json"
+      },
+      {
+        "id": "commandcode",
+        "path": "commandcode.tool.json"
+      },
+      {
+        "id": "proma",
+        "path": "proma.tool.json"
+      },
+      {
+        "id": "qodercn",
+        "path": "qodercn.tool.json"
+      },
+      {
+        "id": "reasonix",
+        "path": "reasonix.tool.json"
+      },
+      {
+        "id": "cherrystudio",
+        "path": "cherrystudio.tool.json"
       }
     ]
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "92b317e5e3bf6df3";
+export const TOOL_REGISTRY_VERSION: string = "c1559201a4801a57";

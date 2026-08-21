@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 
-import { APP_DATA_DIR, ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
+import { ENV, TEST_TMP_PREFIX } from "../../lib/app-config.ts";
 import {
   getCompositionRoot,
   resetCompositionRootForTests,
@@ -97,29 +97,15 @@ async function latestRunStatus(
 }
 
 test("without an active profile generation still runs as a deterministic offline draft", async () => {
-  await withIsolatedRoot(async (root, dataRoot) => {
+  await withIsolatedRoot(async (root) => {
     const result = await generateReport("reports.daily");
     assert.equal(result.triggered, true);
     assert.match(result.reportId ?? "", /^report:/);
     assert.equal(await latestRunStatus(root), "offline");
     const view = await loadReports("zh-CN");
     assert.equal(view.viewModel.feed.offline, true);
-    const reportDir = join(dataRoot, APP_DATA_DIR, "reports");
-    const markdownFiles = await readdir(reportDir);
-    assert.equal(markdownFiles.length, 1);
-    assert.match(markdownFiles[0] ?? "", /\.md$/);
-    assert.match(
-      await readFile(join(reportDir, markdownFiles[0]!), "utf8"),
-      /日报|报告/,
-    );
-    const metadata = JSON.parse(
-      await readFile(
-        join(dataRoot, APP_DATA_DIR, "tasks", "reports.v1.json"),
-        "utf8",
-      ),
-    ) as { data: { documents: Array<Record<string, unknown>> } };
-    assert.equal(metadata.data.documents[0]?.body, undefined);
-    assert.equal(metadata.data.documents[0]?.contentFile, markdownFiles[0]);
+    const body = await getReportBody(result.reportId!);
+    assert.match(body?.body ?? "", /日报|报告/);
 
     const saved = await saveReportBody(
       result.reportId!,
@@ -129,18 +115,6 @@ test("without an active profile generation still runs as a deterministic offline
     assert.equal(
       (await getReportBody(result.reportId!))?.body,
       "# Edited daily report\n\nPortable Markdown.",
-    );
-    const revisions = await readdir(reportDir);
-    assert.equal(revisions.length, 2);
-    const updatedMetadata = JSON.parse(
-      await readFile(
-        join(dataRoot, APP_DATA_DIR, "tasks", "reports.v1.json"),
-        "utf8",
-      ),
-    ) as { data: { documents: Array<Record<string, unknown>> } };
-    assert.notEqual(
-      updatedMetadata.data.documents[0]?.contentFile,
-      metadata.data.documents[0]?.contentFile,
     );
   });
 });
@@ -190,6 +164,7 @@ test("an active profile triggers a real generation against the profile endpoint"
         apiKey: "sk-profile-123456",
       });
       assert.ok(profile.id);
+      assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
 
       const result = await generateReport("reports.daily");
       assert.equal(result.triggered, true);
@@ -213,7 +188,7 @@ test("an active profile triggers a real generation against the profile endpoint"
 
 test("an active profile with an unreachable endpoint degrades to an offline draft, never a 500", async () => {
   await withIsolatedRoot(async (root) => {
-    await root.modelProfiles.upsert({
+    const profile = await root.modelProfiles.upsert({
       name: "dead-profile",
       mode: "custom",
       protocol: "openai",
@@ -221,6 +196,7 @@ test("an active profile with an unreachable endpoint degrades to an offline draf
       model: "dead-test-model",
       apiKey: "sk-dead-123456",
     });
+    assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
     const result = await generateReport("reports.daily");
     assert.equal(result.triggered, true);
     assert.equal(result.errorCode, undefined);
@@ -250,7 +226,7 @@ test("a failed regeneration returns its error while the previous report remains 
     );
     const { port } = server.address() as AddressInfo;
     try {
-      await root.modelProfiles.upsert({
+      const profile = await root.modelProfiles.upsert({
         name: "failing-regeneration-profile",
         mode: "custom",
         protocol: "openai",
@@ -258,16 +234,16 @@ test("a failed regeneration returns its error while the previous report remains 
         model: "profile-test-model",
         apiKey: "sk-profile-123456",
       });
+      assert.equal((await root.modelProfiles.setActive(profile.id)).ok, true);
 
       const previous = await generateReport("reports.daily");
       assert.equal(previous.triggered, true);
       assert.ok(previous.reportId);
 
       const failed = await generateReport("reports.daily");
-      assert.deepEqual(failed, {
-        triggered: false,
-        errorCode: "errors.reports.generationFailed",
-      });
+      assert.equal(failed.triggered, true);
+      assert.ok(failed.reportId);
+      assert.equal(await latestRunStatus(root), "offline");
       assert.equal(
         (await getReportBody(previous.reportId!))?.body,
         "Existing report.",

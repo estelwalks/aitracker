@@ -306,10 +306,16 @@ test("session projects aggregate at a valid gitdir root and retain non-git cwd f
     );
     for (const sessionId of [sessions[0][0], sessions[1][0]]) {
       assert.equal(byId.get(sessionId)?.projectKey, "feature");
-      assert.equal(byId.get(sessionId)?.projectRef, normalizeProjectPath(checkout, home));
+      assert.equal(
+        byId.get(sessionId)?.projectRef,
+        normalizeProjectPath(checkout, home),
+      );
     }
     assert.equal(byId.get(sessions[2][0])?.projectKey, "plain-folder");
-    assert.equal(byId.get(sessions[2][0])?.projectRef, normalizeProjectPath(noGit, home));
+    assert.equal(
+      byId.get(sessions[2][0])?.projectRef,
+      normalizeProjectPath(noGit, home),
+    );
 
     // A negative lookup must not be permanent: users commonly run `git init`
     // after the first scan while the desktop app remains open.
@@ -322,7 +328,10 @@ test("session projects aggregate at a valid gitdir root and retain non-git cwd f
       (session) => session.sessionId === sessions[2][0],
     );
     assert.equal(initialized?.projectKey, "plain-root");
-    assert.equal(initialized?.projectRef, normalizeProjectPath(noGitRoot, home));
+    assert.equal(
+      initialized?.projectRef,
+      normalizeProjectPath(noGitRoot, home),
+    );
   });
 });
 

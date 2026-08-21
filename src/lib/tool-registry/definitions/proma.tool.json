@@ -1,0 +1,18 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "proma",
+  "display": { "name": "Proma", "nameZh": "Proma", "icon": "other", "color": "#f97316" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "detection": {
+    "locations": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".proma/agent-sessions" }]
+  },
+  "capabilities": {
+    "usage": {
+      "mode": "adapter", "reader": "generic-jsonl",
+      "paths": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".proma/agent-sessions", "glob": "*.jsonl", "format": "jsonl" }]
+    },
+    "skills": "unsupported", "agents": "unsupported", "sessions": { "mode": "unsupported" }, "market": "unsupported", "security": "unsupported"
+  },
+  "modelObservation": { "modelField": "model" }
+}

@@ -21,6 +21,21 @@
         ],
         "base": "appData",
         "path": "anythingllm-desktop"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "appDataRoaming",
+        "path": "AnythingLLM"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "anythingllm"
       }
     ]
   },

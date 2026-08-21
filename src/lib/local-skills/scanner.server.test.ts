@@ -364,7 +364,7 @@ test("rejects a market source outside the controlled temporary directory", async
   }
 });
 
-test("rejects symbolic links anywhere in a market skill source", async (t) => {
+test("rejects symbolic links anywhere in a market skill source", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const marketRoot = join(dataDirectory, "tmp", `market-${randomUUID()}`);
@@ -373,15 +373,15 @@ test("rejects symbolic links anywhere in a market skill source", async (t) => {
   try {
     await mkdir(sourcePath, { recursive: true });
     await writeFile(join(sourcePath, "SKILL.md"), "# Symlink");
-    await writeFile(linkedFile, "linked");
-    try {
+    if (process.platform === "win32") {
+      // Windows junctions are reparse-point links and do not require the
+      // Developer Mode/admin privilege required by file symlinks.
+      await mkdir(linkedFile);
+      await writeFile(join(linkedFile, "payload.txt"), "linked");
+      await symlink(linkedFile, join(sourcePath, "reference.md"), "junction");
+    } else {
+      await writeFile(linkedFile, "linked");
       await symlink(linkedFile, join(sourcePath, "reference.md"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EPERM") {
-        t.skip("Windows symlink privilege unavailable");
-        return;
-      }
-      throw error;
     }
 
     await assert.rejects(
@@ -776,7 +776,7 @@ test("prefers frontmatter name over the directory name", async () => {
   }
 });
 
-test("skips dot-prefixed and symlinked skill directories", async (t) => {
+test("skips dot-prefixed and symlinked skill directories", async () => {
   const root = await mkdtemp(join(tmpdir(), "tt-skills-hidden-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
@@ -786,14 +786,10 @@ test("skips dot-prefixed and symlinked skill directories", async (t) => {
     const realSkill = join(claudeRoot, "real");
     await mkdir(realSkill, { recursive: true });
     await writeFile(join(realSkill, "SKILL.md"), "# real");
-    try {
+    if (process.platform === "win32") {
+      await symlink(realSkill, join(claudeRoot, "linked"), "junction");
+    } else {
       await symlink(realSkill, join(claudeRoot, "linked"));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EPERM") {
-        t.skip("Windows symlink privilege unavailable");
-        return;
-      }
-      throw error;
     }
     const snapshot = await scanLocalSkills({
       homeDirectory: root,

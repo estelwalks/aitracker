@@ -24,6 +24,28 @@
         ],
         "base": "home",
         "path": ".codebuddy"
+      },
+      {
+        "targets": [
+          "macos"
+        ],
+        "base": "appData",
+        "path": "CodeBuddyExtension/Logs"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "userProfile",
+        "path": "Local/CodeBuddyExtension/Logs"
+      },
+      {
+        "targets": [
+          "linux"
+        ],
+        "base": "dataHome",
+        "path": "CodeBuddyExtension/Logs"
       }
     ]
   },

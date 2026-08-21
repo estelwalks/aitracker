@@ -31,6 +31,14 @@
         ],
         "base": "home",
         "path": ".cursor"
+      },
+      {
+        "targets": [
+          "macos",
+          "linux"
+        ],
+        "base": "configHome",
+        "path": "tokscale/cursor-cache"
       }
     ]
   },
@@ -84,6 +92,16 @@
           "path": ".cursor",
           "glob": "**/*usage*.jsonl",
           "format": "jsonl"
+        },
+        {
+          "targets": [
+            "macos",
+            "linux"
+          ],
+          "base": "configHome",
+          "path": "tokscale/cursor-cache",
+          "glob": "**/*.json",
+          "format": "json"
         }
       ]
     },
