@@ -907,5 +907,14 @@ if (!hasSingleInstanceLock) {
     void prewarmLocalData(allowedOrigin);
     await createMainWindow();
     await scheduleAutomaticSecurityScan();
+  }).catch((error: unknown) => {
+    // A failure before BrowserWindow construction must not leave a headless
+    // process holding the single-instance lock and making later launches look
+    // like they do nothing.
+    console.error("TrustTools startup failed", error);
+    const startupFailure =
+      electronMessages[currentPreferences.locale].dialog.startupFailure;
+    dialog.showErrorBox(startupFailure.title, startupFailure.message);
+    app.quit();
   });
 }
