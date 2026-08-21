@@ -623,6 +623,7 @@ export function DistillationPage({
                 <ExpCard
                   candidate={shownCandidate}
                   sessions={sessions}
+                  modelOptions={initial.modelOptions}
                   busy={busy}
                   onRegenerate={() => handleRegenerate(shownCandidate)}
                 />
@@ -659,6 +660,7 @@ export function DistillationPage({
       {compareOpen && doneCandidates[0] && doneCandidates[1] && (
         <CandidateCompareDialog
           candidates={[doneCandidates[0], doneCandidates[1]]}
+          modelOptions={initial.modelOptions}
           onClose={() => setCompareOpen(false)}
         />
       )}
@@ -668,6 +670,7 @@ export function DistillationPage({
           candidates={candidates}
           sessions={sessions}
           sessionIds={sessionIds}
+          modelOptions={initial.modelOptions}
           onClose={() => setHistoryOpen(false)}
           onView={handleViewHistory}
         />

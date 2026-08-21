@@ -79,6 +79,20 @@ export function formatDateTime(
 }
 
 /**
+ * Time-only formatting (HH:MM, 24h) — used where rows are already grouped by
+ * date (e.g. session list), matching the prototype's `09:12` style.
+ */
+export function formatTime(locale: Locale, value: string | Date): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return NAN_CHAR;
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+/**
  * Currency fraction-digit rules (docs/plan v1.2 展示货币策略):
  * JPY/KRW always use 0 digits; CNY/USD keep the magnitude-based behavior
  * (0 digits for amounts ≥ 100, otherwise 2–4).
@@ -172,6 +186,7 @@ export interface BoundFormatters {
     options?: Intl.DateTimeFormatOptions,
   ) => string;
   formatDateTime: (value: string | Date, withSeconds?: boolean) => string;
+  formatTime: (value: string | Date) => string;
   formatMoney: (
     amount: number,
     currency: string,
@@ -190,6 +205,7 @@ export function createBoundFormatters(locale: Locale): BoundFormatters {
     formatDate: (value, options) => formatDate(locale, value, options),
     formatDateTime: (value, withSeconds) =>
       formatDateTime(locale, value, withSeconds),
+    formatTime: (value) => formatTime(locale, value),
     formatMoney: (amount, currency, options) =>
       formatMoney(locale, amount, currency, options),
     formatTokens: (value) => formatTokens(locale, value),

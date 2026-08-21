@@ -1,21 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  Check,
-  ChevronRight,
-  Hash,
-  MessagesSquare,
-  RefreshCw,
-  Sparkles,
-  Terminal,
-  Wrench,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
-
+import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
 import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
 import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import {
   ChipTabs,
@@ -25,10 +16,10 @@ import {
   Segmented,
   TTButton,
 } from "../../../components/tt.tsx";
+import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { toUiError } from "../../../lib/errors.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { formatCostLabel } from "../../../lib/pricing/cost-label.ts";
 import { refreshSessionsQuery, getSessionsQuery } from "../query.ts";
 import type {
   SessionFilter,
@@ -101,7 +92,6 @@ function localDateKey(date: Date): string {
  */
 export function SessionsPage({ initial }: { initial: SessionPage }) {
   const { t, format } = useI18n();
-  const navigate = useNavigate();
   const [page, setPage] = useState(initial);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -163,12 +153,17 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     };
   }, [request]);
 
+  // 稳定的源列表：以初始（未过滤）页为准，只增不减——选中某个 agent 后
+  // 其它 agent tab 不会被隐藏（agent 是切换/筛选，不是单选后隐藏其它）。
+  const [initialSources] = useState(() => [
+    ...new Set(initial.sessions.map((session) => session.source)),
+  ]);
   const sources = useMemo(
     () =>
-      [...new Set(page.sessions.map((session) => session.source))].sort(
-        (a, b) => sourceLabel(a).localeCompare(sourceLabel(b)),
-      ),
-    [page.sessions],
+      [
+        ...new Set([...initialSources, ...page.sessions.map((s) => s.source)]),
+      ].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b))),
+    [initialSources, page.sessions],
   );
   const projects = useMemo(
     () =>
@@ -371,32 +366,27 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             />
             <span className="sr-only">{t("common.refresh")}</span>
           </TTButton>
-          <DistillButton
-            size="md"
-            count={page.total}
-            onClick={() =>
-              notifyDistillStarted({
-                sessions: page.total,
-                minutes: Math.max(
-                  1,
-                  Math.round((60_000 + page.total * 20_000) / 60_000),
-                ),
-                t,
-                onGo: () => void navigate({ to: "/distill" }),
-              })
-            }
-          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 px-1">
           <ChipTabs
             value={source}
-            onChange={(value) => changeFilter(() => setSource(value))}
+            onChange={(value) =>
+              changeFilter(() => setSource(value === source ? "all" : value))
+            }
             options={[
               { value: "all", label: t("sessions.source.all") },
               ...sources.map((value) => ({
                 value,
-                label: sourceLabel(value),
+                label: (
+                  <span className="inline-flex items-center gap-1.5">
+                    <BrandIcon
+                      name={sourceLabel(value)}
+                      className="size-3.5 shrink-0"
+                    />
+                    {sourceLabel(value)}
+                  </span>
+                ),
               })),
             ]}
           />
@@ -469,35 +459,16 @@ function SessionRow({ session }: { session: SessionSummary }) {
   const navigate = useNavigate();
   const status = STATUS_META[session.status];
   const detailAvailable = session.sessionId !== "unavailable";
-  const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    },
-    [],
-  );
-
-  /** Copies the privacy-safe opaque session id; commands/paths never leave the server. */
-  async function copyHash() {
-    try {
-      if (navigator.clipboard?.writeText == null) throw new Error("no-clip");
-      await navigator.clipboard.writeText(session.sessionId);
-      setCopied(true);
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-      copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
-      toast.success(t("sessions.toast.hashCopied"));
-    } catch {
-      toast.error(t("common.error"));
-    }
-  }
 
   return (
-    <li className="group flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3.5 transition-colors hover:bg-surface-2/60">
+    <li className="group flex items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-surface-2/60">
+      {/* 左侧：来源/状态 + 标题 + 项目·时间·时长·轮次·Token 元数据 */}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Terminal className="size-3.5 shrink-0 text-primary" />
+          <BrandIcon
+            name={sourceLabel(session.source)}
+            className="size-3.5 shrink-0"
+          />
           <span className="text-[11px] font-medium text-primary">
             {sourceLabel(session.source)}
           </span>
@@ -509,51 +480,44 @@ function SessionRow({ session }: { session: SessionSummary }) {
           </span>
         </div>
         <p className="mt-1 truncate text-[13px] font-medium text-foreground">
-          {session.title || t("sessions.row.untitled")}
+          {detailAvailable ? (
+            <Link
+              to="/chats/$id"
+              params={{ id: session.sessionId }}
+              className="transition-colors hover:text-primary"
+            >
+              {session.title || t("sessions.row.untitled")}
+            </Link>
+          ) : (
+            session.title || t("sessions.row.untitled")
+          )}
         </p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
+        <div className="tt-num mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
           <span>{session.projectKey}</span>
-          {session.model ? <span>{session.model}</span> : null}
-          <span>{format.formatDateTime(session.startedAt, false)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{format.formatTime(session.startedAt)}</span>
+          <span aria-hidden="true">·</span>
           <span>{formatDuration(session.durationMs)}</span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {t("sessions.row.turnsShort", {
+              count: format.formatNumber(session.turns),
+            })}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{format.formatTokens(session.totals.totalTokens)}</span>
+          {session.model ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{session.model}</span>
+            </>
+          ) : null}
           {session.statusReason ? <span>{session.statusReason}</span> : null}
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-x-4 text-right sm:gap-x-6">
-        <Metric
-          value={format.formatTokens(session.totals.totalTokens)}
-          label="Token"
-        />
-        <Metric
-          value={formatCostLabel(t, format, session.cost)}
-          label={t("sessions.row.cost")}
-        />
-        <Metric
-          value={format.formatNumber(session.turns)}
-          label={t("sessions.row.turns")}
-        />
-      </div>
+      {/* 右侧：仅功能按钮（恢复对话/命令行 + 蒸馏） */}
       <div className="flex shrink-0 items-center gap-2">
         <ResumeSessionButton session={session} />
-        {detailAvailable ? (
-          <button
-            type="button"
-            onClick={copyHash}
-            title={session.sessionId}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 font-mono text-[11px] transition-colors ${
-              copied
-                ? "text-primary"
-                : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
-            }`}
-          >
-            {copied ? (
-              <Check className="size-3.5" />
-            ) : (
-              <Hash className="size-3.5" />
-            )}
-            {copied ? t("sessions.row.copiedHash") : t("sessions.row.copyHash")}
-          </button>
-        ) : null}
         <DistillButton
           size="sm"
           count={1}
@@ -566,28 +530,7 @@ function SessionRow({ session }: { session: SessionSummary }) {
             })
           }
         />
-        {detailAvailable ? (
-          <Link
-            to="/chats/$id"
-            params={{ id: session.sessionId }}
-            className="inline-flex h-7 items-center gap-1 rounded-lg px-2 text-[11px] text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
-          >
-            {t("sessions.action.open")}
-            <ChevronRight className="size-3.5" />
-          </Link>
-        ) : null}
       </div>
     </li>
-  );
-}
-
-function Metric({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="min-w-12">
-      <div className="tt-num max-w-24 truncate text-[12px] font-semibold text-foreground">
-        {value}
-      </div>
-      <div className="font-mono text-[9px] text-muted-foreground">{label}</div>
-    </div>
   );
 }

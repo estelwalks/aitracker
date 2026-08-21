@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck,
+  BarChart3,
+  Bot,
   ChevronRight,
+  Layers,
+  Cloud,
+  Code2,
+  FileText,
   Package,
+  Palette,
   RefreshCw,
+  Server,
   ShieldAlert,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,15 +33,17 @@ import {
 } from "../../../components/ui/dialog";
 import { Progress } from "../../../components/ui/progress";
 import { Badge } from "../../../components/ui/badge";
+import { APP_ID } from "../../../lib/app-config";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey, MessageParams } from "../../../lib/i18n/messages";
 import {
   getMarketSkills,
   getLocalSkills,
+  refreshSkillSnapshot,
   requestApprovedSkillInstall,
+  requestMarketSkillUninstall,
   MARKET_AGENTS,
-  type InstallSkillResult,
   type MarketAgent,
   type MarketListResult,
   type MarketSkill,
@@ -47,15 +57,19 @@ const PAGE_SIZE = 12;
 
 /** Fixed market category taxonomy → upstream `tags` slugs. */
 const MARKET_DOMAINS = [
-  { label: "AI与自动化", tags: ["ai", "automation", "ml"] },
-  { label: "开发", tags: ["backend", "frontend", "api"] },
-  { label: "数据与分析", tags: ["data", "analytics"] },
-  { label: "运维", tags: ["devops", "cli", "scripting"] },
-  { label: "安全与测试", tags: ["security", "testing", "debugging"] },
-  { label: "生产力", tags: ["productivity"] },
-  { label: "文档", tags: ["docs", "code-review"] },
-  { label: "云与性能", tags: ["cloud", "performance"] },
-  { label: "设计与前端", tags: ["design", "frontend"] },
+  { label: "AI与自动化", icon: Bot, tags: ["ai", "automation", "ml"] },
+  { label: "开发", icon: Code2, tags: ["backend", "frontend", "api"] },
+  { label: "数据与分析", icon: BarChart3, tags: ["data", "analytics"] },
+  { label: "运维", icon: Server, tags: ["devops", "cli", "scripting"] },
+  {
+    label: "安全与测试",
+    icon: ShieldCheck,
+    tags: ["security", "testing", "debugging"],
+  },
+  { label: "生产力", icon: Zap, tags: ["productivity"] },
+  { label: "文档", icon: FileText, tags: ["docs", "code-review"] },
+  { label: "云与性能", icon: Cloud, tags: ["cloud", "performance"] },
+  { label: "设计与前端", icon: Palette, tags: ["design", "frontend"] },
 ] as const;
 
 type TFunction = <K extends MessageKey>(
@@ -66,13 +80,10 @@ type TFunction = <K extends MessageKey>(
 type SecurityState = "safe" | "attention" | "unknown";
 
 function securityOf(skill: MarketSkill, t: TFunction): SecurityState {
-  const safe =
-    skill.verdict === "allow" ||
-    (skill.securityScore != null && skill.securityScore >= 80);
+  // 外接 API v1 不再返回 verdict，安全判定以安全分为准（≥80 视为安全）。
+  const safe = skill.securityScore != null && skill.securityScore >= 80;
   const hasEvidence =
-    skill.securityScore != null ||
-    skill.verdict != null ||
-    skill.securityLevel != null;
+    skill.securityScore != null || skill.securityLevel != null;
   if (!hasEvidence) return "unknown";
   return safe ? "safe" : "attention";
 }
@@ -87,17 +98,12 @@ function domainOf(skill: MarketSkill): string {
 }
 
 const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
-  { value: "downloads", labelKey: "market.sort.hot" },
-  { value: "created_at", labelKey: "market.sort.latest" },
   { value: "stars", labelKey: "market.sort.rating" },
-  { value: "tokens", labelKey: "market.sort.tokens" },
+  { value: "security_score", labelKey: "market.sort.security" },
+  { value: "created_at", labelKey: "market.sort.latest" },
+  { value: "name_asc", labelKey: "market.sort.nameAsc" },
+  { value: "name_desc", labelKey: "market.sort.nameDesc" },
 ];
-
-/** 安装目标（详情弹窗内预选 Agent 后发起安装）。 */
-interface InstallRequest {
-  readonly skill: MarketSkill;
-  readonly agent: MarketAgent;
-}
 
 /**
  * 安全市场（V3.0 原型 MarketPanel）：KPI 统计条 + 搜索/排序 + 领域胶囊 +
@@ -108,7 +114,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   const [result, setResult] = useState(initial);
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<MarketSort>("downloads");
+  const [sort, setSort] = useState<MarketSort>("stars");
   const [domain, setDomain] = useState("all");
   const [page, setPage] = useState(1);
   const [domainCounts, setDomainCounts] = useState<Record<string, number>>({});
@@ -116,9 +122,10 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   const [refreshRequest, setRefreshRequest] = useState(0);
   const forceRefreshRef = useRef(false);
   const [detail, setDetail] = useState<MarketSkill | null>(null);
-  const [installTarget, setInstallTarget] = useState<InstallRequest | null>(
-    null,
-  );
+  /** 行内 Agent 安装/卸载进行中集合（keyed by skill.id）。 */
+  const [pendingAgents, setPendingAgents] = useState<
+    Record<number, Set<string>>
+  >({});
   const [localSnapshot, setLocalSnapshot] = useState<SkillSnapshot | null>(
     null,
   );
@@ -143,7 +150,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
           page: 1,
           limit: 1,
           search: "",
-          sort: "downloads",
+          sort: "stars",
           tags: [...item.tags],
         },
       })
@@ -198,15 +205,27 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
   }, [query, sort, page, domain, refreshRequest, t]);
 
   const installedBySkill = useMemo(() => {
-    const map = new Map<string, Record<string, boolean>>();
+    // 本地 Skill 名取自 SKILL.md frontmatter，可能与市场名不同；市场安装的
+    // source.label 固定为 "${repoOwner}/${repoName}"，用它做第二索引，保证
+    // 安装后图标正确点亮（避免误判未安装导致重复安装报错）。
+    const byName = new Map<string, Record<string, boolean>>();
+    const byMarket = new Map<string, Record<string, boolean>>();
     for (const skill of localSnapshot?.skills ?? []) {
       const per: Record<string, boolean> = {};
       for (const installation of skill.installations) {
         per[installation.agent] = true;
       }
-      map.set(skill.name, per);
+      byName.set(skill.name, per);
+      for (const installation of skill.installations) {
+        if (
+          installation.source?.kind === "market" &&
+          installation.source.label
+        ) {
+          byMarket.set(installation.source.label, per);
+        }
+      }
     }
-    return map;
+    return { byName, byMarket };
   }, [localSnapshot]);
 
   const installedNames = useMemo(
@@ -220,6 +239,57 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       ),
     [localSnapshot],
   );
+
+  /**
+   * 行内 Agent 点击：未安装 → 直接安装；已安装 → 直接卸载。
+   * 安装/卸载期间该 Agent 按钮显示 spinner 并禁用，结束后刷新本地快照。
+   */
+  async function toggleRowAgent(
+    skill: MarketSkill,
+    agent: string,
+    next: boolean,
+  ) {
+    const target = agent as MarketAgent;
+    setPendingAgents((prev) => {
+      const nextSet = new Set(prev[skill.id] ?? []);
+      nextSet.add(target);
+      return { ...prev, [skill.id]: nextSet };
+    });
+    try {
+      if (next) {
+        await requestApprovedSkillInstall({
+          data: {
+            confirmed: true,
+            packageRef: skill.packageRef,
+            agent: target,
+          },
+        });
+        toast.success(t("market.install.success", { agent: target }));
+      } else {
+        await requestMarketSkillUninstall({
+          data: {
+            confirmed: true,
+            packageRef: skill.packageRef,
+            agent: target,
+          },
+        });
+        toast.success(t("market.install.uninstalled", { agent: target }));
+      }
+    } catch (requestError) {
+      const ui = toUiError(requestError);
+      toast.error(ui ? t(ui.code, ui.params) : t("market.install.failed"));
+    } finally {
+      setPendingAgents((prev) => {
+        const nextSet = new Set(prev[skill.id] ?? []);
+        nextSet.delete(target);
+        return { ...prev, [skill.id]: nextSet };
+      });
+      // 安装/卸载后强制重新扫描，避免读到操作前的快照缓存导致图标不点亮。
+      void refreshSkillSnapshot()
+        .then(setLocalSnapshot)
+        .catch(() => undefined);
+    }
+  }
 
   // Server-driven pagination: `result.pagination` reflects the filtered total.
   const totalPages = Math.max(1, result.pagination?.pages ?? 1);
@@ -246,11 +316,6 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       }),
     },
     {
-      label: t("market.stats.officialCount"),
-      value: format.formatNumber(result.stats?.officialCount ?? 0),
-      hint: t("market.stats.hintOfficial"),
-    },
-    {
       label: t("market.stats.passRate"),
       value: format.formatNumber(pageSafeCount),
       hint: t("market.stats.hintCurrentPage"),
@@ -258,9 +323,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
     {
       label: t("market.stats.installedCount"),
       value: format.formatNumber(result.stats?.installedCount ?? 0),
-      hint: t("market.stats.hintDownloads", {
-        count: compactNumber(result.stats?.totalDownloads ?? 0),
-      }),
+      hint: t("market.stats.hintLocalInstalled"),
     },
   ];
 
@@ -272,8 +335,8 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         </p>
       </div>
 
-      {/* KPI 统计条（原型 4 格） */}
-      <div className="grid grid-cols-4 overflow-hidden rounded-xl border border-border bg-card">
+      {/* KPI 统计条（原型 3 格） */}
+      <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-card">
         {kpis.map((kpi, index) => (
           <div
             key={kpi.label}
@@ -338,14 +401,15 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               setDomain("all");
               setPage(1);
             }}
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
               domain === "all"
                 ? "bg-primary/12 text-primary ring-1 ring-primary/25 ring-inset"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
+            <Layers className="size-3.5 shrink-0" strokeWidth={1.8} />
             {t("market.domainAll")}
-            <span className="ml-1 text-[10px] opacity-60">
+            <span className="ml-0.5 text-[10px] opacity-60">
               {result.stats?.totalSkills ?? 0}
             </span>
           </button>
@@ -359,14 +423,15 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                   setDomain(item.label);
                   setPage(1);
                 }}
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
                   on
                     ? "bg-primary/12 text-primary ring-1 ring-primary/25 ring-inset"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
+                <item.icon className="size-3.5 shrink-0" strokeWidth={1.8} />
                 {item.label}
-                <span className="ml-1 text-[10px] opacity-60">
+                <span className="ml-0.5 text-[10px] opacity-60">
                   {domainCounts[item.label] ?? 0}
                 </span>
               </button>
@@ -400,9 +465,12 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             <ul className="overflow-hidden rounded-xl border border-border bg-card">
               {result.skills.map((skill, index) => {
                 const security = securityOf(skill, t);
-                const downloads = skill.installCount ?? 0;
-                const stars = skill.stars ?? 0;
-                const tokens = skill.tokens ?? 0;
+                const installed =
+                  installedBySkill.byName.get(skill.name) ??
+                  installedBySkill.byMarket.get(
+                    `${skill.repoOwner}/${skill.repoName}`,
+                  ) ??
+                  {};
                 return (
                   <li
                     key={skill.id}
@@ -439,9 +507,6 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                           >
                             {skill.name}
                           </button>
-                          {skill.isOfficial === true && (
-                            <BadgeCheck className="size-3.5 shrink-0 text-primary" />
-                          )}
                           <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
                             {domainOf(skill)}
                           </span>
@@ -461,26 +526,39 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                                 ? t("market.security.attention")
                                 : t("common.unknown")}
                           </span>
-                          <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
-                            ↓{compactNumber(downloads)} · {compactNumber(stars)}{" "}
-                            Star · {compactNumber(tokens)} tok
-                          </span>
+                          {(skill.stars != null ||
+                            skill.securityScore != null) && (
+                            <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                              {skill.stars != null &&
+                                `${compactNumber(skill.stars)} Star`}
+                              {skill.stars != null &&
+                                skill.securityScore != null &&
+                                " · "}
+                              {skill.securityScore != null &&
+                                t("market.security.score", {
+                                  score: skill.securityScore,
+                                })}
+                            </span>
+                          )}
                           <span className="mx-1 hidden h-3.5 w-px shrink-0 bg-rowline sm:inline-block" />
                           <AgentInstallBar
                             agents={detectedAgents}
-                            installed={installedBySkill.get(skill.name) ?? {}}
-                            onToggle={(agent) =>
-                              setInstallTarget({ skill, agent })
+                            installed={installed}
+                            onToggle={(agent, next) =>
+                              void toggleRowAgent(skill, agent, next)
                             }
+                            pendingAgents={pendingAgents[skill.id]}
                             inline
-                            inlineVisible={4}
+                            inlineVisible={8}
                           />
                         </div>
                         <p
                           className="mt-1 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground"
-                          title={skill.descriptionZh ?? skill.description ?? ""}
+                          title={
+                            skill.shortDescription ?? skill.description ?? ""
+                          }
                         >
-                          {skill.descriptionZh ??
+                          {skill.shortDescription ??
                             skill.description ??
                             t("market.noDescription")}
                         </p>
@@ -526,27 +604,20 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
         <MarketDetailModal
           skill={detail}
           agents={detectedAgents}
-          installed={installedBySkill.get(detail.name) ?? {}}
+          installed={
+            installedBySkill.byName.get(detail.name) ??
+            installedBySkill.byMarket.get(
+              `${detail.repoOwner}/${detail.repoName}`,
+            ) ??
+            {}
+          }
           skillInstalled={installedNames.has(detail.name)}
-          onRequestInstall={(agent) => {
-            setInstallTarget({ skill: detail, agent });
-          }}
-          onClose={() => setDetail(null)}
-        />
-      )}
-
-      {installTarget && (
-        <MarketInstallModal
-          skill={installTarget.skill}
-          initialAgent={installTarget.agent}
-          detectedAgents={detectedAgents}
-          installedSkillNames={installedNames}
-          onClose={() => setInstallTarget(null)}
           onInstalled={() => {
-            void getLocalSkills()
+            void refreshSkillSnapshot()
               .then(setLocalSnapshot)
               .catch(() => undefined);
           }}
+          onClose={() => setDetail(null)}
         />
       )}
     </div>
@@ -558,20 +629,66 @@ function MarketDetailModal({
   agents,
   installed,
   skillInstalled,
-  onRequestInstall,
+  onInstalled,
   onClose,
 }: {
   skill: MarketSkill;
   agents: readonly string[];
   installed: Readonly<Record<string, boolean>>;
   skillInstalled: boolean;
-  onRequestInstall: (agent: string) => void;
+  onInstalled: () => void;
   onClose: () => void;
 }) {
   const { t, format } = useI18n();
   const security = securityOf(skill, t);
   const repoSlug = `${skill.repoOwner}/${skill.repoName}/${skill.slug}`;
-  const [selected, setSelected] = useState<string | null>(null);
+  // 多选安装目标：逐个勾选，支持全选/全不选，最后统一安装。
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  const installableAgents = agents.filter((agent) => !installed[agent]);
+  const allSelected =
+    installableAgents.length > 0 &&
+    installableAgents.every((agent) => selectedAgents.has(agent));
+
+  function toggleSelect(agent: string) {
+    if (installed[agent]) return;
+    setSelectedAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(agent)) next.delete(agent);
+      else next.add(agent);
+      return next;
+    });
+  }
+
+  async function handleInstallSelected() {
+    const targets = agents.filter(
+      (agent) => selectedAgents.has(agent) && !installed[agent],
+    );
+    if (targets.length === 0) return;
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      for (const agent of targets) {
+        await requestApprovedSkillInstall({
+          data: {
+            confirmed: true,
+            packageRef: skill.packageRef,
+            agent: agent as MarketAgent,
+          },
+        });
+      }
+      toast.success(t("market.install.success", { agent: targets.join(", ") }));
+      onInstalled();
+      setSelectedAgents(new Set());
+    } catch (requestError) {
+      const ui = toUiError(requestError);
+      setInstallError(ui ? t(ui.code, ui.params) : t("market.install.failed"));
+    } finally {
+      setInstalling(false);
+    }
+  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -609,9 +726,6 @@ function MarketDetailModal({
               </Badge>
             )}
             <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-              {skill.isOfficial === true && (
-                <BadgeCheck className="size-3 text-primary" />
-              )}
               {skill.repoOwner || "-"} · {domainOf(skill)}
             </span>
           </DialogTitle>
@@ -625,20 +739,19 @@ function MarketDetailModal({
             源路径：{repoSlug}
           </div>
           <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-            {skill.descriptionZh ??
-              skill.description ??
+            {skill.description ??
+              skill.shortDescription ??
               t("market.noDescription")}
           </p>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               {
-                label: t("market.metric.downloads"),
-                value: compactNumber(skill.installCount ?? 0),
-              },
-              {
-                label: t("market.metric.tokenUsage"),
-                value: skill.tokens != null ? compactNumber(skill.tokens) : "-",
+                label: t("market.metric.securityScore"),
+                value:
+                  skill.securityScore != null
+                    ? String(skill.securityScore)
+                    : "-",
               },
               {
                 label: t("market.metric.stars"),
@@ -647,6 +760,13 @@ function MarketDetailModal({
               {
                 label: t("market.metric.size"),
                 value: formatSizeBytes(skill.size ?? 0),
+              },
+              {
+                label: t("market.drawer.lastUpdated"),
+                value:
+                  skill.updatedAt != null
+                    ? format.formatDateTime(skill.updatedAt, false)
+                    : "-",
               },
             ].map((cell) => (
               <div
@@ -684,27 +804,19 @@ function MarketDetailModal({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <InfoCell
                 label={t("market.drawer.commandExample")}
-                value={`trusttools install ${skill.name}`}
+                value={`${APP_ID} install ${skill.name}`}
               />
               <InfoCell
                 label={t("market.metric.size")}
                 value={formatSizeBytes(skill.size ?? 0)}
               />
               <InfoCell
-                label={t("market.drawer.contextTokens")}
-                value={skill.tokens != null ? compactNumber(skill.tokens) : "-"}
+                label={t("market.metric.securityLevel")}
+                value={skill.securityLevel ?? "-"}
               />
               <InfoCell
                 label={t("market.detail.sourcePath")}
                 value={`${skill.repoOwner}/${skill.repoName}`}
-              />
-              <InfoCell
-                label={t("market.detail.lastScanned")}
-                value={
-                  skill.lastScannedAt != null
-                    ? format.formatDateTime(skill.lastScannedAt, false)
-                    : "-"
-                }
               />
               <InfoCell
                 label={t("market.drawer.lastUpdated")}
@@ -730,7 +842,7 @@ function MarketDetailModal({
             </div>
           )}
 
-          {/* 安装到Agent（原型 AgentInstallBar 选择模式） */}
+          {/* 安装到Agent（多选勾选 + 全选，最后统一安装） */}
           {agents.length > 0 && (
             <div>
               <div className="tt-label mb-1.5">
@@ -741,36 +853,38 @@ function MarketDetailModal({
               <AgentInstallBar
                 agents={agents}
                 installed={installed}
-                selected={selected}
-                onSelect={(agent) => setSelected(agent)}
+                selected={[...selectedAgents]}
+                onSelect={toggleSelect}
+                onSetAll={(next) =>
+                  setSelectedAgents(
+                    next ? new Set(installableAgents) : new Set(),
+                  )
+                }
+                allSelected={allSelected}
+                disabled={installing}
                 cols={4}
               />
             </div>
           )}
+
+          {installing && <Progress value={undefined} className="h-1.5" />}
         </div>
 
         <DialogFooter className="mt-3 flex-wrap items-center gap-2">
-          {skill.repoUrl && (
-            <a
-              href={skill.repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mr-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              {t("market.drawer.viewRepo")}
-            </a>
+          {installError && (
+            <p className="mr-auto text-[12px] text-danger">{installError}</p>
           )}
-          <TTButton variant="default" onClick={onClose}>
+          <TTButton variant="default" disabled={installing} onClick={onClose}>
             {t("common.close")}
           </TTButton>
           <TTButton
             variant="primary"
-            disabled={skillInstalled || selected == null}
-            onClick={() => selected != null && onRequestInstall(selected)}
+            disabled={installing || selectedAgents.size === 0}
+            onClick={() => void handleInstallSelected()}
           >
-            {skillInstalled
-              ? t("market.installed")
-              : t("market.install.button")}
+            {installing
+              ? t("market.install.downloading")
+              : t("market.install.toSelected")}
           </TTButton>
         </DialogFooter>
       </DialogContent>
@@ -786,111 +900,5 @@ function InfoCell({ label, value }: { label: string; value: string }) {
         {value}
       </div>
     </div>
-  );
-}
-
-function MarketInstallModal({
-  skill,
-  initialAgent,
-  detectedAgents,
-  installedSkillNames,
-  onClose,
-  onInstalled,
-}: {
-  skill: MarketSkill;
-  initialAgent: MarketAgent | null;
-  detectedAgents: readonly string[];
-  installedSkillNames: Set<string>;
-  onClose: () => void;
-  onInstalled: () => void;
-}) {
-  const { t } = useI18n();
-  const [agent, setAgent] = useState<MarketAgent | null>(initialAgent);
-  const [submitting, setSubmitting] = useState(false);
-  const [outcome, setOutcome] = useState<InstallSkillResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const installed = installedSkillNames.has(skill.name);
-
-  async function handleInstall() {
-    if (!agent) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const result = await requestApprovedSkillInstall({
-        data: { confirmed: true, packageRef: skill.packageRef, agent },
-      });
-      setOutcome(result);
-      if (result.installed) onInstalled();
-    } catch (requestError) {
-      const ui = toUiError(requestError);
-      setError(ui ? t(ui.code, ui.params) : t("common.failed"));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && !submitting && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {skill.isOfficial === true && (
-              <Badge
-                variant="secondary"
-                className="bg-primary/10 text-[10px] font-normal text-primary"
-              >
-                {t("market.official")}
-              </Badge>
-            )}
-            {skill.name}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div>
-            <p className="mb-2 text-[12px] font-medium text-foreground">
-              {t("market.install.target")}
-            </p>
-            <AgentInstallBar
-              agents={detectedAgents}
-              installed={{}}
-              selected={agent}
-              onSelect={(item) => setAgent(item as MarketAgent)}
-              disabled={submitting}
-              cols={2}
-              rows={2}
-            />
-          </div>
-
-          {submitting && <Progress value={undefined} className="h-1.5" />}
-
-          {error && <p className="text-[12px] text-danger">{error}</p>}
-
-          {outcome && (
-            <p className="text-[12px] text-muted-foreground">
-              {t(
-                outcome.installed
-                  ? "market.install.succeeded"
-                  : "market.install.failed",
-              )}
-            </p>
-          )}
-        </div>
-
-        <DialogFooter>
-          <TTButton variant="ghost" disabled={submitting} onClick={onClose}>
-            {t("common.close")}
-          </TTButton>
-          <TTButton
-            variant="primary"
-            disabled={!agent || submitting || installed}
-            onClick={() => void handleInstall()}
-          >
-            {installed ? t("market.installed") : t("market.install.button")}
-          </TTButton>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

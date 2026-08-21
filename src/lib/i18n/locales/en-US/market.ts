@@ -28,16 +28,12 @@ export const market = {
   },
   stats: {
     totalSkills: "Total Skills",
-    officialCount: "Official",
     passRate: "Security passed",
     passRatePage: "This page pass rate",
     installedCount: "Installed",
-    totalDownloads: "Total downloads",
     hintCurrentPage: "Current page stats",
     hintLocalInstalled: "Installed on this machine",
-    hintOfficial: "Maintained by the official team",
     hintDomains: "{count} categories",
-    hintDownloads: "Total downloads {count}",
   },
   search: {
     placeholder: "Search skill name, source path, or capability",
@@ -46,13 +42,11 @@ export const market = {
     perPage: "{count} per page · page {page}",
   },
   sort: {
-    hot: "Popular",
     latest: "Latest",
     rating: "Top rated",
-    tokens: "Token usage",
+    security: "Top security score",
     nameAsc: "A-Z",
     nameDesc: "Z-A",
-    downloads: "Downloads",
   },
   list: {
     title: "Skill list ({count})",
@@ -70,7 +64,6 @@ export const market = {
     actions: "Actions",
   },
   installed: "Installed",
-  official: "Official",
   domainAll: "All",
   card: {
     detail: "Details",
@@ -84,13 +77,12 @@ export const market = {
     tokens: "Context tokens",
     securityPass: "Security scan passed · safe to install",
     infoTitle: "Install info",
-    lastScanned: "Last scanned",
   },
   metric: {
-    downloads: "Downloads",
-    tokenUsage: "Token usage",
     size: "Size",
     stars: "Star",
+    securityScore: "Security score",
+    securityLevel: "Security level",
   },
   security: {
     score: "Security score {score}",
@@ -100,6 +92,11 @@ export const market = {
   },
   install: {
     button: "Install",
+    to: "Install to {agent}",
+    uninstallFrom: "Uninstall from {agent}",
+    installedAt: "Installed on {agent}",
+    selectAll: "Select all",
+    clearAll: "Deselect all",
     expandAll: "Show all {count}",
     expandMore: "{count} more",
     toSelected: "Install to selected tool",
@@ -108,6 +105,7 @@ export const market = {
     succeeded: "Install succeeded",
     failed: "Install failed",
     success: "Installed to {agent}",
+    uninstalled: "Uninstalled from {agent}",
     downloading: "Downloading and scanning…",
     failure: {
       scanBlocked:
@@ -119,17 +117,15 @@ export const market = {
     },
   },
   drawer: {
-    viewRepo: "View source repository",
     viewSource: "View source",
     securityNotice:
       "Security scan passed · no malicious URLs, dangerous commands, or sensitive information detected",
     commandExample: "Example install command",
-    contextTokens: "Context tokens",
     lastUpdated: "Last updated",
     permissionClaim: "Permission claims",
     networkClaim: "Network claims",
     selectAgent:
-      "Select install target (single-select, {count} tools supported)",
+      "Select install targets ({count} tools supported, select all available)",
     agentNotInstalled: "Not installed",
   },
   pagination: {

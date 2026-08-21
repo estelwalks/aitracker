@@ -8,13 +8,11 @@ import {
   ShieldQuestion,
 } from "lucide-react";
 
-import { BrandIcon } from "../../../components/BrandIcon";
 import { useI18n } from "../../../lib/i18n/context";
+import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
+import type { SkillAgent } from "../query.ts";
 import type { SkillAssetView } from "../application/index.ts";
 import { compactNumber, formatSizeBytes } from "./skill-format.ts";
-
-/** Number of installed-agent pills shown inline before collapsing to "+N". */
-const VISIBLE_AGENTS = 6;
 
 export interface SkillCardSecurity {
   /** Number of risk findings recorded in the security history. */
@@ -25,8 +23,9 @@ export interface SkillCardSecurity {
 
 /**
  * 原型对齐的单行 Skill 条目（列表行而非卡片）：安全徽章 + 名称行（蒸馏
- * Brain 标识、来源、Token/体积、已装 Agent 胶囊）+ 一行描述 + 详情箭头。
- * 行内安装胶囊为只读展示，安装/同步/卸载走详情弹窗与批量操作栏。
+ * Brain 标识、来源、Token/体积、已装 Agent 安装条）+ 一行描述 + 详情箭头。
+ * 行内安装条即原型 AgentInstallBar：图标钮点亮=已装、灰态=可装，点击安装/
+ * 卸载，Plus 钮全选/全不选——交互接到真实后端（SkillsPage 提供回调）。
  */
 export function SkillListRow({
   skill,
@@ -34,6 +33,9 @@ export function SkillListRow({
   security,
   blacklisted,
   index,
+  availableAgents,
+  pendingAgents,
+  onToggleAgent,
   onSelect,
   onOpen,
 }: {
@@ -42,6 +44,12 @@ export function SkillListRow({
   security?: SkillCardSecurity;
   blacklisted: boolean;
   index: number;
+  /** 本地已探测到客户端的可安装 Agent（原型 availableAgents）。 */
+  availableAgents: readonly SkillAgent[];
+  /** 安装/卸载进行中的 Agent（该 Agent 显示 loading 并禁用）。 */
+  pendingAgents?: ReadonlySet<string> | null;
+  /** 点击单个 Agent 安装/卸载。agent 按 string 传递，与 AgentInstallBar 一致。 */
+  onToggleAgent: (agent: string, next: boolean) => void;
   onSelect: () => void;
   onOpen: () => void;
 }) {
@@ -71,9 +79,9 @@ export function SkillListRow({
         ? t("skills.security.attention")
         : t("skills.card.verdictUnknown");
 
-  const agents = skill.installedAgents;
-  const visibleAgents = agents.slice(0, VISIBLE_AGENTS);
-  const overflow = agents.length - visibleAgents.length;
+  const installedMap = Object.fromEntries(
+    skill.installedAgents.map((agent) => [agent, true]),
+  );
   const selectLabel = selected
     ? t("skills.card.deselect", { name: skill.name })
     : t("skills.card.select", { name: skill.name });
@@ -82,7 +90,7 @@ export function SkillListRow({
     <li
       className={`group relative px-3.5 py-3 transition-colors hover:bg-surface-2/40 ${
         selected ? "bg-accent/30" : ""
-      } ${index > 0 ? "border-t border-border/60" : ""}`}
+      } ${index > 0 ? "[box-shadow:inset_0_1px_0_var(--rowline)]" : ""}`}
     >
       <div className="flex items-start gap-3">
         {/* 选择圈：未选中时仅在悬停浮现，保持列表清爽 */}
@@ -91,7 +99,7 @@ export function SkillListRow({
           aria-label={selectLabel}
           title={selectLabel}
           onClick={onSelect}
-          className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full transition-colors ${
+          className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-[6px] transition-colors ${
             selected
               ? "bg-foreground text-background"
               : "bg-surface-2 text-transparent hover:text-muted-foreground"
@@ -103,20 +111,20 @@ export function SkillListRow({
         {/* 安全状态徽章 */}
         <span
           title={verdictLabel}
-          className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-md ${
+          className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-md ${
             verdict === "ok"
               ? "bg-ok/10 text-ok"
               : verdict === "warn"
                 ? "bg-danger/10 text-danger"
-                : "bg-surface-2 text-muted-foreground"
+                : "border border-border bg-surface-2 text-muted-foreground"
           }`}
         >
           {verdict === "ok" ? (
-            <ShieldCheck className="size-4" />
+            <ShieldCheck className="size-5" />
           ) : verdict === "warn" ? (
-            <ShieldAlert className="size-4" />
+            <ShieldAlert className="size-5" />
           ) : (
-            <ShieldQuestion className="size-4" />
+            <ShieldQuestion className="size-5" />
           )}
         </span>
 
@@ -150,23 +158,18 @@ export function SkillListRow({
               {compactNumber(skill.tokenEstimate)} tok ·{" "}
               {formatSizeBytes(skill.sizeBytes)}
             </span>
-            {agents.length > 0 && (
-              <span className="mx-1 hidden h-3.5 w-px shrink-0 bg-border sm:inline-block" />
-            )}
-            {visibleAgents.map((agent) => (
-              <span
-                key={agent}
-                className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-surface-2/70 px-1.5 py-px text-[11px] text-muted-foreground"
-                title={t("skills.table.agent")}
-              >
-                <BrandIcon name={agent} className="size-3" />
-                {agent}
-              </span>
-            ))}
-            {overflow > 0 && (
-              <span className="shrink-0 rounded-sm bg-surface-2/70 px-1.5 py-px text-[11px] text-muted-foreground">
-                +{overflow}
-              </span>
+            {availableAgents.length > 0 && (
+              <>
+                <span className="mx-1 hidden h-3.5 w-px shrink-0 bg-border sm:inline-block" />
+                <AgentInstallBar
+                  agents={availableAgents}
+                  installed={installedMap}
+                  onToggle={onToggleAgent}
+                  pendingAgents={pendingAgents}
+                  inline
+                  inlineVisible={8}
+                />
+              </>
             )}
           </div>
 

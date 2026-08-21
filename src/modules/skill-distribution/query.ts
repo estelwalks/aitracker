@@ -118,7 +118,7 @@ export const requestApprovedSkillInstall = createServerFn({ method: "POST" })
     const { getMarketSkills: query, requestSkillInstall } =
       await import("../../lib/local-market/index.ts");
     const result = await query({
-      data: { page: 1, limit: 50, search: identity.slug, sort: "downloads" },
+      data: { page: 1, limit: 50, search: identity.slug, sort: "stars" },
     });
     const skill = result.skills.find(
       (item) => item.id === identity.id && item.slug === identity.slug,
@@ -139,5 +139,39 @@ export const requestApprovedSkillInstall = createServerFn({ method: "POST" })
     return projectInstallResult(installed);
   });
 
+export const requestMarketSkillUninstall = createServerFn({ method: "POST" })
+  .validator(
+    (input: { confirmed: boolean; packageRef: string; agent: MarketAgent }) =>
+      input,
+  )
+  .handler(async ({ data }) => {
+    if (data.confirmed !== true)
+      throw new Error("errors.skillDistribution.notApproved");
+    const identity = resolvePackageRef(data.packageRef);
+    const { scanLocalSkills } =
+      await import("../../lib/local-skills/scanner.server.ts");
+    const snapshot = await scanLocalSkills();
+    const paths = snapshot.skills
+      .flatMap((item) => item.installations)
+      .filter(
+        (installation) =>
+          installation.agent === data.agent &&
+          installation.source?.kind === "market" &&
+          installation.source.slug === identity.slug,
+      )
+      .map((installation) => installation.path);
+    if (paths.length === 0) return { uninstalled: false, paths: 0 };
+    const { batchUninstallSkills } =
+      await import("../../lib/local-skills/server-fns.ts");
+    const done = await batchUninstallSkills({ data: paths });
+    return {
+      uninstalled: done.succeeded.length > 0,
+      paths: done.succeeded.length,
+    };
+  });
+
 export type { SkillSnapshot } from "../skill-catalog/index.ts";
-export { getLocalSkills } from "../skill-catalog/index.ts";
+export {
+  getLocalSkills,
+  refreshSkillSnapshot,
+} from "../skill-catalog/index.ts";

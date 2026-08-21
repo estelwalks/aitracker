@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  Check,
   Download,
   FileCode,
   FolderTree,
@@ -18,7 +17,6 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { BrandIcon } from "../../../components/BrandIcon";
 import { Segmented, TTButton } from "../../../components/tt";
 import {
   Dialog,
@@ -27,10 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog";
+import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
+import { Progress } from "../../../components/ui/progress";
+import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
 import {
   getSkillFiles,
-  SKILL_AGENTS,
+  requestApprovedSkillInstall,
   type LocalSkill,
   type SkillAgent,
   type SkillFileEntry,
@@ -478,6 +479,7 @@ export function SkillDetailModal({
   blacklisted,
   onClose,
   onSync,
+  onInstalled,
   onRemove,
   onOpenSecurity,
   onToggleBlacklist,
@@ -488,6 +490,7 @@ export function SkillDetailModal({
   blacklisted: boolean;
   onClose: () => void;
   onSync: () => void;
+  onInstalled: () => void;
   onRemove: () => void;
   onOpenSecurity: () => void;
   onToggleBlacklist: () => void;
@@ -538,6 +541,65 @@ export function SkillDetailModal({
   const usableSet = new Set(usableAgents);
   const firstVersion =
     skill.installations.find((i) => i.version)?.version ?? null;
+
+  // 安装目标多选（与安全市场 AgentInstallBar 一致）：逐个勾选 + 全选，统一安装。
+  const installedMap = Object.fromEntries(
+    skill.installations.map((installation) => [installation.agent, true]),
+  );
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
+
+  const installableAgents = usableAgents.filter(
+    (agent) => !installedSet.has(agent),
+  );
+  const allSelected =
+    installableAgents.length > 0 &&
+    installableAgents.every((agent) => selectedAgents.has(agent));
+
+  function toggleSelect(agent: string) {
+    if (installedSet.has(agent)) return;
+    setSelectedAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(agent)) next.delete(agent);
+      else next.add(agent);
+      return next;
+    });
+  }
+
+  async function handleInstallSelected() {
+    const sourceRef = skill.installations[0]?.installationRef;
+    const targets = usableAgents.filter(
+      (agent) => selectedAgents.has(agent) && !installedSet.has(agent),
+    );
+    if (!sourceRef || targets.length === 0) return;
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      for (const agent of targets) {
+        await requestApprovedSkillInstall({
+          data: {
+            confirmed: true,
+            installationRef: sourceRef,
+            targetAgent: agent,
+          },
+        });
+      }
+      toast.success(
+        t("skills.toast.installedTo", {
+          name: skill.name,
+          agent: targets.join(", "),
+        }),
+      );
+      onInstalled();
+      setSelectedAgents(new Set());
+    } catch (requestError) {
+      const ui = toUiError(requestError);
+      setInstallError(ui ? t(ui.code, ui.params) : t("common.error"));
+    } finally {
+      setInstalling(false);
+    }
+  }
 
   const metrics: { key: string; label: string }[] = [
     {
@@ -704,7 +766,7 @@ export function SkillDetailModal({
           </div>
         </div>
 
-        {/* Install position chips */}
+        {/* 安装到工具：与安全市场 AgentInstallBar 一致（多选勾选 + 全选 + 安装） */}
         <div className="mt-3 border-t border-border/60 pt-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="tt-label">
@@ -721,45 +783,24 @@ export function SkillDetailModal({
               {t("skills.detail.syncToTools")}
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SKILL_AGENTS.map((agent) => {
-              const installed = installedSet.has(agent);
-              const usable = usableSet.has(agent);
-              return (
-                <span
-                  key={agent}
-                  title={`${agent} · ${installed ? t("common.installed") : t("common.notInstalled")}`}
-                  className={`inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 text-[11.5px] ${
-                    !usable
-                      ? "border-border text-muted-foreground/40"
-                      : installed
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground"
-                  }`}
-                >
-                  <span
-                    className={`grid size-3 shrink-0 place-items-center rounded-sm border ${
-                      installed
-                        ? "border-primary bg-primary/30"
-                        : "border-border"
-                    } ${usable ? "" : "opacity-40"}`}
-                  >
-                    {installed && <Check className="size-2.5" />}
-                  </span>
-                  <BrandIcon
-                    name={agent}
-                    className={`size-3.5 ${usable ? "" : "opacity-40"}`}
-                  />
-                  {agent}
-                  {!usable && (
-                    <span className="text-[9px]">
-                      · {t("common.notInstalled")}
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </div>
+          {usableAgents.length > 0 && (
+            <AgentInstallBar
+              agents={usableAgents}
+              installed={installedMap}
+              selected={[...selectedAgents]}
+              onSelect={toggleSelect}
+              onSetAll={(next) =>
+                setSelectedAgents(next ? new Set(installableAgents) : new Set())
+              }
+              allSelected={allSelected}
+              disabled={installing}
+              cols={4}
+            />
+          )}
+          {installing && <Progress value={undefined} className="h-1.5" />}
+          {installError && (
+            <p className="mt-2 text-[12px] text-danger">{installError}</p>
+          )}
         </div>
 
         <DialogFooter className="mt-3 flex-wrap items-center gap-2">
@@ -784,8 +825,15 @@ export function SkillDetailModal({
           <TTButton size="sm" variant="danger" onClick={onRemove}>
             <Trash2 className="size-3.5" /> {t("skills.actions.uninstall")}
           </TTButton>
-          <TTButton size="sm" onClick={onSync}>
-            <Download className="size-3.5" /> {t("skills.detail.syncToTools")}
+          <TTButton
+            size="sm"
+            variant="primary"
+            disabled={installing || selectedAgents.size === 0}
+            onClick={() => void handleInstallSelected()}
+          >
+            {installing
+              ? t("skills.detail.installing")
+              : t("skills.detail.installToSelected")}
           </TTButton>
         </DialogFooter>
       </DialogContent>

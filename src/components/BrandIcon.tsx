@@ -55,6 +55,11 @@ function match(name: string) {
   if (n.includes("gemini")) return "gemini";
   if (n.includes("kimi")) return "kimi";
   if (n.includes("deepseek")) return "deepseek";
+  if (n.includes("craft")) return "craft";
+  if (n.includes("droid")) return "droid";
+  if (n.includes("roo")) return "roo";
+  if (n.includes("goose")) return "goose";
+  if (n.includes("zed")) return "zed";
   return "other";
 }
 
@@ -65,8 +70,70 @@ const brandColor: Record<string, string> = {
   gemini: "#4285f4",
   kimi: "#7c5cff",
   deepseek: "#4d6bfe",
+  craft: "#9570be",
+  droid: "currentColor",
+  roo: "#f0524d",
+  goose: "currentColor",
+  zed: "#3b82f6",
   other: "currentColor",
 };
+
+/**
+ * 官方品牌 logo 静态资源（public/brand-logos/，来自 AITracker 的
+ * @lobehub/icons 资产）：优先于内置自绘 SVG 使用，让图标显示真实品牌图形。
+ * 点亮/未点亮由调用方控制（未安装置灰 grayscale），logo 本身保留品牌原色。
+ */
+const BRAND_LOGO_BY_NAME: Record<string, string> = {
+  antigravity: "/brand-logos/antigravity.svg",
+  anythingllm: "/brand-logos/anythingllm.svg",
+  "anythingllm desktop": "/brand-logos/anythingllm.svg",
+  claude: "/brand-logos/claude-code.svg",
+  "claude code": "/brand-logos/claude-code.svg",
+  "claude science": "/brand-logos/claude-code.svg",
+  codebuddy: "/brand-logos/codebuddy.svg",
+  workbuddy: "/brand-logos/codebuddy.svg",
+  codex: "/brand-logos/codex.svg",
+  "every code": "/brand-logos/codex.svg",
+  copilot: "/brand-logos/copilot.svg",
+  "github copilot": "/brand-logos/copilot.svg",
+  cursor: "/brand-logos/cursor.svg",
+  deepseek: "/brand-logos/deepseek.svg",
+  "deepseek harness": "/brand-logos/deepseek.svg",
+  gemini: "/brand-logos/gemini.svg",
+  "gemini cli": "/brand-logos/gemini.svg",
+  grok: "/brand-logos/grok.svg",
+  "grok build": "/brand-logos/grok.svg",
+  hermes: "/brand-logos/hermes.svg",
+  "hermes agent": "/brand-logos/hermes.svg",
+  kilo: "/brand-logos/kilo.svg",
+  "kilo cli": "/brand-logos/kilo.svg",
+  "kilo code": "/brand-logos/kilo.svg",
+  kimi: "/brand-logos/kimi.svg",
+  "kimi code": "/brand-logos/kimi.svg",
+  kiro: "/brand-logos/kiro.svg",
+  mimo: "/brand-logos/mimo.svg",
+  "mimo code": "/brand-logos/mimo.svg",
+  "oh-my-pi": "/brand-logos/omp.svg",
+  "oh my pi": "/brand-logos/omp.svg",
+  omp: "/brand-logos/omp.svg",
+  openclaw: "/brand-logos/openclaw.svg",
+  opencode: "/brand-logos/opencode.svg",
+  pi: "/brand-logos/pi.svg",
+  qoder: "/brand-logos/qoder.svg",
+  "qoder cn": "/brand-logos/qoder-cn.svg",
+  reasonix: "/brand-logos/reasonix.png",
+  zcode: "/brand-logos/zcode.svg",
+};
+
+function brandLogoSrc(name: string): string | undefined {
+  // 同时接受展示名（"Claude Code"）、工具 id（"claude-code"）与 kind 键。
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+  return BRAND_LOGO_BY_NAME[normalized];
+}
 
 /** 各产品品牌原色（顺序优先：第一个命中的规则胜出）。 */
 const productColor: { test: (n: string) => boolean; color: string }[] = [
@@ -130,6 +197,22 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
     return (
       <img
         src={rawIcon}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className={`object-contain ${className}`}
+      />
+    );
+  }
+
+  const localLogoSrc =
+    brandLogoSrc(name) ?? (kind === "other" ? undefined : brandLogoSrc(kind));
+  if (localLogoSrc != null) {
+    return (
+      <img
+        src={localLogoSrc}
         alt=""
         aria-hidden="true"
         draggable={false}
@@ -222,6 +305,61 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
       >
         <path d="M3 9c4.5-3 8.5-1 11 1.5S19.5 15 21 13" />
         <circle cx="17.5" cy="7.5" r="1.6" fill={fill} stroke="none" />
+      </svg>
+    );
+
+  if (kind === "craft")
+    return (
+      <svg {...common} fill="none">
+        <g transform="translate(3.4502, 3)" fill={fill} fillRule="nonzero">
+          <path d="M3.17890888,3.6 L3.17890888,0 L16,0 L16,3.6 L3.17890888,3.6 Z M9.642,7.2 L9.64218223,10.8 L0,10.8 L0,3.6 L16,3.6 L16,7.2 L9.642,7.2 Z M3.17890888,18 L3.178,14.4 L0,14.4 L0,10.8 L16,10.8 L16,18 L3.17890888,18 Z" />
+        </g>
+      </svg>
+    );
+
+  if (kind === "droid")
+    return (
+      <svg
+        {...common}
+        fill="none"
+        stroke={fill}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 3v2" />
+        <path d="M15 3v2" />
+        <rect x="4" y="6" width="16" height="13" rx="3" />
+        <circle cx="9" cy="13" r="1.4" fill={fill} stroke="none" />
+        <circle cx="15" cy="13" r="1.4" fill={fill} stroke="none" />
+        <path d="M9 16h6" />
+      </svg>
+    );
+
+  if (kind === "roo")
+    return (
+      <svg {...common} fill={fill} fillRule="evenodd">
+        <path d="M20.113 5.5l-.442 1.557a.157.157 0 01-.196.106l-7.414-2.157a.16.16 0 00-.143.028l-7.342 5.74a.159.159 0 01-.074.032l-4.37.656a.154.154 0 00-.132.162l.02.245c.005.078.071.14.152.141l5.074.128.058.002 3.75-1.953a.16.16 0 01.164.01l2.657 1.847a.152.152 0 01.066.125l-.023 2.45c0 .032.01.063.028.089l3.737 5.227c.03.04.077.065.129.065h1.182a.153.153 0 00.14-.224l-2.664-4.919a.15.15 0 01.005-.152l1.389-2.169a.156.156 0 01.062-.055l4.965-2.456a.16.16 0 01.158.01l1.418.921a.16.16 0 00.087.026h1.289c.125 0 .2-.136.13-.237l-3.578-5.29c-.074-.109-.246-.082-.282.044z" />
+      </svg>
+    );
+
+  if (kind === "goose")
+    return (
+      <svg {...common} fill={fill} fillRule="evenodd">
+        <path d="M21.595 23.61c1.167-.254 2.405-.944 2.405-.944l-2.167-1.784a12.124 12.124 0 01-2.695-3.131 12.127 12.127 0 00-3.97-4.049l-.794-.462a1.115 1.115 0 01-.488-.815.844.844 0 01.154-.575c.413-.582 2.548-3.115 2.94-3.44.503-.416 1.065-.762 1.586-1.159.074-.056.148-.112.221-.17.003-.002.007-.004.009-.007.167-.131.325-.272.45-.438.453-.524.563-.988.59-1.193-.061-.197-.244-.639-.753-1.148.319.02.705.272 1.056.569.235-.376.481-.773.727-1.171.165-.266-.08-.465-.086-.471h-.001V3.22c-.007-.007-.206-.25-.471-.086-.567.35-1.134.702-1.639 1.021 0 0-.597-.012-1.305.599a2.464 2.464 0 00-.438.45l-.007.009c-.058.072-.114.147-.17.221-.397.521-.743 1.083-1.16 1.587-.323.391-2.857 2.526-3.44 2.94a.842.842 0 01-.574.153 1.115 1.115 0 01-.815-.488l-.462-.794a12.123 12.123 0 00-4.049-3.97 12.133 12.133 0 01-3.13-2.695L1.332 0S.643 1.238.39 2.405c.352.428 1.27 1.49 2.34 2.302C1.58 4.167.73 3.75.06 3.4c-.103.765-.063 1.92.043 2.816.726.317 1.961.806 3.219 1.066-1.006.236-2.11.278-2.961.262.15.554.358 1.119.64 1.688.119.263.25.52.39.77.452.125 2.222.383 3.164.171l-2.51.897a27.776 27.776 0 002.544 2.726c2.031-1.092 2.494-1.241 4.018-2.238-2.467 2.008-3.108 2.828-3.8 3.67l-.483.678c-.25.351-.469.725-.65 1.117-.61 1.31-1.47 4.1-1.47 4.1-.154.486.202.842.674.674 0 0 2.79-.861 4.1-1.47.392-.182.766-.4 1.118-.65l.677-.483c.227-.187.453-.37.701-.586 0 0 1.705 2.02 3.458 3.349l.896-2.511c-.211.942.046 2.712.17 3.163.252.142.509.272.772.392.569.28 1.134.49 1.688.64-.016-.853.026-1.956.261-2.962.26 1.258.75 2.493 1.067 3.219.895.106 2.051.146 2.816.043a73.87 73.87 0 01-1.308-2.67c.811 1.07 1.874 1.988 2.302 2.34h-.001z" />
+      </svg>
+    );
+
+  if (kind === "zed")
+    return (
+      <svg
+        className={common.className}
+        viewBox="0 0 16 16"
+        aria-hidden={common["aria-hidden"]}
+        fill={fill}
+        fillRule="evenodd"
+      >
+        <path d="M3.125 2.75C2.9179 2.75 2.75 2.9179 2.75 3.125V11.375H2V3.125C2 2.50368 2.50368 2 3.125 2H13.1723C13.6735 2 13.9244 2.6059 13.5701 2.96025L7.38189 9.14843H9.125V8.375H9.875V9.33593C9.875 9.6466 9.6232 9.8984 9.3125 9.8984H6.63189L5.34282 11.1875H11.1875V6.5H11.9375V11.1875C11.9375 11.6017 11.6017 11.9375 11.1875 11.9375H4.59282L3.28032 13.25H12.875C13.0821 13.25 13.25 13.0821 13.25 12.875V4.625H14V12.875C14 13.4963 13.4963 14 12.875 14H2.82767C2.32653 14 2.07557 13.3941 2.42992 13.0397L8.59468 6.875H6.875V7.625H6.125V6.6875C6.125 6.37684 6.37684 6.125 6.6875 6.125H9.34468L10.6571 4.8125H4.8125V9.5H4.0625V4.8125C4.0625 4.39829 4.39829 4.0625 4.8125 4.0625H11.4071L12.7197 2.75H3.125Z" />
       </svg>
     );
 

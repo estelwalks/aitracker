@@ -709,6 +709,34 @@ function codexSessionIdFromFilename(name: string): string | undefined {
   return match != null ? match[0] : undefined;
 }
 
+// Codex injects a synthetic first "user" turn — an environment/plugin
+// preamble, not the user's request. Letting it win the fallback title produces
+// garbage like "/path 2026-08-20 Asia/Shanghai /path :root /path". These tags
+// are noise, so blocks starting with one are dropped; `<user_request>` /
+// `<user_command>` deliberately aren't in the set because Codex can wrap the
+// user's real prompt in them.
+const CODEX_SYNTHETIC_PREAMBLE_RE =
+  /^(?:<(?:environment_context|recommended_plugins|custom_tool_instruction|user_instructions)\b|#\s*AGENTS\.md instructions for\b)/iu;
+
+/** Keep only the user-authored blocks of a Codex user message. */
+function authoredCodexBlocks(content: unknown): unknown {
+  if (typeof content === "string") {
+    return CODEX_SYNTHETIC_PREAMBLE_RE.test(content.trimStart()) ? "" : content;
+  }
+  return asArray(content).filter((item) => {
+    const block = asObject(item);
+    if (
+      block == null ||
+      (stringValue(block.type) !== "text" &&
+        stringValue(block.type) !== "input_text") ||
+      typeof block.text !== "string"
+    ) {
+      return false;
+    }
+    return !CODEX_SYNTHETIC_PREAMBLE_RE.test(block.text.trimStart());
+  });
+}
+
 /** Current Codex records may put the message directly in payload or nest it. */
 function codexFallbackTitle(
   payload: JsonObject | undefined,
@@ -722,7 +750,7 @@ function codexFallbackTitle(
   ];
   for (const candidate of candidates) {
     if (candidate == null || stringValue(candidate.role) !== "user") continue;
-    const title = safeFallbackTitle(candidate.content);
+    const title = safeFallbackTitle(authoredCodexBlocks(candidate.content));
     if (title != null) return title;
   }
   return undefined;
@@ -760,6 +788,11 @@ async function scanCodexSessions(
     // Track which turns carried an edit tool (best-effort).
     let pendingEditTurn = false;
 
+    // Codex auto-spawns guardian/approval-review subagent threads
+    // (thread_source: "subagent"). Their rollout is an internal side-chain
+    // whose first "user" turn is injected AGENTS.md / environment preamble,
+    // not a real user conversation — such files are skipped below.
+    let isSubagentThread = false;
     const perFileTotals = emptyTokenCounts();
     const timestamps: RecordTimestamp[] = [];
     let assistantTurns = 0;
@@ -802,6 +835,9 @@ async function scanCodexSessions(
         if (id != null) resolvedId = id;
         const cwd = stringValue(metaPayload.cwd);
         if (cwd != null) context.cwd = cwd;
+        if (stringValue(metaPayload.thread_source) === "subagent") {
+          isSubagentThread = true;
+        }
         return;
       }
 
@@ -920,6 +956,9 @@ async function scanCodexSessions(
         pendingEditTurn = false;
       }
     });
+
+    // Internal subagent side-chains never become user-facing sessions.
+    if (isSubagentThread) continue;
 
     const sessionId = resolvedId ?? fallbackId;
     if (sessionId == null) continue;

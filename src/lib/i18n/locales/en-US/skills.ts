@@ -25,6 +25,12 @@ export const skills = {
     external: "External",
     other: "Other",
   },
+  form: {
+    all: "All forms",
+    package: "Distilled skill",
+    workflow: "Workflow",
+    prompt: "Prompt",
+  },
   agent: {
     all: "All Agents",
     prevGroup: "Previous agents",
@@ -337,6 +343,8 @@ export const skills = {
     exportDir: "Export directory",
     scanSecurity: "Security check",
     syncToTools: "Sync to tools",
+    installing: "Installing…",
+    installToSelected: "Install to selected tools",
     verifySecurity: "View security results",
   },
   syncTarget: {

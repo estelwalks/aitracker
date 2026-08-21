@@ -1,18 +1,6 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  AppWindow,
-  ArrowDownToLine,
-  ArrowLeft,
-  ArrowUpToLine,
-  Brain,
-  ChevronRight,
-  FileText,
-  Loader2,
-  Terminal,
-  X,
-} from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 
 import {
   Dialog,
@@ -23,24 +11,22 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog.tsx";
 import { EmptyState, StatusBadge, TTButton } from "../../../components/tt.tsx";
+import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
-import { encodeSegmentRef } from "../../../lib/distill-segment.ts";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { useReportActions } from "../../reports";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
 import {
   buildReportText,
-  buildSegmentMarkdown,
   type ReportInput,
   type ReportLabel,
 } from "./chat-report.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
 
 /**
- * Session detail panel (Story S-300): sticky header, sticky segment-selection
- * bar, CLI/client resume card, and the full local conversation with
- * point-to-point segment selection for 蒸馏所选 and 生成简报.
+ * Session detail panel (Story S-300): sticky header, CLI/client resume card,
+ * and the full local conversation with 生成简报 (report) support.
  *
  * PRIVACY BOUNDARY — in-memory only, never persisted or uploaded: the
  * transcript is fetched through the server fn, which reads the user's own
@@ -49,15 +35,11 @@ import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
  */
 export function TranscriptPanel({ session }: { session: SessionSummary }) {
   const { t, format } = useI18n();
-  const navigate = useNavigate();
 
   const [transcript, setTranscript] = useState<SessionTranscriptMessage[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
-  const [anchor, setAnchor] = useState<number | null>(null);
-  const [end, setEnd] = useState<number | null>(null);
-  const [hover, setHover] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
 
   const load = useCallback(() => {
@@ -109,93 +91,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
     `daily-report-${session.startedAt.slice(0, 10)}`,
   );
 
-  // Segment selection — prototype parity: first click sets the anchor,
-  // second click (or 以上/以下全部) sets the end; hover previews the range.
-  const range = useMemo(() => {
-    if (anchor === null) return null;
-    const other = end ?? hover;
-    if (other === null) return { s: anchor, e: anchor, live: false };
-    return {
-      s: Math.min(anchor, other),
-      e: Math.max(anchor, other),
-      live: end === null,
-    };
-  }, [anchor, end, hover]);
-
-  const picked = useMemo(() => {
-    if (!range) return [] as number[];
-    if (range.live) return [range.s];
-    const out: number[] = [];
-    for (let index = range.s; index <= range.e; index += 1) out.push(index);
-    return out;
-  }, [range]);
-
-  function pick(index: number) {
-    if (anchor === null || end !== null) {
-      setAnchor(index);
-      setEnd(null);
-    } else {
-      setEnd(index);
-    }
-  }
-
-  function reset() {
-    setAnchor(null);
-    setEnd(null);
-    setHover(null);
-  }
-
-  function selectAll() {
-    setAnchor(0);
-    setEnd(Math.max(0, total - 1));
-  }
-
-  function allAbove() {
-    if (anchor !== null) setEnd(0);
-  }
-
-  function allBelow() {
-    if (anchor !== null) setEnd(Math.max(0, total - 1));
-  }
-
-  /**
-   * 蒸馏所选: assemble the picked segment markdown, copy it to the clipboard
-   * (compat, so it can still be pasted manually), notify, and jump to /distill
-   * carrying the selection as a compact `?segment=` reference. Only the ref
-   * (source/sessionId/window) crosses the URL — the message text stays in this
-   * browser and is re-read into memory on the server only when the user
-   * actually starts a distillation. Nothing is uploaded.
-   */
-  async function runDistill() {
-    if (end === null || total === 0 || range === null) return;
-    const pickedMessages = picked
-      .map((index) => transcript[index])
-      .filter(
-        (message): message is SessionTranscriptMessage => message != null,
-      );
-    if (pickedMessages.length === 0) return;
-    const markdown = buildSegmentMarkdown(reportInput(pickedMessages), label);
-    try {
-      await navigator.clipboard?.writeText(markdown);
-    } catch {
-      // Clipboard may be unavailable (permissions/private mode) — best effort.
-    }
-    toast.info(
-      t("sessions.transcript.distillToast", {
-        count: pickedMessages.length,
-      }),
-    );
-    const segment = encodeSegmentRef({
-      source: session.source,
-      sessionId: session.sessionId,
-      startIndex: range.s,
-      endIndex: range.e,
-    });
-    void navigate({ to: "/distill", search: { segment } });
-  }
-
   const messageCount = status === "ready" ? total : session.turns;
-  const selectionReady = end !== null && picked.length > 0;
 
   return (
     <div className="min-w-0 flex-1">
@@ -243,73 +139,15 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
           </TTButton>
           <ResumeSessionButton session={session} />
         </div>
-
-        {status === "ready" && total > 0 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border/60 pt-2.5">
-            <span className="tt-num inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-              <Brain className="size-3.5 text-primary" />
-              {anchor === null
-                ? t("sessions.transcript.startHint")
-                : end === null
-                  ? t("sessions.transcript.anchorSet", {
-                      index: format.formatNumber(anchor + 1),
-                    })
-                  : t("sessions.transcript.selectedRange", {
-                      count: format.formatNumber(picked.length),
-                      start: format.formatNumber((range?.s ?? anchor) + 1),
-                      end: format.formatNumber((range?.e ?? anchor) + 1),
-                    })}
-            </span>
-            <div className="flex-1" />
-            {anchor !== null && end === null ? (
-              <>
-                <TTButton
-                  size="sm"
-                  onClick={allAbove}
-                  disabled={anchor === 0}
-                  title={t("sessions.transcript.allAbove")}
-                >
-                  <ArrowUpToLine className="size-3.5" />
-                  {t("sessions.transcript.allAbove")}
-                </TTButton>
-                <TTButton
-                  size="sm"
-                  onClick={allBelow}
-                  disabled={anchor === total - 1}
-                  title={t("sessions.transcript.allBelow")}
-                >
-                  <ArrowDownToLine className="size-3.5" />
-                  {t("sessions.transcript.allBelow")}
-                </TTButton>
-              </>
-            ) : null}
-            <TTButton size="sm" onClick={selectAll}>
-              {t("sessions.transcript.selectAll")}
-            </TTButton>
-            {anchor !== null ? (
-              <TTButton size="sm" onClick={reset}>
-                <X className="size-3.5" />
-                {t("sessions.transcript.reset")}
-              </TTButton>
-            ) : null}
-            <TTButton
-              size="sm"
-              variant={selectionReady ? "primary" : "default"}
-              disabled={!selectionReady}
-              onClick={() => void runDistill()}
-            >
-              <Brain className="size-3.5" />
-              {t("sessions.transcript.distillSelected")}
-              {selectionReady ? ` ${format.formatNumber(picked.length)}` : ""}
-            </TTButton>
-          </div>
-        ) : null}
       </div>
 
       {session.resumeAvailable ? (
         <div className="mx-auto mt-4 mb-4 max-w-3xl rounded-xl border border-border bg-card p-3">
           <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Terminal className="size-3.5 text-primary" />
+            <BrandIcon
+              name={sourceLabel(session.source)}
+              className="size-3.5 shrink-0 text-primary"
+            />
             <span className="text-foreground">
               {t("sessions.transcript.cliResumable")}
             </span>
@@ -329,7 +167,10 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
       ) : (
         <div className="mx-auto mt-4 mb-4 max-w-3xl rounded-xl border border-border bg-card p-3">
           <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <AppWindow className="size-3.5" />
+            <BrandIcon
+              name={sourceLabel(session.source)}
+              className="size-3.5 shrink-0"
+            />
             <span className="text-foreground">
               {t("sessions.transcript.clientSession")}
             </span>
@@ -371,21 +212,9 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
         ) : null}
         {status === "ready" && total > 0 ? (
           <>
-            <div className="space-y-4" onMouseLeave={() => setHover(null)}>
+            <div className="space-y-4">
               {transcript.map((message, index) => (
-                <Bubble
-                  key={index}
-                  message={message}
-                  index={index}
-                  isAnchor={anchor === index}
-                  inRange={
-                    range !== null && index >= range.s && index <= range.e
-                  }
-                  preview={range?.live === true}
-                  confirmed={end !== null}
-                  onPick={() => pick(index)}
-                  onHover={() => setHover(index)}
-                />
+                <Bubble key={index} message={message} />
               ))}
             </div>
             <p className="mt-6 text-center text-[10px] tracking-wide text-muted-foreground">
@@ -438,86 +267,23 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
   );
 }
 
-function Bubble({
-  message,
-  index,
-  isAnchor,
-  inRange,
-  preview,
-  confirmed,
-  onPick,
-  onHover,
-}: {
-  message: SessionTranscriptMessage;
-  index: number;
-  isAnchor: boolean;
-  inRange: boolean;
-  preview: boolean;
-  confirmed: boolean;
-  onPick: () => void;
-  onHover: () => void;
-}) {
+function Bubble({ message }: { message: SessionTranscriptMessage }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
-  const mark = (
-    <span
-      className={`mt-2.5 w-8 shrink-0 text-center text-[10px] transition-opacity ${
-        isAnchor
-          ? "text-primary"
-          : inRange
-            ? "text-primary/70"
-            : "text-muted-foreground opacity-0 group-hover:opacity-100"
-      }`}
-    >
-      {isAnchor
-        ? t("sessions.transcript.anchorMark")
-        : inRange && confirmed
-          ? t("sessions.transcript.selectedMark")
-          : `#${index + 1}`}
-    </span>
-  );
-  const ring = isAnchor
-    ? "ring-1 ring-primary"
-    : inRange
-      ? preview
-        ? "ring-1 ring-primary/40"
-        : "ring-1 ring-primary/70"
-      : "";
-
   if (message.role === "user") {
     return (
-      <div
-        className="group flex cursor-pointer items-start justify-end gap-2"
-        onClick={onPick}
-        onMouseEnter={onHover}
-      >
-        <div
-          className={`max-w-[80%] rounded-xl rounded-tr-sm border px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground transition-all ${
-            inRange
-              ? "border-primary bg-primary/20"
-              : "border-primary bg-primary/12"
-          } ${ring}`}
-        >
+      <div className="flex items-start justify-end gap-2">
+        <div className="max-w-[80%] rounded-xl rounded-tr-sm border border-primary bg-primary/12 px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground">
           {message.text}
         </div>
-        {mark}
       </div>
     );
   }
 
   return (
-    <div
-      className="group flex cursor-pointer items-start justify-start gap-2"
-      onClick={onPick}
-      onMouseEnter={onHover}
-    >
-      {mark}
-      <div
-        className={`max-w-[85%] rounded-xl rounded-tl-sm border bg-surface-2 px-3.5 py-2.5 transition-all ${
-          inRange ? "border-primary" : "border-border"
-        } ${ring}`}
-      >
+    <div className="flex items-start justify-start gap-2">
+      <div className="max-w-[85%] rounded-xl rounded-tl-sm border border-border bg-surface-2 px-3.5 py-2.5">
         {message.thinking ? (
           <div className="mb-2 border-b border-border pb-2">
             <button

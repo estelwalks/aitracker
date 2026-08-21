@@ -21,6 +21,7 @@ import { mkdir, lstat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { promptForKind } from "./prompts.ts";
+import { qualifySkillFiles, type SkillQualification } from "./qualify.ts";
 
 import type { Locale } from "../../lib/i18n/locale.ts";
 import type { SessionSummary } from "../sessions/contracts.ts";
@@ -357,7 +358,24 @@ export async function saveCandidateAsSkill(
     });
   }
   const skillPath = join(targetDir, "SKILL.md");
+  // 生成后自动质检：对产物按候选 kind 应用对应规则，随保存结果返回。
+  const qualification = qualifySkillFiles(
+    validated.map((file) => ({
+      path: relative(targetDir, file.targetFile),
+      content: file.content,
+    })),
+    candidate.kind === "skill" ||
+      candidate.kind === "prompt" ||
+      candidate.kind === "brief"
+      ? candidate.kind
+      : "skill",
+  );
   // Make the new package visible in Skill management immediately.
   await root.skillSnapshot.requestRefresh({ reason: "manual" }).catch(() => {});
-  return { ok: true, agent: input.targetAgent, path: skillPath };
+  return {
+    ok: true,
+    agent: input.targetAgent,
+    path: skillPath,
+    qualification,
+  };
 }

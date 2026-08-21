@@ -536,6 +536,223 @@ test("Codex: parses current payload envelopes and counts explicit patch events o
   });
 });
 
+test("Codex: synthetic env/plugin preamble is skipped as a fallback title", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = join(home, ".codex");
+    const sessionId = "codex3333-2222-3333-4444-555555555555";
+    const sessionDir = join(codexDir, "sessions", "2026", "08", "01");
+    await mkdir(sessionDir, { recursive: true });
+    // First "user" turn is the injected <environment_context> preamble — it
+    // must NOT become the title; the real prompt below must.
+    await writeFile(
+      join(sessionDir, `rollout-${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:00.000Z",
+          type: "session_meta",
+          payload: { id: sessionId, cwd: "/Users/demo/codex-proj" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:01.000Z",
+          type: "turn_context",
+          payload: { model: "gpt-5-codex", cwd: "/Users/demo/codex-proj" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:02.000Z",
+          type: "response_item",
+          payload: {
+            type: "response_item",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: [
+                  "<environment_context>",
+                  "<cwd>/Users/demo/codex-proj</cwd>",
+                  "<shell>zsh</shell>",
+                  "<current_date>2026-08-01</current_date>",
+                  "<timezone>Asia/Shanghai</timezone>",
+                  "</environment_context>",
+                ].join("\n"),
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:03.000Z",
+          type: "response_item",
+          payload: {
+            type: "response_item",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "重构登录流程并补充单测",
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:04.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 200,
+                cached_input_tokens: 50,
+                output_tokens: 40,
+              },
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.title, "重构登录流程并补充单测");
+    assert.doesNotMatch(
+      session.title,
+      /environment_context|Asia\/Shanghai|cwd|codex-proj/,
+    );
+    assertPrivacyClean(session);
+  });
+});
+
+test("Codex: guardian subagent threads are skipped as user sessions", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = join(home, ".codex");
+    const sessionId = "codex4444-2222-3333-4444-555555555555";
+    const sessionDir = join(codexDir, "sessions", "2026", "08", "01");
+    await mkdir(sessionDir, { recursive: true });
+    // Auto-spawned guardian/approval-review thread: thread_source is
+    // "subagent" and its first "user" turn is injected AGENTS.md + env
+    // preamble. It must never surface as a user session.
+    await writeFile(
+      join(sessionDir, `rollout-${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:00.000Z",
+          type: "session_meta",
+          payload: {
+            id: sessionId,
+            cwd: "/Users/demo/codex-proj",
+            thread_source: "subagent",
+            source: { subagent: { other: "guardian" } },
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:01.000Z",
+          type: "turn_context",
+          payload: { model: "gpt-5-codex", cwd: "/Users/demo/codex-proj" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:02.000Z",
+          type: "response_item",
+          payload: {
+            type: "response_item",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: [
+                  "# AGENTS.md instructions for /Users/demo/codex-proj",
+                  "",
+                  "<INSTRUCTIONS>",
+                  "> [!IMPORTANT]",
+                  "> This project is connected to [Lovable](https://lovable.dev).",
+                  "</INSTRUCTIONS>",
+                  "",
+                  "<environment_context>",
+                  "<cwd>/Users/demo/codex-proj</cwd>",
+                  "</environment_context>",
+                ].join("\n"),
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:03.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 200,
+                cached_input_tokens: 50,
+                output_tokens: 40,
+              },
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(summary.sessions.length, 0);
+  });
+});
+
+test("Codex: AGENTS.md instruction block is skipped as a fallback title", async () => {
+  await withTempHome(async (home) => {
+    const codexDir = join(home, ".codex");
+    const sessionId = "codex5555-2222-3333-4444-555555555555";
+    const sessionDir = join(codexDir, "sessions", "2026", "08", "01");
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, `rollout-${sessionId}.jsonl`),
+      [
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:00.000Z",
+          type: "session_meta",
+          payload: { id: sessionId, cwd: "/Users/demo/codex-proj" },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:02.000Z",
+          type: "response_item",
+          payload: {
+            type: "response_item",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "# AGENTS.md instructions for /Users/demo/codex-proj\n\n<INSTRUCTIONS>\n> This project is connected to [Lovable](https://lovable.dev).\n</INSTRUCTIONS>\n",
+              },
+              {
+                type: "input_text",
+                text: "修复会话标题展示错误",
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          timestamp: "2026-08-01T10:00:04.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              last_token_usage: {
+                input_tokens: 200,
+                cached_input_tokens: 50,
+                output_tokens: 40,
+              },
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const session = soleSession(
+      (await scanLocalSessions({ homeDirectory: home, now: NOW })).sessions,
+    );
+    assert.equal(session.title, "修复会话标题展示错误");
+    assert.doesNotMatch(session.title, /AGENTS\.md|INSTRUCTIONS|Lovable/);
+    assertPrivacyClean(session);
+  });
+});
+
 test("Claude Code: deduplicates streamed usage and turns by session and message id", async () => {
   await withTempHome(async (home) => {
     const projectDir = join(home, ".claude", "projects", "duplicate-project");

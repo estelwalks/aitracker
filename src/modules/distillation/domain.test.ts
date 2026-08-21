@@ -84,6 +84,28 @@ test("candidateText redacts private fragments but keeps surrounding content", ()
   assert.match(output, /环境变量注入/);
 });
 
+test("candidateText strips the prompt-mandated redundant H1 from memory/persona bodies", () => {
+  // The prompts mandate a leading "# 任务记忆" / "# 用户画像" H1 that the card's
+  // type badge already carries; without the strip, the stored body reads as a
+  // duplicated title (title/body look swapped).
+  const memory = "# 任务记忆\n\n## 当前目标\n搭建蒸馏工作台。";
+  const persona = "# 用户画像\n\n## 明确事实\n主力 node 工程化。";
+  assert.equal(
+    candidateText(aiResult(memory), [row], "memory"),
+    "## 当前目标\n搭建蒸馏工作台。",
+  );
+  assert.equal(
+    candidateText(aiResult(persona), [row], "persona"),
+    "## 明确事实\n主力 node 工程化。",
+  );
+  // A non-memory kind must not be stripped.
+  const skill = "# Skill 安装说明\n\n使用方式见下。";
+  assert.equal(
+    candidateText(aiResult(skill), [row], "skill"),
+    "# Skill 安装说明\n\n使用方式见下。",
+  );
+});
+
 test("candidateText falls back for empty output and keeps redacted paths otherwise", () => {
   assert.equal(
     candidateText(aiResult(""), [row], "persona"),

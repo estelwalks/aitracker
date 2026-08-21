@@ -89,6 +89,7 @@ export const sessions = {
     duration: "소요 시간",
     cost: "비용",
     turns: "턴",
+    turnsShort: "{count}턴",
     edits: "편집 횟수",
     resumeDirHint:
       "복원은 제어된 로컬 서비스로 실행되며 명령이나 디렉터리는 브라우저에 공개되지 않습니다.",
