@@ -4,7 +4,7 @@ import type { LocalUsageEvent } from "../../lib/local-usage/types.ts";
 export type UsageApiResponse = UsageModuleContract;
 
 function emptyTrackerReadModel(): TrackerReadModel {
-  const emptyBoard = { rows: [], totalTokens: 0 } as const;
+  const emptyBoard = { rows: [], totalTokens: 0, totalEntries: 0 } as const;
   return {
     generatedAt: null,
     boards: {

@@ -40,6 +40,8 @@ export interface TrackerBoard {
   readonly rows: readonly RoastRow[];
   /** Complete token total for this dimension, including rows outside Top 10. */
   readonly totalTokens?: number;
+  /** Complete number of entries in this dimension, including rows outside Top 10. */
+  readonly totalEntries?: number;
 }
 
 export const RECENT_TREND_DAYS = 7;
@@ -239,6 +241,7 @@ export function buildBoard(
   return {
     rows: allRows.slice(0, TOP_BOARD_LIMIT),
     totalTokens,
+    totalEntries: allRows.length,
   };
 }
 
@@ -249,6 +252,11 @@ export function totalTokensForBoard(board: TrackerBoard): number {
     board.totalTokens ??
     board.rows.reduce((total, row) => total + row.tokens, 0)
   );
+}
+
+/** Prefer the complete entry count while keeping older hand-built boards valid. */
+export function totalEntriesForBoard(board: TrackerBoard): number {
+  return board.totalEntries ?? board.rows.length;
 }
 
 /** Sum the token consumption represented by one selected leaderboard. */
@@ -294,7 +302,7 @@ export function trackerTotalsFromEvents(
     tokens: tokensForDimension(boards, "project"),
     events: events.length,
     entries: (Object.values(boards) as readonly TrackerBoard[]).reduce(
-      (total, board) => total + board.rows.length,
+      (total, board) => total + totalEntriesForBoard(board),
       0,
     ),
   };
