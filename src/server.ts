@@ -7,6 +7,7 @@ import { handleDesktopStateBrokerRequest } from "./app/desktop-state-broker.serv
 
 // SECURITY_API_PREFIX must stay in sync with electron/security-http-api.ts.
 const SECURITY_API_PREFIX = "/api/security";
+const NO_STORE = "no-store";
 
 type ServerEntry = {
   fetch: (
@@ -45,7 +46,28 @@ async function normalizeCatastrophicSsrResponse(
   );
   return new Response(renderErrorPage(request.url), {
     status: 500,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": NO_STORE,
+    },
+  });
+}
+
+/**
+ * SSR HTML embeds the current route manifest and references to hashed lazy
+ * chunks. It must not be cached: reusing an old document shell after a
+ * deployment can make the browser request chunks that no longer exist.
+ */
+function markDocumentResponseNoStore(response: Response): Response {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", NO_STORE);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -94,12 +116,19 @@ export default {
       if (security) return security;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(request, response);
+      const normalized = await normalizeCatastrophicSsrResponse(
+        request,
+        response,
+      );
+      return markDocumentResponseNoStore(normalized);
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(request.url), {
         status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": NO_STORE,
+        },
       });
     }
   },
