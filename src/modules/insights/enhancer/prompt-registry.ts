@@ -13,22 +13,28 @@ import {
 import {
   INSIGHT_ACTION_IDS,
   MAX_ANALYSIS_CHARS,
+  MIN_LINES,
   MAX_LINES,
   WIDGET_MAX_LINES,
 } from "./validation.ts";
 
-export const INSIGHT_PROMPT_VERSION = 1;
-export const INSIGHT_OUTPUT_SCHEMA_VERSION = 1;
-export const INSIGHT_ALLOWED_LOCALES = ["zh-CN", "en-US", "ja-JP"] as const;
+export const INSIGHT_PROMPT_VERSION = 2;
+export const INSIGHT_OUTPUT_SCHEMA_VERSION = 2;
+export const INSIGHT_ALLOWED_LOCALES = [
+  "zh-CN",
+  "en-US",
+  "ja-JP",
+  "ko-KR",
+] as const;
 
 export interface InsightPrompt {
   readonly id: `insight.${InsightSurfaceId}`;
-  readonly version: 1;
+  readonly version: 2;
   readonly surfaceId: InsightSurfaceId;
   readonly maxLines: number;
   readonly maxAnalysisChars: number;
   readonly allowedLocales: readonly string[];
-  readonly outputSchemaVersion: 1;
+  readonly outputSchemaVersion: 2;
   readonly system: string;
   readonly policy: string;
 }
@@ -46,42 +52,44 @@ const SHARED_SYSTEM = [
 
 const POLICIES: Record<InsightSurfaceId, string> = {
   dashboard:
-    "Prioritize the single most impactful cross-tool observation; calm, actionable tone.",
+    "Cover distinct dimensions across security, usage and sessions, source concentration, cache efficiency, collection health, and distillation next steps; calm, actionable tone.",
   agents:
-    "Focus on agent health and utilization; suggest the most relevant drill-down action.",
+    "Cover distinct dimensions across tool coverage, activity, prompt structure, cache reuse, security posture, and agent-specific optimization.",
   distill:
-    "Emphasize distillation output quality and coverage gaps without naming outputs.",
+    "Cover distinct dimensions across pending work, knowledge output, quota, reuse coverage, material focus, and the empty-state path without naming outputs.",
   reports:
-    "Highlight report completeness and scheduling gaps without naming report assets.",
+    "Cover distinct dimensions across report inventory and recency, highlights, security review, collaboration, and the next report path without naming report assets.",
   memory:
-    "Summarize memory aggregation state and hygiene; never name a memory item.",
+    "Cover distinct dimensions across asset inventory, approval and publishing, risk hygiene, memory types, automatic aggregation, and the empty-state path; never name a memory item.",
   security:
-    "Security findings must NEVER be downplayed: keep or raise severity, never soften it; lead with the most dangerous item.",
+    "Cover distinct dimensions across risk, failed-scan gaps, coverage, recency, history, and starting a scan. NEVER downplay severity; lead with the most dangerous item.",
   tracker:
-    "Summarize usage-tracking coverage and anomalies; point at the tracker action.",
-  skills: "Note skill health and adoption without naming a specific skill.",
+    "Cover distinct dimensions across consumption, waste, cache efficiency, model and project concentration, and optimization; point at the tracker action.",
+  skills:
+    "Cover distinct dimensions across local inventory, enablement, Agent coverage, updates, sync, safety, and specialization without naming a specific skill.",
   market:
-    "Summarize marketplace availability and install state without naming a package.",
+    "Cover distinct dimensions across local installs, updates, cached catalog availability and size, security review, and the installation path without naming a package.",
   chats:
-    "Summarize conversation activity without naming sessions or participants.",
+    "Cover distinct dimensions across session inventory, sources, recoverability, activity, recovery, and distillation without naming sessions or participants.",
   "chat-detail":
-    "Summarize the current conversation state neutrally and briefly.",
+    "Cover distinct dimensions across turns, token activity, recovery state, session status, recovery action, and distillation action; stay neutral and never name the session.",
   widget:
     "Exactly ONE line only: the single most important action. Be extremely brief.",
-  settings: "Summarize configuration state and the follow-up settings action.",
+  settings:
+    "Cover distinct dimensions across model readiness, insight enhancement, task schedules, collection, retention, and local privacy.",
   sources:
-    "Summarize data-source health and failures without naming a specific source.",
+    "Cover distinct dimensions across detected sources, usable data, missing logs, missing installations, malformed input, rescanning, and local boundaries without naming a specific source.",
 };
 
 export function getInsightPrompt(surfaceId: InsightSurfaceId): InsightPrompt {
   return {
     id: `insight.${surfaceId}`,
-    version: 1,
+    version: INSIGHT_PROMPT_VERSION,
     surfaceId,
     maxLines: surfaceId === "widget" ? WIDGET_MAX_LINES : MAX_LINES,
     maxAnalysisChars: MAX_ANALYSIS_CHARS,
     allowedLocales: [...INSIGHT_ALLOWED_LOCALES],
-    outputSchemaVersion: 1,
+    outputSchemaVersion: INSIGHT_OUTPUT_SCHEMA_VERSION,
     system: SHARED_SYSTEM,
     policy: POLICIES[surfaceId],
   };
@@ -101,8 +109,9 @@ export function buildInsightPromptTemplate(entry: InsightPrompt): string {
       '","actionId":"<optional, one of: ' +
       actionIds +
       '>"}]}',
-    `At most ${entry.maxLines} line(s). Every mandatory candidate must appear; ` +
-      "omit actionId when no action is appropriate.",
+    entry.surfaceId === "widget"
+      ? "Output exactly one line. Every mandatory candidate must appear; omit actionId when no action is appropriate."
+      : `When at least ${MIN_LINES} candidates are provided, output ${MIN_LINES}-${entry.maxLines} lines covering different policy dimensions. When fewer are provided, output every candidate. Every mandatory candidate must appear; omit actionId when no action is appropriate.`,
   ].join("\n");
 }
 

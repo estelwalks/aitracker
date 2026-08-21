@@ -15,8 +15,9 @@ import type {
 import { INSIGHT_AUTO_CONSENT_VERSION } from "./contracts.ts";
 import {
   composeRulesEnvelope,
+  composePageCandidates,
+  composeRemotePageCandidates,
   evidenceHash,
-  filterValidCandidates,
   rankCandidates,
   resolveFactText,
 } from "./domain.ts";
@@ -125,25 +126,22 @@ export function createPageInsightsApplication(options: {
       return { ...base, status: "enhancer-unavailable" };
     }
 
-    const candidates = filterValidCandidates(
-      bundle,
-      adapter.composeCandidates(bundle),
-    );
+    const candidates = composePageCandidates(adapter, bundle);
+    const maxLines = getPageRuleConfig(surfaceId).maxLines;
+    const remoteCandidates = composeRemotePageCandidates(adapter, bundle);
     const input: InsightEnhancementInput = {
       surface: surfaceId,
       adapterVersion: adapter.adapterVersion,
       locale,
       profileId: preference.profileId,
       dailyCallLimit: preference.dailyCallLimit,
-      candidates: candidates
-        .filter((candidate) => candidate.remoteEligible !== false)
-        .map((candidate) => ({
-          id: candidate.id,
-          severity: candidate.severity,
-          fact: resolveFactText(locale, candidate),
-          actionIds: [...candidate.allowedActionIds],
-          mandatory: candidate.mandatory ?? false,
-        })),
+      candidates: remoteCandidates.map((candidate) => ({
+        id: candidate.id,
+        severity: candidate.severity,
+        fact: resolveFactText(locale, candidate),
+        actionIds: [...candidate.allowedActionIds],
+        mandatory: candidate.mandatory ?? false,
+      })),
     };
 
     if (input.candidates.length === 0) return base;
@@ -171,7 +169,10 @@ export function createPageInsightsApplication(options: {
       result.status === "enhanced-ready"
     ) {
       const candidatesById = new Map(
-        candidates.map((candidate) => [candidate.id, candidate]),
+        [...candidates, ...remoteCandidates].map((candidate) => [
+          candidate.id,
+          candidate,
+        ]),
       );
       const selectedIds = new Set(result.lines.map((line) => line.candidateId));
       const mandatory = rankCandidates(candidates, candidates.length).filter(
@@ -187,7 +188,6 @@ export function createPageInsightsApplication(options: {
         (candidate) =>
           candidate.mandatory !== true && !selectedIds.has(candidate.id),
       );
-      const maxLines = getPageRuleConfig(surfaceId).maxLines;
       const ordered = [...mandatory, ...modelSelected, ...fallback].slice(
         0,
         maxLines,

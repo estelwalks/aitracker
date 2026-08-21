@@ -95,9 +95,14 @@ test("read returns a complete local envelope when default enhancement has no enh
   assert.equal(env.status, "rules");
   assert.equal(env.source, "rules");
   assert.equal(env.canEnhance, false);
+  assert.equal(env.lines.length, 7);
   assert.deepEqual(
-    env.lines.map((line) => line.id),
+    env.lines.slice(0, 2).map((line) => line.id),
     ["c1", "c2"],
+  );
+  assert.equal(
+    env.lines.slice(2).every((line) => line.id.startsWith("dashboard.guide-")),
+    true,
   );
   assert.equal(env.lines[0].action?.id, "open_security");
   assert.equal(env.lines[0].action?.labelKey, "insights.actions.security");
@@ -306,14 +311,18 @@ test("model selection and order control non-mandatory lines while mandatory safe
     },
   );
   assert.deepEqual(
-    env.lines.map((line) => line.id),
-    ["c1", "c3", "c2"],
+    env.lines.slice(0, 4).map((line) => line.id),
+    ["c1", "c3", "c2", "c4"],
   );
-  assert.equal(env.lines.length, 3);
+  assert.equal(env.lines.length, 7);
   assert.equal(env.lines[0]?.severity, "risk");
+  assert.equal(env.lines[0]?.source, "enhanced");
+  assert.equal(env.lines[1]?.source, "enhanced");
+  assert.equal(env.lines[2]?.source, "enhanced");
+  assert.equal(env.lines[3]?.source, "rules");
 });
 
-test("local entity candidates remain as rule fallback but never enter enhancement payload", async () => {
+test("private local candidates stay out of remote input while anonymous supplemental candidates fill it", async () => {
   let captured: InsightEnhancementInput | undefined;
   const adapter = makeAdapter();
   const privacyAdapter: PageInsightAdapter = {
@@ -363,9 +372,98 @@ test("local entity candidates remain as rule fallback but never enter enhancemen
     captured.candidates.some((candidate) => candidate.id === "private-project"),
     false,
   );
+  assert.ok(captured.candidates.length >= 5);
+  assert.equal(
+    captured.candidates.some((candidate) =>
+      candidate.id.startsWith("dashboard.guide-"),
+    ),
+    true,
+  );
+  assert.equal(
+    captured.candidates
+      .filter((candidate) => candidate.id.startsWith("dashboard.guide-"))
+      .every((candidate) => candidate.fact.includes("Aurora") === false),
+    true,
+  );
   const local = env.lines.find((line) => line.id === "private-project");
   assert.deepEqual(local?.params, { name: "Project Aurora Secret" });
   assert.equal(local?.source, "rules");
+});
+
+test("five valid model lines stay enhanced and rule candidates fill the seven-line envelope", async () => {
+  const adapter = makeAdapter();
+  const sevenCandidateAdapter: PageInsightAdapter = {
+    ...adapter,
+    composeCandidates: (): InsightCandidate[] =>
+      Array.from({ length: 7 }, (_, index) => {
+        const id = `c${index + 1}`;
+        const candidate: InsightCandidate =
+          index === 0
+            ? {
+                id,
+                severity: "risk",
+                factKey: "insights.page.dashboard.dashboard-security-risk",
+                factParams: { count: 2 },
+                evidenceRefs: ["e1"],
+                allowedActionIds: ["open_security"],
+                actionId: "open_security",
+                mandatory: true,
+              }
+            : {
+                id,
+                severity: "info",
+                factKey: "insights.page.dashboard.dashboard-watch",
+                factParams: {
+                  agents: index,
+                  blocked: 0,
+                  hours: index,
+                  distillable: 0,
+                },
+                evidenceRefs: ["e1"],
+                allowedActionIds: [],
+              };
+        return candidate;
+      }),
+  };
+  let captured: InsightEnhancementInput | undefined;
+  const app = createPageInsightsApplication({
+    adapters: [sevenCandidateAdapter],
+    enhancer: {
+      id: "five-line-enhancer",
+      async enhance(input) {
+        captured = input;
+        return {
+          status: "enhanced-ready",
+          modelLabel: "fake-model",
+          lines: input.candidates.slice(0, 5).map((candidate, index) => ({
+            candidateId: candidate.id,
+            analysis: `analysis ${index + 1}`,
+          })),
+        };
+      },
+    },
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    { locale: "zh-CN", reason: "manual" },
+  );
+
+  assert.equal(captured?.candidates.length, 7);
+  assert.ok(env.lines.length <= 7);
+  assert.equal(env.lines.length, 7);
+  const enhanced = env.lines.filter((line) => line.source === "enhanced");
+  assert.ok(enhanced.length >= 5);
+  assert.equal(
+    enhanced.every((line) => typeof line.analysis === "string"),
+    true,
+  );
+  assert.equal(
+    env.lines.some((line) => line.source === "rules"),
+    true,
+  );
 });
 
 test("evidence changing during generation discards the old enhancement", async () => {
