@@ -621,23 +621,12 @@ export function DashboardToolSwitcher({
 }) {
   const { t } = useI18n();
   const trackRef = useRef<HTMLDivElement | null>(null);
-  const toolOrderRef = useRef<string[]>([]);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
-  const orderedTools = useMemo(() => {
-    const currentIds = new Set(tools.map((tool) => tool.id));
-    const retainedIds = toolOrderRef.current.filter((id) => currentIds.has(id));
-    const newIds = tools
-      .map((tool) => tool.id)
-      .filter((id) => !retainedIds.includes(id));
-    const order = [...retainedIds, ...newIds];
-    toolOrderRef.current = order;
-    const byId = new Map(tools.map((tool) => [tool.id, tool]));
-    return order.flatMap((id) => {
-      const tool = byId.get(id);
-      return tool ? [tool] : [];
-    });
-  }, [tools]);
+  // The server projection is already sorted by the selected window's usage.
+  // Keep that order on every refresh/range change instead of retaining the
+  // first render's order in a client-side id list.
+  const orderedTools = useMemo(() => [...tools], [tools]);
 
   const updateArrows = () => {
     const el = trackRef.current;

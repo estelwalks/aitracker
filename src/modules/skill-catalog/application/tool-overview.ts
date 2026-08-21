@@ -138,6 +138,18 @@ export interface ToolOverviewView {
   readonly measurement: ToolOverviewMeasurement;
 }
 
+function compareToolUsage(
+  left: Pick<ToolOverviewCard, "tokens" | "events" | "name" | "id">,
+  right: Pick<ToolOverviewCard, "tokens" | "events" | "name" | "id">,
+): number {
+  return (
+    right.tokens - left.tokens ||
+    right.events - left.events ||
+    left.name.localeCompare(right.name) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
 function inRange(
   events: readonly DashboardV2Event[],
   period: UsagePeriod,
@@ -535,59 +547,61 @@ export function buildToolOverview(
         periodEvents.some((event) => event.source === tool.id),
     )
     .map((tool) => tool.id);
-  const cards = cardToolIds.map((toolId) => {
-    const scannedTool = sourceTools.get(toolId);
-    const tool = {
-      id: toolId,
-      // The dashboard snapshot is built server-side from the public tool
-      // manifest, whose name is the registry definition's `display.name`.
-      // The generated manifest is a browser-safe projection of `display.name`.
-      // It remains the fallback while scanner data is unavailable.
-      name: scannedTool?.name ?? registryNameById.get(toolId) ?? toolId,
-      icon: registryDisplayById.get(toolId)?.icon,
-      color: registryDisplayById.get(toolId)?.color,
-      available: scannedTool?.available ?? false,
-      detected: scannedTool?.detected ?? false,
-    };
-    const events = periodEvents.filter((event) => event.source === tool.id);
-    const lastActiveAt = events.reduce<string | null>(
-      (latest, event) =>
-        latest == null || event.timestamp > latest ? event.timestamp : latest,
-      null,
-    );
-    const tokens = events.reduce(
-      (total, event) => total + event.totalTokens,
-      0,
-    );
-    const active = events.length > 0;
-    const state: ToolOverviewState = active
-      ? "active"
-      : tool.detected
-        ? "detected"
-        : tool.available
-          ? "available"
-          : "unavailable";
-    return {
-      ...tool,
-      active,
-      state,
-      tokens,
-      events: events.length,
-      share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
-      sessions: sessionsForSource(snapshot, tool.id, period, from, to),
-      subagentCalls: subagentsForSource(snapshot, tool.id, period, from, to),
-      cacheRate: cacheRate(events),
-      messages: !events.some((event) => event.evidence.textResponses)
-        ? null
-        : events.reduce(
-            (total, event) => total + event.context.textResponses,
-            0,
-          ),
-      lastActiveAt,
-      skillUsage: skillUsage(events),
-      measurement: measurementFor(events),
-    };
-  });
+  const cards = cardToolIds
+    .map((toolId) => {
+      const scannedTool = sourceTools.get(toolId);
+      const tool = {
+        id: toolId,
+        // The dashboard snapshot is built server-side from the public tool
+        // manifest, whose name is the registry definition's `display.name`.
+        // The generated manifest is a browser-safe projection of `display.name`.
+        // It remains the fallback while scanner data is unavailable.
+        name: scannedTool?.name ?? registryNameById.get(toolId) ?? toolId,
+        icon: registryDisplayById.get(toolId)?.icon,
+        color: registryDisplayById.get(toolId)?.color,
+        available: scannedTool?.available ?? false,
+        detected: scannedTool?.detected ?? false,
+      };
+      const events = periodEvents.filter((event) => event.source === tool.id);
+      const lastActiveAt = events.reduce<string | null>(
+        (latest, event) =>
+          latest == null || event.timestamp > latest ? event.timestamp : latest,
+        null,
+      );
+      const tokens = events.reduce(
+        (total, event) => total + event.totalTokens,
+        0,
+      );
+      const active = events.length > 0;
+      const state: ToolOverviewState = active
+        ? "active"
+        : tool.detected
+          ? "detected"
+          : tool.available
+            ? "available"
+            : "unavailable";
+      return {
+        ...tool,
+        active,
+        state,
+        tokens,
+        events: events.length,
+        share: totalPeriodTokens === 0 ? 0 : (tokens / totalPeriodTokens) * 100,
+        sessions: sessionsForSource(snapshot, tool.id, period, from, to),
+        subagentCalls: subagentsForSource(snapshot, tool.id, period, from, to),
+        cacheRate: cacheRate(events),
+        messages: !events.some((event) => event.evidence.textResponses)
+          ? null
+          : events.reduce(
+              (total, event) => total + event.context.textResponses,
+              0,
+            ),
+        lastActiveAt,
+        skillUsage: skillUsage(events),
+        measurement: measurementFor(events),
+      };
+    })
+    .sort(compareToolUsage);
   // A persisted/manual selection wins. On first load, prefer actual activity
   // over installation order so the overview opens on meaningful evidence.
   const selected =
