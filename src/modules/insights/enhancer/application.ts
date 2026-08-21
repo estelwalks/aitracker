@@ -43,7 +43,8 @@ import {
 
 export const INSIGHT_ENHANCER_ID = "insight-enhancer";
 
-const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+/** Keep enhanced text aligned with the active page's 30-minute evidence cycle. */
+export const INSIGHT_ENHANCEMENT_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_DAILY_CALL_LIMIT = 30;
 /** The enhancer is the "enhanced" path; manual vs auto is interchangeable for
  * cache purposes (only "rules" is treated differently by the repository). */
@@ -89,7 +90,7 @@ export interface InsightEnhancerOptions {
     profileId: string,
   ) => Promise<ActiveInsightProfile | null>;
   readonly now?: () => number;
-  /** Cache TTL. Defaults to 24h. */
+  /** Cache TTL. Defaults to 30 minutes. */
   readonly ttlMs?: number;
   /** In-process daily call budget. Defaults to 30. */
   readonly dailyCallLimit?: number;
@@ -176,7 +177,7 @@ export function createInsightEnhancer(
   const resolveActiveProfile = options.resolveActiveProfile;
   const resolveProfile = options.resolveProfile;
   const now = options.now ?? Date.now;
-  const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
+  const ttlMs = options.ttlMs ?? INSIGHT_ENHANCEMENT_CACHE_TTL_MS;
   const dailyCallLimit = options.dailyCallLimit ?? DEFAULT_DAILY_CALL_LIMIT;
   const singleflight = options.singleflight ?? true;
   const recordExecution = options.recordExecution ?? (() => undefined);

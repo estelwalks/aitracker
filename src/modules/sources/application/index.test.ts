@@ -139,8 +139,8 @@ test("read failures return a stable error", async () => {
   assert.equal(JSON.stringify(result).includes("private"), false);
 });
 
-test("default freshness follows the 15 minute Usage runtime policy", async () => {
-  assert.equal(DEFAULT_MAX_AGE_MS, 15 * 60_000);
+test("default freshness follows the 1 minute Usage runtime policy", async () => {
+  assert.equal(DEFAULT_MAX_AGE_MS, 60_000);
   const result = await createSourcesApplication({
     repository: {
       async read() {
@@ -149,7 +149,7 @@ test("default freshness follows the 15 minute Usage runtime policy", async () =>
             {
               agentId: "codex",
               status: "healthy",
-              observedAt: "2026-08-06T23:50:00.000Z",
+              observedAt: "2026-08-06T23:59:00.000Z",
             },
           ],
         };
