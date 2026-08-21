@@ -526,12 +526,12 @@ test("private local candidates stay out of remote input", async () => {
   assert.equal(local?.source, "rules");
 });
 
-test("five valid model lines stay enhanced and rule candidates fill the seven-line envelope", async () => {
+test("valid model lines stay enhanced and rule candidates fill the ten-line envelope", async () => {
   const adapter = makeAdapter();
   const sevenCandidateAdapter: PageInsightAdapter = {
     ...adapter,
     composeCandidates: (): InsightCandidate[] =>
-      Array.from({ length: 7 }, (_, index) => {
+      Array.from({ length: 10 }, (_, index) => {
         const id = `c${index + 1}`;
         const candidate: InsightCandidate =
           index === 0
@@ -545,19 +545,28 @@ test("five valid model lines stay enhanced and rule candidates fill the seven-li
                 actionId: "open_security",
                 mandatory: true,
               }
-            : {
-                id,
-                severity: "info",
-                factKey: "insights.page.dashboard.dashboard-watch",
-                factParams: {
-                  agents: index,
-                  blocked: 0,
-                  hours: index,
-                  distillable: 0,
-                },
-                evidenceRefs: ["e1"],
-                allowedActionIds: [],
-              };
+            : index === 1
+              ? {
+                  id,
+                  severity: "info",
+                  factKey: "insights.page.dashboard.dashboard-guide-collection",
+                  factParams: { tokens: 3495068214 },
+                  evidenceRefs: ["e1"],
+                  allowedActionIds: [],
+                }
+              : {
+                  id,
+                  severity: "info",
+                  factKey: "insights.page.dashboard.dashboard-watch",
+                  factParams: {
+                    agents: index,
+                    blocked: 0,
+                    hours: index,
+                    distillable: 0,
+                  },
+                  evidenceRefs: ["e1"],
+                  allowedActionIds: [],
+                };
         return candidate;
       }),
   };
@@ -587,11 +596,19 @@ test("five valid model lines stay enhanced and rule candidates fill the seven-li
     { locale: "zh-CN", reason: "manual" },
   );
 
-  assert.equal(captured?.candidates.length, 7);
-  assert.ok(env.lines.length <= 7);
-  assert.equal(env.lines.length, 7);
+  assert.equal(captured?.candidates.length, 10);
+  assert.ok(env.lines.length <= 10);
+  assert.equal(env.lines.length, 10);
   const enhanced = env.lines.filter((line) => line.source === "enhanced");
-  assert.ok(enhanced.length >= 5);
+  assert.ok(enhanced.length > 0);
+  assert.ok(enhanced.length <= 10);
+  assert.equal(
+    new Set(env.lines.map((line) => line.id)).size,
+    env.lines.length,
+  );
+  const tokenLine = env.lines.find((line) => line.id === "c2");
+  assert.equal(tokenLine?.params.tokens, "3.5B");
+  assert.notEqual(tokenLine?.params.tokens, 3495068214);
   assert.equal(
     enhanced.every((line) => typeof line.analysis === "string"),
     true,

@@ -7,23 +7,23 @@ export interface PageRuleConfig {
 
 /**
  * Per-surface rule budget. `widget` is a single-sentence broadcast surface;
- * every complete page renders up to seven ranked rule lines.
+ * every complete page renders up to ten ranked, evidence-backed rule lines.
  */
 export const PAGE_RULE_CONFIGS: Record<InsightSurfaceId, PageRuleConfig> = {
   widget: { ruleVersion: 1, maxLines: 1 },
-  dashboard: { ruleVersion: 2, maxLines: 7 },
-  agents: { ruleVersion: 2, maxLines: 7 },
-  distill: { ruleVersion: 2, maxLines: 7 },
-  reports: { ruleVersion: 2, maxLines: 7 },
-  memory: { ruleVersion: 2, maxLines: 7 },
-  security: { ruleVersion: 2, maxLines: 7 },
-  tracker: { ruleVersion: 2, maxLines: 7 },
-  skills: { ruleVersion: 2, maxLines: 7 },
-  market: { ruleVersion: 2, maxLines: 7 },
-  chats: { ruleVersion: 2, maxLines: 7 },
-  "chat-detail": { ruleVersion: 2, maxLines: 7 },
-  settings: { ruleVersion: 2, maxLines: 7 },
-  sources: { ruleVersion: 2, maxLines: 7 },
+  dashboard: { ruleVersion: 3, maxLines: 10 },
+  agents: { ruleVersion: 3, maxLines: 10 },
+  distill: { ruleVersion: 3, maxLines: 10 },
+  reports: { ruleVersion: 3, maxLines: 10 },
+  memory: { ruleVersion: 3, maxLines: 10 },
+  security: { ruleVersion: 3, maxLines: 10 },
+  tracker: { ruleVersion: 3, maxLines: 10 },
+  skills: { ruleVersion: 3, maxLines: 10 },
+  market: { ruleVersion: 3, maxLines: 10 },
+  chats: { ruleVersion: 3, maxLines: 10 },
+  "chat-detail": { ruleVersion: 3, maxLines: 10 },
+  settings: { ruleVersion: 3, maxLines: 10 },
+  sources: { ruleVersion: 3, maxLines: 10 },
 };
 
 export function getPageRuleConfig(surfaceId: InsightSurfaceId): PageRuleConfig {

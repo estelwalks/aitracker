@@ -256,7 +256,7 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(requests()[0]?.maxOutputTokens, 8192);
 });
 
-test("default cache expires with the 30-minute page refresh cycle", async () => {
+test("default cache expires with the 3-hour page refresh cycle", async () => {
   let nowMs = FIXED_NOW;
   const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
   const repository = new FakeInsightRepository();
@@ -267,6 +267,7 @@ test("default cache expires with the 30-minute page refresh cycle", async () => 
     now: () => nowMs,
   });
 
+  assert.equal(INSIGHT_ENHANCEMENT_CACHE_TTL_MS, 3 * 60 * 60 * 1000);
   assert.equal((await target.enhance(input())).status, "enhanced-ready");
   assert.equal(
     repository.saved[0]!.expiresAtMs - repository.saved[0]!.generatedAtMs,
@@ -280,6 +281,23 @@ test("default cache expires with the 30-minute page refresh cycle", async () => 
   nowMs += 1;
   assert.equal((await target.enhance(input())).status, "enhanced-ready");
   assert.equal(calls(), 2);
+});
+
+test("default daily budget allows the 500th call and rejects the 501st", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = enhancer(ai, new FakeInsightRepository());
+
+  for (let adapterVersion = 1; adapterVersion <= 500; adapterVersion += 1) {
+    assert.equal(
+      (await target.enhance(input({ adapterVersion }))).status,
+      "enhanced-ready",
+    );
+  }
+  assert.equal(
+    (await target.enhance(input({ adapterVersion: 501 }))).status,
+    "budget-exceeded",
+  );
+  assert.equal(calls(), 500);
 });
 
 test("adapterVersion isolates the enhancement cache identity", async () => {

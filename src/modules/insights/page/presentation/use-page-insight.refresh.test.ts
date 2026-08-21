@@ -7,7 +7,7 @@ import {
   type PageInsightRefreshTimer,
 } from "./use-page-insight.ts";
 
-test("mounted page refreshes every 30 minutes and clears the timer on cleanup", async () => {
+test("mounted page refreshes every 3 hours and clears the timer on cleanup", async () => {
   let callback: (() => void) | undefined;
   let delayMs: number | undefined;
   let clearedHandle: number | undefined;
@@ -28,7 +28,7 @@ test("mounted page refreshes every 30 minutes and clears the timer on cleanup", 
   }, timer);
 
   assert.equal(delayMs, PAGE_INSIGHT_REFRESH_INTERVAL_MS);
-  assert.equal(delayMs, 30 * 60 * 1000);
+  assert.equal(delayMs, 3 * 60 * 60 * 1000);
   assert.ok(callback);
   callback();
   await Promise.resolve();

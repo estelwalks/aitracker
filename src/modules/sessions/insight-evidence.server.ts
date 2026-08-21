@@ -31,22 +31,37 @@ function composeChatsCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const total = metricValue(bundle, "chats.total");
+  const sources = metricValue(bundle, "chats.sources");
   const recoverable = metricValue(bundle, "chats.recoverable");
+  const turns = metricValue(bundle, "chats.turns");
+  const tokens = metricValue(bundle, "chats.tokens");
+  const durationMinutes = metricValue(bundle, "chats.durationMinutes");
   const topSource = bundle.evidence.find(
     (item) => item.id === "chats.topSource" && typeof item.value === "string",
   );
   const candidates: InsightCandidate[] = [];
 
-  if (total != null && total > 0) {
+  if (total != null) {
     candidates.push({
-      id: "chats.total",
+      id: "chats.inventory",
       severity: "info",
-      factKey: "insights.page.chats.chats-total",
+      factKey: "insights.page.chats.chats-guide-inventory",
       factParams: { count: total },
       evidenceRefs: ["chats.total"],
       allowedActionIds: ["open_sessions"],
       actionId: "open_sessions",
     });
+    if (sources != null) {
+      candidates.push({
+        id: "chats.sources",
+        severity: "info",
+        factKey: "insights.page.chats.chats-guide-sources",
+        factParams: { count: sources },
+        evidenceRefs: ["chats.sources"],
+        allowedActionIds: ["open_sessions"],
+        actionId: "open_sessions",
+      });
+    }
     if (topSource != null) {
       candidates.push({
         id: "chats.top-source",
@@ -58,44 +73,36 @@ function composeChatsCandidates(
         actionId: "open_sessions",
       });
     }
-    if (recoverable != null && recoverable > 0) {
+    if (recoverable != null) {
       candidates.push({
         id: "chats.recoverable",
-        severity: "info",
-        factKey: "insights.page.chats.chats-recoverable",
+        severity: recoverable > 0 ? "attention" : "info",
+        factKey: "insights.page.chats.chats-guide-recovery",
         factParams: { count: recoverable },
         evidenceRefs: ["chats.recoverable"],
         allowedActionIds: ["open_sessions", "open_distill"],
         actionId: "open_sessions",
       });
     }
+  }
+  if (turns != null && tokens != null) {
     candidates.push({
-      id: "chats.resume",
+      id: "chats.activity",
       severity: "info",
-      factKey: "insights.page.chats.chats-resume",
-      factParams: {},
-      evidenceRefs: ["chats.total"],
+      factKey: "insights.page.chats.chats-guide-activity",
+      factParams: { turns, tokens },
+      evidenceRefs: ["chats.turns", "chats.tokens"],
       allowedActionIds: ["open_sessions"],
       actionId: "open_sessions",
     });
-    candidates.push({
-      id: "chats.distill",
-      severity: "info",
-      factKey: "insights.page.chats.chats-distill",
-      factParams: {},
-      evidenceRefs: ["chats.recoverable"],
-      allowedActionIds: ["open_distill"],
-      actionId: "open_distill",
-    });
   }
-
-  if (candidates.length === 0) {
+  if (durationMinutes != null) {
     candidates.push({
-      id: "chats.empty",
+      id: "chats.duration",
       severity: "info",
-      factKey: "insights.page.chats.chats-empty",
-      factParams: {},
-      evidenceRefs: [],
+      factKey: "insights.page.chats.chats-guide-distill",
+      factParams: { minutes: durationMinutes },
+      evidenceRefs: ["chats.durationMinutes"],
       allowedActionIds: ["open_sessions"],
       actionId: "open_sessions",
     });
@@ -125,6 +132,14 @@ async function loadChatsEvidence(scope: InsightScope) {
   const recoverable = sessions.filter((session) =>
     isRecoverable(session.status),
   ).length;
+  const turns = sessions.reduce((sum, session) => sum + session.turns, 0);
+  const tokens = sessions.reduce(
+    (sum, session) => sum + session.totals.totalTokens,
+    0,
+  );
+  const durationMinutes = Math.round(
+    sessions.reduce((sum, session) => sum + session.durationMs, 0) / 60_000,
+  );
 
   const bySource = new Map<string, number>();
   for (const session of sessions) {
@@ -151,6 +166,15 @@ async function loadChatsEvidence(scope: InsightScope) {
       freshness,
       "count",
     ),
+    metricEvidence("chats.turns", turns, observedAt, freshness, "count"),
+    metricEvidence("chats.tokens", tokens, observedAt, freshness, "tokens"),
+    metricEvidence(
+      "chats.durationMinutes",
+      durationMinutes,
+      observedAt,
+      freshness,
+      "count",
+    ),
   ];
   if (topSource !== "") {
     evidence.push(
@@ -172,7 +196,19 @@ function composeChatDetailCandidates(
   const turns = metricValue(bundle, "chat-detail.turns");
   const tokens = metricValue(bundle, "chat-detail.tokens");
   const recoverable = bundle.evidence.find(
-    (item) => item.id === "chat-detail.recoverable" && item.value === true,
+    (item) => item.id === "chat-detail.recoverable",
+  );
+  const durationMinutes = metricValue(bundle, "chat-detail.durationMinutes");
+  const editTurns = metricValue(bundle, "chat-detail.editTurns");
+  const retryTurns = metricValue(bundle, "chat-detail.retryTurns");
+  const subagentCalls = metricValue(bundle, "chat-detail.subagentCalls");
+  const source = bundle.evidence.find(
+    (item) =>
+      item.id === "chat-detail.source" && typeof item.value === "string",
+  );
+  const status = bundle.evidence.find(
+    (item) =>
+      item.id === "chat-detail.status" && typeof item.value === "string",
   );
   const candidates: InsightCandidate[] = [];
 
@@ -200,7 +236,21 @@ function composeChatDetailCandidates(
     });
   }
 
-  if (recoverable != null) {
+  if (source != null && status != null) {
+    candidates.push({
+      id: "chat-detail.state",
+      severity: "info",
+      factKey: "insights.page.chat-detail.chat-detail-guide-state",
+      factParams: {
+        source: String(source.value),
+        status: String(status.value),
+      },
+      evidenceRefs: ["chat-detail.source", "chat-detail.status"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+  }
+  if (recoverable?.value === true) {
     candidates.push({
       id: "chat-detail.recoverable",
       severity: "info",
@@ -210,12 +260,45 @@ function composeChatDetailCandidates(
       allowedActionIds: ["open_sessions"],
       actionId: "open_sessions",
     });
+  }
+
+  for (const [id, value, key, ref, param] of [
+    [
+      "duration",
+      durationMinutes,
+      "chat-detail-guide-distill",
+      "chat-detail.durationMinutes",
+      "minutes",
+    ],
+    [
+      "edits",
+      editTurns,
+      "chat-detail-guide-recovery",
+      "chat-detail.editTurns",
+      "count",
+    ],
+    [
+      "retries",
+      retryTurns,
+      "chat-detail-guide-turns",
+      "chat-detail.retryTurns",
+      "count",
+    ],
+    [
+      "subagents",
+      subagentCalls,
+      "chat-detail-guide-tokens",
+      "chat-detail.subagentCalls",
+      "count",
+    ],
+  ] as const) {
+    if (value == null) continue;
     candidates.push({
-      id: "chat-detail.resume",
+      id: `chat-detail.${id}`,
       severity: "info",
-      factKey: "insights.page.chat-detail.chat-detail-resume",
-      factParams: {},
-      evidenceRefs: ["chat-detail.recoverable"],
+      factKey: `insights.page.chat-detail.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
       allowedActionIds: ["open_sessions"],
       actionId: "open_sessions",
     });
@@ -259,6 +342,21 @@ async function loadChatDetailEvidence(scope: InsightScope) {
     0,
   );
   const recoverable = matches.some((session) => isRecoverable(session.status));
+  const durationMinutes = Math.round(
+    matches.reduce((sum, session) => sum + session.durationMs, 0) / 60_000,
+  );
+  const editTurns = matches.reduce(
+    (sum, session) => sum + session.editTurns,
+    0,
+  );
+  const retryTurns = matches.reduce(
+    (sum, session) => sum + session.retryTurns,
+    0,
+  );
+  const subagentCalls = matches.reduce(
+    (sum, session) => sum + session.subagentCalls,
+    0,
+  );
 
   return {
     surfaceId: "chat-detail" as const,
@@ -287,20 +385,60 @@ async function loadChatDetailEvidence(scope: InsightScope) {
         freshness,
         sensitivity: "aggregate" as const,
       },
+      metricEvidence(
+        "chat-detail.durationMinutes",
+        durationMinutes,
+        observedAt,
+        freshness,
+        "count",
+      ),
+      metricEvidence(
+        "chat-detail.editTurns",
+        editTurns,
+        observedAt,
+        freshness,
+        "count",
+      ),
+      metricEvidence(
+        "chat-detail.retryTurns",
+        retryTurns,
+        observedAt,
+        freshness,
+        "count",
+      ),
+      metricEvidence(
+        "chat-detail.subagentCalls",
+        subagentCalls,
+        observedAt,
+        freshness,
+        "count",
+      ),
+      statusEvidence(
+        "chat-detail.source",
+        matches[0]!.source,
+        observedAt,
+        freshness,
+      ),
+      statusEvidence(
+        "chat-detail.status",
+        matches[0]!.status,
+        observedAt,
+        freshness,
+      ),
     ],
   };
 }
 
 export const chatsInsightAdapter: PageInsightAdapter = {
   surfaceId: "chats",
-  adapterVersion: 2,
+  adapterVersion: 3,
   loadEvidence: loadChatsEvidence,
   composeCandidates: composeChatsCandidates,
 };
 
 export const chatDetailInsightAdapter: PageInsightAdapter = {
   surfaceId: "chat-detail",
-  adapterVersion: 2,
+  adapterVersion: 3,
   loadEvidence: loadChatDetailEvidence,
   composeCandidates: composeChatDetailCandidates,
 };

@@ -28,13 +28,15 @@ function composeDistillCandidates(
   const waiting = metricValue(bundle, "distill.waiting");
   const quotaRemaining = metricValue(bundle, "distill.quotaRemaining");
   const quotaUsedRate = metricValue(bundle, "distill.quotaUsedRate");
+  const quotaUsed = metricValue(bundle, "distill.quotaUsed");
+  const quotaLimit = metricValue(bundle, "distill.quotaLimit");
   const knowledge = metricValue(bundle, "distill.knowledge");
   const candidates: InsightCandidate[] = [];
 
-  if (waiting != null && waiting > 0) {
+  if (waiting != null) {
     candidates.push({
       id: "distill.pending",
-      severity: "attention",
+      severity: waiting > 0 ? "attention" : "info",
       factKey: "insights.page.distill.distill-pending",
       factParams: { count: waiting },
       evidenceRefs: ["distill.waiting"],
@@ -43,48 +45,49 @@ function composeDistillCandidates(
     });
   }
 
-  if (quotaRemaining != null && quotaRemaining <= 0) {
+  if (quotaUsedRate != null) {
     candidates.push({
       id: "distill.quota",
-      severity: "risk",
+      severity: quotaRemaining != null && quotaRemaining <= 0 ? "risk" : "info",
       factKey: "insights.page.distill.distill-quota",
-      factParams: { rate: quotaUsedRate ?? 100 },
+      factParams: { rate: quotaUsedRate },
       evidenceRefs: ["distill.quotaUsedRate"],
       allowedActionIds: ["open_settings"],
       actionId: "open_settings",
     });
   }
 
-  if (knowledge != null && knowledge > 0) {
+  if (knowledge != null) {
     candidates.push({
-      id: "distill.focus",
+      id: "distill.knowledge",
       severity: "info",
-      factKey: "insights.page.distill.distill-focus",
-      factParams: {},
-      evidenceRefs: ["distill.knowledge"],
-      allowedActionIds: ["open_distill"],
-      actionId: "open_distill",
-    });
-    candidates.push({
-      id: "distill.repeat",
-      severity: "info",
-      factKey: "insights.page.distill.distill-repeat",
-      factParams: {},
+      factKey: "insights.page.distill.distill-guide-outputs",
+      factParams: { count: knowledge },
       evidenceRefs: ["distill.knowledge"],
       allowedActionIds: ["open_distill"],
       actionId: "open_distill",
     });
   }
-
-  if (candidates.length === 0) {
+  if (quotaRemaining != null) {
     candidates.push({
-      id: "distill.empty",
+      id: "distill.remaining",
       severity: "info",
-      factKey: "insights.page.distill.distill-empty",
-      factParams: {},
-      evidenceRefs: [],
-      allowedActionIds: ["open_distill"],
-      actionId: "open_distill",
+      factKey: "insights.page.distill.distill-guide-quota",
+      factParams: { count: quotaRemaining },
+      evidenceRefs: ["distill.quotaRemaining"],
+      allowedActionIds: ["open_settings"],
+      actionId: "open_settings",
+    });
+  }
+  if (quotaUsed != null && quotaLimit != null) {
+    candidates.push({
+      id: "distill.ledger",
+      severity: "info",
+      factKey: "insights.page.distill.distill-guide-intake",
+      factParams: { used: quotaUsed, limit: quotaLimit },
+      evidenceRefs: ["distill.quotaUsed", "distill.quotaLimit"],
+      allowedActionIds: ["open_settings"],
+      actionId: "open_settings",
     });
   }
   return candidates;
@@ -92,7 +95,7 @@ function composeDistillCandidates(
 
 export const distillInsightAdapter: PageInsightAdapter = {
   surfaceId: "distill",
-  adapterVersion: 2,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
@@ -138,13 +141,31 @@ export const distillInsightAdapter: PageInsightAdapter = {
           "count",
         ),
         metricEvidence(
-          "distill.quotaUsedRate",
-          quota.limit > 0 ? (quota.used / quota.limit) * 100 : 0,
+          "distill.quotaUsed",
+          quota.used,
           observedAt,
           "unknown",
-          "percent",
+          "count",
+        ),
+        metricEvidence(
+          "distill.quotaLimit",
+          quota.limit,
+          observedAt,
+          "unknown",
+          "count",
         ),
       );
+      if (quota.limit > 0) {
+        evidence.push(
+          metricEvidence(
+            "distill.quotaUsedRate",
+            (quota.used / quota.limit) * 100,
+            observedAt,
+            "unknown",
+            "percent",
+          ),
+        );
+      }
     }
 
     const partial = knowledgeCount == null || quota == null;
