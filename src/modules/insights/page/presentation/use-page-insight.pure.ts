@@ -3,6 +3,7 @@
  * separate module (no React, no server-fn imports) so they can be tested with
  * node:test in isolation and shared by any presentational wrapper.
  */
+import { isInsightAnalysisUseful } from "../analysis-quality.ts";
 
 /**
  * Severity of a single envelope line. Matches the frozen M1 contract
@@ -129,7 +130,7 @@ export function composeLineText(
   line: ComposableInsightLine,
 ): string {
   const base = t(line.key, line.params);
-  if (!line.analysis) return base;
+  if (!isInsightAnalysisUseful(base, line.analysis)) return base;
   if (/[。！？…]$/u.test(base)) return `${base}${line.analysis}`;
   if (/[.!?]$/u.test(base)) return `${base} ${line.analysis}`;
   return `${base}。${line.analysis}`;

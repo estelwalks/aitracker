@@ -88,21 +88,17 @@ function makeEnhancer(result: InsightEnhancementResult): InsightEnhancerPort {
   };
 }
 
-test("read returns a complete local envelope when default enhancement has no enhancer", async () => {
+test("read returns the adapter's local facts when default enhancement has no enhancer", async () => {
   const app = createPageInsightsApplication({ adapters: [makeAdapter()] });
   const env = await app.read("dashboard", { range: "today" }, "zh-CN");
   assert.equal(env.surfaceId, "dashboard");
   assert.equal(env.status, "rules");
   assert.equal(env.source, "rules");
   assert.equal(env.canEnhance, false);
-  assert.equal(env.lines.length, 7);
+  assert.equal(env.lines.length, 2);
   assert.deepEqual(
     env.lines.slice(0, 2).map((line) => line.id),
     ["c1", "c2"],
-  );
-  assert.equal(
-    env.lines.slice(2).every((line) => line.id.startsWith("dashboard.guide-")),
-    true,
   );
   assert.equal(env.lines[0].action?.id, "open_security");
   assert.equal(env.lines[0].action?.labelKey, "insights.actions.security");
@@ -147,6 +143,158 @@ test("enhance success replaces analysis and keeps fact key/params", async () => 
   assert.ok(c2);
   assert.equal(c2.analysis, "info analysis");
   assert.equal(c2.action, undefined);
+});
+
+test("quality gate keeps fact lines while suppressing real duplicate and generic model samples", async () => {
+  const baseAdapter = makeAdapter();
+  const qualityAdapter: PageInsightAdapter = {
+    ...baseAdapter,
+    composeCandidates: (): InsightCandidate[] => [
+      {
+        id: "security-safe",
+        severity: "info",
+        factKey: "insights.page.dashboard.dashboard-security-safe",
+        factParams: {},
+        evidenceRefs: ["e1"],
+        allowedActionIds: [],
+      },
+      {
+        id: "cache-zero",
+        severity: "attention",
+        factKey: "insights.page.dashboard.dashboard-efficiency",
+        factParams: { name: "aipy", rate: 0 },
+        evidenceRefs: ["e1"],
+        allowedActionIds: ["open_tracker"],
+        remoteEligible: false,
+      },
+      {
+        id: "collection-guidance",
+        severity: "info",
+        factKey: "insights.page.dashboard.dashboard-guide-collection",
+        factParams: {},
+        evidenceRefs: ["e1"],
+        allowedActionIds: [],
+      },
+      {
+        id: "tool-guidance",
+        severity: "info",
+        factKey: "insights.page.agents.agents-guide-coverage",
+        factParams: {},
+        evidenceRefs: ["e1"],
+        allowedActionIds: [],
+      },
+      {
+        id: "useful-risk",
+        severity: "risk",
+        factKey: "insights.page.dashboard.dashboard-security-risk",
+        factParams: { count: 2 },
+        evidenceRefs: ["e1"],
+        allowedActionIds: ["open_security"],
+      },
+    ],
+  };
+  const app = createPageInsightsApplication({
+    adapters: [qualityAdapter],
+    enhancer: makeEnhancer({
+      status: "enhanced-ready",
+      lines: [
+        {
+          candidateId: "security-safe",
+          analysis: "今日安全扫描未发现风险，所有项目均通过检查。",
+        },
+        {
+          candidateId: "cache-zero",
+          analysis: "缓存命中率极低，建议复用上下文以降低成本。",
+          actionId: "open_tracker",
+        },
+        {
+          candidateId: "collection-guidance",
+          analysis:
+            "先确认数据来源持续采集中，首页结论才不会因采集断档而失真。",
+        },
+        {
+          candidateId: "tool-guidance",
+          analysis: "补齐未接入的本地工具，可使 Agent 总览覆盖更完整。",
+        },
+        {
+          candidateId: "useful-risk",
+          analysis: "应优先处置以缩短风险暴露时间。",
+          actionId: "open_security",
+        },
+      ],
+    }),
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    { locale: "zh-CN", reason: "manual" },
+  );
+
+  for (const id of [
+    "security-safe",
+    "cache-zero",
+    "collection-guidance",
+    "tool-guidance",
+  ]) {
+    const line = env.lines.find((item) => item.id === id);
+    assert.ok(line, `${id} fact line must remain visible`);
+    assert.equal(line.analysis, undefined);
+    assert.equal(line.source, "rules");
+  }
+  const useful = env.lines.find((line) => line.id === "useful-risk");
+  assert.equal(useful?.analysis, "应优先处置以缩短风险暴露时间。");
+  assert.equal(useful?.source, "enhanced");
+  assert.equal(env.source, "enhanced");
+});
+
+test("an entirely rejected enhancement falls back to the complete rules envelope", async () => {
+  const baseAdapter = makeAdapter();
+  const safeAdapter: PageInsightAdapter = {
+    ...baseAdapter,
+    composeCandidates: (): InsightCandidate[] => [
+      {
+        id: "security-safe",
+        severity: "info",
+        factKey: "insights.page.dashboard.dashboard-security-safe",
+        factParams: {},
+        evidenceRefs: ["e1"],
+        allowedActionIds: [],
+        mandatory: true,
+      },
+    ],
+  };
+  const app = createPageInsightsApplication({
+    adapters: [safeAdapter],
+    enhancer: makeEnhancer({
+      status: "enhanced-ready",
+      lines: [
+        {
+          candidateId: "security-safe",
+          analysis: "今日安全扫描未发现风险，所有项目均通过检查。",
+        },
+      ],
+    }),
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    { locale: "zh-CN", reason: "manual" },
+  );
+
+  assert.equal(env.status, "invalid-output");
+  assert.equal(env.source, "rules");
+  assert.ok(env.lines.length >= 1);
+  assert.equal(
+    env.lines.every((line) => line.source === "rules"),
+    true,
+  );
+  assert.equal(env.lines[0]?.id, "security-safe");
+  assert.equal(env.lines[0]?.analysis, undefined);
+  assert.equal(env.lines[0]?.source, "rules");
 });
 
 test("enhance failure keeps rules lines identical to read", async () => {
@@ -314,7 +462,7 @@ test("model selection and order control non-mandatory lines while mandatory safe
     env.lines.slice(0, 4).map((line) => line.id),
     ["c1", "c3", "c2", "c4"],
   );
-  assert.equal(env.lines.length, 7);
+  assert.equal(env.lines.length, 4);
   assert.equal(env.lines[0]?.severity, "risk");
   assert.equal(env.lines[0]?.source, "enhanced");
   assert.equal(env.lines[1]?.source, "enhanced");
@@ -322,7 +470,7 @@ test("model selection and order control non-mandatory lines while mandatory safe
   assert.equal(env.lines[3]?.source, "rules");
 });
 
-test("private local candidates stay out of remote input while anonymous supplemental candidates fill it", async () => {
+test("private local candidates stay out of remote input", async () => {
   let captured: InsightEnhancementInput | undefined;
   const adapter = makeAdapter();
   const privacyAdapter: PageInsightAdapter = {
@@ -372,19 +520,7 @@ test("private local candidates stay out of remote input while anonymous suppleme
     captured.candidates.some((candidate) => candidate.id === "private-project"),
     false,
   );
-  assert.ok(captured.candidates.length >= 5);
-  assert.equal(
-    captured.candidates.some((candidate) =>
-      candidate.id.startsWith("dashboard.guide-"),
-    ),
-    true,
-  );
-  assert.equal(
-    captured.candidates
-      .filter((candidate) => candidate.id.startsWith("dashboard.guide-"))
-      .every((candidate) => candidate.fact.includes("Aurora") === false),
-    true,
-  );
+  assert.equal(captured.candidates.length, 2);
   const local = env.lines.find((line) => line.id === "private-project");
   assert.deepEqual(local?.params, { name: "Project Aurora Secret" });
   assert.equal(local?.source, "rules");
