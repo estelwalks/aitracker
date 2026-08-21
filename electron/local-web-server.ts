@@ -219,6 +219,13 @@ async function sendFetchResponse(
     }
   });
 
+  // SSR HTML embeds the current route manifest and lazy-chunk references.
+  // Never reuse an old document shell after an app update; the hashed assets
+  // themselves remain safely immutable.
+  if ((fetchResponse.headers.get("content-type") ?? "").includes("text/html")) {
+    nodeResponse.setHeader("cache-control", "no-store");
+  }
+
   const getSetCookie = (
     fetchResponse.headers as Headers & { getSetCookie?: () => string[] }
   ).getSetCookie;
@@ -427,6 +434,11 @@ export async function startLocalWebServer(
       }
 
       if (middleware) {
+        // Nitro's Node middleware writes the document response directly, so
+        // apply the same policy as the fetch-based path above.
+        if (request.method === "GET" || request.method === "HEAD") {
+          response.setHeader("cache-control", "no-store");
+        }
         if (challengeCookies.length > 0) {
           response.setHeader("set-cookie", challengeCookies);
         }

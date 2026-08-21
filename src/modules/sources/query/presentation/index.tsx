@@ -1,10 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowLeftRight,
   Boxes,
   ExternalLink,
   FolderOpen,
-  RefreshCw,
   Search,
   TriangleAlert,
 } from "lucide-react";
@@ -12,11 +11,15 @@ import { toast } from "sonner";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
 import { InsightCard } from "../../../insights/page/presentation/insight-card";
-import { EmptyState, TTButton } from "../../../../components/tt";
+import {
+  Card,
+  ChipTabs,
+  EmptyState,
+  MetricGrid,
+} from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import { toUiError } from "../../../../lib/errors";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import type { UsageLogParsing } from "../../../../lib/tools/catalog";
 import { getSourcesQuery, refreshSourcesQuery } from "../server-fns";
 import type {
   SourcesQueryEntry,
@@ -42,12 +45,12 @@ const STATUS_META: Record<
     color: "text-ok",
   },
   "no-logs": {
-    labelKey: "sources.status.noLogs",
+    labelKey: "sources.status.noLogsCard",
     dot: "bg-warn",
     color: "text-warn",
   },
   "not-installed": {
-    labelKey: "sources.status.notInstalled",
+    labelKey: "sources.status.notInstalledCard",
     dot: "bg-muted-foreground/40",
     color: "text-muted-foreground",
   },
@@ -63,12 +66,6 @@ const STATUS_FILTERS: Array<{
   { key: "not-installed", labelKey: "sources.status.notInstalled" },
 ];
 
-const LOG_PARSING_LABEL: Record<UsageLogParsing, MessageKey> = {
-  native: "sources.parsing.native",
-  adapter: "sources.parsing.adapter",
-  unsupported: "sources.parsing.unsupported",
-};
-
 const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
   cli: "sources.type.cli",
   ide: "sources.type.ide",
@@ -78,13 +75,17 @@ const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
 
 const SOURCES_PAGE_SIZE = 6;
 
+type MigrationSourceSelection = {
+  source: SourcesQueryEntry;
+  installedTargetAgents: readonly string[];
+};
+
 export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const { t, format } = useI18n();
   const [summary, setSummary] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [migrationSource, setMigrationSource] =
-    useState<SourcesQueryEntry | null>(null);
-  const [keyword, setKeyword] = useState("");
+    useState<MigrationSourceSelection | null>(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
@@ -98,16 +99,25 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
     for (const entry of summary.entries) counts[entry.status] += 1;
     return counts;
   }, [summary.entries]);
+  const installedSkillAgents = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          summary.entries
+            .filter(
+              (entry) =>
+                entry.status !== "not-installed" && entry.skillAgent != null,
+            )
+            .map((entry) => entry.skillAgent!),
+        ),
+      ),
+    [summary.entries],
+  );
   const filtered = useMemo(() => {
-    const kw = keyword.trim().toLocaleLowerCase();
     return summary.entries.filter(
-      (entry) =>
-        (statusFilter === "all" || entry.status === statusFilter) &&
-        (!kw ||
-          entry.name.toLocaleLowerCase().includes(kw) ||
-          entry.paths.some((path) => path.toLocaleLowerCase().includes(kw))),
+      (entry) => statusFilter === "all" || entry.status === statusFilter,
     );
-  }, [summary.entries, keyword, statusFilter]);
+  }, [summary.entries, statusFilter]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / SOURCES_PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageEntries = filtered.slice(
@@ -118,19 +128,30 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      const before = summary.generatedAt;
-      // T4-01 (fix): the refresh command is non-blocking — the server fires
-      // the snapshot refresh in the background and returns the latest known
-      // projection; poll until the snapshot revision lands, then update.
-      setSummary(await refreshSourcesQuery());
+      const beforeSkillCounts = new Map(
+        summary.entries.map((entry) => [entry.id, entry.skillCount]),
+      );
+      // The migration response is intentionally non-blocking. Read the latest
+      // known projection now, then keep polling until the Skill snapshot
+      // changes instead of relying on the Usage/Installation timestamp.
+      const initial = await refreshSourcesQuery();
+      setSummary(initial);
       toast.success(t("sources.toast.rescanStarted"));
+      const hasSkillCountChanged = (next: SourcesQuerySummary) =>
+        next.entries.some(
+          (entry) => entry.skillCount !== beforeSkillCounts.get(entry.id),
+        );
+      if (hasSkillCountChanged(initial)) {
+        toast.success(t("sources.toast.rescanDone"));
+        return;
+      }
       const startedAt = Date.now();
       const poll = async () => {
-        if (Date.now() - startedAt > 120_000) return;
+        if (Date.now() - startedAt > 600_000) return;
         try {
           const next = await getSourcesQuery();
-          if (next.generatedAt !== before) {
-            setSummary(next);
+          setSummary(next);
+          if (hasSkillCountChanged(next)) {
             toast.success(t("sources.toast.rescanDone"));
             return;
           }
@@ -149,128 +170,73 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   }
 
   return (
-    <div className="space-y-5 pb-12">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {t("sources.hubTitle")}
-          </h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {t("sources.hubSummary", {
-              connected: format.formatNumber(summary.totals.connectedCount),
-              total: format.formatNumber(summary.totals.toolCount),
-              events: format.formatNumber(summary.totals.eventCount),
-              time: format.formatDateTime(summary.generatedAt, false),
-            })}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3">
-            <Search className="size-3.5 text-muted-foreground" />
-            <input
-              value={keyword}
-              onChange={(event) => {
-                setKeyword(event.target.value);
-                setPage(1);
-              }}
-              placeholder={t("sources.searchToolOrPath")}
-              aria-label={t("sources.searchToolOrPath")}
-              className="w-40 bg-transparent font-mono text-[11px] outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <TTButton onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw
-              className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
-            />
-            {refreshing ? t("sources.scanning") : t("sources.rescan")}
-          </TTButton>
-        </div>
-      </header>
-
+    <div className="space-y-4 pb-12">
       <InsightCard
         surfaceId="sources"
         variant="hero"
         title={t("insights.title")}
         dotsLabel={t("insights.dots")}
+        rotateLabel={t("insights.rotate")}
       />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface-2/60 px-3 py-2 text-[12px] text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-ok" />
-          {t("sources.status.hasData")} · {statusCounts["has-data"]}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-warn" />
-          {t("sources.status.noLogs")} · {statusCounts["no-logs"]}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="size-1.5 rounded-full bg-muted-foreground/40" />
-          {t("sources.status.notInstalled")} · {statusCounts["not-installed"]}
-        </span>
-      </div>
+      <MetricGrid
+        items={[
+          {
+            icon: Boxes,
+            label: t("sources.summary.connected"),
+            v: format.formatNumber(summary.totals.connectedCount),
+            right: (
+              <span className="tt-num flex items-baseline gap-1 font-mono text-[13px] text-muted-foreground">
+                <span aria-hidden="true">/</span>
+                <span>{format.formatNumber(summary.totals.toolCount)}</span>
+              </span>
+            ),
+            sub: t("sources.summary.detectedLocally"),
+          },
+          {
+            icon: FolderOpen,
+            label: t("sources.summary.events"),
+            v: format.formatNumber(summary.totals.eventCount),
+            sub: t("sources.summary.allSources"),
+          },
+          {
+            icon: Search,
+            label: t("sources.summary.noLogs"),
+            v: format.formatNumber(summary.totals.noLogsCount),
+            sub: t("sources.summary.missingLogs"),
+          },
+          {
+            icon: TriangleAlert,
+            label: t("sources.summary.malformed"),
+            v: format.formatNumber(summary.totals.malformedCount),
+            sub:
+              summary.totals.malformedCount > 0
+                ? t("sources.summary.needsReview")
+                : t("sources.summary.noAnomalies"),
+            color:
+              summary.totals.malformedCount > 0 ? "var(--warn)" : undefined,
+          },
+        ]}
+      />
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <SummaryCard
-          icon={<Boxes className="size-4" />}
-          label={t("sources.summary.connected")}
-          value={`${format.formatNumber(summary.totals.connectedCount)} / ${format.formatNumber(summary.totals.toolCount)}`}
-          subtitle={t("sources.summary.detectedLocally")}
-        />
-        <SummaryCard
-          icon={<FolderOpen className="size-4" />}
-          label={t("sources.summary.events")}
-          value={format.formatNumber(summary.totals.eventCount)}
-          subtitle={t("sources.summary.allSources")}
-        />
-        <SummaryCard
-          icon={<Search className="size-4" />}
-          label={t("sources.summary.noLogs")}
-          value={format.formatNumber(summary.totals.noLogsCount)}
-          subtitle={t("sources.summary.missingLogs")}
-        />
-        <SummaryCard
-          icon={<TriangleAlert className="size-4" />}
-          label={t("sources.summary.malformed")}
-          value={format.formatNumber(summary.totals.malformedCount)}
-          subtitle={
-            summary.totals.malformedCount > 0
-              ? t("sources.summary.needsReview")
-              : t("sources.summary.noAnomalies")
-          }
-          warn={summary.totals.malformedCount > 0}
-        />
-      </div>
+      <ChipTabs
+        value={statusFilter}
+        onChange={(value) => {
+          setStatusFilter(value);
+          setPage(1);
+        }}
+        options={STATUS_FILTERS.map((filter) => ({
+          value: filter.key,
+          label: `${t(filter.labelKey)} ${format.formatNumber(filter.key === "all" ? summary.entries.length : statusCounts[filter.key])}`,
+        }))}
+      />
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {STATUS_FILTERS.map((filter) => {
-          const active = statusFilter === filter.key;
-          const count =
-            filter.key === "all"
-              ? summary.entries.length
-              : statusCounts[filter.key];
-          return (
-            <button
-              key={filter.key}
-              type="button"
-              onClick={() => {
-                setStatusFilter(filter.key);
-                setPage(1);
-              }}
-              className={`tt-num inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${active ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface text-muted-foreground hover:text-foreground"}`}
-            >
-              {t(filter.labelKey)}
-              <span className="text-[10px] opacity-70">{count}</span>
-            </button>
-          );
+      <Card
+        title={t("sources.agentEcosystem", {
+          count: format.formatNumber(filtered.length),
         })}
-      </div>
-
-      <section className="tt-panel p-3">
-        <header className="px-1 pb-3 text-[13px] font-medium tracking-[0.025em]">
-          {t("sources.agentEcosystem", {
-            count: format.formatNumber(filtered.length),
-          })}
-        </header>
+        bodyClassName="px-3 pb-3"
+      >
         {filtered.length === 0 ? (
           <EmptyState
             title={t("sources.empty.title")}
@@ -278,48 +244,42 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           />
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {pageEntries.map((entry) => (
-              <SourceCard
-                key={entry.id}
-                entry={entry}
-                onMigrate={() => setMigrationSource(entry)}
-              />
-            ))}
+            {pageEntries.map((entry) => {
+              const installedTargetAgents = installedSkillAgents.filter(
+                (agent) => agent !== entry.skillAgent,
+              );
+              return (
+                <SourceCard
+                  key={entry.id}
+                  entry={entry}
+                  hasInstalledTargets={installedTargetAgents.length > 0}
+                  onMigrate={() =>
+                    setMigrationSource({
+                      source: entry,
+                      installedTargetAgents,
+                    })
+                  }
+                />
+              );
+            })}
           </div>
         )}
         {filtered.length > SOURCES_PAGE_SIZE && (
-          <nav
-            aria-label="数据来源分页"
-            className="mt-4 flex items-center justify-center gap-3 border-t border-border pt-3"
-          >
-            <button
-              type="button"
-              aria-label="上一页"
-              disabled={currentPage === 1}
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
-              className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:opacity-40"
-            >
-              ←
-            </button>
-            <span className="tt-num text-[11px] text-muted-foreground">
-              {currentPage} / {pageCount}
-            </span>
-            <button
-              type="button"
-              aria-label="下一页"
-              disabled={currentPage === pageCount}
-              onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-              className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:opacity-40"
-            >
-              →
-            </button>
-          </nav>
+          <SourcesPager
+            page={currentPage}
+            pageCount={pageCount}
+            total={filtered.length}
+            onPage={setPage}
+            previousLabel={t("common.pagination.previous")}
+            nextLabel={t("common.pagination.next")}
+          />
         )}
-      </section>
+      </Card>
 
       {migrationSource !== null && (
         <SourceMigrationModal
-          source={migrationSource}
+          source={migrationSource.source}
+          installedTargetAgents={migrationSource.installedTargetAgents}
           onClose={() => setMigrationSource(null)}
           onDone={handleRefresh}
         />
@@ -328,52 +288,72 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   );
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  subtitle,
-  warn = false,
+function SourcesPager({
+  page,
+  pageCount,
+  total,
+  onPage,
+  previousLabel,
+  nextLabel,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  subtitle: string;
-  warn?: boolean;
+  page: number;
+  pageCount: number;
+  total: number;
+  onPage: (page: number) => void;
+  previousLabel: string;
+  nextLabel: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-surface p-3.5">
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className={warn ? "text-warn" : "text-primary"}>{icon}</span>
-        {label}
+    <div className="flex items-center justify-between gap-3 px-5 py-3">
+      <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
+        {(page - 1) * SOURCES_PAGE_SIZE + 1}-
+        {Math.min(page * SOURCES_PAGE_SIZE, total)} / {total}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="rounded-full border border-border/60 px-2.5 py-1 font-mono text-[10.5px] transition-colors hover:bg-surface-2 disabled:opacity-35"
+        >
+          {previousLabel}
+        </button>
+        <span className="tt-num px-1 font-mono text-[10.5px] text-muted-foreground">
+          {page} / {pageCount}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(pageCount, page + 1))}
+          disabled={page >= pageCount}
+          className="rounded-full border border-border/60 px-2.5 py-1 font-mono text-[10.5px] transition-colors hover:bg-surface-2 disabled:opacity-35"
+        >
+          {nextLabel}
+        </button>
       </div>
-      <div
-        className={`tt-num mt-1 text-lg font-semibold ${warn ? "text-warn" : "text-foreground"}`}
-      >
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</div>
     </div>
   );
 }
 
 function SourceCard({
   entry,
+  hasInstalledTargets,
   onMigrate,
 }: {
   entry: SourcesQueryEntry;
+  hasInstalledTargets: boolean;
   onMigrate: () => void;
 }) {
   const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
   const hasPaths = entry.paths.length > 0;
   // 迁移按钮仅在工具确实有 Skill 根且存在 Skill 时可用。
-  const canMigrate = entry.skillCount !== null && entry.skillCount > 0;
+  const canMigrate =
+    hasInstalledTargets && entry.skillCount !== null && entry.skillCount > 0;
 
   return (
     <article
       data-testid={`source-card-${entry.id}`}
-      className="rounded-xl bg-surface-2/60 p-3.5 transition-colors hover:bg-surface-2"
+      className="flex min-h-[184px] flex-col rounded-xl bg-surface-2/60 p-3.5 transition-colors hover:bg-surface-2"
     >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -433,7 +413,7 @@ function SourceCard({
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="mt-auto flex min-h-9 flex-wrap items-center gap-2 pt-2">
         <button
           type="button"
           disabled={!canMigrate}
@@ -444,11 +424,6 @@ function SourceCard({
           <ArrowLeftRight className="size-3.5" strokeWidth={2} />
           {t("sources.migrate.button")}
         </button>
-        <span className="tt-num text-[10px] text-muted-foreground">
-          {t("sources.row.parsing", {
-            label: t(LOG_PARSING_LABEL[entry.usageLogParsing]),
-          })}
-        </span>
         {entry.officialDownloadUrl ? (
           <a
             href={entry.officialDownloadUrl}

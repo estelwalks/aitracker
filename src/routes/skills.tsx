@@ -47,7 +47,10 @@ export const Route = createFileRoute("/skills")({
     ]);
     return { locale: deps.locale, workspace, usage, distillation };
   },
-  staleTime: 30_000,
+  // Skill snapshots can be changed by the Sources migration flow. Always
+  // re-read the O(1) persisted snapshot when entering Skill management so a
+  // cached route cannot show the pre-migration skill count.
+  staleTime: 0,
   gcTime: 5 * 60_000,
   preloadStaleTime: 0,
   head: ({ loaderData }) => ({

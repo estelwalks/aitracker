@@ -22,5 +22,19 @@ export const migrateSourceSkills = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<SourceMigrationResult> => {
     const { migrateSourceSkills: runMigration } =
       await import("./migration.server.ts");
-    return runMigration(data);
+    const result = await runMigration(data);
+
+    // The migration writes Skill directories directly. Queue the persisted
+    // Skill read-model refresh without delaying the mutation response; the
+    // Sources page polls the skill counts and updates when the task commits.
+    if (result.migrated.length > 0 || result.skipped.length > 0) {
+      const { getCompositionRoot } =
+        await import("../../app/composition.server.ts");
+      const root = await getCompositionRoot();
+      void root.skillSnapshot
+        .requestRefresh({ reason: "event" })
+        .catch(() => {});
+    }
+
+    return result;
   });
