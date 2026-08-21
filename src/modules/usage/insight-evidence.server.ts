@@ -23,14 +23,57 @@ import type {
   InsightScope,
   PageInsightAdapter,
 } from "../insights/page/contracts.ts";
+import { getUsagePlan } from "../../lib/tool-registry/registry.ts";
 import { suggestionFor, wasteIndex } from "./application/tracker.ts";
 
 const LOW_CACHE_THRESHOLD = 40;
+
+const CACHE_OBSERVABLE_NATIVE_READERS = new Set([
+  "claude-rollout-v1",
+  "codex-rollout-v1",
+  "dsh-session-v1",
+  "gemini-session-v1",
+  "grok-turn-v1",
+  "openclaw-session-v1",
+  "workbuddy-native",
+]);
+
+/** Missing cache columns are normalized to zero by aggregation, so zero alone
+ * cannot prove a measured miss rate. Observability comes from the registry's
+ * mapping/reader contract instead of tool ids or aggregate values. */
+export function isCacheUsageObservable(sourceId: string): boolean {
+  const plan = getUsagePlan(sourceId);
+  if (plan == null) return false;
+  if (plan.mapping != null) {
+    return (plan.mapping.cachedInputTokens?.length ?? 0) > 0;
+  }
+  return CACHE_OBSERVABLE_NATIVE_READERS.has(plan.reader);
+}
+
+function cacheDenominator(source: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+}): number {
+  return (
+    source.inputTokens +
+    source.cachedInputTokens +
+    source.cacheCreationInputTokens
+  );
+}
 
 function composeTrackerCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const tokens = metricValue(bundle, "tracker.tokens");
+  const events = metricValue(bundle, "tracker.events");
+  const averageTokens = metricValue(bundle, "tracker.averageTokensPerEvent");
+  const topSourceTokens = metricValue(bundle, "tracker.topSourceTokens");
+  const topSourceShare = metricValue(bundle, "tracker.topSourceShare");
+  const observableCacheSources = metricValue(
+    bundle,
+    "tracker.cacheObservableSources",
+  );
   const topSource = bundle.evidence.find(
     (item) => item.id === "tracker.topSource" && typeof item.value === "string",
   );
@@ -54,13 +97,49 @@ function composeTrackerCandidates(
   const suggestCount = metricValue(bundle, "tracker.suggestCount");
   const candidates: InsightCandidate[] = [];
 
-  if (tokens != null && tokens > 0 && topSource != null) {
+  if (tokens != null && events != null) {
+    candidates.push({
+      id: "tracker.consumption",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-guide-consumption",
+      factParams: { tokens, events },
+      evidenceRefs: ["tracker.tokens", "tracker.events"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (averageTokens != null) {
+    candidates.push({
+      id: "tracker.average",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-guide-optimize",
+      factParams: { average: averageTokens },
+      evidenceRefs: ["tracker.averageTokensPerEvent"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (topSourceTokens != null && topSourceTokens > 0 && topSource != null) {
     candidates.push({
       id: "tracker.burn-leader",
       severity: "info",
       factKey: "insights.page.tracker.tracker-burn-leader",
-      factParams: { name: String(topSource.value), tokens },
-      evidenceRefs: ["tracker.topSource", "tracker.tokens"],
+      factParams: { name: String(topSource.value), tokens: topSourceTokens },
+      evidenceRefs: ["tracker.topSource", "tracker.topSourceTokens"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
+  if (topSource != null && topSourceShare != null) {
+    candidates.push({
+      id: "tracker.concentration",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-guide-concentration",
+      factParams: { name: String(topSource.value), rate: topSourceShare },
+      evidenceRefs: ["tracker.topSource", "tracker.topSourceShare"],
       allowedActionIds: ["open_tracker"],
       actionId: "open_tracker",
     });
@@ -122,6 +201,18 @@ function composeTrackerCandidates(
     });
   }
 
+  if (observableCacheSources != null && observableCacheSources > 0) {
+    candidates.push({
+      id: "tracker.cache-coverage",
+      severity: "info",
+      factKey: "insights.page.tracker.tracker-guide-cache",
+      factParams: { count: observableCacheSources },
+      evidenceRefs: ["tracker.cacheObservableSources"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+
   if (suggestCount != null && suggestCount > 0) {
     candidates.push({
       id: "tracker.suggest",
@@ -134,13 +225,13 @@ function composeTrackerCandidates(
     });
   }
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && tokens != null && events != null) {
     candidates.push({
       id: "tracker.empty",
       severity: "info",
       factKey: "insights.page.tracker.tracker-empty",
-      factParams: {},
-      evidenceRefs: [],
+      factParams: { tokens, events },
+      evidenceRefs: ["tracker.tokens", "tracker.events"],
       allowedActionIds: ["open_sources"],
       actionId: "open_sources",
     });
@@ -190,13 +281,58 @@ async function loadTrackerEvidence(scope: InsightScope) {
   if (topSource != null) {
     evidence.push(
       statusEvidence("tracker.topSource", topSource.key, observedAt, freshness),
+      metricEvidence(
+        "tracker.topSourceTokens",
+        topSource.totalTokens,
+        observedAt,
+        freshness,
+        "tokens",
+      ),
     );
+    if (snapshot.totals.totalTokens > 0) {
+      evidence.push(
+        metricEvidence(
+          "tracker.topSourceShare",
+          Math.round(
+            (topSource.totalTokens / snapshot.totals.totalTokens) * 100,
+          ),
+          observedAt,
+          freshness,
+          "percent",
+        ),
+      );
+    }
   }
 
-  const withCache = sources.filter((source) => source.inputTokens > 0);
+  const cacheObservableSources = sources.filter((source) =>
+    isCacheUsageObservable(source.key),
+  );
+  evidence.push(
+    metricEvidence(
+      "tracker.cacheObservableSources",
+      cacheObservableSources.length,
+      observedAt,
+      freshness,
+      "count",
+    ),
+  );
+  if (snapshot.events > 0) {
+    evidence.push(
+      metricEvidence(
+        "tracker.averageTokensPerEvent",
+        Math.round(snapshot.totals.totalTokens / snapshot.events),
+        observedAt,
+        freshness,
+        "tokens",
+      ),
+    );
+  }
+  const withCache = cacheObservableSources.filter(
+    (source) => cacheDenominator(source) > 0,
+  );
   const lowCache = withCache.reduce(
     (best, source) => {
-      const rate = (source.cachedInputTokens / source.inputTokens) * 100;
+      const rate = (source.cachedInputTokens / cacheDenominator(source)) * 100;
       return best == null || rate < best.rate
         ? { key: source.key, rate }
         : best;
@@ -252,8 +388,8 @@ async function loadTrackerEvidence(scope: InsightScope) {
   const wasteLeader = withTokens.reduce(
     (best, source) => {
       const cacheRate =
-        source.inputTokens > 0
-          ? (source.cachedInputTokens / source.inputTokens) * 100
+        isCacheUsageObservable(source.key) && cacheDenominator(source) > 0
+          ? (source.cachedInputTokens / cacheDenominator(source)) * 100
           : null;
       const outputRatio =
         source.totalTokens > 0 ? source.outputTokens / source.totalTokens : 0;
@@ -283,12 +419,12 @@ async function loadTrackerEvidence(scope: InsightScope) {
   }
 
   const suggestCount = sources.filter((source) => {
+    if (source.totalTokens <= 0) return false;
     const cacheRate =
-      source.inputTokens > 0
-        ? (source.cachedInputTokens / source.inputTokens) * 100
+      isCacheUsageObservable(source.key) && cacheDenominator(source) > 0
+        ? (source.cachedInputTokens / cacheDenominator(source)) * 100
         : null;
-    const outputRatio =
-      source.totalTokens > 0 ? source.outputTokens / source.totalTokens : 0;
+    const outputRatio = source.outputTokens / source.totalTokens;
     return (
       suggestionFor({ cacheRate, outputRatio, tokens: source.totalTokens }) !==
       "none"
@@ -319,55 +455,77 @@ function composeAgentsCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const active = metricValue(bundle, "agents.activeSources");
-  const blocked = metricValue(bundle, "agents.blocked");
-  const hours = metricValue(bundle, "agents.hours");
-  const lowCacheRate = metricValue(bundle, "agents.lowCacheRate");
-  const lowCacheSource = bundle.evidence.find(
-    (item) =>
-      item.id === "agents.lowCacheSource" && typeof item.value === "string",
+  const total = metricValue(bundle, "agents.totalSources");
+  const available = metricValue(bundle, "agents.availableSources");
+  const inactive = metricValue(bundle, "agents.inactiveSources");
+  const sessions = metricValue(bundle, "agents.sessions");
+  const events = metricValue(bundle, "agents.events");
+  const tokens = metricValue(bundle, "agents.tokens");
+  const topShare = metricValue(bundle, "agents.topShareRate");
+  const topSource = bundle.evidence.find(
+    (item) => item.id === "agents.topSource" && typeof item.value === "string",
   );
   const candidates: InsightCandidate[] = [];
 
-  if (
-    lowCacheRate != null &&
-    lowCacheRate < LOW_CACHE_THRESHOLD &&
-    lowCacheSource != null
-  ) {
-    candidates.push({
-      id: "agents.focus-cache",
-      severity: "attention",
-      factKey: "insights.page.agents.agents-focus-cache",
-      factParams: { name: String(lowCacheSource.value), rate: lowCacheRate },
-      evidenceRefs: ["agents.lowCacheSource", "agents.lowCacheRate"],
-      allowedActionIds: ["open_tracker"],
-      actionId: "open_tracker",
-    });
-  }
-
-  if (active != null && active > 0) {
+  if (active != null && total != null && inactive != null) {
     candidates.push({
       id: "agents.overview",
       severity: "info",
       factKey: "insights.page.agents.agents-overview",
-      factParams: {
-        count: active,
-        blocked: blocked ?? 0,
-        hours: hours ?? 0,
-      },
-      evidenceRefs: ["agents.activeSources", "agents.blocked", "agents.hours"],
-      allowedActionIds: ["open_sources", "open_tracker"],
+      factParams: { count: total, active, inactive },
+      evidenceRefs: [
+        "agents.totalSources",
+        "agents.activeSources",
+        "agents.inactiveSources",
+      ],
+      allowedActionIds: ["open_sources"],
       actionId: "open_sources",
     });
+  }
+  if (available != null) {
     candidates.push({
-      id: "agents.prompt-guide",
+      id: "agents.available",
       severity: "info",
-      factKey: "insights.page.agents.agents-prompt-guide",
-      factParams: {},
-      evidenceRefs: ["agents.activeSources"],
-      allowedActionIds: ["open_tracker"],
+      factKey: "insights.page.agents.agents-focus-security",
+      factParams: { available },
+      evidenceRefs: ["agents.availableSources"],
+      allowedActionIds: ["open_sources"],
+      actionId: "open_sources",
     });
   }
-
+  if (sessions != null) {
+    candidates.push({
+      id: "agents.sessions",
+      severity: "info",
+      factKey: "insights.page.agents.agents-guide-activity",
+      factParams: { count: sessions },
+      evidenceRefs: ["agents.sessions"],
+      allowedActionIds: ["open_sessions"],
+      actionId: "open_sessions",
+    });
+  }
+  if (events != null && tokens != null) {
+    candidates.push({
+      id: "agents.usage",
+      severity: "info",
+      factKey: "insights.page.agents.agents-guide-prompt",
+      factParams: { events, tokens },
+      evidenceRefs: ["agents.events", "agents.tokens"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
+  if (topSource != null && topShare != null) {
+    candidates.push({
+      id: "agents.primary",
+      severity: "info",
+      factKey: "insights.page.agents.agents-prompt-guide",
+      factParams: { name: String(topSource.value), rate: topShare },
+      evidenceRefs: ["agents.topSource", "agents.topShareRate"],
+      allowedActionIds: ["open_tracker"],
+      actionId: "open_tracker",
+    });
+  }
   return candidates;
 }
 
@@ -378,8 +536,7 @@ async function loadAgentsEvidence(scope: InsightScope) {
 
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
-  const { usageSnapshot, sessionSnapshot, monitoring } =
-    await getCompositionRoot();
+  const { usageSnapshot, sessionSnapshot } = await getCompositionRoot();
   await usageSnapshot.ensureHydrated();
   await sessionSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
@@ -390,8 +547,18 @@ async function loadAgentsEvidence(scope: InsightScope) {
   }
 
   const freshness = freshnessOf(snapshot.generatedAt, nowMs);
-  const sources = snapshot.sources;
+  const sources = snapshot.sources.filter(
+    (source) =>
+      source.detected === true || source.available || source.events > 0,
+  );
   const activeSources = sources.filter((source) => source.events > 0).length;
+  const availableSources = sources.filter((source) => source.available).length;
+  const bySource = snapshot.bySource.filter((source) => source.events > 0);
+  const topSource = bySource.reduce(
+    (best, source) =>
+      best == null || source.totalTokens > best.totalTokens ? source : best,
+    undefined as (typeof bySource)[number] | undefined,
+  );
 
   const evidence = [
     metricEvidence(
@@ -408,30 +575,42 @@ async function loadAgentsEvidence(scope: InsightScope) {
       freshness,
       "count",
     ),
+    metricEvidence(
+      "agents.availableSources",
+      availableSources,
+      observedAt,
+      freshness,
+      "count",
+    ),
+    metricEvidence(
+      "agents.inactiveSources",
+      Math.max(0, sources.length - activeSources),
+      observedAt,
+      freshness,
+      "count",
+    ),
+    metricEvidence(
+      "agents.events",
+      snapshot.events,
+      observedAt,
+      freshness,
+      "count",
+    ),
+    metricEvidence(
+      "agents.tokens",
+      snapshot.totals.totalTokens,
+      observedAt,
+      freshness,
+      "tokens",
+    ),
   ];
 
-  const bySource = snapshot.bySource.filter((source) => source.events > 0);
-  const withCache = bySource.filter((source) => source.inputTokens > 0);
-  const lowCache = withCache.reduce(
-    (best, source) => {
-      const rate = (source.cachedInputTokens / source.inputTokens) * 100;
-      return best == null || rate < best.rate
-        ? { key: source.key, rate }
-        : best;
-    },
-    undefined as { key: string; rate: number } | undefined,
-  );
-  if (lowCache != null) {
+  if (topSource != null && snapshot.totals.totalTokens > 0) {
     evidence.push(
-      statusEvidence(
-        "agents.lowCacheSource",
-        lowCache.key,
-        observedAt,
-        freshness,
-      ),
+      statusEvidence("agents.topSource", topSource.key, observedAt, freshness),
       metricEvidence(
-        "agents.lowCacheRate",
-        lowCache.rate,
+        "agents.topShareRate",
+        Math.round((topSource.totalTokens / snapshot.totals.totalTokens) * 100),
         observedAt,
         freshness,
         "percent",
@@ -440,32 +619,17 @@ async function loadAgentsEvidence(scope: InsightScope) {
   }
 
   const sessionsLatest = sessionSnapshot.readLatest();
-  evidence.push(
-    metricEvidence(
-      "agents.sessions",
-      sessionsLatest.data?.sessions.length ?? 0,
-      observedAt,
-      freshnessOf(sessionsLatest.data?.generatedAt ?? null, nowMs),
-      "count",
-    ),
-  );
-
-  const monitoringStatus = await monitoring.status().catch(() => null);
-  // Blocked = risky assets surfaced by the last security pass (0 when none).
-  evidence.push(
-    metricEvidence(
-      "agents.blocked",
-      monitoringStatus?.security != null
-        ? monitoringStatus.security.dangerousCount +
-            monitoringStatus.security.suspiciousCount
-        : 0,
-      observedAt,
-      freshnessOf(monitoringStatus?.security?.assessedAt ?? null, nowMs),
-      "count",
-    ),
-    // TODO(metrics): hours-saved is not yet measured; report an honest 0.
-    metricEvidence("agents.hours", 0, observedAt, "unknown", "count"),
-  );
+  if (sessionsLatest.data != null) {
+    evidence.push(
+      metricEvidence(
+        "agents.sessions",
+        sessionsLatest.data.sessions.length,
+        observedAt,
+        freshnessOf(sessionsLatest.data.generatedAt, nowMs),
+        "count",
+      ),
+    );
+  }
 
   return {
     surfaceId: "agents" as const,
@@ -478,14 +642,14 @@ async function loadAgentsEvidence(scope: InsightScope) {
 
 export const trackerInsightAdapter: PageInsightAdapter = {
   surfaceId: "tracker",
-  adapterVersion: 1,
+  adapterVersion: 3,
   loadEvidence: loadTrackerEvidence,
   composeCandidates: composeTrackerCandidates,
 };
 
 export const agentsInsightAdapter: PageInsightAdapter = {
   surfaceId: "agents",
-  adapterVersion: 1,
+  adapterVersion: 3,
   loadEvidence: loadAgentsEvidence,
   composeCandidates: composeAgentsCandidates,
 };

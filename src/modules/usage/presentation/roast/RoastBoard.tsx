@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Flame, Minus } from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
@@ -12,7 +12,7 @@ import type {
 } from "../../application/tracker.ts";
 import { WasteDetail } from "./WasteDetail.tsx";
 
-const DIMENSIONS: RoastDimension[] = ["skill", "project", "session"];
+const DIMENSIONS: RoastDimension[] = ["project", "session", "skill"];
 
 const SUGGEST_KEY: Record<RoastRow["suggestion"], MessageKey> = {
   cache: "tracker.suggest.cache",
@@ -71,15 +71,22 @@ function TrendBadge({ row }: { row: RoastRow }) {
   );
 }
 
-/** 3-tab waste board: skill / project / session, ranked by waste index. */
+/** 3-tab token board: project / session / skill, ranked by token usage. */
 export function RoastBoard({
   boards,
+  dimension,
+  onDimensionChange,
 }: {
   boards: Record<RoastDimension, TrackerBoard>;
+  dimension: RoastDimension;
+  onDimensionChange: (dimension: RoastDimension) => void;
 }) {
   const { t, format } = useI18n();
-  const [dimension, setDimension] = useState<RoastDimension>("skill");
   const [selected, setSelected] = useState<RoastRow | null>(null);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [dimension]);
 
   const rows = boards[dimension].rows;
   const options = DIMENSIONS.map((value) => ({
@@ -106,7 +113,7 @@ export function RoastBoard({
     >
       <ChipTabs
         value={dimension}
-        onChange={setDimension}
+        onChange={onDimensionChange}
         options={options}
         className="mb-3"
       />

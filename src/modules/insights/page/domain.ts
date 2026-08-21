@@ -1,4 +1,5 @@
 import { sha256Hex } from "../../../lib/crypto/sha256.ts";
+import { formatPercent, formatTokens } from "../../../lib/i18n/format.ts";
 import { catalogs, getMessage } from "../../../lib/i18n/messages.ts";
 import { normalizeLocale } from "../../../lib/i18n/locale.ts";
 import { INSIGHT_ACTIONS } from "./action-registry.ts";
@@ -25,6 +26,60 @@ const SEVERITY_ORDER: Record<InsightSeverity, number> = {
   attention: 1,
   info: 0,
 };
+const AVERAGE_TOKEN_FACT_KEYS = new Set([
+  "insights.page.dashboard.dashboard-guide-concentration",
+  "insights.page.tracker.tracker-guide-optimize",
+]);
+const PERCENT_FACT_KEYS = new Set([
+  "insights.page.dashboard.dashboard-assets",
+  "insights.page.dashboard.dashboard-efficiency",
+  "insights.page.agents.agents-focus-cache",
+  "insights.page.agents.agents-prompt-guide",
+  "insights.page.distill.distill-quota",
+  "insights.page.reports.reports-highlights",
+  "insights.page.security.security-scan-coverage",
+  "insights.page.tracker.tracker-waste-leader",
+  "insights.page.tracker.tracker-cache-low",
+  "insights.page.tracker.tracker-guide-waste",
+  "insights.page.tracker.tracker-guide-concentration",
+  "insights.page.widget.widget-broadcast-efficiency",
+  "insights.page.settings.settings-collection",
+]);
+
+/**
+ * Fact parameters are machine values until they cross the insight display
+ * boundary. Token-valued parameters use the same K/M/B formatter as the rest
+ * of the product, so a large aggregate never leaks into a user-facing fact as
+ * an unformatted integer. Percentage formatting is restricted to the explicit
+ * fact-key whitelist below: only those facts have a rate whose unit is 0–100%.
+ * String parameters, including already formatted percentages, are never
+ * formatted a second time. `average` is token-valued only for fact keys whose
+ * wording explicitly describes average token usage.
+ */
+export function formatInsightFactParams(
+  locale: string,
+  factKey: string,
+  params: Readonly<Record<string, string | number>>,
+): Readonly<Record<string, string | number>> {
+  const resolvedLocale = normalizeLocale(locale) ?? "zh-CN";
+  const tokenKey = /^(?:token|tokens|totalTokens|tokenCount)$/i;
+  const percentKey = /^rate$/i;
+  const averageIsTokens =
+    params.average !== undefined && AVERAGE_TOKEN_FACT_KEYS.has(factKey);
+
+  return Object.fromEntries(
+    Object.entries(params).map(([key, value]) =>
+      typeof value === "number" &&
+      PERCENT_FACT_KEYS.has(factKey) &&
+      percentKey.test(key)
+        ? [key, formatPercent(resolvedLocale, value)]
+        : typeof value === "number" &&
+            (tokenKey.test(key) || (key === "average" && averageIsTokens))
+          ? [key, formatTokens(resolvedLocale, value)]
+          : [key, value],
+    ),
+  );
+}
 
 export function isInsightSurfaceId(value: unknown): value is InsightSurfaceId {
   return (
@@ -87,6 +142,9 @@ export function validateCandidates(
     ) {
       errors.push(`candidate.severity.invalid:${candidate.id}`);
     }
+    if (candidate.evidenceRefs.length === 0) {
+      errors.push(`candidate.evidenceRefs.empty:${candidate.id}`);
+    }
     for (const ref of candidate.evidenceRefs) {
       if (!evidenceIds.has(ref)) {
         errors.push(`candidate.evidenceRef.missing:${candidate.id}:${ref}`);
@@ -134,6 +192,46 @@ export function rankCandidates(
   return sorted.slice(0, maxLines);
 }
 
+function collectPageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  return filterValidCandidates(bundle, adapter.composeCandidates(bundle));
+}
+
+/**
+ * Compose the bounded local rule set. Every line is owned by the page adapter
+ * and must reference evidence from the current bundle; missing read models are
+ * represented by an honest short/empty result instead of generic padding.
+ */
+export function composePageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  return rankCandidates(
+    collectPageCandidates(adapter, bundle),
+    getPageRuleConfig(adapter.surfaceId).maxLines,
+  );
+}
+
+/**
+ * Compose the remote-safe model input independently from the local rule set.
+ * Filtering happens before truncation so private high-priority facts cannot
+ * crowd safe candidates out of the model payload.
+ */
+export function composeRemotePageCandidates(
+  adapter: PageInsightAdapter,
+  bundle: InsightEvidenceBundle,
+): readonly InsightCandidate[] {
+  const remoteSafe = collectPageCandidates(adapter, bundle).filter(
+    (candidate) => candidate.remoteEligible !== false,
+  );
+  return rankCandidates(
+    remoteSafe,
+    getPageRuleConfig(adapter.surfaceId).maxLines,
+  );
+}
+
 export interface ComposeRulesEnvelopeOptions {
   readonly adapter: PageInsightAdapter;
   readonly bundle: InsightEvidenceBundle;
@@ -154,17 +252,18 @@ export function composeRulesEnvelope(
   const adapter = options.adapter;
   const bundle = options.bundle;
   const mode = options.mode;
-  const candidates = filterValidCandidates(
-    bundle,
-    adapter.composeCandidates(bundle),
-  );
+  const candidates = composePageCandidates(adapter, bundle);
   const maxLines = getPageRuleConfig(adapter.surfaceId).maxLines;
   const lines: InsightEnvelopeLine[] = rankCandidates(candidates, maxLines).map(
     (candidate) => ({
       id: candidate.id,
       severity: candidate.severity,
       key: candidate.factKey,
-      params: candidate.factParams,
+      params: formatInsightFactParams(
+        options.locale,
+        candidate.factKey,
+        candidate.factParams,
+      ),
       source: "rules",
       ...(candidate.actionId !== undefined
         ? {
@@ -201,7 +300,11 @@ export function resolveFactText(
   candidate: InsightCandidate,
 ): string {
   const catalog = catalogs[normalizeLocale(locale) ?? "zh-CN"];
-  return getMessage(catalog, candidate.factKey, { ...candidate.factParams });
+  return getMessage(
+    catalog,
+    candidate.factKey,
+    formatInsightFactParams(locale, candidate.factKey, candidate.factParams),
+  );
 }
 
 /** Deterministic key-order-independent JSON serialization over a whitelist projection. */
@@ -236,13 +339,16 @@ function projectEvidence(item: InsightEvidence): Record<string, unknown> {
     kind: item.kind,
     value: item.value,
     unit: item.unit ?? null,
-    observedAt: item.observedAt,
     freshness: item.freshness,
     sensitivity: item.sensitivity,
   };
 }
 
-/** Evidence identity over a whitelist of fields; extra fields never affect the hash. */
+/**
+ * Semantic evidence identity over a whitelist of fields. Sampling timestamps
+ * (`bundle.observedAt` and item `observedAt`) and extra fields do not affect
+ * the hash; content, freshness, scope and completeness still do.
+ */
 export function evidenceHash(bundle: InsightEvidenceBundle): string {
   return sha256Hex(
     stableStringify({
@@ -251,7 +357,6 @@ export function evidenceHash(bundle: InsightEvidenceBundle): string {
         range: bundle.scope.range ?? null,
         entityId: bundle.scope.entityId ?? null,
       },
-      observedAt: bundle.observedAt,
       evidence: bundle.evidence.map(projectEvidence),
       partial: bundle.partial ?? null,
     }),

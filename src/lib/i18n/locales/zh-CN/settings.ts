@@ -229,6 +229,13 @@ export const settings = {
       "invalid-output": "增强结果无效",
       stale: "数据可能过期",
     },
+    fallbackStatus: {
+      "enhancer-unavailable": "AI 增强不可用，已显示规则洞察",
+      "budget-exceeded": "AI 增强已达调用上限，已显示规则洞察",
+      timeout: "AI 增强超时，已显示规则洞察",
+      "enhancer-failed": "AI 增强失败，已显示规则洞察",
+      "invalid-output": "AI 返回格式无效，已显示规则洞察",
+    },
     section: {
       title: "今日洞察",
       desc: "关闭时仅使用本地规则；打开后自动调用模型生成增强洞察。",

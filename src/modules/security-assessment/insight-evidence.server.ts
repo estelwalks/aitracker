@@ -30,32 +30,46 @@ function composeSecurityCandidates(
   const risky = metricValue(bundle, "security.risky");
   const failed = metricValue(bundle, "security.failed");
   const assessed = metricValue(bundle, "security.assessed");
+  const discovered = metricValue(bundle, "security.discovered");
+  const clean = metricValue(bundle, "security.clean");
   const coverageRate = metricValue(bundle, "security.coverageRate");
   const scanTime = bundle.evidence.find(
     (item) => item.id === "security.scanTime" && typeof item.value === "string",
   );
   const candidates: InsightCandidate[] = [];
 
-  if (risky != null && risky > 0) {
+  if (risky != null) {
     candidates.push({
       id: "security.risk-top",
-      severity: "risk",
-      factKey: "insights.page.security.security-risk-top",
-      factParams: { count: risky },
+      severity: risky > 0 ? "risk" : "info",
+      factKey: "insights.page.security.security-guide-posture",
+      factParams: { risky },
       evidenceRefs: ["security.risky"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
-      mandatory: true,
+      mandatory: risky > 0,
     });
   }
 
-  if (failed != null && failed > 0) {
+  if (failed != null) {
     candidates.push({
       id: "security.scan-gap",
-      severity: "attention",
-      factKey: "insights.page.security.security-scan-gap",
-      factParams: { count: failed },
+      severity: failed > 0 ? "attention" : "info",
+      factKey: "insights.page.security.security-guide-failures",
+      factParams: { failed },
       evidenceRefs: ["security.failed"],
+      allowedActionIds: ["open_security"],
+      actionId: "open_security",
+    });
+  }
+
+  if (assessed != null && discovered != null) {
+    candidates.push({
+      id: "security.assessment-counts",
+      severity: "info",
+      factKey: "insights.page.security.security-guide-coverage",
+      factParams: { assessed, discovered },
+      evidenceRefs: ["security.assessed", "security.discovered"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
     });
@@ -78,39 +92,25 @@ function composeSecurityCandidates(
     });
   }
 
-  if (
-    candidates.length === 0 &&
-    assessed != null &&
-    assessed > 0 &&
-    scanTime != null
-  ) {
+  if (scanTime != null) {
     candidates.push({
       id: "security.last-scan",
       severity: "info",
-      factKey: "insights.page.security.security-last-scan",
+      factKey: "insights.page.security.security-guide-recency",
       factParams: { time: String(scanTime.value) },
-      evidenceRefs: ["security.assessed", "security.scanTime"],
+      evidenceRefs: ["security.scanTime"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
     });
   }
 
-  if (assessed != null && assessed > 0) {
+  if (clean != null) {
     candidates.push({
-      id: "security.scan-first",
+      id: "security.clean",
       severity: "info",
-      factKey: "insights.page.security.security-scan-first",
-      factParams: {},
-      evidenceRefs: ["security.assessed"],
-      allowedActionIds: ["open_security"],
-      actionId: "open_security",
-    });
-    candidates.push({
-      id: "security.history",
-      severity: "info",
-      factKey: "insights.page.security.security-history",
-      factParams: {},
-      evidenceRefs: ["security.assessed"],
+      factKey: "insights.page.security.security-guide-scan",
+      factParams: { clean },
+      evidenceRefs: ["security.clean"],
       allowedActionIds: ["open_security"],
       actionId: "open_security",
     });
@@ -121,7 +121,7 @@ function composeSecurityCandidates(
 
 export const securityInsightAdapter: PageInsightAdapter = {
   surfaceId: "security",
-  adapterVersion: 1,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
