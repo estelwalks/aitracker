@@ -2,6 +2,10 @@ import { RadarIcon, ScanLine } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useI18n } from "../../../../lib/i18n/context";
+import {
+  insightFallbackStatusLabel,
+  usePageInsight,
+} from "../../../insights/page/presentation/use-page-insight";
 import type { SecurityScanPhase, SecurityTotals } from "../security-view";
 
 const TYPE_INTERVAL_MS = 18;
@@ -27,7 +31,12 @@ export function SecurityBriefing({
   scanning: boolean;
   onScan: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const {
+    lines: sharedInsightLines,
+    envelope,
+    loading: insightLoading,
+  } = usePageInsight({ surfaceId: "security", locale });
   const risky = totals.warn + totals.danger + totals.unknown + totals.failed;
   const suspicious = totals.warn + totals.unknown + totals.failed;
   const health = totals.total
@@ -40,7 +49,7 @@ export function SecurityBriefing({
         ? "var(--warn)"
         : "var(--ok)";
 
-  const lines = useMemo(() => {
+  const localLines = useMemo(() => {
     const first =
       totals.total === 0
         ? t("security.center.briefing.noReportLine")
@@ -78,6 +87,19 @@ export function SecurityBriefing({
     t,
     totals,
   ]);
+
+  // The security briefing keeps its bespoke radar/health presentation, while
+  // its rotating copy comes from the same evidence envelope as every page.
+  // During the initial read (or when no envelope lines are available), the
+  // existing security totals remain the honest local fallback.
+  const useLocalLines = insightLoading || sharedInsightLines.length === 0;
+  const lines = useLocalLines
+    ? localLines
+    : sharedInsightLines.map((insight) => insight.text);
+  const fallbackStatusKey = envelope
+    ? insightFallbackStatusLabel(envelope.status)
+    : null;
+  const renderMessage = t as unknown as (key: string) => string;
 
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
@@ -137,9 +159,24 @@ export function SecurityBriefing({
           </span>
 
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold tracking-tight">
-              {t("security.center.briefing.title")}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[15px] font-semibold tracking-tight">
+                {t("security.center.briefing.title")}
+              </h2>
+              {envelope?.source === "enhanced" ? (
+                <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground">
+                  {t("settings.insight.enhanced")}
+                </span>
+              ) : null}
+              {fallbackStatusKey ? (
+                <span
+                  role="status"
+                  className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+                >
+                  {renderMessage(fallbackStatusKey)}
+                </span>
+              ) : null}
+            </div>
 
             <p
               className="mt-2 min-h-[46px] text-[15px] leading-relaxed font-medium text-foreground/90 md:text-[16px]"

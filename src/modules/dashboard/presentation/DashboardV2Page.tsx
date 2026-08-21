@@ -25,6 +25,7 @@ import {
   DashboardToolSwitcher,
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
+import { resolveDashboardToolRailTools } from "./tool-rail-order.ts";
 
 // P6-T6-05: Recharts trend panel is loaded on demand (not in the initial
 // shared shell). The Suspense fallback keeps layout stable during load.
@@ -136,10 +137,46 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
     staleTime: 30_000,
   });
 
+  // The selected-tool query is intentionally scoped to one source so the
+  // detail panels can update. Keep a second, all-tools custom projection for
+  // the tool rail: selecting a tool must not make that tool jump to the first
+  // position just because the scoped projection contains fewer events.
+  const { data: customAll } = useQuery({
+    queryKey: [
+      "dashboard-custom-window",
+      data.locale,
+      "custom",
+      isCustom ? from : "",
+      isCustom ? to : "",
+      "all",
+    ],
+    queryFn: () =>
+      getDashboardCustomWindow({
+        data: {
+          locale: data.locale,
+          from,
+          to,
+          tool: null,
+        },
+      }),
+    enabled: isCustom && selectedTool !== "all",
+    staleTime: 30_000,
+  });
+
   const windowView: DashboardWindowSummary =
     isCustom || selectedTool !== "all"
       ? (custom?.window ?? data.windows[standardKey])
       : data.windows[standardKey];
+
+  // The rail order is based on the unscoped window. Its content query may be
+  // scoped after a click, but its button positions remain stable.
+  const toolRailTools = resolveDashboardToolRailTools(
+    selectedTool,
+    windowView.tools,
+    isCustom
+      ? (customAll?.window.tools ?? data.tools)
+      : data.windows[standardKey].tools,
+  );
 
   const view = useMemo(
     () => windowToView(windowView, data),
@@ -243,7 +280,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
         baselineLabel={baselineLabel}
       />
       <DashboardToolSwitcher
-        tools={view.tools}
+        tools={toolRailTools}
         selected={selectedTool}
         onChange={setSelectedTool}
       />

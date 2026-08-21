@@ -45,10 +45,9 @@ test("dashboard compose: usage data without a security scan yields usage line, n
   );
 });
 
-test("dashboard compose: no usage and no security yields the honest empty line", () => {
+test("dashboard compose: no evidence yields no fabricated line", () => {
   const result = dashboardInsightAdapter.composeCandidates(bundle([]));
-  assert.equal(result.length, 1);
-  assert.equal(result[0]!.factKey, "insights.page.dashboard.dashboard-empty");
+  assert.equal(result.length, 0);
 });
 
 test("dashboard compose: security risk is mandatory and ranked first", () => {

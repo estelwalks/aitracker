@@ -13,10 +13,13 @@ import type {
   InsightPreference,
 } from "./contracts.ts";
 import { INSIGHT_AUTO_CONSENT_VERSION } from "./contracts.ts";
+import { isInsightAnalysisUseful } from "./analysis-quality.ts";
 import {
   composeRulesEnvelope,
+  composePageCandidates,
+  composeRemotePageCandidates,
   evidenceHash,
-  filterValidCandidates,
+  formatInsightFactParams,
   rankCandidates,
   resolveFactText,
 } from "./domain.ts";
@@ -125,25 +128,22 @@ export function createPageInsightsApplication(options: {
       return { ...base, status: "enhancer-unavailable" };
     }
 
-    const candidates = filterValidCandidates(
-      bundle,
-      adapter.composeCandidates(bundle),
-    );
+    const candidates = composePageCandidates(adapter, bundle);
+    const maxLines = getPageRuleConfig(surfaceId).maxLines;
+    const remoteCandidates = composeRemotePageCandidates(adapter, bundle);
     const input: InsightEnhancementInput = {
       surface: surfaceId,
       adapterVersion: adapter.adapterVersion,
       locale,
       profileId: preference.profileId,
       dailyCallLimit: preference.dailyCallLimit,
-      candidates: candidates
-        .filter((candidate) => candidate.remoteEligible !== false)
-        .map((candidate) => ({
-          id: candidate.id,
-          severity: candidate.severity,
-          fact: resolveFactText(locale, candidate),
-          actionIds: [...candidate.allowedActionIds],
-          mandatory: candidate.mandatory ?? false,
-        })),
+      candidates: remoteCandidates.map((candidate) => ({
+        id: candidate.id,
+        severity: candidate.severity,
+        fact: resolveFactText(locale, candidate),
+        actionIds: [...candidate.allowedActionIds],
+        mandatory: candidate.mandatory ?? false,
+      })),
     };
 
     if (input.candidates.length === 0) return base;
@@ -171,7 +171,10 @@ export function createPageInsightsApplication(options: {
       result.status === "enhanced-ready"
     ) {
       const candidatesById = new Map(
-        candidates.map((candidate) => [candidate.id, candidate]),
+        [...candidates, ...remoteCandidates].map((candidate) => [
+          candidate.id,
+          candidate,
+        ]),
       );
       const selectedIds = new Set(result.lines.map((line) => line.candidateId));
       const mandatory = rankCandidates(candidates, candidates.length).filter(
@@ -187,7 +190,6 @@ export function createPageInsightsApplication(options: {
         (candidate) =>
           candidate.mandatory !== true && !selectedIds.has(candidate.id),
       );
-      const maxLines = getPageRuleConfig(surfaceId).maxLines;
       const ordered = [...mandatory, ...modelSelected, ...fallback].slice(
         0,
         maxLines,
@@ -197,7 +199,16 @@ export function createPageInsightsApplication(options: {
         const match = result.lines.find(
           (item) => item.candidateId === candidate.id,
         );
+        const analysis =
+          match?.analysis !== undefined &&
+          isInsightAnalysisUseful(
+            resolveFactText(locale, candidate),
+            match.analysis,
+          )
+            ? match.analysis.trim()
+            : undefined;
         const action =
+          analysis !== undefined &&
           match?.actionId !== undefined &&
           isInsightActionId(match.actionId) &&
           candidate.allowedActionIds.includes(match.actionId)
@@ -215,18 +226,23 @@ export function createPageInsightsApplication(options: {
           id: candidate.id,
           severity: candidate.severity,
           key: candidate.factKey,
-          params: candidate.factParams,
-          source: match === undefined ? "rules" : "enhanced",
-          ...(match?.analysis !== undefined
-            ? { analysis: match.analysis }
-            : {}),
+          params: formatInsightFactParams(
+            locale,
+            candidate.factKey,
+            candidate.factParams,
+          ),
+          source: analysis === undefined ? "rules" : "enhanced",
+          ...(analysis !== undefined ? { analysis } : {}),
           ...(action !== undefined ? { action } : {}),
         };
       });
+      const hasUsefulEnhancement = lines.some(
+        (line) => line.source === "enhanced",
+      );
       return {
         ...base,
-        status: result.status,
-        source: "enhanced",
+        status: hasUsefulEnhancement ? result.status : "invalid-output",
+        source: hasUsefulEnhancement ? "enhanced" : "rules",
         lines,
         modelLabel: result.modelLabel,
       };

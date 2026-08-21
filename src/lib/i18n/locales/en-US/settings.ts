@@ -238,6 +238,16 @@ export const settings = {
       "invalid-output": "Invalid enhancer output",
       stale: "Data may be stale",
     },
+    fallbackStatus: {
+      "enhancer-unavailable":
+        "AI enhancement is unavailable; showing rule-based insight",
+      "budget-exceeded":
+        "AI enhancement limit reached; showing rule-based insight",
+      timeout: "AI enhancement timed out; showing rule-based insight",
+      "enhancer-failed": "AI enhancement failed; showing rule-based insight",
+      "invalid-output":
+        "AI returned invalid output; showing rule-based insight",
+    },
     section: {
       title: "Today's insights",
       desc: "Off uses local rules only; on automatically calls the model for enhanced insights.",

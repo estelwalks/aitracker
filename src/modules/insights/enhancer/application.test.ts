@@ -16,6 +16,7 @@ import type {
 } from "../infrastructure/sqlite-insight-repository.server.ts";
 import {
   createInsightEnhancer,
+  INSIGHT_ENHANCEMENT_CACHE_TTL_MS,
   type InsightEnhancerInput,
   type InsightEnhancerOptions,
   type InsightExecutionRecord,
@@ -235,7 +236,7 @@ test("no active profile returns enhancer-unavailable without calling the model",
 });
 
 test("successful generation writes the cache and a second call hits it", async () => {
-  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const { ai, calls, requests } = fakeAI(() => completedResult(VALID_OUTPUT));
   const repository = new FakeInsightRepository();
   const target = enhancer(ai, repository);
 
@@ -251,6 +252,52 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(second.modelLabel, "Model");
   assert.equal(second.lines.length, 2);
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
+  assert.equal(requests()[0]?.timeoutMs, 30_000);
+  assert.equal(requests()[0]?.maxOutputTokens, 8192);
+});
+
+test("default cache expires with the 3-hour page refresh cycle", async () => {
+  let nowMs = FIXED_NOW;
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const target = createInsightEnhancer({
+    ai,
+    repository,
+    resolveActiveProfile: resolveProfile,
+    now: () => nowMs,
+  });
+
+  assert.equal(INSIGHT_ENHANCEMENT_CACHE_TTL_MS, 3 * 60 * 60 * 1000);
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(
+    repository.saved[0]!.expiresAtMs - repository.saved[0]!.generatedAtMs,
+    INSIGHT_ENHANCEMENT_CACHE_TTL_MS,
+  );
+
+  nowMs += INSIGHT_ENHANCEMENT_CACHE_TTL_MS - 1;
+  assert.equal((await target.enhance(input())).status, "enhanced-cached");
+  assert.equal(calls(), 1);
+
+  nowMs += 1;
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(calls(), 2);
+});
+
+test("default daily budget allows the 500th call and rejects the 501st", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const target = enhancer(ai, new FakeInsightRepository());
+
+  for (let adapterVersion = 1; adapterVersion <= 500; adapterVersion += 1) {
+    assert.equal(
+      (await target.enhance(input({ adapterVersion }))).status,
+      "enhanced-ready",
+    );
+  }
+  assert.equal(
+    (await target.enhance(input({ adapterVersion: 501 }))).status,
+    "budget-exceeded",
+  );
+  assert.equal(calls(), 500);
 });
 
 test("adapterVersion isolates the enhancement cache identity", async () => {

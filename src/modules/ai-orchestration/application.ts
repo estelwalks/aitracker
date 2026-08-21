@@ -127,6 +127,7 @@ export async function executeAIRequest(
             modelId: request.modelId,
             prompt: request.prompt,
             input: request.input,
+            maxOutputTokens: request.maxOutputTokens,
             signal,
           }),
           signal,

@@ -17,71 +17,89 @@ import {
   WIDGET_MAX_LINES,
 } from "./validation.ts";
 
-export const INSIGHT_PROMPT_VERSION = 1;
-export const INSIGHT_OUTPUT_SCHEMA_VERSION = 1;
-export const INSIGHT_ALLOWED_LOCALES = ["zh-CN", "en-US", "ja-JP"] as const;
+export const INSIGHT_PROMPT_VERSION = 6;
+export const INSIGHT_OUTPUT_SCHEMA_VERSION = 6;
+export const INSIGHT_ALLOWED_LOCALES = [
+  "zh-CN",
+  "en-US",
+  "ja-JP",
+  "ko-KR",
+] as const;
 
 export interface InsightPrompt {
   readonly id: `insight.${InsightSurfaceId}`;
-  readonly version: 1;
+  readonly version: 6;
   readonly surfaceId: InsightSurfaceId;
   readonly maxLines: number;
   readonly maxAnalysisChars: number;
   readonly allowedLocales: readonly string[];
-  readonly outputSchemaVersion: 1;
+  readonly outputSchemaVersion: 6;
   readonly system: string;
   readonly policy: string;
 }
 
 const SHARED_SYSTEM = [
-  `You are the ${APP_NAME} daily-insight enhancer. You rewrite a small set of rule-produced fact sentences into concise, actionable analysis lines.`,
+  `You are the ${APP_NAME} daily-insight analyst. The supplied fact is already shown to the user; your analysis must add decision-useful meaning instead of rewriting it.`,
   "Hard rules — violating any one invalidates the whole response:",
-  "1. Never invent or echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
-  "2. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
-  "3. Every mandatory candidate must receive exactly one line — never drop it.",
-  "4. Respond with a single JSON object only: no markdown, no prose, no code fences.",
-  "5. Answer in the same language as the request locale.",
-  "6. Never soften a risk: keep or raise the severity implied by each fact.",
+  "1. Analyze every candidate independently. For a line, use ONLY that candidate's fact; never borrow a number, ratio, entity, metric, condition, or conclusion from another candidate in the payload.",
+  "2. Never invent a cause, trend, comparison, availability state, missing state, collection state, configuration state, permission state, or recommendation that the current candidate fact does not establish.",
+  "3. Do not use external or assumed benchmarks such as common, typical, normal, industry, far above, or significantly higher unless the current candidate fact itself explicitly contains that threshold conclusion.",
+  "4. Do not speculate with may, might, likely, possibly, or equivalent wording. Do not fill a line with requests for more data, further confirmation, distinction, investigation, or verification. If the fact supports no incremental conclusion, omit that non-mandatory candidate.",
+  "5. Do not repeat, paraphrase, summarize, or merely strengthen the candidate fact. Analysis must add a concrete implication, priority, trade-off, or action rationale that is directly supported by that same fact.",
+  "6. Treat unknown, unavailable, unobserved, or missing values as unknown. Never convert them to zero, none, low, healthy, risky, unavailable, or missing.",
+  "7. Never tell the user to confirm collection is running, prevent collection gaps, install or connect missing tools, maximize coverage, or perform generic optimization. Do not recommend work the user cannot verify from this page.",
+  "8. Keep each surface within its stated responsibility. Do not repeat diagnostics owned by another surface, even when a candidate sounds related.",
+  "9. Never echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
+  "10. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
+  "11. Every mandatory candidate must receive exactly one line — never drop it. When its fact supports no incremental conclusion, provide only a directly supported priority or action rationale without speculation.",
+  "12. Quality is more important than line count. For non-mandatory candidates, omit the line when its own fact cannot support a genuinely incremental conclusion. Never add filler merely to reach five lines; fewer than five useful lines is correct.",
+  "13. Every output line must add a distinct conclusion. Never produce two lines with the same or synonymous implication, priority, recommendation, or rationale; keep only the stronger supported line.",
+  "14. Ground every metric word in the current candidate fact. In particular, never mention events or event volume unless that fact itself mentions events; another candidate cannot supply the metric.",
+  "15. Never fill a line by describing absent dimensions, data limitations, or prompt rules. Do not say that only a total-volume dimension is provided, that existing data only contains a dimension, or that assumptions are unnecessary or forbidden.",
+  "16. Do not call a number, count, source set, or quantity limited, few, small, high, or low unless the current fact explicitly provides that conclusion or an applicable threshold/share.",
+  "17. Respond with a single JSON object only: no markdown, no prose, no code fences. Answer in the request locale. Never soften a risk.",
 ].join("\n");
 
 const POLICIES: Record<InsightSurfaceId, string> = {
   dashboard:
-    "Prioritize the single most impactful cross-tool observation; calm, actionable tone.",
+    "Responsibility: cross-domain executive summary of observed aggregate security, usage, sessions, and source concentration. Cover distinct dimensions, but exclude agent-level cache diagnostics, source-collection troubleshooting, setup guidance, and details owned by specialist pages.",
   agents:
-    "Focus on agent health and utilization; suggest the most relevant drill-down action.",
+    "Responsibility: summarize only already-detected agents and tools—their activity, sessions, prompt behavior, and agent-specific security. Cover distinct dimensions; never recommend installing, connecting, or completing coverage for missing tools.",
   distill:
-    "Emphasize distillation output quality and coverage gaps without naming outputs.",
+    "Responsibility: analyze observed distillation backlog, output, quota, and reuse. Cover distinct dimensions without inventing materials, naming outputs, or filling an empty state with generic workflow advice.",
   reports:
-    "Highlight report completeness and scheduling gaps without naming report assets.",
+    "Responsibility: analyze observed report inventory, types, status, and recency. Cover distinct dimensions without inventing highlights, collaboration activity, security review, or a next-report recommendation not present in facts.",
   memory:
-    "Summarize memory aggregation state and hygiene; never name a memory item.",
+    "Responsibility: analyze observed memory inventory, approval/publishing state, types, and safety status. Cover distinct dimensions; never name an item or invent automatic aggregation and empty-state guidance.",
   security:
-    "Security findings must NEVER be downplayed: keep or raise severity, never soften it; lead with the most dangerous item.",
+    "Responsibility: analyze observed scan risk, failures, coverage, and recency. Cover distinct dimensions, NEVER downplay severity, and lead with the most dangerous supported item; do not invent scan gaps or ask for a scan unless a fact supports it.",
   tracker:
-    "Summarize usage-tracking coverage and anomalies; point at the tracker action.",
-  skills: "Note skill health and adoption without naming a specific skill.",
+    "Responsibility: analyze observed token consumption, waste, cache efficiency, and model/project concentration. Cover distinct dimensions; discuss cache only when the fact says it is observable and never treat missing telemetry as zero.",
+  skills:
+    "Responsibility: analyze the observed local Skill inventory, enablement, current Agent use, updates, and safety. Cover distinct dimensions without naming a Skill or recommending installation merely to increase coverage.",
   market:
-    "Summarize marketplace availability and install state without naming a package.",
+    "Responsibility: analyze observed marketplace catalog availability, installed items, and updates. Cover distinct dimensions without naming a package, inventing security review, or recommending installation for completeness.",
   chats:
-    "Summarize conversation activity without naming sessions or participants.",
+    "Responsibility: analyze observed session inventory, source distribution, activity, and recoverability. Cover distinct dimensions without naming sessions/participants or inventing recovery and distillation work.",
   "chat-detail":
-    "Summarize the current conversation state neutrally and briefly.",
+    "Responsibility: analyze only the current session's observed turns, token activity, duration/status, and recoverability. Cover distinct dimensions, stay neutral, never name the session, and do not invent recovery or distillation actions.",
   widget:
     "Exactly ONE line only: the single most important action. Be extremely brief.",
-  settings: "Summarize configuration state and the follow-up settings action.",
+  settings:
+    "Responsibility: summarize observed configuration state for model readiness, insight mode, schedules, retention, and privacy. Cover distinct dimensions without claiming runtime health or asking the user to verify collection.",
   sources:
-    "Summarize data-source health and failures without naming a specific source.",
+    "Responsibility: analyze observed source detection, usable data, missing logs/installations, malformed input, and scan results. Cover distinct dimensions without naming a source or asking the user to confirm background collection.",
 };
 
 export function getInsightPrompt(surfaceId: InsightSurfaceId): InsightPrompt {
   return {
     id: `insight.${surfaceId}`,
-    version: 1,
+    version: INSIGHT_PROMPT_VERSION,
     surfaceId,
     maxLines: surfaceId === "widget" ? WIDGET_MAX_LINES : MAX_LINES,
     maxAnalysisChars: MAX_ANALYSIS_CHARS,
     allowedLocales: [...INSIGHT_ALLOWED_LOCALES],
-    outputSchemaVersion: 1,
+    outputSchemaVersion: INSIGHT_OUTPUT_SCHEMA_VERSION,
     system: SHARED_SYSTEM,
     policy: POLICIES[surfaceId],
   };
@@ -101,8 +119,9 @@ export function buildInsightPromptTemplate(entry: InsightPrompt): string {
       '","actionId":"<optional, one of: ' +
       actionIds +
       '>"}]}',
-    `At most ${entry.maxLines} line(s). Every mandatory candidate must appear; ` +
-      "omit actionId when no action is appropriate.",
+    entry.surfaceId === "widget"
+      ? "Output exactly one line. Every mandatory candidate must appear; omit actionId when no action is appropriate."
+      : `Output at most ${entry.maxLines} useful lines covering distinct policy dimensions. Aim for five or more only when that many candidates independently support distinct incremental conclusions; fewer than five is correct otherwise. Never pad, repeat, or paraphrase to reach a count. Every mandatory candidate must appear; omit actionId when no action is appropriate.`,
   ].join("\n");
 }
 

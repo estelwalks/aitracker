@@ -235,6 +235,16 @@ export const settings = {
       "invalid-output": "강화 결과가 올바르지 않음",
       stale: "데이터가 오래되었을 수 있음",
     },
+    fallbackStatus: {
+      "enhancer-unavailable":
+        "AI 강화를 사용할 수 없어 규칙 기반 인사이트를 표시합니다",
+      "budget-exceeded":
+        "AI 강화 호출 한도에 도달하여 규칙 기반 인사이트를 표시합니다",
+      timeout: "AI 강화 시간이 초과되어 규칙 기반 인사이트를 표시합니다",
+      "enhancer-failed": "AI 강화에 실패하여 규칙 기반 인사이트를 표시합니다",
+      "invalid-output":
+        "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
+    },
     section: {
       title: "오늘의 인사이트",
       desc: "끄면 로컬 규칙만 사용하고, 켜면 모델을 호출해 인사이트를 강화합니다.",

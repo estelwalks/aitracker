@@ -6,15 +6,20 @@
  *
  * The card is intentionally minimal: title + severity/增强 marks + typed
  * insight line. Action buttons, the enhance control, the "换一条" rotate
- * control and the unavailable hint are no longer surfaced here — pages show the
- * insight as a passive read-only caption.
+ * control and configuration hint are no longer surfaced here — pages show the
+ * insight as a passive read-only caption. A compact status mark remains when a
+ * requested AI enhancement safely falls back to rule output.
  */
 import type { LucideIcon } from "lucide-react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { InsightScope, InsightSurfaceId } from "../contracts";
-import { insightSeverityLabelKey, usePageInsight } from "./use-page-insight";
+import {
+  insightFallbackStatusLabel,
+  insightSeverityLabelKey,
+  usePageInsight,
+} from "./use-page-insight";
 
 function InsightSkeleton({ variant }: { variant: "hero" | "inline" }) {
   const hero = variant === "hero";
@@ -79,6 +84,10 @@ export function InsightCard({
 
   const textLines = lines.map((line) => line.text);
   const topSeverity = showSeverity ? lines[0]?.severity : undefined;
+  const fallbackStatusKey = envelope
+    ? insightFallbackStatusLabel(envelope.status)
+    : null;
+  const renderMessage = t as unknown as (key: string) => string;
 
   return (
     <JarvisInsight
@@ -93,6 +102,16 @@ export function InsightCard({
       }
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
+      pills={
+        fallbackStatusKey ? (
+          <span
+            role="status"
+            className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+          >
+            {renderMessage(fallbackStatusKey)}
+          </span>
+        ) : undefined
+      }
       dotsLabel={dotsLabel}
       rotateLabel={rotateLabel}
       headingLevel={headingLevel}

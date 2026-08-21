@@ -25,6 +25,7 @@ import {
   chatUrl,
   createProfileBackedProvider,
   createModelProfileNetworkOperations,
+  diagnoseModelProfile,
   modelListUrl,
   type ModelProfileRepository,
 } from "./model-profile.server.ts";
@@ -634,6 +635,69 @@ test("createProfileBackedProvider: resolves profile and parses OpenAI response",
   assert.equal(response.modelId, profile.id);
 });
 
+test("createProfileBackedProvider: uses the requested max output tokens", async () => {
+  const profile: ModelProfile = {
+    id: "m-token-limit",
+    name: "Bounded model",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "bounded-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let requestBody: unknown;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async (_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({ choices: [{ message: { content: "note" } }] });
+    }),
+  });
+
+  await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    maxOutputTokens: 8192,
+    signal: new AbortController().signal,
+  });
+
+  assert.equal((requestBody as { max_tokens?: unknown }).max_tokens, 8192);
+});
+
+test("createProfileBackedProvider: preserves the legacy max token default", async () => {
+  const profile: ModelProfile = {
+    id: "m-default-limit",
+    name: "Default model",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "default-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let requestBody: unknown;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async (_url, init) => {
+      requestBody = JSON.parse(String(init.body));
+      return jsonResponse({ choices: [{ message: { content: "note" } }] });
+    }),
+  });
+
+  await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    signal: new AbortController().signal,
+  });
+
+  assert.equal((requestBody as { max_tokens?: unknown }).max_tokens, 8192);
+});
+
 test("createProfileBackedProvider: anthropic headers and content parsing", async () => {
   const profile: ModelProfile = {
     id: "m-2",
@@ -680,5 +744,104 @@ test("createProfileBackedProvider: unknown profile throws (executor falls back)"
     }),
     (error: unknown) =>
       (error as { code?: string }).code === "errors.modelProfile.notFound",
+  );
+});
+
+test("diagnoseModelProfile: reports safe metadata for both synthetic probes", async () => {
+  const secret = "sk-diagnostic-secret-value";
+  const profile: ModelProfile = {
+    id: "m-diagnostic",
+    name: "Private profile name",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: secret,
+    endpoint: "https://user:ignored@example.test/v1?private=query",
+    model: "diagnostic-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const bodies: Array<{ max_tokens?: unknown }> = [];
+  const safeProfile = {
+    ...profile,
+    endpoint: "https://example.test/v1?private=query",
+  };
+  const report = await diagnoseModelProfile(safeProfile, {
+    fetchFn: mockFetch(async (_url, init) => {
+      bodies.push(JSON.parse(String(init.body)) as { max_tokens?: unknown });
+      return jsonResponse({
+        choices: [{ message: { content: '{"ok":true}' } }],
+      });
+    }),
+  });
+
+  assert.equal(report.endpointHost, "example.test");
+  assert.equal(report.model, "diagnostic-model");
+  assert.deepEqual(
+    report.attempts.map((attempt) => attempt.classification),
+    ["none", "none"],
+  );
+  assert.deepEqual(
+    report.attempts.map((attempt) => attempt.httpStatus),
+    [200, 200],
+  );
+  assert.deepEqual(
+    bodies.map((body) => body.max_tokens),
+    [32, 8192],
+  );
+  const serialized = JSON.stringify(report);
+  assert.doesNotMatch(
+    serialized,
+    /diagnostic-secret|private=query|Private profile/,
+  );
+  assert.equal(serialized.includes(secret), false);
+});
+
+test("diagnoseModelProfile: classifies invalid model JSON without exposing response text", async () => {
+  const responseText = "sensitive provider prose";
+  const profile: ModelProfile = {
+    id: "m-diagnostic-invalid",
+    name: "Diagnostic",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://example.test/v1",
+    model: "diagnostic-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const report = await diagnoseModelProfile(profile, {
+    fetchFn: mockFetch(async () =>
+      jsonResponse({ choices: [{ message: { content: responseText } }] }),
+    ),
+  });
+  assert.ok(
+    report.attempts.every(
+      (attempt) => attempt.classification === "invalid-model-json",
+    ),
+  );
+  assert.equal(JSON.stringify(report).includes(responseText), false);
+  assert.equal(JSON.stringify(report).includes(VALID_KEY), false);
+});
+
+test("diagnoseModelProfile: classifies bounded timeouts", async () => {
+  const profile: ModelProfile = {
+    id: "m-diagnostic-timeout",
+    name: "Diagnostic",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://example.test/v1",
+    model: "diagnostic-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const report = await diagnoseModelProfile(profile, {
+    fetchFn: mockFetch(
+      async () => await new Promise<Response>(() => undefined),
+    ),
+    timeoutMs: 5,
+  });
+  assert.ok(
+    report.attempts.every((attempt) => attempt.classification === "timeout"),
   );
 });
