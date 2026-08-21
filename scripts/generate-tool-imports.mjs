@@ -95,8 +95,10 @@ for (const entry of manifest.tools) {
   }
   defs.push(parsed.data);
 }
-if (defs.length !== 30) {
-  fail(`expected exactly 30 definitions, got ${defs.length}`);
+if (defs.length !== manifest.tools.length) {
+  fail(
+    `expected ${manifest.tools.length} definitions from manifest, got ${defs.length}`,
+  );
 }
 
 // Canonical hash input: manifest + shared packs + definitions, deterministic

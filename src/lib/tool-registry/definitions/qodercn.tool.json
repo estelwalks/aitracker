@@ -1,0 +1,19 @@
+{
+  "$schema": "../tool-definition.schema.json",
+  "configVersion": 1,
+  "id": "qodercn",
+  "display": { "name": "Qoder CN", "nameZh": "Qoder CN", "icon": "other", "color": "#22c55e" },
+  "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
+  "detection": {
+    "locations": [
+      { "targets": ["macos"], "base": "appData", "path": "QoderCN/SharedClientCache/cache/db/local.db" },
+      { "targets": ["windows10", "windows11"], "base": "appDataRoaming", "path": "QoderCN/SharedClientCache/cache/db/local.db" },
+      { "targets": ["linux"], "base": "configHome", "path": "QoderCN/SharedClientCache/cache/db/local.db" }
+    ]
+  },
+  "capabilities": {
+    "usage": { "mode": "unsupported" },
+    "skills": "unsupported", "agents": "unsupported", "sessions": { "mode": "unsupported" }, "market": "unsupported", "security": "unsupported"
+  },
+  "modelObservation": { "modelField": "model" }
+}

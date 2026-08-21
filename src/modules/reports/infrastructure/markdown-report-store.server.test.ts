@@ -47,8 +47,20 @@ test("rejects traversal, malformed filenames, symlinks, NUL and oversized bodies
     await assert.rejects(() => store.read("../outside-report.md"), TypeError);
     await assert.rejects(() => store.read("nested/report.md"), TypeError);
     await assert.rejects(() => store.read("report.txt"), TypeError);
-    await symlink(outside, join(root, "linked.md"));
-    await assert.rejects(() => store.read("linked.md"));
+    let symlinkCreated = false;
+    try {
+      await symlink(outside, join(root, "linked.md"));
+      symlinkCreated = true;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (
+        process.platform !== "win32" ||
+        !["EPERM", "EACCES"].includes(code ?? "")
+      ) {
+        throw error;
+      }
+    }
+    if (symlinkCreated) await assert.rejects(() => store.read("linked.md"));
     await assert.rejects(() => store.create(document, "bad\0body"), TypeError);
     await assert.rejects(
       () => store.create(document, "x".repeat(2 * 1024 * 1024 + 1)),

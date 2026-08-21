@@ -24,6 +24,16 @@
         ],
         "base": "home",
         "path": ".openclaw"
+      },
+      {
+        "targets": [
+          "macos",
+          "windows10",
+          "windows11",
+          "linux"
+        ],
+        "base": "home",
+        "path": ".openclaw/agents"
       }
     ]
   },
