@@ -15,7 +15,7 @@ async function fixture(): Promise<string> {
   await mkdir(join(root, "public"), { recursive: true });
   await writeFile(
     join(root, "server", "index.mjs"),
-    "export default { fetch() { return new Response('app') } }",
+    "export default { fetch() { return new Response('<html>app</html>', { headers: { 'content-type': 'text/html; charset=utf-8' } }) } }",
   );
   return root;
 }
@@ -132,6 +132,32 @@ test("rejects wrong Host, unauthenticated API and oversized chunked body", async
     assert.deepEqual(JSON.parse(oversized.body), {
       error: { code: "security.http.body_too_large" },
     });
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not cache SSR documents that contain the route manifest", async () => {
+  const root = await fixture();
+  const server = await startLocalWebServer(root, {
+    securityScanner: scanner(),
+  });
+  try {
+    const bootstrap = await fetch(
+      server.createBrowserBootstrapUrl("/tracker"),
+      {
+        redirect: "manual",
+      },
+    );
+    const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+    assert.equal(bootstrap.status, 303);
+
+    const document = await fetch(`${server.origin}/tracker`, {
+      headers: { cookie },
+    });
+    assert.equal(document.status, 200);
+    assert.equal(document.headers.get("cache-control"), "no-store");
   } finally {
     await server.close();
     await rm(root, { recursive: true, force: true });

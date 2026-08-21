@@ -22,7 +22,9 @@ export const Route = createFileRoute("/agents")({
     ]);
     return { ...data, usage, securityVerdicts, locale: deps.locale };
   },
-  staleTime: 30_000,
+  // Agent/Skill snapshots can change from the Sources migration flow; do not
+  // reuse a stale route loader result when entering the overview.
+  staleTime: 0,
   gcTime: 5 * 60_000,
   preloadStaleTime: 0,
   head: ({ loaderData }) => ({

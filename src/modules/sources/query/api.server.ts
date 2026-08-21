@@ -32,6 +32,21 @@ function countSkillsByAgent(snapshot: SkillSnapshotData): Map<string, number> {
   return countByAgent;
 }
 
+function latestSnapshotTimestamp(
+  ...values: readonly (string | null | undefined)[]
+): string {
+  const timestamps = values
+    .filter(
+      (value): value is string =>
+        value != null && Number.isFinite(Date.parse(value)),
+    )
+    .map((value) => ({ value, time: Date.parse(value) }));
+  if (timestamps.length === 0) return new Date(0).toISOString();
+  return timestamps.reduce((latest, current) =>
+    current.time > latest.time ? current : latest,
+  ).value;
+}
+
 function projectSources(
   usage: UsageSourcesSummary,
   skills: SkillSnapshotData,
@@ -139,7 +154,12 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
     AI_TOOLS,
     latest.data?.sources ?? [],
     installationFacts,
-    latest.generatedAt ?? latest.lastSuccessAt ?? new Date(0).toISOString(),
+    latestSnapshotTimestamp(
+      latest.generatedAt,
+      installations.generatedAt,
+      latest.lastSuccessAt,
+      installations.lastSuccessAt,
+    ),
     homeDirectory,
   );
 }

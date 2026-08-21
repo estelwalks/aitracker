@@ -685,7 +685,10 @@ export function createDashboardV2View(
     .filter((tool) => tool.detected || tool.events > 0)
     .sort(
       (left, right) =>
-        right.tokens - left.tokens || left.name.localeCompare(right.name),
+        right.tokens - left.tokens ||
+        right.events - left.events ||
+        left.name.localeCompare(right.name) ||
+        left.id.localeCompare(right.id),
     );
   // A known-but-currently-empty source is intentionally not promoted into a
   // tool card. This avoids presenting catalog availability as activity.

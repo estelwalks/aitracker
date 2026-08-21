@@ -13,7 +13,6 @@ import {
 } from "../../../../components/ui/dialog";
 import { toUiError } from "../../../../lib/errors";
 import { useI18n } from "../../../../lib/i18n/context";
-import { SKILL_AGENTS } from "../../../../lib/local-skills/types";
 import { migrateSourceSkills } from "../../migration.server-fns";
 import type { SourcesQueryEntry } from "./model";
 
@@ -24,10 +23,12 @@ import type { SourcesQueryEntry } from "./model";
  */
 export function SourceMigrationModal({
   source,
+  installedTargetAgents,
   onClose,
   onDone,
 }: {
   source: SourcesQueryEntry;
+  installedTargetAgents: readonly string[];
   onClose: () => void;
   onDone: () => void | Promise<void>;
 }) {
@@ -35,7 +36,7 @@ export function SourceMigrationModal({
   const availableAgents =
     source.skillAgent == null
       ? []
-      : SKILL_AGENTS.filter((agent) => agent !== source.skillAgent);
+      : installedTargetAgents.filter((agent) => agent !== source.skillAgent);
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(availableAgents),
   );
@@ -133,7 +134,8 @@ export function SourceMigrationModal({
             <button
               type="button"
               onClick={toggleAll}
-              className="rounded-full bg-accent/50 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:bg-accent"
+              disabled={availableAgents.length === 0}
+              className="rounded-full bg-accent/50 px-2.5 py-1 text-[11px] text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               {allSelected
                 ? t("sources.migrate.clearAll")

@@ -97,9 +97,16 @@ export function deriveUsageSources(
   const entries: UsageSourceEntry[] = tools.map((tool) => {
     const summary = bySource.get(tool.id);
     const installation = installationsById.get(tool.id);
-    const installed = installation?.installed ?? false;
     const events = summary?.events ?? 0;
     const malformedLines = summary?.malformedLines ?? 0;
+    // A persisted usage snapshot can outlive the installation snapshot (for
+    // example after a restart before the first installation probe completes).
+    // A source with parsed events is definitive evidence that the tool was
+    // installed when the snapshot was written, so do not regress it to
+    // "not-installed" while the second snapshot is still empty.
+    const inferredInstalled =
+      summary?.detected === true || (summary?.available === true && events > 0);
+    const installed = installation?.installed ?? inferredInstalled;
 
     // Path display: prefer the concrete paths the scanner actually walked;
     // fall back to the catalog's known probe roots.
@@ -112,15 +119,18 @@ export function deriveUsageSources(
       .filter((path): path is string => path !== null);
 
     let status: UsageSourceStatus;
-    if (installed && events > 0) {
-      status = "has-data";
+    if (installed) {
+      // "已接入" follows the installation/detection fact used by the
+      // dashboard and Agent overview. Log availability is reported separately
+      // by the status tabs and must not lower the installed-agent count.
       connectedCount += 1;
-      eventCount += events;
-    } else if (installed) {
-      // The tool is installed even when no log parser exists or the parser
-      // has no events. Log capability must never redefine installation.
-      status = "no-logs";
-      noLogsCount += 1;
+      if (events > 0) {
+        status = "has-data";
+        eventCount += events;
+      } else {
+        status = "no-logs";
+        noLogsCount += 1;
+      }
     } else {
       status = "not-installed";
       notInstalledCount += 1;

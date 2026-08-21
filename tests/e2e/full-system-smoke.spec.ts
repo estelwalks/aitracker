@@ -52,7 +52,7 @@ test.describe("全系统路由冒烟", () => {
   }
 });
 
-test("数据来源页支持搜索、状态筛选、平台目录和分页", async ({ page }) => {
+test("数据来源页支持状态筛选、平台目录和分页", async ({ page }) => {
   await page.goto("/sources", {
     waitUntil: "domcontentloaded",
     timeout: 90_000,
@@ -60,7 +60,13 @@ test("数据来源页支持搜索、状态筛选、平台目录和分页", async
   await page.waitForURL(/locale=/, { timeout: 30_000 });
   await expect(
     page.getByRole("heading", { name: "Agent & Skill Hub", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "搜索工具 / 目录" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "重新扫描", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByText("36", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "下一页" })).toBeVisible();
   await expect(page.getByTestId("source-card-claude-code")).toBeVisible();
@@ -71,10 +77,11 @@ test("数据来源页支持搜索、状态筛选、平台目录和分页", async
   await page.getByRole("button", { name: "下一页" }).click();
   await expect(page.getByTestId("source-card-openclaw")).toBeVisible();
 
-  const search = page.getByRole("textbox", { name: "搜索工具 / 目录" });
-  await search.fill("Qoder");
+  await page.getByRole("button", { name: /^未安装/ }).click();
+  for (let index = 0; index < 5; index += 1) {
+    await page.getByRole("button", { name: "下一页" }).click();
+  }
   await expect(page.getByTestId("source-card-qodercn")).toBeVisible();
-  await expect(page.getByTestId("source-card-claude-code")).toHaveCount(0);
   await expect(
     page.getByText(
       "~/AppData/Roaming/QoderCN/SharedClientCache/cache/db/local.db",
@@ -83,7 +90,4 @@ test("数据来源页支持搜索、状态筛选、平台目录和分页", async
       },
     ),
   ).toBeVisible();
-
-  await page.getByRole("button", { name: /^未安装/ }).click();
-  await expect(page.getByTestId("source-card-qodercn")).toBeVisible();
 });

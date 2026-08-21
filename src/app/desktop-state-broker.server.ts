@@ -8,6 +8,10 @@ export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
 export const DESKTOP_SCHEDULE_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule.v1`;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+// app_preferences rejects JSON documents larger than 64 KiB. Security history
+// is intentionally a compact summary, so keep a little headroom for schema
+// and serialization changes while retaining the newest entries.
+const MAX_PERSISTED_SECURITY_HISTORY_JSON_LENGTH = 60_000;
 
 function authorized(request: Request): boolean {
   const expected = process.env[ENV.DESKTOP_BROKER_TOKEN];
@@ -67,7 +71,7 @@ async function body(request: Request): Promise<Record<string, unknown>> {
 
 export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
   if (!Array.isArray(value)) throw new TypeError("History array is required");
-  return value.slice(0, 200).map((raw) => {
+  const projected = value.slice(0, 200).map((raw) => {
     const entry = raw as Record<string, unknown>;
     const report = entry.report as Record<string, unknown> | undefined;
     return {
@@ -120,7 +124,11 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
                 "none",
               ),
               threatLevelDisplay: String(report.threatLevel ?? "none"),
-              categories: (report.categories as PreferenceValue) ?? {},
+              // Category names are risk-kind identifiers (for example
+              // `secret_access`). The preference privacy guard deliberately
+              // rejects keys that look like credential fields, so category
+              // details must not be persisted in this summary document.
+              categories: {},
               summary: "Persisted security scan summary",
               findings: [],
               rules: [],
@@ -131,6 +139,18 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
         : {}),
     } as PreferenceValue;
   });
+
+  // The database stores this whole array in one app_preferences row. Drop the
+  // oldest entries until the compact summary fits the repository's limit; the
+  // array is newest-first, so the current scan is always retained.
+  while (
+    projected.length > 1 &&
+    JSON.stringify(projected).length >
+      MAX_PERSISTED_SECURITY_HISTORY_JSON_LENGTH
+  ) {
+    projected.pop();
+  }
+  return projected;
 }
 
 export async function handleDesktopStateBrokerRequest(
