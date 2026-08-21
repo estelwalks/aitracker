@@ -478,14 +478,14 @@ async function loadAgentsEvidence(scope: InsightScope) {
 
 export const trackerInsightAdapter: PageInsightAdapter = {
   surfaceId: "tracker",
-  adapterVersion: 1,
+  adapterVersion: 2,
   loadEvidence: loadTrackerEvidence,
   composeCandidates: composeTrackerCandidates,
 };
 
 export const agentsInsightAdapter: PageInsightAdapter = {
   surfaceId: "agents",
-  adapterVersion: 1,
+  adapterVersion: 2,
   loadEvidence: loadAgentsEvidence,
   composeCandidates: composeAgentsCandidates,
 };

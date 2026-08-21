@@ -4,9 +4,27 @@ import test from "node:test";
 import type { InsightEnhancementInput } from "../page/contracts.ts";
 import {
   assertPayloadSafe,
+  lineBoundsForInput,
   stripCodeFence,
   validateEnhancementOutput,
 } from "./validation.ts";
+
+function candidates(count: number): InsightEnhancementInput["candidates"] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `c${index + 1}`,
+    severity: index === 0 ? ("risk" as const) : ("info" as const),
+    fact: index === 0 ? "检测到安全风险" : "使用状态保持平稳",
+    actionIds: ["open_security" as const],
+    mandatory: index === 0,
+  }));
+}
+
+function outputLines(count: number, start = 1): unknown[] {
+  return Array.from({ length: count }, (_, index) => ({
+    candidateId: `c${start + index}`,
+    analysis: "状态保持平稳",
+  }));
+}
 
 function input(
   overrides: Partial<InsightEnhancementInput> = {},
@@ -15,22 +33,7 @@ function input(
     surface: "dashboard",
     adapterVersion: 1,
     locale: "zh-CN",
-    candidates: [
-      {
-        id: "c1",
-        severity: "risk",
-        fact: "检测到安全风险",
-        actionIds: ["open_security"],
-        mandatory: true,
-      },
-      {
-        id: "c2",
-        severity: "info",
-        fact: "今日使用量正常",
-        actionIds: ["open_tracker"],
-        mandatory: false,
-      },
-    ],
+    candidates: candidates(1),
     ...overrides,
   };
 }
@@ -39,7 +42,7 @@ function text(lines: unknown): string {
   return JSON.stringify({ lines });
 }
 
-test("accepts a valid two-line output", () => {
+test("accepts a valid output", () => {
   const result = validateEnhancementOutput(
     text([
       {
@@ -47,13 +50,12 @@ test("accepts a valid two-line output", () => {
         analysis: "请优先处理安全告警",
         actionId: "open_security",
       },
-      { candidateId: "c2", analysis: "使用趋势保持平稳" },
     ]),
     input(),
   );
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.equal(result.output.length, 2);
+    assert.equal(result.output.length, 1);
     assert.equal(result.output[0].candidateId, "c1");
     assert.equal(result.output[0].actionId, "open_security");
   }
@@ -69,7 +71,7 @@ test("L1 rejects non-JSON text", () => {
 });
 
 test("L1 rejects an oversized response", () => {
-  const result = validateEnhancementOutput("x".repeat(4097), input());
+  const result = validateEnhancementOutput("x".repeat(8193), input());
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.stage, 1);
 });
@@ -90,10 +92,64 @@ test("L2 rejects a widget surface with more than one line", () => {
       { candidateId: "c1", analysis: "请优先处理安全告警" },
       { candidateId: "c2", analysis: "使用趋势保持平稳" },
     ]),
-    input({ surface: "widget" }),
+    input({ surface: "widget", candidates: candidates(2) }),
   );
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.stage, 2);
+});
+
+test("full-page line bounds require five to seven lines when seven candidates are available", () => {
+  const sevenCandidateInput = input({ candidates: candidates(7) });
+  assert.deepEqual(lineBoundsForInput(sevenCandidateInput), { min: 5, max: 7 });
+
+  for (const count of [5, 7]) {
+    const result = validateEnhancementOutput(
+      text(outputLines(count)),
+      sevenCandidateInput,
+    );
+    assert.equal(result.ok, true, `${count} lines should be accepted`);
+  }
+  for (const count of [3, 4, 8]) {
+    const result = validateEnhancementOutput(
+      text(outputLines(count)),
+      sevenCandidateInput,
+    );
+    assert.equal(result.ok, false, `${count} lines should be rejected`);
+    if (!result.ok) assert.equal(result.stage, 2);
+  }
+});
+
+test("a full page with three candidates requires exactly three lines", () => {
+  const threeCandidateInput = input({ candidates: candidates(3) });
+  assert.deepEqual(lineBoundsForInput(threeCandidateInput), { min: 3, max: 3 });
+  assert.equal(
+    validateEnhancementOutput(text(outputLines(3)), threeCandidateInput).ok,
+    true,
+  );
+  const short = validateEnhancementOutput(
+    text(outputLines(2)),
+    threeCandidateInput,
+  );
+  assert.equal(short.ok, false);
+  if (!short.ok) assert.equal(short.stage, 2);
+});
+
+test("widget requires exactly one line and zero candidates are never valid output", () => {
+  const widgetInput = input({ surface: "widget", candidates: candidates(2) });
+  assert.deepEqual(lineBoundsForInput(widgetInput), { min: 1, max: 1 });
+  assert.equal(
+    validateEnhancementOutput(text(outputLines(1)), widgetInput).ok,
+    true,
+  );
+
+  const emptyInput = input({ candidates: [] });
+  assert.deepEqual(lineBoundsForInput(emptyInput), { min: 0, max: 0 });
+  const empty = validateEnhancementOutput(text([]), emptyInput);
+  assert.deepEqual(empty, {
+    ok: false,
+    stage: 2,
+    reason: "no candidates are available",
+  });
 });
 
 test("L2 rejects unknown top-level fields (strict)", () => {
@@ -132,7 +188,7 @@ test("L3 rejects a duplicate candidateId", () => {
       { candidateId: "c1", analysis: "请优先处理安全告警" },
       { candidateId: "c1", analysis: "使用趋势保持平稳" },
     ]),
-    input(),
+    input({ candidates: candidates(2) }),
   );
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.stage, 3);
@@ -140,8 +196,8 @@ test("L3 rejects a duplicate candidateId", () => {
 
 test("L3 rejects a missing mandatory candidate", () => {
   const result = validateEnhancementOutput(
-    text([{ candidateId: "c2", analysis: "使用趋势保持平稳" }]),
-    input(),
+    text(outputLines(5, 2)),
+    input({ candidates: candidates(7) }),
   );
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.stage, 3);

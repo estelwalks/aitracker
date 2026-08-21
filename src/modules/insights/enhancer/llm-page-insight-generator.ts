@@ -21,7 +21,7 @@ import { MAX_PAYLOAD_BYTES, assertPayloadSafe } from "./validation.ts";
  * Rules render first and never wait for the model. This background window
  * accommodates reasoning models that may count internal reasoning against the
  * total token budget. Visible output remains bounded by the strict response
- * schema, 160 characters per analysis and at most 3 lines.
+ * schema, 160 characters per analysis and at most 7 lines.
  */
 export const INSIGHT_MODEL_TIMEOUT_MS = 30_000;
 export const INSIGHT_MAX_OUTPUT_TOKENS = 8192;
