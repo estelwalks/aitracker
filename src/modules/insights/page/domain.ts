@@ -236,13 +236,16 @@ function projectEvidence(item: InsightEvidence): Record<string, unknown> {
     kind: item.kind,
     value: item.value,
     unit: item.unit ?? null,
-    observedAt: item.observedAt,
     freshness: item.freshness,
     sensitivity: item.sensitivity,
   };
 }
 
-/** Evidence identity over a whitelist of fields; extra fields never affect the hash. */
+/**
+ * Semantic evidence identity over a whitelist of fields. Sampling timestamps
+ * (`bundle.observedAt` and item `observedAt`) and extra fields do not affect
+ * the hash; content, freshness, scope and completeness still do.
+ */
 export function evidenceHash(bundle: InsightEvidenceBundle): string {
   return sha256Hex(
     stableStringify({
@@ -251,7 +254,6 @@ export function evidenceHash(bundle: InsightEvidenceBundle): string {
         range: bundle.scope.range ?? null,
         entityId: bundle.scope.entityId ?? null,
       },
-      observedAt: bundle.observedAt,
       evidence: bundle.evidence.map(projectEvidence),
       partial: bundle.partial ?? null,
     }),

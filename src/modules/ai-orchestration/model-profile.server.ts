@@ -6,8 +6,8 @@
  * persisted encrypted because it must be usable for real model calls, but it
  * never crosses the renderer boundary: every public read path returns
  * `ModelProfileView` (a boolean `apiKeyMasked`), and `getProfileForExecution`
- * is the only key-bearing accessor — used exclusively by server-side execution
- * (distillation) and connection tests.
+ * is the only key-bearing accessor — used exclusively by server-side model
+ * execution, connection tests and the explicit developer diagnostic command.
  *
  * This module is `*.server.ts`: it is dynamically imported by server fns and
  * transports, never statically imported from a renderer-visible module.
@@ -97,6 +97,7 @@ export function modelListUrl(endpoint: string): string {
 }
 
 const MODEL_PROFILE_NETWORK_TIMEOUT_MS = 12_000;
+const DEFAULT_PROFILE_MAX_OUTPUT_TOKENS = 8192;
 const KNOWN_MODEL_FALLBACKS: Record<ProfileProtocol, readonly string[]> = {
   openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
   anthropic: [
@@ -329,6 +330,178 @@ function parseChatText(protocol: ProfileProtocol, raw: string): string {
   }
 }
 
+export type ModelDiagnosticFailureClassification =
+  | "none"
+  | "timeout"
+  | "http-error"
+  | "network-error"
+  | "invalid-response-json"
+  | "empty-model-output"
+  | "invalid-model-json";
+
+export interface ModelDiagnosticAttempt {
+  readonly kind: "connectivity" | "insight-json";
+  readonly httpStatus: number | null;
+  readonly durationMs: number;
+  /** Whether the provider's outer HTTP response envelope is valid JSON. */
+  readonly responseJsonParseable: boolean;
+  /** Whether the model content itself is a JSON value. */
+  readonly modelJsonParseable: boolean;
+  readonly classification: ModelDiagnosticFailureClassification;
+}
+
+export interface ModelDiagnosticReport {
+  /** Host only: excludes path, query, credentials and secret material. */
+  readonly endpointHost: string;
+  readonly model: string;
+  readonly attempts: readonly ModelDiagnosticAttempt[];
+}
+
+export interface ModelDiagnosticOptions {
+  readonly fetchFn?: typeof fetch;
+  readonly timeoutMs?: number;
+  readonly now?: () => number;
+}
+
+const DIAGNOSTIC_TIMEOUT_MS = 30_000;
+
+function isJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runDiagnosticAttempt(input: {
+  readonly kind: ModelDiagnosticAttempt["kind"];
+  readonly profile: ModelProfile;
+  readonly model: string;
+  readonly content: string;
+  readonly maxOutputTokens: number;
+  readonly fetchFn: typeof fetch;
+  readonly timeoutMs: number;
+  readonly now: () => number;
+}): Promise<ModelDiagnosticAttempt> {
+  const startedAt = input.now();
+  let httpStatus: number | null = null;
+  try {
+    const exchange = await withNetworkTimeout(async (signal) => {
+      const response = await input.fetchFn(
+        chatUrl(input.profile.protocol, effectiveEndpoint(input.profile)),
+        {
+          method: "POST",
+          headers: chatHeaders(
+            input.profile.protocol,
+            input.profile.apiKey!,
+            effectiveAuth(input.profile),
+          ),
+          body: chatRequestBody(
+            input.profile.protocol,
+            input.model,
+            input.content,
+            input.maxOutputTokens,
+          ),
+          signal,
+        },
+      );
+      httpStatus = response.status;
+      return {
+        ok: response.ok,
+        status: response.status,
+        raw: await response.text(),
+      };
+    }, input.timeoutMs);
+    httpStatus = exchange.status;
+    const raw = exchange.raw;
+    const responseJsonParseable = isJson(raw);
+    const modelText = responseJsonParseable
+      ? parseChatText(input.profile.protocol, raw)
+      : "";
+    const modelJsonParseable = modelText !== "" && isJson(modelText);
+    let classification: ModelDiagnosticFailureClassification = "none";
+    if (!exchange.ok) classification = "http-error";
+    else if (!responseJsonParseable) classification = "invalid-response-json";
+    else if (!modelText) classification = "empty-model-output";
+    else if (!modelJsonParseable) classification = "invalid-model-json";
+    return {
+      kind: input.kind,
+      httpStatus,
+      durationMs: Math.max(0, input.now() - startedAt),
+      responseJsonParseable,
+      modelJsonParseable,
+      classification,
+    };
+  } catch (error) {
+    return {
+      kind: input.kind,
+      httpStatus,
+      durationMs: Math.max(0, input.now() - startedAt),
+      responseJsonParseable: false,
+      modelJsonParseable: false,
+      classification:
+        error instanceof ModelProfileNetworkTimeout
+          ? "timeout"
+          : "network-error",
+    };
+  }
+}
+
+/**
+ * Runs two synthetic, privacy-safe probes against a fully resolved profile.
+ * The returned report never includes headers, prompts, response text or keys.
+ */
+export async function diagnoseModelProfile(
+  profile: ModelProfile,
+  options: ModelDiagnosticOptions = {},
+): Promise<ModelDiagnosticReport> {
+  if (!profile.apiKey) {
+    throw new ModelProfileError("errors.modelProfile.apiKeyRequired");
+  }
+  const endpoint = effectiveEndpoint(profile);
+  if (!endpointIsValid(endpoint)) {
+    throw new ModelProfileError("errors.modelProfile.invalidUrl");
+  }
+  const model = effectiveModel(profile);
+  if (!model) {
+    throw new ModelProfileError("errors.modelProfile.invalidModel");
+  }
+  const timeoutMs = options.timeoutMs ?? DIAGNOSTIC_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000) {
+    throw new RangeError("timeoutMs must be an integer from 1 to 120000");
+  }
+  const fetchFn = options.fetchFn ?? fetch;
+  const now = options.now ?? Date.now;
+  const common = { profile, model, fetchFn, timeoutMs, now };
+  const attempts = [] as ModelDiagnosticAttempt[];
+  attempts.push(
+    await runDiagnosticAttempt({
+      ...common,
+      kind: "connectivity",
+      content: 'Return exactly this JSON object: {"ok":true}',
+      maxOutputTokens: 32,
+    }),
+  );
+  attempts.push(
+    await runDiagnosticAttempt({
+      ...common,
+      kind: "insight-json",
+      content: [
+        "Return one JSON object only, without markdown.",
+        'Required shape: {"lines":[{"candidateId":"diagnostic","analysis":"brief sentence"}]}',
+        'Synthetic input: {"surface":"dashboard","locale":"en-US","candidates":[{"id":"diagnostic","severity":"attention","fact":"A local aggregate needs attention","actionIds":[],"mandatory":true}]}',
+      ].join("\n"),
+      maxOutputTokens: 8192,
+    }),
+  );
+  return {
+    endpointHost: new URL(endpoint).host,
+    model,
+    attempts,
+  };
+}
+
 export interface ModelProfileRepository {
   /** Renderer-safe projection of every profile (no apiKey anywhere). */
   listViews(): Promise<ModelProfileView[]>;
@@ -380,6 +553,8 @@ export function createProfileBackedProvider(options: {
       const model = effectiveModel(profile) ?? request.modelId;
       const content =
         `${request.prompt.template}\n\n${request.input.text}`.trim();
+      const maxOutputTokens =
+        request.maxOutputTokens ?? DEFAULT_PROFILE_MAX_OUTPUT_TOKENS;
       const response = await fetchImpl(chatUrl(profile.protocol, endpoint), {
         method: "POST",
         headers: chatHeaders(
@@ -387,7 +562,12 @@ export function createProfileBackedProvider(options: {
           profile.apiKey,
           effectiveAuth(profile),
         ),
-        body: chatRequestBody(profile.protocol, model, content, 8192),
+        body: chatRequestBody(
+          profile.protocol,
+          model,
+          content,
+          maxOutputTokens,
+        ),
         signal: request.signal,
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

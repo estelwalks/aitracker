@@ -27,6 +27,7 @@ import {
   composeLineText,
   ENHANCE_COOLDOWN_MS,
   insightActionPath,
+  insightFallbackStatusLabel,
   insightStatusLabel,
   type InsightActionPath,
 } from "./use-page-insight.pure";
@@ -36,6 +37,7 @@ export {
   composeLineText,
   ENHANCE_COOLDOWN_MS,
   insightActionPath,
+  insightFallbackStatusLabel,
   insightStatusLabel,
 };
 export type {

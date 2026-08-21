@@ -430,6 +430,52 @@ test("evidence changing during generation discards the old enhancement", async (
   assert.equal(env.lines[0]?.analysis, undefined);
 });
 
+test("sampling timestamps changing during generation preserve the enhancement", async () => {
+  let reads = 0;
+  const baseAdapter = makeAdapter();
+  const resamplingAdapter: PageInsightAdapter = {
+    ...baseAdapter,
+    async loadEvidence(scope) {
+      reads += 1;
+      const observedAt = `2026-08-07T00:00:0${reads}.000Z`;
+      return {
+        surfaceId: "dashboard",
+        scope,
+        observedAt,
+        evidence: [
+          {
+            id: "e1",
+            kind: "metric",
+            value: 5,
+            observedAt,
+            freshness: "fresh",
+            sensitivity: "aggregate",
+          },
+        ],
+      };
+    },
+  };
+  const app = createPageInsightsApplication({
+    adapters: [resamplingAdapter],
+    enhancer: makeEnhancer({
+      status: "enhanced-ready",
+      lines: [{ candidateId: "c1", analysis: "current analysis" }],
+    }),
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    { locale: "zh-CN", reason: "manual" },
+  );
+
+  assert.equal(reads, 2);
+  assert.equal(env.status, "enhanced-ready");
+  assert.equal(env.source, "enhanced");
+  assert.equal(env.lines[0]?.analysis, "current analysis");
+});
+
 test("read advertises auto enhancement only with current valid consent", async () => {
   const enhancer = makeEnhancer({ status: "enhanced-ready", lines: [] });
   const authorized = createPageInsightsApplication({
