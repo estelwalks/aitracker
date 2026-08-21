@@ -6,6 +6,7 @@ import { useI18n } from "../../../lib/i18n/context";
 import { InsightCard } from "../../insights/page/presentation/insight-card";
 import type { TrackerReadModel } from "../contracts.ts";
 import {
+  totalEntriesForBoard,
   tokensForDimension,
   type RoastDimension,
 } from "../application/tracker.ts";
@@ -32,19 +33,19 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
       {
         icon: FolderKanban,
         label: t("tracker.metric.projects"),
-        v: format.formatNumber(boards.project.rows.length),
+        v: format.formatNumber(totalEntriesForBoard(boards.project)),
         sub: t("tracker.metric.sortedBy"),
       },
       {
         icon: Boxes,
         label: t("tracker.metric.skills"),
-        v: format.formatNumber(boards.skill.rows.length),
+        v: format.formatNumber(totalEntriesForBoard(boards.skill)),
         sub: t("tracker.metric.sortedBy"),
       },
       {
         icon: MessagesSquare,
         label: t("tracker.metric.sessions"),
-        v: format.formatNumber(boards.session.rows.length),
+        v: format.formatNumber(totalEntriesForBoard(boards.session)),
         sub: t("tracker.metric.sortedBy"),
       },
     ],

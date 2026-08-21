@@ -8,6 +8,7 @@ import {
   computeMoM,
   suggestionFor,
   tokensForDimension,
+  totalEntriesForBoard,
   trackerTotalsFromEvents,
   totalTokensForBoard,
   wasteIndex,
@@ -171,6 +172,8 @@ test("buildBoard: keeps the complete total while returning only Top 10 rows", ()
   assert.equal(board.rows[0]?.tokens, 1_000);
   assert.equal(board.rows[9]?.tokens, 910);
   assert.equal(board.totalTokens, 11_340);
+  assert.equal(board.totalEntries, 12);
+  assert.equal(totalEntriesForBoard(board), 12);
   assert.equal(totalTokensForBoard(board), 11_340);
 });
 
