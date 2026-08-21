@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { I18nProvider } from "../lib/i18n/context";
 import type { Currency, Locale } from "../lib/i18n/locale";
 import type { RatesSnapshot } from "../lib/pricing/server-fns";
+import type { Translations } from "../lib/i18n/messages";
 import { ThemeProvider } from "../lib/theme";
 
 /**
@@ -17,6 +18,7 @@ import { ThemeProvider } from "../lib/theme";
 export interface AppProvidersProps {
   readonly queryClient: QueryClient;
   readonly initialLocale?: Locale;
+  readonly initialCatalog?: Translations;
   readonly initialDisplayCurrency?: Currency;
   readonly initialRates?: RatesSnapshot | null;
   readonly children: ReactNode;
@@ -25,6 +27,7 @@ export interface AppProvidersProps {
 export function AppProviders({
   queryClient,
   initialLocale,
+  initialCatalog,
   initialDisplayCurrency,
   initialRates,
   children,
@@ -33,6 +36,7 @@ export function AppProviders({
     <QueryClientProvider client={queryClient}>
       <I18nProvider
         initialLocale={initialLocale}
+        initialCatalog={initialCatalog}
         initialDisplayCurrency={initialDisplayCurrency}
         initialRates={initialRates}
       >

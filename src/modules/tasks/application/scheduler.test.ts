@@ -14,6 +14,7 @@ import {
   isScheduleDue,
   lastSuccessfulFinishedAt,
   nextRunAt,
+  prioritizeStartupDefinitions,
   type SchedulerOptions,
 } from "./scheduler.ts";
 
@@ -257,6 +258,20 @@ test("startup performs abandoned-run recovery before scheduling", async () => {
   assert.equal(recoveries, 1);
   await scheduler.stop();
   timers.forEach((timer) => clearTimeout(timer));
+});
+
+test("startup prioritizes local workspace snapshots ahead of exchange refresh", () => {
+  const startupIds = prioritizeStartupDefinitions(JOB_DEFINITIONS)
+    .filter((definition) => definition.startupPolicy === "if-stale")
+    .map((definition) => definition.id);
+
+  assert.deepEqual(startupIds.slice(0, 5), [
+    "usage.refresh",
+    "sessions.refresh",
+    "skills.refresh",
+    "installation.refresh",
+    "exchange.refresh",
+  ]);
 });
 
 test("does not expose execution error details in JobRun", async () => {

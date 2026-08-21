@@ -1,16 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { catalogs, getMessage } from "../../../lib/i18n/messages.ts";
+import {
+  catalogs,
+  getMessage,
+  loadCatalog,
+} from "../../../lib/i18n/messages.ts";
 import type { Translations } from "../../../lib/i18n/schema.ts";
 import { INSIGHT_SURFACE_IDS } from "./contracts.ts";
 import { PAGE_RULE_IDS } from "./rule-ids.ts";
 
-const CATALOGS: readonly { locale: string; catalog: Translations }[] = [
-  { locale: "zh-CN", catalog: catalogs["zh-CN"] },
-  { locale: "en-US", catalog: catalogs["en-US"] },
-  { locale: "ja-JP", catalog: catalogs["ja-JP"] },
-  { locale: "ko-KR", catalog: catalogs["ko-KR"] },
-];
+async function loadAllCatalogs(): Promise<
+  readonly { locale: string; catalog: Translations }[]
+> {
+  await Promise.all([
+    loadCatalog("zh-CN"),
+    loadCatalog("en-US"),
+    loadCatalog("ja-JP"),
+    loadCatalog("ko-KR"),
+  ]);
+  return [
+    { locale: "zh-CN", catalog: catalogs["zh-CN"] },
+    { locale: "en-US", catalog: catalogs["en-US"] },
+    { locale: "ja-JP", catalog: catalogs["ja-JP"] },
+    { locale: "ko-KR", catalog: catalogs["ko-KR"] },
+  ];
+}
 
 function lookupLeaf(catalog: unknown, key: string): string | null {
   let current: unknown = catalog;
@@ -45,11 +59,12 @@ test("every rule fact key resolves in zh-CN via getMessage", () => {
   }
 });
 
-test("every rule fact key exists in en/ja/ko dictionaries (no fallback)", () => {
+test("every rule fact key exists in en/ja/ko dictionaries (no fallback)", async () => {
+  const catalogs = await loadAllCatalogs();
   for (const surface of INSIGHT_SURFACE_IDS) {
     for (const id of PAGE_RULE_IDS[surface]) {
       const key = `insights.page.${surface}.${id}`;
-      for (const { locale, catalog } of CATALOGS) {
+      for (const { locale, catalog } of catalogs) {
         const leaf = lookupLeaf(catalog, key);
         assert.ok(
           leaf !== null && leaf.length > 0,

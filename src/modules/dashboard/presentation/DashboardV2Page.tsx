@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
@@ -13,7 +14,9 @@ import { windowToView } from "../summary-contracts.ts";
 import {
   getDashboardCustomWindow,
   getDashboardSnapshotStatus,
+  retryDashboardSnapshotInitialization,
 } from "../summary-query.ts";
+import type { DashboardSnapshotStatus } from "../summary-query.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -26,6 +29,10 @@ import {
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
 import { resolveDashboardToolRailTools } from "./tool-rail-order.ts";
+import {
+  resolveWorkspaceInitializationState,
+  retryWorkspaceInitialization,
+} from "./workspace-initialization-state.ts";
 
 // P6-T6-05: Recharts trend panel is loaded on demand (not in the initial
 // shared shell). The Suspense fallback keeps layout stable during load.
@@ -35,8 +42,9 @@ const DashboardTrendPanel = lazy(() =>
   })),
 );
 
-/** Poll interval while the dashboard shows the first-scan empty state. */
-const EMPTY_REFRESH_POLL_MS = 15_000;
+/** Keep first-run feedback responsive without keeping normal polling chatty. */
+const FIRST_SCAN_POLL_MS = 2_000;
+const BACKGROUND_REFRESH_POLL_MS = 15_000;
 
 function localDateDaysAgo(days: number): string {
   const date = new Date();
@@ -61,6 +69,8 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
   const [from, setFrom] = useState(localDateDaysAgo(29));
   const [to, setTo] = useState(localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
+  const [snapshotStatus, setSnapshotStatus] =
+    useState<DashboardSnapshotStatus["status"]>("empty");
 
   // 快照自愈轮询（空状态 + 过期状态）：
   // - 首次扫描空状态：loader 已触发非阻塞刷新，轮询轻量状态探测直到 revision
@@ -80,6 +90,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
           data: data.locale,
         });
         if (disposed) return;
+        setSnapshotStatus(status.status);
         if (status.status === "stale") {
           // 过期：重跑 loader（loader 会触发非阻塞刷新）；刷新完成前保持轮询
           void router.invalidate();
@@ -96,13 +107,18 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
     };
     // `timer` is a const captured by `poll`; the first probe runs right after
     // it is assigned, so the closure never observes the temporal dead zone.
-    const timer = setInterval(() => void poll(), EMPTY_REFRESH_POLL_MS);
+    const timer = setInterval(
+      () => void poll(),
+      snapshotStatus === "empty" || snapshotStatus === "refreshing"
+        ? FIRST_SCAN_POLL_MS
+        : BACKGROUND_REFRESH_POLL_MS,
+    );
     void poll();
     return () => {
       disposed = true;
       clearInterval(timer);
     };
-  }, [data.locale, router]);
+  }, [data.locale, router, snapshotStatus]);
 
   const isCustom = period === "custom";
   const standardKey: "today" | "7d" | "30d" | "all" =
@@ -189,17 +205,22 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
   useEffect(() => {
     if (!sessionsUnavailable) return;
     let disposed = false;
-    const timer = setInterval(() => {
-      if (disposed) return;
-      // 与快照轮询相同的保护：过渡中不打断进行中的加载。
-      if (router.state.status === "pending") return;
-      void router.invalidate();
-    }, EMPTY_REFRESH_POLL_MS);
+    const timer = setInterval(
+      () => {
+        if (disposed) return;
+        // 与快照轮询相同的保护：过渡中不打断进行中的加载。
+        if (router.state.status === "pending") return;
+        void router.invalidate();
+      },
+      snapshotStatus === "empty" || snapshotStatus === "refreshing"
+        ? FIRST_SCAN_POLL_MS
+        : BACKGROUND_REFRESH_POLL_MS,
+    );
     return () => {
       disposed = true;
       clearInterval(timer);
     };
-  }, [router, sessionsUnavailable]);
+  }, [router, sessionsUnavailable, snapshotStatus]);
   const today = useMemo(() => windowToView(data.windows.today, data), [data]);
   const hero = data.hero;
   const rangeLabel = useMemo(() => {
@@ -235,10 +256,60 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
     () => resolveUsageRange(period, from, to),
     [from, period, to],
   );
+  const workspaceInitializationState = resolveWorkspaceInitializationState({
+    hasUsageData: view.hasData,
+    hasSessionData: !sessionsUnavailable,
+    snapshotStatus,
+  });
 
   return (
     <div className="dashboard-v3 space-y-4 pb-12">
       <DashboardJarvisInsight />
+      {workspaceInitializationState === "loading" ? (
+        <section
+          className="dashboard-panel flex items-start gap-3 border border-primary/20 bg-primary/5"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-primary" />
+          <div className="space-y-1">
+            <h2 className="text-sm font-medium">
+              {t("dashboard.onboarding.workspaceInitializing")}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.onboarding.workspaceInitializingDesc")}
+            </p>
+          </div>
+        </section>
+      ) : workspaceInitializationState === "failed" ? (
+        <section
+          className="dashboard-panel flex flex-wrap items-center justify-between gap-3 border border-destructive/30 bg-destructive/5"
+          role="alert"
+        >
+          <div className="space-y-1">
+            <h2 className="text-sm font-medium">
+              {t("dashboard.onboarding.workspaceInitializationFailed")}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.onboarding.workspaceInitializationFailedDesc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+            onClick={() =>
+              retryWorkspaceInitialization({
+                resetStatus: setSnapshotStatus,
+                triggerRefresh: () =>
+                  retryDashboardSnapshotInitialization({ data: data.locale }),
+                invalidate: () => router.invalidate(),
+              })
+            }
+          >
+            {t("dashboard.onboarding.retryWorkspaceInitialization")}
+          </button>
+        </section>
+      ) : null}
       <DashboardTrustHero
         view={view}
         today={today}
