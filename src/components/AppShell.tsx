@@ -42,41 +42,21 @@ type NavItem = {
   hero?: boolean;
 };
 
-/**
- * Sidebar mirrors the V3.0 prototype tiering: Workspace (home/agents/distill/
- * reports/memory), Insights & Security (guard/tracker) and Skill Library
- * (skill hub / market / session resume / widgets).
- */
-const navTiers: ReadonlyArray<{
-  label: MessageKey;
-  items: readonly NavItem[];
-}> = [
-  {
-    label: "nav.tier1",
-    items: [
-      { to: "/", label: "nav.home", icon: LayoutDashboard },
-      { to: "/agents", label: "nav.agents", icon: IdCard },
-      { to: "/distill", label: "nav.distill", icon: FlaskConical, hero: true },
-      { to: "/reports", label: "nav.reports", icon: FileText },
-      { to: "/memory", label: "nav.memoryHub", icon: BookHeart },
-    ],
-  },
-  {
-    label: "nav.tier2",
-    items: [
-      { to: "/security", label: "nav.guard", icon: ShieldCheck },
-      { to: "/tracker", label: "nav.tracker", icon: Flame },
-    ],
-  },
-  {
-    label: "nav.tier3",
-    items: [
-      { to: "/skills", label: "nav.skillHub", icon: Boxes },
-      { to: "/market", label: "nav.market", icon: Store },
-      { to: "/chats", label: "nav.resume", icon: MessagesSquare },
-      { to: "/widget", label: "nav.widget", icon: AppWindowMac },
-    ],
-  },
+/** 侧边导航（扁平单层，按原型顺序）：首页总览 / Agent概览 / 蒸馏工作台 /
+ * 记忆 / 日报周报 / 会话管理 / Skill 管理 / 安全检测 / 安全市场 / 燃烧榜 /
+ * 菜单栏小组件。数据来源与设置固定在底部。 */
+const navItems: readonly NavItem[] = [
+  { to: "/", label: "nav.home", icon: LayoutDashboard },
+  { to: "/agents", label: "nav.agents", icon: IdCard },
+  { to: "/distill", label: "nav.distill", icon: FlaskConical, hero: true },
+  { to: "/memory", label: "nav.memoryHub", icon: BookHeart },
+  { to: "/reports", label: "nav.reports", icon: FileText },
+  { to: "/chats", label: "nav.resume", icon: MessagesSquare },
+  { to: "/skills", label: "nav.skillHub", icon: Boxes },
+  { to: "/security", label: "nav.guard", icon: ShieldCheck },
+  { to: "/market", label: "nav.market", icon: Store },
+  { to: "/tracker", label: "nav.tracker", icon: Flame },
+  { to: "/widget", label: "nav.widget", icon: AppWindowMac },
 ];
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
@@ -129,41 +109,32 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label={APP_NAME}
           className="tt-scroll mt-1 flex-1 overflow-y-auto px-2 pb-2"
         >
-          {navTiers.map((group) => (
-            <div key={group.label} className="mb-3">
-              {!collapsed && (
-                <p className="px-3 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.18em] text-muted-foreground uppercase">
-                  {t(group.label)}
-                </p>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active = isNavActive(pathname, item.to);
-                  const Icon = item.icon;
-                  const label = t(item.label);
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      title={label}
-                      className={`group relative flex items-center gap-3 rounded-md px-3 py-2 transition-colors ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <Icon
-                        className={`size-4 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
-                        strokeWidth={1.75}
-                      />
-                      {!collapsed && (
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                          {label}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <div className="space-y-0.5">
+            {navItems.map((item) => {
+              const active = isNavActive(pathname, item.to);
+              const Icon = item.icon;
+              const label = t(item.label);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  title={label}
+                  className={`group relative flex items-center gap-3 rounded-md px-3 py-2 transition-colors ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon
+                    className={`size-4 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
+                    strokeWidth={1.75}
+                  />
+                  {!collapsed && (
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                      {label}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         <div className="shrink-0 space-y-2 px-2 pb-3">

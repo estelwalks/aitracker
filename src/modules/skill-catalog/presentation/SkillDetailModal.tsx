@@ -572,7 +572,11 @@ export function SkillDetailModal({
     const targets = usableAgents.filter(
       (agent) => selectedAgents.has(agent) && !installedSet.has(agent),
     );
-    if (!sourceRef || targets.length === 0) return;
+    if (!sourceRef || targets.length === 0) {
+      // 兜底：没有可安装目标时给出明确提示，而不是静默无反应。
+      toast.error(t("skills.toast.selectTarget"));
+      return;
+    }
     setInstalling(true);
     setInstallError(null);
     try {

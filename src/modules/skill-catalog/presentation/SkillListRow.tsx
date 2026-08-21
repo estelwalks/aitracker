@@ -88,7 +88,8 @@ export function SkillListRow({
 
   return (
     <li
-      className={`group relative px-3.5 py-3 transition-colors hover:bg-surface-2/40 ${
+      onClick={onOpen}
+      className={`group relative cursor-pointer px-3.5 py-3 transition-colors hover:bg-surface-2/40 ${
         selected ? "bg-accent/30" : ""
       } ${index > 0 ? "[box-shadow:inset_0_1px_0_var(--rowline)]" : ""}`}
     >
@@ -98,7 +99,10 @@ export function SkillListRow({
           type="button"
           aria-label={selectLabel}
           title={selectLabel}
-          onClick={onSelect}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelect();
+          }}
           className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-[6px] transition-colors ${
             selected
               ? "bg-foreground text-background"
@@ -132,7 +136,10 @@ export function SkillListRow({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <button
               type="button"
-              onClick={onOpen}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen();
+              }}
               className="tt-num truncate text-[14px] font-semibold hover:text-primary"
               title={t("skills.aria.openSkill", { name: skill.name })}
             >
@@ -161,14 +168,19 @@ export function SkillListRow({
             {availableAgents.length > 0 && (
               <>
                 <span className="mx-1 hidden h-3.5 w-px shrink-0 bg-border sm:inline-block" />
-                <AgentInstallBar
-                  agents={availableAgents}
-                  installed={installedMap}
-                  onToggle={onToggleAgent}
-                  pendingAgents={pendingAgents}
-                  inline
-                  inlineVisible={8}
-                />
+                <span
+                  className="ml-auto flex items-center"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <AgentInstallBar
+                    agents={availableAgents}
+                    installed={installedMap}
+                    onToggle={onToggleAgent}
+                    pendingAgents={pendingAgents}
+                    inline
+                    inlineVisible={8}
+                  />
+                </span>
               </>
             )}
           </div>
@@ -185,7 +197,10 @@ export function SkillListRow({
           type="button"
           aria-label={t("skills.actions.inspect")}
           title={t("skills.actions.inspect")}
-          onClick={onOpen}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
           className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronRight className="size-4" />

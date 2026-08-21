@@ -6,9 +6,6 @@ import { nav as ja } from "./ja-JP/nav.ts";
 import { nav as ko } from "./ko-KR/nav.ts";
 
 const requiredV3Navigation = [
-  "tier1",
-  "tier2",
-  "tier3",
   "home",
   "agents",
   "distill",

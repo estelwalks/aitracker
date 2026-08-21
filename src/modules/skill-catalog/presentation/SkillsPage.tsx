@@ -279,7 +279,7 @@ export function SkillsPage({
         (installation) => installation.source?.label === sourceLabel,
       ),
     );
-  }, [agent, query, snapshot, source, sourceLabel]);
+  }, [agent, form, query, snapshot, source, sourceLabel]);
 
   // Distinct source labels for the fine-grained source dropdown.
   const sourceOptions = useMemo(() => {
@@ -392,6 +392,7 @@ export function SkillsPage({
     busyRef.current = true;
     try {
       if (target.skills.length === 1) {
+        const uninstalledId = target.skills[0].id;
         for (const installation of target.skills[0].installations) {
           await requestApprovedSkillUninstall({
             data: {
@@ -400,6 +401,10 @@ export function SkillsPage({
             },
           });
         }
+        // 卸载后如果详情弹窗正显示该 skill，直接关闭，避免残留已删除的详情。
+        setDetailSkillId((current) =>
+          current === uninstalledId ? null : current,
+        );
         await refresh(
           t("skills.toast.deleted", { name: target.skills[0].name }),
         );

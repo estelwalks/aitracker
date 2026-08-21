@@ -1,8 +1,5 @@
 // AI 翻訳稿、審校待ち (2026-08)
 export const nav = {
-  tier1: "ワークベンチ",
-  tier2: "インサイトとセキュリティ",
-  tier3: "スキルライブラリ",
   home: "ホーム概要",
   agents: "Agent 概要",
   distill: "蒸留ワークベンチ",
