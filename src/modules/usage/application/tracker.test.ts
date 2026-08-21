@@ -7,6 +7,7 @@ import {
   buildBoard,
   computeMoM,
   suggestionFor,
+  tokensForDimension,
   trackerTotalsFromEvents,
   wasteIndex,
 } from "./tracker.ts";
@@ -133,26 +134,27 @@ test("buildBoard: skill dimension attributes tokens by skill-call share", () => 
   assert.equal(review.calls, 1);
 });
 
-test("buildBoard: rows sort by waste index descending", () => {
+test("buildBoard: rows sort by tokens descending before waste index", () => {
   const events = [
     event({
       timestamp: "2026-08-01T00:00:00Z",
-      project: "no-cache",
-      outputTokens: 500,
-      totalTokens: 500,
+      project: "low-token-high-waste",
+      outputTokens: 100,
+      totalTokens: 100,
       cachedInputTokens: 0,
     }),
     event({
       timestamp: "2026-08-01T00:00:00Z",
-      project: "cached",
-      outputTokens: 10,
-      totalTokens: 100,
-      cachedInputTokens: 1000,
-      inputTokens: 0,
+      project: "high-token-low-waste",
+      outputTokens: 0,
+      totalTokens: 1_000,
+      cachedInputTokens: 900,
+      inputTokens: 100,
     }),
   ];
   const board = buildBoard(events, "project");
-  assert.equal(board.rows[0]?.name, "no-cache");
+  assert.equal(board.rows[0]?.name, "high-token-low-waste");
+  assert.equal(board.rows[1]?.name, "low-token-high-waste");
 });
 
 test("aggregateBoards: sums unique entries, tokens and events", () => {
@@ -166,7 +168,7 @@ test("aggregateBoards: sums unique entries, tokens and events", () => {
   assert.equal(totals.entries, 1);
 });
 
-test("trackerTotalsFromEvents uses the Skill rows instead of raw event totals", () => {
+test("tokensForDimension uses the selected board's rows", () => {
   const events = [
     event({
       timestamp: "2026-08-01T00:00:00Z",
@@ -191,15 +193,44 @@ test("trackerTotalsFromEvents uses the Skill rows instead of raw event totals", 
     buildBoard(events, "session"),
   ];
 
-  const totals = trackerTotalsFromEvents(events, {
+  const boardSet = {
     skill: boards[0]!,
     project: boards[1]!,
     session: boards[2]!,
-  });
-  // The second event has no Skill attribution and must not be included. The
-  // project/session projections still contain it, but they are not the page
-  // total's source of truth.
-  assert.equal(totals.tokens, 300);
+  };
+
+  assert.equal(tokensForDimension(boardSet, "project"), 500);
+  assert.equal(tokensForDimension(boardSet, "session"), 500);
+  assert.equal(tokensForDimension(boardSet, "skill"), 300);
+});
+
+test("trackerTotalsFromEvents uses the default Project rows", () => {
+  const events = [
+    event({
+      timestamp: "2026-08-01T00:00:00Z",
+      totalTokens: 300,
+      context: {
+        skills: [
+          { name: "skill-a", calls: 1 },
+          { name: "skill-b", calls: 1 },
+        ],
+      },
+      sessionId: "session-1",
+    }),
+    event({
+      timestamp: "2026-08-02T00:00:00Z",
+      totalTokens: 200,
+      sessionId: "session-2",
+    }),
+  ];
+  const boards = {
+    skill: buildBoard(events, "skill"),
+    project: buildBoard(events, "project"),
+    session: buildBoard(events, "session"),
+  };
+
+  const totals = trackerTotalsFromEvents(events, boards);
+  assert.equal(totals.tokens, 500);
   assert.equal(totals.events, 2);
   assert.equal(totals.entries, 5);
 });
