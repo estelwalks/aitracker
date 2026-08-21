@@ -36,10 +36,14 @@ export interface RoastRow {
 }
 
 export interface TrackerBoard {
+  /** Only the highest-consuming rows are serialized to the renderer. */
   readonly rows: readonly RoastRow[];
+  /** Complete token total for this dimension, including rows outside Top 10. */
+  readonly totalTokens?: number;
 }
 
 export const RECENT_TREND_DAYS = 7;
+export const TOP_BOARD_LIMIT = 10;
 
 /**
  * Waste index = 100 × (1 − cacheRate) × outputRatio, clamped to 0–100.
@@ -227,11 +231,24 @@ export function buildBoard(
     }
   }
 
-  const rows = [...accs.entries()].map(([key, entry]) =>
+  const allRows = [...accs.entries()].map(([key, entry]) =>
     rowFor(key, entry.source, entry.acc),
   );
-  rows.sort((a, b) => b.tokens - a.tokens || b.waste - a.waste);
-  return { rows };
+  allRows.sort((a, b) => b.tokens - a.tokens || b.waste - a.waste);
+  const totalTokens = allRows.reduce((total, row) => total + row.tokens, 0);
+  return {
+    rows: allRows.slice(0, TOP_BOARD_LIMIT),
+    totalTokens,
+  };
+}
+
+/** Keep older hand-built TrackerBoard values compatible while preferring the
+ * explicit server-computed total for Top10 boards. */
+export function totalTokensForBoard(board: TrackerBoard): number {
+  return (
+    board.totalTokens ??
+    board.rows.reduce((total, row) => total + row.tokens, 0)
+  );
 }
 
 /** Sum the token consumption represented by one selected leaderboard. */
@@ -239,7 +256,7 @@ export function tokensForDimension(
   boards: Readonly<Record<RoastDimension, TrackerBoard>>,
   dimension: RoastDimension,
 ): number {
-  return boards[dimension].rows.reduce((total, row) => total + row.tokens, 0);
+  return totalTokensForBoard(boards[dimension]);
 }
 
 /** Aggregate totals across all three dimensions for general usage summaries. */
@@ -253,12 +270,12 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
   let events = 0;
   let entries = 0;
   for (const board of boards) {
+    tokens += totalTokensForBoard(board);
     for (const row of board.rows) {
       if (!seen.has(row.key)) {
         seen.add(row.key);
         entries += 1;
       }
-      tokens += row.tokens;
       events += row.events;
     }
   }

@@ -9,6 +9,11 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import {
+  addChunkReloadNonce,
+  claimChunkReload,
+  isChunkLoadError,
+} from "../lib/chunk-recovery";
 import { useI18n } from "../lib/i18n/context";
 import { AppShell } from "../components/AppShell";
 import { AppProviders } from "./providers";
@@ -99,6 +104,15 @@ export function ErrorComponent({
   const { t } = useI18n();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  }, [error]);
+  useEffect(() => {
+    if (!isChunkLoadError(error)) return;
+    console.error("Route chunk failed; attempting one safe reload", error);
+    if (claimChunkReload(window.sessionStorage, window.location.pathname)) {
+      window.location.replace(
+        addChunkReloadNonce(window.location.href, Date.now()),
+      );
+    }
   }, [error]);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

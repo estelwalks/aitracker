@@ -9,6 +9,7 @@ import {
   suggestionFor,
   tokensForDimension,
   trackerTotalsFromEvents,
+  totalTokensForBoard,
   wasteIndex,
 } from "./tracker.ts";
 
@@ -157,18 +158,45 @@ test("buildBoard: rows sort by tokens descending before waste index", () => {
   assert.equal(board.rows[1]?.name, "low-token-high-waste");
 });
 
-test("aggregateBoards: sums unique entries, tokens and events", () => {
-  const { rows } = buildBoard(
-    [event({ timestamp: "2026-08-01T00:00:00Z", project: "a" })],
-    "project",
+test("buildBoard: keeps the complete total while returning only Top 10 rows", () => {
+  const events = Array.from({ length: 12 }, (_, index) =>
+    event({
+      timestamp: "2026-08-01T00:00:00Z",
+      project: `project-${index}`,
+      totalTokens: 1_000 - index * 10,
+    }),
   );
-  const totals = aggregateBoards([{ rows }]);
-  assert.equal(totals.tokens, 150);
-  assert.equal(totals.events, 1);
-  assert.equal(totals.entries, 1);
+  const board = buildBoard(events, "project");
+  assert.equal(board.rows.length, 10);
+  assert.equal(board.rows[0]?.tokens, 1_000);
+  assert.equal(board.rows[9]?.tokens, 910);
+  assert.equal(board.totalTokens, 11_340);
+  assert.equal(totalTokensForBoard(board), 11_340);
 });
 
-test("tokensForDimension uses the selected board's rows", () => {
+test("aggregateBoards: sums each board total once even with multiple rows", () => {
+  const board = buildBoard(
+    [
+      event({
+        timestamp: "2026-08-01T00:00:00Z",
+        project: "a",
+        totalTokens: 150,
+      }),
+      event({
+        timestamp: "2026-08-01T00:00:00Z",
+        project: "b",
+        totalTokens: 250,
+      }),
+    ],
+    "project",
+  );
+  const totals = aggregateBoards([board]);
+  assert.equal(totals.tokens, 400);
+  assert.equal(totals.events, 2);
+  assert.equal(totals.entries, 2);
+});
+
+test("tokensForDimension uses the selected board's complete total", () => {
   const events = [
     event({
       timestamp: "2026-08-01T00:00:00Z",
