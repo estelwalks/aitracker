@@ -89,6 +89,19 @@ function pragmaValue(port: SqliteDatabasePort, sql: string): string {
   );
 }
 
+function readWindowsAcl(path: string): string {
+  const result = spawnSync("icacls", [path], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(
+    result.status,
+    0,
+    `icacls failed for ${path}: ${result.stderr || result.stdout}`,
+  );
+  return `${result.stdout}\n${result.stderr}`;
+}
+
 /**
  * The canonical form a Host registers itself under, computed from the
  * filesystem instead of from the Host: `realpath` (which resolves symlinks such
@@ -267,13 +280,24 @@ test("rejects a database with a foreign application_id as capability-mismatch (P
   );
 });
 
-test("file-backed database artifacts use private POSIX permissions", (t) => {
-  if (process.platform === "win32") {
-    t.skip("Windows permissions are enforced through the current-user profile");
-    return;
-  }
+test("file-backed database artifacts use platform-private permissions", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
   const host = openHostInDir(t, dir, "private.db", versionsProvider("99.0.0"));
+
+  if (process.platform === "win32") {
+    for (const artifact of [dir, host.path, `${host.path}.writer.lock`]) {
+      const acl = readWindowsAcl(artifact);
+      assert.match(acl, /NT AUTHORITY\\SYSTEM:.*\(F\)/i);
+      assert.match(acl, /BUILTIN\\Administrators:.*\(F\)/i);
+      assert.doesNotMatch(
+        acl,
+        /(?:Everyone|BUILTIN\\Users|Authenticated Users):.*\((?:F|M)\)/i,
+        `broad principals must not have write access: ${acl}`,
+      );
+    }
+    return;
+  }
+
   assert.equal(statSync(dir).mode & 0o777, 0o700);
   assert.equal(statSync(host.path).mode & 0o777, 0o600);
   assert.equal(statSync(`${host.path}.writer.lock`).mode & 0o777, 0o600);

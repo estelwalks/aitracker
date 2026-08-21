@@ -4,9 +4,9 @@
 |------|-----|
 | 文档类型 | 测试进度记录 (TEST-PROGRESS) |
 | 项目名称 | TrustTools |
-| 版本 | v1.2 |
+| 版本 | v1.3 |
 | 创建日期 | 2026-08-21 00:47:34 |
-| 更新日期 | 2026-08-21 08:43:56 |
+| 更新日期 | 2026-08-21 08:47:31 |
 | 生成工具 | agile-feature-dev + system-test-automation |
 | 文档状态 | 草稿 |
 
@@ -14,6 +14,7 @@
 
 | 版本 | 修改时间 | 修改内容 |
 |------|---------|---------|
+| v1.3 | 2026-08-21 08:47:31 | 新增 Windows ACL 专用测试，验证数据库目录、数据库文件和 writer lock 的访问控制；全量单元测试达到 0 skipped |
 | v1.2 | 2026-08-21 08:43:56 | 使用 Windows junction 替代需要管理员权限的符号链接测试，新增 3 个跨平台通过用例；保留 1 个 POSIX 权限位测试边界 |
 | v1.1 | 2026-08-21 01:21:33 | 补全参考项目 agent 数据目录、增加 Windows/macOS 来源页投影、补充全系统 E2E 并修复离线 SSR 与 Windows Home 隔离问题 |
 | v1.0 | 2026-08-21 00:47:34 | 完成模型配置、调用链、开关、Windows 兼容性和真实模型 smoke test 记录 |
@@ -153,7 +154,7 @@ LLM 配置相关代码和测试可以提交。正式发布前仍建议在 macOS 
 
 | 测试/门禁 | 结果 |
 |-----------|------|
-| `npm run test:unit` | 1453 passed / 1 skipped / 0 failed |
+| `npm run test:unit` | 1454 passed / 0 skipped / 0 failed |
 | agent 注册表、平台路径、来源投影定向测试 | 53/53 passed |
 | `npm run test:scripts` | 30/30 passed |
 | `npx tsc --noEmit` | 通过 |
@@ -174,6 +175,6 @@ LLM 配置相关代码和测试可以提交。正式发布前仍建议在 macOS 
 
 本轮功能代码、注册表、来源页和自动化测试均已通过验证，可提交。真实模型调用证据见本报告 v1.0 的第 2 节；本轮新增 E2E 使用隔离空 Home 和离线降级，避免把宿主机数据或外部市场服务当成测试成功条件。
 
-剩余边界是：当前环境为 Windows，macOS 已完成路径解析与平台矩阵测试，但未在真实 macOS 主机执行原生打包；Qoder CN 已支持目录识别，SQLite 数据解析需基于真实 schema 单独实现；剩余 1 个跳过用例是 POSIX `chmod 600/700` 权限位测试，Windows 由用户目录 ACL 管理，不能用同一 mode 位断言替代。
+剩余边界是：当前环境为 Windows，macOS 已完成路径解析与平台矩阵测试，但未在真实 macOS 主机执行原生打包；Qoder CN 已支持目录识别，SQLite 数据解析需基于真实 schema 单独实现。Windows ACL 已由专用测试覆盖，POSIX `chmod 600/700` 仍在 macOS/Linux 分支使用原有 mode 位断言。
 
-本轮已将 3 个可移植的符号链接测试改为 Windows junction 等价实现，定向测试 34/34 通过；没有删除安全断言，也没有把权限缺口伪装成通过。
+本轮已将 3 个可移植的符号链接测试改为 Windows junction 等价实现，并新增 ACL 检查：要求 SYSTEM 与 Administrators 保有完全控制，同时拒绝 Everyone、Users、Authenticated Users 的写权限。权限测试没有删除安全断言，也没有把平台差异伪装成通过。
