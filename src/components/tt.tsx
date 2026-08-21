@@ -362,9 +362,7 @@ export function PageBar({
   return (
     <div className="sticky top-14 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/60 bg-background px-4 py-2.5 md:-mx-8 md:px-8">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-[13px] font-semibold tracking-tight">
-          {title}
-        </span>
+        <h1 className="text-[13px] font-semibold tracking-tight">{title}</h1>
         {summary && (
           <span className="tt-num truncate font-mono text-[11px] text-muted-foreground">
             {summary}

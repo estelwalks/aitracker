@@ -70,7 +70,29 @@ test("no-logs: detected but events=0", () => {
   const codex = out.entries.find((e) => e.id === "codex")!;
   assert.equal(codex.status, "no-logs");
   assert.equal(out.totals.noLogsCount, 1);
-  assert.equal(out.totals.connectedCount, 0);
+  // Installation/detection is independent from log availability: the
+  // dashboard and Agent overview count this tool as connected too.
+  assert.equal(out.totals.connectedCount, 1);
+});
+
+test("has-data: persisted usage evidence survives an empty installation snapshot", () => {
+  const out = deriveUsageSources(
+    AI_TOOLS,
+    [
+      summary({
+        source: "codex",
+        available: true,
+        detected: undefined,
+        events: 2,
+      }),
+    ],
+    [],
+    "2026-08-03T00:00:00.000Z",
+    HOME,
+  );
+  const codex = out.entries.find((entry) => entry.id === "codex")!;
+  assert.equal(codex.status, "has-data");
+  assert.equal(out.totals.connectedCount, 1);
 });
 
 test("not-installed: tool absent from summaries", () => {

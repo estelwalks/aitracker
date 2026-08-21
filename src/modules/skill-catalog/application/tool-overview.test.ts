@@ -155,6 +155,30 @@ test("tool overview uses scan state plus real sanitized event aggregates", () =>
   ]);
 });
 
+test("tool overview orders cards by usage in the selected period", () => {
+  const cursorEvent = {
+    ...input.events[0]!,
+    source: "cursor" as const,
+    inputTokens: 240,
+    totalTokens: 300,
+  };
+  const view = buildToolOverview(
+    { ...input, events: [...input.events, cursorEvent] },
+    null,
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.deepEqual(
+    view.cards.map((card) => [card.id, card.tokens, card.events]),
+    [
+      ["cursor", 300, 1],
+      ["codex", 150, 2],
+    ],
+  );
+});
+
 test("skill evidence preserves observed zero and unavailable sessions", () => {
   const observed = buildToolOverview(
     input,
