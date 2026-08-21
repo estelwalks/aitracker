@@ -16,6 +16,7 @@ import type {
 } from "../infrastructure/sqlite-insight-repository.server.ts";
 import {
   createInsightEnhancer,
+  INSIGHT_ENHANCEMENT_CACHE_TTL_MS,
   type InsightEnhancerInput,
   type InsightEnhancerOptions,
   type InsightExecutionRecord,
@@ -253,6 +254,32 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
   assert.equal(requests()[0]?.timeoutMs, 30_000);
   assert.equal(requests()[0]?.maxOutputTokens, 8192);
+});
+
+test("default cache expires with the 30-minute page refresh cycle", async () => {
+  let nowMs = FIXED_NOW;
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const target = createInsightEnhancer({
+    ai,
+    repository,
+    resolveActiveProfile: resolveProfile,
+    now: () => nowMs,
+  });
+
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(
+    repository.saved[0]!.expiresAtMs - repository.saved[0]!.generatedAtMs,
+    INSIGHT_ENHANCEMENT_CACHE_TTL_MS,
+  );
+
+  nowMs += INSIGHT_ENHANCEMENT_CACHE_TTL_MS - 1;
+  assert.equal((await target.enhance(input())).status, "enhanced-cached");
+  assert.equal(calls(), 1);
+
+  nowMs += 1;
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(calls(), 2);
 });
 
 test("adapterVersion isolates the enhancement cache identity", async () => {
