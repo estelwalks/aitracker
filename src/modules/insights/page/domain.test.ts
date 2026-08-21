@@ -195,6 +195,31 @@ test("evidenceHash is deterministic, key-order independent and whitelist-only", 
   assert.equal(evidenceHash(bundle([e1])), evidenceHash(bundle([extra])));
 });
 
+test("evidenceHash ignores bundle and item sampling timestamps", () => {
+  const first = bundle([evidence("e1", 5)], {
+    observedAt: "2026-08-07T00:00:00.000Z",
+  });
+  const resampled = bundle(
+    [evidence("e1", 5, { observedAt: "2026-08-07T00:05:00.000Z" })],
+    { observedAt: "2026-08-07T00:05:00.000Z" },
+  );
+
+  assert.equal(evidenceHash(first), evidenceHash(resampled));
+});
+
+test("evidenceHash changes when evidence value or freshness changes", () => {
+  const base = bundle([evidence("e1", 5)]);
+
+  assert.notEqual(
+    evidenceHash(base),
+    evidenceHash(bundle([evidence("e1", 6)])),
+  );
+  assert.notEqual(
+    evidenceHash(base),
+    evidenceHash(bundle([evidence("e1", 5, { freshness: "stale" })])),
+  );
+});
+
 test("resolveFactText resolves zh/en and falls back to zh-CN for unknown locales", () => {
   const c = candidate({
     factKey: "insights.page.widget.widget-broadcast-security",

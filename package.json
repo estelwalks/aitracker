@@ -63,6 +63,7 @@
     "verify:bundle-budget": "node scripts/verify-bundle-budget.mjs",
     "verify:bundle-no-sqlite": "node scripts/verify-bundle-no-sqlite.mjs",
     "inspect:database": "node scripts/inspect-database.mts",
+    "diagnose:model": "node --import tsx scripts/diagnose-active-model.mts",
     "check:opensource-hygiene": "node scripts/check-open-source-hygiene.mjs"
   },
   "dependencies": {

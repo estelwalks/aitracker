@@ -135,3 +135,20 @@ test("pricing remains provider/model injected and can be exact or estimated", as
   assert.equal(result.summary.cost.confidence, "exact");
   assert.equal(result.summary.promptVersion, 2);
 });
+
+test("optional max output tokens are forwarded to the selected provider", async () => {
+  let captured: number | undefined;
+  const result = await executeAIRequest(request({ maxOutputTokens: 512 }), {
+    router: {
+      route: () => ({
+        providerId: "p",
+        invoke: async (providerRequest) => {
+          captured = providerRequest.maxOutputTokens;
+          return { providerId: "p", modelId: "model-a", text: "ok" };
+        },
+      }),
+    },
+  });
+  assert.equal(result.summary.status, "completed");
+  assert.equal(captured, 512);
+});
