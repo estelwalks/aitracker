@@ -129,6 +129,28 @@ describe("composeLineText", () => {
       "本地规则。模型补充说明",
     );
   });
+
+  it("does not append a near-paraphrase of the security fact", () => {
+    const fact = "今日安全扫描未发现风险，所有项目均通过检查。";
+    assert.equal(
+      composeLineText(() => fact, {
+        key: "k",
+        analysis: "今日未发现安全风险，所有已扫描项目均通过检查。",
+      }),
+      fact,
+    );
+  });
+
+  it("does not append a near-paraphrase of the cache fact", () => {
+    const fact = "「aipy」缓存命中率仅 0，建议复用上下文以降低成本。";
+    assert.equal(
+      composeLineText(() => fact, {
+        key: "k",
+        analysis: "缓存命中率极低，建议复用上下文以降低成本。",
+      }),
+      fact,
+    );
+  });
 });
 
 describe("canEnhanceNow", () => {

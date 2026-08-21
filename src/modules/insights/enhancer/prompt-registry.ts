@@ -18,8 +18,8 @@ import {
   WIDGET_MAX_LINES,
 } from "./validation.ts";
 
-export const INSIGHT_PROMPT_VERSION = 2;
-export const INSIGHT_OUTPUT_SCHEMA_VERSION = 2;
+export const INSIGHT_PROMPT_VERSION = 3;
+export const INSIGHT_OUTPUT_SCHEMA_VERSION = 3;
 export const INSIGHT_ALLOWED_LOCALES = [
   "zh-CN",
   "en-US",
@@ -29,56 +29,60 @@ export const INSIGHT_ALLOWED_LOCALES = [
 
 export interface InsightPrompt {
   readonly id: `insight.${InsightSurfaceId}`;
-  readonly version: 2;
+  readonly version: 3;
   readonly surfaceId: InsightSurfaceId;
   readonly maxLines: number;
   readonly maxAnalysisChars: number;
   readonly allowedLocales: readonly string[];
-  readonly outputSchemaVersion: 2;
+  readonly outputSchemaVersion: 3;
   readonly system: string;
   readonly policy: string;
 }
 
 const SHARED_SYSTEM = [
-  `You are the ${APP_NAME} daily-insight enhancer. You rewrite a small set of rule-produced fact sentences into concise, actionable analysis lines.`,
+  `You are the ${APP_NAME} daily-insight analyst. The supplied fact is already shown to the user; your analysis must add decision-useful meaning instead of rewriting it.`,
   "Hard rules — violating any one invalidates the whole response:",
-  "1. Never invent or echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
-  "2. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
-  "3. Every mandatory candidate must receive exactly one line — never drop it.",
-  "4. Respond with a single JSON object only: no markdown, no prose, no code fences.",
-  "5. Answer in the same language as the request locale.",
-  "6. Never soften a risk: keep or raise the severity implied by each fact.",
+  "1. Use only the supplied candidate facts. Never invent a cause, trend, comparison, availability state, collection state, or recommendation that the facts do not establish.",
+  "2. Do not repeat, paraphrase, summarize, or merely strengthen the candidate fact. Analysis must add a concrete implication, priority, trade-off, or action rationale that is directly supported by that same fact.",
+  "3. Treat unknown, unavailable, unobserved, or missing values as unknown. Never convert them to zero, none, low, healthy, or risky.",
+  "4. Never tell the user to confirm collection is running, prevent collection gaps, install or connect missing tools, maximize coverage, or perform generic optimization. Do not recommend work the user cannot verify from this page.",
+  "5. Keep each surface within its stated responsibility. Do not repeat diagnostics owned by another surface, even when a candidate sounds related.",
+  "6. Never echo numbers, counts, percentages, URLs, absolute file paths, command names, or entity names (projects, sessions, skills, tools, people).",
+  "7. Never add a new action or navigation target; only reuse an action id listed for that exact candidate.",
+  "8. Every mandatory candidate must receive exactly one line — never drop it.",
+  "9. Respond with a single JSON object only: no markdown, no prose, no code fences. Answer in the request locale.",
+  "10. Never soften a risk: keep or raise the severity implied by each fact.",
 ].join("\n");
 
 const POLICIES: Record<InsightSurfaceId, string> = {
   dashboard:
-    "Cover distinct dimensions across security, usage and sessions, source concentration, cache efficiency, collection health, and distillation next steps; calm, actionable tone.",
+    "Responsibility: cross-domain executive summary of observed aggregate security, usage, sessions, and source concentration. Cover distinct dimensions, but exclude agent-level cache diagnostics, source-collection troubleshooting, setup guidance, and details owned by specialist pages.",
   agents:
-    "Cover distinct dimensions across tool coverage, activity, prompt structure, cache reuse, security posture, and agent-specific optimization.",
+    "Responsibility: summarize only already-detected agents and tools—their activity, sessions, prompt behavior, and agent-specific security. Cover distinct dimensions; never recommend installing, connecting, or completing coverage for missing tools.",
   distill:
-    "Cover distinct dimensions across pending work, knowledge output, quota, reuse coverage, material focus, and the empty-state path without naming outputs.",
+    "Responsibility: analyze observed distillation backlog, output, quota, and reuse. Cover distinct dimensions without inventing materials, naming outputs, or filling an empty state with generic workflow advice.",
   reports:
-    "Cover distinct dimensions across report inventory and recency, highlights, security review, collaboration, and the next report path without naming report assets.",
+    "Responsibility: analyze observed report inventory, types, status, and recency. Cover distinct dimensions without inventing highlights, collaboration activity, security review, or a next-report recommendation not present in facts.",
   memory:
-    "Cover distinct dimensions across asset inventory, approval and publishing, risk hygiene, memory types, automatic aggregation, and the empty-state path; never name a memory item.",
+    "Responsibility: analyze observed memory inventory, approval/publishing state, types, and safety status. Cover distinct dimensions; never name an item or invent automatic aggregation and empty-state guidance.",
   security:
-    "Cover distinct dimensions across risk, failed-scan gaps, coverage, recency, history, and starting a scan. NEVER downplay severity; lead with the most dangerous item.",
+    "Responsibility: analyze observed scan risk, failures, coverage, and recency. Cover distinct dimensions, NEVER downplay severity, and lead with the most dangerous supported item; do not invent scan gaps or ask for a scan unless a fact supports it.",
   tracker:
-    "Cover distinct dimensions across consumption, waste, cache efficiency, model and project concentration, and optimization; point at the tracker action.",
+    "Responsibility: analyze observed token consumption, waste, cache efficiency, and model/project concentration. Cover distinct dimensions; discuss cache only when the fact says it is observable and never treat missing telemetry as zero.",
   skills:
-    "Cover distinct dimensions across local inventory, enablement, Agent coverage, updates, sync, safety, and specialization without naming a specific skill.",
+    "Responsibility: analyze the observed local Skill inventory, enablement, current Agent use, updates, and safety. Cover distinct dimensions without naming a Skill or recommending installation merely to increase coverage.",
   market:
-    "Cover distinct dimensions across local installs, updates, cached catalog availability and size, security review, and the installation path without naming a package.",
+    "Responsibility: analyze observed marketplace catalog availability, installed items, and updates. Cover distinct dimensions without naming a package, inventing security review, or recommending installation for completeness.",
   chats:
-    "Cover distinct dimensions across session inventory, sources, recoverability, activity, recovery, and distillation without naming sessions or participants.",
+    "Responsibility: analyze observed session inventory, source distribution, activity, and recoverability. Cover distinct dimensions without naming sessions/participants or inventing recovery and distillation work.",
   "chat-detail":
-    "Cover distinct dimensions across turns, token activity, recovery state, session status, recovery action, and distillation action; stay neutral and never name the session.",
+    "Responsibility: analyze only the current session's observed turns, token activity, duration/status, and recoverability. Cover distinct dimensions, stay neutral, never name the session, and do not invent recovery or distillation actions.",
   widget:
     "Exactly ONE line only: the single most important action. Be extremely brief.",
   settings:
-    "Cover distinct dimensions across model readiness, insight enhancement, task schedules, collection, retention, and local privacy.",
+    "Responsibility: summarize observed configuration state for model readiness, insight mode, schedules, retention, and privacy. Cover distinct dimensions without claiming runtime health or asking the user to verify collection.",
   sources:
-    "Cover distinct dimensions across detected sources, usable data, missing logs, missing installations, malformed input, rescanning, and local boundaries without naming a specific source.",
+    "Responsibility: analyze observed source detection, usable data, missing logs/installations, malformed input, and scan results. Cover distinct dimensions without naming a source or asking the user to confirm background collection.",
 };
 
 export function getInsightPrompt(surfaceId: InsightSurfaceId): InsightPrompt {

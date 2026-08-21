@@ -22,7 +22,7 @@ function candidates(count: number): InsightEnhancementInput["candidates"] {
 function outputLines(count: number, start = 1): unknown[] {
   return Array.from({ length: count }, (_, index) => ({
     candidateId: `c${start + index}`,
-    analysis: "状态保持平稳",
+    analysis: "现阶段可将处置优先级放在异常项",
   }));
 }
 
@@ -98,21 +98,21 @@ test("L2 rejects a widget surface with more than one line", () => {
   if (!result.ok) assert.equal(result.stage, 2);
 });
 
-test("full-page line bounds require five to seven lines when seven candidates are available", () => {
-  const sevenCandidateInput = input({ candidates: candidates(7) });
-  assert.deepEqual(lineBoundsForInput(sevenCandidateInput), { min: 5, max: 7 });
+test("full-page line bounds require five to ten lines when ten candidates are available", () => {
+  const tenCandidateInput = input({ candidates: candidates(10) });
+  assert.deepEqual(lineBoundsForInput(tenCandidateInput), { min: 5, max: 10 });
 
-  for (const count of [5, 7]) {
+  for (const count of [5, 10]) {
     const result = validateEnhancementOutput(
       text(outputLines(count)),
-      sevenCandidateInput,
+      tenCandidateInput,
     );
     assert.equal(result.ok, true, `${count} lines should be accepted`);
   }
-  for (const count of [3, 4, 8]) {
+  for (const count of [3, 4, 11]) {
     const result = validateEnhancementOutput(
       text(outputLines(count)),
-      sevenCandidateInput,
+      tenCandidateInput,
     );
     assert.equal(result.ok, false, `${count} lines should be rejected`);
     if (!result.ok) assert.equal(result.stage, 2);
@@ -201,6 +201,97 @@ test("L3 rejects a missing mandatory candidate", () => {
   );
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.stage, 3);
+});
+
+test("quality gate removes near-paraphrases and generic guidance per line", () => {
+  const qualityInput = input({
+    candidates: [
+      {
+        id: "c1",
+        severity: "info",
+        fact: "今日安全扫描未发现风险，所有项目均通过检查。",
+        actionIds: [],
+        mandatory: false,
+      },
+      {
+        id: "c2",
+        severity: "info",
+        fact: "「aipy」缓存命中率仅 0，建议复用上下文以降低成本。",
+        actionIds: [],
+        mandatory: false,
+      },
+      {
+        id: "c3",
+        severity: "info",
+        fact: "首页汇总了今日可用数据。",
+        actionIds: [],
+        mandatory: false,
+      },
+      {
+        id: "c4",
+        severity: "info",
+        fact: "Agent 总览展示当前已识别工具。",
+        actionIds: [],
+        mandatory: false,
+      },
+      {
+        id: "c5",
+        severity: "risk",
+        fact: "检测到高风险安全项。",
+        actionIds: ["open_security"],
+        mandatory: false,
+      },
+    ],
+  });
+  const result = validateEnhancementOutput(
+    text([
+      {
+        candidateId: "c1",
+        analysis: "今日未发现安全风险，所有已扫描项目均通过检查。",
+      },
+      {
+        candidateId: "c2",
+        analysis: "缓存命中率极低，建议复用上下文以降低成本。",
+      },
+      {
+        candidateId: "c3",
+        analysis: "先确认数据来源持续采集中，首页结论才不会因采集断档而失真。",
+      },
+      {
+        candidateId: "c4",
+        analysis: "补齐未接入的本地工具，可使 Agent 总览覆盖更完整。",
+      },
+      {
+        candidateId: "c5",
+        analysis: "应优先处置以缩短风险暴露时间。",
+        actionId: "open_security",
+      },
+    ]),
+    qualityInput,
+  );
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.output, [
+      {
+        candidateId: "c5",
+        analysis: "应优先处置以缩短风险暴露时间。",
+        actionId: "open_security",
+      },
+    ]);
+  }
+});
+
+test("quality gate rejects output when every analysis is empty boilerplate", () => {
+  const result = validateEnhancementOutput(
+    text([{ candidateId: "c1", analysis: "建议持续关注当前状态" }]),
+    input(),
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.stage, 5);
+    assert.match(result.reason, /no incremental analysis/i);
+  }
 });
 
 test("L4 rejects digits", () => {
