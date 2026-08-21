@@ -60,28 +60,19 @@ import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { useSecurityClient } from "./use-security-client";
 import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
-import { WidgetConfigPanel } from "../../widget";
 import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
 } from "../../security-assessment/llm-review.server-fns";
 
 // 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
-const categories = [
-  "通用",
-  "扫描配置",
-  "模型配置",
-  "外观",
-  "小组件",
-  "关于",
-] as const;
+const categories = ["通用", "扫描配置", "模型配置", "外观", "关于"] as const;
 type Category = (typeof categories)[number];
 const categoryKeys: Record<Category, MessageKey> = {
   通用: "settings.sections.general",
   扫描配置: "settings.sections.scan",
   模型配置: "settings.sections.model",
   外观: "settings.sections.appearance",
-  小组件: "settings.sections.widget",
   关于: "settings.sections.about",
 };
 
@@ -796,12 +787,6 @@ export function SettingsPage({
                   </span>
                 </Field>
               </div>
-            </div>
-          )}
-
-          {category === "小组件" && (
-            <div className="pt-1">
-              <WidgetConfigPanel />
             </div>
           )}
 
