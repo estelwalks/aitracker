@@ -314,6 +314,7 @@ export const skills = {
     detected: "セキュリティチェック済み",
     attention: "要確認",
     clean: "安全",
+    pending: "未スキャン",
   },
   pagination: {
     range: "{start}-{end} 件目 / 全 {total} 件",

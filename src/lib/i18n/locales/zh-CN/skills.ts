@@ -301,6 +301,7 @@ export const skills = {
     detected: "已安全检测",
     attention: "需关注",
     clean: "安全",
+    pending: "待扫描",
   },
   pagination: {
     range: "第 {start}–{end} 项 / 共 {total} 项",

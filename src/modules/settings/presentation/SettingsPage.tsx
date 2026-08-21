@@ -758,7 +758,7 @@ export function SettingsPage({
 
           {category === "外观" && (
             <div>
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3">
                 {themes.map((item) => (
                   <button
                     key={item.id}

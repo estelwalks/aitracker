@@ -797,13 +797,13 @@ export function SkillsPage({
                   className="inline-flex items-center gap-2 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <span
-                    className={`grid size-6 shrink-0 place-items-center rounded-[6px] transition-colors ${
+                    className={`grid size-5 shrink-0 place-items-center rounded-[6px] border transition-colors ${
                       allPagedChecked
-                        ? "bg-foreground text-background"
-                        : "bg-foreground/10"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border bg-surface-2"
                     }`}
                   >
-                    {allPagedChecked && <Check className="size-3" />}
+                    {allPagedChecked && <Check className="size-2.5" />}
                   </span>
                   {checkedIds.size > 0
                     ? t("skills.batch.selectedCount", {

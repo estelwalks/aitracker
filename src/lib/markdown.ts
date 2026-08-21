@@ -1,8 +1,9 @@
 /**
  * 轻量 Markdown 渲染（标题 / 列表 / 表格 / 代码块 / 引用 / 粗体）。
- * 逐行拷贝自原型 `src/routes/distill.tsx` 的 `md()`，保证产物卡与对比弹窗的
- * 渲染结果和原型逐像素一致。输出直接喂给 `tt-md`（全局 utility，见 styles.css）。
+ * 共享渲染器：蒸馏产物卡、对比弹窗、记忆卡片等复用，保证渲染结果一致。
+ * 输出直接喂给 `tt-md` / `tt-md-sm`（全局 utility，见 styles.css）。
  */
+
 export function md(text: string) {
   const inline = (s: string) =>
     s

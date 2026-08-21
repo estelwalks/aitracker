@@ -309,6 +309,7 @@ export const skills = {
     detected: "보안 검사됨",
     attention: "확인 필요",
     clean: "안전",
+    pending: "미검사",
   },
   pagination: {
     range: "{start}-{end}번째 / 전체 {total}개",
