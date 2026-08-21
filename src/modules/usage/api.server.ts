@@ -28,11 +28,7 @@ export async function loadTrackerReadModel(): Promise<TrackerReadModel> {
     project: buildBoard(events, "project"),
     session: buildBoard(events, "session"),
   };
-  const totals = trackerTotalsFromEvents(events, [
-    boards.skill,
-    boards.project,
-    boards.session,
-  ]);
+  const totals = trackerTotalsFromEvents(events, boards);
   return {
     // `createEmptyUsageSnapshot` has a construction timestamp, not a scan
     // timestamp. Only expose the generated time for an actual local scan.

@@ -12,7 +12,7 @@ import type {
 } from "../../application/tracker.ts";
 import { WasteDetail } from "./WasteDetail.tsx";
 
-const DIMENSIONS: RoastDimension[] = ["skill", "project", "session"];
+const DIMENSIONS: RoastDimension[] = ["project", "session", "skill"];
 
 const SUGGEST_KEY: Record<RoastRow["suggestion"], MessageKey> = {
   cache: "tracker.suggest.cache",
@@ -71,14 +71,14 @@ function TrendBadge({ row }: { row: RoastRow }) {
   );
 }
 
-/** 3-tab waste board: skill / project / session, ranked by waste index. */
+/** 3-tab waste board: project / session / skill, ranked by waste index. */
 export function RoastBoard({
   boards,
 }: {
   boards: Record<RoastDimension, TrackerBoard>;
 }) {
   const { t, format } = useI18n();
-  const [dimension, setDimension] = useState<RoastDimension>("skill");
+  const [dimension, setDimension] = useState<RoastDimension>("project");
   const [selected, setSelected] = useState<RoastRow | null>(null);
 
   const rows = boards[dimension].rows;
