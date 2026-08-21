@@ -1,10 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Boxes, Flame, FolderKanban, MessagesSquare } from "lucide-react";
 
 import { MetricGrid } from "../../../components/tt";
 import { useI18n } from "../../../lib/i18n/context";
 import { InsightCard } from "../../insights/page/presentation/insight-card";
 import type { TrackerReadModel } from "../contracts.ts";
+import {
+  tokensForDimension,
+  type RoastDimension,
+} from "../application/tracker.ts";
 import { RoastBoard } from "./roast/RoastBoard.tsx";
 
 /**
@@ -13,14 +17,16 @@ import { RoastBoard } from "./roast/RoastBoard.tsx";
  */
 export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
   const { t, format } = useI18n();
-  const { boards, totals } = initial;
+  const { boards } = initial;
+  const [dimension, setDimension] = useState<RoastDimension>("project");
+  const selectedTokens = tokensForDimension(boards, dimension);
 
   const metrics = useMemo(
     () => [
       {
         icon: Flame,
         label: t("tracker.metric.tokens"),
-        v: format.formatTokens(totals.tokens),
+        v: format.formatTokens(selectedTokens),
         sub: t("tracker.desc"),
       },
       {
@@ -42,7 +48,7 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
         sub: t("tracker.metric.sortedBy"),
       },
     ],
-    [t, format, boards, totals],
+    [t, format, boards, selectedTokens],
   );
 
   return (
@@ -54,7 +60,11 @@ export function TrackerPage({ initial }: { initial: TrackerReadModel }) {
         dotsLabel={t("insights.dots")}
       />
       <MetricGrid items={metrics} />
-      <RoastBoard boards={boards} />
+      <RoastBoard
+        boards={boards}
+        dimension={dimension}
+        onDimensionChange={setDimension}
+      />
     </div>
   );
 }

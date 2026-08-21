@@ -132,8 +132,8 @@ function rowFor(key: string, source: string | undefined, acc: Acc): RoastRow {
 /**
  * Build a ranked board for one dimension. Skill rows attribute each event's
  * tokens to its skills by the skill-call share within that event; project and
- * session rows map each event one-to-one. Rows sort by waste index (highest
- * first) so the most wasteful entries surface at the top.
+ * session rows map each event one-to-one. Rows sort by token consumption
+ * (highest first), using waste index only as a tie-breaker.
  */
 export function buildBoard(
   events: readonly LocalUsageEvent[],
@@ -230,11 +230,19 @@ export function buildBoard(
   const rows = [...accs.entries()].map(([key, entry]) =>
     rowFor(key, entry.source, entry.acc),
   );
-  rows.sort((a, b) => b.waste - a.waste || b.tokens - a.tokens);
+  rows.sort((a, b) => b.tokens - a.tokens || b.waste - a.waste);
   return { rows };
 }
 
-/** Aggregate totals across all three dimensions for the page's stat strip. */
+/** Sum the token consumption represented by one selected leaderboard. */
+export function tokensForDimension(
+  boards: Readonly<Record<RoastDimension, TrackerBoard>>,
+  dimension: RoastDimension,
+): number {
+  return boards[dimension].rows.reduce((total, row) => total + row.tokens, 0);
+}
+
+/** Aggregate totals across all three dimensions for general usage summaries. */
 export function aggregateBoards(boards: readonly TrackerBoard[]): {
   tokens: number;
   events: number;
@@ -258,16 +266,15 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
 }
 
 /**
- * Page totals use the Skill leaderboard as their token source. Skill rows are
- * the page's definition of attributable consumption; raw events without a
- * Skill attribution must not inflate the displayed total.
+ * Return the initial page totals for the default Project leaderboard. The
+ * selected leaderboard's live token total is derived by tokensForDimension.
  */
 export function trackerTotalsFromEvents(
   events: readonly LocalUsageEvent[],
   boards: Readonly<Record<RoastDimension, TrackerBoard>>,
 ): { tokens: number; events: number; entries: number } {
   return {
-    tokens: boards.skill.rows.reduce((total, row) => total + row.tokens, 0),
+    tokens: tokensForDimension(boards, "project"),
     events: events.length,
     entries: (Object.values(boards) as readonly TrackerBoard[]).reduce(
       (total, board) => total + board.rows.length,
