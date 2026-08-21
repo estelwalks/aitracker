@@ -215,10 +215,10 @@ export function AgentInstallBar({
               onClick={() => handleClick(agent, on)}
               className={`flex min-w-0 items-center gap-2 rounded-md border px-2.5 py-2 text-left text-[12.5px] transition-colors ${
                 isSelected
-                  ? "border-ok/60 bg-ok/10 text-foreground"
+                  ? "border-ok/70 bg-white text-neutral-900"
                   : on
-                    ? "border-transparent bg-neutral-100 text-neutral-800"
-                    : "border-border bg-neutral-100 text-neutral-500 hover:border-ok/40 hover:text-neutral-800"
+                    ? "border-transparent bg-ok/25 text-foreground"
+                    : "border-border bg-surface-2 text-muted-foreground hover:border-ok/40 hover:text-foreground"
               }`}
             >
               {pending ? (
@@ -227,6 +227,9 @@ export function AgentInstallBar({
                 <BrandIcon name={agent} className="size-[18px] shrink-0" />
               )}
               <span className="truncate">{agent}</span>
+              {on && !isSelected && (
+                <Check className="ml-auto size-4 shrink-0 text-ok" />
+              )}
               {multi && isSelected && (
                 <Check className="ml-auto size-4 shrink-0 text-ok" />
               )}

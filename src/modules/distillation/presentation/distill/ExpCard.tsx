@@ -4,7 +4,6 @@ import {
   Check,
   FileCode2,
   FolderOpen,
-  PackageCheck,
   Pencil,
   RefreshCw,
   Rocket,
@@ -23,7 +22,7 @@ import type { DistillConfigModelOption } from "./DistillConfig.tsx";
 import type { DistillationSessionItem } from "../index.ts";
 import { saveCandidateAsSkill } from "../../query";
 import { qualifySkillFiles, type SkillQualification } from "../../qualify.ts";
-import { md } from "./markdown";
+import { md } from "../../../../lib/markdown";
 import { isMemoryKind, kindMeta } from "./out-types.ts";
 import { resolveCandidateSource } from "./source-resolve.ts";
 
@@ -562,91 +561,9 @@ function SaveModal({
   );
 }
 
-/** 保存完成引导：告诉用户蒸馏出的 Skill 去哪里找、怎么用（原型 2363-2424）。 */
-function SavedGuide({ name, onClose }: { name: string; onClose: () => void }) {
-  const { t } = useI18n();
-  const steps: { n: string; t: string; d: string }[] = [
-    { n: "1", t: t("distill.savedStep1"), d: t("distill.savedStep1Desc") },
-    { n: "2", t: t("distill.savedStep2"), d: t("distill.savedStep2Desc") },
-    { n: "3", t: t("distill.savedStep3"), d: t("distill.savedStep3Desc") },
-    { n: "4", t: t("distill.savedStep4"), d: t("distill.savedStep4Desc") },
-  ];
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
-      <div
-        className="tt-overlay absolute inset-0 backdrop-blur-md"
-        onClick={onClose}
-      />
-      <section className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-card p-6 shadow-2xl shadow-black/60">
-        <header className="flex items-center gap-2">
-          <PackageCheck
-            className="size-4"
-            style={{ color: "var(--chart-1)" }}
-          />
-          <h2 className="text-[14px] font-semibold tracking-tight">
-            {t("distill.savedGuideTitle", { name })}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="ml-auto rounded-lg p-1 text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </header>
-        <p className="mt-3 text-[13px] leading-relaxed">
-          {t("distill.savedGuideDesc")}
-        </p>
-        <ol className="mt-3 space-y-2">
-          {steps.map((x) => (
-            <li
-              key={x.n}
-              className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2.5"
-            >
-              <span
-                className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full font-mono text-[10px]"
-                style={{
-                  background:
-                    "color-mix(in oklab, var(--chart-1) 18%, transparent)",
-                  color: "var(--chart-1)",
-                }}
-              >
-                {x.n}
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[12.5px]">{x.t}</span>
-                <span className="block truncate font-mono text-[10.5px] text-muted-foreground">
-                  {x.d}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ol>
-        <div className="mt-5 flex items-center gap-2">
-          <Link
-            to="/skills"
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 font-mono text-[11.5px] text-background transition-opacity hover:opacity-90"
-          >
-            {t("distill.savedGuideGo")} <ArrowRight className="size-3.5" />
-          </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg bg-surface-2 px-4 py-2 font-mono text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("distill.savedGuideStay")}
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 /**
  * 持久化结果卡,对齐原型 ExpCard(1807-1957):kind 色 mono 头部 + 素材行、
- * 记忆类/能力类两种 body、原型 Act 动作、保存弹窗与 SavedGuide。候选完成即
+ * 记忆类/能力类两种 body、原型 Act 动作、保存弹窗。候选完成即
  * 可用(阶段 A2 自动通过),无 waiting/取消态。运行中进度卡由页面渲染
  * (RunningExpCard),本卡只承载已完成的候选。
  *
@@ -659,6 +576,8 @@ export function ExpCard({
   modelOptions,
   busy,
   onRegenerate,
+  onSaved,
+  bare = false,
 }: {
   candidate: CandidateOutput;
   sessions: readonly DistillationSessionItem[];
@@ -666,6 +585,10 @@ export function ExpCard({
   modelOptions: readonly DistillConfigModelOption[];
   busy: boolean;
   onRegenerate: () => void;
+  /** 保存完成后回调（页面切到结果视图并展开该产物，原型 saveExp）。 */
+  onSaved?: () => void;
+  /** 嵌在历史手风琴里：去掉重复的卡片外壳、光晕与元信息行。 */
+  bare?: boolean;
 }) {
   const { t, format } = useI18n();
   const memoryAsset = isMemoryKind(candidate.kind);
@@ -682,7 +605,6 @@ export function ExpCard({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(candidate.summary);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [savedGuideName, setSavedGuideName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing) setDraft(candidate.summary);
@@ -706,52 +628,58 @@ export function ExpCard({
   return (
     <>
       <article
-        className="animate-fade-in relative overflow-hidden rounded-xl bg-card"
-        style={{ boxShadow: `inset 3px 0 0 ${badge.color}` }}
+        className={`animate-fade-in relative overflow-hidden ${
+          bare ? "" : "rounded-xl bg-card"
+        }`}
+        style={bare ? undefined : { boxShadow: `inset 3px 0 0 ${badge.color}` }}
       >
-        {/* 原型右上角模糊色圈（原型 1828-1831） */}
-        <div
-          className="pointer-events-none absolute -top-16 right-0 size-40 rounded-full opacity-[0.14] blur-3xl"
-          style={{ background: badge.color }}
-        />
-        <div className="relative flex flex-wrap items-center gap-2 px-4 py-3 font-mono text-[10.5px] text-muted-foreground">
-          <span
-            className="rounded-full px-2 py-0.5 font-semibold"
-            style={{
-              background: `color-mix(in oklab, ${badge.color} 16%, transparent)`,
-              color: badge.color,
-            }}
-          >
-            {t(badge.labelKey)}
-          </span>
-          <span>{format.formatDateTime(candidate.generatedAt, false)}</span>
-          <span>· {modelLabel}</span>
-          {saved && (
-            <span
-              className="rounded-full px-2 py-0.5"
-              style={{
-                background:
-                  "color-mix(in oklab, var(--chart-1) 16%, transparent)",
-                color: "var(--chart-1)",
-              }}
-            >
-              {memoryAsset
-                ? t("distill.expSavedMemory")
-                : `${kindLabel} 已保存 ✓`}
-            </span>
-          )}
-        </div>
-        <div className="relative px-4 pb-2 font-mono text-[10.5px] text-muted-foreground">
-          {t("distill.materialMeta", {
-            count: candidate.selectedSessionRefs.length,
-            sources,
-          })}
-        </div>
-        {(projectLine || titleLine) && (
-          <div className="relative space-y-1 px-4 pb-3 font-mono text-[10.5px] text-muted-foreground">
-            {projectLine && <div>项目：{projectLine}</div>}
-            {titleLine && <div>会话：{titleLine}</div>}
-          </div>
+        {!bare && (
+          <>
+            {/* 原型右上角模糊色圈（原型 1828-1831） */}
+            <div
+              className="pointer-events-none absolute -top-16 right-0 size-40 rounded-full opacity-[0.14] blur-3xl"
+              style={{ background: badge.color }}
+            />
+            <div className="relative flex flex-wrap items-center gap-2 px-4 py-3 font-mono text-[10.5px] text-muted-foreground">
+              <span
+                className="rounded-full px-2 py-0.5 font-semibold"
+                style={{
+                  background: `color-mix(in oklab, ${badge.color} 16%, transparent)`,
+                  color: badge.color,
+                }}
+              >
+                {t(badge.labelKey)}
+              </span>
+              <span>{format.formatDateTime(candidate.generatedAt, false)}</span>
+              <span>· {modelLabel}</span>
+              {saved && (
+                <span
+                  className="rounded-full px-2 py-0.5"
+                  style={{
+                    background:
+                      "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                    color: "var(--chart-1)",
+                  }}
+                >
+                  {memoryAsset
+                    ? t("distill.expSavedMemory")
+                    : `${kindLabel} 已保存 ✓`}
+                </span>
+              )}
+            </div>
+            <div className="relative px-4 pb-2 font-mono text-[10.5px] text-muted-foreground">
+              {t("distill.materialMeta", {
+                count: candidate.selectedSessionRefs.length,
+                sources,
+              })}
+            </div>
+            {(projectLine || titleLine) && (
+              <div className="relative space-y-1 px-4 pb-3 font-mono text-[10.5px] text-muted-foreground">
+                {projectLine && <div>项目：{projectLine}</div>}
+                {titleLine && <div>会话：{titleLine}</div>}
+              </div>
+            )}
+          </>
         )}
 
         {memoryAsset ? (
@@ -854,14 +782,8 @@ export function ExpCard({
           onClose={() => setSaveOpen(false)}
           onSaved={(name) => {
             setSaveOpen(false);
-            setSavedGuideName(name);
+            onSaved?.();
           }}
-        />
-      )}
-      {savedGuideName && (
-        <SavedGuide
-          name={savedGuideName}
-          onClose={() => setSavedGuideName(null)}
         />
       )}
     </>

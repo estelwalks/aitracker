@@ -313,6 +313,7 @@ export const skills = {
     detected: "Security checked",
     attention: "Needs attention",
     clean: "Safe",
+    pending: "Pending scan",
   },
   pagination: {
     range: "Items {start}-{end} of {total}",

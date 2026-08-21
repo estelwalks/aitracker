@@ -2,10 +2,10 @@ import {
   Brain,
   Check,
   ChevronRight,
+  Shield,
   ShieldAlert,
   ShieldBan,
   ShieldCheck,
-  ShieldQuestion,
 } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
@@ -77,7 +77,7 @@ export function SkillListRow({
       ? t("skills.security.clean")
       : verdict === "warn"
         ? t("skills.security.attention")
-        : t("skills.card.verdictUnknown");
+        : t("skills.security.pending");
 
   const installedMap = Object.fromEntries(
     skill.installedAgents.map((agent) => [agent, true]),
@@ -88,7 +88,7 @@ export function SkillListRow({
 
   return (
     <li
-      onClick={onOpen}
+      onClick={onSelect}
       className={`group relative cursor-pointer px-3.5 py-3 transition-colors hover:bg-surface-2/40 ${
         selected ? "bg-accent/30" : ""
       } ${index > 0 ? "[box-shadow:inset_0_1px_0_var(--rowline)]" : ""}`}
@@ -103,33 +103,38 @@ export function SkillListRow({
             event.stopPropagation();
             onSelect();
           }}
-          className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-[6px] transition-colors ${
+          className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border transition-colors ${
             selected
-              ? "bg-foreground text-background"
-              : "bg-surface-2 text-transparent hover:text-muted-foreground"
+              ? "border-foreground bg-foreground text-background"
+              : "border-border bg-surface-2 text-transparent hover:text-muted-foreground"
           }`}
         >
-          <Check className="size-3" />
+          <Check className="size-2.5" />
         </button>
 
-        {/* 安全状态徽章 */}
+        {/* 安全状态胶囊：图标 + 文字横向排列，未扫描为中性待扫描态 */}
         <span
           title={verdictLabel}
-          className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-md ${
+          className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] leading-none ${
             verdict === "ok"
-              ? "bg-ok/10 text-ok"
+              ? "border-ok/25 bg-ok/10 text-ok"
               : verdict === "warn"
-                ? "bg-danger/10 text-danger"
-                : "border border-border bg-surface-2 text-muted-foreground"
+                ? "border-danger/25 bg-danger/10 text-danger"
+                : "border-border bg-surface-2 text-muted-foreground"
           }`}
         >
           {verdict === "ok" ? (
-            <ShieldCheck className="size-5" />
+            <ShieldCheck className="size-3.5" />
           ) : verdict === "warn" ? (
-            <ShieldAlert className="size-5" />
+            <ShieldAlert className="size-3.5" />
           ) : (
-            <ShieldQuestion className="size-5" />
+            <Shield className="size-3.5" />
           )}
+          {verdict === "ok"
+            ? t("skills.security.clean")
+            : verdict === "warn"
+              ? t("skills.security.attention")
+              : t("skills.security.pending")}
         </span>
 
         <div className="min-w-0 flex-1">
