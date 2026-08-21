@@ -3,15 +3,18 @@ import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
+  ChevronRight,
   Columns2,
+  FlaskConical,
   HelpCircle,
   Loader2,
+  PackageCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import "./distill/distill.css";
 
-import { TTButton } from "../../../components/tt";
+import { Pagination, TTButton } from "../../../components/tt";
 import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
@@ -28,9 +31,9 @@ import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { CandidateCompareDialog, ExpCard } from "./distill/ExpCard";
 import { DistillConfig } from "./distill/DistillConfig";
-import { DistillHistoryDialog } from "./distill/DistillHistory";
 import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
-import { outTypeMeta, type OutTypeId } from "./distill/out-types";
+import { resolveCandidateSource } from "./distill/source-resolve";
+import { kindMeta, outTypeMeta, type OutTypeId } from "./distill/out-types";
 import {
   filterDistillationSessions,
   materialKeyOf,
@@ -47,6 +50,8 @@ import {
  * "本次输入预估" sub-line (E-200) — never as a measured value.
  */
 const EST_TOKENS_PER_TURN = 900;
+/** 蒸馏历史每页条数（原型 HIST_PAGE = 10）。 */
+const HIST_PAGE = 10;
 
 function keyOf(item: { source: string; sessionId: string }): string {
   return materialKeyOf(item);
@@ -150,7 +155,7 @@ export function DistillationPage({
   /** User-picked transcript window handed over from the session detail page. */
   initialSegment?: SegmentRefCodec | null;
 }) {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   // A carried-over `?segment=` session is seeded into the selection right away
   // (its segment is meaningless unless the session is part of sessionRefs).
   // Seeding here — rather than re-adding it in an effect — lets the drop
@@ -169,18 +174,20 @@ export function DistillationPage({
   const [outType, setOutType] = useState<OutTypeId>("skill");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [viewId, setViewId] = useState<string | null>(null);
+  /** 工作台视图：配置 / 结果 切换（原型 distill.tsx distillView）。 */
+  const [distillView, setDistillView] = useState<"config" | "result">("config");
+  const [histPage, setHistPage] = useState(1);
+  // 默认展开第一条历史（原型 open = viewId ?? exps[0]）。一旦用户点击切换，
+  // 显式用 viewId 控制，允许全部收起。
+  const [viewId, setViewId] = useState<string | null>(
+    () => initial.candidates[0]?.candidateId ?? null,
+  );
   const [candidates, setCandidates] = useState<CandidateOutput[]>(() => [
     ...initial.candidates,
   ]);
   // 蒸馏次数（持久化累计 + 本次页面会话增量）。刷新后回到持久化总数，与
   // `approved` 同口径，避免 runs 归零而 approved 保留总量的矛盾。
   const [runs, setRuns] = useState(initial.stats.runs);
-  /** 本页面会话内新产生的候选 id(历史弹窗「本次会话结果」区,原型内存实验)。 */
-  const [sessionIds, setSessionIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const [approved, setApproved] = useState(initial.stats.approved);
   const [timeRange, setTimeRange] = useState<DistillationTimeRange>("all");
   const [granularity, setGranularity] =
@@ -278,19 +285,15 @@ export function DistillationPage({
     () => candidates.filter((c) => c.approvalState === "approved"),
     [candidates],
   );
-  /** 本次页面会话内产生的候选（原型 `exps`：内存实验，刷新即清空）。 */
-  const sessionCandidates = useMemo(
-    () => candidates.filter((c) => sessionIds.has(c.candidateId)),
-    [candidates, sessionIds],
-  );
-  const shownCandidate = useMemo(
-    () =>
-      // 历史弹窗的「查看」可能指向刷新后从持久化恢复的候选（不在 sessionIds），
-      // 先从全量 candidates 解析，否则回退到本次会话首个结果。
-      (viewId ? candidates.find((c) => c.candidateId === viewId) : undefined) ??
-      sessionCandidates[0],
-    [candidates, sessionCandidates, viewId],
-  );
+  /** 蒸馏历史计数与分页（原型 distill.tsx 462-486：本次会话 + 持久历史合并）。 */
+  const totalRuns = candidates.length;
+  const totalSaved = candidates.filter(
+    (c) => c.approvalState === "approved",
+  ).length;
+  const histPageCount = Math.max(1, Math.ceil(totalRuns / HIST_PAGE));
+  const curHistPage = Math.min(histPage, histPageCount);
+  const winStart = (curHistPage - 1) * HIST_PAGE;
+  const shownCandidates = candidates.slice(winStart, winStart + HIST_PAGE);
 
   function toggle(item: DistillationSessionItem) {
     setSelected(
@@ -374,6 +377,7 @@ export function DistillationPage({
     if (refs.length === 0) return;
     setBusy(true);
     setDistilling(true);
+    let accepted: CandidateOutput | null = null;
     try {
       const result = await startDistillation({
         data: {
@@ -401,7 +405,7 @@ export function DistillationPage({
         // waiting/approve step. The candidate is approved on completion so
         // memory kinds write into the knowledge library immediately and
         // capability kinds are instantly savable.
-        let accepted: CandidateOutput = result.candidate;
+        accepted = result.candidate;
         try {
           const approved = await approveCandidate({
             data: { candidateId: result.candidate.candidateId },
@@ -414,19 +418,41 @@ export function DistillationPage({
           // The approval write failed (no knowledge port); the result is still
           // shown, just not counted as 已入库.
         }
-        setCandidates((prev) => [accepted, ...prev]);
-        setSessionIds((prev) => new Set(prev).add(accepted.candidateId));
-      }
-      setRuns((current) => current + 1);
-      toast.success(t("common.success"), {
-        action: {
-          label: t("distill.viewResult"),
-          onClick: () =>
+        setCandidates((prev) => [accepted!, ...prev]);
+        // 原型 saveExp / 完成后行为：切到结果视图并展开这条产物。
+        setViewId(accepted!.candidateId);
+        setDistillView("result");
+        setHistPage(1);
+        window.setTimeout(
+          () =>
             document
               .getElementById("distill-results")
               ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          80,
+        );
+      }
+      setRuns((current) => current + 1);
+      toast.success(
+        t("distill.completedToHistory", {
+          label: t(kindMeta(accepted?.kind ?? "memory").labelKey),
+        }),
+        {
+          action: {
+            label: t("distill.viewResult"),
+            onClick: () => {
+              setDistillView("result");
+              if (accepted) setViewId(accepted.candidateId);
+              window.setTimeout(
+                () =>
+                  document
+                    .getElementById("distill-results")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                60,
+              );
+            },
+          },
         },
-      });
+      );
     } catch (error) {
       const ui = toUiError(error);
       toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
@@ -438,6 +464,7 @@ export function DistillationPage({
 
   function handleStart() {
     setViewId(null);
+    setDistillView("result");
     // Quick mode also forwards the selected model: the page defaults `modelId`
     // to the active saved profile or offline, so one-click runs use the shared
     // model source. The
@@ -452,21 +479,12 @@ export function DistillationPage({
 
   function handleRegenerate(candidate: CandidateOutput) {
     setViewId(null);
+    setDistillView("result");
     void runDistillation(candidate.selectedSessionRefs, {
       modelId,
       kind: outTypeMeta(outType).kind,
       promptText: buildPrompt(mode === "pro" ? promptText : undefined),
     });
-  }
-
-  function handleViewHistory(candidateId: string) {
-    setHistoryOpen(false);
-    setViewId(candidateId);
-    window.setTimeout(() => {
-      document
-        .getElementById("distill-results")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
   }
 
   function handleSwitchModel() {
@@ -539,114 +557,276 @@ export function DistillationPage({
         />
       </div>
 
-      <DistillMetrics
-        selectedCount={mode === "pro" ? segments.length : selectionCount}
-        estTokens={estTokens}
-        runs={runs}
-        approved={approved}
-        busy={distilling}
-      />
-
-      <DistillConfig
-        mode={mode}
-        onMode={setMode}
-        timeRange={timeRange}
-        onTimeRange={setTimeRange}
-        granularity={granularity}
-        onGranularity={setGranularity}
-        modelId={modelId}
-        onModelId={setModelId}
-        modelOptions={initial.modelOptions}
-        quota={initial.quota}
-        promptText={promptText}
-        onPromptText={setPromptText}
-        outType={outType}
-        onOutType={setOutType}
-        historyCount={candidates.length}
-        segments={segments}
-        onHistory={() => setHistoryOpen(true)}
-        onSwitchModel={handleSwitchModel}
-        availableItems={materialSessions}
-        selected={selected}
-        selectedItems={selectedItems}
-        onToggle={toggle}
-        onToggleProject={toggleProject}
-        onOpenMaterial={() => setDrawerOpen(true)}
-        onClearSelection={clearSelection}
-        onClearSegments={clearSegments}
-        onRun={handleStart}
-        canRun={canStart}
-        busy={busy}
-      />
-
-      {(candidates.length > 0 || distilling) && (
-        <section className="mb-3">
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-card px-4 py-3">
-            <h2 className="text-[13px] font-semibold tracking-tight">
-              {t("distill.resultsTitle")}
-            </h2>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {t("distill.resultsSummary", {
-                count: sessionCandidates.length,
-                approved: sessionCandidates.filter(
-                  (c) => c.approvalState === "approved",
-                ).length,
-              })}
-            </span>
-            {distilling && (
-              <span
-                className="inline-flex items-center gap-1.5 font-mono text-[11px]"
-                style={{ color: "var(--chart-1)" }}
-              >
-                <Loader2 className="size-3.5 animate-spin" />
-                {t("distill.running")}
-              </span>
-            )}
+      {/* 工作区：配置 / 结果 切换（原型 distill.tsx 873-1370，窄屏不再左右挤压） */}
+      <section className="relative min-w-0 space-y-4">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
+          <div className="tt-toolbar gap-1">
+            {(
+              [
+                {
+                  k: "config",
+                  label: t("distill.viewConfig"),
+                  Icon: FlaskConical,
+                  badge: null,
+                },
+                {
+                  k: "result",
+                  label: t("distill.historyTitle"),
+                  Icon: PackageCheck,
+                  badge: totalRuns || null,
+                },
+              ] as const
+            ).map(({ k, label, Icon, badge }) => {
+              const on = distillView === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setDistillView(k)}
+                  className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                >
+                  <Icon className="size-3.5" /> {label}
+                  {badge != null && badge > 0 && (
+                    <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          <div id="distill-results" className="scroll-mt-20 space-y-3">
-            {distilling ? (
-              <RunningExpCard
-                color={outTypeMeta(outType).color}
-                kindLabel={t(outTypeMeta(outType).labelKey)}
-                modelLabel={
-                  selectedModel?.offline
-                    ? t("distill.proOffline")
-                    : (selectedModel?.label ?? "offline")
-                }
-                segCount={selectedItems.length}
-                sources={[
-                  ...new Set(selectedItems.map((item) => item.source)),
-                ].join(" / ")}
-              />
-            ) : (
-              shownCandidate && (
-                <ExpCard
-                  candidate={shownCandidate}
-                  sessions={sessions}
-                  modelOptions={initial.modelOptions}
-                  busy={busy}
-                  onRegenerate={() => handleRegenerate(shownCandidate)}
-                />
-              )
-            )}
-
-            {((distilling && sessionCandidates.length > 0) ||
-              (!distilling && sessionCandidates.length > 1)) && (
-              <button
-                type="button"
-                onClick={() => setHistoryOpen(true)}
-                className="w-full rounded-xl bg-surface-2 py-2 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {t("distill.anotherHistoryResults", {
-                  count: distilling
-                    ? sessionCandidates.length
-                    : sessionCandidates.length - 1,
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+            {distillView === "config"
+              ? t("distill.workbenchHint")
+              : t("distill.summaryRuns", {
+                  count: totalRuns,
+                  saved: totalSaved,
                 })}
-              </button>
-            )}
-          </div>
-        </section>
-      )}
+          </span>
+          {distilling && (
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[11px]"
+              style={{ color: "var(--chart-1)" }}
+            >
+              <Loader2 className="size-3.5 animate-spin" />{" "}
+              {t("distill.running")}
+            </span>
+          )}
+          {distillView === "result" && (
+            <Link
+              to="/skills"
+              className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-primary hover:underline"
+            >
+              {t("distill.goSkills")} <ArrowRight className="size-3" />
+            </Link>
+          )}
+        </div>
+
+        {distillView === "config" && (
+          <>
+            <DistillMetrics
+              selectedCount={mode === "pro" ? segments.length : selectionCount}
+              estTokens={estTokens}
+              runs={runs}
+              approved={approved}
+              busy={distilling}
+            />
+
+            <DistillConfig
+              mode={mode}
+              onMode={setMode}
+              timeRange={timeRange}
+              onTimeRange={setTimeRange}
+              granularity={granularity}
+              onGranularity={setGranularity}
+              modelId={modelId}
+              onModelId={setModelId}
+              modelOptions={initial.modelOptions}
+              quota={initial.quota}
+              promptText={promptText}
+              onPromptText={setPromptText}
+              outType={outType}
+              onOutType={setOutType}
+              historyCount={candidates.length}
+              segments={segments}
+              onHistory={() => setDistillView("result")}
+              onSwitchModel={handleSwitchModel}
+              availableItems={materialSessions}
+              selected={selected}
+              selectedItems={selectedItems}
+              onToggle={toggle}
+              onToggleProject={toggleProject}
+              onOpenMaterial={() => setDrawerOpen(true)}
+              onClearSelection={clearSelection}
+              onClearSegments={clearSegments}
+              onRun={handleStart}
+              canRun={canStart}
+              busy={busy}
+            />
+          </>
+        )}
+
+        {distillView === "result" && (
+          <aside className="tt-scroll min-w-0 space-y-3">
+            <div id="distill-results" className="scroll-mt-20 space-y-3">
+              {distilling && (
+                <RunningExpCard
+                  color={outTypeMeta(outType).color}
+                  kindLabel={t(outTypeMeta(outType).labelKey)}
+                  modelLabel={
+                    selectedModel?.offline
+                      ? t("distill.proOffline")
+                      : (selectedModel?.label ?? "offline")
+                  }
+                  segCount={selectedItems.length}
+                  sources={[
+                    ...new Set(selectedItems.map((item) => item.source)),
+                  ].join(" / ")}
+                />
+              )}
+
+              {totalRuns === 0 && !distilling && (
+                <div className="rounded-xl border border-border bg-card px-4 py-10 text-center">
+                  <FlaskConical className="mx-auto size-5 text-muted-foreground" />
+                  <p className="mt-2 font-mono text-[11.5px] text-muted-foreground">
+                    {t("distill.emptyTitle")}
+                  </p>
+                  <p className="mt-1 font-mono text-[10.5px] text-muted-foreground/70">
+                    {t("distill.emptyDesc")}
+                  </p>
+                </div>
+              )}
+
+              {shownCandidates.length > 0 && (
+                <ul className="overflow-hidden rounded-xl border border-border bg-card">
+                  {shownCandidates.map((candidate, i0) => {
+                    const i = winStart + i0;
+                    const badge = kindMeta(candidate.kind);
+                    const resolved = resolveCandidateSource(
+                      candidate,
+                      sessions,
+                    );
+                    const sources =
+                      resolved.sources.join(" / ") ||
+                      [
+                        ...new Set(
+                          candidate.selectedSessionRefs.map((r) => r.source),
+                        ),
+                      ].join(" / ");
+                    const open = viewId === candidate.candidateId;
+                    const saved = candidate.approvalState === "approved";
+                    return (
+                      <li
+                        key={candidate.candidateId}
+                        className={`group relative transition-colors hover:bg-surface-2/40 ${
+                          i > 0
+                            ? "[box-shadow:inset_0_1px_0_var(--rowline)]"
+                            : ""
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setViewId(open ? null : candidate.candidateId)
+                          }
+                          className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
+                        >
+                          <span
+                            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md"
+                            style={{
+                              background: `color-mix(in oklab, ${badge.color} 12%, transparent)`,
+                              color: badge.color,
+                            }}
+                          >
+                            {saved ? (
+                              <PackageCheck className="size-4" />
+                            ) : (
+                              <FlaskConical className="size-4" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              <span className="tt-num truncate text-[14px] font-semibold">
+                                {candidate.title || t(badge.labelKey)}
+                              </span>
+                              <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
+                                {t(badge.labelKey)}
+                              </span>
+                              <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                                {t("distill.histSegments", {
+                                  count: candidate.selectedSessionRefs.length,
+                                })}{" "}
+                                ·{" "}
+                                {format.formatDateTime(
+                                  candidate.generatedAt,
+                                  false,
+                                )}
+                              </span>
+                              <span
+                                className="shrink-0 rounded-full px-2 py-px font-mono text-[10px]"
+                                style={
+                                  saved
+                                    ? {
+                                        background:
+                                          "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                                        color: "var(--chart-1)",
+                                      }
+                                    : {
+                                        background: "var(--surface-2)",
+                                        color: "var(--muted-foreground)",
+                                      }
+                                }
+                              >
+                                {saved
+                                  ? t("distill.histSaved")
+                                  : t("distill.statusUnsaved")}
+                              </span>
+                            </span>
+                            <span className="mt-1 block truncate text-[12.5px] leading-relaxed text-muted-foreground">
+                              {sources}
+                            </span>
+                          </span>
+                          <ChevronRight
+                            className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform ${
+                              open ? "rotate-90" : ""
+                            }`}
+                          />
+                        </button>
+                        {open && (
+                          <div className="px-3.5 pb-3.5">
+                            <ExpCard
+                              candidate={candidate}
+                              sessions={sessions}
+                              modelOptions={initial.modelOptions}
+                              busy={busy}
+                              bare
+                              onRegenerate={() => handleRegenerate(candidate)}
+                              onSaved={() => {
+                                setViewId(candidate.candidateId);
+                                setDistillView("result");
+                              }}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {totalRuns > HIST_PAGE && (
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  <Pagination
+                    page={curHistPage}
+                    pageCount={histPageCount}
+                    onChange={setHistPage}
+                  />
+                </div>
+              )}
+            </div>
+          </aside>
+        )}
+      </section>
 
       {drawerOpen && (
         <MaterialDrawer
@@ -662,17 +842,6 @@ export function DistillationPage({
           candidates={[doneCandidates[0], doneCandidates[1]]}
           modelOptions={initial.modelOptions}
           onClose={() => setCompareOpen(false)}
-        />
-      )}
-
-      {historyOpen && (
-        <DistillHistoryDialog
-          candidates={candidates}
-          sessions={sessions}
-          sessionIds={sessionIds}
-          modelOptions={initial.modelOptions}
-          onClose={() => setHistoryOpen(false)}
-          onView={handleViewHistory}
         />
       )}
     </div>

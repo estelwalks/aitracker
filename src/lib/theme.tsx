@@ -22,18 +22,6 @@ export const themes = [
     descKey: "theme.light.desc",
     cls: "theme-light",
   },
-  {
-    id: "contrast",
-    labelKey: "theme.contrast.label",
-    descKey: "theme.contrast.desc",
-    cls: "theme-contrast",
-  },
-  {
-    id: "warm",
-    labelKey: "theme.warm.label",
-    descKey: "theme.warm.desc",
-    cls: "theme-warm",
-  },
 ] as const satisfies ReadonlyArray<{
   id: string;
   labelKey: MessageKey;

@@ -130,6 +130,12 @@
   --scan-a: 1;
   --scan-line: oklch(0.72 0.12 162 / 0.26);
   --scan-line-soft: oklch(0.72 0.12 162 / 0.14);
+
+  /* 透明白玻璃卡片：暗色下低透明度白，亮色下半透明白 */
+  --glass: oklch(1 0 0 / 0.055);
+  --glass-strong: oklch(1 0 0 / 0.1);
+  --glass-border: oklch(1 0 0 / 0.045);
+  --glass-highlight: oklch(1 0 0 / 0.08);
 }
 
 /* 亮色主题：白天 / 会议展示 */
@@ -173,6 +179,11 @@
   --scan-a: 2.6;
   --scan-line: oklch(0.5 0.09 162 / 0.5);
   --scan-line-soft: oklch(0.5 0.09 162 / 0.28);
+
+  --glass: oklch(1 0 0 / 0.55);
+  --glass-strong: oklch(1 0 0 / 0.78);
+  --glass-border: oklch(0.35 0.02 258 / 0.07);
+  --glass-highlight: oklch(1 0 0 / 0.7);
 }
 
 /* 高对比度：投影 / 大屏 / 视力辅助 */
@@ -206,6 +217,10 @@
   --sidebar-accent: oklch(0.22 0 0);
   --sidebar-accent-foreground: oklch(1 0 0);
   --sidebar-border: oklch(0.55 0 0);
+  --glass: oklch(1 0 0 / 0.07);
+  --glass-strong: oklch(1 0 0 / 0.13);
+  --glass-border: oklch(1 0 0 / 0.06);
+  --glass-highlight: oklch(1 0 0 / 0.1);
 }
 
 /* 暖色：夜间低蓝光 */
@@ -239,6 +254,10 @@
   --sidebar-accent: oklch(0.288 0.026 70);
   --sidebar-accent-foreground: oklch(0.95 0.03 82);
   --sidebar-border: oklch(0.318 0.026 70);
+  --glass: oklch(1 0 0 / 0.05);
+  --glass-strong: oklch(1 0 0 / 0.09);
+  --glass-border: oklch(1 0 0 / 0.04);
+  --glass-highlight: oklch(1 0 0 / 0.07);
 }
 
 @layer base {
@@ -552,6 +571,89 @@
 
   & strong {
     font-weight: 600;
+  }
+
+  & a {
+    color: var(--color-primary);
+    text-decoration: underline;
+  }
+}
+
+/* 紧凑 Markdown（卡片正文预览）：字号/行高/标题更小，避免撑爆卡片 */
+@utility tt-md-sm {
+  line-height: 20px;
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+
+  & h1,
+  & h2,
+  & h3,
+  & h4 {
+    line-height: 1.35;
+    font-weight: 600;
+    margin-top: 0.75em;
+    margin-bottom: 0.35em;
+    color: var(--color-foreground);
+  }
+
+  & h1 {
+    font-size: 0.875rem;
+  }
+  & h2 {
+    font-size: 0.8125rem;
+  }
+  & h3 {
+    font-size: 0.78125rem;
+  }
+  & h4 {
+    font-size: 0.75rem;
+  }
+
+  & p {
+    margin: 0.35em 0;
+  }
+
+  & ul,
+  & ol {
+    padding-left: 1.1rem;
+  }
+
+  & li {
+    margin: 0.15em 0;
+  }
+
+  & code {
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    padding: 0.05em 0.25em;
+    border-radius: 0.25rem;
+    background-color: var(--color-surface-2);
+  }
+
+  & pre {
+    background-color: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem;
+    overflow-x: auto;
+    margin: 0.5em 0;
+  }
+
+  & pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  & blockquote {
+    border-left: 2px solid var(--color-primary);
+    padding-left: 0.6rem;
+    margin: 0.5em 0;
+    color: var(--color-muted-foreground);
+  }
+
+  & strong {
+    font-weight: 600;
+    color: var(--color-foreground);
   }
 
   & a {
@@ -1497,16 +1599,8 @@
   background: var(--chart-1);
 }
 
-/* Reference navigation rail: fixed black foundation, with theme-specific
-   light mode still supplied by the existing .theme-light sidebar tokens. */
-:root {
-  --sidebar: oklch(0.05 0 0);
-  --sidebar-foreground: oklch(0.93 0.003 286);
-  --sidebar-accent: oklch(1 0 0 / 0.08);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.27 0 0);
-}
-
+/* Reference navigation rail: fixed black foundation; the light theme's
+   sidebar tokens come from the .theme-light block above. */
 .tt-sidebar {
   box-shadow:
     1px 0 0 oklch(1 0 0 / 0.035),

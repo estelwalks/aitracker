@@ -95,7 +95,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
 
   return (
     <div className="min-w-0 flex-1">
-      <div className="sticky top-14 z-30 -mx-4 border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur md:-mx-8 md:px-8">
+      <div className="sticky top-14 z-30 border-b border-border/60 bg-background/95 px-4 py-2.5 backdrop-blur">
         <div className="flex items-start gap-3">
           <Link
             to="/chats"

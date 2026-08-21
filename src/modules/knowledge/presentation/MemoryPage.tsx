@@ -1,4 +1,12 @@
-import { Brain, Download, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import {
+  Brain,
+  Download,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import {
   lazy,
   Suspense,
@@ -23,6 +31,7 @@ import {
 } from "../query";
 import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
+import { md } from "../../../lib/markdown";
 
 // P6-T6-05: the editor form is an on-demand chunk (loaded only when the user
 // edits an entry); the boundary keeps the page usable if the chunk
@@ -541,69 +550,86 @@ function MemoryCard({
 }) {
   const { t, format } = useI18n();
   const label = sourceLabel(item, t);
-  const sourceLine = `${t("memory.form.source")} ${label}${
-    item.project ? ` · ${item.project}` : ""
-  }`;
+  // 透明白玻璃卡片：无强配色，仅用图标区分类型（画像=人像、任务记忆=大脑），
+  // 正文用紧凑 Markdown 渲染（标题/列表/粗体），让卡片内容更丰富。
+  const Icon = item.type === "profile" ? UserRound : Brain;
+  const bodyText = item.body ?? item.summary ?? "";
 
   return (
-    <article className="group flex min-w-0 flex-col rounded-xl border border-border bg-card p-3.5 transition-colors hover:border-primary/40 hover:bg-surface-2/40">
-      <div className="min-w-0">
+    <article className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--glass-border)] bg-[var(--glass)] p-3.5 shadow-[0_12px_32px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl transition-colors hover:border-[var(--glass-strong)] hover:bg-[var(--glass-strong)]">
+      {/* 玻璃顶部内高光 */}
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[var(--glass-highlight)]" />
+      <div className="relative flex min-w-0 flex-1 flex-col gap-2">
+        {/* 顶部：类型 + 来源 */}
+        <div className="flex items-center gap-2">
+          <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--glass-strong)] text-foreground/70">
+            <Icon className="size-3.5" strokeWidth={1.8} />
+          </span>
+          <span className="truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+            {typeLabel(item, t)}
+          </span>
+          <span className="ml-auto shrink-0 rounded-full bg-[var(--glass-strong)] px-2 py-px font-mono text-[10px] text-foreground/70">
+            {label}
+          </span>
+        </div>
+
+        {/* 标题 */}
         <button
           type="button"
           onClick={onEdit}
-          className="block w-full truncate text-left text-[13px] font-medium hover:text-primary"
+          className="block w-full truncate text-left text-[14px] font-semibold leading-snug hover:text-primary"
           title={item.title}
         >
           {item.title}
         </button>
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
-            {typeLabel(item, t)}
+
+        {/* 正文：紧凑 Markdown 预览（定高 + 底部渐隐，防止长正文撑爆卡片） */}
+        {bodyText && (
+          <div className="tt-md-sm max-h-[88px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]">
+            <div dangerouslySetInnerHTML={{ __html: md(bodyText) }} />
+          </div>
+        )}
+
+        <div className="mt-auto flex items-center gap-1.5 border-t border-[var(--glass-border)] pt-2.5">
+          {item.project && (
+            <span className="min-w-0 max-w-[45%] truncate rounded-sm bg-[var(--glass-strong)] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+              {item.project}
+            </span>
+          )}
+          <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
+            {format.formatDateTime(item.updatedAt || item.createdAt, false)}
           </span>
-          <span className="font-mono text-[10.5px] text-muted-foreground">
-            {sourceLine}
+          <span className="ml-auto flex items-center gap-1">
+            <TTButton
+              size="sm"
+              onClick={() => {
+                downloadMemoryMarkdown(item);
+                toast.success(t("memory.exportMd"));
+              }}
+              disabled={busy}
+            >
+              <Download className="size-3.5" strokeWidth={2} />
+              {t("memory.exportMd")}
+            </TTButton>
+            <TTButton
+              size="sm"
+              onClick={onEdit}
+              disabled={busy}
+              title={t("memory.edit")}
+            >
+              <Pencil className="size-3.5" strokeWidth={2} />
+            </TTButton>
+            <TTButton
+              size="sm"
+              variant="danger"
+              onClick={onDelete}
+              disabled={busy}
+              title={t("memory.delete")}
+            >
+              <Trash2 className="size-3.5" strokeWidth={2} />
+            </TTButton>
           </span>
         </div>
-      </div>
-
-      <p className="mt-2.5 line-clamp-3 min-h-[3.2em] text-[12.5px] leading-relaxed text-muted-foreground">
-        {(item.body ?? item.summary) || "—"}
-      </p>
-
-      <div className="mt-3 flex items-center gap-1.5 border-t border-border pt-2.5">
-        <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
-          {format.formatDateTime(item.updatedAt || item.createdAt, false)}
-        </span>
-        <span className="ml-auto flex items-center gap-1">
-          <TTButton
-            size="sm"
-            onClick={() => {
-              downloadMemoryMarkdown(item);
-              toast.success(t("memory.exportMd"));
-            }}
-            disabled={busy}
-          >
-            <Download className="size-3.5" strokeWidth={2} />
-            {t("memory.exportMd")}
-          </TTButton>
-          <TTButton
-            size="sm"
-            onClick={onEdit}
-            disabled={busy}
-            title={t("memory.edit")}
-          >
-            <Pencil className="size-3.5" strokeWidth={2} />
-          </TTButton>
-          <TTButton
-            size="sm"
-            variant="danger"
-            onClick={onDelete}
-            disabled={busy}
-            title={t("memory.delete")}
-          >
-            <Trash2 className="size-3.5" strokeWidth={2} />
-          </TTButton>
-        </span>
       </div>
     </article>
   );
