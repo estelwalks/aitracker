@@ -820,6 +820,66 @@
   }
 }
 
+/* 自绘标题栏（无边框主窗口顶部）：整条可拖拽，右侧为窗口控制按钮。 */
+.tt-window-chrome {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  height: 36px;
+  align-items: center;
+  -webkit-app-region: drag;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+  user-select: none;
+}
+
+.tt-window-chrome-title {
+  padding-left: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+}
+
+/* macOS：原生红绿灯按钮占据左侧，标题文字右移避让。 */
+.tt-window-chrome--mac .tt-window-chrome-title {
+  padding-left: 0;
+}
+
+.tt-window-controls {
+  display: flex;
+  height: 100%;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.tt-window-control {
+  display: inline-flex;
+  width: 46px;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  cursor: default;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.tt-window-control:hover {
+  background: var(--color-accent);
+  color: var(--color-foreground);
+}
+
+.tt-window-control--close:hover {
+  background: var(--color-destructive);
+  color: var(--color-destructive-foreground);
+}
+
 /* Application chrome: structured, compact, and intentionally data-first. */
 .tt-app-shell {
   background:
