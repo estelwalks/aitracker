@@ -9,7 +9,7 @@ import {
 } from "../../security-assessment/index";
 import { SkillsPage } from "../../skill-catalog/index.ts";
 import type { SkillWorkspaceSnapshot } from "../../skill-catalog/index.ts";
-import type { AgentUsageOverviewReadModel } from "../../skill-catalog/index.ts";
+import { getDistillationActivity } from "../../distillation/query";
 
 /** Real distillation activity surfaced by the composition root. */
 export interface SkillsDistillationView {
@@ -19,10 +19,6 @@ export interface SkillsDistillationView {
 
 export interface SkillHubData {
   readonly workspace: SkillWorkspaceSnapshot;
-  /** Compact agent-overview projection; never raw events (P1-T1-07). */
-  readonly usage: AgentUsageOverviewReadModel;
-  /** Real distillation counters; null when the workbench is unavailable. */
-  readonly distillation: SkillsDistillationView | null;
 }
 
 /**
@@ -34,6 +30,8 @@ export interface SkillHubData {
  */
 export function SkillHubPage({ initial }: { initial: SkillHubData }) {
   const { t } = useI18n();
+  const [distillation, setDistillation] =
+    useState<SkillsDistillationView | null>(null);
   const [securityHistory, setSecurityHistory] = useState<
     readonly SecurityHistoryView[]
   >([]);
@@ -56,6 +54,20 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
       }
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // This KPI is useful but must not make the file-backed Skill workspace wait
+  // on a separate distillation read path. It fills in after first paint.
+  useEffect(() => {
+    let cancelled = false;
+    void getDistillationActivity()
+      .then((activity) => {
+        if (!cancelled) setDistillation(activity);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -97,11 +109,10 @@ export function SkillHubPage({ initial }: { initial: SkillHubData }) {
 
       <SkillsPage
         initial={initial.workspace}
-        usage={initial.usage}
         showWorkspace
         showToolOverview={false}
         security={securityView}
-        distillation={initial.distillation ?? undefined}
+        distillation={distillation ?? undefined}
       />
     </div>
   );

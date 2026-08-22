@@ -289,6 +289,13 @@ export const dashboard = {
     dataLoadFailed: "数据读取失败",
     dataLoadFailedDesc: "真实数据读取失败：{error}",
     localReadFailed: "本地数据读取失败",
+    workspaceInitializing: "正在初始化工作区数据",
+    workspaceInitializingDesc:
+      "正在读取本机 AI 工具的使用记录、会话和 Skills；本地数据不会上传。",
+    workspaceInitializationFailed: "工作区数据初始化失败",
+    workspaceInitializationFailedDesc:
+      "暂时无法读取首次工作区数据。请重试，或稍后重新打开应用。",
+    retryWorkspaceInitialization: "重试初始化",
     reload: "重新加载",
     welcomeDesc: "把散落在各 AI 工具的 token、skill、会话，统一收回你手里。",
     capTokenTitle: "Token 追踪",

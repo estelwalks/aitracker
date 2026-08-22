@@ -274,6 +274,48 @@ export function stripCodeFence(text: string): string {
     .trim();
 }
 
+/**
+ * Returns the first complete JSON object in a model response. Some reasoning
+ * providers prepend a private `<think>` block or a short prose lead-in even
+ * when asked for JSON only. The response is still bounded and subsequently
+ * passes the same strict schema and safety checks below; this merely prevents
+ * a valid object from being discarded because of that transport wrapper.
+ */
+function extractJsonObject(text: string): string | undefined {
+  const normalized = stripCodeFence(text).replace(
+    /^\s*<think(?:\s[^>]*)?>[\s\S]*?<\/think>\s*/i,
+    "",
+  );
+
+  let start = -1;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index]!;
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === "{") {
+      if (start === -1) start = index;
+      depth += 1;
+      continue;
+    }
+    if (character === "}" && start !== -1) {
+      depth -= 1;
+      if (depth === 0) return normalized.slice(start, index + 1);
+    }
+  }
+  return undefined;
+}
+
 export function lineBoundsForInput(input: InsightEnhancementInput): {
   readonly min: number;
   readonly max: number;
@@ -302,7 +344,9 @@ export function validateEnhancementOutput(
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stripCodeFence(rawText));
+    const json = extractJsonObject(rawText);
+    if (json === undefined) throw new Error("response is not JSON");
+    parsed = JSON.parse(json);
   } catch {
     return { ok: false, stage: 1, reason: "response is not JSON" };
   }

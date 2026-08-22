@@ -1,5 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
+import { RoutePending } from "./components/RoutePending";
+import { routerPerformanceOptions } from "./router-performance";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -20,9 +22,9 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
-    defaultStaleTime: 30_000,
-    defaultGcTime: 5 * 60_000,
+    // Sidebar links opt in to intent preloading. Keep the result long enough
+    // to cover the ensuing click, but never eagerly request every route.
+    ...routerPerformanceOptions(RoutePending),
   });
 
   return router;

@@ -60,6 +60,23 @@ const NODE_BUILTIN_IMPORTS = new Set([
   "node:worker_threads",
 ]);
 
+/**
+ * Extract only ESM imports that execute synchronously. The old `includes()`
+ * walk also followed filenames in Vite's dynamic-import preload map, counting
+ * lazy route chunks as initial code and making the budget impossible to act
+ * on. Build output is minified, so support both `import{...}from` and bare
+ * side-effect import forms.
+ */
+function staticChunkReferences(source) {
+  const references = new Set();
+  const fromPattern =
+    /(?:^|[;\n])(?:import|export)(?!\s*\()(?:(?!;).)*?from\s*["']\.\/([^"']+)["']/gm;
+  const barePattern = /(?:^|[;\n])import\s*["']\.\/([^"']+)["']/gm;
+  for (const match of source.matchAll(fromPattern)) references.add(match[1]);
+  for (const match of source.matchAll(barePattern)) references.add(match[1]);
+  return references;
+}
+
 async function main() {
   let files;
   try {
@@ -71,6 +88,7 @@ async function main() {
     process.exit(1);
   }
   const jsFiles = files.filter((name) => name.endsWith(".js"));
+  const jsFileSet = new Set(jsFiles);
   const cssFiles = files.filter((name) => name.endsWith(".css"));
 
   const entry = jsFiles.find((name) => /^index-[^.]+\.js$/.test(name));
@@ -97,9 +115,9 @@ async function main() {
   while (stack.length > 0) {
     const name = stack.pop();
     const source = await readFile(join(assetsDir, name), "utf8");
-    for (const candidate of jsFiles) {
+    for (const candidate of staticChunkReferences(source)) {
+      if (!jsFileSet.has(candidate)) continue;
       if (referenced.has(candidate)) continue;
-      if (!source.includes(candidate)) continue;
       referenced.add(candidate);
       if (/\.lazy-[^.]+\.js$/.test(candidate)) continue;
       // A chunk referenced only inside a dynamic-import/preload context is
@@ -124,9 +142,10 @@ async function main() {
   // node imports is a real leak; the TanStack server-fn transport chunks are
   // browser-safe RPC endpoints and are allowed.
   const entrySource = await readFile(join(assetsDir, entry), "utf8");
+  const entryStaticReferences = staticChunkReferences(entrySource);
   const serverChunksInEntry = [];
   for (const name of jsFiles) {
-    if (!/\.server-[^.]+\.js$/.test(name) || !entrySource.includes(name))
+    if (!/\.server-[^.]+\.js$/.test(name) || !entryStaticReferences.has(name))
       continue;
     const source = await readFile(join(assetsDir, name), "utf8");
     if (
