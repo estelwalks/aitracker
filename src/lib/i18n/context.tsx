@@ -22,12 +22,14 @@ import {
   type PreferenceMode,
   type PreferenceSource,
 } from "./locale";
-import { zh } from "./locales/zh-CN";
 import {
-  catalogs,
+  catalogFor,
   getMessage,
+  loadCatalog,
+  primeCatalog,
   type MessageKey,
   type MessageParams,
+  type Translations,
 } from "./messages";
 import { BUILTIN_RATES, formatMoney as pricingFormatMoney } from "../pricing";
 import { getRatesSnapshot, type RatesSnapshot } from "../pricing/server-fns";
@@ -94,7 +96,11 @@ const fallbackT = <K extends MessageKey>(
   key: K,
   params?: MessageParams<K>,
 ): string =>
-  getMessage(zh, key, params as Record<string, string | number> | undefined);
+  getMessage(
+    catalogFor("zh-CN"),
+    key,
+    params as Record<string, string | number> | undefined,
+  );
 
 /**
  * Default value uses the zh-CN catalog directly, so `t()` still works outside
@@ -134,15 +140,11 @@ function updateSearchParams(locale: Locale, currency: Currency): void {
   window.history.replaceState(null, "", url);
 }
 
-function titleForPath(locale: Locale, pathname: string): string {
+function titleForPath(catalog: Translations, pathname: string): string {
   const match = ROUTE_TITLE_KEYS.find(([prefix]) =>
     pathname.startsWith(prefix),
   );
-  return getMessage(
-    catalogs[locale],
-    match?.[1] ?? "meta.titles.notFound",
-    brandParams,
-  );
+  return getMessage(catalog, match?.[1] ?? "meta.titles.notFound", brandParams);
 }
 
 function rateFor(rates: RatesSnapshot | null, currency: Currency): number {
@@ -152,6 +154,8 @@ function rateFor(rates: RatesSnapshot | null, currency: Currency): number {
 export interface I18nProviderProps {
   /** Locale resolved by the root route loader (SSR `?locale=` etc.). */
   initialLocale?: Locale;
+  /** Active catalog serialized by the root loader; never all language packs. */
+  initialCatalog?: Translations;
   /** Display currency resolved by the root route loader (SSR `?currency=`). */
   initialDisplayCurrency?: Currency;
   /** Exchange rates read server-side (cache/built-in) for the first frame. */
@@ -161,6 +165,7 @@ export interface I18nProviderProps {
 
 export function I18nProvider({
   initialLocale,
+  initialCatalog,
   initialDisplayCurrency,
   initialRates = null,
   children,
@@ -173,6 +178,11 @@ export function I18nProvider({
   const [systemLocale, setSystemLocale] = useState<Locale>(
     () => initialLocale ?? "zh-CN",
   );
+  const [catalog, setCatalog] = useState<Translations>(() => {
+    const locale = initialLocale ?? "zh-CN";
+    if (initialCatalog) primeCatalog(locale, initialCatalog);
+    return initialCatalog ?? catalogFor(locale);
+  });
   const [rates, setRates] = useState<RatesSnapshot | null>(initialRates);
   const [ratesLoading, setRatesLoading] = useState(false);
 
@@ -206,8 +216,22 @@ export function I18nProvider({
     currencyRef.current = displayCurrency;
     if (typeof document === "undefined") return;
     document.documentElement.lang = locale;
-    document.title = titleForPath(locale, window.location.pathname);
-  }, [locale, displayCurrency]);
+    document.title = titleForPath(catalog, window.location.pathname);
+  }, [catalog, locale, displayCurrency]);
+
+  useEffect(() => {
+    let active = true;
+    void loadCatalog(locale)
+      .then((nextCatalog) => {
+        if (active) setCatalog(nextCatalog);
+      })
+      .catch(() => {
+        if (active) setCatalog(catalogFor("zh-CN"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [locale]);
 
   /**
    * Converge the SSR values to SQLite preferences once. The same server-owned
@@ -321,11 +345,11 @@ export function I18nProvider({
   const t = useCallback(
     <K extends MessageKey>(key: K, params?: MessageParams<K>): string =>
       getMessage(
-        catalogs[locale],
+        catalog,
         key,
         params as Record<string, string | number> | undefined,
       ),
-    [locale],
+    [catalog],
   );
 
   const format = useMemo(() => {
