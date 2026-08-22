@@ -22,6 +22,7 @@ import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 import { PrivacyStrip } from "./PrivacyStrip";
+import { WindowChrome, WINDOW_CHROME_HEIGHT } from "./WindowChrome";
 
 type NavItem = {
   to:
@@ -70,6 +71,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(184);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const searchStr = useRouterState({ select: (s) => s.location.searchStr });
+  // 浮窗小组件（/widget?mode=float）复用本壳层，但不属于主窗口：不渲染自绘标题栏，
+  // 顶部也不留标题栏占位。
+  const isWidgetFloat = searchStr.includes("mode=float");
+  const chromeOffset = isWidgetFloat ? 0 : WINDOW_CHROME_HEIGHT;
 
   useEffect(() => {
     const onResize = () => {
@@ -86,9 +92,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
+      {!isWidgetFloat && <WindowChrome />}
       <aside
-        className="tt-sidebar fixed inset-y-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
-        style={{ width: railWidth }}
+        className="tt-sidebar fixed bottom-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
+        style={{ width: railWidth, top: chromeOffset }}
       >
         <div
           className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
@@ -178,7 +185,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div
         className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
-        style={{ paddingLeft: railWidth }}
+        style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
       >
         <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-4 md:px-8 md:pt-8 2xl:px-10 2xl:pt-10">
           <div className="tt-container">{children}</div>

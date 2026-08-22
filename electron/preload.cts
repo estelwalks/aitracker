@@ -29,6 +29,22 @@ const desktopApi: DesktopApi = Object.freeze({
       enabled,
     ) as Promise<AutoLaunchState>,
   showWindow: () => ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
+  minimizeWindow: () =>
+    ipcRenderer.invoke(desktopIpc.windowMinimize) as Promise<void>,
+  toggleMaximizeWindow: () =>
+    ipcRenderer.invoke(desktopIpc.windowToggleMaximize) as Promise<boolean>,
+  closeWindow: () => ipcRenderer.invoke(desktopIpc.windowClose) as Promise<void>,
+  isWindowMaximized: () =>
+    ipcRenderer.invoke(desktopIpc.windowIsMaximized) as Promise<boolean>,
+  onWindowMaximizedChanged: (callback: (maximized: boolean) => void) => {
+    const listener = (_event: unknown, maximized: unknown) => {
+      callback(maximized === true);
+    };
+    ipcRenderer.on(desktopIpc.windowMaximizedChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(desktopIpc.windowMaximizedChanged, listener);
+    };
+  },
   openWidgetWindow: () =>
     ipcRenderer.invoke(desktopIpc.openWidgetWindow) as Promise<void>,
   getPreferences: () =>

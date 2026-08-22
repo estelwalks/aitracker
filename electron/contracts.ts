@@ -14,6 +14,11 @@ export const desktopIpc = {
   setLocaleMode: "desktop:set-locale-mode",
   setCurrencyMode: "desktop:set-currency-mode",
   preferencesChanged: "desktop:preferences-changed",
+  windowMinimize: "desktop:window-minimize",
+  windowToggleMaximize: "desktop:window-toggle-maximize",
+  windowClose: "desktop:window-close",
+  windowIsMaximized: "desktop:window-is-maximized",
+  windowMaximizedChanged: "desktop:window-maximized-changed",
   listSecuritySkills: "security:list-skills",
   selectSecuritySkillDirectory: "security:select-skill-directory",
   startSecurityScan: "security:start-scan",
@@ -265,6 +270,16 @@ export interface DesktopApi {
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
   showWindow(): Promise<void>;
+  /** Minimize the main window (no-op in browser preview). */
+  minimizeWindow(): Promise<void>;
+  /** Toggle maximized/restored on the main window; resolves to the new state. */
+  toggleMaximizeWindow(): Promise<boolean>;
+  /** Close the main window (main process routes it to hide-to-tray). */
+  closeWindow(): Promise<void>;
+  /** Whether the main window is currently maximized. */
+  isWindowMaximized(): Promise<boolean>;
+  /** Subscribe to main-window maximize/restore changes; returns an unsubscribe function. */
+  onWindowMaximizedChanged(callback: (maximized: boolean) => void): () => void;
   /** Show the floating widget window (created lazily, reused across opens). */
   openWidgetWindow(): Promise<void>;
   getPreferences(): Promise<Record<string, unknown>>;

@@ -458,6 +458,28 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     void showWidgetWindow();
   });
+  ipcMain.handle(desktopIpc.windowMinimize, (event): void => {
+    assertTrustedSender(event);
+    mainWindow?.minimize();
+  });
+  ipcMain.handle(desktopIpc.windowToggleMaximize, (event): boolean => {
+    assertTrustedSender(event);
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+  ipcMain.handle(desktopIpc.windowClose, (event): void => {
+    assertTrustedSender(event);
+    // 复用现有 close 拦截：隐藏到托盘（而非真正退出）。
+    mainWindow?.close();
+  });
+  ipcMain.handle(desktopIpc.windowIsMaximized, (event): boolean => {
+    assertTrustedSender(event);
+    return Boolean(
+      mainWindow && !mainWindow.isDestroyed() && mainWindow.isMaximized(),
+    );
+  });
 
   ipcMain.handle(
     desktopIpc.getPreferences,
@@ -701,6 +723,10 @@ async function createMainWindow(): Promise<void> {
     height: 940,
     minWidth: 1100,
     minHeight: 720,
+    // 无边框 + 自绘标题栏：隐藏系统原生标题栏与窗口按钮，由渲染进程
+    // 提供与主题一致的深色标题栏（macOS 保留原生红绿灯按钮）。
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    autoHideMenuBar: true,
     // 立即显示窗口（深色底避免白屏闪烁）：首次完整扫描可能耗时较久，
     // 等待 ready-to-show 会让用户以为应用没有启动。
     show: true,
@@ -726,6 +752,12 @@ async function createMainWindow(): Promise<void> {
     }
   });
   mainWindow.once("ready-to-show", showMainWindow);
+  const broadcastMaximized = (maximized: boolean) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(desktopIpc.windowMaximizedChanged, maximized);
+  };
+  mainWindow.on("maximize", () => broadcastMaximized(true));
+  mainWindow.on("unmaximize", () => broadcastMaximized(false));
   mainWindow.on("close", async (event) => {
     if (isQuitting) {
       return;
@@ -850,6 +882,10 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.showWindow);
     ipcMain.removeHandler(desktopIpc.openWidgetWindow);
+    ipcMain.removeHandler(desktopIpc.windowMinimize);
+    ipcMain.removeHandler(desktopIpc.windowToggleMaximize);
+    ipcMain.removeHandler(desktopIpc.windowClose);
+    ipcMain.removeHandler(desktopIpc.windowIsMaximized);
     ipcMain.removeHandler(desktopIpc.getPreferences);
     ipcMain.removeHandler(desktopIpc.setPreference);
     ipcMain.removeHandler(desktopIpc.resetPreferences);
@@ -901,6 +937,12 @@ if (!hasSingleInstanceLock) {
     );
     registerIpcHandlers();
     rebuildTray();
+    // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
+    // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
+    // 开发模式需要默认快捷键（DevTools/Reload）。
+    if (process.platform !== "darwin" && app.isPackaged) {
+      Menu.setApplicationMenu(null);
+    }
     // 先创建主窗口（立即反馈启动），本地数据预热改为并行执行——
     // 首次完整用量扫描可能耗时数十秒甚至数分钟，不应阻塞窗口出现。
     // 扫描器对并发请求去重，预热与窗口首屏共享同一次扫描。
