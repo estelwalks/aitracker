@@ -62,7 +62,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* 与原型一致：Inter 负责界面字形，JetBrains Mono 负责数字与代码 */
+  /* Native font stacks avoid an external request during offline desktop startup. */
   --font-sans:
     "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
     sans-serif;

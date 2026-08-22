@@ -165,6 +165,15 @@ export const getDistillationQuery = createServerFn({ method: "GET" })
     return loadDistillation(data);
   });
 
+/** Low-cost Skill Management KPI request, intentionally separate from the
+ * workbench loader so Skill Management can become interactive first. */
+export const getDistillationActivity = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  const { loadDistillationActivity } = await import("./api.server.ts");
+  return loadDistillationActivity();
+});
+
 /** Start a distillation run from the selected session refs (+ optional segments). */
 export const startDistillation = createServerFn({ method: "POST" })
   .validator(validateStartDistillationInput)

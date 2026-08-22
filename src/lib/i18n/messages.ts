@@ -1,8 +1,5 @@
 import { zh } from "./locales/zh-CN";
-import { en } from "./locales/en-US";
-import { ja } from "./locales/ja-JP";
-import { ko } from "./locales/ko-KR";
-import type { Locale } from "./locale";
+import { LOCALES, type Locale } from "./locale";
 import type { MessageLeaf, PluralMessage, Translations } from "./schema";
 export type { MessageKey, MessageParams, Translations } from "./schema";
 
@@ -15,12 +12,59 @@ export type { MessageKey, MessageParams, Translations } from "./schema";
 
 /** The schema is defined separately so locale dictionaries do not import this resolver. */
 
-export const catalogs: Record<Locale, Translations> = {
+const loadedCatalogs: Partial<Record<Locale, Translations>> = {
   "zh-CN": zh,
-  "en-US": en,
-  "ja-JP": ja,
-  "ko-KR": ko,
 };
+
+/**
+ * Loads only the active UI language. Chinese remains embedded as the safe
+ * offline fallback; the other three catalogs become route-independent chunks.
+ */
+export async function loadCatalog(locale: Locale): Promise<Translations> {
+  const cached = loadedCatalogs[locale];
+  if (cached) return cached;
+
+  const catalog =
+    locale === "en-US"
+      ? (await import("./locales/en-US")).en
+      : locale === "ja-JP"
+        ? (await import("./locales/ja-JP")).ja
+        : (await import("./locales/ko-KR")).ko;
+  loadedCatalogs[locale] = catalog;
+  return catalog;
+}
+
+/** Seeds the browser cache with the catalog serialized by the root SSR loader. */
+export function primeCatalog(locale: Locale, catalog: Translations): void {
+  loadedCatalogs[locale] = catalog;
+}
+
+/** Synchronous readers always have a Chinese fallback while a chunk loads. */
+export function catalogFor(locale: Locale): Translations {
+  return loadedCatalogs[locale] ?? zh;
+}
+
+/**
+ * Compatibility view for existing synchronous server/domain consumers. Its
+ * values resolve from the active cache, never causing every locale to be
+ * imported by the initial browser graph.
+ */
+export const catalogs: Record<Locale, Translations> = new Proxy(
+  {} as Record<Locale, Translations>,
+  {
+    get: (_target, property) =>
+      typeof property === "string" &&
+      (LOCALES as readonly string[]).includes(property)
+        ? catalogFor(property as Locale)
+        : undefined,
+    ownKeys: () => [...LOCALES],
+    getOwnPropertyDescriptor: (_target, property) =>
+      typeof property === "string" &&
+      (LOCALES as readonly string[]).includes(property)
+        ? { configurable: true, enumerable: true }
+        : undefined,
+  },
+);
 
 function atPath(catalog: Translations, key: string): MessageLeaf | undefined {
   const value = key.split(".").reduce<unknown>((acc, part) => {

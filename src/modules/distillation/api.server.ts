@@ -76,9 +76,10 @@ export async function loadDistillation(
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
     const root = await getCompositionRoot();
-    await root.sessionSnapshot
-      .requestRefresh({ reason: "manual" })
-      .catch(() => undefined);
+    // Opening the workbench must never wait for a filesystem session scan.
+    // `root.sessions.query()` below serves the persisted snapshot and asks the
+    // task runtime to refresh stale/empty data in the background.
+    await root.sessionSnapshot.ensureHydrated();
     const [page, candidates] = await Promise.all([
       root.sessions.query({ page: 1, pageSize: 100 }),
       root.distillation.listAll(),
@@ -152,6 +153,22 @@ export async function loadDistillation(
       quota: null,
     };
   }
+}
+
+/** Compact async KPI read for Skill Management; deliberately omits sessions,
+ * model profiles and the full candidate history used by the workbench. */
+export async function loadDistillationActivity(): Promise<{
+  readonly approved: number;
+  readonly waiting: number;
+}> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const [approved, waiting] = await Promise.all([
+    root.distillation.count(),
+    root.distillation.listWaiting(),
+  ]);
+  return { approved: approved ?? 0, waiting: waiting.length };
 }
 
 /**

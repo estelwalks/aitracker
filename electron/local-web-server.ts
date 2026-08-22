@@ -37,6 +37,11 @@ export interface LocalWebServer {
   origin: string;
   capabilityToken: string;
   createBrowserBootstrapUrl(pathname?: string): string;
+  /**
+   * Starts the server-side desktop runtime without rendering an application
+   * document. Used while Electron shows its native startup screen.
+   */
+  warmup(desktopBrokerToken: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -505,9 +510,10 @@ export async function startLocalWebServer(
   if (!address || typeof address === "string") {
     throw new Error("Unable to resolve local server address");
   }
+  const origin = `http://127.0.0.1:${address.port}`;
 
   return {
-    origin: `http://127.0.0.1:${address.port}`,
+    origin,
     capabilityToken,
     createBrowserBootstrapUrl(pathname = "/security") {
       const now = Date.now();
@@ -522,11 +528,33 @@ export async function startLocalWebServer(
       }
       const bootstrap = randomUUID();
       browserBootstrapTokens.set(bootstrap, now + BROWSER_BOOTSTRAP_TTL_MS);
-      const url = new URL(pathname, `http://127.0.0.1:${address.port}`);
-      if (url.origin !== `http://127.0.0.1:${address.port}`)
+      const url = new URL(pathname, origin);
+      if (url.origin !== origin)
         throw new TypeError("Browser bootstrap path must stay same-origin");
       url.searchParams.set("bootstrap", bootstrap);
       return url.href;
+    },
+    async warmup(desktopBrokerToken) {
+      // Call the loaded Nitro handler directly rather than HTTP-fetching a
+      // document. Its server entry starts the desktop scheduler before
+      // handling the small desktop-state read, so first-run collectors begin
+      // behind the native splash without duplicating SSR/hydration work.
+      if (!handler?.fetch || !desktopBrokerToken) return;
+      const pendingTasks: Promise<unknown>[] = [];
+      const response = await handler.fetch(
+        new Request(`${origin}/api/desktop-state/preferences`, {
+          headers: {
+            "x-trusttools-desktop-broker": desktopBrokerToken,
+          },
+        }),
+        {},
+        {
+          waitUntil: (promise) => pendingTasks.push(promise),
+          passThroughOnException: () => undefined,
+        },
+      );
+      await response.body?.cancel();
+      void Promise.allSettled(pendingTasks);
     },
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {

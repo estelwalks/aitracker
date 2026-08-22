@@ -455,7 +455,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       {
         const capability = request.prompt.id.startsWith("report")
           ? "report"
-          : "distillation";
+          : request.prompt.id.startsWith("insight.")
+            ? "page-insight"
+            : "distillation";
         const amountUsd = result.summary.cost.amountUsd;
         audit.recordWithBudget({
           mode: "enhanced-manual",
