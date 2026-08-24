@@ -28,44 +28,41 @@ function composeMemoryCandidates(
   bundle: InsightEvidenceBundle,
 ): readonly InsightCandidate[] {
   const count = metricValue(bundle, "memory.count");
-  if (count != null && count > 0) {
-    return [
-      {
-        id: "memory.auto",
-        severity: "info",
-        factKey: "insights.page.memory.memory-auto",
-        factParams: {},
-        evidenceRefs: ["memory.count"],
-        allowedActionIds: ["open_memory"],
-        actionId: "open_memory",
-      },
-      {
-        id: "memory.kinds",
-        severity: "info",
-        factKey: "insights.page.memory.memory-kinds",
-        factParams: {},
-        evidenceRefs: ["memory.count"],
-        allowedActionIds: ["open_memory"],
-        actionId: "open_memory",
-      },
-    ];
-  }
-  return [
-    {
-      id: "memory.empty",
-      severity: "info",
-      factKey: "insights.page.memory.memory-empty",
-      factParams: {},
-      evidenceRefs: [],
+  const approved = metricValue(bundle, "memory.approved");
+  const pending = metricValue(bundle, "memory.pending");
+  const unsafe = metricValue(bundle, "memory.unsafe");
+  const safe = metricValue(bundle, "memory.safe");
+  const candidates: InsightCandidate[] = [];
+  for (const [id, value, key, ref, param] of [
+    ["inventory", count, "memory-guide-inventory", "memory.count", "count"],
+    [
+      "approved",
+      approved,
+      "memory-guide-approval",
+      "memory.approved",
+      "approved",
+    ],
+    ["pending", pending, "memory-guide-types", "memory.pending", "pending"],
+    ["unsafe", unsafe, "memory-guide-hygiene", "memory.unsafe", "unsafe"],
+    ["safe", safe, "memory-guide-distill", "memory.safe", "safe"],
+  ] as const) {
+    if (value == null) continue;
+    candidates.push({
+      id: `memory.${id}`,
+      severity: id === "unsafe" && value > 0 ? "attention" : "info",
+      factKey: `insights.page.memory.${key}`,
+      factParams: { [param]: value },
+      evidenceRefs: [ref],
       allowedActionIds: ["open_memory"],
       actionId: "open_memory",
-    },
-  ];
+    });
+  }
+  return candidates;
 }
 
 export const memoryInsightAdapter: PageInsightAdapter = {
   surfaceId: "memory",
-  adapterVersion: 1,
+  adapterVersion: 3,
   async loadEvidence(scope: InsightScope) {
     assertEntityId(scope.entityId);
     const nowMs = Date.now();
@@ -90,6 +87,8 @@ export const memoryInsightAdapter: PageInsightAdapter = {
         asset.securityVerdict === "suspicious" ||
         asset.securityVerdict === "dangerous",
     ).length;
+    const pending = Math.max(0, count - approved);
+    const safe = Math.max(0, count - unsafe);
 
     const latestUpdatedAt = assets.reduce<string | null>(
       (best, asset) =>
@@ -108,6 +107,8 @@ export const memoryInsightAdapter: PageInsightAdapter = {
         "count",
       ),
       metricEvidence("memory.unsafe", unsafe, observedAt, freshness, "count"),
+      metricEvidence("memory.pending", pending, observedAt, freshness, "count"),
+      metricEvidence("memory.safe", safe, observedAt, freshness, "count"),
     ];
 
     return {

@@ -19,10 +19,12 @@ import type {
   InsightEnhancementInput,
   InsightSurfaceId,
 } from "../page/contracts.ts";
+import { isInsightAnalysisUseful } from "../page/analysis-quality.ts";
 
-export const MAX_RESPONSE_TEXT_LENGTH = 4096;
+export const MAX_RESPONSE_TEXT_LENGTH = 8192;
 export const MAX_ANALYSIS_CHARS = 160;
-export const MAX_LINES = 3;
+export const MIN_LINES = 1;
+export const MAX_LINES = 10;
 export const WIDGET_MAX_LINES = 1;
 export const CANDIDATE_ID_MIN = 1;
 export const CANDIDATE_ID_MAX = 80;
@@ -225,25 +227,29 @@ type ParsedLine = {
   readonly actionId?: string;
 };
 
-function outputSchema(maxLines: number): z.ZodType<{ lines: ParsedLine[] }> {
+function outputSchema(
+  minLines: number,
+  maxLines: number,
+): z.ZodType<{ lines: ParsedLine[] }> {
+  const linesSchema = z.array(
+    z
+      .object({
+        candidateId: z
+          .string()
+          .trim()
+          .min(CANDIDATE_ID_MIN)
+          .max(CANDIDATE_ID_MAX),
+        analysis: z.string().trim().min(1).max(MAX_ANALYSIS_CHARS),
+        actionId: actionIdSchema.optional(),
+      })
+      .strict(),
+  );
   return z
     .object({
-      lines: z
-        .array(
-          z
-            .object({
-              candidateId: z
-                .string()
-                .trim()
-                .min(CANDIDATE_ID_MIN)
-                .max(CANDIDATE_ID_MAX),
-              analysis: z.string().trim().min(1).max(MAX_ANALYSIS_CHARS),
-              actionId: actionIdSchema.optional(),
-            })
-            .strict(),
-        )
-        .min(1)
-        .max(maxLines),
+      lines:
+        minLines === 0
+          ? linesSchema.max(maxLines)
+          : linesSchema.min(minLines).max(maxLines),
     })
     .strict();
 }
@@ -268,8 +274,63 @@ export function stripCodeFence(text: string): string {
     .trim();
 }
 
-function maxLinesFor(surface: InsightSurfaceId): number {
-  return surface === "widget" ? WIDGET_MAX_LINES : MAX_LINES;
+/**
+ * Returns the first complete JSON object in a model response. Some reasoning
+ * providers prepend a private `<think>` block or a short prose lead-in even
+ * when asked for JSON only. The response is still bounded and subsequently
+ * passes the same strict schema and safety checks below; this merely prevents
+ * a valid object from being discarded because of that transport wrapper.
+ */
+function extractJsonObject(text: string): string | undefined {
+  const normalized = stripCodeFence(text).replace(
+    /^\s*<think(?:\s[^>]*)?>[\s\S]*?<\/think>\s*/i,
+    "",
+  );
+
+  let start = -1;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index]!;
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === "{") {
+      if (start === -1) start = index;
+      depth += 1;
+      continue;
+    }
+    if (character === "}" && start !== -1) {
+      depth -= 1;
+      if (depth === 0) return normalized.slice(start, index + 1);
+    }
+  }
+  return undefined;
+}
+
+export function lineBoundsForInput(input: InsightEnhancementInput): {
+  readonly min: number;
+  readonly max: number;
+} {
+  const available = input.candidates.length;
+  if (available === 0) {
+    return { min: 0, max: 0 };
+  }
+  if (input.surface === "widget") {
+    return { min: WIDGET_MAX_LINES, max: WIDGET_MAX_LINES };
+  }
+  return {
+    min: Math.min(MIN_LINES, available),
+    max: Math.min(MAX_LINES, available),
+  };
 }
 
 export function validateEnhancementOutput(
@@ -283,15 +344,19 @@ export function validateEnhancementOutput(
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stripCodeFence(rawText));
+    const json = extractJsonObject(rawText);
+    if (json === undefined) throw new Error("response is not JSON");
+    parsed = JSON.parse(json);
   } catch {
     return { ok: false, stage: 1, reason: "response is not JSON" };
   }
 
   // L2 — schema.
-  const parsedSchema = outputSchema(maxLinesFor(input.surface)).safeParse(
-    parsed,
-  );
+  const bounds = lineBoundsForInput(input);
+  if (bounds.max === 0) {
+    return { ok: false, stage: 2, reason: "no candidates are available" };
+  }
+  const parsedSchema = outputSchema(bounds.min, bounds.max).safeParse(parsed);
   if (!parsedSchema.success) {
     return {
       ok: false,
@@ -380,9 +445,21 @@ export function validateEnhancementOutput(
     }
   }
 
+  const usefulLines = lines.filter((line) => {
+    const candidate = candidatesById.get(line.candidateId)!;
+    return isInsightAnalysisUseful(candidate.fact, line.analysis);
+  });
+  if (usefulLines.length === 0) {
+    return {
+      ok: false,
+      stage: 5,
+      reason: "no incremental analysis remains after quality filtering",
+    };
+  }
+
   return {
     ok: true,
-    output: lines.map((line) => ({
+    output: usefulLines.map((line) => ({
       candidateId: line.candidateId,
       analysis: line.analysis,
       ...(line.actionId === undefined

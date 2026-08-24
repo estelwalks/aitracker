@@ -58,7 +58,7 @@ import type { SecuritySkillVerdictReadModel } from "../../security-assessment/qu
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;
   /** Compact agent-overview projection; never raw events (P1-T1-06/07). */
-  usage: AgentUsageOverviewReadModel;
+  usage?: AgentUsageOverviewReadModel;
   showWorkspace?: boolean;
   showToolOverview?: boolean;
   /** Real security-detection summary (skill name → risk-finding count). */

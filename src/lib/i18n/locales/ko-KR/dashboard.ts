@@ -295,6 +295,13 @@ export const dashboard = {
     dataLoadFailed: "데이터 로드 실패",
     dataLoadFailedDesc: "실제 데이터 로드 실패: {error}",
     localReadFailed: "로컬 데이터 읽기 실패",
+    workspaceInitializing: "작업 공간 데이터를 초기화하는 중",
+    workspaceInitializingDesc:
+      "로컬 AI 도구의 사용 기록, 세션, Skills를 읽고 있습니다. 로컬 데이터는 이 기기 밖으로 전송되지 않습니다.",
+    workspaceInitializationFailed: "작업 공간 데이터 초기화에 실패했습니다",
+    workspaceInitializationFailedDesc:
+      "최초 작업 공간 데이터를 읽을 수 없습니다. 지금 다시 시도하거나 나중에 앱을 다시 여세요.",
+    retryWorkspaceInitialization: "초기화 다시 시도",
     reload: "다시 로드",
     welcomeDesc:
       "각 AI 도구에 흩어진 token, skill, 세션을 한곳에서 다시 관리하세요.",

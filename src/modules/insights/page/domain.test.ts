@@ -6,9 +6,15 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   InsightSeverity,
+  InsightSurfaceId,
+  PageInsightAdapter,
 } from "./contracts.ts";
+import { INSIGHT_SURFACE_IDS } from "./contracts.ts";
 import {
   canonicalScopeHash,
+  composePageCandidates,
+  composeRemotePageCandidates,
+  composeRulesEnvelope,
   evidenceHash,
   isInsightSurfaceId,
   rankCandidates,
@@ -16,6 +22,7 @@ import {
   validateCandidates,
   validateEvidenceBundle,
 } from "./domain.ts";
+import { getPageRuleConfig } from "./rule-registry.ts";
 
 function evidence(
   id: string,
@@ -83,6 +90,95 @@ test("rankCandidates orders mandatory first, then severity, then stable, and tru
   );
 });
 
+test("complete pages allow up to ten lines without fabricating empty-bundle padding", () => {
+  const completeSurfaces = INSIGHT_SURFACE_IDS.filter(
+    (surface) => surface !== "widget",
+  );
+  assert.equal(completeSurfaces.length, 13);
+
+  for (const surfaceId of completeSurfaces) {
+    const adapter: PageInsightAdapter = {
+      surfaceId,
+      adapterVersion: 1,
+      loadEvidence: async () => bundle([], { surfaceId }),
+      composeCandidates: () => [],
+    };
+    const composed = composePageCandidates(adapter, bundle([], { surfaceId }));
+    assert.equal(composed.length, 0, surfaceId);
+    assert.equal(getPageRuleConfig(surfaceId).maxLines, 10);
+    assert.equal(getPageRuleConfig(surfaceId).ruleVersion, 3);
+  }
+
+  const widgetAdapter: PageInsightAdapter = {
+    surfaceId: "widget",
+    adapterVersion: 1,
+    loadEvidence: async () => bundle([], { surfaceId: "widget" }),
+    composeCandidates: () => [
+      candidate({
+        id: "widget-line",
+        factKey: "insights.page.widget.widget-broadcast-security",
+        factParams: { count: 0 },
+        evidenceRefs: ["e1"],
+      }),
+    ],
+  };
+  assert.equal(
+    composePageCandidates(
+      widgetAdapter,
+      bundle([evidence("e1", 0)], { surfaceId: "widget" }),
+    ).length,
+    1,
+  );
+  assert.equal(getPageRuleConfig("widget").maxLines, 1);
+});
+
+test("remote candidates filter private facts before truncation and preserve mandatory rank", () => {
+  const surfaceId: InsightSurfaceId = "tracker";
+  const privateCandidates = Array.from({ length: 10 }, (_, index) =>
+    candidate({
+      id: `private-${index + 1}`,
+      severity: "risk",
+      factKey: "insights.page.tracker.tracker-top-project",
+      factParams: { name: `Private ${index + 1}` },
+      remoteEligible: false,
+    }),
+  );
+  const adapter: PageInsightAdapter = {
+    surfaceId,
+    adapterVersion: 1,
+    loadEvidence: async () => bundle([], { surfaceId }),
+    composeCandidates: () => privateCandidates,
+  };
+  const targetBundle = bundle([evidence("e1", 1)], { surfaceId });
+
+  const local = composePageCandidates(adapter, targetBundle);
+  const remote = composeRemotePageCandidates(adapter, targetBundle);
+  assert.equal(local.length, 10);
+  assert.equal(
+    local.every((item) => item.remoteEligible === false),
+    true,
+  );
+  assert.equal(remote.length, 0);
+  assert.equal(
+    remote.every((item) => item.remoteEligible !== false),
+    true,
+  );
+
+  const mandatoryAdapter: PageInsightAdapter = {
+    ...adapter,
+    composeCandidates: () => [
+      ...Array.from({ length: 10 }, (_, index) =>
+        candidate({ id: `risk-${index}`, severity: "risk" }),
+      ),
+      candidate({ id: "mandatory", mandatory: true, severity: "info" }),
+    ],
+  };
+  assert.equal(
+    composeRemotePageCandidates(mandatoryAdapter, targetBundle)[0]?.id,
+    "mandatory",
+  );
+});
+
 test("validateEvidenceBundle accepts scalars and rejects paths, secrets, ids and objects", () => {
   const good = bundle([
     evidence("e1", 42),
@@ -127,6 +223,13 @@ test("validateCandidates checks refs, action whitelist, uniqueness and severity"
   const missingRef = [candidate({ id: "a", evidenceRefs: ["nope"] })];
   assert.ok(
     validateCandidates(b, missingRef).some((e) => e.includes("evidenceRef")),
+  );
+
+  const emptyRefs = [candidate({ id: "empty", evidenceRefs: [] })];
+  assert.ok(
+    validateCandidates(b, emptyRefs).some((e) =>
+      e.includes("evidenceRefs.empty"),
+    ),
   );
 
   const badAction = [
@@ -193,6 +296,153 @@ test("evidenceHash is deterministic, key-order independent and whitelist-only", 
     ignored: "not-whitelisted",
   } as unknown as InsightEvidence;
   assert.equal(evidenceHash(bundle([e1])), evidenceHash(bundle([extra])));
+});
+
+test("evidenceHash ignores bundle and item sampling timestamps", () => {
+  const first = bundle([evidence("e1", 5)], {
+    observedAt: "2026-08-07T00:00:00.000Z",
+  });
+  const resampled = bundle(
+    [evidence("e1", 5, { observedAt: "2026-08-07T00:05:00.000Z" })],
+    { observedAt: "2026-08-07T00:05:00.000Z" },
+  );
+
+  assert.equal(evidenceHash(first), evidenceHash(resampled));
+});
+
+test("evidenceHash changes when evidence value or freshness changes", () => {
+  const base = bundle([evidence("e1", 5)]);
+
+  assert.notEqual(
+    evidenceHash(base),
+    evidenceHash(bundle([evidence("e1", 6)])),
+  );
+  assert.notEqual(
+    evidenceHash(base),
+    evidenceHash(bundle([evidence("e1", 5, { freshness: "stale" })])),
+  );
+});
+
+test("resolveFactText formats large token parameters with the shared formatter", () => {
+  const rawTokenCount = 3495068214;
+  const c = candidate({
+    factKey: "insights.page.dashboard.dashboard-guide-collection",
+    factParams: { tokens: rawTokenCount },
+  });
+
+  const en = resolveFactText("en-US", c);
+  const zh = resolveFactText("zh-CN", c);
+  assert.match(en, /3\.5B tokens/);
+  assert.match(zh, /3\.5B tokens/);
+  assert.doesNotMatch(en, /3495068214/);
+  assert.doesNotMatch(zh, /3495068214/);
+
+  const average = candidate({
+    factKey: "insights.page.tracker.tracker-guide-optimize",
+    factParams: { average: rawTokenCount },
+  });
+  assert.match(resolveFactText("en-US", average), /3\.5B tokens/);
+});
+
+test("resolveFactText formats only whitelisted percentage facts", () => {
+  const percentageCases = [
+    {
+      factKey: "insights.page.dashboard.dashboard-assets",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.dashboard.dashboard-efficiency",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.agents.agents-focus-cache",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.agents.agents-prompt-guide",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.tracker.tracker-waste-leader",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.tracker.tracker-cache-low",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.tracker.tracker-guide-waste",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.tracker.tracker-guide-concentration",
+      factParams: { name: "dsh", rate: 55 },
+    },
+    {
+      factKey: "insights.page.distill.distill-quota",
+      factParams: { rate: 55 },
+    },
+    {
+      factKey: "insights.page.security.security-scan-coverage",
+      factParams: { rate: 55 },
+    },
+  ] as const;
+
+  for (const { factKey, factParams } of percentageCases) {
+    for (const locale of ["zh-CN", "en-US", "ja-JP", "ko-KR"] as const) {
+      const rendered = resolveFactText(
+        locale,
+        candidate({ factKey, factParams }),
+      );
+      assert.match(rendered, /55%/u, `${factKey} ${locale}`);
+      assert.doesNotMatch(rendered, /55[。.]$/u, `${factKey} ${locale}`);
+    }
+  }
+
+  const alreadyFormatted = resolveFactText(
+    "zh-CN",
+    candidate({
+      factKey: "insights.page.dashboard.dashboard-assets",
+      factParams: { name: "dsh", rate: "55%" },
+    }),
+  );
+  assert.match(alreadyFormatted, /55%/u);
+  assert.doesNotMatch(alreadyFormatted, /55%%/u);
+
+  const ordinaryRate = resolveFactText(
+    "zh-CN",
+    candidate({
+      factKey: "insights.sources.coverage",
+      factParams: { connected: 5, total: 10, rate: 55 },
+    }),
+  );
+  assert.match(ordinaryRate, /55。$/u);
+  assert.doesNotMatch(ordinaryRate, /55%/u);
+});
+
+test("rule envelopes carry formatted token params to the renderer", () => {
+  const rawTokenCount = 3495068214;
+  const c = candidate({
+    factKey: "insights.page.dashboard.dashboard-guide-collection",
+    factParams: { tokens: rawTokenCount },
+  });
+  const adapter: PageInsightAdapter = {
+    surfaceId: "dashboard",
+    adapterVersion: 1,
+    loadEvidence: async () => bundle([evidence("e1", rawTokenCount)]),
+    composeCandidates: () => [c],
+  };
+  const envelope = composeRulesEnvelope({
+    adapter,
+    bundle: bundle([evidence("e1", rawTokenCount)]),
+    locale: "en-US",
+    mode: "rules",
+    enhancerAvailable: false,
+    now: () => Date.parse("2026-08-07T00:00:00.000Z"),
+  });
+
+  assert.equal(envelope.lines[0]?.params.tokens, "3.5B");
+  assert.notEqual(envelope.lines[0]?.params.tokens, 3_495_068_214);
 });
 
 test("resolveFactText resolves zh/en and falls back to zh-CN for unknown locales", () => {

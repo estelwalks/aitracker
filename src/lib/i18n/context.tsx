@@ -22,9 +22,15 @@ import {
   type PreferenceMode,
   type PreferenceSource,
 } from "./locale";
-import { loadCatalog } from "./catalog-loader";
-import { getMessage } from "./message-resolver";
-import type { MessageKey, MessageParams, Translations } from "./schema";
+import {
+  catalogFor,
+  getMessage,
+  loadCatalog,
+  primeCatalog,
+  type MessageKey,
+  type MessageParams,
+  type Translations,
+} from "./messages";
 import { BUILTIN_RATES, formatMoney as pricingFormatMoney } from "../pricing";
 import { getRatesSnapshot, type RatesSnapshot } from "../pricing/server-fns";
 import { brandParams } from "../app-config";
@@ -86,7 +92,15 @@ export interface I18nContextValue {
   };
 }
 
-const fallbackT = <K extends MessageKey>(key: K): string => key;
+const fallbackT = <K extends MessageKey>(
+  key: K,
+  params?: MessageParams<K>,
+): string =>
+  getMessage(
+    catalogFor("zh-CN"),
+    key,
+    params as Record<string, string | number> | undefined,
+  );
 
 /**
  * Default value uses the zh-CN catalog directly, so `t()` still works outside
@@ -140,20 +154,20 @@ function rateFor(rates: RatesSnapshot | null, currency: Currency): number {
 export interface I18nProviderProps {
   /** Locale resolved by the root route loader (SSR `?locale=` etc.). */
   initialLocale?: Locale;
+  /** Active catalog serialized by the root loader; never all language packs. */
+  initialCatalog?: Translations;
   /** Display currency resolved by the root route loader (SSR `?currency=`). */
   initialDisplayCurrency?: Currency;
   /** Exchange rates read server-side (cache/built-in) for the first frame. */
   initialRates?: RatesSnapshot | null;
-  /** Catalog loaded by the root loader; other locales stay in lazy chunks. */
-  initialCatalog: Translations;
   children: ReactNode;
 }
 
 export function I18nProvider({
   initialLocale,
+  initialCatalog,
   initialDisplayCurrency,
   initialRates = null,
-  initialCatalog,
   children,
 }: I18nProviderProps) {
   const [localeMode, setLocaleModeState] = useState<PreferenceMode>("system");
@@ -164,8 +178,12 @@ export function I18nProvider({
   const [systemLocale, setSystemLocale] = useState<Locale>(
     () => initialLocale ?? "zh-CN",
   );
+  const [catalog, setCatalog] = useState<Translations>(() => {
+    const locale = initialLocale ?? "zh-CN";
+    if (initialCatalog) primeCatalog(locale, initialCatalog);
+    return initialCatalog ?? catalogFor(locale);
+  });
   const [rates, setRates] = useState<RatesSnapshot | null>(initialRates);
-  const [catalog, setCatalog] = useState<Translations>(initialCatalog);
   const [ratesLoading, setRatesLoading] = useState(false);
 
   const systemCurrency = mapSystemCurrency(systemLocale);
@@ -199,7 +217,21 @@ export function I18nProvider({
     if (typeof document === "undefined") return;
     document.documentElement.lang = locale;
     document.title = titleForPath(catalog, window.location.pathname);
-  }, [locale, displayCurrency, catalog]);
+  }, [catalog, locale, displayCurrency]);
+
+  useEffect(() => {
+    let active = true;
+    void loadCatalog(locale)
+      .then((nextCatalog) => {
+        if (active) setCatalog(nextCatalog);
+      })
+      .catch(() => {
+        if (active) setCatalog(catalogFor("zh-CN"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [locale]);
 
   /**
    * Converge the SSR values to SQLite preferences once. The same server-owned
@@ -226,17 +258,11 @@ export function I18nProvider({
       const browserSystemCurrency = mapSystemCurrency(navigator.language);
       let nextLocale = browserSystemLocale;
       if (storedLocaleMode === "manual" && manualStoredLocale) {
-        void loadCatalog(manualStoredLocale).then((nextCatalog) => {
-          setCatalog(nextCatalog);
-          setManualLocale(manualStoredLocale);
-          setLocaleModeState("manual");
-        });
+        setManualLocale(manualStoredLocale);
+        setLocaleModeState("manual");
         nextLocale = manualStoredLocale;
       } else {
-        void loadCatalog(browserSystemLocale).then((nextCatalog) => {
-          setCatalog(nextCatalog);
-          setSystemLocale(browserSystemLocale);
-        });
+        setSystemLocale(browserSystemLocale);
       }
       let nextCurrency = browserSystemCurrency;
       if (storedCurrencyMode === "manual" && manualStoredCurrency) {
@@ -270,18 +296,10 @@ export function I18nProvider({
   const setLocaleMode = useCallback(
     (mode: PreferenceMode, locale?: Locale) => {
       if (mode === "manual" && locale != null) {
-        void loadCatalog(locale).then((nextCatalog) => {
-          setCatalog(nextCatalog);
-          setManualLocale(locale);
-          setLocaleModeState("manual");
-        });
+        setManualLocale(locale);
         void setPreference(LOCALE_STORAGE_KEY, locale);
-      } else {
-        void loadCatalog(systemLocale).then((nextCatalog) => {
-          setCatalog(nextCatalog);
-          setLocaleModeState(mode);
-        });
       }
+      setLocaleModeState(mode);
       void setPreference(LOCALE_MODE_STORAGE_KEY, mode);
       updateSearchParams(
         mode === "manual" ? (locale ?? systemLocale) : systemLocale,

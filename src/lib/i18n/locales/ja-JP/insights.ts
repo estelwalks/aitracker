@@ -41,11 +41,11 @@ export const insights = {
   page: {
     dashboard: {
       "dashboard-watch":
-        "今日は {agents} 個の Agent が稼働し、{blocked} 回のリスクを遮断、約 {hours} 時間を節約、{distillable} 件のセッションを蒸留できます。",
+        "現在のスナップショットには Skill 資産 {skills} 件、知識資産 {knowledge} 件があります。",
       "dashboard-assets":
-        "主力 Agent「{name}」が {rate} の使用量を占めています。他は低使用のため、配分の見直しをご検討ください。",
+        "最大利用 Agent「{name}」は総 tokens の {rate} を占めます。",
       "dashboard-usage":
-        "今日は {events} 件の使用イベントと {sessions} 件のセッションを収集しました。セッションで確認や蒸留ができます。",
+        "現在の範囲で {events} 件の使用イベントを収集しました。",
       "dashboard-security-safe":
         "本日はセキュリティリスクは見つかりませんでした。スキャン済み項目はすべて合格です。",
       "dashboard-security-risk":
@@ -54,18 +54,38 @@ export const insights = {
         "「{name}」のキャッシュヒット率は {rate} のみです。コスト削減のためコンテキスト再利用をご検討ください。",
       "dashboard-empty":
         "まだセッションデータがありません。データソースからローカル Agent を接続してください。",
+      "dashboard-guide-collection":
+        "現在の範囲で {tokens} tokens を消費しました。",
+      "dashboard-guide-sessions":
+        "現在の範囲には {count} 件の AI セッションがあります。",
+      "dashboard-guide-concentration":
+        "1 利用イベントあたり平均 {average} tokens を消費しました。",
+      "dashboard-guide-cache":
+        "現在の範囲には {events} 件の利用イベントがあります。",
+      "dashboard-guide-distill":
+        "{count} 個の Agent が計測可能な利用イベントを生成しました。",
     },
     agents: {
       "agents-overview":
-        "{count} 個の Agent が稼働中。本日 {blocked} 回のリスクを遮断し、約 {hours} 時間を節約しました。",
+        "既存 Agent を {count} 個検出し、{active} 個に利用イベント、{inactive} 個にイベントがありません。",
       "agents-focus-prompt":
         "「{name}」はプロンプトの重複度が高いため、共通指示を抽出して token 消費を削減してください。",
       "agents-focus-cache":
         "「{name}」のキャッシュヒット率は {rate} のみです。コンテキスト再利用を有効化してください。",
       "agents-focus-security":
-        "「{name}」は直近 {count} 件のリスク操作があります。権限と設定を再確認してください。",
+        "{available} 個の既存 Agent でローカルデータを読み取れます。",
       "agents-prompt-guide":
-        "プロンプトを具体的に書くと、重複読み込みや手戻りが減り、token を節約できます。",
+        "最大利用の既存 Agent「{name}」は総 tokens の {rate} を占めます。",
+      "agents-guide-coverage":
+        "インストール済み、読み取り可能、または利用イベントがある Agent を {count} 個検出しました。",
+      "agents-guide-activity":
+        "既存 Agent には {count} 件のセッションが記録されています。",
+      "agents-guide-prompt":
+        "既存 Agent は {events} 件の利用イベントと {tokens} tokens を生成しました。",
+      "agents-guide-cache":
+        "{available} 個の Agent でローカルデータを読み取れます。",
+      "agents-guide-security":
+        "{count} 個の既存 Agent が利用イベントを生成しました。",
     },
     distill: {
       "distill-ready":
@@ -79,6 +99,13 @@ export const insights = {
         "素材が絞られているほど蒸留品質は向上します。3〜8 件の関連性の高い会話を選ぶ方が、全体をインポートするより良い成果が得られます。",
       "distill-repeat":
         "繰り返しの多い Q&A は 1 つの Skill に固定でき、token を節約できます。",
+      "distill-guide-intake":
+        "本日の蒸留呼び出しは {used} / {limit} 回使用済みです。",
+      "distill-guide-outputs":
+        "蒸留ワークベンチには現在 {count} 件の知識資産があります。",
+      "distill-guide-quota": "本日はあと {count} 回蒸留を呼び出せます。",
+      "distill-guide-reuse": "{count} 件の蒸留結果が承認待ちです。",
+      "distill-guide-start": "蒸留候補キューには現在 {count} 件あります。",
     },
     reports: {
       "reports-highlights":
@@ -92,6 +119,12 @@ export const insights = {
         "AI が下書きし、あなたが修正して保存するだけ。レポートはゼロから書く必要がなく、結論の確認だけで済みます。",
       "reports-next":
         "レポートに「次のステップ」を追記すると、集計時に自動で引用されます。",
+      "reports-guide-inventory":
+        "レポートライブラリには現在 {total} 件のレポートがあります。",
+      "reports-guide-highlights": "日報 {daily} 件、週報 {weekly} 件です。",
+      "reports-guide-security": "現在 {count} 件のレポートが下書きです。",
+      "reports-guide-workflow": "現在 {count} 件のレポートが承認済みです。",
+      "reports-guide-next": "現在 {count} 件のレポートがアーカイブ済みです。",
     },
     memory: {
       "memory-total":
@@ -102,6 +135,15 @@ export const insights = {
         "メモリは空です。セッションを蒸留すると経験が自動で蓄積されます。",
       "memory-kinds":
         "プロフィールはあなたが誰でどう働きたいかを、タスク記憶は私たちが決めたルールを覚えています。",
+      "memory-guide-inventory":
+        "メモリライブラリには現在 {count} 件の資産があります。",
+      "memory-guide-approval":
+        "{approved} 件のメモリが承認または公開済みです。",
+      "memory-guide-hygiene":
+        "{unsafe} 件のメモリが疑わしいまたは危険と判定されています。",
+      "memory-guide-types": "{pending} 件のメモリが未承認または未公開です。",
+      "memory-guide-distill":
+        "{safe} 件のメモリにはセキュリティリスク判定がありません。",
     },
     security: {
       "security-risk-top":
@@ -116,6 +158,16 @@ export const insights = {
         "新しいスキルは有効化する前にスキャンしてください。数秒で大半の悪意あるスクリプトを防げます。",
       "security-history":
         "スキャン履歴は保存されます。問題発生時に前後バージョンを比較し、どの更新でリスクが入ったかを特定できます。",
+      "security-guide-posture":
+        "最新の安全性サマリーには疑わしいまたは危険な資産が {risky} 件あります。",
+      "security-guide-failures":
+        "最新スキャンでは {failed} 件の資産評価に失敗しました。",
+      "security-guide-coverage":
+        "最新スキャンは {discovered} 件を検出し、{assessed} 件を評価しました。",
+      "security-guide-recency":
+        "最新の安全性サマリーは {time} に生成されました。",
+      "security-guide-scan":
+        "最新スキャンでは {clean} 件の資産が合格しました。",
     },
     tracker: {
       "tracker-burn-leader":
@@ -131,6 +183,16 @@ export const insights = {
       "tracker-top-project":
         "プロジェクト別では「{name}」の消費が最も多く、プロンプトテンプレートの最適化をご検討ください。",
       "tracker-empty": "今のところ目立った浪費はありません。",
+      "tracker-guide-consumption":
+        "現在の範囲で {events} 件のイベントが {tokens} tokens を消費しました。",
+      "tracker-guide-waste":
+        "浪費指数が最も高いのは「{name}」で、指数は {rate} です。",
+      "tracker-guide-cache":
+        "{count} 件のソースが検証可能なキャッシュ項目を提供しています。",
+      "tracker-guide-concentration":
+        "最大消費ソース「{name}」は総 tokens の {rate} を占めます。",
+      "tracker-guide-optimize":
+        "1 利用イベントあたり平均 {average} tokens を消費しました。",
     },
     skills: {
       "skills-local": "ローカルに {count} 個のスキルがあります。",
@@ -142,6 +204,16 @@ export const insights = {
         "Skill が一部の Agent にしか入っていないと結果が不整合になります。ワンクリック同期で補完してください。",
       "skills-specific":
         "Skill が具体的であるほどモデルはぶれにくく、token も節約できます。",
+      "skills-guide-inventory":
+        "ローカル Skill スナップショットには {count} 個の Skill があります。",
+      "skills-guide-enablement":
+        "{enabled} 個の Skill が少なくとも 1 つの Agent にインストールされています。",
+      "skills-guide-coverage":
+        "インストール済み Agent を {agents} 個検出しました。",
+      "skills-guide-updates":
+        "{outdated} 件の Skill インストールに更新があります。",
+      "skills-guide-safety":
+        "{unassigned} 個の Skill はどの Agent にもインストールされていません。",
     },
     market: {
       "market-installed":
@@ -152,6 +224,16 @@ export const insights = {
         "新しいコンポーネントをインストールする前に、必ずセキュリティスキャンを完了してください。",
       "market-review":
         "インストール前に SKILL.md とバージョン履歴を確認し、使えないパッケージを避けてください。",
+      "market-guide-installs":
+        "マーケット由来の Skill を {installed} 個インストール済みです。",
+      "market-guide-updates":
+        "{updates} 個のマーケット Skill に更新があります。",
+      "market-guide-cache":
+        "ローカル市場キャッシュには {total} 件の項目があります。",
+      "market-guide-review":
+        "インストール済み市場 Skill のうち {current} 個には保留中の更新がありません。",
+      "market-guide-install":
+        "市場キャッシュは約 {hours} 時間前に取得されました。",
     },
     chats: {
       "chats-total": "{count} 件のセッションを収集しました。",
@@ -165,6 +247,15 @@ export const insights = {
         "復元コマンドにはプロジェクトパスが含まれ、ターミナルに貼り付けるだけで元の作業ディレクトリに戻れます。",
       "chats-distill":
         "再利用できるセッションは蒸留ワークベンチへ。履歴を探すより Skill 化する方が早いです。",
+      "chats-guide-inventory":
+        "セッションスナップショットには現在 {count} 件あります。",
+      "chats-guide-sources":
+        "これらのセッションは {count} 個の Agent ソースから来ています。",
+      "chats-guide-recovery": "現在 {count} 件のセッションが復元可能です。",
+      "chats-guide-activity":
+        "全セッションの合計は {turns} ターン、{tokens} tokens です。",
+      "chats-guide-distill":
+        "全セッションのアクティブ時間は約 {minutes} 分です。",
     },
     "chat-detail": {
       "chat-detail-turns":
@@ -174,6 +265,16 @@ export const insights = {
         "このセッションは復元または蒸留できます。詳細ページから開始してください。",
       "chat-detail-resume":
         "このセッションは復元してコンテキストを継続できます。復元コマンドにはプロジェクトパスが含まれます。",
+      "chat-detail-guide-turns":
+        "このセッションには {count} 件の再試行ターンがあります。",
+      "chat-detail-guide-tokens":
+        "このセッションには {count} 回のサブ Agent 呼び出しがあります。",
+      "chat-detail-guide-state":
+        "このセッションのソースは「{source}」、ローカル状態は「{status}」です。",
+      "chat-detail-guide-recovery":
+        "このセッションには編集操作を含むターンが {count} 件あります。",
+      "chat-detail-guide-distill":
+        "このセッションのアクティブ時間は約 {minutes} 分です。",
     },
     widget: {
       "widget-broadcast-security":
@@ -192,19 +293,39 @@ export const insights = {
         "データ収集の完全度は {rate} です。不足分はここでソースを確認できます。",
       "settings-local":
         "収集はすべてローカルで行われ、会話内容はアップロードされません。データソースで収集範囲を調整できます。",
+      "settings-guide-model":
+        "モデルプロファイルは {profiles} 件あり、{ready} 件に認証情報があります。",
+      "settings-guide-enhancement":
+        "バックグラウンドジョブは {total} 件登録されています。",
+      "settings-guide-schedules":
+        "バックグラウンドジョブのうち {enabled} 件が有効です。",
+      "settings-guide-retention":
+        "バックグラウンドジョブのうち {disabled} 件が無効です。",
+      "settings-guide-privacy":
+        "{ready} 件のモデルプロファイルに利用可能な認証情報があります。",
     },
     sources: {
       "sources-connected": "{count} 個のデータソースを接続済みです。",
       "sources-malformed":
         "{count} 行の異常データがあります。ログ形式を確認してください。",
       "sources-not-installed":
-        "{count} 件のツールが未インストールです。ダウンロードして接続してください。",
+        "{count} 件の検出ソースには分析可能なイベントがありません。",
       "sources-all-good":
         "全 {count} 件のソースが正常で、異常ログはありません。",
       "sources-rescan":
         "ツールのディレクトリ変更後は再スキャンしてください。さもないとセッションやスキルの収集に欠落が生じます。",
       "sources-local":
         "すべての収集はローカルで行われ、会話内容がアップロードされることはありません。",
+      "sources-guide-inventory":
+        "ソーススナップショットにはレジストリソースが {total} 件あります。",
+      "sources-guide-availability":
+        "{available} 件のソースでローカルデータを読み取れます。",
+      "sources-guide-logs":
+        "{connected} 件のソースが分析可能なイベントを生成しました。",
+      "sources-guide-rescan":
+        "ソーススナップショットには形式異常が {malformed} 行あります。",
+      "sources-guide-privacy":
+        "インストールスナップショットは {installed} 個のインストール済みツールを検出しました。",
     },
   },
 } as const;

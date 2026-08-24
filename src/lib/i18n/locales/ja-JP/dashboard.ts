@@ -301,6 +301,13 @@ export const dashboard = {
     dataLoadFailed: "データの読み込みに失敗",
     dataLoadFailedDesc: "実際のデータ読み込みに失敗：{error}",
     localReadFailed: "ローカルデータの読み込みに失敗",
+    workspaceInitializing: "ワークスペースのデータを初期化しています",
+    workspaceInitializingDesc:
+      "ローカルの AI ツールの利用状況、セッション、Skills を読み込んでいます。ローカルデータがアップロードされることはありません。",
+    workspaceInitializationFailed: "ワークスペースのデータ初期化に失敗しました",
+    workspaceInitializationFailedDesc:
+      "初回のワークスペースデータを読み取れませんでした。再試行するか、後でアプリを開き直してください。",
+    retryWorkspaceInitialization: "初期化を再試行",
     reload: "再読み込み",
     welcomeDesc:
       "各 AI ツールに散らばった token・skill・セッションを、あなたの手元にまとめて取り戻します。",
