@@ -178,7 +178,7 @@ export const settings = {
   confirmReset: "초기화",
   currentLanguage: "현재 언어",
   followSystem: "시스템 따르기",
-  currency: "표시 통화",
+  currency: "통화",
   currencyDesc: "표시 금액에 사용하는 통화 (표시 언어와 독립)",
   languageFollowHint: "시스템 언어에서 자동 결정",
   languageManualHint: "수동 선택",

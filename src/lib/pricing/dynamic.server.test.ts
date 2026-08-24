@@ -23,18 +23,19 @@ function memoryCache(): ExchangeRateCache {
 /**
  * Model prices are resolved offline from the rule-pack registry (resolve.ts);
  * this snapshot only carries exchange rates + the rule-pack version stamp. The
- * frankfurter mock uses the real response shape `{ date, rates: { CNY, JPY, KRW } }`.
+ * frankfurter mock uses the real v2 response shape: one `{ date, quote, rate }`
+ * row per currency.
  */
 test("refresh loads latest exchange rate and stamps the offline rule-pack version", async () => {
   const homeDirectory = await mkdtemp(join(tmpdir(), "tt-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
     if (url.includes("frankfurter")) {
-      return Response.json({
-        date: "2026-07-28",
-        base: "USD",
-        rates: { CNY: 8, JPY: 200, KRW: 1600 },
-      });
+      return Response.json([
+        { date: "2026-07-28", base: "USD", quote: "CNY", rate: 8 },
+        { date: "2026-07-28", base: "USD", quote: "JPY", rate: 200 },
+        { date: "2026-07-28", base: "USD", quote: "KRW", rate: 1600 },
+      ]);
     }
     throw new Error(`unexpected fetch: ${url}`);
   };
