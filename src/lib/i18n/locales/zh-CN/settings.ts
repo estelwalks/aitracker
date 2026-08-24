@@ -24,7 +24,6 @@ export const settings = {
   scan: {
     onDemand: "扫描方式",
     onDemandDesc: "扫描按需触发，读取本机受支持 AI 工具日志并建立增量索引。",
-    retentionNote: "以下保留期同样作用于用量与扫描缓存：",
   },
   modelProfiles: {
     count: "模型配置（{count}）",
