@@ -15,8 +15,35 @@ import {
   lastSuccessfulFinishedAt,
   nextRunAt,
   prioritizeStartupDefinitions,
+  TaskSchedulerStartupError,
   type SchedulerOptions,
 } from "./scheduler.ts";
+
+const STARTUP_TASK_IDS = new Set([
+  "usage.refresh",
+  "sessions.refresh",
+  "skills.refresh",
+  "installation.refresh",
+  "exchange.refresh",
+]);
+
+function startupCatalog() {
+  return JOB_DEFINITIONS.filter((definition) =>
+    STARTUP_TASK_IDS.has(definition.id),
+  );
+}
+
+function successfulStartupExecutors(
+  onStart?: (taskId: string) => void,
+): NonNullable<SchedulerOptions["executors"]> {
+  return {
+    "refresh-usage-v1": async () => onStart?.("usage.refresh"),
+    "refresh-sessions-v1": async () => onStart?.("sessions.refresh"),
+    "refresh-skills-v1": async () => onStart?.("skills.refresh"),
+    "refresh-installation-v1": async () => onStart?.("installation.refresh"),
+    "refresh-exchange-v1": async () => onStart?.("exchange.refresh"),
+  };
+}
 
 function harness() {
   const runs: JobRun[] = [];
@@ -29,7 +56,10 @@ function harness() {
     append: async (run) => {
       runs.push(run);
     },
-    list: async () => [...runs].reverse(),
+    list: async (options) =>
+      [...runs]
+        .reverse()
+        .filter((run) => !options?.taskId || run.taskId === options.taskId),
     recoverRunning: async () => [],
     compact: async () => undefined,
     rotate: async () => undefined,
@@ -70,6 +100,276 @@ test("defaults installation refresh on and excludes duplicate security schedulin
   await scheduler.start();
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(calls, 1);
+  await scheduler.stop();
+});
+
+test("startup does not resolve before all initial collectors are terminal", async () => {
+  const h = harness();
+  let releaseUsage!: () => void;
+  const usageGate = new Promise<void>((resolve) => {
+    releaseUsage = resolve;
+  });
+  let settled = false;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    executors: {
+      ...successfulStartupExecutors(),
+      "refresh-usage-v1": async () => usageGate,
+    },
+  });
+
+  const starting = scheduler.start().then(() => {
+    settled = true;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+
+  releaseUsage();
+  await starting;
+  assert.equal(settled, true);
+  await scheduler.stop();
+});
+
+test("startup resolves after all required collectors succeed", async () => {
+  const h = harness();
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    executors: successfulStartupExecutors(),
+  });
+
+  await scheduler.start();
+  assert.deepEqual(
+    h.runs
+      .filter(
+        (run) =>
+          run.trigger === "startup-recovery" && run.status === "succeeded",
+      )
+      .map((run) => run.taskId)
+      .sort(),
+    [
+      "exchange.refresh",
+      "installation.refresh",
+      "sessions.refresh",
+      "skills.refresh",
+      "usage.refresh",
+    ],
+  );
+  await scheduler.stop();
+});
+
+test("startup is idempotent across concurrent and repeated calls", async () => {
+  const h = harness();
+  let calls = 0;
+  const installation = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "installation.refresh",
+  );
+  assert.ok(installation);
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [installation],
+    executors: {
+      "refresh-installation-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await Promise.all([scheduler.start(), scheduler.start(), scheduler.start()]);
+  await scheduler.start();
+  assert.equal(calls, 1);
+  await scheduler.stop();
+});
+
+test("startup rejects with a stable code when a required collector fails", async () => {
+  const h = harness();
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    executors: {
+      ...successfulStartupExecutors(),
+      "refresh-usage-v1": async () => {
+        throw Object.assign(new Error("/Users/alice/private-token"), {
+          code: "errors.tasks.failed",
+        });
+      },
+    },
+  });
+
+  await assert.rejects(scheduler.start(), (error: unknown) => {
+    assert.ok(error instanceof TaskSchedulerStartupError);
+    assert.equal(error.code, "errors.tasks.startup-failed");
+    assert.equal(error.message.includes("/Users/alice"), false);
+    return true;
+  });
+  await scheduler.stop();
+});
+
+test("a failed startup can retry the same scheduler and reruns the failed task", async () => {
+  const h = harness();
+  let attempts = 0;
+  const installation = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "installation.refresh",
+  );
+  assert.ok(installation);
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [installation],
+    executors: {
+      "refresh-installation-v1": async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("first startup fails");
+      },
+    },
+  });
+
+  await assert.rejects(scheduler.start(), TaskSchedulerStartupError);
+  await scheduler.start();
+
+  assert.equal(attempts, 2);
+  assert.equal(
+    h.runs.filter(
+      (run) =>
+        run.taskId === "installation.refresh" && run.status === "running",
+    ).length,
+    2,
+  );
+  await scheduler.stop();
+});
+
+test("stop settles a pending startup and allows a fresh start", async () => {
+  const h = harness();
+  let attempts = 0;
+  let firstStarted!: () => void;
+  const firstStartedPromise = new Promise<void>((resolve) => {
+    firstStarted = resolve;
+  });
+  const installation = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "installation.refresh",
+  );
+  assert.ok(installation);
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [installation],
+    executors: {
+      "refresh-installation-v1": async ({ signal }) => {
+        attempts += 1;
+        if (attempts !== 1) return;
+        firstStarted();
+        await new Promise<void>((resolve) =>
+          signal.addEventListener("abort", () => resolve(), { once: true }),
+        );
+      },
+    },
+  });
+
+  const starting = scheduler.start();
+  const rejected = assert.rejects(starting, TaskSchedulerStartupError);
+  await firstStartedPromise;
+  await scheduler.stop();
+  await rejected;
+
+  await scheduler.start();
+  assert.equal(attempts, 2);
+  await scheduler.stop();
+});
+
+test("exchange startup failure does not reject and does not wait for delayed retry", async () => {
+  const h = harness();
+  const delays: number[] = [];
+  const timers = new Set<ReturnType<typeof setTimeout>>();
+  let timerSequence = 0;
+  const scheduleTimer: NonNullable<SchedulerOptions["setTimeout"]> = (
+    handler,
+    delay,
+  ) => {
+    void handler;
+    delays.push(delay);
+    const timer = { id: ++timerSequence } as unknown as ReturnType<
+      typeof setTimeout
+    >;
+    timers.add(timer);
+    return timer;
+  };
+  const clearScheduleTimer: NonNullable<SchedulerOptions["clearTimeout"]> = (
+    timer,
+  ) => {
+    timers.delete(timer);
+    clearTimeout(timer);
+  };
+  let exchangeAttempts = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    setTimeout: scheduleTimer,
+    clearTimeout: clearScheduleTimer,
+    executors: {
+      ...successfulStartupExecutors(),
+      "refresh-exchange-v1": async () => {
+        exchangeAttempts += 1;
+        throw Object.assign(new Error("/Users/alice/rates"), {
+          code: "errors.tasks.network-failed",
+          retryable: true,
+        });
+      },
+    },
+  });
+
+  await scheduler.start();
+  assert.equal(exchangeAttempts, 1);
+  assert.equal(
+    delays.some((delay) => delay >= 300_000),
+    true,
+  );
+  assert.equal(
+    h.runs.some(
+      (run) => run.taskId === "exchange.refresh" && run.status === "failed",
+    ),
+    true,
+  );
+  await scheduler.stop();
+  timers.clear();
+});
+
+test("startup executes collectors in the existing startup priority order", async () => {
+  const h = harness();
+  const order: string[] = [];
+  let heavyTail = Promise.resolve();
+  const budget = {
+    acquire: async () => {
+      const previous = heavyTail;
+      let release!: () => void;
+      heavyTail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      return release;
+    },
+  };
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    resourceBudget: budget,
+    executors: successfulStartupExecutors((taskId) => order.push(taskId)),
+  });
+
+  await scheduler.start();
+  assert.deepEqual(order, [
+    "usage.refresh",
+    "sessions.refresh",
+    "skills.refresh",
+    "installation.refresh",
+    "exchange.refresh",
+  ]);
   await scheduler.stop();
 });
 
@@ -252,6 +552,7 @@ test("startup performs abandoned-run recovery before scheduling", async () => {
         return [];
       },
     },
+    catalog: [],
     setTimeout: scheduleTimer,
   });
   await scheduler.start();

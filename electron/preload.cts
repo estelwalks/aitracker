@@ -4,6 +4,7 @@ import {
   desktopIpc,
   type AutoLaunchState,
   type DesktopCurrency,
+  type DesktopAppRoute,
   type DesktopLocale,
   type DesktopPreferenceMode,
   type DesktopApi,
@@ -29,11 +30,14 @@ const desktopApi: DesktopApi = Object.freeze({
       enabled,
     ) as Promise<AutoLaunchState>,
   showWindow: () => ipcRenderer.invoke(desktopIpc.showWindow) as Promise<void>,
+  openWindowRoute: (route: DesktopAppRoute) =>
+    ipcRenderer.invoke(desktopIpc.openWindowRoute, route) as Promise<void>,
   minimizeWindow: () =>
     ipcRenderer.invoke(desktopIpc.windowMinimize) as Promise<void>,
   toggleMaximizeWindow: () =>
     ipcRenderer.invoke(desktopIpc.windowToggleMaximize) as Promise<boolean>,
-  closeWindow: () => ipcRenderer.invoke(desktopIpc.windowClose) as Promise<void>,
+  closeWindow: () =>
+    ipcRenderer.invoke(desktopIpc.windowClose) as Promise<void>,
   isWindowMaximized: () =>
     ipcRenderer.invoke(desktopIpc.windowIsMaximized) as Promise<boolean>,
   onWindowMaximizedChanged: (callback: (maximized: boolean) => void) => {

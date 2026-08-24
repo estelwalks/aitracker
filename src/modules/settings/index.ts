@@ -6,4 +6,10 @@ export {
   getStorageUsageQuery,
 } from "./query";
 export type { CleanupStats, StorageUsage } from "./query";
+export {
+  SETTINGS_CATEGORIES,
+  parseSettingsSection,
+  resolveSettingsCategory,
+} from "./settings-navigation";
+export type { SettingsCategory, SettingsSection } from "./settings-navigation";
 export type { SettingsViewModel } from "./presentation";

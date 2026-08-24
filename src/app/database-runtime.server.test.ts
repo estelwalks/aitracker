@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { createDatabaseRuntime } from "./database-runtime.server.ts";
 import { DatabaseError } from "../platform/database/contracts.ts";
+import { LATEST_MIGRATION_VERSION } from "../platform/database/migrations/index.ts";
 
 const clock = { now: () => new Date("2026-08-19T00:00:00.000Z") };
 const codec = {
@@ -32,7 +33,7 @@ test("fresh startup exposes SQLite-only adapters", async (t) => {
     await rm(root, { recursive: true, force: true });
   });
   assert.equal(runtime.status.state, "active");
-  assert.ok(runtime.status.schemaVersion >= 4);
+  assert.equal(runtime.status.schemaVersion, LATEST_MIGRATION_VERSION);
   assert.equal((await runtime.features.runs.list()).length, 0);
   assert.equal((await runtime.features.preferences.read()).schemaVersion, 2);
 });

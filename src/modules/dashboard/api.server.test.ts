@@ -3,15 +3,41 @@ import test from "node:test";
 
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
 import { APP_ID } from "../../lib/app-config.ts";
+import { compactUsageSnapshot } from "../usage/application/aggregate-projection.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
 import {
   aggregateDashboardProjectSessions,
   aggregateDashboardSourceSessions,
+  requestDashboardSessionRefresh,
   shouldRefreshDashboardSessions,
   toDashboardSnapshot,
   toDashboardV2Snapshot,
 } from "./api.server.ts";
 import { createDashboardV2View } from "./application/v2.ts";
+
+test("dashboard schedules missing session sources without waiting for a scan", async () => {
+  let requestedReason: string | null = null;
+  let refreshCompleted = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  requestDashboardSessionRefresh({
+    requestRefresh: async ({ reason }) => {
+      requestedReason = reason;
+      await pending;
+      refreshCompleted = true;
+    },
+  });
+
+  assert.equal(requestedReason, "event");
+  assert.equal(refreshCompleted, false);
+  release();
+  await pending;
+  await Promise.resolve();
+  assert.equal(refreshCompleted, true);
+});
 
 test("dashboard refreshes a fresh legacy session snapshot when usage has DSH", () => {
   assert.equal(
@@ -106,8 +132,18 @@ const rawSnapshot: LocalUsageSnapshot = {
   recent: [],
 };
 
+function projectedDashboardSnapshot(
+  snapshot: LocalUsageSnapshot,
+  classifications: ReadonlyMap<
+    string,
+    DashboardProjectClassification
+  > = new Map(),
+) {
+  return toDashboardSnapshot(compactUsageSnapshot(snapshot), classifications);
+}
+
 test("dashboard snapshot projects scanner data without paths or command summaries", () => {
-  const result = toDashboardSnapshot(rawSnapshot);
+  const result = projectedDashboardSnapshot(rawSnapshot);
 
   assert.deepEqual(result.sources[0], {
     source: "codex",
@@ -125,10 +161,10 @@ test("dashboard snapshot projects scanner data without paths or command summarie
   assert.equal(JSON.stringify(result).includes("opaque-session"), false);
 });
 
-test("dashboard keeps project rows whose classification is still pending", () => {
+test("dashboard keeps pending projects unknown instead of promoting them to workspace", () => {
   const firstProject = `/Users/example/work/${APP_ID}`;
   const secondProject = "/Users/example/work/another-project";
-  const result = toDashboardSnapshot(
+  const result = projectedDashboardSnapshot(
     {
       ...rawSnapshot,
       details: [
@@ -139,24 +175,26 @@ test("dashboard keeps project rows whose classification is still pending", () =>
     new Map([
       [firstProject, { kind: "workspace", label: APP_ID }],
       // The second reference is not in the persisted index yet. The query
-      // path must keep it visible with the safe final-segment fallback.
+      // path keeps a safe label but must not invent a workspace classification.
     ]),
   );
 
   assert.deepEqual(
-    result.details.map((event) => ({
-      project: event.project,
-      projectKind: event.projectKind,
-    })),
+    result.details
+      .map((event) => ({
+        project: event.project,
+        projectKind: event.projectKind,
+      }))
+      .sort((left, right) => left.project.localeCompare(right.project)),
     [
+      { project: "another-project", projectKind: "unknown" },
       { project: APP_ID, projectKind: "workspace" },
-      { project: "another-project", projectKind: "workspace" },
     ],
   );
 });
 
 test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
-  const snapshot = toDashboardSnapshot(rawSnapshot);
+  const snapshot = projectedDashboardSnapshot(rawSnapshot);
   const result = toDashboardV2Snapshot({
     snapshot,
     skills: { available: true, count: 3, generatedAt: "2026-08-10T00:00:00Z" },
@@ -355,7 +393,7 @@ test("normalized session projectRef joins usage events under one project key", (
 
   // The same normalized ref through the usage-event path collapses to the
   // same label, so the project overview's session column can look it up.
-  const usage = toDashboardSnapshot(
+  const usage = projectedDashboardSnapshot(
     {
       ...rawSnapshot,
       details: [{ ...rawSnapshot.details[0]!, project: normalizedRef }],
@@ -370,7 +408,7 @@ test("DeepSeek Harness sessions map to the dashboard project row", () => {
   const classifications = new Map<string, DashboardProjectClassification>([
     [projectRef, { kind: "workspace", label: APP_ID }],
   ]);
-  const usage = toDashboardSnapshot(
+  const usage = projectedDashboardSnapshot(
     {
       ...rawSnapshot,
       sources: [{ ...rawSnapshot.sources[0]!, source: "dsh" }],
@@ -428,7 +466,7 @@ test("DeepSeek Harness sessions map to the dashboard project row", () => {
 
 test("dashboard V2 keeps installation detection when Claude has no usage events", () => {
   const result = toDashboardV2Snapshot({
-    snapshot: toDashboardSnapshot({
+    snapshot: projectedDashboardSnapshot({
       ...rawSnapshot,
       sources: [
         {

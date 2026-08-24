@@ -7,27 +7,15 @@ import {
   useWidgetPrefs,
   type WidgetPrefs,
 } from "./widget-prefs";
+import "./widget-config-panel.css";
 
-function Row({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/60 py-2.5 last:border-0">
-      <div className="min-w-0">
-        <div className="text-[12.5px]">{label}</div>
-        {hint && (
-          <div className="mt-0.5 text-[10.5px] text-muted-foreground">
-            {hint}
-          </div>
-        )}
+    <div className="tt-widget-config-row" data-testid="widget-config-row">
+      <div className="tt-widget-config-label">{label}</div>
+      <div className="tt-widget-config-options" role="group" aria-label={label}>
+        {children}
       </div>
-      <div className="flex flex-wrap justify-end gap-1">{children}</div>
     </div>
   );
 }
@@ -46,11 +34,7 @@ function Opt({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`rounded-lg px-2 py-1 font-mono text-[10.5px] transition-colors ${
-        on
-          ? "bg-foreground text-background"
-          : "bg-surface-2 text-muted-foreground hover:text-foreground"
-      }`}
+      className={`tt-widget-config-option${on ? " is-active" : ""}`}
     >
       {children}
     </button>
@@ -81,9 +65,7 @@ function Group<K extends keyof WidgetPrefs>({
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return (
-    <div className="tt-label mb-1 text-muted-foreground/70">{children}</div>
-  );
+  return <div className="tt-widget-config-title">{children}</div>;
 }
 
 /**
@@ -100,20 +82,20 @@ export function WidgetConfigPanel({
   const { t } = useI18n();
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`tt-widget-config-panel ${className}`}>
       {sections.includes("bar") && (
-        <section>
+        <section className="tt-widget-config-section">
           <SectionTitle>{t("widget.configBar")}</SectionTitle>
-          <Row label="动态栏">
+          <Row label={t("widget.dynamicBar")}>
             <Group
               k="menuBarEnabled"
               options={[
-                { v: true, label: "开启" },
-                { v: false, label: "关闭" },
+                { v: true, label: t("widget.enabled") },
+                { v: false, label: t("widget.disabled") },
               ]}
             />
           </Row>
-          <Row label={t("widget.barStyle")} hint={t("widget.barStyleHint")}>
+          <Row label={t("widget.barStyle")}>
             <Group
               k="barStyle"
               options={[
@@ -136,9 +118,9 @@ export function WidgetConfigPanel({
       )}
 
       {sections.includes("panel") && (
-        <section>
+        <section className="tt-widget-config-section">
           <SectionTitle>{t("widget.configPanel")}</SectionTitle>
-          <Row label={t("widget.defaultTab")} hint={t("widget.defaultTabHint")}>
+          <Row label={t("widget.defaultTab")}>
             <Group
               k="defaultTab"
               options={[
@@ -149,7 +131,7 @@ export function WidgetConfigPanel({
               ]}
             />
           </Row>
-          <Row label={t("widget.tone")} hint={t("widget.toneHint")}>
+          <Row label={t("widget.tone")}>
             <Group
               k="tone"
               options={[
@@ -159,7 +141,7 @@ export function WidgetConfigPanel({
               ]}
             />
           </Row>
-          <Row label={t("widget.rotate")} hint={t("widget.rotateHint")}>
+          <Row label={t("widget.rotate")}>
             <Group
               k="rotate"
               options={[
@@ -174,7 +156,7 @@ export function WidgetConfigPanel({
       )}
 
       {sections.includes("desktop") && (
-        <section>
+        <section className="tt-widget-config-section">
           <SectionTitle>{t("widget.configDesktop")}</SectionTitle>
           <Row label={t("widget.smallContent")}>
             <Group
@@ -196,10 +178,7 @@ export function WidgetConfigPanel({
               ]}
             />
           </Row>
-          <Row
-            label={t("widget.largeContent")}
-            hint={t("widget.largeContentHint")}
-          >
+          <Row label={t("widget.largeContent")}>
             <Opt on onClick={() => {}}>
               {t("widget.threeSignals")}
             </Opt>
@@ -216,11 +195,11 @@ export function WidgetConfigPanel({
         </section>
       )}
 
-      <div className="flex justify-end">
+      <div className="tt-widget-config-reset-row">
         <button
           type="button"
           onClick={() => void resetWidgetPrefs()}
-          className="flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[10.5px] text-muted-foreground transition-colors hover:text-foreground"
+          className="tt-widget-config-reset font-mono text-muted-foreground transition-colors hover:text-foreground"
         >
           <RotateCcw className="size-3" strokeWidth={1.75} />
           {t("widget.resetDefaults")}

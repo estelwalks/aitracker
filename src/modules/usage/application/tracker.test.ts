@@ -5,6 +5,7 @@ import type { LocalUsageEvent } from "../../../lib/local-usage/types.ts";
 import {
   aggregateBoards,
   buildBoard,
+  buildTrackerReadModelFromProjection,
   computeMoM,
   suggestionFor,
   tokensForDimension,
@@ -13,6 +14,7 @@ import {
   totalTokensForBoard,
   wasteIndex,
 } from "./tracker.ts";
+import type { UsageTrackerBucket } from "../contracts.ts";
 
 function event(
   overrides: Partial<LocalUsageEvent> & { timestamp: string },
@@ -264,4 +266,41 @@ test("trackerTotalsFromEvents uses the default Project rows", () => {
   assert.equal(totals.tokens, 500);
   assert.equal(totals.events, 2);
   assert.equal(totals.entries, 5);
+});
+
+test("projection boards keep same-label projects distinct without raw details", () => {
+  const bucket = (
+    identity: string,
+    totalTokens: number,
+  ): UsageTrackerBucket => ({
+    dimension: "project",
+    date: "2026-08-24",
+    source: "codex",
+    identity,
+    label: "shared",
+    projectKind: "workspace",
+    events: 1,
+    calls: 0,
+    inputTokens: totalTokens,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens,
+  });
+  const model = buildTrackerReadModelFromProjection({
+    generatedAt: "2026-08-24T12:00:00.000Z",
+    buckets: [bucket("hmac-a", 100), bucket("hmac-b", 200)],
+    nowMs: Date.parse("2026-08-24T12:00:00.000Z"),
+  });
+  assert.equal(model.boards.project.rows.length, 2);
+  assert.deepEqual(model.boards.project.rows.map((row) => row.key).sort(), [
+    "hmac-a",
+    "hmac-b",
+  ]);
+  assert.deepEqual(
+    model.boards.project.rows.map((row) => row.name),
+    ["shared", "shared"],
+  );
+  assert.deepEqual(model.totals, { tokens: 300, events: 2, entries: 2 });
 });

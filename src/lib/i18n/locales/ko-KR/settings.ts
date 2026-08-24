@@ -14,9 +14,13 @@ export const settings = {
     general: "일반",
     scan: "스캔 구성",
     model: "모델 구성",
+    menuBarApp: "메뉴 막대 APP",
     appearance: "모양",
     widget: "위젯",
     about: "정보",
+  },
+  menuBarApp: {
+    dynamicBar: "동적 표시줄",
   },
   scan: {
     onDemand: "스캔 방식",

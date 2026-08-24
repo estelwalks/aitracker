@@ -3,6 +3,7 @@ export const desktopIpc = {
   getAutoLaunch: "desktop:get-auto-launch",
   setAutoLaunch: "desktop:set-auto-launch",
   showWindow: "desktop:show-window",
+  openWindowRoute: "desktop:open-window-route",
   openWidgetWindow: "desktop:open-widget-window",
   setTrayTitle: "desktop:set-tray-title",
   getPreferences: "desktop:get-preferences",
@@ -30,6 +31,14 @@ export const desktopIpc = {
   setSecurityScanSchedule: "security:set-scan-schedule",
   getSecurityRuntimeCapability: "security:get-runtime-capability",
 } as const;
+
+export const desktopAppRoutes = [
+  "/",
+  "/security",
+  "/reports",
+  "/settings",
+] as const;
+export type DesktopAppRoute = (typeof desktopAppRoutes)[number];
 
 /**
  * The four locales supported by the desktop shell. MUST stay in sync with
@@ -271,6 +280,8 @@ export interface DesktopApi {
   getAutoLaunch(): Promise<AutoLaunchState>;
   setAutoLaunch(enabled: boolean): Promise<AutoLaunchState>;
   showWindow(): Promise<void>;
+  /** Show the desktop client and navigate its main window to an allowed route. */
+  openWindowRoute(route: DesktopAppRoute): Promise<void>;
   /** Minimize the main window (no-op in browser preview). */
   minimizeWindow(): Promise<void>;
   /** Toggle maximized/restored on the main window; resolves to the new state. */

@@ -78,6 +78,15 @@ export interface TaskScheduler {
   getNextRunAt(taskId: TaskId, from?: Date): Date | undefined;
 }
 
+export class TaskSchedulerStartupError extends Error {
+  readonly code = "errors.tasks.startup-failed" as const;
+
+  constructor() {
+    super("Task scheduler failed to initialize");
+    this.name = "TaskSchedulerStartupError";
+  }
+}
+
 const TERMINAL = new Set<JobRunStatus>([
   "succeeded",
   "failed",
@@ -230,6 +239,17 @@ const STARTUP_TASK_ORDER = new Map<string, number>([
   ["exchange.refresh", 4],
 ]);
 
+const REQUIRED_STARTUP_TASK_IDS = new Set([
+  "usage.refresh",
+  "sessions.refresh",
+  "skills.refresh",
+  "installation.refresh",
+]);
+const STARTUP_BARRIER_TASK_IDS = new Set([
+  ...REQUIRED_STARTUP_TASK_IDS,
+  "exchange.refresh",
+]);
+
 export function prioritizeStartupDefinitions(
   catalog: readonly JobTypeDefinition[],
 ): JobTypeDefinition[] {
@@ -263,10 +283,38 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   let sequence = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let started = false;
+  let startPromise: Promise<void> | undefined;
+  let lifecycle = 0;
+  const retryTimers = new Set<ReturnType<typeof setTimeout>>();
   // A successful terminal record is the source of truth for freshness. This
   // small in-memory guard merely prevents a slow/failed task from repeatedly
   // being enqueued while its last success remains stale.
   const lastScheduledAt = new Map<string, Date>();
+  const startupCompletions = new Map<
+    string,
+    {
+      readonly promise: Promise<JobRun>;
+      readonly resolve: (run: JobRun) => void;
+      settled?: JobRun;
+    }
+  >();
+
+  const createStartupCompletion = (runId: string) => {
+    let resolve!: (run: JobRun) => void;
+    const promise = new Promise<JobRun>((settle) => {
+      resolve = settle;
+    });
+    const completion = { promise, resolve };
+    startupCompletions.set(runId, completion);
+    return completion;
+  };
+
+  const settleStartupCompletion = (run: JobRun) => {
+    const completion = startupCompletions.get(run.runId);
+    if (!completion || completion.settled) return;
+    completion.settled = run;
+    completion.resolve(run);
+  };
 
   const definitionFor = (taskId: TaskId) =>
     catalog.find((item) => item.id === taskId);
@@ -291,13 +339,16 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     run: JobRun,
     status: JobRunStatus,
     extra: Partial<JobRun> = {},
-  ) =>
-    append({
+  ) => {
+    const transitioned = await append({
       ...run,
       status,
       ...extra,
       ...(TERMINAL.has(status) ? { finishedAt: nowIso() } : {}),
     });
+    if (TERMINAL.has(status)) settleStartupCompletion(transitioned);
+    return transitioned;
+  };
 
   const drain = async (): Promise<void> => {
     while (queue.length) {
@@ -387,16 +438,21 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
           errorCode: taskErrorCode(error),
           retryable: true,
         });
-        setTimer(() => {
+        const retryLifecycle = lifecycle;
+        const retryTimer = setTimer(() => {
+          retryTimers.delete(retryTimer);
+          if (lifecycle !== retryLifecycle) return;
           void (async () => {
             const queued = await transition(retryRun, "queued", {
               attempt: retryRun.attempt + 1,
               queuedAt: nowIso(),
             });
+            if (lifecycle !== retryLifecycle) return;
             queue.push({ run: queued, definition, priority: definition.queue });
             await drain();
           })();
         }, jittered);
+        retryTimers.add(retryTimer);
       } else
         await transition(run, "failed", {
           errorCode: taskErrorCode(error),
@@ -428,17 +484,53 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     return isScheduleDue(schedule, lastSuccessfulFinishedAt(runs), now);
   };
 
-  const scheduleNext = async () => {
-    if (!started) return;
+  const waitForStartupRun = async (run: JobRun): Promise<JobRun> => {
+    if (TERMINAL.has(run.status)) return run;
+    const completion = startupCompletions.get(run.runId);
+    if (!completion) throw new TaskSchedulerStartupError();
+    return completion.settled ?? completion.promise;
+  };
+
+  const awaitStartupBarrier = async (
+    startupRuns: readonly {
+      definition: JobTypeDefinition;
+      run: JobRun;
+    }[],
+  ): Promise<void> => {
+    const outcomes = await Promise.allSettled(
+      startupRuns.map(async ({ definition, run }) => ({
+        definition,
+        run: await waitForStartupRun(run),
+      })),
+    );
+    try {
+      const requiredFailure = outcomes.some((outcome) => {
+        if (outcome.status === "rejected") return true;
+        return (
+          REQUIRED_STARTUP_TASK_IDS.has(outcome.value.definition.id) &&
+          outcome.value.run.status !== "succeeded"
+        );
+      });
+      if (requiredFailure) throw new TaskSchedulerStartupError();
+    } finally {
+      for (const { run } of startupRuns) startupCompletions.delete(run.runId);
+    }
+  };
+
+  const scheduleNext = async (expectedLifecycle = lifecycle) => {
+    if (!started || lifecycle !== expectedLifecycle) return;
     if (timer !== undefined) clearTimer(timer);
     let soonest: Date | undefined;
     for (const definition of catalog) {
+      if (!started || lifecycle !== expectedLifecycle) return;
       const preference = await options.preferences.get(definition.id);
+      if (!started || lifecycle !== expectedLifecycle) return;
       if (!enabled(definition.id, preference)) continue;
       const schedule = effectiveSchedule(definition, preference);
       const runs = await withRuns(() =>
         options.runs.list({ taskId: definition.id }),
       );
+      if (!started || lifecycle !== expectedLifecycle) return;
       const lastSuccess = lastSuccessfulFinishedAt(runs);
       const scheduled = lastScheduledAt.get(definition.id);
       const base =
@@ -450,36 +542,42 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       const candidate = base ? nextRunAt(schedule, base) : clock.now();
       if (!soonest || candidate < soonest) soonest = candidate;
     }
-    if (soonest)
+    if (soonest && started && lifecycle === expectedLifecycle)
       timer = setTimer(
         () => {
           void (async () => {
-            if (!started) return;
+            if (!started || lifecycle !== expectedLifecycle) return;
             const now = clock.now();
             for (const definition of catalog) {
-              if (!started) return;
+              if (!started || lifecycle !== expectedLifecycle) return;
               const id = createTaskId(definition.id);
               const preference = await options.preferences.get(id);
-              if (!started) return;
+              if (!started || lifecycle !== expectedLifecycle) return;
               if (await isDue(definition, preference, now)) {
+                if (!started || lifecycle !== expectedLifecycle) return;
                 lastScheduledAt.set(definition.id, now);
                 await runNow({ taskId: id, reason: "schedule" });
               }
             }
-            await scheduleNext();
+            await scheduleNext(expectedLifecycle);
           })();
         },
         Math.max(0, soonest.getTime() - clock.now().getTime()),
       );
   };
 
-  const runNow = async ({
-    taskId,
-    reason,
-  }: {
-    taskId: TaskId;
-    reason: SchedulerReason;
-  }): Promise<JobRun> => {
+  const runNow = async (
+    {
+      taskId,
+      reason,
+    }: {
+      taskId: TaskId;
+      reason: SchedulerReason;
+    },
+    expectedLifecycle?: number,
+  ): Promise<JobRun> => {
+    if (expectedLifecycle !== undefined && lifecycle !== expectedLifecycle)
+      throw new TaskSchedulerStartupError();
     const definition = definitionFor(taskId);
     if (!definition) throw new TypeError("Unknown task id");
     if (definition.constraints.singleFlight) {
@@ -520,44 +618,142 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       attempt: 1,
       correlationId: createCorrelationId(`corr-${sequence}`),
     };
-    await append(run);
-    queue.push({
-      run,
-      definition,
-      priority: reason === "manual" ? "interactive" : definition.queue,
-    });
-    await drain();
-    return run;
+    const startupCompletion =
+      reason === "startup" && STARTUP_BARRIER_TASK_IDS.has(definition.id)
+        ? createStartupCompletion(run.runId)
+        : undefined;
+    try {
+      await append(run);
+      if (expectedLifecycle !== undefined && lifecycle !== expectedLifecycle) {
+        return transition(run, "cancelled", {
+          errorCode: "errors.tasks.cancelled",
+          retryable: false,
+        });
+      }
+      queue.push({
+        run,
+        definition,
+        priority: reason === "manual" ? "interactive" : definition.queue,
+      });
+      await drain();
+      return run;
+    } catch (error) {
+      if (startupCompletion) startupCompletions.delete(run.runId);
+      throw error;
+    }
   };
 
-  return {
-    async start() {
-      if (started) return;
-      started = true;
+  const performStart = async (expectedLifecycle: number): Promise<void> => {
+    started = true;
+    const scheduledByThisStart = new Map<
+      string,
+      { previous: Date | undefined; scheduled: Date }
+    >();
+    const assertCurrentStart = () => {
+      if (!started || lifecycle !== expectedLifecycle)
+        throw new TaskSchedulerStartupError();
+    };
+    try {
       await withRuns(() => options.runs.recoverRunning());
+      assertCurrentStart();
       const now = clock.now();
+      const startupRuns: Array<{
+        definition: JobTypeDefinition;
+        run: JobRun;
+      }> = [];
       for (const definition of prioritizeStartupDefinitions(catalog)) {
+        assertCurrentStart();
         if (definition.startupPolicy !== "if-stale") continue;
         const taskId = createTaskId(definition.id);
         const preference = await options.preferences.get(taskId);
+        assertCurrentStart();
         if (await isDue(definition, preference, now)) {
+          assertCurrentStart();
+          scheduledByThisStart.set(definition.id, {
+            previous: lastScheduledAt.get(definition.id),
+            scheduled: now,
+          });
           lastScheduledAt.set(definition.id, now);
-          await runNow({ taskId, reason: "startup" });
+          const run = await runNow(
+            { taskId, reason: "startup" },
+            expectedLifecycle,
+          );
+          assertCurrentStart();
+          if (STARTUP_BARRIER_TASK_IDS.has(definition.id))
+            startupRuns.push({ definition, run });
         }
       }
-      await scheduleNext();
-    },
-    async stop() {
-      started = false;
+      await awaitStartupBarrier(startupRuns);
+      assertCurrentStart();
+      await scheduleNext(expectedLifecycle);
+    } catch {
+      for (const [taskId, entry] of scheduledByThisStart) {
+        if (lastScheduledAt.get(taskId) !== entry.scheduled) continue;
+        if (entry.previous) lastScheduledAt.set(taskId, entry.previous);
+        else lastScheduledAt.delete(taskId);
+      }
+      if (lifecycle === expectedLifecycle) started = false;
       if (timer !== undefined) {
         clearTimer(timer);
         timer = undefined;
       }
+      for (const retryTimer of retryTimers) clearTimer(retryTimer);
+      retryTimers.clear();
+      throw new TaskSchedulerStartupError();
+    }
+  };
+
+  return {
+    async start() {
+      if (startPromise) return startPromise;
+      if (started) return;
+      const expectedLifecycle = ++lifecycle;
+      const pending = performStart(expectedLifecycle);
+      startPromise = pending;
+      void pending.then(
+        () => undefined,
+        () => {
+          if (startPromise === pending) startPromise = undefined;
+        },
+      );
+      return pending;
+    },
+    async stop() {
+      const pendingStart = startPromise;
+      started = false;
+      lifecycle += 1;
+      if (timer !== undefined) {
+        clearTimer(timer);
+        timer = undefined;
+      }
+      for (const retryTimer of retryTimers) clearTimer(retryTimer);
+      retryTimers.clear();
       // Do not start queued background work while shutdown waits for an
       // already-running collector to acknowledge its abort signal.
-      queue.length = 0;
-      for (const item of active.values()) item.controller.abort();
-      await Promise.allSettled([...activeExecutions]);
+      const queued = queue.splice(0);
+      await Promise.all(
+        queued.map((item) =>
+          transition(item.run, "cancelled", {
+            errorCode: "errors.tasks.cancelled",
+            retryable: false,
+          }),
+        ),
+      );
+      for (const item of active.values()) {
+        item.controller.abort();
+        settleStartupCompletion({
+          ...item.run,
+          status: "cancelled",
+          finishedAt: nowIso(),
+          errorCode: "errors.tasks.cancelled",
+          retryable: false,
+        });
+      }
+      await Promise.allSettled([
+        ...(pendingStart ? [pendingStart] : []),
+        ...activeExecutions,
+      ]);
+      if (startPromise === pendingStart) startPromise = undefined;
     },
     runNow,
     async cancel(runId) {

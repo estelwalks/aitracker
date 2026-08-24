@@ -14,9 +14,13 @@ export const settings = {
     general: "一般",
     scan: "スキャン設定",
     model: "モデル設定",
+    menuBarApp: "メニューバー APP",
     appearance: "外観",
     widget: "ウィジェット",
     about: "情報",
+  },
+  menuBarApp: {
+    dynamicBar: "ダイナミックバー",
   },
   scan: {
     onDemand: "スキャン方式",
