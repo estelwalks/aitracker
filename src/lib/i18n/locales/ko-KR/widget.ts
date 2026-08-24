@@ -70,6 +70,10 @@ export const widget = {
   toolsUsage: "도구 사용",
   lowestCache: "캐시 최저 {name} · {percent}%",
   todayTokens: "오늘 {tokens}",
+  dynamicBar: "메뉴 막대 위젯",
+  enabled: "켜기",
+  disabled: "끄기",
+  trendPoint: "{date} {tokens}",
   // 오늘 탭
   todaySummary: "오늘 요약",
   toolCount: "도구",

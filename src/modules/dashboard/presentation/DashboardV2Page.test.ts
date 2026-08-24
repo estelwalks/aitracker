@@ -7,13 +7,15 @@ const page = readFileSync(
   "utf8",
 );
 
-test("new workspaces receive visible initialization feedback with fast polling", () => {
-  assert.match(page, /const FIRST_SCAN_POLL_MS = 2_000/);
+test("new workspaces receive visible initialization feedback without route invalidation", () => {
   assert.match(page, /dashboard\.onboarding\.workspaceInitializing/);
   assert.match(page, /dashboard\.onboarding\.workspaceInitializingDesc/);
   assert.match(page, /role="status"/);
-  assert.match(
-    page,
-    /snapshotStatus === "empty" \|\| snapshotStatus === "refreshing"/,
-  );
+  assert.doesNotMatch(page, /setInterval/);
+  assert.doesNotMatch(page, /router\.invalidate/);
+  assert.match(page, /onClick=\{\(\) => void onRetry\(\)\}/);
+});
+
+test("trend lazy chunk keeps a stable fallback", () => {
+  assert.match(page, /Suspense fallback=\{<DashboardTrendFallback \/>\}/);
 });

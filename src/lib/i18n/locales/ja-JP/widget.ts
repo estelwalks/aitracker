@@ -72,6 +72,10 @@ export const widget = {
   toolsUsage: "ツール使用",
   lowestCache: "キャッシュ最低 {name} · {percent}%",
   todayTokens: "今日 {tokens}",
+  dynamicBar: "メニューバーウィジェット",
+  enabled: "オン",
+  disabled: "オフ",
+  trendPoint: "{date} {tokens}",
   // 今日タブ
   todaySummary: "今日のサマリー",
   toolCount: "ツール",

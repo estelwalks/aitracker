@@ -17,4 +17,29 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    optimizeDeps: {
+      // The desktop renderer opens only after Vite reports ready. Keep every
+      // dependency used by the shared shell and dashboard's first render in
+      // the initial optimisation batch so discovering Recharts or a server-fn
+      // client cannot invalidate the module graph after Electron is visible.
+      // Runtime discovery is deliberately disabled: every dependency needed
+      // by the first document is in this list, so Vite cannot publish a second
+      // optimized-deps generation after Electron has connected.
+      noDiscovery: true,
+      include: [
+        "react",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "react-dom",
+        "react-dom/client",
+        "@tanstack/react-query",
+        "@tanstack/react-router",
+        "lucide-react",
+        "sonner",
+        "recharts",
+        "zod",
+      ],
+    },
+  },
 });

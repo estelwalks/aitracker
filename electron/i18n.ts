@@ -50,6 +50,8 @@ export interface ElectronMessages {
   };
   menu: {
     open: string;
+    dashboard: string;
+    settings: string;
     widget: string;
     openBrowser: string;
     autoLaunch: string;
@@ -78,6 +80,8 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "打开 {appName}",
+      dashboard: "打开仪表盘",
+      settings: "进入设置",
       widget: "小组件",
       openBrowser: "在浏览器中打开",
       autoLaunch: "开机自动启动",
@@ -106,6 +110,8 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "Open {appName}",
+      dashboard: "Open Dashboard",
+      settings: "Open Settings",
       widget: "Widgets",
       openBrowser: "Open in Browser",
       autoLaunch: "Launch at Login",
@@ -135,6 +141,8 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} を開く",
+      dashboard: "ダッシュボードを開く",
+      settings: "設定を開く",
       widget: "ウィジェット",
       openBrowser: "ブラウザーで開く",
       autoLaunch: "ログイン時に起動",
@@ -164,6 +172,8 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
     tray: { tooltip: "{appName}" },
     menu: {
       open: "{appName} 열기",
+      dashboard: "대시보드 열기",
+      settings: "설정 열기",
       widget: "위젯",
       openBrowser: "브라우저에서 열기",
       autoLaunch: "로그인 시 실행",
@@ -369,6 +379,26 @@ export interface TrayTemplateCallbacks {
   onOpenBrowser(): void;
   onToggleAutoLaunch(checked: boolean): void;
   onQuit(): void;
+}
+
+export interface MacWidgetTrayTemplateCallbacks {
+  onOpenDashboard(): void;
+  onOpenSettings(): void;
+  onQuit(): void;
+}
+
+/** macOS 菜单栏小组件右键菜单：仅保留页面入口和退出。 */
+export function createMacWidgetTrayTemplate(
+  locale: DesktopLocale,
+  callbacks: MacWidgetTrayTemplateCallbacks,
+): TrayTemplateItem[] {
+  const t = electronMessages[locale];
+  return [
+    { label: t.menu.dashboard, click: callbacks.onOpenDashboard },
+    { label: t.menu.settings, click: callbacks.onOpenSettings },
+    { type: "separator" },
+    { label: t.menu.quit, click: callbacks.onQuit },
+  ];
 }
 
 /** Build the tray context-menu template in the current locale. */
