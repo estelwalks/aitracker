@@ -12,8 +12,8 @@ import type { CleanupStats, StorageUsage } from "./data-lifecycle.server";
  */
 export const getStorageUsageQuery = createServerFn({ method: "GET" }).handler(
   async (): Promise<StorageUsage> => {
-    const { getStorageUsageFn } = await import("./data-lifecycle.server");
-    return getStorageUsageFn();
+    const { readStorageUsage } = await import("./data-lifecycle.server");
+    return readStorageUsage();
   },
 );
 
@@ -32,9 +32,8 @@ export const applyRetentionPolicyQuery = createServerFn({ method: "POST" })
     async ({
       data,
     }): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-      const { applyRetentionPolicyFn } =
-        await import("./data-lifecycle.server");
-      return applyRetentionPolicyFn({ data });
+      const { applyRetentionPolicy } = await import("./data-lifecycle.server");
+      return applyRetentionPolicy(data.retentionDays);
     },
   );
 
@@ -42,8 +41,8 @@ export const clearRegenerableCacheQuery = createServerFn({
   method: "POST",
 }).handler(
   async (): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-    const { clearRegenerableCacheFn } = await import("./data-lifecycle.server");
-    return clearRegenerableCacheFn();
+    const { clearRegenerableCache } = await import("./data-lifecycle.server");
+    return clearRegenerableCache();
   },
 );
 

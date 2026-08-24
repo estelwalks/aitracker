@@ -26,8 +26,6 @@ export const settings = {
     onDemand: "スキャン方式",
     onDemandDesc:
       "スキャンはオンデマンドで実行され、対応するローカル AI ツールのログを読み取り増分インデックスを構築します。",
-    retentionNote:
-      "以下の保持期間は使用量・スキャンキャッシュにも適用されます：",
   },
   modelProfiles: {
     count: "モデル設定（{count}）",
