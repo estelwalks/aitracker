@@ -14,6 +14,7 @@ test.beforeEach(async ({ page }) => {
   // 偏好已迁移到 SQLite；通过真实 UI 将共享隔离数据库归一化为中文。
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await page.waitForURL(/locale=/, { timeout: 15_000 });
+  await page.getByRole("button", { name: "外观", exact: true }).click();
   await page.getByRole("button", { name: "中文", exact: true }).click();
 });
 

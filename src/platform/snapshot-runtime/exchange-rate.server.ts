@@ -70,7 +70,7 @@ function withFallbacks(
 }
 
 const EXCHANGE_URL =
-  "https://api.frankfurter.dev/v2/latest?base=USD&symbols=CNY,JPY,KRW";
+  "https://api.frankfurter.dev/v2/rates?base=USD&quotes=CNY,JPY,KRW";
 
 async function defaultCache(): Promise<ExchangeRateCache> {
   const { getCompositionRoot } =
@@ -161,22 +161,36 @@ export function createExchangeRateRepository(
           clearTimeout(timer);
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const value = (await response.json()) as {
-          date?: unknown;
-          rates?: Record<string, unknown>;
-        };
-        if (typeof value.date !== "string" || !isRecord(value.rates))
+        const value = (await response.json()) as unknown;
+        let date: unknown;
+        let rawRates: Record<string, unknown> | undefined;
+        if (Array.isArray(value)) {
+          rawRates = {};
+          for (const row of value) {
+            if (!isRecord(row)) continue;
+            if (date === undefined && typeof row.date === "string") {
+              date = row.date;
+            }
+            if (typeof row.quote === "string") {
+              rawRates[row.quote] = row.rate;
+            }
+          }
+        } else if (isRecord(value)) {
+          date = value.date;
+          rawRates = isRecord(value.rates) ? value.rates : undefined;
+        }
+        if (typeof date !== "string" || !rawRates)
           throw new Error("incomplete rate response");
         const rates = {
-          CNY: parseRate(value.rates.CNY),
-          JPY: parseRate(value.rates.JPY),
-          KRW: parseRate(value.rates.KRW),
+          CNY: parseRate(rawRates.CNY),
+          JPY: parseRate(rawRates.JPY),
+          KRW: parseRate(rawRates.KRW),
         };
         if (rates.CNY === 0 || rates.JPY === 0 || rates.KRW === 0)
           throw new Error("missing currency");
         next = {
           fetchedAt: current.toISOString(),
-          date: value.date,
+          date,
           rates,
         };
       } catch {

@@ -183,7 +183,7 @@ export const settings = {
   confirmReset: "リセット",
   currentLanguage: "現在の言語",
   followSystem: "システムに従う",
-  currency: "表示通貨",
+  currency: "通貨",
   currencyDesc: "表示金額に使用する通貨（表示言語とは独立）",
   languageFollowHint: "システム言語から自動判定",
   languageManualHint: "手動選択",
