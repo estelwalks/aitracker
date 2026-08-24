@@ -5,7 +5,7 @@
   "display": {
     "name": "Gemini CLI",
     "nameZh": "Gemini CLI",
-    "icon": "gemini",
+    "icon": "https://geminicli.com/favicon.ico",
     "color": "#4285f4"
   },
   "platforms": {

@@ -17,16 +17,8 @@ import {
   type AppSettings,
 } from "../../../lib/settings/store";
 import { useI18n } from "../../../lib/i18n/context";
-import {
-  catalogs,
-  getMessage,
-  type MessageKey,
-} from "../../../lib/i18n/messages";
-import {
-  resolveLocaleFromSearch,
-  type Currency,
-  type Locale,
-} from "../../../lib/i18n/locale";
+import type { MessageKey } from "../../../lib/i18n/messages";
+import { type Currency, type Locale } from "../../../lib/i18n/locale";
 import { themes, useTheme } from "../../../lib/theme";
 import { useVersionCheck } from "../../../lib/version-check";
 import {
@@ -100,13 +92,6 @@ const rateSourceKeys: Record<string, MessageKey> = {
   fallback: "settings.rate.fallback",
 };
 
-const localeLabelKeys: Record<Locale, MessageKey> = {
-  "zh-CN": "settings.languages.zhCN",
-  "en-US": "settings.languages.enUS",
-  "ja-JP": "settings.languages.jaJP",
-  "ko-KR": "settings.languages.koKR",
-};
-
 const retentionOptions = [30, 60, 90, 180, 0] as const;
 
 function NumberField({
@@ -167,7 +152,7 @@ export function SettingsPage({
     status: securityStatus,
     refresh: refreshSecurity,
   } = useSecurityClient();
-  const { settings, setSettings, loaded } = useAppSettings();
+  const { settings, setSettings } = useAppSettings();
   const { prefs: widgetPrefs, set: setWidgetPref } = useWidgetPrefs();
   const {
     locale,
@@ -424,103 +409,6 @@ export function SettingsPage({
                   }
                 />
               </Field>
-              <Field
-                label={t("settings.language")}
-                hint={
-                  localeMode === "system"
-                    ? t("settings.languageFollowHint")
-                    : t("settings.languageManualHint")
-                }
-              >
-                <Segmented
-                  value={localeMode === "manual" ? locale : "system"}
-                  onChange={(value) =>
-                    value === "system"
-                      ? setLocaleMode("system")
-                      : setLocaleMode("manual", value as Locale)
-                  }
-                  options={[
-                    { value: "system", label: t("settings.followSystem") },
-                    { value: "zh-CN", label: t("settings.languages.zhCN") },
-                    { value: "en-US", label: t("settings.languages.enUS") },
-                    { value: "ja-JP", label: t("settings.languages.jaJP") },
-                    { value: "ko-KR", label: t("settings.languages.koKR") },
-                  ]}
-                />
-              </Field>
-              <Field
-                label={t("settings.currency")}
-                hint={
-                  currencyMode === "manual"
-                    ? t("settings.currencyManualHint")
-                    : currencySource === "fallback"
-                      ? t("settings.currencyFallbackHint")
-                      : t("settings.currencyFollowHint")
-                }
-              >
-                <Segmented
-                  value={currencyMode === "manual" ? displayCurrency : "system"}
-                  onChange={(value) =>
-                    value === "system"
-                      ? setCurrencyMode("system")
-                      : setCurrencyMode("manual", value as Currency)
-                  }
-                  options={[
-                    { value: "system", label: t("settings.followSystem") },
-                    { value: "CNY", label: "CNY" },
-                    { value: "USD", label: "USD" },
-                    { value: "JPY", label: "JPY" },
-                    { value: "KRW", label: "KRW" },
-                  ]}
-                />
-              </Field>
-              <Field
-                label={t("settings.rate.title")}
-                hint={t("settings.rate.desc")}
-              >
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="tt-num text-[13px]">
-                      {rates
-                        ? t("settings.rate.line", {
-                            rate: format.formatNumber(
-                              rates.rates[displayCurrency] ?? 1,
-                              { maximumFractionDigits: 4 },
-                            ),
-                            currency: displayCurrency,
-                          })
-                        : "—"}
-                    </span>
-                    <TTButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void handleRefreshRates()}
-                      disabled={ratesLoading}
-                    >
-                      {ratesLoading
-                        ? t("settings.rate.refreshing")
-                        : t("settings.rate.refresh")}
-                    </TTButton>
-                  </div>
-                  {rates && (
-                    <div className="text-[11px] text-muted-foreground">
-                      {t("settings.rate.updatedAt", { date: rates.date })}
-                      {" · "}
-                      {t(
-                        rateSourceKeys[rates.source] ??
-                          "settings.rate.fallback",
-                      )}
-                      {rates.source !== "live" &&
-                        ` · ${t("settings.rate.offlineHint", {
-                          source: t(
-                            rateSourceKeys[rates.source] ??
-                              "settings.rate.fallback",
-                          ),
-                        })}`}
-                    </div>
-                  )}
-                </div>
-              </Field>
               <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
                 <Toggle
                   value={autoLaunchEnabled}
@@ -762,44 +650,113 @@ export function SettingsPage({
 
           {category === "外观" && (
             <div>
-              <div className="grid grid-cols-2 gap-3">
-                {themes.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setTheme(item.id)}
-                    className={`overflow-hidden rounded-sm border text-left ${
-                      theme === item.id ? "border-primary" : "border-border"
-                    }`}
-                  >
-                    {/* 迷你主题预览：把主题类套在缩略图容器上，使 CSS 变量局部生效 */}
-                    <div
-                      className={`flex items-center gap-1.5 border-b border-border/60 bg-background px-2 py-2 ${item.cls}`}
+              <Field label={t("settings.theme")} hint={t("settings.themeDesc")}>
+                <Segmented
+                  value={theme}
+                  onChange={(value) => setTheme(value as typeof theme)}
+                  options={themes.map((item) => ({
+                    value: item.id,
+                    label: t(item.labelKey),
+                  }))}
+                />
+              </Field>
+              <Field
+                label={t("settings.language")}
+                hint={
+                  localeMode === "system"
+                    ? t("settings.languageFollowHint")
+                    : t("settings.languageManualHint")
+                }
+              >
+                <Segmented
+                  value={localeMode === "manual" ? locale : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setLocaleMode("system")
+                      : setLocaleMode("manual", value as Locale)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "zh-CN", label: t("settings.languages.zhCN") },
+                    { value: "en-US", label: t("settings.languages.enUS") },
+                    { value: "ja-JP", label: t("settings.languages.jaJP") },
+                    { value: "ko-KR", label: t("settings.languages.koKR") },
+                  ]}
+                />
+              </Field>
+              <Field
+                label={t("settings.currency")}
+                hint={
+                  currencyMode === "manual"
+                    ? t("settings.currencyManualHint")
+                    : currencySource === "fallback"
+                      ? t("settings.currencyFallbackHint")
+                      : t("settings.currencyFollowHint")
+                }
+              >
+                <Segmented
+                  value={currencyMode === "manual" ? displayCurrency : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setCurrencyMode("system")
+                      : setCurrencyMode("manual", value as Currency)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "CNY", label: "CNY" },
+                    { value: "USD", label: "USD" },
+                    { value: "JPY", label: "JPY" },
+                    { value: "KRW", label: "KRW" },
+                  ]}
+                />
+              </Field>
+              <Field
+                label={t("settings.rate.title")}
+                hint={t("settings.rate.desc")}
+              >
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="tt-num text-[13px]">
+                      {rates
+                        ? t("settings.rate.line", {
+                            rate: format.formatNumber(
+                              rates.rates[displayCurrency] ?? 1,
+                              { maximumFractionDigits: 4 },
+                            ),
+                            currency: displayCurrency,
+                          })
+                        : "—"}
+                    </span>
+                    <TTButton
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRefreshRates()}
+                      disabled={ratesLoading}
                     >
-                      <span className="h-6 w-1.5 shrink-0 rounded-sm bg-sidebar" />
-                      <div className="flex flex-1 flex-col gap-1">
-                        <span className="h-1.5 w-3/4 rounded-full bg-primary/70" />
-                        <span className="h-1.5 w-1/2 rounded-full bg-muted-foreground/40" />
-                      </div>
-                      <span className="size-2.5 shrink-0 rounded-full bg-ok" />
+                      {ratesLoading
+                        ? t("settings.rate.refreshing")
+                        : t("settings.rate.refresh")}
+                    </TTButton>
+                  </div>
+                  {rates && (
+                    <div className="text-[11px] text-muted-foreground">
+                      {t("settings.rate.updatedAt", { date: rates.date })}
+                      {" · "}
+                      {t(
+                        rateSourceKeys[rates.source] ??
+                          "settings.rate.fallback",
+                      )}
+                      {rates.source !== "live" &&
+                        ` · ${t("settings.rate.offlineHint", {
+                          source: t(
+                            rateSourceKeys[rates.source] ??
+                              "settings.rate.fallback",
+                          ),
+                        })}`}
                     </div>
-                    <div className="px-2 py-1.5">
-                      <div className="text-[13px] font-medium">
-                        {t(item.labelKey)}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {t(item.descKey)}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-4 border-t border-border pt-4">
-                <Field label={t("settings.currentLanguage")}>
-                  <span className="text-[13px] text-muted-foreground">
-                    {t(localeLabelKeys[locale])}
-                  </span>
-                </Field>
-              </div>
+                  )}
+                </div>
+              </Field>
             </div>
           )}
 

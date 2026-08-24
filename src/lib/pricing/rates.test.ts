@@ -27,10 +27,11 @@ function failingFetcher(): typeof fetch {
   };
 }
 
-const LIVE_RATES = {
-  date: "2026-08-05",
-  rates: { CNY: 7.15, JPY: 146, KRW: 1360 },
-};
+const LIVE_RATES = [
+  { date: "2026-08-05", base: "USD", quote: "CNY", rate: 7.15 },
+  { date: "2026-08-05", base: "USD", quote: "JPY", rate: 146 },
+  { date: "2026-08-05", base: "USD", quote: "KRW", rate: 1360 },
+];
 
 function memoryCache(): ExchangeRateCache {
   let value: Awaited<ReturnType<ExchangeRateCache["read"]>>;
