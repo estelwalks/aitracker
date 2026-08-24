@@ -172,7 +172,7 @@ export const settings = {
   confirmReset: "确认重置",
   currentLanguage: "当前语言",
   followSystem: "跟随系统",
-  currency: "展示货币",
+  currency: "货币",
   currencyDesc: "展示金额使用的货币，独立于界面语言",
   languageFollowHint: "按系统语言解析",
   languageManualHint: "手动选择",
