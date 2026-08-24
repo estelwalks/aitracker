@@ -8,15 +8,16 @@ import type { SnapshotEnvelope } from "../../../platform/snapshot-runtime/contra
 import type { SnapshotRepository } from "../../../platform/snapshot-runtime/contracts.ts";
 import type { SnapshotRefreshPort } from "../../../platform/snapshot-runtime/contracts.ts";
 import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
+import { compactUsageSnapshot } from "../application/aggregate-projection.ts";
 
 /**
  * P2-T2-06: Usage snapshot coordinator.
  *
  * The collector is the usage scanner wrapped as a pure adapter (an
  * external-source read-only collection adapter) — it receives an AbortSignal, returns the sanitized snapshot, and never writes. The
- * coordinator commits once per refresh and keeps last-known-good. Raw events
- * stay server-only (`details`/`recent` are present in the persisted snapshot
- * but only page-specific projectors expose them).
+ * coordinator commits once per refresh and keeps last-known-good. Scanner
+ * events are reduced to compact aggregate buckets before the coordinator can
+ * retain or persist them; raw event arrays are never part of the read path.
  */
 
 export interface UsageSnapshotRuntimeOptions {
@@ -82,13 +83,18 @@ export function createUsageSnapshotRuntime(
       };
     });
 
+  const aggregateCollect: typeof collect = async (request) => {
+    const result = await collect(request);
+    return { ...result, data: compactUsageSnapshot(result.data) };
+  };
+
   const coordinator = createSnapshotCoordinator<UsageSnapshotDto>({
     repository: options.repository,
     requestRefresh: options.requestRefresh,
     now: options.now,
     freshForMs:
       RUNTIME_POLICY.snapshotPolicies.usage.freshForMinutes * 60 * 1000,
-    collect,
+    collect: aggregateCollect,
   });
 
   return {

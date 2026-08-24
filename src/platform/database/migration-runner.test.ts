@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -11,17 +11,15 @@ import { DatabaseHost } from "./database-host.server.ts";
 import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
 import {
   migrationChecksum,
-  normalizeMigrationSql,
   readSchemaVersion,
   runMigrations,
   type MigrationDefinition,
 } from "./migration-runner.server.ts";
 import {
+  INITIAL_SCHEMA_SQL,
   LATEST_MIGRATION_VERSION,
   MIGRATIONS,
-  PLATFORM_MIGRATION_0001_SQL,
 } from "./migrations/index.ts";
-import { PLATFORM_MIGRATION_0007_SQL } from "./migrations/0007_model_profile_auth.ts";
 
 /** Enough of node:test's TestContext for the shared test bed. */
 interface TestScope {
@@ -30,19 +28,11 @@ interface TestScope {
 
 const APP_VERSION = "3.0.0-test";
 
-/** The new-project first-wave tables, sorted by name. */
-const FIRST_WAVE_TABLES = [
-  "ai_daily_usage",
-  "ai_executions",
-  "app_preferences",
-  "insight_enhancement_cache",
-  "insight_enhancement_lines",
-  "insight_preferences",
-  "model_profiles",
-  "runtime_flags",
-  "schema_migrations",
-  "secure_secrets",
-] as const;
+const INITIAL_SCHEMA_TABLES = [
+  ...INITIAL_SCHEMA_SQL.matchAll(/CREATE TABLE (\w+)/g),
+]
+  .map((match) => match[1])
+  .sort();
 
 const EXPECTED_INDEXES = [
   "idx_ai_executions_capability_started",
@@ -166,8 +156,8 @@ test("migrates an empty database from 0 to latest and records the ledger row", (
   assert.equal(result.applied.length, MIGRATIONS.length);
   const record = result.applied[0];
   assert.equal(record.version, 1);
-  assert.equal(record.name, "0001_platform");
-  assert.equal(record.checksum, migrationChecksum(PLATFORM_MIGRATION_0001_SQL));
+  assert.equal(record.name, "0001_initial_schema");
+  assert.equal(record.checksum, migrationChecksum(INITIAL_SCHEMA_SQL));
   assert.equal(record.appVersion, APP_VERSION);
   assert.equal(record.appliedAtMs, 1_700_000_000_005);
   assert.equal(record.durationMs, 5);
@@ -179,7 +169,7 @@ test("migrates an empty database from 0 to latest and records the ledger row", (
     "schema_migrations must hold every bundled migration row",
   );
   assert.equal(integer(rows[0].version), 1);
-  assert.equal(text(rows[0].name), "0001_platform");
+  assert.equal(text(rows[0].name), "0001_initial_schema");
   assert.equal(text(rows[0].checksum), record.checksum);
   assert.equal(text(rows[0].app_version), APP_VERSION);
   assert.equal(integer(rows[0].applied_at_ms), record.appliedAtMs);
@@ -207,7 +197,7 @@ test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
   );
 });
 
-test("creates exactly the 10 new-project STRICT tables and their indexes", (t) => {
+test("fresh install creates the complete STRICT baseline and its indexes", (t) => {
   const host = openHost(t);
   runMigrations({
     database: host,
@@ -217,10 +207,10 @@ test("creates exactly the 10 new-project STRICT tables and their indexes", (t) =
 
   assert.deepEqual(
     objectNames(host, "table"),
-    [...FIRST_WAVE_TABLES],
-    "no non-first-wave table may be created by 0001",
+    INITIAL_SCHEMA_TABLES,
+    "fresh install must create exactly the baseline tables",
   );
-  for (const table of FIRST_WAVE_TABLES) {
+  for (const table of INITIAL_SCHEMA_TABLES) {
     const row = host
       .prepare(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -294,7 +284,7 @@ test("rejects a renamed applied migration with migration-checksum", (t) => {
   runMigrations({ database: host, appVersion: APP_VERSION });
   host
     .prepare("UPDATE schema_migrations SET name = ? WHERE version = 1")
-    .run("0001_platform_renamed");
+    .run("0001_initial_schema_renamed");
 
   assert.throws(
     () => runMigrations({ database: host, appVersion: APP_VERSION }),
@@ -452,77 +442,29 @@ test("rejects malformed definition lists with invalid-argument", (t) => {
   assert.deepEqual(objectNames(host, "table"), []);
 });
 
-test("the inline SQL stays byte-identical to migrations/0001_platform.sql", () => {
-  const fileText = readFileSync(
-    new URL("./migrations/0001_platform.sql", import.meta.url),
-    "utf8",
-  );
-  const fromFile = normalizeMigrationSql(fileText);
-  const inline = normalizeMigrationSql(PLATFORM_MIGRATION_0001_SQL);
+test("single baseline directly contains the final evolved columns", (t) => {
+  assert.equal(MIGRATIONS.length, 1);
+  assert.equal(MIGRATIONS[0].version, 1);
+  assert.equal(MIGRATIONS[0].name, "0001_initial_schema");
+  assert.equal(MIGRATIONS[0].sql, INITIAL_SCHEMA_SQL);
+  assert.doesNotMatch(INITIAL_SCHEMA_SQL, /ALTER\s+TABLE/i);
 
-  assert.equal(
-    inline,
-    fromFile,
-    "migrations/index.ts and migrations/0001_platform.sql have diverged",
-  );
-  assert.equal(
-    migrationChecksum(fileText),
-    migrationChecksum(PLATFORM_MIGRATION_0001_SQL),
-  );
-  assert.ok(MIGRATIONS.length >= 1);
-  assert.equal(MIGRATIONS[0].sql, PLATFORM_MIGRATION_0001_SQL);
-  // Ten new-project tables, and nothing else, are declared in that text.
-  const created = [...inline.matchAll(/CREATE TABLE (\w+)/g)].map(
-    (match) => match[1],
-  );
-  assert.deepEqual([...created].sort(), [...FIRST_WAVE_TABLES]);
-});
-
-test("migration 0007 adds auth and keeps legacy rows protocol-default compatible", (t) => {
   const host = openHost(t);
-  runMigrations({
-    database: host,
-    appVersion: APP_VERSION,
-    definitions: MIGRATIONS.slice(0, 6),
-  });
-  host
-    .prepare(
-      `INSERT INTO model_profiles
-        (profile_id, name, mode, protocol, endpoint, model, secret_id, is_active, created_at_ms, updated_at_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      "legacy-profile",
-      "Legacy",
-      "custom",
-      "anthropic",
-      "https://example.invalid/v1",
-      "claude-sonnet-4",
-      null,
-      0,
-      1n,
-      1n,
-    );
-
   runMigrations({ database: host, appVersion: APP_VERSION });
-  const authColumn = host
-    .prepare(
-      "SELECT name, dflt_value FROM pragma_table_info('model_profiles') WHERE name = 'auth'",
-    )
-    .get();
-  assert.equal(authColumn?.name, "auth");
-  assert.equal(authColumn?.dflt_value, null);
-  const legacy = host
-    .prepare("SELECT auth FROM model_profiles WHERE profile_id = ?")
-    .get("legacy-profile");
-  assert.equal(legacy?.auth, null);
-
-  const sqlFile = readFileSync(
-    new URL("./migrations/0007_model_profile_auth.sql", import.meta.url),
-    "utf8",
-  );
-  assert.equal(
-    normalizeMigrationSql(sqlFile),
-    normalizeMigrationSql(PLATFORM_MIGRATION_0007_SQL),
-  );
+  for (const [table, column] of [
+    ["model_profiles", "auth"],
+    ["knowledge_versions", "content"],
+    ["skills", "form"],
+    ["usage_aggregate_buckets", "project_kind"],
+  ] as const) {
+    assert.ok(
+      host
+        .prepare(
+          `SELECT name FROM pragma_table_info('${table}') WHERE name = ?`,
+        )
+        .get(column),
+      `missing ${table}.${column}`,
+    );
+  }
+  assert.ok(objectNames(host, "table").includes("usage_tracker_buckets"));
 });

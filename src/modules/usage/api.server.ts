@@ -1,5 +1,4 @@
 import type { TrackerReadModel, UsageModuleContract } from "./contracts.ts";
-import type { LocalUsageEvent } from "../../lib/local-usage/types.ts";
 
 export type UsageApiResponse = UsageModuleContract;
 
@@ -21,35 +20,24 @@ function emptyTrackerReadModel(): TrackerReadModel {
  * event set is aggregated into compact, ranked boards before anything reaches
  * the renderer — no raw event arrays cross this boundary.
  *
- * T7-08: reads the unified Usage snapshot (O(1), never scans on the query
- * path); an absent snapshot degrades to the empty read model.
+ * Reads the persisted aggregate projection with a fixed query count. This is
+ * intentionally independent of the coordinator's hot value: the repository
+ * has already replaced project/session refs with installation-scoped HMACs.
  */
 export async function loadTrackerReadModel(): Promise<TrackerReadModel> {
   try {
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
-    const { createEmptyUsageSnapshot } =
-      await import("../../lib/local-usage/presentation.ts");
-    const { buildBoard, trackerTotalsFromEvents } =
+    const { buildTrackerReadModelFromProjection } =
       await import("./application/tracker.ts");
-    const { usageSnapshot } = await getCompositionRoot();
-    await usageSnapshot.ensureHydrated();
-    const latest = usageSnapshot.readLatest();
-    const snapshot = latest.data ?? createEmptyUsageSnapshot();
-    const events: readonly LocalUsageEvent[] = snapshot.details ?? [];
-    const boards = {
-      skill: buildBoard(events, "skill"),
-      project: buildBoard(events, "project"),
-      session: buildBoard(events, "session"),
-    };
-    const totals = trackerTotalsFromEvents(events, boards);
-    return {
-      // `createEmptyUsageSnapshot` has a construction timestamp, not a scan
-      // timestamp. Only expose the generated time for an actual local scan.
+    const root = await getCompositionRoot();
+    const hydrated = await root.database.features.usageSnapshots.load();
+    const snapshot = hydrated.envelope.data;
+    if (snapshot == null) return emptyTrackerReadModel();
+    return buildTrackerReadModelFromProjection({
       generatedAt: snapshot.mode === "real" ? snapshot.generatedAt : null,
-      boards,
-      totals,
-    };
+      buckets: snapshot.trackerBuckets ?? [],
+    });
   } catch (error) {
     // A broken persisted snapshot or database must not turn this read-only
     // dashboard into a route-level SSR failure. Keep the original error for

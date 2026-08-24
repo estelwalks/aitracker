@@ -70,6 +70,10 @@ export const widget = {
   toolsUsage: "Tool usage",
   lowestCache: "Lowest cache {name} · {percent}%",
   todayTokens: "Today {tokens}",
+  dynamicBar: "Menu bar widget",
+  enabled: "On",
+  disabled: "Off",
+  trendPoint: "{date} {tokens}",
   // Today tab
   todaySummary: "Today summary",
   toolCount: "Tools",

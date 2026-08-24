@@ -605,7 +605,7 @@ test("rejects negative schema_migrations timings", (t) => {
     "a duplicate migration name",
     INSERT_LEDGER,
     4,
-    "0001_platform",
+    "0001_initial_schema",
     "checksum",
     APP_VERSION,
     1,

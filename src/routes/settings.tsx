@@ -3,18 +3,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { brandParams } from "../lib/app-config";
-import { getStorageUsageQuery } from "../modules/settings";
+import {
+  getStorageUsageQuery,
+  parseSettingsSection,
+} from "../modules/settings";
 
 // The page component lives in settings.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     const search = location.search as Record<string, unknown>;
-    const section =
-      search.section === "scan"
-        ? "scan"
-        : search.section === "model"
-          ? "model"
-          : undefined;
+    const section = parseSettingsSection(search.section);
     try {
       const usage = await getStorageUsageQuery();
       return {

@@ -23,7 +23,7 @@ export const widget = {
   mediumRisk: "中危",
   safeItems: "安全",
   activeAgents: "{count} 活跃 Agent",
-  openDashboardFull: "打开 Dashboard",
+  openDashboardFull: "打开仪表盘",
   cacheRate: "整体缓存命中 {percent}%",
   desktopWidgets: "桌面小组件",
   desktopWidgetsDesc:
@@ -65,6 +65,10 @@ export const widget = {
   toolsUsage: "工具使用",
   lowestCache: "缓存最低 {name} · {percent}%",
   todayTokens: "今日 {tokens}",
+  dynamicBar: "动态栏",
+  enabled: "开启",
+  disabled: "关闭",
+  trendPoint: "{date} {tokens}",
   // 今日 Tab
   todaySummary: "今日摘要",
   toolCount: "工具",

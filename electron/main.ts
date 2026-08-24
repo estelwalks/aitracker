@@ -13,13 +13,16 @@ import {
   Notification,
   safeStorage,
   shell,
+  screen,
   Tray,
   type IpcMainInvokeEvent,
 } from "electron";
 
 import {
+  desktopAppRoutes,
   desktopIpc,
   type AutoLaunchState,
+  type DesktopAppRoute,
   type RuntimeInfo,
   type SecurityScanCycle,
   type SecurityScanHistoryEntry,
@@ -27,9 +30,11 @@ import {
   type SecurityScanState,
 } from "./contracts.js";
 import {
+  createMacWidgetTrayTemplate,
   createTrayTemplate,
   electronMessages,
   interpolate,
+  mapSystemCurrency,
   normalizeDesktopCurrency,
   normalizeDesktopLocale,
   resolveDesktopPreferences,
@@ -53,6 +58,20 @@ import { SecurityScannerService } from "./security-scanner-service.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
+import {
+  normalizeTrayTitle,
+  persistTrayTitleBestEffort,
+  readTrayPreferencesBestEffort,
+  TRAY_TITLE_PLACEHOLDER,
+  TRAY_TITLE_PREF_KEY,
+  updateTrayTitleIfChanged,
+} from "./tray-title.js";
+import { findTrayIconPath, TRAY_ICON_DATA_URL } from "./tray-icon.js";
+import { createWidgetShellDataUrl } from "./widget-shell.js";
+import {
+  completeReleaseDataResetAfterWarmup,
+  prepareReleaseDataReset,
+} from "./release-data-reset.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -74,7 +93,6 @@ function reportStartupMilestone(name: string): void {
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
-let menuBarWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
@@ -83,6 +101,7 @@ let securityScanner: SecurityScannerService | null = null;
 let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
 let desktopStateBroker: DesktopStateBroker | null = null;
 let startupDocument = "";
+let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -114,43 +133,7 @@ function trustedWebContentsIds(): number[] {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     ids.push(widgetWindow.webContents.id);
   }
-  if (menuBarWindow && !menuBarWindow.isDestroyed()) {
-    ids.push(menuBarWindow.webContents.id);
-  }
   return ids;
-}
-
-async function createMenuBarWindow(): Promise<void> {
-  if (menuBarWindow && !menuBarWindow.isDestroyed()) return;
-  menuBarWindow = new BrowserWindow({
-    width: 680,
-    height: 62,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    show: false,
-    hasShadow: false,
-    webPreferences: {
-      preload: join(currentDirectory, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  const display = (screen as unknown as { getPrimaryDisplay: () => { workArea: Electron.Rectangle } }).getPrimaryDisplay();
-  menuBarWindow.setPosition(
-    Math.round(display.workArea.x + (display.workArea.width - 680) / 2),
-    display.workArea.y + 8,
-    false,
-  );
-  const url = localWebServer
-    ? localWebServer.createBrowserBootstrapUrl(`/widget?mode=bar&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`)
-    : `${allowedOrigin}/widget?mode=bar&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
-  await menuBarWindow.loadURL(url);
-  menuBarWindow.once("ready-to-show", () => menuBarWindow?.show());
-  menuBarWindow.on("closed", () => { menuBarWindow = null; });
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -201,17 +184,46 @@ function setAutoLaunch(enabled: boolean): AutoLaunchState {
 }
 
 function showMainWindow(): void {
-  if (!mainWindow) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
 
-  if (process.platform === "darwin") app.dock?.show();
+  if (process.platform === "darwin") {
+    app.dock?.show();
+    // Temporarily expose the client on every Space so showing it from a
+    // menu-bar widget brings it onto the user's current desktop.
+    mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
 
   if (mainWindow.isMinimized()) {
     mainWindow.restore();
   }
   mainWindow.show();
   mainWindow.focus();
+  mainWindow.moveTop();
+
+  if (process.platform === "darwin") {
+    mainWindow.setVisibleOnAllWorkspaces(false, { visibleOnFullScreen: true });
+  }
+}
+
+function openMainWindowRoute(
+  route: DesktopAppRoute,
+  section?: "menu-bar-app",
+): void {
+  if (!mainWindow || mainWindow.isDestroyed() || !allowedOrigin) return;
+  widgetWindow?.hide();
+  const sectionQuery = section ? `section=${section}&` : "";
+  const path = `${route}?${sectionQuery}locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
+  const url = localWebServer
+    ? localWebServer.createBrowserBootstrapUrl(path)
+    : `${allowedOrigin}${path}`;
+  void mainWindow
+    .loadURL(url)
+    .then(showMainWindow)
+    .catch((error: unknown) =>
+      console.warn("AITracker main-window navigation failed", error),
+    );
 }
 
 function openBrowserCompanion(): void {
@@ -229,10 +241,12 @@ function openBrowserCompanion(): void {
  * Security hardening mirrors the main window: sandboxed preload, same-origin
  * navigation guard and external links handed to the OS browser.
  */
-async function showWidgetWindow(): Promise<void> {
+async function showWidgetWindow(
+  trayBounds?: Electron.Rectangle,
+): Promise<void> {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     if (widgetWindow.isMinimized()) widgetWindow.restore();
-    positionWidgetWindow();
+    positionWidgetWindow(trayBounds);
     widgetWindow.show();
     widgetWindow.focus();
     return;
@@ -250,12 +264,6 @@ async function showWidgetWindow(): Promise<void> {
     skipTaskbar: true,
     show: false,
     title: APP_NAME,
-    ...(process.platform === "darwin"
-      ? {
-          vibrancy: "under-window" as const,
-          visualEffectState: "active" as const,
-        }
-      : {}),
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
       contextIsolation: true,
@@ -266,7 +274,7 @@ async function showWidgetWindow(): Promise<void> {
 
   // Position only after BrowserWindow exists. On macOS, positioning before
   // ready-to-show can be overwritten by the native window restoration logic.
-  positionWidgetWindow();
+  positionWidgetWindow(trayBounds);
 
   if (process.platform === "darwin") {
     // macOS 菜单栏小组件惯例：浮于所有桌面空间（含全屏 Space）之上。
@@ -281,14 +289,23 @@ async function showWidgetWindow(): Promise<void> {
     return { action: "deny" };
   });
   widgetWindow.webContents.on("will-navigate", (event, url) => {
-    if (new URL(url).origin !== allowedOrigin) {
+    if (
+      !url.startsWith("data:text/html;base64,") &&
+      new URL(url).origin !== allowedOrigin
+    ) {
       event.preventDefault();
     }
   });
 
   widgetWindow.once("ready-to-show", () => {
-    positionWidgetWindow();
+    positionWidgetWindow(trayBounds);
     widgetWindow?.show();
+    widgetWindow?.focus();
+  });
+  widgetWindow.on("blur", () => {
+    if (process.platform === "darwin" && !isQuitting) {
+      widgetWindow?.hide();
+    }
   });
   widgetWindow.on("close", (event) => {
     if (isQuitting) {
@@ -307,28 +324,59 @@ async function showWidgetWindow(): Promise<void> {
       )
     : `${allowedOrigin}/widget?mode=float&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
   try {
-    await widgetWindow.loadURL(widgetUrl);
+    // Paint a self-contained shell first, then replace it with the real route
+    // without waiting for any Dashboard/widget data request.
+    await widgetWindow.loadURL(createWidgetShellDataUrl());
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    positionWidgetWindow(trayBounds);
+    widgetWindow.show();
+    widgetWindow.focus();
+    void widgetWindow.loadURL(widgetUrl).catch((error: unknown) => {
+      console.warn("Widget window failed to load", error);
+    });
   } catch (error) {
-    // A transient load failure (e.g. dev server not yet up) must not surface
-    // as an unhandled rejection in the renderer; the next open recreates the
-    // window and retries.
-    console.warn("Widget window failed to load", error);
+    console.warn("Widget shell failed to load", error);
     widgetWindow?.destroy();
   }
 }
 
-function positionWidgetWindow(): void {
+/** macOS 菜单栏入口只负责切换浮窗，不附带其他菜单操作。 */
+async function toggleWidgetWindow(
+  trayBounds: Electron.Rectangle,
+): Promise<void> {
+  if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+    widgetWindow.hide();
+    return;
+  }
+  await showWidgetWindow(trayBounds);
+}
+
+function positionWidgetWindow(trayBounds?: Electron.Rectangle): void {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const display = (
-    screen as unknown as { getPrimaryDisplay: () => { workArea: Electron.Rectangle } }
-  ).getPrimaryDisplay();
+  const display =
+    process.platform === "darwin" && trayBounds
+      ? screen.getDisplayNearestPoint({
+          x: trayBounds.x,
+          y: trayBounds.y,
+        })
+      : screen.getPrimaryDisplay();
   const { x, y, width, height } = display.workArea;
-  const [windowWidth] = widgetWindow.getSize();
-  widgetWindow.setPosition(
-    Math.max(x + 8, x + width - windowWidth - 12),
-    y + 8,
-    false,
+  const [windowWidth, windowHeight] = widgetWindow.getSize();
+  const gap = 6;
+  const preferredX = trayBounds
+    ? trayBounds.x + Math.round((trayBounds.width - windowWidth) / 2)
+    : x + width - windowWidth - 12;
+  const preferredY = trayBounds
+    ? trayBounds.y + trayBounds.height + gap
+    : y + 8;
+  const positionX = Math.min(
+    Math.max(preferredX, x + 8),
+    x + width - windowWidth - 8,
   );
+  const positionY = trayBounds
+    ? Math.min(Math.max(preferredY, y + 8), y + height - windowHeight - 8)
+    : preferredY;
+  widgetWindow.setPosition(positionX, positionY, false);
 }
 
 const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
@@ -539,18 +587,39 @@ function registerIpcHandlers(): void {
   );
   ipcMain.handle(desktopIpc.showWindow, (event): void => {
     assertTrustedSender(event);
-    showMainWindow();
+    openMainWindowRoute("/");
+  });
+  ipcMain.handle(desktopIpc.openWindowRoute, (event, route: unknown): void => {
+    assertTrustedSender(event);
+    if (!desktopAppRoutes.includes(route as DesktopAppRoute)) {
+      throw new TypeError("Unsupported desktop app route");
+    }
+    openMainWindowRoute(route as DesktopAppRoute);
   });
   ipcMain.handle(desktopIpc.openWidgetWindow, (event): void => {
     assertTrustedSender(event);
     void showWidgetWindow();
   });
-  ipcMain.handle(desktopIpc.setTrayTitle, (event, title: unknown): void => {
-    assertTrustedSender(event);
-    if (process.platform !== "darwin" || !tray) return;
-    if (typeof title !== "string") throw new TypeError("Tray title required");
-    tray.setTitle(title.slice(0, 80));
-  });
+  ipcMain.handle(
+    desktopIpc.setTrayTitle,
+    async (event, title: unknown): Promise<void> => {
+      assertTrustedSender(event);
+      if (process.platform !== "darwin" || !tray) return;
+      const nextTitle = normalizeTrayTitle(title);
+      if (nextTitle == null) throw new TypeError("Tray title required");
+      currentTrayTitle = nextTitle;
+      updateTrayTitleIfChanged(tray, nextTitle);
+      const broker = desktopStateBroker;
+      if (broker) {
+        void persistTrayTitleBestEffort(
+          (value) => broker.setPreference(TRAY_TITLE_PREF_KEY, value),
+          nextTitle,
+          (error) =>
+            console.warn("AITracker tray title cache write failed", error),
+        );
+      }
+    },
+  );
   ipcMain.handle(desktopIpc.windowMinimize, (event): void => {
     assertTrustedSender(event);
     mainWindow?.minimize();
@@ -650,11 +719,19 @@ function registerIpcHandlers(): void {
         throw new Error("Desktop state broker unavailable");
       const prefs = await desktopStateBroker.preferences();
       prefs[LOCALE_MODE_PREF_KEY] = mode;
+      const nextLocale =
+        mode === "manual"
+          ? (normalizeDesktopLocale(locale) ?? currentPreferences.locale)
+          : resolveDesktopPreferences(prefs, app.getLocale()).locale;
       if (mode === "manual") {
         const next = normalizeDesktopLocale(locale);
         if (next == null) throw new TypeError("Unsupported locale");
         prefs[LOCALE_PREF_KEY] = next;
       }
+      // Match the renderer's language-change policy: changing language also
+      // pins the corresponding display currency once, in the same IPC turn.
+      prefs[CURRENCY_MODE_PREF_KEY] = "manual";
+      prefs[CURRENCY_PREF_KEY] = mapSystemCurrency(nextLocale);
       await applyPreferences(prefs);
     },
   );
@@ -771,13 +848,16 @@ async function applyPreferences(prefs: Record<string, unknown>): Promise<void> {
  * auto-launch checkbox state stay in sync.
  */
 function rebuildTray(): void {
-  const trayIconPath = app.isPackaged
-    ? join(process.resourcesPath, "tray-icon.png")
-    : join(app.getAppPath(), "build", "tray-icon.png");
-  const trayIcon = nativeImage.createFromPath(trayIconPath);
-  if (trayIcon.isEmpty()) {
-    console.warn("AITracker tray icon could not be loaded", trayIconPath);
-  }
+  const trayIconPath = findTrayIconPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+  });
+  let trayIcon = trayIconPath
+    ? nativeImage.createFromPath(trayIconPath)
+    : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+  if (trayIcon.isEmpty())
+    trayIcon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
   if (process.platform === "darwin") {
     trayIcon.setTemplateImage(true);
   }
@@ -807,16 +887,33 @@ function rebuildTray(): void {
   if (tray) tray.destroy();
   tray = new Tray(trayIcon);
   tray.setToolTip(electronMessages[currentPreferences.locale].tray.tooltip);
-  tray.setContextMenu(
-    Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]),
-  );
   if (process.platform === "darwin") {
-    // Keep a visible native status-item label even before the renderer has
-    // produced its first live read model. The renderer replaces this title
-    // with the current token/tool/security summary afterwards.
-    tray.setTitle("TT");
+    // Use the persisted last-known compact summary immediately. A new install
+    // gets only a low-noise placeholder until the first read model arrives.
+    tray.setTitle(currentTrayTitle);
+    const macMenu = Menu.buildFromTemplate(
+      createMacWidgetTrayTemplate(currentPreferences.locale, {
+        onOpenDashboard: () => openMainWindowRoute("/"),
+        onOpenSettings: () => openMainWindowRoute("/settings", "menu-bar-app"),
+        onQuit: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      }) as Electron.MenuItemConstructorOptions[],
+    );
+    tray.on("right-click", () => tray?.popUpContextMenu(macMenu));
+  } else {
+    tray.setContextMenu(
+      Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]),
+    );
   }
-  tray.on("click", () => void showWidgetWindow());
+  tray.on("click", (_event, bounds) => {
+    if (process.platform === "darwin") {
+      void toggleWidgetWindow(bounds);
+      return;
+    }
+    void showWidgetWindow();
+  });
 }
 
 async function createMainWindow(): Promise<void> {
@@ -942,6 +1039,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.showWindow);
+    ipcMain.removeHandler(desktopIpc.openWindowRoute);
     ipcMain.removeHandler(desktopIpc.openWidgetWindow);
     ipcMain.removeHandler(desktopIpc.setTrayTitle);
     ipcMain.removeHandler(desktopIpc.windowMinimize);
@@ -1011,6 +1109,15 @@ if (!hasSingleInstanceLock) {
       // This window does not need the application origin and therefore gives
       // feedback even on a truly cold start.
       await createMainWindow();
+      const releaseDataReset = await prepareReleaseDataReset({
+        platform: process.platform,
+        isPackaged: app.isPackaged,
+        appVersion: app.getVersion(),
+        // Always use Electron's trusted interactive-user paths. In particular,
+        // never use the test-lab usage-home override as a deletion target.
+        homeDirectory: app.getPath("home"),
+        userDataDirectory: app.getPath("userData"),
+      });
       allowedOrigin = await resolveApplicationOrigin();
       reportStartupMilestone("local-server-ready");
       // Start first-run collection while the native startup document remains
@@ -1018,22 +1125,37 @@ if (!hasSingleInstanceLock) {
       // speculative homepage render: it starts the scheduler without doing
       // the same SSR/hydration work twice.
       if (localWebServer) {
-        void localWebServer
-          .warmup(process.env[ENV.DESKTOP_BROKER_TOKEN] ?? "")
-          .then(() => reportStartupMilestone("workspace-warmup-started"))
-          .catch((error: unknown) =>
-            console.warn("AITracker workspace warmup failed", error),
-          );
+        await completeReleaseDataResetAfterWarmup(
+          releaseDataReset,
+          async () => {
+            await localWebServer!.warmup(
+              process.env[ENV.DESKTOP_BROKER_TOKEN] ?? "",
+            );
+            reportStartupMilestone("workspace-warmup-completed");
+          },
+        );
+      } else if (releaseDataReset.status === "pending") {
+        // A destructive packaged reset may only be completed by the local
+        // runtime warmup. Never mark it successful merely because an external
+        // development URL happened to be configured in the environment.
+        throw new Error(
+          "AITracker release data reset requires local workspace warmup",
+        );
       }
+      const broker = desktopStateBroker;
+      const persistedTrayState = await readTrayPreferencesBestEffort(
+        () => broker.preferences(),
+        (error) =>
+          console.warn("AITracker desktop preferences unavailable", error),
+      );
+      const persistedPreferences = persistedTrayState.preferences;
       currentPreferences = resolveDesktopPreferences(
-        await desktopStateBroker.preferences(),
+        persistedPreferences,
         app.getLocale(),
       );
+      currentTrayTitle = persistedTrayState.title;
       registerIpcHandlers();
       rebuildTray();
-      void createMenuBarWindow().catch((error: unknown) =>
-        console.warn("AITracker menu-bar window failed", error),
-      );
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.

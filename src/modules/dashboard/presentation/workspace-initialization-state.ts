@@ -18,16 +18,3 @@ export function resolveWorkspaceInitializationState(input: {
     ? "loading"
     : "idle";
 }
-
-/** Re-run the dashboard loader, which re-dispatches empty/failed snapshots. */
-export function retryWorkspaceInitialization(input: {
-  readonly resetStatus: (status: DashboardSnapshotStatus["status"]) => void;
-  readonly triggerRefresh: () => Promise<unknown>;
-  readonly invalidate: () => Promise<unknown>;
-}): void {
-  input.resetStatus("empty");
-  void (async () => {
-    await input.triggerRefresh();
-    await input.invalidate();
-  })();
-}
