@@ -1,8 +1,18 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
+import { recoverFromVitePreloadError } from "./lib/chunk-recovery";
 import { RoutePending } from "./components/RoutePending";
 import { routerPerformanceOptions } from "./router-performance";
 import { routeTree } from "./routeTree.gen";
+
+// Vite reports a stale preloaded lazy chunk through this event before React's
+// error boundary necessarily gets a chance to render. Install the recovery at
+// module evaluation time so direct navigations to a lazy route are covered too.
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", (event) => {
+    recoverFromVitePreloadError(window, event);
+  });
+}
 
 /**
  * P4-T4-07: Router/Query ownership.

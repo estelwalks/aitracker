@@ -5,7 +5,7 @@
   "display": {
     "name": "Roo Code",
     "nameZh": "Roo Code",
-    "icon": "other",
+    "icon": "https://roomote.dev/favicon.ico",
     "color": "#f0524d"
   },
   "platforms": {

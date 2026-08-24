@@ -73,8 +73,6 @@ const SURFACE_LABEL: Record<SourcesQueryEntry["toolSurface"], MessageKey> = {
   desktop: "sources.type.desktop",
 };
 
-const SOURCES_PAGE_SIZE = 6;
-
 type MigrationSourceSelection = {
   source: SourcesQueryEntry;
   installedTargetAgents: readonly string[];
@@ -86,7 +84,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
   const [refreshing, setRefreshing] = useState(false);
   const [migrationSource, setMigrationSource] =
     useState<MigrationSourceSelection | null>(null);
-  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<SourcesQueryStatus | "all">(
     "all",
   );
@@ -118,12 +115,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
       (entry) => statusFilter === "all" || entry.status === statusFilter,
     );
   }, [summary.entries, statusFilter]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / SOURCES_PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pageEntries = filtered.slice(
-    (currentPage - 1) * SOURCES_PAGE_SIZE,
-    currentPage * SOURCES_PAGE_SIZE,
-  );
   async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
@@ -223,7 +214,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
         value={statusFilter}
         onChange={(value) => {
           setStatusFilter(value);
-          setPage(1);
         }}
         options={STATUS_FILTERS.map((filter) => ({
           value: filter.key,
@@ -244,7 +234,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           />
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {pageEntries.map((entry) => {
+            {filtered.map((entry) => {
               const installedTargetAgents = installedSkillAgents.filter(
                 (agent) => agent !== entry.skillAgent,
               );
@@ -264,16 +254,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
             })}
           </div>
         )}
-        {filtered.length > SOURCES_PAGE_SIZE && (
-          <SourcesPager
-            page={currentPage}
-            pageCount={pageCount}
-            total={filtered.length}
-            onPage={setPage}
-            previousLabel={t("common.pagination.previous")}
-            nextLabel={t("common.pagination.next")}
-          />
-        )}
       </Card>
 
       {migrationSource !== null && (
@@ -284,52 +264,6 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
           onDone={handleRefresh}
         />
       )}
-    </div>
-  );
-}
-
-function SourcesPager({
-  page,
-  pageCount,
-  total,
-  onPage,
-  previousLabel,
-  nextLabel,
-}: {
-  page: number;
-  pageCount: number;
-  total: number;
-  onPage: (page: number) => void;
-  previousLabel: string;
-  nextLabel: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3">
-      <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
-        {(page - 1) * SOURCES_PAGE_SIZE + 1}-
-        {Math.min(page * SOURCES_PAGE_SIZE, total)} / {total}
-      </span>
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="rounded-full border border-border/60 px-2.5 py-1 font-mono text-[10.5px] transition-colors hover:bg-surface-2 disabled:opacity-35"
-        >
-          {previousLabel}
-        </button>
-        <span className="tt-num px-1 font-mono text-[10.5px] text-muted-foreground">
-          {page} / {pageCount}
-        </span>
-        <button
-          type="button"
-          onClick={() => onPage(Math.min(pageCount, page + 1))}
-          disabled={page >= pageCount}
-          className="rounded-full border border-border/60 px-2.5 py-1 font-mono text-[10.5px] transition-colors hover:bg-surface-2 disabled:opacity-35"
-        >
-          {nextLabel}
-        </button>
-      </div>
     </div>
   );
 }
@@ -436,11 +370,7 @@ function SourceCard({
             className="ml-auto inline-flex items-center gap-1 text-[12px] text-primary hover:underline"
           >
             <ExternalLink className="size-3.5" />
-            {t(
-              entry.status === "not-installed"
-                ? "sources.row.download"
-                : "sources.row.official",
-            )}
+            {t("sources.row.official")}
           </a>
         ) : (
           <span className="ml-auto text-[12px] text-muted-foreground">

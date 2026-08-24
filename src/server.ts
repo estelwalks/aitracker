@@ -54,14 +54,13 @@ async function normalizeCatastrophicSsrResponse(
 }
 
 /**
- * SSR HTML embeds the current route manifest and references to hashed lazy
- * chunks. It must not be cached: reusing an old document shell after a
- * deployment can make the browser request chunks that no longer exist.
+ * Application documents, route-loader responses and server-function responses
+ * can all contain a deployment-specific route/function manifest or live local
+ * usage data. Never let a browser reuse them after an update; only static,
+ * content-addressed assets are cacheable and Nitro serves those outside this
+ * application entry.
  */
-function markDocumentResponseNoStore(response: Response): Response {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("text/html")) return response;
-
+export function markDynamicResponseNoStore(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("cache-control", NO_STORE);
   return new Response(response.body, {
@@ -120,7 +119,7 @@ export default {
         request,
         response,
       );
-      return markDocumentResponseNoStore(normalized);
+      return markDynamicResponseNoStore(normalized);
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(request.url), {
