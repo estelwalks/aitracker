@@ -62,6 +62,32 @@ test("first packaged macOS launch clears ~/.trusttools and marks only on explici
   }
 });
 
+test("first packaged Windows launch clears incompatible ~/.trusttools data", async () => {
+  const { root, options } = await fixture();
+  try {
+    const windowsOptions = { ...options, platform: "win32" as const };
+    const target = join(windowsOptions.homeDirectory, ".trusttools");
+    await mkdir(join(target, "data"), { recursive: true });
+    await writeFile(
+      join(target, "data", "trusttools.v1.db"),
+      "legacy-migration-lineage",
+    );
+
+    const reset = await prepareReleaseDataReset(windowsOptions);
+    assert.equal(reset.status, "pending");
+    await assert.rejects(lstat(target), { code: "ENOENT" });
+    assert.equal(await readReleaseDataResetMarker(windowsOptions), null);
+
+    await reset.markInitializationComplete();
+    const marker = JSON.parse(
+      (await readReleaseDataResetMarker(windowsOptions)) ?? "null",
+    ) as Record<string, unknown>;
+    assert.equal(marker.resetCode, "initial-schema-v1");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("same release does not clear data again after its completion marker exists", async () => {
   const { root, options } = await fixture();
   try {
@@ -101,7 +127,36 @@ test("failed initialization leaves no marker so the next launch retries", async 
   }
 });
 
-test("development and non-macOS launches never clear data", async () => {
+test("a compatibility reset refuses to delete data held by another writer", async () => {
+  const { root, options } = await fixture();
+  try {
+    const target = join(options.homeDirectory, ".trusttools");
+    const retained = join(target, "data", "trusttools.v1.db");
+    await mkdir(join(target, "data"), { recursive: true });
+    await writeFile(retained, "must-survive", "utf8");
+    await writeFile(
+      `${retained}.writer.lock`,
+      `${JSON.stringify({
+        pid: process.pid,
+        token: "test-owner",
+        createdAtMs: Date.now(),
+      })}\n`,
+      "utf8",
+    );
+
+    await assert.rejects(
+      prepareReleaseDataReset(options),
+      (error: unknown) =>
+        (error as { startupFailureCode?: unknown }).startupFailureCode ===
+        "database.already-open",
+    );
+    assert.equal(await readFile(retained, "utf8"), "must-survive");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("development and unsupported-platform launches never clear data", async () => {
   const { root, options } = await fixture();
   try {
     const target = join(options.homeDirectory, ".trusttools");
@@ -114,13 +169,13 @@ test("development and non-macOS launches never clear data", async () => {
       isPackaged: false,
       homeDirectory: "not-an-absolute-path",
     });
-    const otherPlatform = await prepareReleaseDataReset({
+    const unsupportedPlatform = await prepareReleaseDataReset({
       ...options,
-      platform: "win32",
+      platform: "linux",
       homeDirectory: "also-not-absolute",
     });
     assert.equal(development.status, "not-applicable");
-    assert.equal(otherPlatform.status, "not-applicable");
+    assert.equal(unsupportedPlatform.status, "not-applicable");
     assert.equal(await readFile(retained, "utf8"), "safe");
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -145,7 +200,7 @@ test("a ~/.trusttools symlink is unlinked without touching its destination", asy
   }
 });
 
-test("packaged macOS reset rejects an invalid or dangerously broad home", async () => {
+test("packaged desktop reset rejects an invalid or dangerously broad home", async () => {
   const { root, options } = await fixture();
   try {
     await assert.rejects(

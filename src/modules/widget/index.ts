@@ -3,7 +3,6 @@ export type { WidgetModuleContract, WidgetModuleId } from "./contracts";
 export type { WidgetViewModel } from "./presentation";
 export { createWidgetApplication } from "./application/index";
 export type { WidgetApplication } from "./application/index";
-export { WidgetPage } from "./presentation/WidgetPage";
 export { JarvisWidget } from "./presentation/JarvisWidget";
 export { TrayWidget } from "./presentation/TrayWidget";
 export {
@@ -11,7 +10,6 @@ export {
   MediumWidget,
   LargeWidget,
 } from "./presentation/DesktopWidgets";
-export { MenuBarIcon } from "./presentation/MenuBarIcon";
 export { WidgetConfigPanel } from "./presentation/WidgetConfigPanel";
 export { WidgetThemeScope } from "./presentation/widget-theme";
 export {

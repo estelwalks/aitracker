@@ -64,7 +64,7 @@ test("无快照时 Widget 浮窗模式正常渲染", async ({ page }) => {
   });
   expect(response?.status() ?? 0).toBeLessThan(400);
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
-  await expect(page.locator("main")).toBeVisible();
+  await expect(page.locator(".tt-glass-overview")).toBeVisible();
 });
 
 /** Lazy route chunks must load on demand without errors (T6-04). */

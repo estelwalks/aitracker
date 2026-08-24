@@ -58,6 +58,7 @@ import { SecurityScannerService } from "./security-scanner-service.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
+import { startupFailureDialogMessage } from "./startup-failure.js";
 import {
   normalizeTrayTitle,
   persistTrayTitleBestEffort,
@@ -853,11 +854,16 @@ function rebuildTray(): void {
     resourcesPath: process.resourcesPath,
     appPath: app.getAppPath(),
   });
+  // NativeImage loads the adjacent `@2x` representation when constructed from
+  // the Template filename. This is required for a crisp, visible status-item
+  // icon on Retina Apple Silicon Macs; retain a PNG-only fallback if a resource
+  // is unexpectedly unavailable or corrupt.
   let trayIcon = trayIconPath
     ? nativeImage.createFromPath(trayIconPath)
     : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
-  if (trayIcon.isEmpty())
+  if (trayIcon.isEmpty()) {
     trayIcon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+  }
   if (process.platform === "darwin") {
     trayIcon.setTemplateImage(true);
   }
@@ -1169,7 +1175,10 @@ if (!hasSingleInstanceLock) {
       console.error("TrustTools startup failed", error);
       const startupFailure =
         electronMessages[currentPreferences.locale].dialog.startupFailure;
-      dialog.showErrorBox(startupFailure.title, startupFailure.message);
+      dialog.showErrorBox(
+        startupFailure.title,
+        startupFailureDialogMessage(startupFailure, error),
+      );
       app.quit();
     });
 }

@@ -22,29 +22,52 @@ function pngSize(path: string): { width: number; height: number } {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-test("tray fallback is an 18px inline SVG data URL", () => {
-  assert.match(TRAY_ICON_DATA_URL, /^data:image\/svg\+xml;base64,/u);
-  const svg = Buffer.from(
-    TRAY_ICON_DATA_URL.replace("data:image/svg+xml;base64,", ""),
+function pngDensity(path: string): { x: number; y: number; unit: number } {
+  const bytes = readFileSync(path);
+  let offset = 8;
+  while (offset < bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.subarray(offset + 4, offset + 8).toString("ascii");
+    if (type === "pHYs") {
+      return {
+        x: bytes.readUInt32BE(offset + 8),
+        y: bytes.readUInt32BE(offset + 12),
+        unit: bytes[offset + 16],
+      };
+    }
+    offset += length + 12;
+  }
+  throw new Error(`${path} is missing a pHYs density chunk`);
+}
+
+test("tray fallback is an inline PNG data URL", () => {
+  assert.match(TRAY_ICON_DATA_URL, /^data:image\/png;base64,/u);
+  const png = Buffer.from(
+    TRAY_ICON_DATA_URL.replace("data:image/png;base64,", ""),
     "base64",
-  ).toString("utf8");
-  assert.match(svg, /width="18"/u);
-  assert.match(svg, /height="18"/u);
+  );
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
 test("real template PNG assets have valid signatures and 1x/2x dimensions", () => {
   const assetRoot = join(projectRoot, "public", "build");
   assert.deepEqual(pngSize(join(assetRoot, TRAY_ICON_FILENAME)), {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
   });
   assert.deepEqual(pngSize(join(assetRoot, "tray-iconTemplate@2x.png")), {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
+  });
+  // Electron's macOS Tray guidance specifies 144 dpi for the Retina image.
+  assert.deepEqual(pngDensity(join(assetRoot, "tray-iconTemplate@2x.png")), {
+    x: 5669,
+    y: 5669,
+    unit: 1,
   });
 });
 
-test("tray source assets are trackable and packaging copies .output to Resources/web", () => {
+test("tray source assets are trackable and packaging preserves the native pair", () => {
   for (const asset of [
     "tray-iconTemplate.png",
     "tray-iconTemplate@2x.png",
@@ -64,9 +87,12 @@ test("tray source assets are trackable and packaging copies .output to Resources
   );
   assert.match(
     builderConfig,
+    /extraResources:\s*[\s\S]*?- from: public\/build\s+to: tray[\s\S]*?tray-iconTemplate\.png[\s\S]*?tray-iconTemplate@2x\.png/u,
+  );
+  assert.match(
+    builderConfig,
     /extraResources:\s*[\s\S]*?- from: \.output\s+to: web/u,
   );
-  assert.doesNotMatch(builderConfig, /build\/tray-icon\.png/u);
 });
 
 test("development and packaged paths target their bundled public assets", () => {
@@ -80,9 +106,7 @@ test("development and packaged paths target their bundled public assets", () => 
   );
   const packagedPath = join(
     "/Applications/TrustTools/Resources",
-    "web",
-    "public",
-    "build",
+    "tray",
     TRAY_ICON_FILENAME,
   );
   assert.equal(
