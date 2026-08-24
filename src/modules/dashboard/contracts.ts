@@ -40,6 +40,12 @@ export interface DashboardUsageEvent extends LocalTokenCounts {
     LocalUsageContext,
     "textResponse" | "tools" | "skills" | "toolOutputs"
   >;
+  /** Number of scanner events represented by this aggregate row. */
+  readonly eventCount?: number;
+  /** Pre-aggregated context counts; present on the persisted usage projection. */
+  readonly contextCounts?: DashboardV2ContextCounts;
+  /** Field-level evidence retained by the usage projection. */
+  readonly aggregateEvidence?: DashboardV2ContextAvailability;
 }
 
 /** Scanner status with roots, file paths and diagnostic payloads removed. */
@@ -124,6 +130,8 @@ export interface DashboardV2Event extends LocalTokenCounts {
   /** Display-only project label, derived from the final project segment. */
   readonly project: string;
   readonly projectKind?: DashboardProjectKind;
+  /** Number of original scanner events represented by this row. */
+  readonly events?: number;
   /** Omitted means a directly observed provider/local usage record. */
   readonly measurement?: LocalUsageMeasurement;
   readonly context: {

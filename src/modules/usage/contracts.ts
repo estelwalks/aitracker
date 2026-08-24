@@ -1,4 +1,10 @@
 import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
+import type {
+  LocalTokenCounts,
+  LocalUsageMeasurement,
+  LocalUsageSource,
+  LocalUsageToolCall,
+} from "../../lib/local-usage/types.ts";
 
 /** Browser-safe contracts owned by the usage feature. */
 export const usageModuleId = "usage" as const;
@@ -8,7 +14,68 @@ export interface UsageModuleContract {
   readonly schemaVersion: 1;
 }
 
-export type UsageSnapshotDto = LocalUsageSnapshot;
+/**
+ * Compact, persisted usage bucket. A bucket is the smallest row required by
+ * Dashboard/Widget/Insight: one local day + source + model + project and
+ * evidence shape. `events` preserves the original call count, so consumers
+ * never need the event-level fact table to calculate totals or rankings.
+ */
+export interface UsageAggregateBucket extends LocalTokenCounts {
+  readonly date: string;
+  readonly latestTimestamp: string;
+  readonly source: LocalUsageSource;
+  readonly model: string;
+  readonly project: string;
+  /** Stable installation-scoped HMAC identity on persisted reads. */
+  readonly projectRefHash?: string;
+  /** Server-resolved display value; never an absolute path. */
+  readonly projectLabel?: string;
+  /** Classification captured with the aggregate so restart cannot change it. */
+  readonly projectKind?: UsageProjectKind;
+  readonly measurement: LocalUsageMeasurement;
+  readonly events: number;
+  readonly context: {
+    readonly textResponses: number;
+    readonly toolCalls: number;
+    readonly tools: readonly LocalUsageToolCall[];
+    readonly skillCalls: number;
+    readonly toolOutputCalls: number;
+  };
+  readonly evidence: {
+    readonly textResponses: boolean;
+    readonly toolCalls: boolean;
+    readonly skillCalls: boolean;
+    readonly toolOutputCalls: boolean;
+    readonly reasoningTokens: boolean;
+    readonly systemPromptTokens: boolean;
+  };
+}
+
+export type UsageProjectKind = "workspace" | "quick-conversation" | "unknown";
+
+/** Daily facts used to build Tracker boards without retaining raw events. */
+export interface UsageTrackerBucket extends LocalTokenCounts {
+  readonly dimension: "project" | "session" | "skill";
+  readonly date: string;
+  readonly source: LocalUsageSource;
+  /** Raw server-only ref during collection, HMAC/safe key after hydration. */
+  readonly identity: string;
+  readonly label: string;
+  readonly projectKind?: UsageProjectKind;
+  readonly events: number;
+  readonly calls: number;
+}
+
+/**
+ * `aggregateBuckets` is optional at the scanner boundary for compatibility
+ * with source adapters. The snapshot runtime normalizes every successful
+ * collection before it reaches memory or SQLite; persisted reads always set
+ * it and intentionally leave `details`/`recent` empty.
+ */
+export type UsageSnapshotDto = LocalUsageSnapshot & {
+  readonly aggregateBuckets?: readonly UsageAggregateBucket[];
+  readonly trackerBuckets?: readonly UsageTrackerBucket[];
+};
 
 export interface UsageScanBudget {
   /** Maximum number of files passed to each legacy source adapter. */

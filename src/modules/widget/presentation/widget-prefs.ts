@@ -4,6 +4,7 @@ import {
   getPreference,
   removePreference,
   setPreference,
+  type PreferenceValue,
 } from "../../../lib/preferences/client.ts";
 
 /**
@@ -32,7 +33,6 @@ export type SmallContent = "orb" | "safety";
 export type MediumContent = "brief" | "today" | "waste" | "safety";
 /** 小组件颜色主题 */
 export type WidgetTheme = "dark" | "system";
-
 export interface WidgetPrefs {
   menuBarEnabled: boolean;
   barStyle: MenuBarStyle;
@@ -64,10 +64,11 @@ export const WIDGET_PREFS_STORAGE_KEY = "tt-widget-prefs";
 let state: WidgetPrefs = DEFAULT_WIDGET_PREFS;
 let hydrated = false;
 let hydration: Promise<void> | null = null;
+let persistenceWrite: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 interface WidgetPreferencePersistence {
   get(key: string): Promise<unknown>;
-  set(key: string, value: string): Promise<void>;
+  set(key: string, value: PreferenceValue): Promise<void>;
   remove(key: string): Promise<boolean>;
 }
 let persistence: WidgetPreferencePersistence = {
@@ -152,13 +153,22 @@ export function setWidgetPref<K extends keyof WidgetPrefs>(
 ): Promise<void> {
   state = { ...state, [key]: value };
   emit();
-  return persistence.set(WIDGET_PREFS_STORAGE_KEY, JSON.stringify(state));
+  const persisted = { ...state } as unknown as PreferenceValue;
+  persistenceWrite = persistenceWrite
+    .catch(() => undefined)
+    .then(() => persistence.set(WIDGET_PREFS_STORAGE_KEY, persisted));
+  return persistenceWrite;
 }
 
 export async function resetWidgetPrefs(): Promise<void> {
   state = DEFAULT_WIDGET_PREFS;
   emit();
-  await persistence.remove(WIDGET_PREFS_STORAGE_KEY);
+  persistenceWrite = persistenceWrite
+    .catch(() => undefined)
+    .then(async () => {
+      await persistence.remove(WIDGET_PREFS_STORAGE_KEY);
+    });
+  await persistenceWrite;
 }
 
 /**
@@ -169,6 +179,7 @@ export function __resetWidgetPrefsModuleForTest(): void {
   state = DEFAULT_WIDGET_PREFS;
   hydrated = false;
   hydration = null;
+  persistenceWrite = Promise.resolve();
   listeners.clear();
 }
 
@@ -185,6 +196,7 @@ export async function __hydrateWidgetPrefsForTest(): Promise<void> {
 /** 响应式读取小组件偏好（服务端渲染返回默认值）。 */
 export function useWidgetPrefs(): {
   prefs: WidgetPrefs;
+  hydrated: boolean;
   set: <K extends keyof WidgetPrefs>(
     key: K,
     value: WidgetPrefs[K],
@@ -203,7 +215,7 @@ export function useWidgetPrefs(): {
       setWidgetPref(key, value),
     [],
   );
-  return { prefs, set };
+  return { prefs, hydrated, set };
 }
 
 /** 语气改写：口语化 / 简洁 / 关闭（返回空串表示不显示）。 */

@@ -21,8 +21,6 @@ extraResources:
     to: web
     filter:
       - "**/*"
-  - from: build/tray-icon.png
-    to: tray-icon.png
 afterPack: electron/after-pack.cjs
 mac:
   target:

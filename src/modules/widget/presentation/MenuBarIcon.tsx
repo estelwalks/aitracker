@@ -10,6 +10,7 @@ import {
 
 import { useI18n } from "../../../lib/i18n/context";
 import { GlassOverviewWidget } from "./GlassOverviewWidget";
+import { useNativeTrayTitleSync } from "./native-tray-title-sync";
 import { useWidgetPrefs } from "./widget-prefs";
 import { resolveWidgetMood, useWidgetData } from "./widget-data";
 import "./menu-bar-widget.css";
@@ -37,7 +38,6 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
   const mood = resolveWidgetMood(hasData, security);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -45,28 +45,22 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  if (!prefs.menuBarEnabled) return null;
-
   const top = today.topTools[0];
   const detail =
     today.cacheRate == null
       ? `${format.formatNumber(today.events)} ${t("widget.events")}`
       : t("widget.cacheRate", {
           percent: Math.round(today.cacheRate),
-      });
+        });
+  const tokenText = format.formatTokens(today.tokens);
+  const toolText = top?.name ?? t("widget.noData");
 
-  useEffect(() => {
-    const desktop =
-      typeof window !== "undefined" ? window.desktopApi : undefined;
-    if (!desktop) return;
-    if (!prefs.menuBarEnabled) {
-      void desktop.setTrayTitle("");
-      return;
-    }
-    void desktop.setTrayTitle(
-      `${format.formatTokens(today.tokens)} · ${top?.name ?? t("widget.noData")} · ${detail}`,
-    );
-  }, [detail, format, prefs.menuBarEnabled, t, today.tokens, top?.name]);
+  useNativeTrayTitleSync({
+    dynamic: prefs.menuBarEnabled,
+    tokens: tokenText,
+    tool: toolText,
+    detail,
+  });
 
   const handleClick = () => {
     const desktop =
@@ -81,11 +75,7 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
   };
 
   return (
-    <div
-      className={`tt-menubar-wrap ${className}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div className={`tt-menubar-wrap ${className}`}>
       <div className="tt-menubar-glass">
         <span className="tt-menubar-system-icons" aria-hidden="true">
           <PanelsTopLeft />
@@ -98,14 +88,18 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
           className="tt-menubar-summary"
           onClick={handleClick}
         >
-          <span className={`tt-menubar-dot ${statusClass[mood]}`} />
-          <strong>{format.formatTokens(today.tokens)}</strong>
-          <i />
-          <Database />
-          <span className="tt-menubar-model">
-            {top?.name ?? t("widget.noData")}
-          </span>
-          <span className="tt-menubar-detail">{detail}</span>
+          {prefs.menuBarEnabled && (
+            <span className={`tt-menubar-dot ${statusClass[mood]}`} />
+          )}
+          <strong>{tokenText}</strong>
+          {prefs.menuBarEnabled && (
+            <>
+              <i />
+              <Database />
+              <span className="tt-menubar-model">{toolText}</span>
+              <span className="tt-menubar-detail">{detail}</span>
+            </>
+          )}
         </button>
 
         <span className="tt-menubar-clock">
@@ -114,7 +108,7 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
         </span>
       </div>
 
-      {(open || hovered) && prefs.barClick === "panel" && (
+      {open && prefs.barClick === "panel" && (
         <div className="tt-menubar-popover">
           <GlassOverviewWidget />
         </div>

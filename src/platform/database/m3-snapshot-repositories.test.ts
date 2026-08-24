@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { buildLocalUsageSnapshot } from "../../lib/local-usage/aggregate.ts";
 import { createSqliteClassificationIndexRepository } from "../../modules/dashboard/sqlite-classification-index.server.ts";
 import { createSqliteSessionSnapshotRepository } from "../../modules/sessions/infrastructure/sqlite-session-snapshot-repository.server.ts";
 import { createSqliteSkillSnapshotRepository } from "../../modules/skill-catalog/infrastructure/sqlite-skill-snapshot-repository.server.ts";
@@ -49,7 +50,7 @@ function envelope<T>(revision: string, data: T): SnapshotEnvelope<T> {
   };
 }
 
-test("usage generation is atomic and never persists raw project/session/command refs", async (t) => {
+test("usage aggregate generation is atomic and never reads or writes legacy events", async (t) => {
   const database = openDatabase(t);
   let sequence = 0;
   const repository = createSqliteUsageSnapshotRepository({
@@ -71,6 +72,7 @@ test("usage generation is atomic and never persists raw project/session/command 
     reasoningOutputTokens: 1,
     totalTokens: 18,
     context: {
+      skills: [{ name: "review", calls: 1 }],
       commands: [
         {
           kind: "exec_command" as const,
@@ -84,6 +86,18 @@ test("usage generation is atomic and never persists raw project/session/command 
       ],
     },
   };
+  await createSqliteClassificationIndexRepository({
+    database,
+    hmacKey: "test-installation-key",
+  }).commit([
+    {
+      ref: event.project,
+      kind: "quick-conversation",
+      label: "quick-conversation",
+      classifiedAt: "2026-08-19T01:01:00.000Z",
+      fingerprint: null,
+    },
+  ]);
   const data = {
     generatedAt: "2026-08-19T01:02:03.000Z",
     mode: "real" as const,
@@ -120,29 +134,52 @@ test("usage generation is atomic and never persists raw project/session/command 
 
   const persisted = database
     .prepare(
-      "SELECT project_ref_hash,project_label,session_ref FROM usage_events",
+      "SELECT project_ref_hash,project_label,project_kind FROM usage_aggregate_buckets",
     )
     .get()!;
   assert.notEqual(persisted.project_ref_hash, event.project);
-  assert.notEqual(persisted.session_ref, event.sessionId);
-  assert.equal(persisted.project_label, "secret-repo");
+  assert.equal(persisted.project_label, "quick-conversation");
+  assert.equal(persisted.project_kind, "quick-conversation");
   assert.equal(
-    database
-      .prepare("SELECT executable_label FROM usage_event_command_stats")
-      .get()!.executable_label,
-    "cmd.exe",
+    Number(
+      database
+        .prepare("SELECT count(*) AS count FROM usage_tracker_buckets")
+        .get()!.count,
+    ),
+    3,
+  );
+  assert.equal(
+    Number(
+      database.prepare("SELECT count(*) AS count FROM usage_events").get()!
+        .count,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      database
+        .prepare("SELECT count(*) AS count FROM usage_event_command_stats")
+        .get()!.count,
+    ),
+    0,
   );
   assert.ok(
     !stringifySqliteRows(
-      database.prepare("SELECT * FROM usage_events").all(),
+      database.prepare("SELECT * FROM usage_aggregate_buckets").all(),
     ).includes("C:\\Users"),
   );
+  const hydrated = await repository.load();
+  assert.equal(hydrated.envelope.data?.events, 1);
+  assert.equal(hydrated.envelope.data?.totals.totalTokens, 18);
+  assert.equal(hydrated.envelope.data?.details.length, 0);
+  assert.equal(hydrated.envelope.data?.aggregateBuckets?.length, 1);
+  assert.equal(hydrated.envelope.data?.trackerBuckets?.length, 3);
+  assert.equal(
+    hydrated.envelope.data?.aggregateBuckets?.[0]?.projectKind,
+    "quick-conversation",
+  );
 
-  const bad = structuredClone(data);
-  bad.details[0].context.commands.push({
-    ...bad.details[0].context.commands[0],
-  });
-  await assert.rejects(repository.save(envelope("r2", bad)));
+  await assert.rejects(repository.save(envelope("r1", data)));
   assert.equal(
     database
       .prepare(
@@ -161,6 +198,122 @@ test("usage generation is atomic and never persists raw project/session/command 
     ),
     1,
   );
+});
+
+test("same-name projects keep distinct HMAC identities and persisted classification", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "same-name-project-test-key";
+  const projects = ["/Users/alice/a/shared", "/Users/alice/b/shared"];
+  const classifications = createSqliteClassificationIndexRepository({
+    database,
+    hmacKey,
+  });
+  await classifications.commit(
+    projects.map((ref) => ({
+      ref,
+      kind: "workspace" as const,
+      label: "shared",
+      classifiedAt: "2026-08-19T01:00:00.000Z",
+      fingerprint: null,
+    })),
+  );
+  const snapshot = buildLocalUsageSnapshot(
+    projects.map((project, index) => ({
+      source: "codex" as const,
+      timestamp: `2026-08-19T01:0${index}:00.000Z`,
+      model: "gpt-test",
+      project,
+      sessionId: `session_${index}`,
+      inputTokens: 10,
+      cachedInputTokens: 2,
+      cacheCreationInputTokens: 1,
+      outputTokens: 5,
+      reasoningOutputTokens: 1,
+      totalTokens: 19,
+      context: { skills: [{ name: "review", calls: 1 }] },
+    })),
+    [],
+    new Date("2026-08-19T02:00:00.000Z"),
+  );
+  const repository = createSqliteUsageSnapshotRepository({
+    database,
+    hmacKey,
+    createId: () => "same-name-snapshot",
+  });
+  await repository.save(envelope("same-name-r1", snapshot));
+
+  const projectRows = database
+    .prepare(
+      `SELECT project_ref_hash, project_label, project_kind
+       FROM usage_aggregate_buckets ORDER BY project_ref_hash`,
+    )
+    .all();
+  assert.equal(projectRows.length, 2);
+  assert.equal(new Set(projectRows.map((row) => row.project_ref_hash)).size, 2);
+  assert.deepEqual(
+    projectRows.map((row) => [row.project_label, row.project_kind]),
+    [
+      ["shared", "workspace"],
+      ["shared", "workspace"],
+    ],
+  );
+  const trackerProjects = database
+    .prepare(
+      `SELECT entity_key, entity_label, project_kind
+       FROM usage_tracker_buckets WHERE dimension='project'`,
+    )
+    .all();
+  assert.equal(trackerProjects.length, 2);
+  assert.equal(new Set(trackerProjects.map((row) => row.entity_key)).size, 2);
+  const persistedText = stringifySqliteRows([
+    ...projectRows,
+    ...trackerProjects,
+  ]);
+  assert.equal(persistedText.includes("/Users/alice"), false);
+
+  const hydrated = await repository.load();
+  assert.equal(hydrated.envelope.data?.details.length, 0);
+  assert.equal(hydrated.envelope.data?.recent.length, 0);
+  assert.equal(
+    hydrated.envelope.data?.aggregateBuckets?.filter(
+      (bucket) => bucket.projectLabel === "shared",
+    ).length,
+    2,
+  );
+});
+
+test("fresh baseline includes empty aggregate and tracker projections", (t) => {
+  const database = openDatabase(t);
+  for (const table of [
+    "usage_aggregate_snapshots",
+    "usage_aggregate_sources",
+    "usage_aggregate_source_diagnostics",
+    "usage_aggregate_buckets",
+    "usage_aggregate_bucket_tools",
+    "usage_tracker_buckets",
+  ]) {
+    assert.ok(
+      database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(table),
+      `missing ${table}`,
+    );
+    assert.equal(
+      Number(
+        database.prepare(`SELECT count(*) AS count FROM ${table}`).get()!.count,
+      ),
+      0,
+    );
+  }
+  const projectKind = database
+    .prepare(
+      "SELECT name, dflt_value FROM pragma_table_info('usage_aggregate_buckets') WHERE name = 'project_kind'",
+    )
+    .get();
+  assert.equal(projectKind?.name, "project_kind");
+  assert.equal(projectKind?.dflt_value, "'unknown'");
 });
 
 test("session, skill and installation DTOs survive restart-safe normalized reads", async (t) => {

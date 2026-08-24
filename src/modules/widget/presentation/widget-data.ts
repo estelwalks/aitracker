@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useI18n } from "../../../lib/i18n/context";
@@ -14,6 +14,10 @@ import {
   useSecurityScanOverview,
   type SecurityScanOverview,
 } from "../../security-assessment";
+import {
+  readCachedWidgetReadModel,
+  writeCachedWidgetReadModel,
+} from "../read-model-cache";
 
 /**
  * P4-T4-06: Widget revision protocol (Query-owned).
@@ -108,6 +112,7 @@ export function useWidgetData(): WidgetDataModel {
   const queryClient = useQueryClient();
   const security = useSecurityScanOverview();
 
+  const cachedModel = readCachedWidgetReadModel(locale);
   const statusQuery = useQuery({
     queryKey: STATUS_KEY(locale),
     queryFn: () => getWidgetStatusReadModel({ data: locale }),
@@ -122,11 +127,34 @@ export function useWidgetData(): WidgetDataModel {
   const status = statusQuery.data;
 
   const modelQuery = useQuery({
-    queryKey: MODEL_KEY(locale, status?.revision ?? null),
+    // The compact model is fetched immediately in parallel with the status
+    // probe. The revision remains a validation signal, not a first-request
+    // dependency, so the floating window never waits on status→model.
+    queryKey: MODEL_KEY(locale, null),
     queryFn: () => getWidgetReadModel({ data: locale }),
-    enabled: status != null && status.revision != null,
-    staleTime: 5 * 60_000,
+    initialData: cachedModel,
+    // A persisted compact model is valid until the tiny status probe reports
+    // a different revision. With no cache, React Query still starts this
+    // request immediately in parallel with status.
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnMount: false,
   });
+
+  useEffect(() => {
+    const revision = status?.revision;
+    const modelRevision = modelQuery.data?.revision;
+    if (
+      revision != null &&
+      modelRevision != null &&
+      revision !== modelRevision
+    ) {
+      void queryClient.invalidateQueries({ queryKey: MODEL_KEY(locale, null) });
+    }
+  }, [locale, modelQuery.data?.revision, queryClient, status?.revision]);
+
+  useEffect(() => {
+    if (modelQuery.data) writeCachedWidgetReadModel(locale, modelQuery.data);
+  }, [locale, modelQuery.data]);
 
   const memoryQuery = useQuery({
     queryKey: MEMORY_KEY,
@@ -166,10 +194,9 @@ export function useWidgetData(): WidgetDataModel {
     };
   }, [model, memoryQuery.data]);
 
-  const loading =
-    statusQuery.isPending ||
-    (status?.revision != null && modelQuery.isPending) ||
-    security.loading;
+  // Security and memory are secondary cards. Token totals/trends can render
+  // from the compact model while those independent queries are still pending.
+  const loading = modelQuery.isPending && model == null;
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["widget-status"] });

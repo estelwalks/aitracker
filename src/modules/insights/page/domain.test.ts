@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { loadCatalog } from "../../../lib/i18n/messages.ts";
 import type {
   InsightCandidate,
   InsightEvidence,
@@ -445,16 +446,35 @@ test("rule envelopes carry formatted token params to the renderer", () => {
   assert.notEqual(envelope.lines[0]?.params.tokens, 3_495_068_214);
 });
 
-test("resolveFactText resolves zh/en and falls back to zh-CN for unknown locales", () => {
+test("resolveFactText resolves dashboard security risk in all locales and falls back to zh-CN", async () => {
+  await Promise.all([
+    loadCatalog("en-US"),
+    loadCatalog("ja-JP"),
+    loadCatalog("ko-KR"),
+  ]);
+
   const c = candidate({
-    factKey: "insights.page.widget.widget-broadcast-security",
+    factKey: "insights.page.dashboard.dashboard-security-risk",
     factParams: { count: 3 },
   });
   const zh = resolveFactText("zh-CN", c);
   const en = resolveFactText("en-US", c);
-  assert.match(zh, /3/);
-  assert.match(en, /3/);
-  assert.notEqual(zh, en);
+  const ja = resolveFactText("ja-JP", c);
+  const ko = resolveFactText("ko-KR", c);
+
+  assert.equal(zh, "今日发现 3 项安全风险待处理，建议前往安全页复查。");
+  assert.equal(
+    en,
+    "3 security risks need attention today — review the security page.",
+  );
+  assert.equal(
+    ja,
+    "本日 3 件のセキュリティリスクが未処理です。セキュリティページで再確認してください。",
+  );
+  assert.equal(
+    ko,
+    "오늘 3건의 보안 위험이 처리 대기 중입니다. 보안 페이지에서 확인하세요.",
+  );
   assert.equal(resolveFactText("xx-XX", c), zh);
 });
 
