@@ -5,7 +5,7 @@
   "display": {
     "name": "Kiro",
     "nameZh": "Kiro",
-    "icon": "other",
+    "icon": "https://kiro.dev/icon.svg?fe599162bb293ea0",
     "color": "#01a4ff"
   },
   "platforms": {

@@ -5,7 +5,7 @@
   "display": {
     "name": "Mimo Code",
     "nameZh": "Mimo Code",
-    "icon": "other",
+    "icon": "https://cdn.cnbj1.fds.api.mi-img.com/aife/mimo-blog-fe/doc_build/mimo.ico",
     "color": "#ff6900"
   },
   "platforms": {
