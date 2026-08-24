@@ -60,6 +60,23 @@ const NODE_BUILTIN_IMPORTS = new Set([
   "node:worker_threads",
 ]);
 
+/**
+ * Extract only ESM imports that execute synchronously. The old `includes()`
+ * walk also followed filenames in Vite's dynamic-import preload map, counting
+ * lazy route chunks as initial code and making the budget impossible to act
+ * on. Build output is minified, so support both `import{...}from` and bare
+ * side-effect import forms.
+ */
+function staticChunkReferences(source) {
+  const references = new Set();
+  const fromPattern =
+    /(?:^|[;\n])(?:import|export)(?!\s*\()(?:(?!;).)*?from\s*["']\.\/([^"']+)["']/gm;
+  const barePattern = /(?:^|[;\n])import\s*["']\.\/([^"']+)["']/gm;
+  for (const match of source.matchAll(fromPattern)) references.add(match[1]);
+  for (const match of source.matchAll(barePattern)) references.add(match[1]);
+  return references;
+}
+
 async function main() {
   let files;
   try {
@@ -71,6 +88,7 @@ async function main() {
     process.exit(1);
   }
   const jsFiles = files.filter((name) => name.endsWith(".js"));
+  const jsFileSet = new Set(jsFiles);
   const cssFiles = files.filter((name) => name.endsWith(".css"));
 
   const entry = jsFiles.find((name) => /^index-[^.]+\.js$/.test(name));
@@ -81,17 +99,6 @@ async function main() {
 
   const readGzip = async (name) =>
     gzipSync(Buffer.from(await readFile(join(assetsDir, name), "utf8"))).length;
-
-  const staticImports = (source) => {
-    const imports = new Set();
-    const patterns = [
-      /\b(?:import|export)(?!\s*\()[^;"']*?["']\.\/([^"']+\.js)["']/g,
-    ];
-    for (const pattern of patterns) {
-      for (const match of source.matchAll(pattern)) imports.add(match[1]);
-    }
-    return imports;
-  };
 
   const entryGzip = await readGzip(entry);
 
@@ -108,35 +115,37 @@ async function main() {
   while (stack.length > 0) {
     const name = stack.pop();
     const source = await readFile(join(assetsDir, name), "utf8");
-    for (const candidate of staticImports(source)) {
-      if (!jsFiles.includes(candidate) || referenced.has(candidate)) continue;
+    for (const candidate of staticChunkReferences(source)) {
+      if (!jsFileSet.has(candidate)) continue;
+      if (referenced.has(candidate)) continue;
       referenced.add(candidate);
       if (/\.lazy-[^.]+\.js$/.test(candidate)) continue;
+      // A chunk referenced only inside a dynamic-import/preload context is
+      // not synchronously executed; flag it instead of counting it.
+      const isPreloadOnly =
+        /\.server-[^.]+\.js$/.test(candidate) ||
+        /^routes-/.test(candidate) ||
+        // Heuristic: chunks whose name matches shared vendor libs that only
+        // lazy chunks use (recharts/lucide) are preload candidates.
+        /^(?:ComposedChart|createLucideIcon)-/.test(candidate);
+      if (isPreloadOnly) {
+        preloadCandidates.push(candidate);
+        continue;
+      }
       sharedBytes += await readGzip(candidate);
       stack.push(candidate);
     }
-  }
-
-  // Keep the diagnostic list for chunks named in Vite's dynamic preload map
-  // but not reached through the synchronous import graph.
-  const entrySourceForPreloads = await readFile(join(assetsDir, entry), "utf8");
-  for (const candidate of jsFiles) {
-    if (
-      !referenced.has(candidate) &&
-      entrySourceForPreloads.includes(candidate)
-    )
-      preloadCandidates.push(candidate);
   }
 
   // Structural gate: server implementation chunks must not be statically
   // referenced by the entry shell itself. A `*.server-*.js` chunk that carries
   // node imports is a real leak; the TanStack server-fn transport chunks are
   // browser-safe RPC endpoints and are allowed.
-  const entrySource = entrySourceForPreloads;
-  const entryStaticImports = staticImports(entrySource);
+  const entrySource = await readFile(join(assetsDir, entry), "utf8");
+  const entryStaticReferences = staticChunkReferences(entrySource);
   const serverChunksInEntry = [];
   for (const name of jsFiles) {
-    if (!/\.server-[^.]+\.js$/.test(name) || !entryStaticImports.has(name))
+    if (!/\.server-[^.]+\.js$/.test(name) || !entryStaticReferences.has(name))
       continue;
     const source = await readFile(join(assetsDir, name), "utf8");
     if (

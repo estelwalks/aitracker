@@ -29,6 +29,8 @@ export interface AIRequest {
   readonly prompt: PromptVersion;
   readonly input: AIInput;
   readonly budgetUsd?: number;
+  /** Optional provider output-token ceiling; adapters keep their legacy default when omitted. */
+  readonly maxOutputTokens?: number;
   readonly timeoutMs?: number;
   readonly signal?: AbortSignal;
 }
@@ -98,6 +100,8 @@ export interface AIProviderRequest {
   readonly modelId: AIModelId;
   readonly prompt: PromptVersion;
   readonly input: AIInput;
+  /** Optional output-token ceiling forwarded from the application request. */
+  readonly maxOutputTokens?: number;
   readonly signal: AbortSignal;
 }
 

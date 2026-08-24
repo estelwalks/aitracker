@@ -12,6 +12,7 @@ export {
   buildBoard,
   computeMoM,
   suggestionFor,
+  tokensForDimension,
   trackerTotalsFromEvents,
   wasteIndex,
   RECENT_TREND_DAYS,

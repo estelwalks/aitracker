@@ -279,6 +279,10 @@ const SKIP_REASON_CODES = new Set<
   "scanner-skip",
 ]);
 
+/**
+ * skill-scanner 从报告必填 tokenUsage 起，旧历史 DTO 不含计费数据；
+ * 回退注入后 strict schema 才能继续校验旧条目。
+ */
 const EMPTY_TOKEN_USAGE = {
   status: "not_applicable" as const,
   requestCount: 0,

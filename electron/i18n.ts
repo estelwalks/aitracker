@@ -60,6 +60,10 @@ export interface ElectronMessages {
       message: string;
       ok: string;
     };
+    startupFailure: {
+      title: string;
+      message: string;
+    };
     dataIncompat: {
       title: string;
       message: string; // {oldVer} {curVer}
@@ -83,6 +87,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       closeHint: {
         message: "{appName} 将继续在菜单栏运行，可通过托盘图标重新打开",
         ok: "知道了",
+      },
+      startupFailure: {
+        title: "启动失败",
+        message:
+          "{appName} 无法访问本地数据。请关闭其他正在运行的 {appName} 或开发服务器后重试。",
       },
       dataIncompat: {
         title: "数据版本不兼容",
@@ -108,6 +117,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "{appName} will keep running in the menu bar — reopen it from the tray icon",
         ok: "Got it",
       },
+      startupFailure: {
+        title: "Startup failed",
+        message:
+          "{appName} cannot access its local data. Close any other running {appName} instance or development server, then try again.",
+      },
       dataIncompat: {
         title: "Incompatible data version",
         message:
@@ -132,6 +146,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "{appName} はメニューバーで実行を続けます。トレイアイコンから再度開けます",
         ok: "了解しました",
       },
+      startupFailure: {
+        title: "起動に失敗しました",
+        message:
+          "{appName} はローカルデータにアクセスできません。実行中の {appName} または開発サーバーを終了してから、もう一度お試しください。",
+      },
       dataIncompat: {
         title: "データバージョン非互換",
         message:
@@ -155,6 +174,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
         message:
           "{appName}는 메뉴 막대에서 계속 실행됩니다. 트레이 아이콘으로 다시 열 수 있습니다",
         ok: "확인",
+      },
+      startupFailure: {
+        title: "시작 실패",
+        message:
+          "{appName}에서 로컬 데이터에 접근할 수 없습니다. 실행 중인 {appName} 또는 개발 서버를 종료한 뒤 다시 시도하세요.",
       },
       dataIncompat: {
         title: "데이터 버전 비호환",

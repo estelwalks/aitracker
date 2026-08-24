@@ -50,6 +50,8 @@ win:
 nsis:
   artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   oneClick: false
+  # Install for all users; the NSIS default becomes C:\Program Files\TrustTools.
+  perMachine: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true

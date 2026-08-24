@@ -296,6 +296,13 @@ export const dashboard = {
     dataLoadFailed: "Failed to load data",
     dataLoadFailedDesc: "Real data load failed: {error}",
     localReadFailed: "Failed to read local data",
+    workspaceInitializing: "Initializing your workspace data",
+    workspaceInitializingDesc:
+      "Reading local AI tool usage, sessions, and Skills. Your local data stays on this device.",
+    workspaceInitializationFailed: "Workspace data initialization failed",
+    workspaceInitializationFailedDesc:
+      "Your initial workspace data could not be read. Retry now, or reopen the app later.",
+    retryWorkspaceInitialization: "Retry initialization",
     reload: "Reload",
     welcomeDesc:
       "Bring the tokens, skills and sessions scattered across your AI tools back under your control.",

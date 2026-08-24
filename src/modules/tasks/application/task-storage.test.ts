@@ -24,7 +24,7 @@ test("preference schema rejects unknown tasks and out-of-range schedules", () =>
         tasks: {
           "usage.refresh": {
             enabled: true,
-            schedule: { kind: "interval", minutes: 1 },
+            schedule: { kind: "interval", minutes: 1441 },
           },
         },
       }),

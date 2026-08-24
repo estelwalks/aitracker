@@ -45,7 +45,7 @@ export const Route = createFileRoute("/tracker")({
   },
   staleTime: 30_000,
   gcTime: 5 * 60_000,
-  preloadStaleTime: 0,
+  preloadStaleTime: 30_000,
   head: ({ loaderData }) => ({
     meta: [
       {
