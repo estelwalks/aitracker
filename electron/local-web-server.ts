@@ -471,8 +471,17 @@ export async function startLocalWebServer(
         },
       );
 
+      const isWorkspaceWarmup =
+        requestUrl.pathname === "/api/desktop-state/preferences" &&
+        typeof request.headers["x-trusttools-desktop-broker"] === "string";
+      if (isWorkspaceWarmup) {
+        // The loopback warmup response is a startup barrier. Direct-fetch test
+        // and development builds may register initialization through
+        // waitUntil, so settle that work before exposing a successful status.
+        await Promise.all(pendingTasks);
+      }
       await sendFetchResponse(fetchResponse, response, challengeCookies);
-      void Promise.allSettled(pendingTasks);
+      if (!isWorkspaceWarmup) void Promise.allSettled(pendingTasks);
     } catch (error) {
       if (error instanceof RequestBodyTooLargeError) {
         response.statusCode = 413;
@@ -535,26 +544,27 @@ export async function startLocalWebServer(
       return url.href;
     },
     async warmup(desktopBrokerToken) {
-      // Call the loaded Nitro handler directly rather than HTTP-fetching a
-      // document. Its server entry starts the desktop scheduler before
-      // handling the small desktop-state read, so first-run collectors begin
-      // behind the native splash without duplicating SSR/hydration work.
-      if (!handler?.fetch || !desktopBrokerToken) return;
-      const pendingTasks: Promise<unknown>[] = [];
-      const response = await handler.fetch(
-        new Request(`${origin}/api/desktop-state/preferences`, {
-          headers: {
-            "x-trusttools-desktop-broker": desktopBrokerToken,
-          },
-        }),
-        {},
-        {
-          waitUntil: (promise) => pendingTasks.push(promise),
-          passThroughOnException: () => undefined,
+      if (!desktopBrokerToken) {
+        throw new Error("AITracker workspace warmup token is unavailable");
+      }
+
+      // Use the already-listening loopback server so packaged Nitro builds
+      // that export only Node middleware follow exactly the same request path
+      // as the application. This also invokes one server entry exactly once,
+      // avoiding a direct-fetch + middleware double initialization.
+      const response = await fetch(`${origin}/api/desktop-state/preferences`, {
+        method: "GET",
+        headers: {
+          cookie: `${COOKIE_TOKEN_NAME}=${capabilityToken}`,
+          "x-trusttools-desktop-broker": desktopBrokerToken,
         },
-      );
+      });
       await response.body?.cancel();
-      void Promise.allSettled(pendingTasks);
+      if (!response.ok) {
+        throw new Error(
+          `AITracker workspace warmup failed with HTTP ${response.status}`,
+        );
+      }
     },
     close: () =>
       new Promise<void>((resolveClose, rejectClose) => {

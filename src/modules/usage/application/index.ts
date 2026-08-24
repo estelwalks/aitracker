@@ -10,6 +10,8 @@
 export {
   aggregateBoards,
   buildBoard,
+  buildBoardFromProjection,
+  buildTrackerReadModelFromProjection,
   computeMoM,
   suggestionFor,
   tokensForDimension,

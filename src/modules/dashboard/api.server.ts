@@ -13,7 +13,10 @@ import type { Locale } from "../../lib/i18n/locale.ts";
 import { createProjectUsageReadModel } from "../projects/index.ts";
 import { createInsightsApplication } from "../insights/index.ts";
 import { estimateEventCost } from "../../lib/pricing/index.ts";
-import type { LocalUsageSnapshot } from "../../lib/local-usage/types.ts";
+import type {
+  UsageAggregateBucket,
+  UsageSnapshotDto,
+} from "../usage/contracts.ts";
 import { PUBLIC_TOOL_MANIFEST } from "../../lib/tool-registry/public-manifest.generated.ts";
 import type {
   DashboardV2OutputAvailability,
@@ -48,6 +51,13 @@ export function shouldRefreshDashboardSessions(input: {
     !Number.isFinite(generatedMs) ||
     (input.nowMs ?? Date.now()) - generatedMs >= SESSION_REFRESH_GRACE_MS
   );
+}
+
+/** Schedule session repair without making a dashboard query wait for I/O. */
+export function requestDashboardSessionRefresh(runtime: {
+  requestRefresh(request: { reason: "event" }): Promise<void>;
+}): void {
+  void runtime.requestRefresh({ reason: "event" }).catch(() => {});
 }
 
 function projectKey(project: string): string {
@@ -191,6 +201,9 @@ function toDashboardEvent(
     timestamp: string;
     model: string;
     project: string;
+    projectRefHash?: string;
+    projectLabel?: string;
+    projectKind?: DashboardUsageEvent["projectKind"];
     inputTokens: number;
     cachedInputTokens: number;
     cacheCreationInputTokens: number;
@@ -199,6 +212,9 @@ function toDashboardEvent(
     totalTokens: number;
     measurement?: DashboardUsageEvent["measurement"];
     context?: DashboardUsageEvent["context"] & { commands?: unknown };
+    eventCount?: number;
+    contextCounts?: DashboardUsageEvent["contextCounts"];
+    aggregateEvidence?: DashboardUsageEvent["aggregateEvidence"];
   },
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
 ): DashboardUsageEvent {
@@ -207,8 +223,9 @@ function toDashboardEvent(
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
-    project: classification?.label ?? projectKey(event.project),
-    projectKind: classification?.kind ?? "workspace",
+    project:
+      event.projectLabel ?? classification?.label ?? projectKey(event.project),
+    projectKind: event.projectKind ?? classification?.kind ?? "unknown",
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
     cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -216,6 +233,13 @@ function toDashboardEvent(
     reasoningOutputTokens: event.reasoningOutputTokens,
     totalTokens: event.totalTokens,
     ...(event.measurement == null ? {} : { measurement: event.measurement }),
+    ...(event.eventCount == null ? {} : { eventCount: event.eventCount }),
+    ...(event.contextCounts == null
+      ? {}
+      : { contextCounts: event.contextCounts }),
+    ...(event.aggregateEvidence == null
+      ? {}
+      : { aggregateEvidence: event.aggregateEvidence }),
     ...(event.context
       ? {
           context: {
@@ -234,12 +258,62 @@ function toDashboardEvent(
 }
 
 export function toDashboardSnapshot(
-  snapshot: LocalUsageSnapshot,
+  snapshot: UsageSnapshotDto,
   classifications: ReadonlyMap<
     string,
     DashboardProjectClassification
   > = new Map(),
 ): DashboardUsageSnapshot {
+  const aggregateEvents = snapshot.aggregateBuckets?.map(
+    (bucket: UsageAggregateBucket) =>
+      toDashboardEvent(
+        {
+          source: bucket.source,
+          timestamp: bucket.latestTimestamp,
+          model: bucket.model,
+          project: bucket.project,
+          ...(bucket.projectRefHash == null
+            ? {}
+            : { projectRefHash: bucket.projectRefHash }),
+          ...(bucket.projectLabel == null
+            ? {}
+            : { projectLabel: bucket.projectLabel }),
+          ...(bucket.projectKind == null
+            ? {}
+            : { projectKind: bucket.projectKind }),
+          measurement: bucket.measurement,
+          inputTokens: bucket.inputTokens,
+          cachedInputTokens: bucket.cachedInputTokens,
+          cacheCreationInputTokens: bucket.cacheCreationInputTokens,
+          outputTokens: bucket.outputTokens,
+          reasoningOutputTokens: bucket.reasoningOutputTokens,
+          totalTokens: bucket.totalTokens,
+          eventCount: bucket.events,
+          context: {
+            ...(bucket.context.textResponses > 0 ? { textResponse: true } : {}),
+            ...(bucket.context.tools.length > 0
+              ? { tools: [...bucket.context.tools] }
+              : {}),
+          },
+          contextCounts: {
+            textResponses: bucket.context.textResponses,
+            toolCalls: bucket.context.toolCalls,
+            skillCalls: bucket.context.skillCalls,
+            toolOutputCalls: bucket.context.toolOutputCalls,
+          },
+          aggregateEvidence: bucket.evidence,
+        },
+        classifications,
+      ),
+  );
+  const details =
+    aggregateEvents ??
+    snapshot.details.map((event) => toDashboardEvent(event, classifications));
+  const recent = aggregateEvents
+    ? [...aggregateEvents]
+        .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+        .slice(0, 50)
+    : snapshot.recent.map((event) => toDashboardEvent(event, classifications));
   return {
     generatedAt: snapshot.generatedAt,
     mode: snapshot.mode,
@@ -270,24 +344,71 @@ export function toDashboardSnapshot(
     totals: snapshot.totals,
     bySource: snapshot.bySource,
     byModel: snapshot.byModel,
-    byProject: snapshot.byProject.flatMap((row) => {
-      const classification = classifications.get(row.key);
-      if (
-        classification?.kind !== undefined &&
-        classification.kind !== "workspace"
-      ) {
-        return [];
-      }
-      return [{ ...row, key: classification?.label ?? projectKey(row.key) }];
-    }),
+    byProject:
+      snapshot.aggregateBuckets == null
+        ? snapshot.byProject.flatMap((row) => {
+            const classification = classifications.get(row.key);
+            if (classification?.kind !== "workspace") return [];
+            return [{ ...row, key: classification.label }];
+          })
+        : aggregateDashboardProjects(
+            snapshot.aggregateBuckets,
+            classifications,
+          ),
     daily: snapshot.daily,
-    details: snapshot.details.map((event) =>
-      toDashboardEvent(event, classifications),
-    ),
-    recent: snapshot.recent.map((event) =>
-      toDashboardEvent(event, classifications),
-    ),
+    details,
+    recent,
   };
+}
+
+function aggregateDashboardProjects(
+  buckets: readonly UsageAggregateBucket[],
+  classifications: ReadonlyMap<string, DashboardProjectClassification>,
+) {
+  const rows = new Map<
+    string,
+    {
+      key: string;
+      events: number;
+      inputTokens: number;
+      cachedInputTokens: number;
+      cacheCreationInputTokens: number;
+      outputTokens: number;
+      reasoningOutputTokens: number;
+      totalTokens: number;
+    }
+  >();
+  for (const bucket of buckets) {
+    const classification = classifications.get(bucket.project);
+    const kind = bucket.projectKind ?? classification?.kind ?? "unknown";
+    if (kind !== "workspace") continue;
+    const identity = bucket.projectRefHash ?? bucket.project;
+    const current = rows.get(identity) ?? {
+      key:
+        bucket.projectLabel ??
+        classification?.label ??
+        projectKey(bucket.project),
+      events: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens: 0,
+    };
+    current.events += bucket.events;
+    current.inputTokens += bucket.inputTokens;
+    current.cachedInputTokens += bucket.cachedInputTokens;
+    current.cacheCreationInputTokens += bucket.cacheCreationInputTokens;
+    current.outputTokens += bucket.outputTokens;
+    current.reasoningOutputTokens += bucket.reasoningOutputTokens;
+    current.totalTokens += bucket.totalTokens;
+    rows.set(identity, current);
+  }
+  return [...rows.values()].sort(
+    (left, right) =>
+      right.totalTokens - left.totalTokens || left.key.localeCompare(right.key),
+  );
 }
 
 function sourceEvidence(event: DashboardUsageEvent) {
@@ -388,6 +509,7 @@ export function toDashboardV2Snapshot(input: {
       model: event.model,
       project: event.project,
       projectKind: event.projectKind,
+      events: event.eventCount ?? 1,
       inputTokens: event.inputTokens,
       cachedInputTokens: event.cachedInputTokens,
       cacheCreationInputTokens: event.cacheCreationInputTokens,
@@ -396,26 +518,28 @@ export function toDashboardV2Snapshot(input: {
       totalTokens: event.totalTokens,
       ...(event.measurement == null ? {} : { measurement: event.measurement }),
       context: {
-        textResponses: event.context?.textResponse ? 1 : 0,
-        toolCalls:
-          event.context?.tools?.reduce(
-            (total, item) => total + item.calls,
-            0,
-          ) ?? 0,
+        ...(event.contextCounts ?? {
+          textResponses: event.context?.textResponse ? 1 : 0,
+          toolCalls:
+            event.context?.tools?.reduce(
+              (total, item) => total + item.calls,
+              0,
+            ) ?? 0,
+          skillCalls:
+            event.context?.skills?.reduce(
+              (total, item) => total + item.calls,
+              0,
+            ) ?? 0,
+          toolOutputCalls: event.context?.toolOutputs?.calls ?? 0,
+        }),
         tools:
           event.context?.tools?.map((tool) => ({
             name: tool.name,
             category: tool.category,
             calls: tool.calls,
           })) ?? [],
-        skillCalls:
-          event.context?.skills?.reduce(
-            (total, item) => total + item.calls,
-            0,
-          ) ?? 0,
-        toolOutputCalls: event.context?.toolOutputs?.calls ?? 0,
       },
-      evidence: sourceEvidence(event),
+      evidence: event.aggregateEvidence ?? sourceEvidence(event),
     })),
   };
 }
@@ -573,13 +697,14 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
           status: "rejected" as const,
           reason: new Error("empty usage snapshot"),
         };
-  const rawSnapshot =
+  const rawSnapshot: UsageSnapshotDto =
     usageResult.status === "fulfilled"
       ? usageResult.value
       : createEmptyUsageSnapshot();
+  const rawBuckets = rawSnapshot.aggregateBuckets ?? [];
   const [pricingResult, monitoringResult] = await Promise.allSettled([
     getPricingSnapshot({
-      data: [...new Set(rawSnapshot.details.map((event) => event.model))],
+      data: [...new Set(rawBuckets.map((bucket) => bucket.model))],
     }),
     getMonitoringStatus(),
   ]);
@@ -596,10 +721,8 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
         .ensureHydrated()
         .then(() => installationSnapshot.readLatest()),
     ]);
-  let sessionLatest = initialSessionLatest;
-  const usageSources = [
-    ...new Set(rawSnapshot.details.map((event) => event.source)),
-  ];
+  const sessionLatest = initialSessionLatest;
+  const usageSources = [...new Set(rawBuckets.map((bucket) => bucket.source))];
   const sessionSources = [
     ...new Set(
       sessionLatest.data?.sessions.map((session) => session.source) ?? [],
@@ -613,9 +736,10 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       usageSources,
     })
   ) {
-    // Refresh inline when a valid old snapshot predates a session-capable
-    // source (notably DSH), so the current dashboard response is correct.
-    sessionLatest = await sessionSnapshot.refreshNow();
+    // Keep the route query cache-only. A missing newly supported source
+    // (notably DSH) is repaired in the background and becomes visible on the
+    // next revision instead of blocking this dashboard response on scanning.
+    requestDashboardSessionRefresh(sessionSnapshot);
   }
   // Mirror the sessions-page empty-state (loader rule 4): when no session
   // snapshot exists yet, fire a NON-BLOCKING refresh through the unified task
@@ -671,7 +795,7 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
     })),
   };
   const projectRefs = [
-    ...rawSnapshot.details.map((event) => event.project),
+    ...rawBuckets.map((bucket) => bucket.project),
     ...(sessionsResult.status === "fulfilled"
       ? sessionsResult.value.sessions.map(
           (session) => session.projectRef ?? session.projectKey,
@@ -691,8 +815,8 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   // background so later responses can restore verified workspace filtering.
   const missingUsageRefs = [
     ...new Set(
-      rawSnapshot.details
-        .map((event) => event.project)
+      rawBuckets
+        .map((bucket) => bucket.project)
         .filter((ref) => !projectClassifications.has(ref)),
     ),
   ];

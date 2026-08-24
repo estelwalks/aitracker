@@ -10,10 +10,28 @@ export const WINDOW_CHROME_HEIGHT = 36;
 /** macOS 红绿灯按钮位于标题栏左侧，需要预留空间（hiddenInset 下约 78px）。 */
 const MAC_TRAFFIC_LIGHT_INSET = 78;
 
-function detectMacPlatform(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  return /Mac|iPhone|iPad/.test(ua) && !/Windows|Linux/.test(ua);
+type DesktopApi = NonNullable<Window["desktopApi"]>;
+
+type WindowChromeEnvironment = Readonly<{
+  desktop: DesktopApi;
+  isMac: boolean;
+}>;
+
+/** Pure platform classifier kept independent from browser globals for tests. */
+function isMacDesktopUserAgent(userAgent: string): boolean {
+  return /Mac|iPhone|iPad/.test(userAgent) && !/Windows|Linux/.test(userAgent);
+}
+
+/**
+ * Browser globals are intentionally resolved only from an effect. Returning
+ * null keeps SSR and the client's hydration render byte-for-byte equivalent.
+ */
+function resolveWindowChromeEnvironment(
+  desktop: Window["desktopApi"],
+  userAgent: string,
+): WindowChromeEnvironment | null {
+  if (!desktop) return null;
+  return { desktop, isMac: isMacDesktopUserAgent(userAgent) };
 }
 
 /**
@@ -23,11 +41,20 @@ function detectMacPlatform(): boolean {
  */
 export function WindowChrome() {
   const { t } = useI18n();
-  const desktop = typeof window !== "undefined" ? window.desktopApi : undefined;
-  const isMac = detectMacPlatform();
+  const [environment, setEnvironment] =
+    useState<WindowChromeEnvironment | null>(null);
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
+    const nextEnvironment = resolveWindowChromeEnvironment(
+      window.desktopApi,
+      navigator.userAgent,
+    );
+    setEnvironment(nextEnvironment);
+  }, []);
+
+  useEffect(() => {
+    const desktop = environment?.desktop;
     if (!desktop) return undefined;
     let cancelled = false;
     void desktop
@@ -43,9 +70,11 @@ export function WindowChrome() {
       cancelled = true;
       unsubscribe();
     };
-  }, [desktop]);
+  }, [environment]);
 
-  if (!desktop) return null;
+  if (!environment) return null;
+
+  const { desktop, isMac } = environment;
 
   return (
     <div

@@ -13,9 +13,13 @@ export const settings = {
     general: "General",
     scan: "Scan config",
     model: "Model config",
+    menuBarApp: "Menu Bar App",
     appearance: "Appearance",
     widget: "Widgets",
     about: "About",
+  },
+  menuBarApp: {
+    dynamicBar: "Dynamic bar",
   },
   scan: {
     onDemand: "Scan mode",

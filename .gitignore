@@ -1,6 +1,10 @@
 node_modules/
 dist/
 build/
+!public/build/
+!public/build/tray-iconTemplate.png
+!public/build/tray-iconTemplate@2x.png
+!public/build/tray-iconTemplate.svg
 release/
 out/
 .output/

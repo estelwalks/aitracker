@@ -18,12 +18,12 @@ import {
  */
 
 function createMemoryPersistence() {
-  const store = new Map<string, string>();
+  const store = new Map<string, unknown>();
   return {
     store,
     port: {
       get: async (key: string) => store.get(key),
-      set: async (key: string, value: string) => {
+      set: async (key: string, value: unknown) => {
         store.set(key, value);
       },
       remove: async (key: string) => store.delete(key),
@@ -63,7 +63,7 @@ test("setWidgetPref 写入内存并持久化到 SQLite preference port", async (
 
   const raw = memory.store.get(WIDGET_PREFS_STORAGE_KEY);
   assert.ok(raw != null);
-  const stored = JSON.parse(raw) as Record<string, unknown>;
+  const stored = raw as Record<string, unknown>;
   assert.equal(stored.barStyle, "icon");
   assert.equal(stored.tone, "concise");
   assert.equal(stored.rotate, 30);
@@ -73,10 +73,15 @@ test("部分持久化数据与默认值合并", async () => {
   __resetWidgetPrefsModuleForTest();
   memory.store.set(
     WIDGET_PREFS_STORAGE_KEY,
-    JSON.stringify({ barStyle: "icon-dot", tone: "off" }),
+    JSON.stringify({
+      menuBarEnabled: false,
+      barStyle: "icon-dot",
+      tone: "off",
+    }),
   );
   await __hydrateWidgetPrefsForTest();
   const prefs = readWidgetPrefs();
+  assert.equal(prefs.menuBarEnabled, false);
   assert.equal(prefs.barStyle, "icon-dot");
   assert.equal(prefs.tone, "off");
   assert.equal(prefs.defaultTab, DEFAULT_WIDGET_PREFS.defaultTab);

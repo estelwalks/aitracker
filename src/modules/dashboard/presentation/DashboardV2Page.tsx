@@ -1,6 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
 import { useI18n } from "../../../lib/i18n/context.tsx";
@@ -11,16 +10,11 @@ import type {
   DashboardWindowSummary,
 } from "../summary-contracts.ts";
 import { windowToView } from "../summary-contracts.ts";
-import {
-  getDashboardCustomWindow,
-  getDashboardSnapshotStatus,
-  retryDashboardSnapshotInitialization,
-} from "../summary-query.ts";
+import { getDashboardCustomWindow } from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
-  DashboardJarvisInsight,
   DashboardMetricGrid,
   DashboardModelDonut,
   DashboardProjectOverview,
@@ -29,10 +23,7 @@ import {
   DashboardTrustHero,
 } from "./dashboard-v2-sections.tsx";
 import { resolveDashboardToolRailTools } from "./tool-rail-order.ts";
-import {
-  resolveWorkspaceInitializationState,
-  retryWorkspaceInitialization,
-} from "./workspace-initialization-state.ts";
+import { resolveWorkspaceInitializationState } from "./workspace-initialization-state.ts";
 
 // P6-T6-05: Recharts trend panel is loaded on demand (not in the initial
 // shared shell). The Suspense fallback keeps layout stable during load.
@@ -42,9 +33,23 @@ const DashboardTrendPanel = lazy(() =>
   })),
 );
 
-/** Keep first-run feedback responsive without keeping normal polling chatty. */
-const FIRST_SCAN_POLL_MS = 2_000;
-const BACKGROUND_REFRESH_POLL_MS = 15_000;
+/** Fixed-size fallback prevents the page from jumping while Recharts loads. */
+export function DashboardTrendFallback() {
+  return (
+    <div
+      className="dashboard-panel flex h-[280px] items-end gap-3 overflow-hidden px-6 pb-6"
+      aria-hidden="true"
+    >
+      {[32, 48, 40, 66, 54, 78, 62, 86, 72, 58, 76, 92].map((height, index) => (
+        <span
+          key={index}
+          className="min-w-0 flex-1 animate-pulse rounded-t bg-surface-2"
+          style={{ height: `${height}%` }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function localDateDaysAgo(days: number): string {
   const date = new Date();
@@ -58,9 +63,16 @@ function localDateDaysAgo(days: number): string {
  * window with the shared tool cards / calendar — it never re-aggregates raw
  * events.
  */
-export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
+export function DashboardV2Page({
+  data,
+  snapshotStatus,
+  onRetry,
+}: {
+  readonly data: DashboardSummaryReadModel;
+  readonly snapshotStatus: DashboardSnapshotStatus["status"];
+  readonly onRetry: () => Promise<void>;
+}) {
   const { format, t } = useI18n();
-  const router = useRouter();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   // Date-only range inputs must use the same local calendar convention as
   // resolveUsageRange. Serialising with toISOString() would move the default
@@ -69,57 +81,6 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
   const [from, setFrom] = useState(localDateDaysAgo(29));
   const [to, setTo] = useState(localDateDaysAgo(0));
   const [selectedTool, setSelectedTool] = useState("all");
-  const [snapshotStatus, setSnapshotStatus] =
-    useState<DashboardSnapshotStatus["status"]>("empty");
-
-  // 快照自愈轮询（空状态 + 过期状态）：
-  // - 首次扫描空状态：loader 已触发非阻塞刷新，轮询轻量状态探测直到 revision
-  //   落地，然后重跑路由 loader（design §4.3 Empty -> Refreshing -> Fresh）；
-  // - 快照过期（web 运行时没有调度器，loader 只会在 stale 时触发刷新）：轮询
-  //   探测到 stale 即重跑 loader，刷新完成后自动展示最新 token，无需手动刷新。
-  // 探测是 O(1) 的轻量 GET，fresh 时不做任何事。
-  useEffect(() => {
-    let disposed = false;
-    const poll = async () => {
-      try {
-        // 路由正在加载/过渡时跳过本 tick：此时 invalidate 会中止进行中的
-        // loader 请求（客户端取消），并可能让服务端 SSR 流被取消后打出
-        // "render was aborted" 噪音。下一 tick 再检查。
-        if (router.state.status === "pending") return;
-        const status = await getDashboardSnapshotStatus({
-          data: data.locale,
-        });
-        if (disposed) return;
-        setSnapshotStatus(status.status);
-        if (status.status === "stale") {
-          // 过期：重跑 loader（loader 会触发非阻塞刷新）；刷新完成前保持轮询
-          void router.invalidate();
-          return;
-        }
-        if (status.status === "empty" && status.revision != null) {
-          // 空状态且首个 revision 已落地：刷新一次后停止轮询
-          clearInterval(timer);
-          void router.invalidate();
-        }
-      } catch {
-        // transient probe failure; retry on the next tick
-      }
-    };
-    // `timer` is a const captured by `poll`; the first probe runs right after
-    // it is assigned, so the closure never observes the temporal dead zone.
-    const timer = setInterval(
-      () => void poll(),
-      snapshotStatus === "empty" || snapshotStatus === "refreshing"
-        ? FIRST_SCAN_POLL_MS
-        : BACKGROUND_REFRESH_POLL_MS,
-    );
-    void poll();
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, [data.locale, router, snapshotStatus]);
-
   const isCustom = period === "custom";
   const standardKey: "today" | "7d" | "30d" | "all" =
     period === "today" ||
@@ -140,7 +101,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
       isCustom ? to : "",
       selectedTool,
     ],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       getDashboardCustomWindow({
         data: {
           locale: data.locale,
@@ -148,6 +109,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
           to,
           tool: selectedTool === "all" ? null : selectedTool,
         },
+        signal,
       }),
     enabled: isCustom || selectedTool !== "all",
     staleTime: 30_000,
@@ -166,7 +128,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
       isCustom ? to : "",
       "all",
     ],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       getDashboardCustomWindow({
         data: {
           locale: data.locale,
@@ -174,6 +136,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
           to,
           tool: null,
         },
+        signal,
       }),
     enabled: isCustom && selectedTool !== "all",
     staleTime: 30_000,
@@ -198,29 +161,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
     () => windowToView(windowView, data),
     [data, windowView],
   );
-  // 会话快照缺失（首次启动或后台刷新尚未完成）时，每 15s 重新运行路由
-  // loader：loader 会触发一次非阻塞的 sessions.refresh，快照落盘后下一次
-  // 加载即携带真实会话数，无需手动刷新。会话就绪后轮询自动停止。
   const sessionsUnavailable = view.sessions == null;
-  useEffect(() => {
-    if (!sessionsUnavailable) return;
-    let disposed = false;
-    const timer = setInterval(
-      () => {
-        if (disposed) return;
-        // 与快照轮询相同的保护：过渡中不打断进行中的加载。
-        if (router.state.status === "pending") return;
-        void router.invalidate();
-      },
-      snapshotStatus === "empty" || snapshotStatus === "refreshing"
-        ? FIRST_SCAN_POLL_MS
-        : BACKGROUND_REFRESH_POLL_MS,
-    );
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, [router, sessionsUnavailable, snapshotStatus]);
   const today = useMemo(() => windowToView(data.windows.today, data), [data]);
   const hero = data.hero;
   const rangeLabel = useMemo(() => {
@@ -263,8 +204,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
   });
 
   return (
-    <div className="dashboard-v3 space-y-4 pb-12">
-      <DashboardJarvisInsight />
+    <div className="space-y-4">
       {workspaceInitializationState === "loading" ? (
         <section
           className="dashboard-panel flex items-start gap-3 border border-primary/20 bg-primary/5"
@@ -297,14 +237,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
           <button
             type="button"
             className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-            onClick={() =>
-              retryWorkspaceInitialization({
-                resetStatus: setSnapshotStatus,
-                triggerRefresh: () =>
-                  retryDashboardSnapshotInitialization({ data: data.locale }),
-                invalidate: () => router.invalidate(),
-              })
-            }
+            onClick={() => void onRetry()}
           >
             {t("dashboard.onboarding.retryWorkspaceInitialization")}
           </button>
@@ -358,7 +291,7 @@ export function DashboardV2Page({ data }: { data: DashboardSummaryReadModel }) {
       {/* P6-T6-05: on-demand Recharts panel; the boundary keeps the page
           usable if the chunk fails to load. */}
       <ChunkErrorBoundary>
-        <Suspense fallback={<div className="dashboard-panel h-[280px]" />}>
+        <Suspense fallback={<DashboardTrendFallback />}>
           <DashboardTrendPanel view={view} baselineLabel={baselineLabel} />
         </Suspense>
       </ChunkErrorBoundary>
