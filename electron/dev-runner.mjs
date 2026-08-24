@@ -36,6 +36,15 @@ export const desktopViteWarmupPaths = Object.freeze([
   "/src/routeTree.gen.ts",
 ]);
 
+/**
+ * A clean Windows checkout may spend well over one minute optimizing Vite's
+ * dependency graph. These limits apply only to the development launcher; the
+ * packaged application's workspace startup policy is unchanged.
+ */
+export const desktopDevColdStartTimeoutMs = 300_000;
+export const desktopDevProbeTimeoutMs = 5_000;
+const desktopDevPollIntervalMs = 500;
+
 /** Pure timestamp decision used by both incremental prepare stages. */
 export function shouldRebuild(inputModifiedAt, outputModifiedTimes) {
   return (
@@ -215,15 +224,20 @@ async function fetchReady(url, timeoutMilliseconds) {
   return response;
 }
 
-async function waitForServer(url, timeoutMilliseconds = 60_000) {
+async function waitForServer(
+  url,
+  timeoutMilliseconds = desktopDevColdStartTimeoutMs,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     try {
-      const response = await fetchReady(url, 1_000);
+      const response = await fetchReady(url, desktopDevProbeTimeoutMs);
       await response.body?.cancel();
       return;
     } catch {
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+      await new Promise((resolvePromise) =>
+        setTimeout(resolvePromise, desktopDevPollIntervalMs),
+      );
     }
   }
   throw new Error(`Vite did not become ready at ${url}`);
@@ -237,7 +251,9 @@ export function createStaticWarmupUrls(
   return paths.map((path) => new URL(path, baseUrl).href);
 }
 
-async function waitForOptimizationMetadata(timeoutMilliseconds = 30_000) {
+async function waitForOptimizationMetadata(
+  timeoutMilliseconds = desktopDevColdStartTimeoutMs,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     try {
@@ -255,7 +271,10 @@ async function warmStaticViteModules(baseUrl) {
   console.log("[desktop:ready] warming static Vite modules");
   await Promise.all(
     createStaticWarmupUrls(baseUrl).map(async (url) => {
-      const moduleResponse = await fetchReady(url, 60_000);
+      const moduleResponse = await fetchReady(
+        url,
+        desktopDevColdStartTimeoutMs,
+      );
       await moduleResponse.body?.cancel();
     }),
   );
