@@ -4,6 +4,7 @@ export const desktopIpc = {
   setAutoLaunch: "desktop:set-auto-launch",
   showWindow: "desktop:show-window",
   openWidgetWindow: "desktop:open-widget-window",
+  setTrayTitle: "desktop:set-tray-title",
   getPreferences: "desktop:get-preferences",
   setPreference: "desktop:set-preference",
   resetPreferences: "desktop:reset-preferences",
@@ -282,6 +283,8 @@ export interface DesktopApi {
   onWindowMaximizedChanged(callback: (maximized: boolean) => void): () => void;
   /** Show the floating widget window (created lazily, reused across opens). */
   openWidgetWindow(): Promise<void>;
+  /** Update the native macOS menu-bar summary. */
+  setTrayTitle(title: string): Promise<void>;
   getPreferences(): Promise<Record<string, unknown>>;
   setPreference(key: string, value: unknown): Promise<void>;
   resetPreferences(): Promise<{ removedKeys: number }>;

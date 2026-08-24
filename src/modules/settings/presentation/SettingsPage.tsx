@@ -60,6 +60,7 @@ import { ModelProfilesSection } from "./ModelProfilesSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { useSecurityClient } from "./use-security-client";
 import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
+import { useWidgetPrefs } from "../../widget/presentation/widget-prefs";
 import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
@@ -167,6 +168,7 @@ export function SettingsPage({
     refresh: refreshSecurity,
   } = useSecurityClient();
   const { settings, setSettings, loaded } = useAppSettings();
+  const { prefs: widgetPrefs, set: setWidgetPref } = useWidgetPrefs();
   const {
     locale,
     localeMode,
@@ -411,6 +413,17 @@ export function SettingsPage({
         <Panel className="min-w-0" title={t(categoryKeys[category])}>
           {category === "通用" && (
             <div>
+              <Field
+                label="顶部动态栏"
+                hint="在 macOS 顶部菜单栏显示实时用量与安全状态"
+              >
+                <Toggle
+                  value={widgetPrefs.menuBarEnabled}
+                  onChange={(enabled) =>
+                    void setWidgetPref("menuBarEnabled", enabled)
+                  }
+                />
+              </Field>
               <Field
                 label={t("settings.language")}
                 hint={

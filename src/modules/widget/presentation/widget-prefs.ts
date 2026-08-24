@@ -34,6 +34,7 @@ export type MediumContent = "brief" | "today" | "waste" | "safety";
 export type WidgetTheme = "dark" | "system";
 
 export interface WidgetPrefs {
+  menuBarEnabled: boolean;
   barStyle: MenuBarStyle;
   barClick: MenuBarClick;
   defaultTab: DefaultTab;
@@ -46,6 +47,7 @@ export interface WidgetPrefs {
 }
 
 export const DEFAULT_WIDGET_PREFS: WidgetPrefs = {
+  menuBarEnabled: true,
   barStyle: "icon-num",
   barClick: "panel",
   defaultTab: "today",
@@ -89,6 +91,9 @@ function parseStored(value: unknown): WidgetPrefs {
   // 只取已知字段，避免脏数据污染；未知字段被丢弃。
   return {
     ...DEFAULT_WIDGET_PREFS,
+    ...(typeof parsed.menuBarEnabled === "boolean"
+      ? { menuBarEnabled: parsed.menuBarEnabled }
+      : {}),
     ...(typeof parsed.barStyle === "string"
       ? { barStyle: parsed.barStyle }
       : {}),
