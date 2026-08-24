@@ -34,7 +34,6 @@ import {
 import {
   applyRetentionPolicyQuery,
   clearRegenerableCacheQuery,
-  getStorageUsageQuery,
   type StorageUsage,
 } from "../query";
 import {
@@ -420,7 +419,7 @@ export function SettingsPage({
                 hint={t("settings.dataPathHint", brandParams)}
               >
                 <input
-                  value={storageUsage?.directory ?? settings.dataPath}
+                  value={settings.dataPath}
                   readOnly
                   disabled
                   className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
@@ -593,38 +592,6 @@ export function SettingsPage({
                   <StatusBadge tone="ok">
                     {t("common.status.fresh")}
                   </StatusBadge>
-                </Field>
-                <Field
-                  label={t("settings.retention")}
-                  hint={`${t("settings.scan.retentionNote")} ${t("settings.retentionHint", brandParams)}`}
-                >
-                  <Segmented
-                    value={String(settings.retentionDays)}
-                    onChange={(value) =>
-                      void changeRetentionDays(Number(value))
-                    }
-                    options={retentionOptions.map((days) => ({
-                      value: String(days),
-                      label:
-                        days === 0
-                          ? t("settings.retentionForever")
-                          : t("settings.retentionDays", { count: days }),
-                    }))}
-                  />
-                </Field>
-                <Field label={t("settings.storage")}>
-                  {storageUsage ? (
-                    <span className="tt-num text-[13px]">
-                      {format.formatBytes(storageUsage.bytes)}
-                      {storageUsage.exceedsSoftCap
-                        ? t("settings.storageExceedsSoftCap")
-                        : ""}
-                    </span>
-                  ) : (
-                    <span className="text-[13px] text-muted-foreground">
-                      {t("common.loading")}
-                    </span>
-                  )}
                 </Field>
               </div>
             </div>

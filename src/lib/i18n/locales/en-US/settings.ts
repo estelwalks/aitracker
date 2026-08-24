@@ -25,8 +25,6 @@ export const settings = {
     onDemand: "Scan mode",
     onDemandDesc:
       "Scanning runs on demand: it reads supported local AI tool logs and builds an incremental index.",
-    retentionNote:
-      "The retention period below also applies to usage and scan caches:",
   },
   modelProfiles: {
     count: "Model profiles ({count})",

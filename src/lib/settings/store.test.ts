@@ -7,6 +7,10 @@ test("returns defaults for invalid persisted settings", () => {
   assert.deepEqual(parseSettings("{"), DEFAULT_SETTINGS);
 });
 
+test("uses the TrustTools data directory as the default path", () => {
+  assert.equal(DEFAULT_SETTINGS.dataPath, "~/.trusttools");
+});
+
 test("returns default retentionDays when value is invalid", () => {
   const settings = parseSettings(JSON.stringify({ retentionDays: -1 }));
   assert.equal(settings.retentionDays, DEFAULT_SETTINGS.retentionDays);
@@ -25,6 +29,11 @@ test("parses valid retentionDays", () => {
 test("keeps valid dataPath", () => {
   const settings = parseSettings(JSON.stringify({ dataPath: "/custom/path" }));
   assert.equal(settings.dataPath, "/custom/path");
+});
+
+test("migrates the legacy home-directory data path", () => {
+  const settings = parseSettings(JSON.stringify({ dataPath: "~/" }));
+  assert.equal(settings.dataPath, "~/.trusttools");
 });
 
 test("rejects empty dataPath and uses default", () => {

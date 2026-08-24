@@ -1,10 +1,8 @@
-import { createServerFn } from "@tanstack/react-start";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { getCompositionRoot } from "../../app/composition.server";
-import { AppError } from "../../lib/errors";
 import { APP_DATA_DIR, ENV } from "../../lib/app-config";
 import {
   applyDatabaseRetention,
@@ -110,50 +108,32 @@ function cleanupFromSummary(
   };
 }
 
-export const getStorageUsageFn = createServerFn({ method: "GET" }).handler(
-  async (): Promise<StorageUsage> => readStorageUsage(),
-);
+/**
+ * Applies the already-validated retention setting within the server process.
+ *
+ * This deliberately remains a plain server helper so the public settings RPC
+ * can execute the operation in the same server process.
+ */
+export async function applyRetentionPolicy(
+  retentionDays: number,
+): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> {
+  const root = await getCompositionRoot();
+  const summary = applyDatabaseRetention(root.database.database, Date.now());
+  return {
+    cleanup: cleanupFromSummary(retentionDays, summary),
+    usage: await readStorageUsage(),
+  };
+}
 
-export const applyRetentionPolicyFn = createServerFn({ method: "POST" })
-  .validator((data: unknown): { retentionDays: number } => {
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !Number.isInteger((data as { retentionDays?: unknown }).retentionDays)
-    ) {
-      throw new AppError("errors.usage.retentionNonNegative");
-    }
-    const retentionDays = (data as { retentionDays: number }).retentionDays;
-    if (retentionDays < 0 || retentionDays > 3650) {
-      throw new AppError("errors.usage.retentionRange");
-    }
-    return { retentionDays };
-  })
-  .handler(
-    async ({
-      data,
-    }): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-      const root = await getCompositionRoot();
-      const summary = applyDatabaseRetention(
-        root.database.database,
-        Date.now(),
-      );
-      return {
-        cleanup: cleanupFromSummary(data.retentionDays, summary),
-        usage: await readStorageUsage(),
-      };
-    },
-  );
-
-export const clearRegenerableCacheFn = createServerFn({
-  method: "POST",
-}).handler(
-  async (): Promise<{ cleanup: CleanupStats; usage: StorageUsage }> => {
-    const root = await getCompositionRoot();
-    const summary = clearRegenerableDatabaseCaches(root.database.database);
-    return {
-      cleanup: cleanupFromSummary(0, summary),
-      usage: await readStorageUsage(),
-    };
-  },
-);
+/** Clears regenerable database caches within the server process. */
+export async function clearRegenerableCache(): Promise<{
+  cleanup: CleanupStats;
+  usage: StorageUsage;
+}> {
+  const root = await getCompositionRoot();
+  const summary = clearRegenerableDatabaseCaches(root.database.database);
+  return {
+    cleanup: cleanupFromSummary(0, summary),
+    usage: await readStorageUsage(),
+  };
+}
