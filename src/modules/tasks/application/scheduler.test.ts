@@ -669,6 +669,79 @@ test("T5-06: heavy collectors share the global heavy permit (max 1 concurrent)",
   assert.equal(peakHeavy, 1);
 });
 
+test("heavy collector timeout starts only after its permit is acquired", async () => {
+  const h = harness();
+  let heavyInFlight = false;
+  const waiters: Array<() => void> = [];
+  const budget = {
+    async acquire() {
+      if (heavyInFlight) {
+        await new Promise<void>((resolve) => waiters.push(resolve));
+      }
+      heavyInFlight = true;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        heavyInFlight = false;
+        waiters.shift()?.();
+      };
+    },
+  };
+  const armedTimeouts: number[] = [];
+  const liveTimers: Array<ReturnType<typeof setTimeout>> = [];
+  let releaseUsage!: () => void;
+  const usageGate = new Promise<void>((resolve) => {
+    releaseUsage = resolve;
+  });
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    resourceBudget: budget,
+    setTimeout(handler, delay) {
+      armedTimeouts.push(delay);
+      const timer = setTimeout(handler, delay);
+      liveTimers.push(timer);
+      return timer;
+    },
+    executors: {
+      "refresh-usage-v1": async () => usageGate,
+      "refresh-installation-v1": async () => undefined,
+    },
+  });
+
+  await scheduler.runNow({
+    taskId: createTaskId("usage.refresh"),
+    reason: "manual",
+  });
+  await scheduler.runNow({
+    taskId: createTaskId("installation.refresh"),
+    reason: "manual",
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(armedTimeouts, [120_000]);
+  releaseUsage();
+  for (
+    let attempt = 0;
+    attempt < 20 && armedTimeouts.length < 2;
+    attempt += 1
+  ) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 1));
+  }
+  assert.deepEqual(armedTimeouts, [120_000, 60_000]);
+  assert.equal(
+    h.runs.some(
+      (run) =>
+        run.taskId === "installation.refresh" && run.status === "succeeded",
+    ),
+    true,
+  );
+
+  await scheduler.stop();
+  for (const timer of liveTimers) clearTimeout(timer);
+});
+
 test("T5-06: cancelled heavy task releases its permit (no leak)", async () => {
   const h = harness();
   let permits = 0;
