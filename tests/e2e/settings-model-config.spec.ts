@@ -11,6 +11,10 @@ test.beforeEach(async ({ page }) => {
       configurable: true,
     });
   });
+  // 偏好已迁移到 SQLite；通过真实 UI 将共享隔离数据库归一化为中文。
+  await page.goto("/settings", { waitUntil: "domcontentloaded" });
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
+  await page.getByRole("button", { name: "中文", exact: true }).click();
 });
 
 /** 设置页内容面板（排除侧边导航中的「日报周报」等链接文本）。 */
@@ -33,7 +37,7 @@ async function openModelSection(page: Page): Promise<string[]> {
   return pageErrors;
 }
 
-test("S-005 模型配置页对齐原型：左列表/右表单/当前生效，无多余说明", async ({
+test("S-005 模型配置页对齐原型：左列表/右表单/操作入口，无多余说明", async ({
   page,
 }) => {
   const pageErrors = await openModelSection(page);
@@ -46,39 +50,35 @@ test("S-005 模型配置页对齐原型：左列表/右表单/当前生效，无
     timeout: 60_000,
   });
 
-  // 左列表：标题计数 + 当前生效页脚；「新增」按钮已按要求移除
+  // 左列表：标题计数；新增和启用入口属于当前原型契约。
   await expect(main.getByText(/模型配置（\d+）/)).toBeVisible();
-  await expect(main.getByRole("button", { name: "新增" })).toHaveCount(0);
-  await expect(main.getByText(/当前生效/)).toBeVisible();
+  await expect(main.getByRole("button", { name: "新增" })).toBeVisible();
+  await expect(
+    main.getByRole("button", { name: "启用" }).first(),
+  ).toBeVisible();
 
   // 已去除的多余说明（提及其它 AI 功能用词，仅检查设置内容面板）
   await expect(main.getByText(/安全检测|日报周报|今日洞察/)).toHaveCount(0);
   await expect(main.getByText(/蒸馏/)).toHaveCount(0);
   await expect(main.getByText(/API Key 仅保存于本机服务端文件/)).toHaveCount(0);
 
-  // 右表单：radio 卡片
-  await expect(main.getByText("使用官方模型")).toBeVisible();
-  await expect(main.getByText("自定义模型")).toBeVisible();
+  // 新版默认仅展示配置列表；点击新增后再校验右侧编辑表单。
+  await main.getByRole("button", { name: "新增" }).click();
 
-  // 切换自定义模式：协议类型按钮 + 模型行 + 获取模型列表 + 请求路径/鉴权方式
-  await main.getByText("自定义模型").click();
-  await expect(main.getByText("协议类型")).toBeVisible();
-  await expect(main.getByText(/OpenAI 兼容/).first()).toBeVisible();
-  await expect(main.getByText(/Anthropic/).first()).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "新增模型配置" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("API格式")).toBeVisible();
   await expect(
-    main.getByRole("button", { name: "获取模型列表" }),
+    dialog.getByRole("button", { name: /OpenAI 兼容/ }),
   ).toBeVisible();
-  await expect(main.getByText("请求路径")).toBeVisible();
-  await expect(main.getByText("鉴权方式")).toBeVisible();
-  await expect(main.getByText("POST /chat/completions")).toBeVisible();
-
-  // 新增/编辑标题
-  await expect(main.getByText("新增模型配置")).toBeVisible();
-
-  // 切换官方模式：仅 API Key 表单
-  await main.getByText("使用官方模型").click();
-  await expect(main.getByText(/API Key/).first()).toBeVisible();
-  await expect(main.getByText("协议类型")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: /Anthropic/ })).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: "获取模型列表" }),
+  ).toBeVisible();
+  await expect(dialog.getByText("API Key", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Base URL", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("请求路径", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("POST /chat/completions")).toBeVisible();
 
   expect(pageErrors).toEqual([]);
 });

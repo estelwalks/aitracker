@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { getReportsQuery } from "../modules/reports/query";

@@ -346,9 +346,13 @@ function SourceCard({
   const { t, format } = useI18n();
   const meta = STATUS_META[entry.status];
   const hasPaths = entry.paths.length > 0;
-  // 迁移按钮仅在工具确实有 Skill 根且存在 Skill 时可用。
+  // 迁移按钮仅在工具确实已安装、有 Skill 根且存在 Skill 时可用。未安装的
+  // 工具（例如残留 ~/.cursor 目录但没有 Cursor 本体）不允许一键迁移。
   const canMigrate =
-    hasInstalledTargets && entry.skillCount !== null && entry.skillCount > 0;
+    entry.status !== "not-installed" &&
+    hasInstalledTargets &&
+    entry.skillCount !== null &&
+    entry.skillCount > 0;
 
   return (
     <article

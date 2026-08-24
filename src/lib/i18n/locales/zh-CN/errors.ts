@@ -37,6 +37,7 @@ export const errors = {
     duplicateName: "目标位置已存在同名 Skill",
     noSkillSelected: "至少选择一个 Skill",
     notFound: "Skill 未找到或无法读取",
+    toolNotInstalled: "未检测到 {agent}，目标工具未安装，无法安装 Skill",
   },
   sessions: {
     filterInvalid: "会话过滤参数不合法",

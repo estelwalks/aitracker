@@ -1,6 +1,8 @@
 import appCss from "../styles.css?url";
 import { APP_NAME, brandParams } from "../lib/app-config";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { loadCatalog } from "../lib/i18n/catalog-loader";
+import { getMessage } from "../lib/i18n/message-resolver";
+import type { Translations } from "../lib/i18n/schema";
 import {
   mapSystemCurrency,
   resolveCurrencyFromSearch,
@@ -17,6 +19,7 @@ export interface RootLoaderData {
   readonly locale: Locale;
   readonly displayCurrency: Currency;
   readonly rates: RatesSnapshot | null;
+  readonly catalog: Translations;
 }
 
 export async function rootLoader({
@@ -33,6 +36,7 @@ export async function rootLoader({
   }
   return {
     locale,
+    catalog: await loadCatalog(locale),
     displayCurrency: resolveCurrencyFromSearch(
       location.search,
       mapSystemCurrency(locale),
@@ -47,10 +51,16 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: getMessage(catalogs[locale], "meta.title", brandParams) },
+      {
+        title: loaderData?.catalog
+          ? getMessage(loaderData.catalog, "meta.title", brandParams)
+          : APP_NAME,
+      },
       {
         name: "description",
-        content: getMessage(catalogs[locale], "meta.description", brandParams),
+        content: loaderData?.catalog
+          ? getMessage(loaderData.catalog, "meta.description", brandParams)
+          : APP_NAME,
       },
       { name: "author", content: APP_NAME },
       { property: "og:type", content: "website" },

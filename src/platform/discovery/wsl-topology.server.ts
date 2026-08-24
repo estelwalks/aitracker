@@ -16,7 +16,7 @@ import { execFile } from "node:child_process";
 
 export interface WslDistroHome {
   readonly distribution: string;
-  /** Linux home path (e.g. "/home/user"); never empty. */
+  /** Linux home path (for example, a distro user's home); never empty. */
   readonly home: string;
 }
 

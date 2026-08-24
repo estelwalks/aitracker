@@ -2,7 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { brandParams } from "../lib/app-config.ts";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale.ts";
-import { catalogs, getMessage } from "../lib/i18n/messages.ts";
+import { catalogs, getMessage } from "../lib/i18n/route-messages.ts";
 import { getSessionDetailQuery } from "../modules/sessions/query.ts";
 
 // The page component lives in chats.$id.lazy.tsx (P6-T6-04 route splitting).

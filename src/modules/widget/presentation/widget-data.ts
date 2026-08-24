@@ -62,6 +62,17 @@ export interface WidgetDataModel {
 
 export type WidgetMood = "idle" | "live" | "warn" | "danger";
 
+export function resolveWidgetMood(
+  hasData: boolean,
+  security: SecurityScanOverview,
+): WidgetMood {
+  if (security.loading) return "idle";
+  const danger = security.summary?.dangerousCount ?? 0;
+  if (danger > 0) return "danger";
+  if ((security.summary?.suspiciousCount ?? 0) > 0) return "warn";
+  return hasData ? "live" : "idle";
+}
+
 const STATUS_INTERVAL_MS = 60_000;
 
 const emptyPeriod = (): WidgetPeriodStats => ({
@@ -184,9 +195,5 @@ export function useWidgetData(): WidgetDataModel {
  */
 export function useWidgetMood(): WidgetMood {
   const { hasData, security } = useWidgetData();
-  if (security.loading) return "idle";
-  const danger = security.summary?.dangerousCount ?? 0;
-  if (danger > 0) return "danger";
-  if ((security.summary?.suspiciousCount ?? 0) > 0) return "warn";
-  return hasData ? "live" : "idle";
+  return resolveWidgetMood(hasData, security);
 }

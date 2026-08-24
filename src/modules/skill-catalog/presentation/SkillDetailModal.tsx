@@ -809,28 +809,28 @@ export function SkillDetailModal({
 
         <DialogFooter className="mt-3 flex-wrap items-center gap-2">
           <div className="mr-auto flex flex-wrap gap-2">
-            <TTButton size="sm" variant="ghost" onClick={onToggleBlacklist}>
-              <ShieldBan className="size-3.5" />
+            <TTButton size="md" variant="ghost" onClick={onToggleBlacklist}>
+              <ShieldBan className="size-4" />
               {blacklisted
                 ? t("skills.actions.unblock")
                 : t("skills.actions.block")}
             </TTButton>
-            <TTButton size="sm" variant="ghost" onClick={onOpenSecurity}>
-              <ShieldCheck className="size-3.5" />{" "}
+            <TTButton size="md" variant="ghost" onClick={onOpenSecurity}>
+              <ShieldCheck className="size-4" />{" "}
               {t("skills.detail.scanSecurity")}
             </TTButton>
           </div>
-          <TTButton size="sm" variant="ghost" onClick={exportCurrent}>
-            <Download className="size-3.5" /> {t("skills.detail.exportFile")}
+          <TTButton size="md" variant="ghost" onClick={exportCurrent}>
+            <Download className="size-4" /> {t("skills.detail.exportFile")}
           </TTButton>
-          <TTButton size="sm" variant="ghost" onClick={exportBundle}>
-            <Download className="size-3.5" /> {t("skills.detail.exportDir")}
+          <TTButton size="md" variant="ghost" onClick={exportBundle}>
+            <Download className="size-4" /> {t("skills.detail.exportDir")}
           </TTButton>
-          <TTButton size="sm" variant="danger" onClick={onRemove}>
-            <Trash2 className="size-3.5" /> {t("skills.actions.uninstall")}
+          <TTButton size="md" variant="danger" onClick={onRemove}>
+            <Trash2 className="size-4" /> {t("skills.actions.uninstall")}
           </TTButton>
           <TTButton
-            size="sm"
+            size="md"
             variant="primary"
             disabled={installing || selectedAgents.size === 0}
             onClick={() => void handleInstallSelected()}

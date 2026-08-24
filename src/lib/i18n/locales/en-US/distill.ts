@@ -25,7 +25,7 @@ export const distill = {
   drawerSub:
     "Pick a session on the left, then check the exact segments to distill on the right",
   drawerEsc: "ESC to close",
-  joinWhole: "Add whole session",
+  joinWhole: "Select all",
   footerSelected: "Selected",
   footerSessions: "session(s)",
   footerSegments: "message(s)",

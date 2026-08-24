@@ -74,7 +74,7 @@ export function AgentInstallBar({
     onToggle(agent, !on);
   };
 
-  const spinner = <Loader2 className="size-[18px] animate-spin" />;
+  const spinner = <Loader2 className="size-5 animate-spin" />;
 
   if (inline) {
     const overflow = agents.length > inlineVisible;
@@ -105,7 +105,7 @@ export function AgentInstallBar({
                     : t("market.install.to", { agent })
               }
               onClick={() => handleClick(agent, on)}
-              className={`grid size-8 shrink-0 place-items-center rounded-md border transition-all ${
+              className={`grid size-9 shrink-0 place-items-center rounded-md border transition-all ${
                 on
                   ? "border-transparent bg-white/70 text-primary"
                   : "border-border/60 bg-white/70 text-muted-foreground/40 grayscale hover:border-border hover:text-muted-foreground hover:grayscale-0"
@@ -114,7 +114,7 @@ export function AgentInstallBar({
               {pending ? (
                 spinner
               ) : (
-                <BrandIcon name={agent} className="size-[18px]" />
+                <BrandIcon name={agent} className="size-5" />
               )}
             </button>
           );
@@ -133,7 +133,7 @@ export function AgentInstallBar({
                     count: agents.length - inlineVisible,
                   })
             }
-            className="shrink-0 rounded-md border border-border bg-surface-2/60 px-1.5 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-surface-2/60 text-muted-foreground transition-colors hover:text-foreground"
           >
             {open ? (
               <ChevronUp className="size-4" />
@@ -156,13 +156,13 @@ export function AgentInstallBar({
                 ? t("market.install.clearAll")
                 : t("market.install.selectAll")
             }
-            className={`grid size-8 shrink-0 place-items-center rounded-md border transition-colors ${
+            className={`grid size-9 shrink-0 place-items-center rounded-md border transition-colors ${
               toggleAllOn
                 ? "border-primary/45 bg-primary/12 text-primary"
                 : "border-border bg-surface-2/60 text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Plus className="size-4" />
+            <Plus className="size-5" />
           </button>
         )}
       </span>
@@ -224,7 +224,7 @@ export function AgentInstallBar({
               {pending ? (
                 spinner
               ) : (
-                <BrandIcon name={agent} className="size-[18px] shrink-0" />
+                <BrandIcon name={agent} className="size-5 shrink-0" />
               )}
               <span className="truncate">{agent}</span>
               {on && !isSelected && (

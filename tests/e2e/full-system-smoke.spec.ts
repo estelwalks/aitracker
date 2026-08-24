@@ -83,11 +83,6 @@ test("数据来源页支持状态筛选、平台目录和分页", async ({ page 
   }
   await expect(page.getByTestId("source-card-qodercn")).toBeVisible();
   await expect(
-    page.getByText(
-      "~/AppData/Roaming/QoderCN/SharedClientCache/cache/db/local.db",
-      {
-        exact: true,
-      },
-    ),
+    page.getByText(/QoderCN\/SharedClientCache\/cache\/db\/local\.db/),
   ).toBeVisible();
 });

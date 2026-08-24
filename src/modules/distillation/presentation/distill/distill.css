@@ -5,8 +5,8 @@
  * 其它模块(设置、会话页、Skill 管理等)不受影响。
  *
  * 原型的核心设计语言:
- *   - 卡片:`border-radius: var(--radius)` + `box-shadow: var(--elev-1), var(--hairline)`,
- *     hover 升到 --elev-2。尖角(rounded-none/sm/md)统一收成 calc(var(--radius) - 4px)。
+ *   - 卡片:`border-radius: var(--radius)`,不带阴影(工作台扁平风格)。
+ *     尖角(rounded-none/sm/md)统一收成 calc(var(--radius) - 4px)。
  *   - 分隔线:不做描边,用 inset 顶线分层(--rowline)。
  *   - tt-toolbar:原型是裸 flex(无边框盒);tt-overlay 透明度 0.68(当前全局是 0.62)。
  */
@@ -22,23 +22,21 @@
   --overlay: oklch(0 0 0 / 0.68);
 }
 
-/* ── 卡片:连续圆角 + 柔和分层投影(原型 @layer base 的卡片处理) ────── */
+/* ── 卡片:连续圆角,去投影(卡片不再带阴影,保持与工作台扁平一致) ────── */
 .distill-workbench .bg-card,
 .distill-workbench .tt-panel,
 .distill-workbench .tt-glass,
 .distill-workbench .tt-metric,
 .distill-workbench .bg-popover {
   border-radius: var(--radius);
-  box-shadow: var(--elev-1), var(--hairline);
-  transition:
-    box-shadow 0.22s ease,
-    background-color 0.22s ease;
+  box-shadow: none;
+  transition: background-color 0.22s ease;
 }
 
 .distill-workbench .bg-card:hover,
 .distill-workbench .tt-panel:hover,
 .distill-workbench .tt-metric:hover {
-  box-shadow: var(--elev-2), var(--hairline);
+  box-shadow: none;
 }
 
 /* 当前项目的 .tt-panel > header 加了渐隐底,原型 Panel 没有——作用域内复位。 */

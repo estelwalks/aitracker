@@ -25,7 +25,7 @@ export const distill = {
   drawerTitle: "素材ライブラリ · セッション断片を選択",
   drawerSub: "左でセッションを選び、右で蒸留する断片にチェックを入れます",
   drawerEsc: "ESC で閉じる",
-  joinWhole: "セッション全体を追加",
+  joinWhole: "すべて選択",
   footerSelected: "選択中",
   footerSessions: "セッション",
   footerSegments: "件の会話",

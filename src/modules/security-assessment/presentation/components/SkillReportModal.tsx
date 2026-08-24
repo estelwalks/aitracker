@@ -328,7 +328,7 @@ function ScoreHeader({
     "low",
   ];
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-xl bg-surface px-4 py-4 ring-1 ring-border/50">
+    <div className="flex flex-wrap items-center gap-4 rounded-xl bg-surface px-4 py-4 ring-1 ring-border/50">
       <div>
         <div className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
           {t("security.center.reportModal.securityScore")}

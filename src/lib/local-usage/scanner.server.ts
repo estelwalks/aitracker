@@ -1729,7 +1729,7 @@ async function parseOpenclawUsageFile(
   return { identifiedEvents, malformedLines, diagnostics: [] };
 }
 
-/** TokenTracker-compatible local estimate: CJK chars count one each, other text one per four chars. */
+/** Legacy-compatible local estimate: CJK chars count one each, other text one per four chars. */
 function estimateAntigravityTokens(value: unknown): number {
   const text =
     typeof value === "string"

@@ -240,7 +240,7 @@ export const dashboard = {
     projectSessionBackendRequired: "需后端修复",
     projectDeltaCol: "环比",
     projectTotalQuota: "总消耗额度",
-    projectTopShare: "TOP {count} 占比 {share}%",
+    projectTopShare: "TOP {count} 占比 {share}",
     projectTotal: "共 {count} 个项目",
     projectOther: "其他 {count} 个项目",
     projectViewDetail: "查看所有项目消耗明细",

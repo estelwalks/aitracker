@@ -250,7 +250,7 @@ export const dashboard = {
     projectSessionBackendRequired: "バックエンド修正が必要",
     projectDeltaCol: "前回比",
     projectTotalQuota: "総消費枠",
-    projectTopShare: "TOP {count} · {share}%",
+    projectTopShare: "TOP {count} · {share}",
     projectTotal: "全 {count} プロジェクト",
     projectOther: "他 {count} プロジェクト",
     projectViewDetail: "すべてのプロジェクト消費明細を表示",

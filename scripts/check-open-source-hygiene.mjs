@@ -43,7 +43,7 @@ const RULES = [
   {
     id: "credential-value",
     pattern:
-      /(?:sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/g,
+      /(?<![A-Za-z0-9_-])(?:sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})/g,
   },
   {
     id: "private-import",

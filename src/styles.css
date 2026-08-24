@@ -2,6 +2,31 @@
 @source "../src";
 @import "tw-animate-css";
 
+html.tt-widget-float-document,
+body.tt-widget-float-document {
+  min-width: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.tt-widget-float-shell,
+.tt-widget-float-stage {
+  background: transparent;
+}
+
+.tt-widget-float-stage {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(188 143 113 / 0.9), transparent 38%),
+    linear-gradient(140deg, #a57d68 0%, #645b64 42%, #26374f 100%);
+  border-radius: 40px;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -737,6 +762,16 @@
     transition: background-color 0.16s ease;
   }
 
+  /* 安全页等场景：表头不用灰色底条，改用细分隔线，与卡片底色一致。 */
+  &.tt-table--clean-head thead {
+    background: transparent;
+  }
+
+  &.tt-table--clean-head th {
+    border-bottom: 1px solid
+      color-mix(in oklab, var(--color-border) 78%, transparent);
+  }
+
   & tbody tr:hover {
     background: color-mix(in oklab, var(--color-primary) 5%, transparent);
   }
@@ -1385,6 +1420,15 @@
   font-weight: 600;
 }
 
+/* 亮色主题下 --foreground 变成深色，直接沿用会让首页动作按钮变成
+   “黑底绿字”。与原型一致：亮色主题保持浅色底 + 绿色文字的胶囊钮。 */
+.theme-light .dashboard-spotlight-card > a,
+.theme-light .dashboard-spotlight-card > button {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  color: oklch(0.43 0.095 162);
+}
+
 /* The range bar container follows the reference sticky strip (border-y,
    transparent background); this rule only styles its inner controls. */
 .dashboard-range-bar button,
@@ -1449,7 +1493,9 @@
 }
 .dashboard-metric-card {
   padding: 0.875rem 1rem;
-  border-radius: 0;
+  /* 保持与 shared 规则一致的圆角（之前被覆盖成 0，卡片变直角）；
+     Agent 活跃等首页指标卡应为圆角卡片。 */
+  border-radius: var(--radius-md);
   box-shadow: none;
   transition: background-color 0.16s ease;
 }
@@ -1643,7 +1689,11 @@
 }
 
 .dashboard-calendar-cell-level-0 {
-  background: var(--color-surface);
+  /* 面板底色也是 --surface，纯 surface 填充会让无活跃的格子完全隐形；
+     改成 card 填充 + 细描边，保证空日历也有可见的网格骨架。 */
+  background: var(--color-card);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--color-foreground) 8%, transparent);
 }
 /* 少 → 多 均为绿色（--chart-1），随等级加深（与原型 levelBg 一致） */
 .dashboard-calendar-cell-level-1 {

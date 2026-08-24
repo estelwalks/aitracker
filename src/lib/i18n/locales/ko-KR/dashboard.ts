@@ -244,7 +244,7 @@ export const dashboard = {
     projectSessionBackendRequired: "백엔드 수정 필요",
     projectDeltaCol: "전 기간 대비",
     projectTotalQuota: "총 소비 한도",
-    projectTopShare: "TOP {count} · {share}%",
+    projectTopShare: "TOP {count} · {share}",
     projectTotal: "총 {count}개 프로젝트",
     projectOther: "기타 {count}개 프로젝트",
     projectViewDetail: "모든 프로젝트 사용량 상세 보기",

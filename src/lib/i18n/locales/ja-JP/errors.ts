@@ -46,6 +46,8 @@ export const errors = {
     duplicateName: "対象に同名の Skill がすでに存在します",
     noSkillSelected: "少なくとも 1 つの Skill を選択してください",
     notFound: "Skill が見つからないか、読み取れません",
+    toolNotInstalled:
+      "{agent} が見つかりません。対象ツールがインストールされていないため、Skill をインストールできません",
   },
   sessions: {
     filterInvalid: "セッションフィルターが不正です",

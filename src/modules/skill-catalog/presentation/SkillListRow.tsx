@@ -103,7 +103,7 @@ export function SkillListRow({
             event.stopPropagation();
             onSelect();
           }}
-          className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border transition-colors ${
+          className={`grid size-5 shrink-0 place-items-center self-center rounded-[6px] border transition-colors ${
             selected
               ? "border-foreground bg-foreground text-background"
               : "border-border bg-surface-2 text-transparent hover:text-muted-foreground"
@@ -115,7 +115,7 @@ export function SkillListRow({
         {/* 安全状态胶囊：图标 + 文字横向排列，未扫描为中性待扫描态 */}
         <span
           title={verdictLabel}
-          className={`mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] leading-none ${
+          className={`inline-flex shrink-0 items-center gap-1.5 self-center rounded-full border px-2.5 py-1.5 text-[11px] leading-none ${
             verdict === "ok"
               ? "border-ok/25 bg-ok/10 text-ok"
               : verdict === "warn"

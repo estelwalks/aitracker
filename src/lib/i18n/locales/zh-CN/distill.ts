@@ -24,7 +24,7 @@ export const distill = {
   drawerTitle: "素材库 · 选择会话片段",
   drawerSub: "左侧选会话，右侧勾选要蒸馏的具体片段",
   drawerEsc: "ESC 关闭",
-  joinWhole: "整场加入",
+  joinWhole: "全选",
   footerSelected: "已选",
   footerSessions: "场会话",
   footerSegments: "条对话",

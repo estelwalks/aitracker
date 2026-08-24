@@ -1,9 +1,5 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
-import {
-  DistillButton,
-  notifyDistillStarted,
-} from "../../../components/DistillButton.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -456,7 +452,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 
 function SessionRow({ session }: { session: SessionSummary }) {
   const { t, format } = useI18n();
-  const navigate = useNavigate();
   const status = STATUS_META[session.status];
   const detailAvailable = session.sessionId !== "unavailable";
 
@@ -515,21 +510,9 @@ function SessionRow({ session }: { session: SessionSummary }) {
           {session.statusReason ? <span>{session.statusReason}</span> : null}
         </div>
       </div>
-      {/* 右侧：仅功能按钮（恢复对话/命令行 + 蒸馏） */}
+      {/* 右侧：恢复对话/命令行按钮 */}
       <div className="flex shrink-0 items-center gap-2">
         <ResumeSessionButton session={session} />
-        <DistillButton
-          size="sm"
-          count={1}
-          onClick={() =>
-            notifyDistillStarted({
-              sessions: 1,
-              minutes: 1,
-              t,
-              onGo: () => void navigate({ to: "/distill" }),
-            })
-          }
-        />
       </div>
     </li>
   );
