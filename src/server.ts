@@ -110,8 +110,9 @@ async function maybeHandleSecurityDevRequest(
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      // The bootstrap is a no-op for web development by policy, while desktop
-      // composition may inject the scheduler before the first SSR request.
+      // First-run collectors intentionally form the desktop startup barrier:
+      // the main document should not open before its local workspace data is
+      // ready. Web development resolves this bootstrap to a policy no-op.
       await ensureBackgroundRuntimeStarted();
       const desktopState = await handleDesktopStateBrokerRequest(request);
       if (desktopState) return desktopState;
