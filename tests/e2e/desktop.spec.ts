@@ -259,9 +259,11 @@ test("设置加载完成", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "设置", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("界面语言", { exact: true })).toBeVisible();
+  await expect(page.getByText("开机自启", { exact: true })).toBeVisible();
   await expect(page.getByText("数据路径", { exact: true })).toBeVisible();
   await expect(page.getByText("清除缓存", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "外观", exact: true }).click();
+  await expect(page.getByText("主题", { exact: true })).toBeVisible();
 });
 
 test("本地采集状态仅在数据来源页展示真实结果", async ({ page }) => {
@@ -288,6 +290,7 @@ test("设置页偏好可修改并在当前隔离上下文持久化", async ({ pa
   // 接管）：否则点击会命中 SSR 静态按钮（无事件处理器），更改不生效。
   await page.waitForURL(/locale=/, { timeout: 15_000 });
 
+  await page.getByRole("button", { name: "外观", exact: true }).click();
   await page.getByRole("button", { name: "USD", exact: true }).click();
   await expect(page).toHaveURL(/currency=USD/);
 

@@ -2,7 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "proma",
-  "display": { "name": "Proma", "nameZh": "Proma", "icon": "other", "color": "#f97316" },
+  "display": { "name": "Proma", "nameZh": "Proma", "icon": "https://proma.cool/favicon.png", "color": "#f97316" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {
     "locations": [{ "targets": ["macos", "windows10", "windows11", "linux"], "base": "home", "path": ".proma/agent-sessions" }]

@@ -1,9 +1,5 @@
 export const theme = {
-  dark: { label: "Dark", desc: "Default, everyday use" },
+  system: { label: "System", desc: "Follow the system appearance" },
   light: { label: "Light", desc: "Daytime / meetings & demos" },
-  contrast: {
-    label: "High Contrast",
-    desc: "Projectors / large screens / accessibility",
-  },
-  warm: { label: "Warm", desc: "Reduced blue light at night" },
+  dark: { label: "Dark", desc: "Default, everyday use" },
 } as const;

@@ -76,7 +76,11 @@ export interface I18nContextValue {
   displayCurrency: Currency;
   currencyMode: PreferenceMode;
   currencySource: PreferenceSource;
-  /** Switch the display-currency preference, independent of the language. */
+  /**
+   * Switch the display-currency preference. A language change synchronizes
+   * the currency to its matching locale; a later manual currency choice stays
+   * independent until the next language change.
+   */
   setCurrencyMode: (mode: PreferenceMode, currency?: Currency) => void;
   /** Latest exchange-rate snapshot (one shared snapshot for all amounts). */
   rates: RatesSnapshot | null;
@@ -295,16 +299,29 @@ export function I18nProvider({
 
   const setLocaleMode = useCallback(
     (mode: PreferenceMode, locale?: Locale) => {
+      const nextLocale =
+        mode === "manual" ? (locale ?? systemLocale) : systemLocale;
+      const syncedCurrency = mapSystemCurrency(nextLocale);
+
       if (mode === "manual" && locale != null) {
         setManualLocale(locale);
         void setPreference(LOCALE_STORAGE_KEY, locale);
       }
       setLocaleModeState(mode);
       void setPreference(LOCALE_MODE_STORAGE_KEY, mode);
-      updateSearchParams(
-        mode === "manual" ? (locale ?? systemLocale) : systemLocale,
-        currencyRef.current,
-      );
+
+      // A language change is an explicit user action, so synchronize the
+      // currency once here. Keeping this in the handler (instead of an effect
+      // watching `locale`) lets a later manual currency choice remain stable
+      // across unrelated renders.
+      setManualCurrency(syncedCurrency);
+      setCurrencyModeState("manual");
+      void setPreference(CURRENCY_STORAGE_KEY, syncedCurrency);
+      void setPreference(CURRENCY_MODE_STORAGE_KEY, "manual");
+
+      localeRef.current = nextLocale;
+      currencyRef.current = syncedCurrency;
+      updateSearchParams(nextLocale, syncedCurrency);
     },
     [systemLocale],
   );

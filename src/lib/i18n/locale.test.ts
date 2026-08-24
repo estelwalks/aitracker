@@ -78,13 +78,16 @@ test("类型护栏: Locale 只能取自 LOCALES", () => {
   assert.ok(LOCALES.includes(l));
 });
 
-test("mapSystemCurrency: 系统 locale 地区映射展示货币, 未覆盖回退 USD", () => {
+test("mapSystemCurrency: 四种界面语言映射到对应展示货币", () => {
   assert.equal(mapSystemCurrency("zh-CN"), "CNY");
-  assert.equal(mapSystemCurrency("zh"), "CNY");
-  assert.equal(mapSystemCurrency("ja-JP"), "JPY");
-  assert.equal(mapSystemCurrency("ja"), "JPY");
-  assert.equal(mapSystemCurrency("ko-KR"), "KRW");
   assert.equal(mapSystemCurrency("en-US"), "USD");
+  assert.equal(mapSystemCurrency("ja-JP"), "JPY");
+  assert.equal(mapSystemCurrency("ko-KR"), "KRW");
+});
+
+test("mapSystemCurrency: 系统 locale 的主语言标签也能映射, 未覆盖回退 USD", () => {
+  assert.equal(mapSystemCurrency("zh"), "CNY");
+  assert.equal(mapSystemCurrency("ja"), "JPY");
   assert.equal(mapSystemCurrency("en-GB"), "USD");
   assert.equal(mapSystemCurrency("fr-FR"), "USD");
   assert.equal(mapSystemCurrency(null), "USD");
