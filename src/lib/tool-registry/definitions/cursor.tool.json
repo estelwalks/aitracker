@@ -39,8 +39,21 @@
         ],
         "base": "configHome",
         "path": "tokscale/cursor-cache"
+      },
+      {
+        "targets": [
+          "windows10",
+          "windows11"
+        ],
+        "base": "appDataRoaming",
+        "path": "Cursor"
       }
-    ]
+    ],
+    "executable": {
+      "shared": [
+        "cursor"
+      ]
+    }
   },
   "storage": {
     "skills": {

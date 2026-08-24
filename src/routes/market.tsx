@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import { getMarketSkills } from "../modules/skill-distribution/query";

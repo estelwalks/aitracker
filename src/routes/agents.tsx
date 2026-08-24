@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
 import { getSecuritySkillVerdicts } from "../modules/security-assessment/query/agent-verdicts";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 
 // The route forwards opaque installationRef values from the public query facade;

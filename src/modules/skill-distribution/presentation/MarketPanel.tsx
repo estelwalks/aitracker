@@ -88,13 +88,16 @@ function securityOf(skill: MarketSkill, t: TFunction): SecurityState {
   return safe ? "safe" : "attention";
 }
 
-/** 真实 tags → 领域分类标签（原型行内领域徽章）。 */
-function domainOf(skill: MarketSkill): string {
+/**
+ * 真实 tags → 领域分类标签（原型行内领域徽章）。没有匹配到领域时返回
+ * null，调用方不渲染徽章——避免在列表名称与安全状态之间出现占位的 "-"。
+ */
+function domainOf(skill: MarketSkill): string | null {
   const tags = new Set(skill.tags ?? []);
   const matched = MARKET_DOMAINS.find((item) =>
     item.tags.some((tag) => tags.has(tag)),
   );
-  return matched?.label ?? skill.tags?.[0] ?? "-";
+  return matched?.label ?? skill.tags?.[0] ?? null;
 }
 
 const SORT_OPTIONS: { value: MarketSort; labelKey: MessageKey }[] = [
@@ -507,9 +510,11 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                           >
                             {skill.name}
                           </button>
-                          <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
-                            {domainOf(skill)}
-                          </span>
+                          {domainOf(skill) != null && (
+                            <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
+                              {domainOf(skill)}
+                            </span>
+                          )}
                           <span
                             className={`inline-flex shrink-0 items-center gap-1 text-[11px] ${
                               security === "safe"
@@ -725,9 +730,6 @@ function MarketDetailModal({
                 {t("market.installed")}
               </Badge>
             )}
-            <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-              {skill.repoOwner || "-"} · {domainOf(skill)}
-            </span>
           </DialogTitle>
         </DialogHeader>
 

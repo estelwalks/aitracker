@@ -86,7 +86,8 @@ export function RoastBoard({
     value,
     label: t(DIMENSION_KEY[value]),
   }));
-  const maxTok = Math.max(...rows.map((row) => row.tokens), 1);
+  // 用 reduce 代替 Math.max(...) 展开：会话榜行数可能很大，避免栈溢出。
+  const maxTok = rows.reduce((max, row) => Math.max(max, row.tokens), 1);
 
   return (
     <Panel

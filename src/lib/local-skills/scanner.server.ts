@@ -27,7 +27,9 @@ import { APP_DATA_DIR, MARKET_API_BASE } from "../app-config";
 import { AppError } from "../errors";
 import { AI_TOOLS } from "../tools/catalog.ts";
 import { RUNTIME_POLICY } from "../../app/runtime-policy.generated.ts";
+import { getTool } from "../tool-registry/registry.ts";
 import {
+  detectToolExecutables,
   detectToolInstallations,
   type ToolInstallationFact,
 } from "../tools/detection.server.ts";
@@ -1040,6 +1042,41 @@ export async function readSkillFiles(
   return { name: safeName, root: basename(rootPath), files };
 }
 
+/**
+ * 安装前置校验：目标工具必须真实安装，否则拒绝写入并给出明确提示。
+ *
+ * IDE 类工具（如 Cursor）的配置目录可能只是应用残留、甚至由本应用写入
+ * skill 目录时顺带创建，不足以证明工具本体已安装——因此对声明了
+ * `detection.executable` 的 IDE 工具要求 PATH 中存在对应可执行文件
+ * （Cursor 的 `cursor` 命令）。CLI 工具沿用目录探测的宽松判定，避免误伤
+ * 已安装但未把 CLI 放进 PATH 的工具（如 Gemini CLI / Grok Build）。
+ *
+ * 仅在生产 home（未注入 `homeDirectory`）下执行——测试注入的临时 home 不
+ * 触发该校验，从而保持隔离测试不依赖真实机器环境。
+ */
+export async function assertTargetToolInstalled(
+  targetAgent: SkillAgent,
+  options: SkillOpOptions = {},
+): Promise<void> {
+  // 测试/工具注入的隔离 home 不执行真实环境校验。
+  if (options.homeDirectory != null) return;
+  const rule = RULE_BY_AGENT.get(targetAgent);
+  const tool = rule
+    ? AI_TOOLS.find((candidate) => candidate.id === rule.toolId)
+    : undefined;
+  if (!tool) return;
+  if (tool.toolSurface !== "ide") return;
+  const toolDef = getTool(tool.id);
+  const executables = toolDef?.detection.executable ?? [];
+  if (executables.length === 0) return;
+  const found = await detectToolExecutables([tool]);
+  if ((found.get(tool.id)?.length ?? 0) === 0) {
+    throw new AppError("errors.skills.toolNotInstalled", {
+      agent: targetAgent,
+    });
+  }
+}
+
 async function copySkillToAgent(
   input: {
     sourcePath: string;
@@ -1050,6 +1087,10 @@ async function copySkillToAgent(
 ): Promise<string> {
   if (!SKILL_AGENTS.includes(input.targetAgent))
     throw new AppError("errors.skills.unsupportedAgent");
+
+  // 未安装的工具不接受安装/同步写入（如只有残留 ~/.cursor 目录但没有
+  // Cursor 本体时，明确提示工具未安装而不是假装成功）。
+  await assertTargetToolInstalled(input.targetAgent, options);
 
   const roots = resolveAgentRoots(
     options.homeDirectory ?? homedir(),

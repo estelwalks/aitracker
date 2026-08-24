@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { createLazyFileRoute } from "@tanstack/react-router";
 
-import { JarvisWidget } from "../modules/widget/presentation/JarvisWidget";
+import { GlassOverviewWidget } from "../modules/widget/presentation/GlassOverviewWidget";
 import { WidgetPage } from "../modules/widget/presentation/WidgetPage";
 
 export const Route = createLazyFileRoute("/widget")({
@@ -9,10 +10,21 @@ export const Route = createLazyFileRoute("/widget")({
 
 function WidgetRoutePage() {
   const { mode } = Route.useSearch();
+
+  useEffect(() => {
+    if (mode !== "float") return;
+    document.documentElement.classList.add("tt-widget-float-document");
+    document.body.classList.add("tt-widget-float-document");
+    return () => {
+      document.documentElement.classList.remove("tt-widget-float-document");
+      document.body.classList.remove("tt-widget-float-document");
+    };
+  }, [mode]);
+
   if (mode === "float") {
     return (
-      <div className="tt-xscroll py-1">
-        <JarvisWidget className="mx-auto" />
+      <div className="tt-widget-float-stage">
+        <GlassOverviewWidget />
       </div>
     );
   }

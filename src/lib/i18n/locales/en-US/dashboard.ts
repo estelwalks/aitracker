@@ -245,7 +245,7 @@ export const dashboard = {
     projectSessionBackendRequired: "Backend fix required",
     projectDeltaCol: "Delta",
     projectTotalQuota: "Total usage",
-    projectTopShare: "TOP {count} · {share}%",
+    projectTopShare: "TOP {count} · {share}",
     projectTotal: "{count} projects",
     projectOther: "{count} other projects",
     projectViewDetail: "View all project usage details",

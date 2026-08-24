@@ -88,6 +88,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  if (isWidgetFloat) {
+    return (
+      <div className="tt-widget-float-shell min-h-screen text-foreground">
+        <main className="min-h-screen">{children}</main>
+      </div>
+    );
+  }
+
   const railWidth = collapsed ? 64 : sidebarWidth;
 
   return (
@@ -126,7 +134,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={item.to}
                   to={item.to}
                   title={label}
-                  className={`group relative flex items-center gap-3 rounded-md px-3 py-2 transition-colors ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+                  className={`group relative flex items-center rounded-md py-2 transition-colors ${
+                    collapsed ? "justify-center px-0" : "gap-3 px-3"
+                  } ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
                   aria-current={active ? "page" : undefined}
                 >
                   <Icon
@@ -148,7 +158,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/sources"
             title={t("nav.sources")}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+            className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-3 px-3"
+            } ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
           >
             <Database className="size-4 shrink-0" strokeWidth={1.75} />
             {!collapsed && <span className="truncate">{t("nav.sources")}</span>}
@@ -156,7 +168,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             to="/settings"
             title={t("nav.settings")}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-[13px] transition-colors ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+            className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-3 px-3"
+            } ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
           >
             <Settings className="size-4 shrink-0" strokeWidth={1.75} />
             {!collapsed && (
@@ -167,7 +181,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setCollapsed((value) => !value)}
             title={t("nav.collapse")}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+            className={`flex w-full items-center rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground ${
+              collapsed ? "justify-center px-0" : "gap-3 px-3"
+            }`}
           >
             {collapsed ? (
               <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.75} />
@@ -192,10 +208,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* 全局隐私承诺条：常驻底部（参照 V3.0 原型 PrivacyStrip） */}
+      {/* 全局隐私承诺条：常驻底部（参照 V3.0 原型 PrivacyStrip）。从侧边栏
+          右侧开始铺开（left = railWidth），不覆盖侧边栏底部的「收起」按钮，
+          否则收起后无法再点开侧边栏。 */}
       <div
-        className="fixed inset-x-0 bottom-0 z-40 transition-[padding] duration-200"
-        style={{ paddingLeft: railWidth }}
+        className="fixed right-0 bottom-0 z-40 transition-[left] duration-200"
+        style={{ left: railWidth }}
       >
         <PrivacyStrip />
       </div>

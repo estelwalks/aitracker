@@ -40,6 +40,8 @@ export const errors = {
     duplicateName: "대상 위치에 같은 이름의 Skill이 이미 있습니다",
     noSkillSelected: "Skill을 하나 이상 선택하세요",
     notFound: "Skill을 찾을 수 없거나 읽을 수 없습니다",
+    toolNotInstalled:
+      "{agent}를 감지하지 못했습니다. 대상 도구가 설치되지 않아 Skill을 설치할 수 없습니다",
   },
   sessions: {
     filterInvalid: "세션 필터가 올바르지 않습니다",

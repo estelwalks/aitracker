@@ -29,6 +29,8 @@ test("launches only the registered tokenized command without a shell", async () 
       queueMicrotask(() => child.emit("spawn"));
       return child;
     }) as unknown as typeof spawn,
+    // Deterministic: bypass the login-shell PATH resolver for unit tests.
+    resolveExecutable: async (file) => file,
   });
 
   await executor.execute({ source: "codex", sessionId: "safe-id_01" });
@@ -42,6 +44,25 @@ test("launches only the registered tokenized command without a shell", async () 
     windowsHide: true,
   });
   assert.equal(child.unrefCalled, true);
+});
+
+test("uses the resolved executable path when the resolver returns one", async () => {
+  const calls: unknown[][] = [];
+  const child = new FakeChild();
+  const executor = createNodeResumeExecutor({
+    spawn: ((...args: unknown[]) => {
+      calls.push(args);
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    }) as unknown as typeof spawn,
+    resolveExecutable: async () => "/custom/bin/codex",
+  });
+
+  await executor.execute({ source: "codex", sessionId: "safe-id_01" });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.[0], "/custom/bin/codex");
+  assert.deepEqual(calls[0]?.[1], ["resume", "safe-id_01"]);
 });
 
 test("rejects unregistered sources and unsafe ids before spawning", async () => {
@@ -67,6 +88,7 @@ test("cancels a pending launch without exposing or executing another command", a
   const controller = new AbortController();
   const executor = createNodeResumeExecutor({
     spawn: (() => child) as unknown as typeof spawn,
+    resolveExecutable: async (file) => file,
   });
 
   const pending = executor.execute(

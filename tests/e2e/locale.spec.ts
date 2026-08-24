@@ -7,12 +7,17 @@ import { expect, test } from "playwright/test";
  *  - URL ?locale= 被写回,SSR 首帧与客户端一致
  */
 
-test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("tt-locale", "en-US");
-    window.localStorage.setItem("tt-locale-mode", "manual");
-  });
+async function selectLanguage(
+  page: import("playwright/test").Page,
+  label: "中文" | "English" | "日本語",
+) {
+  await page.goto("/settings");
+  await page.waitForURL(/locale=/, { timeout: 15_000 });
+  await page.getByRole("button", { name: label, exact: true }).click();
+}
 
+test("en-US 偏好经 SQLite 生效,首屏无中文残留", async ({ page }) => {
+  await selectLanguage(page, "English");
   await page.goto("/");
   // 新首页（V3.0）英文标题是「Today's insight」，不再是旧 UI 的「Dashboard」。
   // 首页 SSR 需扫描本地日志（本机高负载下首屏可能接近 10s），放宽断言超时。
@@ -36,34 +41,14 @@ test("en-US 偏好经 localStorage 生效,首屏无中文残留", async ({ page 
 });
 
 test("设置页切换 ja-JP 即时生效并跨刷新保持", async ({ page }) => {
-  // 固定浏览器语言为 zh-CN 且无存储偏好,保证默认语言确定(系统语言回退逻辑)
-  await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    Object.defineProperty(window.navigator, "language", {
-      get: () => "zh-CN",
-      configurable: true,
-    });
-  });
-
-  await page.goto("/settings");
-  // 等待 React hydration 完成（URL 出现 locale 参数即 search-param 同步已
-  // 接管）：否则点击会命中 SSR 静态按钮（无事件处理器），切换不生效。
-  await page.waitForURL(/locale=/, { timeout: 15_000 });
-
-  // 默认中文
-  await expect(
-    page.getByRole("heading", { name: "设置", exact: true }),
-  ).toBeVisible();
-
-  // 点击语言分段控件里的「日本語」
-  await page.getByRole("button", { name: "日本語", exact: true }).click();
+  await selectLanguage(page, "日本語");
 
   // 即时生效:页面标题、导航与 html lang
   await expect(
     page.getByRole("heading", { name: "設定", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "セキュリティと防御" }),
+    page.getByRole("link", { name: "セキュリティ検査" }),
   ).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.lang))
@@ -82,12 +67,7 @@ test("设置页切换 ja-JP 即时生效并跨刷新保持", async ({ page }) =>
 });
 
 test("切回中文并校验 ?locale 同步", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.localStorage.setItem("tt-locale", "en-US");
-    window.localStorage.setItem("tt-locale-mode", "manual");
-  });
-  await page.goto("/settings");
-  await page.waitForURL(/locale=/, { timeout: 15_000 });
+  await selectLanguage(page, "English");
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
   ).toBeVisible();
@@ -105,19 +85,7 @@ test("切回中文并校验 ?locale 同步", async ({ page }) => {
 });
 
 test("展示货币手动切换 JPY 并校验汇率区与 ?currency 同步", async ({ page }) => {
-  // 固定浏览器语言为 zh-CN(CNY),无存储偏好
-  await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-currency-mode");
-    window.localStorage.removeItem("tt-display-currency");
-    Object.defineProperty(window.navigator, "language", {
-      get: () => "zh-CN",
-      configurable: true,
-    });
-  });
-
-  await page.goto("/settings");
-  await page.waitForURL(/locale=/, { timeout: 15_000 });
+  await selectLanguage(page, "中文");
 
   // 默认:展示货币跟随系统(zh-CN → CNY),汇率区显示 CNY
   await page.getByRole("button", { name: "JPY", exact: true }).click();
@@ -130,7 +98,7 @@ test("展示货币手动切换 JPY 并校验汇率区与 ?currency 同步", asyn
     .toBe("JPY");
 
   // 切回跟随系统 → 回到 CNY(zh-CN 系统地区)
-  // 注意:页面有两个"跟随系统"按钮(语言区与货币区),取货币区的第二个
+  // 页面有两个“跟随系统”按钮，货币区是第二个。
   await page
     .getByRole("button", { name: "跟随系统", exact: true })
     .nth(1)

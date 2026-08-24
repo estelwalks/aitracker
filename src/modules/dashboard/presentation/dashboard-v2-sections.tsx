@@ -706,11 +706,7 @@ export function DashboardToolSwitcher({
               className={selected === tool.id ? "dashboard-tool-active" : ""}
               style={{ "--dashboard-tool-color": color } as React.CSSProperties}
             >
-              <BrandIcon
-                name={tool.icon ?? tool.name}
-                className="size-4"
-                color={color}
-              />
+              <BrandIcon name={tool.name} className="size-4" color={color} />
               {tool.name}
             </button>
           );
@@ -776,11 +772,7 @@ export function DashboardModelDonut({
                   title={tool}
                   className="grid size-4 place-items-center rounded-full bg-surface-2"
                 >
-                  <BrandIcon
-                    name={display?.icon ?? tool}
-                    className="size-2.5"
-                    color={color}
-                  />
+                  <BrandIcon name={tool} className="size-2.5" color={color} />
                 </span>
               );
             })}
@@ -1128,7 +1120,29 @@ export function DashboardContribHeatmap({
   periodLabel?: string;
 }) {
   const { format, t } = useI18n();
-  const cells = points.slice(-365);
+  // 完全没有活跃数据时也合成最近 365 天（全零），保证日历骨架始终有样式，
+  // 不会渲染成空白面板。
+  const cells = useMemo(() => {
+    if (points.length > 0) return points.slice(-365);
+    const out: DashboardV2CalendarPoint[] = [];
+    const end = new Date();
+    for (let i = 364; i >= 0; i -= 1) {
+      const date = addLocalDays(end, -i);
+      const key = localDayKey(date);
+      out.push({
+        date: key,
+        tokens: 0,
+        events: 0,
+        cacheTokens: 0,
+        netInputTokens: 0,
+        outputTokens: 0,
+        sessions: null,
+        previousTokens: null,
+        active: false,
+      });
+    }
+    return out;
+  }, [points]);
   const max = Math.max(...cells.map((point) => point.tokens), 1);
   const [hover, setHover] = useState<{
     key: string;
@@ -1486,7 +1500,7 @@ export function DashboardAgentWorkstreams({
           </p>
         </div>
         <Link
-          to="/security"
+          to="/agents"
           className="font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
           {t("dashboard.v2.manageAll")} →
@@ -1507,7 +1521,7 @@ export function DashboardAgentWorkstreams({
                   onClick={() => setOpen(expanded ? null : tool.id)}
                 >
                   <BrandIcon
-                    name={tool.icon ?? tool.name}
+                    name={tool.name}
                     color={tool.color ?? brandColorOf(tool.name)}
                     className="size-5"
                   />

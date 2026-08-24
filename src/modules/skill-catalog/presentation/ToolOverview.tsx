@@ -347,7 +347,7 @@ function ToolBadgeWall({
                 style={{ background: `${color}1f` }}
               >
                 <BrandIcon
-                  name={card.icon ?? card.name}
+                  name={card.name}
                   className="size-3.5"
                   color={color}
                 />
@@ -417,7 +417,7 @@ function TrendPanel({
   name: string;
   /** 注册表 display.color（可空，回退名称启发式）。 */
   brandColor?: string;
-  /** 注册表 display.icon（可空，回退名称匹配）。 */
+  /** 注册表显示名（可空，回退名称匹配；用于品牌 logo 查询）。 */
   brandIcon?: string;
   trend: readonly { date: string; tokens: number }[];
   totalTokens: number;
@@ -1162,7 +1162,7 @@ export function ToolOverview({
       <TrendPanel
         name={selectedName}
         brandColor={selected?.color}
-        brandIcon={selected?.icon}
+        brandIcon={selected?.name}
         trend={toolOverview.trend}
         totalTokens={toolOverview.totalTokens}
         avgTokens={averageTrendTokens}
@@ -1174,14 +1174,14 @@ export function ToolOverview({
       <ContextTreePanel
         name={selectedName}
         brandColor={selected?.color}
-        brandIcon={selected?.icon}
+        brandIcon={selected?.name}
         view={toolOverview}
       />
 
       <ToolModelPanel
         name={selectedName}
         brandColor={selected?.color}
-        brandIcon={selected?.icon}
+        brandIcon={selected?.name}
         mode={detailMode}
         onModeChange={setDetailMode}
         rows={detailRows}

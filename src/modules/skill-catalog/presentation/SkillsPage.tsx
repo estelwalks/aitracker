@@ -651,6 +651,11 @@ export function SkillsPage({
                 ))}
               </div>
 
+              {/* 分隔线：来源与形态两组分段控件视觉上分开，避免看起来合并成一个 */}
+              <span
+                aria-hidden="true"
+                className="h-5 w-px shrink-0 bg-border"
+              />
               {/* 原型 Segmented：形态（完整包/工作流/Prompt） */}
               <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
                 {[

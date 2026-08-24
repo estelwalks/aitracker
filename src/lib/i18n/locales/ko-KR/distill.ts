@@ -25,7 +25,7 @@ export const distill = {
   drawerTitle: "자료 라이브러리 · 세션 조각 선택",
   drawerSub: "왼쪽에서 세션을 선택하고 오른쪽에서 증류할 조각을 체크하세요",
   drawerEsc: "ESC 닫기",
-  joinWhole: "전체 세션 추가",
+  joinWhole: "전체 선택",
   footerSelected: "선택됨",
   footerSessions: "세션",
   footerSegments: "개 대화",

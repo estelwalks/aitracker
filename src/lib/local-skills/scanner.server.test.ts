@@ -17,6 +17,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { APP_DATA_DIR } from "../app-config";
 
 import {
+  assertTargetToolInstalled,
   batchUninstallLocalSkills,
   installMarketSkill as installMarketSkillWithState,
   readSkillFiles as readSkillFilesWithState,
@@ -1101,5 +1102,32 @@ test("readSkillFiles rejects unknown skills and traversal-shaped names", async (
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects installing into a tool that is not actually installed", async () => {
+  const previousPath = process.env.PATH;
+  const binDir = await mkdtemp(join(tmpdir(), "tt-bin-"));
+  const cursorBin = join(binDir, "cursor");
+  try {
+    await writeFile(cursorBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    process.env.PATH = binDir;
+    // 有可执行文件：视为已安装，校验通过。
+    await assertTargetToolInstalled("Cursor");
+
+    // 移除可执行文件后：IDE 工具（Cursor）未安装，必须拒绝并给出明确提示。
+    await rm(cursorBin);
+    await assert.rejects(
+      assertTargetToolInstalled("Cursor"),
+      /errors\.skills\.toolNotInstalled/,
+    );
+
+    // CLI 工具（Codex）不走可执行文件硬校验，避免误伤已安装但 CLI 不在
+    // PATH 的工具。
+    await assertTargetToolInstalled("Codex");
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    await rm(binDir, { recursive: true, force: true });
   }
 });

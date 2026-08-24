@@ -1,32 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog.tsx";
 import { EmptyState, StatusBadge, TTButton } from "../../../components/tt.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { useReportActions } from "../../reports";
 import type { SessionSummary, SessionTranscriptMessage } from "../contracts.ts";
 import { getSessionTranscript } from "../query.ts";
-import {
-  buildReportText,
-  type ReportInput,
-  type ReportLabel,
-} from "./chat-report.ts";
 import { ResumeSessionButton } from "./ResumeSessionButton.tsx";
 
 /**
  * Session detail panel (Story S-300): sticky header, CLI/client resume card,
- * and the full local conversation with 生成简报 (report) support.
+ * and the full local conversation.
  *
  * PRIVACY BOUNDARY — in-memory only, never persisted or uploaded: the
  * transcript is fetched through the server fn, which reads the user's own
@@ -40,8 +26,6 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
-  const [reportOpen, setReportOpen] = useState(false);
-
   const load = useCallback(() => {
     setStatus("loading");
     void getSessionTranscript({
@@ -56,40 +40,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
 
   useEffect(load, [load]);
 
-  const label = useMemo<ReportLabel>(
-    () => ((key, params) => t(key, params as never)) as ReportLabel,
-    [t],
-  );
-
   const total = transcript.length;
-
-  const reportInput = useCallback(
-    (messages: readonly SessionTranscriptMessage[]): ReportInput => ({
-      session,
-      messages,
-      dateLabel: format.formatDate(session.startedAt),
-      tokensTotal: format.formatTokens(session.totals.totalTokens),
-      tokensIn: format.formatTokens(session.totals.inputTokens),
-      tokensOut: format.formatTokens(session.totals.outputTokens),
-      modelLabel: session.model ?? label("common.unknown"),
-      experienceItems: [
-        label("sessions.transcript.expItem1"),
-        label("sessions.transcript.expItem2"),
-        label("sessions.transcript.expItem3"),
-      ],
-    }),
-    [format, label, session],
-  );
-
-  const reportBody = useMemo(
-    () =>
-      status === "ready" ? buildReportText(reportInput(transcript), label) : "",
-    [reportInput, status, transcript, label],
-  );
-  const reportActions = useReportActions(
-    reportBody,
-    `daily-report-${session.startedAt.slice(0, 10)}`,
-  );
 
   const messageCount = status === "ready" ? total : session.turns;
 
@@ -129,14 +80,6 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
               ) : null}
             </div>
           </div>
-          <TTButton
-            size="sm"
-            onClick={() => setReportOpen(true)}
-            title={t("sessions.transcript.generateReport")}
-          >
-            <FileText className="size-3.5" />
-            {t("sessions.transcript.generateReport")}
-          </TTButton>
           <ResumeSessionButton session={session} />
         </div>
       </div>
@@ -223,46 +166,6 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
           </>
         ) : null}
       </div>
-
-      <Dialog
-        open={reportOpen}
-        onOpenChange={(open) => {
-          if (!open) setReportOpen(false);
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {t("sessions.transcript.reportTitle")} ·{" "}
-              {format.formatDate(session.startedAt)}
-            </DialogTitle>
-            <DialogDescription>
-              {sourceLabel(session.source)} · {session.projectKey} ·{" "}
-              {session.model ?? t("common.unknown")}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="tt-scroll max-h-[60vh] overflow-y-auto pr-1">
-            <pre className="tt-num whitespace-pre-wrap text-[12px] leading-relaxed text-foreground">
-              {reportBody}
-            </pre>
-          </div>
-          <DialogFooter>
-            <TTButton size="sm" onClick={() => void reportActions.copy()}>
-              {t("common.reports.editor.copy")}
-            </TTButton>
-            <TTButton size="sm" onClick={reportActions.exportMd}>
-              {t("common.reports.editor.exportMd")}
-            </TTButton>
-            <TTButton
-              size="sm"
-              variant="primary"
-              onClick={() => setReportOpen(false)}
-            >
-              {t("common.close")}
-            </TTButton>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -49,7 +49,7 @@ export function UnsafeSkillList({
       ) : (
         <>
           <div className="border-t border-border/60">
-            <table className="tt-table w-full">
+            <table className="tt-table tt-table--clean-head w-full">
               <thead>
                 <tr>
                   <th>{t("security.center.result.skill")}</th>
