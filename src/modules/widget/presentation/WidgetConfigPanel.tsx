@@ -104,6 +104,15 @@ export function WidgetConfigPanel({
       {sections.includes("bar") && (
         <section>
           <SectionTitle>{t("widget.configBar")}</SectionTitle>
+          <Row label="动态栏">
+            <Group
+              k="menuBarEnabled"
+              options={[
+                { v: true, label: "开启" },
+                { v: false, label: "关闭" },
+              ]}
+            />
+          </Row>
           <Row label={t("widget.barStyle")} hint={t("widget.barStyleHint")}>
             <Group
               k="barStyle"
