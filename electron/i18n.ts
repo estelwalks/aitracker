@@ -65,6 +65,21 @@ export interface ElectronMessages {
     startupFailure: {
       title: string;
       message: string;
+      diagnosticCode: string; // {code}
+      details: Record<
+        | "database.access-denied"
+        | "database.already-open"
+        | "database.busy"
+        | "database.capability-mismatch"
+        | "database.corrupt"
+        | "database.integrity-check-failed"
+        | "database.io-failure"
+        | "database.journal-not-wal"
+        | "database.migration-checksum"
+        | "database.migration-reverted"
+        | "startup.unavailable",
+        string
+      >;
     };
     dataIncompat: {
       title: string;
@@ -94,8 +109,32 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       },
       startupFailure: {
         title: "启动失败",
-        message:
-          "{appName} 无法访问本地数据。请关闭其他正在运行的 {appName} 或开发服务器后重试。",
+        message: "{appName} 无法初始化本地运行环境。",
+        diagnosticCode: "诊断代码：{code}",
+        details: {
+          "database.access-denied":
+            "当前 Windows 帐户没有本地数据的读写权限，请检查安全软件或受控文件夹访问设置。",
+          "database.already-open":
+            "本地数据正被另一个 AITracker 实例或开发服务器使用。请关闭占用者后重试。",
+          "database.busy":
+            "本地数据仍被占用。请关闭其他 AITracker 实例后重试。",
+          "database.capability-mismatch":
+            "本机 SQLite 运行环境不满足当前版本要求。请重新安装此版本的 AITracker。",
+          "database.corrupt":
+            "本地数据库已损坏。请先备份数据，再清除应用数据并重新启动。",
+          "database.integrity-check-failed":
+            "本地数据库完整性校验失败。请先备份数据，再清除应用数据并重新启动。",
+          "database.io-failure":
+            "无法创建或打开本地数据文件。请检查系统盘空间和安全软件限制。",
+          "database.journal-not-wal":
+            "当前数据位置不支持所需的本地数据库文件锁定方式。请勿将应用数据放在网络或同步磁盘。",
+          "database.migration-checksum":
+            "本地数据版本不匹配。请先备份数据，再清除应用数据并重新启动。",
+          "database.migration-reverted":
+            "本地数据版本不兼容。请先备份数据，再清除应用数据并重新启动。",
+          "startup.unavailable":
+            "无法确定具体原因。请将诊断代码提供给技术支持。",
+        },
       },
       dataIncompat: {
         title: "数据版本不兼容",
@@ -125,8 +164,32 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       },
       startupFailure: {
         title: "Startup failed",
-        message:
-          "{appName} cannot access its local data. Close any other running {appName} instance or development server, then try again.",
+        message: "{appName} could not initialize its local runtime.",
+        diagnosticCode: "Diagnostic code: {code}",
+        details: {
+          "database.access-denied":
+            "Your Windows account cannot read or write the local data. Check security software or Controlled Folder Access.",
+          "database.already-open":
+            "Another AITracker instance or development server is using the local data. Close it and try again.",
+          "database.busy":
+            "The local data is still in use. Close other AITracker instances and try again.",
+          "database.capability-mismatch":
+            "The bundled SQLite runtime is incompatible. Reinstall this AITracker version.",
+          "database.corrupt":
+            "The local database is damaged. Back up the data, then clear the application data and restart.",
+          "database.integrity-check-failed":
+            "The local database integrity check failed. Back up the data, then clear the application data and restart.",
+          "database.io-failure":
+            "The local data files cannot be created or opened. Check free disk space and security software restrictions.",
+          "database.journal-not-wal":
+            "This data location does not support required database locking. Do not place application data on a network or synced drive.",
+          "database.migration-checksum":
+            "The local data version does not match. Back up the data, then clear the application data and restart.",
+          "database.migration-reverted":
+            "The local data version is incompatible. Back up the data, then clear the application data and restart.",
+          "startup.unavailable":
+            "The precise cause is unavailable. Provide the diagnostic code to support.",
+        },
       },
       dataIncompat: {
         title: "Incompatible data version",
@@ -156,8 +219,32 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       },
       startupFailure: {
         title: "起動に失敗しました",
-        message:
-          "{appName} はローカルデータにアクセスできません。実行中の {appName} または開発サーバーを終了してから、もう一度お試しください。",
+        message: "{appName} はローカル実行環境を初期化できませんでした。",
+        diagnosticCode: "診断コード：{code}",
+        details: {
+          "database.access-denied":
+            "Windows アカウントにローカルデータの読み書き権限がありません。セキュリティソフトまたは保護されたフォルダーアクセスを確認してください。",
+          "database.already-open":
+            "別の AITracker または開発サーバーがローカルデータを使用しています。終了してから再試行してください。",
+          "database.busy":
+            "ローカルデータはまだ使用中です。他の AITracker を終了してから再試行してください。",
+          "database.capability-mismatch":
+            "同梱の SQLite 実行環境に互換性がありません。このバージョンの AITracker を再インストールしてください。",
+          "database.corrupt":
+            "ローカルデータベースが破損しています。データをバックアップしてからアプリデータを消去し、再起動してください。",
+          "database.integrity-check-failed":
+            "ローカルデータベースの整合性チェックに失敗しました。データをバックアップしてからアプリデータを消去し、再起動してください。",
+          "database.io-failure":
+            "ローカルデータファイルを作成または開くことができません。空き容量とセキュリティソフトの制限を確認してください。",
+          "database.journal-not-wal":
+            "現在のデータ保存先は必要なデータベースロックをサポートしていません。ネットワークまたは同期ドライブにアプリデータを置かないでください。",
+          "database.migration-checksum":
+            "ローカルデータのバージョンが一致しません。データをバックアップしてからアプリデータを消去し、再起動してください。",
+          "database.migration-reverted":
+            "ローカルデータのバージョンに互換性がありません。データをバックアップしてからアプリデータを消去し、再起動してください。",
+          "startup.unavailable":
+            "詳細な原因を取得できません。診断コードを技術サポートへ共有してください。",
+        },
       },
       dataIncompat: {
         title: "データバージョン非互換",
@@ -187,8 +274,32 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
       },
       startupFailure: {
         title: "시작 실패",
-        message:
-          "{appName}에서 로컬 데이터에 접근할 수 없습니다. 실행 중인 {appName} 또는 개발 서버를 종료한 뒤 다시 시도하세요.",
+        message: "{appName}에서 로컬 런타임을 초기화할 수 없습니다.",
+        diagnosticCode: "진단 코드: {code}",
+        details: {
+          "database.access-denied":
+            "현재 Windows 계정에 로컬 데이터 읽기 또는 쓰기 권한이 없습니다. 보안 소프트웨어나 제어된 폴더 액세스를 확인하세요.",
+          "database.already-open":
+            "다른 AITracker 인스턴스 또는 개발 서버가 로컬 데이터를 사용 중입니다. 종료한 뒤 다시 시도하세요.",
+          "database.busy":
+            "로컬 데이터가 아직 사용 중입니다. 다른 AITracker 인스턴스를 종료한 뒤 다시 시도하세요.",
+          "database.capability-mismatch":
+            "번들 SQLite 런타임이 호환되지 않습니다. 이 버전의 AITracker를 다시 설치하세요.",
+          "database.corrupt":
+            "로컬 데이터베이스가 손상되었습니다. 데이터를 백업한 뒤 앱 데이터를 지우고 다시 시작하세요.",
+          "database.integrity-check-failed":
+            "로컬 데이터베이스 무결성 검사에 실패했습니다. 데이터를 백업한 뒤 앱 데이터를 지우고 다시 시작하세요.",
+          "database.io-failure":
+            "로컬 데이터 파일을 만들거나 열 수 없습니다. 디스크 여유 공간과 보안 소프트웨어 제한을 확인하세요.",
+          "database.journal-not-wal":
+            "현재 데이터 위치는 필요한 데이터베이스 잠금 방식을 지원하지 않습니다. 네트워크 또는 동기화 드라이브에 앱 데이터를 두지 마세요.",
+          "database.migration-checksum":
+            "로컬 데이터 버전이 일치하지 않습니다. 데이터를 백업한 뒤 앱 데이터를 지우고 다시 시작하세요.",
+          "database.migration-reverted":
+            "로컬 데이터 버전이 호환되지 않습니다. 데이터를 백업한 뒤 앱 데이터를 지우고 다시 시작하세요.",
+          "startup.unavailable":
+            "정확한 원인을 확인할 수 없습니다. 진단 코드를 기술 지원팀에 전달하세요.",
+        },
       },
       dataIncompat: {
         title: "데이터 버전 비호환",

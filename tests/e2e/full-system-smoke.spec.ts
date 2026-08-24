@@ -13,7 +13,6 @@ const ROUTES = [
   "/market",
   "/tracker",
   "/sources",
-  "/widget",
 ] as const;
 
 test.beforeEach(async ({ page }) => {

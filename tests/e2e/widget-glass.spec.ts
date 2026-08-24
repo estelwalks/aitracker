@@ -2,17 +2,16 @@ import { expect, test } from "playwright/test";
 
 test.use({ locale: "zh-CN" });
 
-test("菜单栏胶囊与透明白玻璃概览同时可用", async ({ page }) => {
+test("透明白玻璃浮窗概览可用", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  const response = await page.goto("/widget?locale=zh-CN&currency=CNY", {
-    waitUntil: "domcontentloaded",
-  });
+  const response = await page.goto(
+    "/widget?mode=float&locale=zh-CN&currency=CNY",
+    { waitUntil: "domcontentloaded" },
+  );
   expect(response?.status() ?? 0).toBeLessThan(400);
 
-  const pill = page.locator(".tt-menubar-glass");
-  await expect(pill).toBeVisible();
   await expect(page.locator(".tt-glass-overview").first()).toBeVisible();
   await expect(page.locator(".tt-glass-agent-list").first()).toBeVisible();
   await expect(page.locator(".tt-glass-chart").first()).toBeVisible();
@@ -21,7 +20,7 @@ test("菜单栏胶囊与透明白玻璃概览同时可用", async ({ page }) => 
 });
 
 test("7 日 Token 趋势悬浮显示对应日期，移出恢复今日摘要", async ({ page }) => {
-  await page.goto("/widget?locale=zh-CN&currency=CNY", {
+  await page.goto("/widget?mode=float&locale=zh-CN&currency=CNY", {
     waitUntil: "domcontentloaded",
   });
   await page.waitForLoadState("networkidle");

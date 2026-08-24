@@ -10,6 +10,10 @@ import { pathToFileURL } from "node:url";
 
 import { COOKIE_TOKEN_NAME } from "./app-config.js";
 import {
+  createStartupWarmupError,
+  STARTUP_FAILURE_CODE_HEADER,
+} from "./startup-failure.js";
+import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
 } from "./security-http-api.js";
@@ -559,11 +563,12 @@ export async function startLocalWebServer(
           "x-trusttools-desktop-broker": desktopBrokerToken,
         },
       });
+      const startupFailureCode = response.headers.get(
+        STARTUP_FAILURE_CODE_HEADER,
+      );
       await response.body?.cancel();
       if (!response.ok) {
-        throw new Error(
-          `AITracker workspace warmup failed with HTTP ${response.status}`,
-        );
+        throw createStartupWarmupError(response.status, startupFailureCode);
       }
     },
     close: () =>

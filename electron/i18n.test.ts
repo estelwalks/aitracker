@@ -35,6 +35,10 @@ test("electronMessages: 四个语言齐全且无空文案", () => {
     assert.ok(catalog.menu.quit.length > 0);
     assert.ok(catalog.dialog.closeHint.message.length > 0);
     assert.ok(catalog.dialog.closeHint.ok.length > 0);
+    assert.ok(catalog.dialog.startupFailure.diagnosticCode.length > 0);
+    for (const detail of Object.values(catalog.dialog.startupFailure.details)) {
+      assert.ok(detail.length > 0);
+    }
     assert.ok(catalog.dialog.dataIncompat.title.length > 0);
     assert.ok(catalog.dialog.dataIncompat.message.length > 0);
     assert.ok(catalog.dialog.dataIncompat.quit.length > 0);

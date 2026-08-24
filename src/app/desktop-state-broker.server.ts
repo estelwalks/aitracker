@@ -3,6 +3,10 @@ import { timingSafeEqual } from "node:crypto";
 import { ENV, STORAGE_KEY_PREFIX } from "../lib/app-config.ts";
 import type { PreferenceValue } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
 import { getCompositionRoot } from "./composition.server.ts";
+import {
+  STARTUP_FAILURE_CODE_HEADER,
+  startupFailureCode,
+} from "./startup-diagnostics.server.ts";
 
 export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
@@ -22,12 +26,17 @@ function authorized(request: Request): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-function json(value: unknown, status = 200): Response {
+function json(
+  value: unknown,
+  status = 200,
+  extraHeaders: Readonly<Record<string, string>> = {},
+): Response {
   return Response.json(value, {
     status,
     headers: {
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
+      ...extraHeaders,
     },
   });
 }
@@ -221,6 +230,8 @@ export async function handleDesktopStateBrokerRequest(
     return json({ error: "not_found" }, 404);
   } catch (error) {
     console.error("Desktop state broker failed", error);
-    return json({ error: "desktop_state_failed" }, 500);
+    return json({ error: "desktop_state_failed" }, 500, {
+      [STARTUP_FAILURE_CODE_HEADER]: startupFailureCode(error),
+    });
   }
 }
