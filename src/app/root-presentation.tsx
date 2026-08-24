@@ -13,6 +13,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import {
   addChunkReloadNonce,
   claimChunkReload,
+  completeChunkRecovery,
   isChunkLoadError,
 } from "../lib/chunk-recovery";
 import { useI18n } from "../lib/i18n/context";
@@ -56,6 +57,7 @@ export function RootComponent({
       initialDisplayCurrency={loaderData.displayCurrency}
       initialRates={loaderData.rates}
     >
+      <ChunkRecoveryCompletion />
       <NavigationPerformanceMarks />
       <PlatformPersistenceSeed />
       <AppShell>
@@ -68,6 +70,25 @@ export function RootComponent({
       />
     </AppProviders>
   );
+}
+
+/**
+ * A successful cache-busted reload proves that the current document and its
+ * hashed chunks agree. Clear the one-shot guard so a future deployment can
+ * recover in the same browser session without asking the user to clear cache.
+ */
+function ChunkRecoveryCompletion() {
+  useEffect(() => {
+    const cleanHref = completeChunkRecovery(
+      window.sessionStorage,
+      window.location.href,
+    );
+    if (cleanHref) {
+      window.history.replaceState(window.history.state, "", cleanHref);
+    }
+  }, []);
+
+  return null;
 }
 
 /**

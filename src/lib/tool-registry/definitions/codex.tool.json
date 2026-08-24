@@ -5,7 +5,7 @@
   "display": {
     "name": "Codex",
     "nameZh": "Codex",
-    "icon": "codex",
+    "icon": "https://chatgpt.com/cdn/assets/favicon-l4nq08hd.svg",
     "color": "#10a37f"
   },
   "platforms": {
