@@ -113,7 +113,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Codex",
       "nameZh": "Codex",
-      "icon": "codex",
+      "icon": "https://chatgpt.com/cdn/assets/favicon-l4nq08hd.svg",
       "color": "#10a37f"
     },
     "platforms": {
@@ -358,7 +358,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Kiro",
       "nameZh": "Kiro",
-      "icon": "other",
+      "icon": "https://kiro.dev/icon.svg?fe599162bb293ea0",
       "color": "#01a4ff"
     },
     "platforms": {
@@ -439,7 +439,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Gemini CLI",
       "nameZh": "Gemini CLI",
-      "icon": "gemini",
+      "icon": "https://geminicli.com/favicon.ico",
       "color": "#4285f4"
     },
     "platforms": {
@@ -519,7 +519,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "OpenCode",
       "nameZh": "OpenCode",
-      "icon": "other",
+      "icon": "https://opencode.ai/favicon-v3.ico",
       "color": "#f59e0b"
     },
     "platforms": {
@@ -715,7 +715,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Every Code",
       "nameZh": "Every Code",
-      "icon": "other",
+      "icon": "https://justevery.com/img/favicon.svg",
       "color": "#00c2a8"
     },
     "platforms": {
@@ -1171,7 +1171,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "WorkBuddy",
       "nameZh": "WorkBuddy",
-      "icon": "other",
+      "icon": "https://codebuddy-1328495429.cos.accelerate.myqcloud.com/web/workbuddy/7c350554d6e526d96bb1d2ba32fd594611e9e711/assets/logo.svg",
       "color": "#22d3ee"
     },
     "platforms": {
@@ -1611,7 +1611,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "pi",
       "nameZh": "pi",
-      "icon": "other",
+      "icon": "https://pi.dev/favicon.svg",
       "color": "#fe2857"
     },
     "platforms": {
@@ -1666,7 +1666,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Craft Agents",
       "nameZh": "Craft Agents",
-      "icon": "other",
+      "icon": "https://agents.craft.do/favicon.ico",
       "color": "#f97316"
     },
     "platforms": {
@@ -1711,7 +1711,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Roo Code",
       "nameZh": "Roo Code",
-      "icon": "other",
+      "icon": "https://roomote.dev/favicon.ico",
       "color": "#f0524d"
     },
     "platforms": {
@@ -1785,7 +1785,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Zed Agent",
       "nameZh": "Zed Agent",
-      "icon": "other",
+      "icon": "https://zed.dev/favicon_black_32.png",
       "color": "#3b82f6"
     },
     "platforms": {
@@ -1843,7 +1843,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Goose",
       "nameZh": "Goose",
-      "icon": "other",
+      "icon": "https://goose-docs.ai/img/favicon.ico",
       "color": "#22c55e"
     },
     "platforms": {
@@ -1896,7 +1896,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Droid",
       "nameZh": "Droid",
-      "icon": "other",
+      "icon": "https://factory.ai/favicon.svg",
       "color": "#1f6feb"
     },
     "platforms": {
@@ -1941,7 +1941,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Mimo Code",
       "nameZh": "Mimo Code",
-      "icon": "other",
+      "icon": "https://cdn.cnbj1.fds.api.mi-img.com/aife/mimo-blog-fe/doc_build/mimo.ico",
       "color": "#ff6900"
     },
     "platforms": {
@@ -2294,7 +2294,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Cline",
       "nameZh": "Cline",
-      "icon": "other",
+      "icon": "https://cline.bot/assets/branding/favicons/favicon-32x32.png",
       "color": "#5b8def"
     },
     "platforms": {
@@ -2404,7 +2404,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Qwen CLI",
       "nameZh": "Qwen CLI",
-      "icon": "deepseek",
+      "icon": "https://img.alicdn.com/imgextra/i4/O1CN01OXv3EM1FN8t9W4P79_!!6000000000474-2-tps-80-80.png",
       "color": "#615ced"
     },
     "platforms": {
@@ -2464,7 +2464,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Command Code",
       "nameZh": "Command Code",
-      "icon": "other",
+      "icon": "https://commandcode.ai/favicon.ico",
       "color": "#8b5cf6"
     },
     "platforms": {
@@ -2524,7 +2524,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Proma",
       "nameZh": "Proma",
-      "icon": "other",
+      "icon": "https://proma.cool/favicon.png",
       "color": "#f97316"
     },
     "platforms": {
@@ -2584,7 +2584,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Qoder CN",
       "nameZh": "Qoder CN",
-      "icon": "other",
+      "icon": "https://img.alicdn.com/imgextra/i3/O1CN01KliT1u1jEq947NlKH_!!6000000004517-55-tps-180-180.svg",
       "color": "#22c55e"
     },
     "platforms": {
@@ -2731,7 +2731,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
     "display": {
       "name": "Cherry Studio",
       "nameZh": "Cherry Studio",
-      "icon": "other",
+      "icon": "https://www.cherryai.com/assets/logo-Bz2G6ABc.png",
       "color": "#ec4899"
     },
     "platforms": {
@@ -3239,4 +3239,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "209d89ff4bb0cdbe";
+export const TOOL_REGISTRY_VERSION: string = "6f91c0025b466a84";

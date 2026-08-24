@@ -52,7 +52,7 @@ test.describe("全系统路由冒烟", () => {
   }
 });
 
-test("数据来源页支持状态筛选、平台目录和分页", async ({ page }) => {
+test("数据来源页支持状态筛选和平台目录", async ({ page }) => {
   await page.goto("/sources", {
     waitUntil: "domcontentloaded",
     timeout: 90_000,
@@ -68,19 +68,14 @@ test("数据来源页支持状态筛选、平台目录和分页", async ({ page 
     page.getByRole("button", { name: "重新扫描", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByText("36", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "下一页" })).toBeVisible();
   await expect(page.getByTestId("source-card-claude-code")).toBeVisible();
   await expect(
     page.getByText("~/.claude/projects", { exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "下一页" }).click();
   await expect(page.getByTestId("source-card-openclaw")).toBeVisible();
 
   await page.getByRole("button", { name: /^未安装/ }).click();
-  for (let index = 0; index < 5; index += 1) {
-    await page.getByRole("button", { name: "下一页" }).click();
-  }
   await expect(page.getByTestId("source-card-qodercn")).toBeVisible();
   await expect(
     page.getByText(/QoderCN\/SharedClientCache\/cache\/db\/local\.db/),

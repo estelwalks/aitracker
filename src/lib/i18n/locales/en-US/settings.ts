@@ -179,7 +179,7 @@ export const settings = {
   confirmReset: "Reset",
   currentLanguage: "Current language",
   followSystem: "Follow system",
-  currency: "Display currency",
+  currency: "Currency",
   currencyDesc:
     "Currency used for displayed amounts, independent of the UI language",
   languageFollowHint: "Resolved from the system language",
