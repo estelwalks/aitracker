@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  AppWindowMac,
   BookHeart,
   Boxes,
   Database,
@@ -34,7 +35,8 @@ type NavItem = {
     | "/tracker"
     | "/skills"
     | "/market"
-    | "/chats";
+    | "/chats"
+    | "/widget";
   label: MessageKey;
   icon: typeof LayoutDashboard;
   /** 高亮强调项（对齐 V3.0 原型：蒸馏工作台） */
@@ -55,6 +57,7 @@ const navItems: readonly NavItem[] = [
   { to: "/security", label: "nav.guard", icon: ShieldCheck },
   { to: "/market", label: "nav.market", icon: Store },
   { to: "/tracker", label: "nav.tracker", icon: Flame },
+  { to: "/widget", label: "nav.widget", icon: AppWindowMac },
 ];
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
@@ -71,7 +74,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
   // 浮窗小组件（/widget?mode=float）复用本壳层，但不属于主窗口：不渲染自绘标题栏，
   // 顶部也不留标题栏占位。
-  const isWidgetFloat = searchStr.includes("mode=float");
+  const isWidgetFloat =
+    searchStr.includes("mode=float") || searchStr.includes("mode=bar");
   const chromeOffset = isWidgetFloat ? 0 : WINDOW_CHROME_HEIGHT;
 
   useEffect(() => {

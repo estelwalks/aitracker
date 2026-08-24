@@ -37,6 +37,7 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
   const mood = resolveWidgetMood(hasData, security);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -44,13 +45,28 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  if (!prefs.menuBarEnabled) return null;
+
   const top = today.topTools[0];
   const detail =
     today.cacheRate == null
       ? `${format.formatNumber(today.events)} ${t("widget.events")}`
       : t("widget.cacheRate", {
           percent: Math.round(today.cacheRate),
-        });
+      });
+
+  useEffect(() => {
+    const desktop =
+      typeof window !== "undefined" ? window.desktopApi : undefined;
+    if (!desktop) return;
+    if (!prefs.menuBarEnabled) {
+      void desktop.setTrayTitle("");
+      return;
+    }
+    void desktop.setTrayTitle(
+      `${format.formatTokens(today.tokens)} · ${top?.name ?? t("widget.noData")} · ${detail}`,
+    );
+  }, [detail, format, prefs.menuBarEnabled, t, today.tokens, top?.name]);
 
   const handleClick = () => {
     const desktop =
@@ -65,7 +81,11 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
   };
 
   return (
-    <div className={`tt-menubar-wrap ${className}`}>
+    <div
+      className={`tt-menubar-wrap ${className}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <div className="tt-menubar-glass">
         <span className="tt-menubar-system-icons" aria-hidden="true">
           <PanelsTopLeft />
@@ -94,7 +114,7 @@ export function MenuBarIcon({ className = "" }: { className?: string }) {
         </span>
       </div>
 
-      {open && prefs.barClick === "panel" && (
+      {(open || hovered) && prefs.barClick === "panel" && (
         <div className="tt-menubar-popover">
           <GlassOverviewWidget />
         </div>

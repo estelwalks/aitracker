@@ -74,6 +74,7 @@ function reportStartupMilestone(name: string): void {
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+let menuBarWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
@@ -113,7 +114,43 @@ function trustedWebContentsIds(): number[] {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     ids.push(widgetWindow.webContents.id);
   }
+  if (menuBarWindow && !menuBarWindow.isDestroyed()) {
+    ids.push(menuBarWindow.webContents.id);
+  }
   return ids;
+}
+
+async function createMenuBarWindow(): Promise<void> {
+  if (menuBarWindow && !menuBarWindow.isDestroyed()) return;
+  menuBarWindow = new BrowserWindow({
+    width: 680,
+    height: 62,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    hasShadow: false,
+    webPreferences: {
+      preload: join(currentDirectory, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  const display = (screen as unknown as { getPrimaryDisplay: () => { workArea: Electron.Rectangle } }).getPrimaryDisplay();
+  menuBarWindow.setPosition(
+    Math.round(display.workArea.x + (display.workArea.width - 680) / 2),
+    display.workArea.y + 8,
+    false,
+  );
+  const url = localWebServer
+    ? localWebServer.createBrowserBootstrapUrl(`/widget?mode=bar&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`)
+    : `${allowedOrigin}/widget?mode=bar&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
+  await menuBarWindow.loadURL(url);
+  menuBarWindow.once("ready-to-show", () => menuBarWindow?.show());
+  menuBarWindow.on("closed", () => { menuBarWindow = null; });
 }
 
 function assertTrustedSender(event: IpcMainInvokeEvent): void {
@@ -168,6 +205,8 @@ function showMainWindow(): void {
     return;
   }
 
+  if (process.platform === "darwin") app.dock?.show();
+
   if (mainWindow.isMinimized()) {
     mainWindow.restore();
   }
@@ -193,6 +232,7 @@ function openBrowserCompanion(): void {
 async function showWidgetWindow(): Promise<void> {
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     if (widgetWindow.isMinimized()) widgetWindow.restore();
+    positionWidgetWindow();
     widgetWindow.show();
     widgetWindow.focus();
     return;
@@ -224,6 +264,10 @@ async function showWidgetWindow(): Promise<void> {
     },
   });
 
+  // Position only after BrowserWindow exists. On macOS, positioning before
+  // ready-to-show can be overwritten by the native window restoration logic.
+  positionWidgetWindow();
+
   if (process.platform === "darwin") {
     // macOS 菜单栏小组件惯例：浮于所有桌面空间（含全屏 Space）之上。
     widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -242,7 +286,10 @@ async function showWidgetWindow(): Promise<void> {
     }
   });
 
-  widgetWindow.once("ready-to-show", () => widgetWindow?.show());
+  widgetWindow.once("ready-to-show", () => {
+    positionWidgetWindow();
+    widgetWindow?.show();
+  });
   widgetWindow.on("close", (event) => {
     if (isQuitting) {
       return;
@@ -268,6 +315,20 @@ async function showWidgetWindow(): Promise<void> {
     console.warn("Widget window failed to load", error);
     widgetWindow?.destroy();
   }
+}
+
+function positionWidgetWindow(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const display = (
+    screen as unknown as { getPrimaryDisplay: () => { workArea: Electron.Rectangle } }
+  ).getPrimaryDisplay();
+  const { x, y, width, height } = display.workArea;
+  const [windowWidth] = widgetWindow.getSize();
+  widgetWindow.setPosition(
+    Math.max(x + 8, x + width - windowWidth - 12),
+    y + 8,
+    false,
+  );
 }
 
 const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
@@ -483,6 +544,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle(desktopIpc.openWidgetWindow, (event): void => {
     assertTrustedSender(event);
     void showWidgetWindow();
+  });
+  ipcMain.handle(desktopIpc.setTrayTitle, (event, title: unknown): void => {
+    assertTrustedSender(event);
+    if (process.platform !== "darwin" || !tray) return;
+    if (typeof title !== "string") throw new TypeError("Tray title required");
+    tray.setTitle(title.slice(0, 80));
   });
   ipcMain.handle(desktopIpc.windowMinimize, (event): void => {
     assertTrustedSender(event);
@@ -708,6 +775,9 @@ function rebuildTray(): void {
     ? join(process.resourcesPath, "tray-icon.png")
     : join(app.getAppPath(), "build", "tray-icon.png");
   const trayIcon = nativeImage.createFromPath(trayIconPath);
+  if (trayIcon.isEmpty()) {
+    console.warn("TrustTools tray icon could not be loaded", trayIconPath);
+  }
   if (process.platform === "darwin") {
     trayIcon.setTemplateImage(true);
   }
@@ -740,7 +810,13 @@ function rebuildTray(): void {
   tray.setContextMenu(
     Menu.buildFromTemplate(template as Electron.MenuItemConstructorOptions[]),
   );
-  tray.on("click", showMainWindow);
+  if (process.platform === "darwin") {
+    // Keep a visible native status-item label even before the renderer has
+    // produced its first live read model. The renderer replaces this title
+    // with the current token/tool/security summary afterwards.
+    tray.setTitle("TT");
+  }
+  tray.on("click", () => void showWidgetWindow());
 }
 
 async function createMainWindow(): Promise<void> {
@@ -867,6 +943,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
     ipcMain.removeHandler(desktopIpc.showWindow);
     ipcMain.removeHandler(desktopIpc.openWidgetWindow);
+    ipcMain.removeHandler(desktopIpc.setTrayTitle);
     ipcMain.removeHandler(desktopIpc.windowMinimize);
     ipcMain.removeHandler(desktopIpc.windowToggleMaximize);
     ipcMain.removeHandler(desktopIpc.windowClose);
@@ -894,6 +971,11 @@ if (!hasSingleInstanceLock) {
   void app
     .whenReady()
     .then(async () => {
+      if (process.platform === "darwin") app.dock?.show();
+      app.on("activate", () => {
+        if (mainWindow && !mainWindow.isDestroyed()) showMainWindow();
+        else void createMainWindow();
+      });
       reportStartupMilestone("electron-ready");
       // Resolve the same interactive user's home in packaged builds. The explicit
       // value also keeps scanner behavior stable when Electron is launched by
@@ -949,6 +1031,9 @@ if (!hasSingleInstanceLock) {
       );
       registerIpcHandlers();
       rebuildTray();
+      void createMenuBarWindow().catch((error: unknown) =>
+        console.warn("TrustTools menu-bar window failed", error),
+      );
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.

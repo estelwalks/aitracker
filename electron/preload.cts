@@ -47,6 +47,8 @@ const desktopApi: DesktopApi = Object.freeze({
   },
   openWidgetWindow: () =>
     ipcRenderer.invoke(desktopIpc.openWidgetWindow) as Promise<void>,
+  setTrayTitle: (title: string) =>
+    ipcRenderer.invoke(desktopIpc.setTrayTitle, title) as Promise<void>,
   getPreferences: () =>
     ipcRenderer.invoke(desktopIpc.getPreferences) as Promise<
       Record<string, unknown>
