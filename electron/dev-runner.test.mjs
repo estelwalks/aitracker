@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   createStaticWarmupUrls,
+  desktopDevColdStartTimeoutMs,
+  desktopDevProbeTimeoutMs,
   desktopViteWarmupPaths,
   isElectronCompilerInput,
   shouldRebuild,
@@ -24,6 +26,12 @@ test("static warmup never requests a document route", () => {
     "http://127.0.0.1:5173/src/routeTree.gen.ts",
   ]);
   assert.equal(desktopViteWarmupPaths.includes("/"), false);
+});
+
+test("cold desktop development allows Windows dependency optimization to finish", () => {
+  assert.equal(desktopDevColdStartTimeoutMs, 300_000);
+  assert.equal(desktopDevProbeTimeoutMs, 5_000);
+  assert.ok(desktopDevColdStartTimeoutMs > 60_000);
 });
 
 test("Electron prepare ignores runner and test harness JavaScript", () => {
