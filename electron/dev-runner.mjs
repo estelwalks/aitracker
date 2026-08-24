@@ -4,6 +4,8 @@ import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { resolveNpmSpawn } from "../scripts/npm-spawn.mjs";
+
 // Env-var names below mirror src/lib/app-config.ts ENV (plain JS cannot import
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
@@ -16,7 +18,6 @@ const viteOptimizationMetadata = join(
 const host = process.env.TRUSTTOOLS_DEV_HOST ?? "127.0.0.1";
 const port = process.env.TRUSTTOOLS_DEV_PORT ?? "5173";
 const origin = `http://${host}:${port}`;
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
 const desktopBrokerToken = randomUUID();
 let shuttingDown = false;
@@ -113,6 +114,15 @@ async function runCommand(
   });
 }
 
+async function runNpmCommand(argumentsList, environment = process.env) {
+  const invocation = resolveNpmSpawn(argumentsList, { environment });
+  await runCommand(
+    invocation.executable,
+    invocation.argumentsList,
+    environment,
+  );
+}
+
 async function prepareIfStale({ label, inputs, outputs, build }) {
   const [inputModifiedAt, outputTimes] = await Promise.all([
     inputsModifiedAt(inputs),
@@ -144,7 +154,7 @@ export async function prepareDesktop() {
       join(skillScannerRoot, "dist/index.d.ts"),
       join(skillScannerRoot, "dist/cli.js"),
     ],
-    build: () => runCommand(npmCommand, ["run", "build:skill-scanner"]),
+    build: () => runNpmCommand(["run", "build:skill-scanner"]),
   });
 
   const electronSourceInputs = (
@@ -169,7 +179,7 @@ export async function prepareDesktop() {
       join(projectRoot, "build/electron/preload.cjs"),
     ],
     build: async () => {
-      await runCommand(npmCommand, [
+      await runNpmCommand([
         "exec",
         "--",
         "tsc",
@@ -182,7 +192,8 @@ export async function prepareDesktop() {
 }
 
 function startProcess(argumentsList, environment = process.env) {
-  const child = spawn(npmCommand, argumentsList, {
+  const invocation = resolveNpmSpawn(argumentsList, { environment });
+  const child = spawn(invocation.executable, invocation.argumentsList, {
     cwd: projectRoot,
     env: environment,
     stdio: "inherit",
