@@ -1,6 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  AppWindowMac,
   BookHeart,
   Boxes,
   Database,
@@ -35,8 +34,7 @@ type NavItem = {
     | "/tracker"
     | "/skills"
     | "/market"
-    | "/chats"
-    | "/widget";
+    | "/chats";
   label: MessageKey;
   icon: typeof LayoutDashboard;
   /** 高亮强调项（对齐 V3.0 原型：蒸馏工作台） */
@@ -44,8 +42,8 @@ type NavItem = {
 };
 
 /** 侧边导航（扁平单层，按原型顺序）：首页总览 / Agent概览 / 蒸馏工作台 /
- * 记忆 / 日报周报 / 会话管理 / Skill 管理 / 安全检测 / 安全市场 / 燃烧榜 /
- * 菜单栏小组件。数据来源与设置固定在底部。 */
+ * 记忆 / 日报周报 / 会话管理 / Skill 管理 / 安全检测 / 安全市场 / 燃烧榜。
+ * 数据来源与设置固定在底部。 */
 const navItems: readonly NavItem[] = [
   { to: "/", label: "nav.home", icon: LayoutDashboard },
   { to: "/agents", label: "nav.agents", icon: IdCard },
@@ -57,7 +55,6 @@ const navItems: readonly NavItem[] = [
   { to: "/security", label: "nav.guard", icon: ShieldCheck },
   { to: "/market", label: "nav.market", icon: Store },
   { to: "/tracker", label: "nav.tracker", icon: Flame },
-  { to: "/widget", label: "nav.widget", icon: AppWindowMac },
 ];
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
@@ -133,6 +130,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   key={item.to}
                   to={item.to}
+                  preload="intent"
+                  preloadDelay={80}
                   title={label}
                   className={`group relative flex items-center rounded-md py-2 transition-colors ${
                     collapsed ? "justify-center px-0" : "gap-3 px-3"
@@ -157,6 +156,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="shrink-0 space-y-2 px-2 pb-3">
           <Link
             to="/sources"
+            preload="intent"
+            preloadDelay={80}
             title={t("nav.sources")}
             className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
               collapsed ? "justify-center px-0" : "gap-3 px-3"
@@ -167,6 +168,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             to="/settings"
+            preload="intent"
+            preloadDelay={80}
             title={t("nav.settings")}
             className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
               collapsed ? "justify-center px-0" : "gap-3 px-3"

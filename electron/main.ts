@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,10 +52,25 @@ import { APP_NAME, ENV } from "./app-config.js";
 import { SecurityScannerService } from "./security-scanner-service.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
+import { createStartupDocument } from "./startup-screen.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
 const isDevelopment = Boolean(developmentUrl);
+/**
+ * A self-contained first frame shown while the local server and persisted
+ * desktop preferences are starting. Loading this document is intentionally
+ * independent of the HTTP application origin: a cold start must never leave
+ * a featureless black BrowserWindow while a route loader is running.
+ */
+const processStartedAt = performance.now();
+
+/** Emits duration-only milestones; no paths, session data, or preferences. */
+function reportStartupMilestone(name: string): void {
+  console.info(
+    `[performance] startup.${name}=${Math.round(performance.now() - processStartedAt)}ms`,
+  );
+}
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -65,6 +81,7 @@ let isQuitting = false;
 let securityScanner: SecurityScannerService | null = null;
 let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
 let desktopStateBroker: DesktopStateBroker | null = null;
+let startupDocument = "";
 /** Resolved at startup: manual preference > system mapping > fallback. */
 let currentPreferences: LocalePreferences = {
   locale: "zh-CN",
@@ -756,7 +773,7 @@ async function createMainWindow(): Promise<void> {
     return { action: "deny" };
   });
   mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (new URL(url).origin !== allowedOrigin) {
+    if (url !== startupDocument && new URL(url).origin !== allowedOrigin) {
       event.preventDefault();
     }
   });
@@ -789,11 +806,23 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
+  // This local document gives immediate visual feedback. The application URL
+  // is loaded separately once the local server and preference store are ready.
+  startupDocument = createStartupDocument(currentPreferences.locale);
+  await mainWindow.loadURL(startupDocument);
+  reportStartupMilestone("startup-screen-ready");
+}
+
+async function loadMainWindow(): Promise<void> {
+  if (!mainWindow || !allowedOrigin) return;
   const appUrl = localWebServer
     ? localWebServer.createBrowserBootstrapUrl(
         `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
       )
     : `${allowedOrigin}?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
+  mainWindow.webContents.once("did-finish-load", () => {
+    reportStartupMilestone("application-document-ready");
+  });
   await mainWindow.loadURL(appUrl);
 }
 
@@ -809,59 +838,6 @@ async function resolveApplicationOrigin(): Promise<string> {
     securityScanner: securityScanner ?? undefined,
   });
   return localWebServer.origin;
-}
-
-async function prewarmLocalData(origin: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  try {
-    // The first document request runs the route loaders, including the local
-    // usage scan. Finish that work before showing the BrowserWindow so a fresh
-    // installation opens with its historical usage instead of briefly
-    // rendering an empty dashboard. Later loads reuse the scanner's
-    // file-signature index and in-memory snapshot.
-    const prewarmUrl = localWebServer
-      ? localWebServer.createBrowserBootstrapUrl(
-          `/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
-        )
-      : `${origin}/?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
-    let response: Response;
-    if (localWebServer) {
-      // Node fetch follows redirects but does not persist Set-Cookie. Complete
-      // the same one-time bootstrap handshake as a browser explicitly so the
-      // authenticated prewarm request reaches the route loaders.
-      const bootstrap = await fetch(prewarmUrl, {
-        headers: { Accept: "text/html" },
-        redirect: "manual",
-        signal: controller.signal,
-      });
-      const location = bootstrap.headers.get("location");
-      const cookie = bootstrap.headers.get("set-cookie")?.split(";", 1)[0];
-      await bootstrap.body?.cancel();
-      if (bootstrap.status !== 303 || location == null || cookie == null) {
-        throw new Error("Local prewarm bootstrap handshake failed");
-      }
-      response = await fetch(new URL(location, origin), {
-        headers: { Accept: "text/html", Cookie: cookie },
-        signal: controller.signal,
-      });
-    } else {
-      response = await fetch(prewarmUrl, {
-        headers: { Accept: "text/html" },
-        signal: controller.signal,
-      });
-    }
-    if (!response.ok) {
-      console.warn(`Initial data scan returned HTTP ${response.status}`);
-    }
-    await response.body?.cancel();
-  } catch (error) {
-    // Startup remains recoverable: the BrowserWindow request will retry the
-    // same loaders, and visible-page polling continues refreshing afterwards.
-    console.warn("Initial data scan did not finish before launch", error);
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -881,7 +857,7 @@ if (!hasSingleInstanceLock) {
     if (mainWindow) {
       showMainWindow();
     } else {
-      void createMainWindow();
+      void createMainWindow().then(() => loadMainWindow());
     }
   });
   app.on("will-quit", () => {
@@ -915,48 +891,78 @@ if (!hasSingleInstanceLock) {
     void localWebServer?.close();
   });
 
-  void app.whenReady().then(async () => {
-    // Resolve the same interactive user's home in packaged builds. The explicit
-    // value also keeps scanner behavior stable when Electron is launched by
-    // Finder/login items with a reduced environment. A test-lab override, when
-    // supplied, intentionally wins.
-    process.env[ENV.USAGE_HOME] ??= app.getPath("home");
-    process.env[ENV.DESKTOP_BROKER_TOKEN] ??= randomUUID();
-    desktopStateBroker = new DesktopStateBroker({
-      origin: () => allowedOrigin,
-      capabilityToken: () => localWebServer?.capabilityToken,
+  void app
+    .whenReady()
+    .then(async () => {
+      reportStartupMilestone("electron-ready");
+      // Resolve the same interactive user's home in packaged builds. The explicit
+      // value also keeps scanner behavior stable when Electron is launched by
+      // Finder/login items with a reduced environment. A test-lab override, when
+      // supplied, intentionally wins.
+      process.env[ENV.USAGE_HOME] ??= app.getPath("home");
+      process.env[ENV.DESKTOP_BROKER_TOKEN] ??= randomUUID();
+      desktopStateBroker = new DesktopStateBroker({
+        origin: () => allowedOrigin,
+        capabilityToken: () => localWebServer?.capabilityToken,
+      });
+      currentPreferences = resolveDesktopPreferences({}, app.getLocale());
+      securityScanner = new SecurityScannerService({
+        homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
+        locale: () => currentPreferences.locale,
+        env: process.env,
+        secretStorage: {
+          isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+          encrypt: (value) =>
+            safeStorage.encryptString(value).toString("base64"),
+          decrypt: (value) =>
+            safeStorage.decryptString(Buffer.from(value, "base64")),
+        },
+        persistence: desktopStateBroker,
+      });
+      // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
+      // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
+      // 开发模式需要默认快捷键（DevTools/Reload）。
+      if (process.platform !== "darwin" && app.isPackaged) {
+        Menu.setApplicationMenu(null);
+      }
+      // Present a branded local frame before any server, SQLite, or route work.
+      // This window does not need the application origin and therefore gives
+      // feedback even on a truly cold start.
+      await createMainWindow();
+      allowedOrigin = await resolveApplicationOrigin();
+      reportStartupMilestone("local-server-ready");
+      // Start first-run collection while the native startup document remains
+      // visible. This is intentionally a lightweight internal request, not a
+      // speculative homepage render: it starts the scheduler without doing
+      // the same SSR/hydration work twice.
+      if (localWebServer) {
+        void localWebServer
+          .warmup(process.env[ENV.DESKTOP_BROKER_TOKEN] ?? "")
+          .then(() => reportStartupMilestone("workspace-warmup-started"))
+          .catch((error: unknown) =>
+            console.warn("AITracker workspace warmup failed", error),
+          );
+      }
+      currentPreferences = resolveDesktopPreferences(
+        await desktopStateBroker.preferences(),
+        app.getLocale(),
+      );
+      registerIpcHandlers();
+      rebuildTray();
+      // Let the renderer own the first document request. A second hidden SSR
+      // request duplicates route-loader, hydration, and SQLite work precisely
+      // when the visible page needs those resources most.
+      await loadMainWindow();
+      void scheduleAutomaticSecurityScan();
+    })
+    .catch((error: unknown) => {
+      // A failure before BrowserWindow construction must not leave a headless
+      // process holding the single-instance lock and making later launches look
+      // like they do nothing.
+      console.error("AITracker startup failed", error);
+      const startupFailure =
+        electronMessages[currentPreferences.locale].dialog.startupFailure;
+      dialog.showErrorBox(startupFailure.title, startupFailure.message);
+      app.quit();
     });
-    currentPreferences = resolveDesktopPreferences({}, app.getLocale());
-    securityScanner = new SecurityScannerService({
-      homeDirectory: process.env[ENV.USAGE_HOME] || app.getPath("home"),
-      locale: () => currentPreferences.locale,
-      env: process.env,
-      secretStorage: {
-        isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
-        encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
-        decrypt: (value) =>
-          safeStorage.decryptString(Buffer.from(value, "base64")),
-      },
-      persistence: desktopStateBroker,
-    });
-    allowedOrigin = await resolveApplicationOrigin();
-    currentPreferences = resolveDesktopPreferences(
-      await desktopStateBroker.preferences(),
-      app.getLocale(),
-    );
-    registerIpcHandlers();
-    rebuildTray();
-    // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
-    // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
-    // 开发模式需要默认快捷键（DevTools/Reload）。
-    if (process.platform !== "darwin" && app.isPackaged) {
-      Menu.setApplicationMenu(null);
-    }
-    // 先创建主窗口（立即反馈启动），本地数据预热改为并行执行——
-    // 首次完整用量扫描可能耗时数十秒甚至数分钟，不应阻塞窗口出现。
-    // 扫描器对并发请求去重，预热与窗口首屏共享同一次扫描。
-    void prewarmLocalData(allowedOrigin);
-    await createMainWindow();
-    await scheduleAutomaticSecurityScan();
-  });
 }

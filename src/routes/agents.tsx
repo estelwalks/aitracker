@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { getSkillWorkspace } from "../modules/skill-catalog/query";
-import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
-import { getSecuritySkillVerdicts } from "../modules/security-assessment/query/agent-verdicts";
-import { catalogs, getMessage } from "../lib/i18n/route-messages";
+import { catalogs, getMessage } from "../lib/i18n/messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
+import { getSkillWorkspace } from "../modules/skill-catalog/query";
 
 // The route forwards opaque installationRef values from the public query facade;
 // filesystem paths remain confined to server-side adapters. Usage data arrives
@@ -15,18 +13,18 @@ export const Route = createFileRoute("/agents")({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }) => {
-    const [data, usage, securityVerdicts] = await Promise.all([
-      getSkillWorkspace(),
-      getAgentUsageOverview({ data: { locale: deps.locale } }),
-      getSecuritySkillVerdicts(),
-    ]);
-    return { ...data, usage, securityVerdicts, locale: deps.locale };
+    // Agent usage aggregation can be materially larger than the Skill
+    // workspace. Commit the route with its persisted workspace first; the
+    // lazy page fetches analytics and security status after first paint.
+    const data = await getSkillWorkspace();
+    return { ...data, locale: deps.locale };
   },
-  // Agent/Skill snapshots can change from the Sources migration flow; do not
-  // reuse a stale route loader result when entering the overview.
-  staleTime: 0,
+  // Source mutations explicitly invalidate the router; repeated sidebar
+  // visits reuse the same persisted snapshot instead of rebuilding all three
+  // read models on every click.
+  staleTime: 30_000,
   gcTime: 5 * 60_000,
-  preloadStaleTime: 0,
+  preloadStaleTime: 30_000,
   head: ({ loaderData }) => ({
     meta: [
       {

@@ -36,10 +36,16 @@ export interface RoastRow {
 }
 
 export interface TrackerBoard {
+  /** Only the highest-consuming rows are serialized to the renderer. */
   readonly rows: readonly RoastRow[];
+  /** Complete token total for this dimension, including rows outside Top 10. */
+  readonly totalTokens?: number;
+  /** Complete number of entries in this dimension, including rows outside Top 10. */
+  readonly totalEntries?: number;
 }
 
 export const RECENT_TREND_DAYS = 7;
+export const TOP_BOARD_LIMIT = 10;
 
 /**
  * Waste index = 100 × (1 − cacheRate) × outputRatio, clamped to 0–100.
@@ -132,8 +138,8 @@ function rowFor(key: string, source: string | undefined, acc: Acc): RoastRow {
 /**
  * Build a ranked board for one dimension. Skill rows attribute each event's
  * tokens to its skills by the skill-call share within that event; project and
- * session rows map each event one-to-one. Rows sort by waste index (highest
- * first) so the most wasteful entries surface at the top.
+ * session rows map each event one-to-one. Rows sort by token consumption
+ * (highest first), using waste index only as a tie-breaker.
  */
 export function buildBoard(
   events: readonly LocalUsageEvent[],
@@ -227,14 +233,41 @@ export function buildBoard(
     }
   }
 
-  const rows = [...accs.entries()].map(([key, entry]) =>
+  const allRows = [...accs.entries()].map(([key, entry]) =>
     rowFor(key, entry.source, entry.acc),
   );
-  rows.sort((a, b) => b.waste - a.waste || b.tokens - a.tokens);
-  return { rows };
+  allRows.sort((a, b) => b.tokens - a.tokens || b.waste - a.waste);
+  const totalTokens = allRows.reduce((total, row) => total + row.tokens, 0);
+  return {
+    rows: allRows.slice(0, TOP_BOARD_LIMIT),
+    totalTokens,
+    totalEntries: allRows.length,
+  };
 }
 
-/** Aggregate totals across all three dimensions for the page's stat strip. */
+/** Keep older hand-built TrackerBoard values compatible while preferring the
+ * explicit server-computed total for Top10 boards. */
+export function totalTokensForBoard(board: TrackerBoard): number {
+  return (
+    board.totalTokens ??
+    board.rows.reduce((total, row) => total + row.tokens, 0)
+  );
+}
+
+/** Prefer the complete entry count while keeping older hand-built boards valid. */
+export function totalEntriesForBoard(board: TrackerBoard): number {
+  return board.totalEntries ?? board.rows.length;
+}
+
+/** Sum the token consumption represented by one selected leaderboard. */
+export function tokensForDimension(
+  boards: Readonly<Record<RoastDimension, TrackerBoard>>,
+  dimension: RoastDimension,
+): number {
+  return totalTokensForBoard(boards[dimension]);
+}
+
+/** Aggregate totals across all three dimensions for general usage summaries. */
 export function aggregateBoards(boards: readonly TrackerBoard[]): {
   tokens: number;
   events: number;
@@ -245,12 +278,12 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
   let events = 0;
   let entries = 0;
   for (const board of boards) {
+    tokens += totalTokensForBoard(board);
     for (const row of board.rows) {
       if (!seen.has(row.key)) {
         seen.add(row.key);
         entries += 1;
       }
-      tokens += row.tokens;
       events += row.events;
     }
   }
@@ -258,19 +291,19 @@ export function aggregateBoards(boards: readonly TrackerBoard[]): {
 }
 
 /**
- * Page totals must come from each source event exactly once. The ranking
- * boards intentionally project the same events into skill/project/session
- * dimensions, so summing their token or event columns would triple-count the
- * user's consumption. `entries` is the number of visible leaderboard rows,
- * while tokens/events remain source-of-truth totals.
+ * Return the initial page totals for the default Project leaderboard. The
+ * selected leaderboard's live token total is derived by tokensForDimension.
  */
 export function trackerTotalsFromEvents(
   events: readonly LocalUsageEvent[],
-  boards: readonly TrackerBoard[],
+  boards: Readonly<Record<RoastDimension, TrackerBoard>>,
 ): { tokens: number; events: number; entries: number } {
   return {
-    tokens: events.reduce((total, event) => total + event.totalTokens, 0),
+    tokens: tokensForDimension(boards, "project"),
     events: events.length,
-    entries: boards.reduce((total, board) => total + board.rows.length, 0),
+    entries: (Object.values(boards) as readonly TrackerBoard[]).reduce(
+      (total, board) => total + totalEntriesForBoard(board),
+      0,
+    ),
   };
 }

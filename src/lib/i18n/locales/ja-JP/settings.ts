@@ -242,6 +242,15 @@ export const settings = {
       "invalid-output": "強化結果が無効です",
       stale: "データが古い可能性があります",
     },
+    fallbackStatus: {
+      "enhancer-unavailable":
+        "AI 強化を利用できないため、ルール洞察を表示しています",
+      "budget-exceeded":
+        "AI 強化の上限に達したため、ルール洞察を表示しています",
+      timeout: "AI 強化がタイムアウトしたため、ルール洞察を表示しています",
+      "enhancer-failed": "AI 強化に失敗したため、ルール洞察を表示しています",
+      "invalid-output": "AI の出力が無効なため、ルール洞察を表示しています",
+    },
     section: {
       title: "今日のインサイト",
       desc: "オフではローカルルールのみ、オンではモデルを呼び出してインサイトを強化します。",

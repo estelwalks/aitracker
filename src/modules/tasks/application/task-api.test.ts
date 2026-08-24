@@ -83,7 +83,7 @@ test("unknown task and unsafe schedule are rejected", async () => {
   const schedule = await api.updatePreference({
     taskId: "usage.refresh",
     enabled: true,
-    schedule: { kind: "interval", minutes: 1 },
+    schedule: { kind: "interval", minutes: 1441 },
   });
   assert.equal(schedule.ok, false);
   if (schedule.ok) throw new Error("expected schedule failure");

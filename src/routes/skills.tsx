@@ -4,8 +4,6 @@ import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
-import { getAgentUsageOverview } from "../modules/skill-catalog/usage-overview-query";
-import { getDistillationQuery } from "../modules/distillation/query";
 import type { SkillHubData } from "../modules/skill-distribution/presentation/SkillHubPage";
 
 /** 兼容拆分前的 `?tab=market` 直达链接：市场已迁至独立 /market 路由。 */
@@ -29,30 +27,17 @@ export const Route = createFileRoute("/skills")({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }): Promise<SkillsLoader> => {
-    const [workspace, usage, distillation] = await Promise.all([
-      getSkillWorkspace(),
-      // Compact agent-overview projection (P1-T1-07); the full dashboard DTO is
-      // no longer loaded by the skills route.
-      getAgentUsageOverview({ data: { locale: deps.locale } }),
-      // Real distillation activity from the composition root; never breaks the
-      // page when the workbench is unavailable.
-      getDistillationQuery({ data: deps.locale })
-        .then((view) => ({
-          approved: view.stats.approved,
-          waiting: view.candidates.filter(
-            (candidate) => candidate.approvalState === "waiting-approval",
-          ).length,
-        }))
-        .catch(() => null),
-    ]);
-    return { locale: deps.locale, workspace, usage, distillation };
+    // The workspace snapshot is the only first-screen dependency. Usage
+    // analytics are not rendered here, and distillation activity is fetched by
+    // the mounted KPI after the workspace is interactive.
+    const workspace = await getSkillWorkspace();
+    return { locale: deps.locale, workspace };
   },
-  // Skill snapshots can be changed by the Sources migration flow. Always
-  // re-read the O(1) persisted snapshot when entering Skill management so a
-  // cached route cannot show the pre-migration skill count.
-  staleTime: 0,
+  // Source mutations explicitly invalidate the router. Retaining the compact
+  // read model briefly makes ordinary sidebar navigation instant.
+  staleTime: 30_000,
   gcTime: 5 * 60_000,
-  preloadStaleTime: 0,
+  preloadStaleTime: 30_000,
   head: ({ loaderData }) => ({
     meta: [
       {
