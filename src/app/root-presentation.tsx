@@ -48,6 +48,7 @@ export function RootComponent({
       initialLocale={loaderData.locale}
       initialDisplayCurrency={loaderData.displayCurrency}
       initialRates={loaderData.rates}
+      initialCatalog={loaderData.catalog}
     >
       <PlatformPersistenceSeed />
       <AppShell>

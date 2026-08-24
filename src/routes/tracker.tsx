@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { brandParams } from "../lib/app-config";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import type { TrackerReadModel } from "../modules/usage/contracts";
@@ -12,14 +12,36 @@ interface TrackerLoader {
   readonly model: TrackerReadModel;
 }
 
+/** 空燃烧榜读模型：路由加载失败时降级为空榜单，而不是整页崩溃。 */
+function emptyTrackerReadModel(): TrackerReadModel {
+  return {
+    generatedAt: null,
+    boards: {
+      skill: { rows: [] },
+      project: { rows: [] },
+      session: { rows: [] },
+    },
+    totals: { tokens: 0, events: 0, entries: 0 },
+  };
+}
+
 // The page component lives in tracker.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/tracker")({
   loaderDeps: ({ search }) => ({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }): Promise<TrackerLoader> => {
-    const model = await getTrackerQuery();
-    return { locale: deps.locale, model };
+    const locale = deps.locale;
+    let model: TrackerReadModel;
+    try {
+      model = await getTrackerQuery();
+    } catch {
+      // The usage snapshot is optional: a transient collection/lock failure
+      // must still render the page shell and its empty state instead of
+      // turning into a crash / SSR 500.
+      model = emptyTrackerReadModel();
+    }
+    return { locale, model };
   },
   staleTime: 30_000,
   gcTime: 5 * 60_000,

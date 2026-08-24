@@ -3,7 +3,7 @@ import { DashboardPage } from "../modules/dashboard/presentation/DashboardPage";
 import { getDashboardSummaryReadModel } from "../modules/dashboard/summary-query";
 import type { DashboardSummaryReadModel } from "../modules/dashboard/summary-contracts";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
-import { catalogs, getMessage } from "../lib/i18n/messages";
+import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { brandParams } from "../lib/app-config";
 
 export const Route = createFileRoute("/")({

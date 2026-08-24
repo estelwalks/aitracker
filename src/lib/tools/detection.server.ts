@@ -160,3 +160,17 @@ export async function detectToolInstallations(
     executables,
   );
 }
+
+/**
+ * Executable-only installation probe (PATH lookups, no root checks). Used by
+ * the skills install path to reject installs into tools that are not actually
+ * present on the machine (e.g. a leftover `~/.cursor` directory without the
+ * Cursor app / CLI installed).
+ */
+export async function detectToolExecutables(
+  tools: readonly AiTool[],
+  os: PlatformOs = osFromProcess(process.platform),
+  signal?: AbortSignal,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  return executableEvidence(tools, os, signal);
+}

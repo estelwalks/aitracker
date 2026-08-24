@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { brandParams } from "../lib/app-config.ts";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale.ts";
-import { catalogs, getMessage } from "../lib/i18n/messages.ts";
+import { catalogs, getMessage } from "../lib/i18n/route-messages.ts";
 import { getSessionsQuery } from "../modules/sessions/query.ts";
 
 /** Deep-link-only session index; the prototype side navigation has no entry. */

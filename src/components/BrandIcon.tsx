@@ -79,7 +79,7 @@ const brandColor: Record<string, string> = {
 };
 
 /**
- * 官方品牌 logo 静态资源（public/brand-logos/，来自 AITracker 的
+ * 官方品牌 logo 静态资源（public/brand-logos/，来自早期原型使用的
  * @lobehub/icons 资产）：优先于内置自绘 SVG 使用，让图标显示真实品牌图形。
  * 点亮/未点亮由调用方控制（未安装置灰 grayscale），logo 本身保留品牌原色。
  */
@@ -208,7 +208,11 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
   }
 
   const localLogoSrc =
-    brandLogoSrc(name) ?? (kind === "other" ? undefined : brandLogoSrc(kind));
+    brandLogoSrc(name) ??
+    (display
+      ? (brandLogoSrc(display.name) ?? brandLogoSrc(display.id))
+      : undefined) ??
+    (kind === "other" ? undefined : brandLogoSrc(kind));
   if (localLogoSrc != null) {
     return (
       <img

@@ -115,7 +115,10 @@ test("incomplete local reads persist an unknown, fail-closed assessment without 
     // A junction is the Windows reparse-point equivalent and works without
     // requiring Developer Mode or administrator privileges.
     await mkdir(outside);
-    await writeFile(join(outside, "payload.txt"), "token=sk-super-secret-value");
+    await writeFile(
+      join(outside, "payload.txt"),
+      "token=sk-super-secret-value",
+    );
     await symlink(outside, join(skill, "SKILL.md"), "junction");
   } else {
     await writeFile(outside, "token=sk-super-secret-value");

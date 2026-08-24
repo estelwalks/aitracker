@@ -27,7 +27,7 @@ const MAX_PAYLOAD_BYTES = 256 * 1024;
 /**
  * Host-content guard for the persisted WSL topology blob. The topology
  * legitimately contains Linux home paths discovered inside WSL distros
- * (`/home/dev`), so the platform preference guard's POSIX-root rules cannot
+ * (a distro user's home), so the platform preference guard's POSIX-root rules cannot
  * apply verbatim. Only *host* Windows content — drive-letter paths, UNC
  * roots, secret-shaped values and shell commands — must never reach
  * `snapshot_blobs`. The serialized payload is scanned as one string so content

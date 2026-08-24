@@ -194,8 +194,10 @@ export function ScanVortex({
   const current = Math.max(0, dimension);
 
   return (
+    // 自绘标题栏高 36px（z-60）：雷达覆盖层从标题栏下方开始，避免缩小
+    // 窗口时遮住标题栏的最小化/关闭以及雷达自身的最小化/取消按钮。
     <div
-      className="fixed inset-y-0 right-0 z-50 flex flex-col overflow-hidden bg-background"
+      className="fixed top-9 right-0 bottom-0 z-50 flex flex-col overflow-hidden bg-background"
       style={{
         left: sidebarInset,
         animation: exiting

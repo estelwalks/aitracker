@@ -39,6 +39,8 @@ export const errors = {
     duplicateName: "A Skill with the same name already exists at the target",
     noSkillSelected: "Select at least one Skill",
     notFound: "Skill not found or unreadable",
+    toolNotInstalled:
+      "Cannot install the Skill: {agent} was not detected — the target tool is not installed",
   },
   sessions: {
     filterInvalid: "Invalid session filter",

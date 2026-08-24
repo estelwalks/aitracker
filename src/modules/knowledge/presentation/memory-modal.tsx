@@ -25,7 +25,7 @@ export function MemoryModal({
         className="absolute inset-0 bg-background/70 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-border-strong bg-card shadow-2xl shadow-black/60">
+      <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-border-strong bg-card shadow-2xl shadow-black/60">
         <header className="flex h-11 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 className="text-[13px] font-medium tracking-wide">{title}</h2>
           <button

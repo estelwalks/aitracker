@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowRight,
   ChevronRight,
-  Columns2,
   FlaskConical,
   HelpCircle,
   Loader2,
@@ -29,7 +28,7 @@ import type { DistillationSessionItem, DistillationViewModel } from "./index";
 import { approveCandidate, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
-import { CandidateCompareDialog, ExpCard } from "./distill/ExpCard";
+import { ExpCard } from "./distill/ExpCard";
 import { DistillConfig } from "./distill/DistillConfig";
 import { DISTILL_GUIDE_KEY, DistillGuide } from "./distill/DistillGuide";
 import { resolveCandidateSource } from "./distill/source-resolve";
@@ -173,7 +172,6 @@ export function DistillationPage({
   const [mode, setMode] = useState<"quick" | "pro">("quick");
   const [outType, setOutType] = useState<OutTypeId>("skill");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [compareOpen, setCompareOpen] = useState(false);
   /** 工作台视图：配置 / 结果 切换（原型 distill.tsx distillView）。 */
   const [distillView, setDistillView] = useState<"config" | "result">("config");
   const [histPage, setHistPage] = useState(1);
@@ -280,11 +278,6 @@ export function DistillationPage({
     (sum, item) => sum + item.turns * EST_TOKENS_PER_TURN,
     0,
   );
-  /** 可对比的结果:已完成(已入库)候选,取最近两条(原型 done >= 2 语义)。 */
-  const doneCandidates = useMemo(
-    () => candidates.filter((c) => c.approvalState === "approved"),
-    [candidates],
-  );
   /** 蒸馏历史计数与分页（原型 distill.tsx 462-486：本次会话 + 持久历史合并）。 */
   const totalRuns = candidates.length;
   const totalSaved = candidates.filter(
@@ -330,7 +323,7 @@ export function DistillationPage({
     for (const seg of next) {
       const key = `${seg.source}:${seg.sessionId}`;
       if (nextSelected.has(key)) continue;
-      if (!materialSessions.some((item) => keyOf(item) === key)) continue;
+      if (!sessions.some((item) => keyOf(item) === key)) continue;
       nextSelected.add(key);
       selectedChanged = true;
     }
@@ -419,17 +412,11 @@ export function DistillationPage({
           // shown, just not counted as 已入库.
         }
         setCandidates((prev) => [accepted!, ...prev]);
-        // 原型 saveExp / 完成后行为：切到结果视图并展开这条产物。
+        // 完成后切到结果视图并展开这条产物，但保持页面停留在顶部视角，
+        // 不自动滚动定位到进度条（用户可自行滚动查看进度）。
         setViewId(accepted!.candidateId);
         setDistillView("result");
         setHistPage(1);
-        window.setTimeout(
-          () =>
-            document
-              .getElementById("distill-results")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-          80,
-        );
       }
       setRuns((current) => current + 1);
       toast.success(
@@ -499,8 +486,8 @@ export function DistillationPage({
     <div className="distill-workbench relative space-y-5 pb-10">
       {showGuide && <DistillGuide onClose={dismissGuide} />}
       {/* Page header mirrors the prototype (738-757): title + workflow hint +
-            help + side-by-side compare. The mode switch / quota status /
-            history / manage-models controls live in the config card header. */}
+            help. The mode switch / quota status / history / manage-models
+            controls live in the config card header. */}
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-[15px] font-semibold tracking-tight">
           {t("common.distillation.pageTitle")}
@@ -517,19 +504,6 @@ export function DistillationPage({
             onClick={() => setShowGuide(true)}
           >
             <HelpCircle className="size-3.5" />
-          </TTButton>
-          <TTButton
-            variant="ghost"
-            disabled={doneCandidates.length < 2}
-            title={
-              doneCandidates.length < 2
-                ? t("distill.compareNeedTwo")
-                : undefined
-            }
-            onClick={() => setCompareOpen(true)}
-          >
-            <Columns2 className="size-3.5" />
-            {t("distill.compare")}
           </TTButton>
         </div>
       </header>
@@ -830,18 +804,10 @@ export function DistillationPage({
 
       {drawerOpen && (
         <MaterialDrawer
-          sessions={materialSessions}
+          sessions={sessions}
           segments={segments}
           onSegmentsChange={handleSegmentsChange}
           onClose={() => setDrawerOpen(false)}
-        />
-      )}
-
-      {compareOpen && doneCandidates[0] && doneCandidates[1] && (
-        <CandidateCompareDialog
-          candidates={[doneCandidates[0], doneCandidates[1]]}
-          modelOptions={initial.modelOptions}
-          onClose={() => setCompareOpen(false)}
         />
       )}
     </div>

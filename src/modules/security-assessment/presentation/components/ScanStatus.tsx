@@ -180,7 +180,7 @@ export function ScanStatus({
         <button
           type="button"
           onClick={() => setDimsOpen((open) => !open)}
-          className="flex w-full items-center gap-2 px-5 py-3 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:bg-surface-2"
+          className="flex w-full items-center gap-2 px-5 py-3 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
           style={{ boxShadow: "inset 0 1px 0 var(--rowline)" }}
         >
           <Layers className="size-3.5 shrink-0" strokeWidth={1.8} />

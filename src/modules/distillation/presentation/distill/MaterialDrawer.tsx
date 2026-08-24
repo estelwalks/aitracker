@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Check, FolderOpen, Loader2, Search, Trash2, X } from "lucide-react";
 import {
-  Check,
-  ChevronDown,
-  FolderOpen,
-  Loader2,
-  Search,
-  Trash2,
-  X,
-} from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../../components/ui/select";
 
 import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
 import { EmptyState } from "../../../../components/tt";
+import { SESSION_TOOL_IDS } from "../../../../lib/local-sessions/types";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { SessionTranscriptMessage } from "../../../../modules/sessions/contracts";
 import { getSessionTranscript } from "../../../../modules/sessions/query";
@@ -77,10 +77,13 @@ export function MaterialDrawer({
     };
   }, [onClose]);
 
-  const sources = useMemo(
-    () => [...new Set(sessions.map((item) => item.source))].sort(),
-    [sessions],
-  );
+  // 来源筛选列出全部已知会话工具 + 全量会话中出现过的来源，避免筛选时
+  // agent 不全（例如某 agent 当前时间窗内没有会话时仍然可见）。
+  const sources = useMemo(() => {
+    const known = new Set<string>(SESSION_TOOL_IDS);
+    for (const item of sessions) known.add(item.source);
+    return [...known].sort();
+  }, [sessions]);
   const projects = useMemo(
     () => [...new Set(sessions.map((item) => item.projectKey))].sort(),
     [sessions],
@@ -749,7 +752,10 @@ export function MaterialDrawer({
   );
 }
 
-/** Prototype Select (distill.tsx 1436-1450): mono select + chevron. */
+/**
+ * Prototype Select (distill.tsx 1436-1450): 用 Radix Select 替换原生
+ * <select>，下拉面板与选项均为应用内样式（不再出现系统原生控件外观）。
+ */
 function FilterSelect({
   value,
   onChange,
@@ -762,21 +768,21 @@ function FilterSelect({
   label: string;
 }) {
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
         aria-label={label}
-        className="w-full appearance-none rounded-lg bg-surface-2 py-1.5 pr-6 pl-2.5 font-mono text-[11px] text-foreground outline-none"
+        className="h-8 w-full rounded-lg border-0 bg-surface-2 px-2.5 font-mono text-[11px] text-foreground shadow-none focus:ring-1 focus:ring-ring"
       >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[80] min-w-[var(--radix-select-trigger-width)] bg-popover font-mono text-[12px]">
         {options.map(([val, text]) => (
-          <option key={val} value={val} className="bg-card text-foreground">
+          <SelectItem key={val} value={val} className="cursor-pointer">
             {text}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-    </div>
+      </SelectContent>
+    </Select>
   );
 }
 

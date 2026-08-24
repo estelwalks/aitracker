@@ -260,8 +260,21 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ],
           "base": "configHome",
           "path": "tokscale/cursor-cache"
+        },
+        {
+          "targets": [
+            "windows10",
+            "windows11"
+          ],
+          "base": "appDataRoaming",
+          "path": "Cursor"
         }
-      ]
+      ],
+      "executable": {
+        "shared": [
+          "cursor"
+        ]
+      }
     },
     "storage": {
       "skills": {
@@ -3226,4 +3239,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "c1559201a4801a57";
+export const TOOL_REGISTRY_VERSION: string = "209d89ff4bb0cdbe";

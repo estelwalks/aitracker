@@ -167,7 +167,7 @@ function openBrowserCompanion(): void {
 }
 
 /**
- * Show the floating widget window (420×640, frameless, always-on-top, hidden
+ * Show the floating widget window (420×680, frameless, always-on-top, hidden
  * from the taskbar/dock). Created lazily on first use and reused afterwards:
  * closing hides it instead of destroying it so widget state/prefs survive.
  * Security hardening mirrors the main window: sandboxed preload, same-origin
@@ -183,13 +183,22 @@ async function showWidgetWindow(): Promise<void> {
 
   widgetWindow = new BrowserWindow({
     width: 420,
-    height: 640,
+    height: 680,
     frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     show: false,
     title: APP_NAME,
+    ...(process.platform === "darwin"
+      ? {
+          vibrancy: "under-window" as const,
+          visualEffectState: "active" as const,
+        }
+      : {}),
     webPreferences: {
       preload: join(currentDirectory, "preload.cjs"),
       contextIsolation: true,
