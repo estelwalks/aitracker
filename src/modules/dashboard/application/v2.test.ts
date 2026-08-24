@@ -119,6 +119,37 @@ test("Dashboard V2 uses one period for metrics, trend, cards and context", () =>
   });
 });
 
+test("Dashboard V2 treats persisted aggregate rows as weighted real events", () => {
+  const weighted = {
+    ...snapshot.events[0]!,
+    events: 37,
+    inputTokens: 3_700,
+    cachedInputTokens: 740,
+    outputTokens: 925,
+    totalTokens: 5_365,
+    context: {
+      textResponses: 31,
+      toolCalls: 74,
+      skillCalls: 18,
+      toolOutputCalls: 42,
+    },
+  };
+  const view = createDashboardV2View(
+    { ...snapshot, events: [weighted] },
+    "custom",
+    "2026-08-10",
+    "2026-08-10",
+  );
+
+  assert.equal(view.totals.events, 37);
+  assert.equal(view.totals.totalTokens, 5_365);
+  assert.equal(view.trend[0]?.events, 37);
+  assert.equal(view.models[0]?.events, 37);
+  assert.equal(view.projects[0]?.events, 37);
+  assert.equal(view.tools[0]?.events, 37);
+  assert.deepEqual(view.context, weighted.context);
+});
+
 test("Dashboard V2 excludes quick conversations from project statistics", () => {
   const quickConversation = {
     ...snapshot.events[0]!,

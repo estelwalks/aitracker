@@ -58,7 +58,7 @@ const emptyContextAvailability = (): DashboardV2ContextAvailability => ({
 
 function totalsFor(events: readonly DashboardV2Event[]): LocalUsageTotals {
   return events.reduce<LocalUsageTotals>((totals, event) => {
-    totals.events += 1;
+    totals.events += event.events ?? 1;
     totals.inputTokens += event.inputTokens;
     totals.cachedInputTokens += event.cachedInputTokens;
     totals.cacheCreationInputTokens += event.cacheCreationInputTokens;
@@ -81,7 +81,7 @@ function ranked(
     const key = keyOf(event) || "unknown";
     const current = rows.get(key) ?? { key, tokens: 0, events: 0 };
     current.tokens += event.totalTokens;
-    current.events += 1;
+    current.events += event.events ?? 1;
     rows.set(key, current);
   }
   return [...rows.values()]
@@ -138,7 +138,7 @@ function daily(events: readonly DashboardV2Event[]): DashboardV2TrendPoint[] {
       previousTokens: null,
     };
     current.tokens += event.totalTokens;
-    current.events += 1;
+    current.events += event.events ?? 1;
     current.cacheTokens += event.cachedInputTokens;
     current.netInputTokens +=
       event.inputTokens + event.cacheCreationInputTokens;
@@ -267,7 +267,9 @@ function enrichRows(
       (event) => (keyOf(event) || "unknown") === row.key,
     );
     const previousTotals = totalsFor(previous);
-    const comparable = related.length >= minimumComparableEvents;
+    const comparable =
+      related.reduce((sum, event) => sum + (event.events ?? 1), 0) >=
+      minimumComparableEvents;
     const deltaPercent = comparable
       ? previousTotals.totalTokens > 0
         ? ((row.tokens - previousTotals.totalTokens) /
@@ -477,7 +479,7 @@ export function createDashboardV2HeroView(input: {
         event.cachedInputTokens +
         event.cacheCreationInputTokens;
       current.cached += event.cachedInputTokens;
-      current.events += 1;
+      current.events += event.events ?? 1;
       cacheBySource.set(event.source, current);
     }
     const worstCache = [...cacheBySource.entries()]
@@ -849,7 +851,7 @@ export function createDashboardV2View(
     period,
     from: range.from,
     to: range.to,
-    hasData: events.length > 0,
+    hasData: totals.events > 0,
     totals,
     estimatedCostUsd: cost ? cost.knownUsd + cost.estimatedUsd : null,
     estimatedCostIsPartial: cost ? cost.unknownEvents > 0 : false,

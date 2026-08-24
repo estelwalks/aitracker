@@ -1,4 +1,5 @@
 import type { LocalUsageEvent } from "../../../lib/local-usage/types.ts";
+import type { UsageTrackerBucket } from "../contracts.ts";
 
 /**
  * Token burn leaderboard ("燃烧榜") pure logic. All inputs are real, sanitized
@@ -109,7 +110,12 @@ const emptyAcc = (): Acc => ({
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function rowFor(key: string, source: string | undefined, acc: Acc): RoastRow {
+function rowFor(
+  key: string,
+  name: string,
+  source: string | undefined,
+  acc: Acc,
+): RoastRow {
   const denominator = acc.netInputTokens + acc.cachedInputTokens;
   const cacheRate =
     denominator > 0 ? (acc.cachedInputTokens / denominator) * 100 : null;
@@ -117,7 +123,7 @@ function rowFor(key: string, source: string | undefined, acc: Acc): RoastRow {
   const previous = acc.previousTokens > 0 ? acc.previousTokens : null;
   return {
     key,
-    name: key,
+    name,
     ...(source === undefined ? {} : { source }),
     tokens: Math.round(acc.tokens),
     events: acc.events,
@@ -234,7 +240,7 @@ export function buildBoard(
   }
 
   const allRows = [...accs.entries()].map(([key, entry]) =>
-    rowFor(key, entry.source, entry.acc),
+    rowFor(key, key, entry.source, entry.acc),
   );
   allRows.sort((a, b) => b.tokens - a.tokens || b.waste - a.waste);
   const totalTokens = allRows.reduce((total, row) => total + row.tokens, 0);
@@ -242,6 +248,83 @@ export function buildBoard(
     rows: allRows.slice(0, TOP_BOARD_LIMIT),
     totalTokens,
     totalEntries: allRows.length,
+  };
+}
+
+function dateKeyAt(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Build one Tracker board from compact daily facts only. */
+export function buildBoardFromProjection(
+  buckets: readonly UsageTrackerBucket[],
+  dimension: RoastDimension,
+  nowMs = Date.now(),
+): TrackerBoard {
+  const accs = new Map<string, { acc: Acc; label: string; source?: string }>();
+  const recentStart = dateKeyAt(nowMs - RECENT_TREND_DAYS * DAY_MS);
+  const previousStart = dateKeyAt(nowMs - 2 * RECENT_TREND_DAYS * DAY_MS);
+  for (const bucket of buckets) {
+    if (bucket.dimension !== dimension) continue;
+    const entry = accs.get(bucket.identity) ?? {
+      acc: emptyAcc(),
+      label: bucket.label,
+      source: bucket.source,
+    };
+    entry.acc.tokens += bucket.totalTokens;
+    entry.acc.events += bucket.events;
+    entry.acc.calls += bucket.calls;
+    entry.acc.outputTokens += bucket.outputTokens;
+    entry.acc.cachedInputTokens += bucket.cachedInputTokens;
+    entry.acc.netInputTokens +=
+      bucket.inputTokens + bucket.cacheCreationInputTokens;
+    if (bucket.date >= recentStart) {
+      entry.acc.recentTokens += bucket.totalTokens;
+    } else if (bucket.date >= previousStart) {
+      entry.acc.previousTokens += bucket.totalTokens;
+    }
+    accs.set(bucket.identity, entry);
+  }
+  const allRows = [...accs.entries()].map(([key, entry]) =>
+    rowFor(key, entry.label, entry.source, entry.acc),
+  );
+  allRows.sort((left, right) =>
+    right.tokens !== left.tokens
+      ? right.tokens - left.tokens
+      : right.waste - left.waste,
+  );
+  return {
+    rows: allRows.slice(0, TOP_BOARD_LIMIT),
+    totalTokens: allRows.reduce((sum, row) => sum + row.tokens, 0),
+    totalEntries: allRows.length,
+  };
+}
+
+/** Complete Tracker DTO from the persisted projection. */
+export function buildTrackerReadModelFromProjection(input: {
+  readonly generatedAt: string | null;
+  readonly buckets: readonly UsageTrackerBucket[];
+  readonly nowMs?: number;
+}): import("../contracts.ts").TrackerReadModel {
+  const boards = {
+    skill: buildBoardFromProjection(input.buckets, "skill", input.nowMs),
+    project: buildBoardFromProjection(input.buckets, "project", input.nowMs),
+    session: buildBoardFromProjection(input.buckets, "session", input.nowMs),
+  };
+  return {
+    generatedAt: input.generatedAt,
+    boards,
+    totals: {
+      tokens: tokensForDimension(boards, "project"),
+      events: input.buckets
+        .filter((bucket) => bucket.dimension === "project")
+        .reduce((sum, bucket) => sum + bucket.events, 0),
+      entries: (Object.values(boards) as TrackerBoard[]).reduce(
+        (sum, board) => sum + totalEntriesForBoard(board),
+        0,
+      ),
+    },
   };
 }
 

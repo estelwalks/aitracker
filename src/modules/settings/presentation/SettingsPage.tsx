@@ -49,24 +49,28 @@ import {
 } from "../../../components/ui/alert-dialog";
 import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
+import { MenuBarAppSettingsSection } from "./MenuBarAppSettingsSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
 import { useSecurityClient } from "./use-security-client";
+import {
+  SETTINGS_CATEGORIES,
+  resolveSettingsCategory,
+  type SettingsCategory,
+  type SettingsSection,
+} from "../settings-navigation";
 import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
-import { useWidgetPrefs } from "../../widget/presentation/widget-prefs";
 import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
 } from "../../security-assessment/llm-review.server-fns";
 
-// 中文值保持为分类数据(用于比较),展示文案经 labelKeys 映射翻译。
-const categories = ["通用", "扫描配置", "模型配置", "外观", "关于"] as const;
-type Category = (typeof categories)[number];
-const categoryKeys: Record<Category, MessageKey> = {
-  通用: "settings.sections.general",
-  扫描配置: "settings.sections.scan",
-  模型配置: "settings.sections.model",
-  外观: "settings.sections.appearance",
-  关于: "settings.sections.about",
+const categoryKeys: Record<SettingsCategory, MessageKey> = {
+  general: "settings.sections.general",
+  scan: "settings.sections.scan",
+  model: "settings.sections.model",
+  menuBarApp: "settings.sections.menuBarApp",
+  appearance: "settings.sections.appearance",
+  about: "settings.sections.about",
 };
 
 type AutoLaunchStatus =
@@ -127,9 +131,9 @@ export interface SettingsLoaderData {
   readonly storageError: string | null;
   /**
    * Deep-link target: `?section=scan` opens the 扫描配置 category,
-   * `?section=model` opens the 模型配置 (model profiles) category.
+   * `?section=model` opens 模型配置；`?section=menu-bar-app` opens 菜单栏 APP.
    */
-  readonly section?: "scan" | "model";
+  readonly section?: SettingsSection;
 }
 
 export function SettingsPage({
@@ -137,12 +141,8 @@ export function SettingsPage({
 }: {
   readonly loaderData: SettingsLoaderData;
 }) {
-  const [category, setCategory] = useState<Category>(() =>
-    loaderData.section === "scan"
-      ? "扫描配置"
-      : loaderData.section === "model"
-        ? "模型配置"
-        : "通用",
+  const [category, setCategory] = useState<SettingsCategory>(() =>
+    resolveSettingsCategory(loaderData.section),
   );
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(false);
   const [autoLaunchStatus, setAutoLaunchStatus] =
@@ -153,7 +153,6 @@ export function SettingsPage({
     refresh: refreshSecurity,
   } = useSecurityClient();
   const { settings, setSettings } = useAppSettings();
-  const { prefs: widgetPrefs, set: setWidgetPref } = useWidgetPrefs();
   const {
     locale,
     localeMode,
@@ -380,7 +379,7 @@ export function SettingsPage({
 
       <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(180px,24%)_minmax(0,1fr)]">
         <Panel className="min-w-0" bodyClassName="p-2">
-          {categories.map((item) => (
+          {SETTINGS_CATEGORIES.map((item) => (
             <button
               key={item}
               onClick={() => setCategory(item)}
@@ -396,19 +395,8 @@ export function SettingsPage({
         </Panel>
 
         <Panel className="min-w-0" title={t(categoryKeys[category])}>
-          {category === "通用" && (
+          {category === "general" && (
             <div>
-              <Field
-                label="顶部动态栏"
-                hint="在 macOS 顶部菜单栏显示实时用量与安全状态"
-              >
-                <Toggle
-                  value={widgetPrefs.menuBarEnabled}
-                  onChange={(enabled) =>
-                    void setWidgetPref("menuBarEnabled", enabled)
-                  }
-                />
-              </Field>
               <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
                 <Toggle
                   value={autoLaunchEnabled}
@@ -574,7 +562,7 @@ export function SettingsPage({
             </div>
           )}
 
-          {category === "扫描配置" && (
+          {category === "scan" && (
             <div>
               <ScanScheduleSection
                 client={securityClient}
@@ -642,13 +630,19 @@ export function SettingsPage({
             </div>
           )}
 
-          {category === "模型配置" && (
+          {category === "model" && (
             <div>
               <ModelProfilesSection />
             </div>
           )}
 
-          {category === "外观" && (
+          {category === "menuBarApp" && (
+            <div>
+              <MenuBarAppSettingsSection />
+            </div>
+          )}
+
+          {category === "appearance" && (
             <div>
               <Field label={t("settings.theme")} hint={t("settings.themeDesc")}>
                 <Segmented
@@ -760,7 +754,7 @@ export function SettingsPage({
             </div>
           )}
 
-          {category === "关于" && (
+          {category === "about" && (
             <div>
               <Field label={t("settings.version")}>
                 <span className="tt-num text-[13px]">V{APP_VERSION}</span>

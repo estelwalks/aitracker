@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createMacWidgetTrayTemplate,
   createTrayTemplate,
   DESKTOP_CURRENCIES,
   DESKTOP_LOCALES,
@@ -28,6 +29,8 @@ test("electronMessages: 四个语言齐全且无空文案", () => {
     const catalog = electronMessages[locale];
     assert.ok(catalog.tray.tooltip.length > 0);
     assert.ok(catalog.menu.open.length > 0);
+    assert.ok(catalog.menu.dashboard.length > 0);
+    assert.ok(catalog.menu.settings.length > 0);
     assert.ok(catalog.menu.autoLaunch.length > 0);
     assert.ok(catalog.menu.quit.length > 0);
     assert.ok(catalog.dialog.closeHint.message.length > 0);
@@ -37,6 +40,27 @@ test("electronMessages: 四个语言齐全且无空文案", () => {
     assert.ok(catalog.dialog.dataIncompat.quit.length > 0);
     assert.ok(catalog.dialog.dataIncompat.clearAndContinue.length > 0);
   }
+});
+
+test("createMacWidgetTrayTemplate: 仅包含仪表盘、设置和退出", () => {
+  let dashboardOpened = 0;
+  let settingsOpened = 0;
+  let quit = 0;
+  const template = createMacWidgetTrayTemplate("zh-CN", {
+    onOpenDashboard: () => dashboardOpened++,
+    onOpenSettings: () => settingsOpened++,
+    onQuit: () => quit++,
+  });
+
+  assert.equal(template.length, 4);
+  assert.equal(template[0]?.label, "打开仪表盘");
+  assert.equal(template[1]?.label, "进入设置");
+  assert.equal(template[2]?.type, "separator");
+  assert.equal(template[3]?.label, "退出");
+  template.forEach((item) => item.click?.());
+  assert.equal(dashboardOpened, 1);
+  assert.equal(settingsOpened, 1);
+  assert.equal(quit, 1);
 });
 
 test("electronMessages: 非中文文案允许在任意 UI 语言展示(品牌名不翻译)", () => {

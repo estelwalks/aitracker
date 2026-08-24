@@ -21,6 +21,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
+import { NativeTrayTitleSync } from "../modules/widget/presentation/NativeTrayTitleSync";
 import { PrivacyStrip } from "./PrivacyStrip";
 import { WindowChrome, WINDOW_CHROME_HEIGHT } from "./WindowChrome";
 
@@ -100,130 +101,138 @@ export function AppShell({ children }: { children: ReactNode }) {
   const railWidth = collapsed ? 64 : sidebarWidth;
 
   return (
-    <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
-      {!isWidgetFloat && <WindowChrome />}
-      <aside
-        className="tt-sidebar fixed bottom-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
-        style={{ width: railWidth, top: chromeOffset }}
-      >
-        <div
-          className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
+    <>
+      <NativeTrayTitleSync />
+      <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
+        <WindowChrome />
+        <aside
+          className="tt-sidebar fixed bottom-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
+          style={{ width: railWidth, top: chromeOffset }}
         >
-          <div className="tt-brand-mark flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground font-mono text-[11px] font-black text-background">
-            TT
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 leading-tight">
-              <div className="truncate text-[13px] font-semibold tracking-tight">
-                {APP_NAME}
-              </div>
+          <div
+            className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
+          >
+            <div className="tt-brand-mark flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground font-mono text-[11px] font-black text-background">
+              TT
             </div>
-          )}
-        </div>
-
-        <nav
-          aria-label={APP_NAME}
-          className="tt-scroll mt-1 flex-1 overflow-y-auto px-2 pb-2"
-        >
-          <div className="space-y-0.5">
-            {navItems.map((item) => {
-              const active = isNavActive(pathname, item.to);
-              const Icon = item.icon;
-              const label = t(item.label);
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  preload="intent"
-                  preloadDelay={80}
-                  title={label}
-                  className={`group relative flex items-center rounded-md py-2 transition-colors ${
-                    collapsed ? "justify-center px-0" : "gap-3 px-3"
-                  } ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon
-                    className={`size-4 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
-                    strokeWidth={1.75}
-                  />
-                  {!collapsed && (
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                      {label}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {!collapsed && (
+              <div className="min-w-0 leading-tight">
+                <div className="truncate text-[13px] font-semibold tracking-tight">
+                  {APP_NAME}
+                </div>
+              </div>
+            )}
           </div>
-        </nav>
 
-        <div className="shrink-0 space-y-2 px-2 pb-3">
-          <Link
-            to="/sources"
-            preload="intent"
-            preloadDelay={80}
-            title={t("nav.sources")}
-            className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
-              collapsed ? "justify-center px-0" : "gap-3 px-3"
-            } ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+          <nav
+            aria-label={APP_NAME}
+            className="tt-scroll mt-1 flex-1 overflow-y-auto px-2 pb-2"
           >
-            <Database className="size-4 shrink-0" strokeWidth={1.75} />
-            {!collapsed && <span className="truncate">{t("nav.sources")}</span>}
-          </Link>
-          <Link
-            to="/settings"
-            preload="intent"
-            preloadDelay={80}
-            title={t("nav.settings")}
-            className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
-              collapsed ? "justify-center px-0" : "gap-3 px-3"
-            } ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
-          >
-            <Settings className="size-4 shrink-0" strokeWidth={1.75} />
-            {!collapsed && (
-              <span className="truncate">{t("nav.settings")}</span>
-            )}
-          </Link>
-          <button
-            type="button"
-            onClick={() => setCollapsed((value) => !value)}
-            title={t("nav.collapse")}
-            className={`flex w-full items-center rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground ${
-              collapsed ? "justify-center px-0" : "gap-3 px-3"
-            }`}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.75} />
-            ) : (
-              <PanelLeftClose className="size-4 shrink-0" strokeWidth={1.75} />
-            )}
-            {!collapsed && (
-              <span className="min-w-0 flex-1 truncate">
-                {t("nav.collapse")}
-              </span>
-            )}
-          </button>
+            <div className="space-y-0.5">
+              {navItems.map((item) => {
+                const active = isNavActive(pathname, item.to);
+                const Icon = item.icon;
+                const label = t(item.label);
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    preload="intent"
+                    preloadDelay={80}
+                    title={label}
+                    className={`group relative flex items-center rounded-md py-2 transition-colors ${
+                      collapsed ? "justify-center px-0" : "gap-3 px-3"
+                    } ${active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <Icon
+                      className={`size-4 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
+                      strokeWidth={1.75}
+                    />
+                    {!collapsed && (
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                        {label}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+
+          <div className="shrink-0 space-y-2 px-2 pb-3">
+            <Link
+              to="/sources"
+              preload="intent"
+              preloadDelay={80}
+              title={t("nav.sources")}
+              className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+                collapsed ? "justify-center px-0" : "gap-3 px-3"
+              } ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+            >
+              <Database className="size-4 shrink-0" strokeWidth={1.75} />
+              {!collapsed && (
+                <span className="truncate">{t("nav.sources")}</span>
+              )}
+            </Link>
+            <Link
+              to="/settings"
+              preload="intent"
+              preloadDelay={80}
+              title={t("nav.settings")}
+              className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+                collapsed ? "justify-center px-0" : "gap-3 px-3"
+              } ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
+            >
+              <Settings className="size-4 shrink-0" strokeWidth={1.75} />
+              {!collapsed && (
+                <span className="truncate">{t("nav.settings")}</span>
+              )}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              title={t("nav.collapse")}
+              className={`flex w-full items-center rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground ${
+                collapsed ? "justify-center px-0" : "gap-3 px-3"
+              }`}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.75} />
+              ) : (
+                <PanelLeftClose
+                  className="size-4 shrink-0"
+                  strokeWidth={1.75}
+                />
+              )}
+              {!collapsed && (
+                <span className="min-w-0 flex-1 truncate">
+                  {t("nav.collapse")}
+                </span>
+              )}
+            </button>
+          </div>
+        </aside>
+
+        <div
+          className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
+          style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
+        >
+          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-4 md:px-8 md:pt-8 2xl:px-10 2xl:pt-10">
+            <div className="tt-container">{children}</div>
+          </main>
         </div>
-      </aside>
 
-      <div
-        className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
-        style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
-      >
-        <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-4 md:px-8 md:pt-8 2xl:px-10 2xl:pt-10">
-          <div className="tt-container">{children}</div>
-        </main>
-      </div>
-
-      {/* 全局隐私承诺条：常驻底部（参照 V3.0 原型 PrivacyStrip）。从侧边栏
+        {/* 全局隐私承诺条：常驻底部（参照 V3.0 原型 PrivacyStrip）。从侧边栏
           右侧开始铺开（left = railWidth），不覆盖侧边栏底部的「收起」按钮，
           否则收起后无法再点开侧边栏。 */}
-      <div
-        className="fixed right-0 bottom-0 z-40 transition-[left] duration-200"
-        style={{ left: railWidth }}
-      >
-        <PrivacyStrip />
+        <div
+          className="fixed right-0 bottom-0 z-40 transition-[left] duration-200"
+          style={{ left: railWidth }}
+        >
+          <PrivacyStrip />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

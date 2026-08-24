@@ -13,9 +13,13 @@ export const settings = {
     general: "通用",
     scan: "扫描配置",
     model: "模型配置",
+    menuBarApp: "菜单栏 APP",
     appearance: "外观",
     widget: "小组件",
     about: "关于",
+  },
+  menuBarApp: {
+    dynamicBar: "动态栏",
   },
   scan: {
     onDemand: "扫描方式",

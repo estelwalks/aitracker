@@ -31,6 +31,11 @@ import {
   type MessageParams,
   type Translations,
 } from "./messages";
+import {
+  applyDesktopLocaleEvent,
+  applyDesktopPreferences,
+  type DesktopI18nState,
+} from "./desktop-sync";
 import { BUILTIN_RATES, formatMoney as pricingFormatMoney } from "../pricing";
 import { getRatesSnapshot, type RatesSnapshot } from "../pricing/server-fns";
 import { brandParams } from "../app-config";
@@ -214,6 +219,32 @@ export function I18nProvider({
   const localeRef = useRef(locale);
   const currencyRef = useRef(displayCurrency);
   const converged = useRef(false);
+  const desktopI18nStateRef = useRef<DesktopI18nState>({
+    localeMode,
+    manualLocale,
+    systemLocale,
+    currencyMode,
+    manualCurrency,
+    systemCurrency,
+  });
+
+  useEffect(() => {
+    desktopI18nStateRef.current = {
+      localeMode,
+      manualLocale,
+      systemLocale,
+      currencyMode,
+      manualCurrency,
+      systemCurrency,
+    };
+  }, [
+    currencyMode,
+    manualCurrency,
+    manualLocale,
+    localeMode,
+    systemCurrency,
+    systemLocale,
+  ]);
 
   useEffect(() => {
     localeRef.current = locale;
@@ -278,6 +309,57 @@ export function I18nProvider({
     });
   }, []);
 
+  /** Electron main is the preference authority for desktop renderers. */
+  useEffect(() => {
+    const desktop =
+      typeof window === "undefined" ? undefined : window.desktopApi;
+    if (!desktop) return;
+
+    const commit = (next: DesktopI18nState) => {
+      desktopI18nStateRef.current = next;
+      setLocaleModeState(next.localeMode);
+      setManualLocale(next.manualLocale);
+      setSystemLocale(next.systemLocale);
+      setCurrencyModeState(next.currencyMode);
+      setManualCurrency(next.manualCurrency);
+      const nextLocale =
+        next.localeMode === "manual"
+          ? (next.manualLocale ?? next.systemLocale)
+          : next.systemLocale;
+      const nextCurrency =
+        next.currencyMode === "manual"
+          ? (next.manualCurrency ?? next.systemCurrency)
+          : next.systemCurrency;
+      localeRef.current = nextLocale;
+      currencyRef.current = nextCurrency;
+      updateSearchParams(nextLocale, nextCurrency);
+    };
+
+    const unsubscribeLocale = desktop.onLocaleChanged((rawLocale) => {
+      const nextLocale = normalizeLocale(rawLocale);
+      if (!nextLocale) return;
+      commit(applyDesktopLocaleEvent(desktopI18nStateRef.current, nextLocale));
+    });
+    const unsubscribePreferences = desktop.onPreferencesChanged((snapshot) => {
+      const nextLocale = normalizeLocale(snapshot.locale);
+      const nextCurrency = normalizeCurrency(snapshot.displayCurrency);
+      if (!nextLocale || !nextCurrency) return;
+      commit(
+        applyDesktopPreferences(desktopI18nStateRef.current, {
+          locale: nextLocale,
+          localeSource: snapshot.localeSource,
+          displayCurrency: nextCurrency,
+          currencySource: snapshot.currencySource,
+        }),
+      );
+    });
+
+    return () => {
+      unsubscribeLocale();
+      unsubscribePreferences();
+    };
+  }, []);
+
   /**
    * Startup silent rate read — cache-only (T3-05/T3-11): automatic network
    * refreshes belong to the `exchange.refresh` background task, never to a
@@ -303,12 +385,24 @@ export function I18nProvider({
         mode === "manual" ? (locale ?? systemLocale) : systemLocale;
       const syncedCurrency = mapSystemCurrency(nextLocale);
 
-      if (mode === "manual" && locale != null) {
-        setManualLocale(locale);
-        void setPreference(LOCALE_STORAGE_KEY, locale);
+      const desktop =
+        typeof window === "undefined" ? undefined : window.desktopApi;
+      if (desktop) {
+        void desktop
+          .setLocaleMode(mode, mode === "manual" ? nextLocale : undefined)
+          .catch((error: unknown) =>
+            console.warn("Electron locale preference sync failed", error),
+          );
+      } else {
+        if (mode === "manual" && locale != null) {
+          void setPreference(LOCALE_STORAGE_KEY, locale);
+        }
+        void setPreference(LOCALE_MODE_STORAGE_KEY, mode);
+        void setPreference(CURRENCY_STORAGE_KEY, syncedCurrency);
+        void setPreference(CURRENCY_MODE_STORAGE_KEY, "manual");
       }
+      if (mode === "manual" && locale != null) setManualLocale(locale);
       setLocaleModeState(mode);
-      void setPreference(LOCALE_MODE_STORAGE_KEY, mode);
 
       // A language change is an explicit user action, so synchronize the
       // currency once here. Keeping this in the handler (instead of an effect
@@ -316,8 +410,6 @@ export function I18nProvider({
       // across unrelated renders.
       setManualCurrency(syncedCurrency);
       setCurrencyModeState("manual");
-      void setPreference(CURRENCY_STORAGE_KEY, syncedCurrency);
-      void setPreference(CURRENCY_MODE_STORAGE_KEY, "manual");
 
       localeRef.current = nextLocale;
       currencyRef.current = syncedCurrency;
