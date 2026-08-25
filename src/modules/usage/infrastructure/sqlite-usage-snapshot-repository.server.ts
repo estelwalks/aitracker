@@ -103,13 +103,19 @@ export function createSqliteUsageSnapshotRepository(
         "SELECT kind, label FROM project_classifications WHERE ref_hash = ?",
       )
       .get(refHash);
+    const kind = row == null ? "unknown" : String(row.kind);
     return {
       refHash,
-      label: row == null ? safeProjectLabel(projectRef) : String(row.label),
-      kind:
-        row == null
-          ? "unknown"
-          : (String(row.kind) as PersistedProjectIdentity["kind"]),
+      // AiPy standalone tasks use their title as the project key. The
+      // classifier quite correctly marks a title as non-workspace, but its
+      // generic `unknown` label would discard that useful display value when
+      // the aggregate is persisted. Keep the safe final segment for all
+      // unknown classifications while preserving the classification kind.
+      label:
+        kind === "unknown"
+          ? safeProjectLabel(projectRef)
+          : String(row?.label ?? "unknown"),
+      kind: kind as PersistedProjectIdentity["kind"],
     };
   };
   return {

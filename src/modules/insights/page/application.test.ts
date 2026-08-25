@@ -65,6 +65,7 @@ function makeStore(
   overrides: Partial<
     ReturnType<InsightStorePort["getEffectivePreference"]>
   > = {},
+  refreshIntervalMs = 60 * 60 * 1000,
 ): InsightStorePort {
   return {
     getEffectivePreference: () => ({
@@ -78,6 +79,8 @@ function makeStore(
       ...overrides,
     }),
     setPreference: () => {},
+    getRefreshIntervalMs: () => refreshIntervalMs,
+    setRefreshIntervalMs: () => {},
   };
 }
 
@@ -102,6 +105,39 @@ test("read returns the adapter's local facts when default enhancement has no enh
   );
   assert.equal(env.lines[0].action?.id, "open_security");
   assert.equal(env.lines[0].action?.labelKey, "insights.actions.security");
+});
+
+test("read uses a valid persisted AI result for the first paint", async () => {
+  let enhanceCalls = 0;
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: {
+      id: "cached-enhancer",
+      readCached: async () => ({
+        status: "enhanced-cached",
+        modelLabel: "cached-model",
+        lines: [{ candidateId: "c1", analysis: "cached analysis" }],
+      }),
+      enhance: async () => {
+        enhanceCalls += 1;
+        return { status: "enhancer-failed", lines: [] };
+      },
+    },
+    store: makeStore("enhanced-auto", {
+      consentVersion: "1",
+      consentedAtMs: 0,
+    }),
+  });
+
+  const env = await app.read("dashboard", {}, "zh-CN");
+  assert.equal(env.status, "enhanced-cached");
+  assert.equal(env.source, "enhanced");
+  assert.equal(env.modelLabel, "cached-model");
+  assert.equal(
+    env.lines.find((line) => line.id === "c1")?.analysis,
+    "cached analysis",
+  );
+  assert.equal(enhanceCalls, 0, "first paint must not start a model request");
 });
 
 test("enhance success replaces analysis and keeps fact key/params", async () => {
@@ -327,6 +363,37 @@ test("enhance failure keeps rules lines identical to read", async () => {
   }
 });
 
+test("reports when privacy filtering leaves no eligible remote candidates", async () => {
+  const baseAdapter = makeAdapter();
+  const localOnlyAdapter: PageInsightAdapter = {
+    ...baseAdapter,
+    composeCandidates(bundle) {
+      return baseAdapter.composeCandidates(bundle).map((candidate) => ({
+        ...candidate,
+        remoteEligible: false,
+      }));
+    },
+  };
+  const app = createPageInsightsApplication({
+    adapters: [localOnlyAdapter],
+    enhancer: makeEnhancer({ status: "enhanced-ready", lines: [] }),
+    store: makeStore("enhanced-manual"),
+  });
+
+  const env = await app.enhance(
+    "dashboard",
+    {},
+    { locale: "zh-CN", reason: "manual" },
+  );
+
+  assert.equal(env.status, "no-eligible-candidates");
+  assert.equal(env.source, "rules");
+  assert.equal(
+    env.lines.every((line) => line.source === "rules"),
+    true,
+  );
+});
+
 test("widget truncates to a single line", async () => {
   const app = createPageInsightsApplication({
     adapters: [makeAdapter("widget")],
@@ -408,6 +475,25 @@ test("effective profile and daily limit are forwarded to the enhancer", async ()
   assert.equal(captured?.profileId, "profile-selected");
   assert.equal(captured?.dailyCallLimit, 7);
   assert.equal(captured?.adapterVersion, 1);
+  assert.equal(captured?.cacheTtlMs, 60 * 60 * 1000);
+});
+
+test("forwards the configured insight refresh interval to enhancement", async () => {
+  let captured: InsightEnhancementInput | undefined;
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: {
+      id: "capture-refresh",
+      async enhance(input) {
+        captured = input;
+        return { status: "enhancer-failed", lines: [] };
+      },
+    },
+    store: makeStore("enhanced-manual", {}, 2 * 60 * 60 * 1000),
+  });
+
+  await app.enhance("dashboard", {}, { locale: "zh-CN", reason: "manual" });
+  assert.equal(captured?.cacheTtlMs, 2 * 60 * 60 * 1000);
 });
 
 test("model selection and order control non-mandatory lines while mandatory safety stays first", async () => {

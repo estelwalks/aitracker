@@ -105,9 +105,14 @@ export function SecurityBriefing({
   // During the initial read (or when no envelope lines are available), the
   // existing security totals remain the honest local fallback.
   const useLocalLines = insightLoading || sharedInsightLines.length === 0;
-  const lines = useLocalLines
-    ? localLines
-    : sharedInsightLines.map((insight) => insight.text);
+  const lines = useMemo(
+    () =>
+      useLocalLines
+        ? localLines
+        : sharedInsightLines.map((insight) => insight.text),
+    [localLines, sharedInsightLines, useLocalLines],
+  );
+  const linesKey = JSON.stringify(lines);
   const topInsight = sharedInsightLines[0];
   const fallbackStatusKey = envelope
     ? insightFallbackStatusLabel(envelope.status)
@@ -136,7 +141,7 @@ export function SecurityBriefing({
   const line = lines[activeIndex] ?? "";
   const rotateNext = () => setIndex((current) => (current + 1) % lines.length);
 
-  useEffect(() => setIndex(0), [lines]);
+  useEffect(() => setIndex(0), [linesKey]);
 
   useEffect(() => {
     if (

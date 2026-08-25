@@ -2273,7 +2273,7 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
           ]
         },
         "maxFileSizeBytes": 536870912,
-        "query": "SELECT\n  e.time AS timestamp,\n  e.task_id AS sessionId,\n  COALESCE(NULLIF(e.model, ''), NULLIF(t.model, ''), 'unknown') AS model,\n  COALESCE(NULLIF(w.workdir, ''), NULLIF(t.workdir, ''), 'unknown') AS project,\n  CAST(COALESCE(json_extract(e.usage, '$.input_tokens'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.output_tokens'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.reasoning_tokens'), 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.total_tokens'), 0) AS INTEGER) AS totalTokens\nFROM task_event e\nLEFT JOIN task t ON t.id = e.task_id\nLEFT JOIN workspace w ON w.id = t.workspace_id\nWHERE e.usage IS NOT NULL AND e.usage <> ''"
+        "query": "SELECT\n  e.time AS timestamp,\n  e.task_id AS sessionId,\n  COALESCE(NULLIF(e.model, ''), NULLIF(t.model, ''), 'unknown') AS model,\n  COALESCE(\n    NULLIF(w.workdir, ''),\n    CASE\n      WHEN NULLIF(t.title, '') IS NOT NULL THEN\n        COALESCE(\n          CASE\n            WHEN instr(t.workdir, '/aipywork/') > 0 THEN\n              substr(t.workdir, instr(t.workdir, '/aipywork/') + length('/aipywork/'))\n          END,\n          NULLIF(t.id, ''),\n          'unknown'\n        ) || ' - ' || t.title\n    END,\n    NULLIF(t.workdir, ''),\n    'unknown'\n  ) AS project,\n  CAST(COALESCE(json_extract(e.usage, '$.input_tokens'), 0) AS INTEGER) AS inputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.output_tokens'), 0) AS INTEGER) AS outputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.reasoning_tokens'), 0) AS INTEGER) AS reasoningOutputTokens,\n  CAST(COALESCE(json_extract(e.usage, '$.total_tokens'), 0) AS INTEGER) AS totalTokens\nFROM task_event e\nLEFT JOIN task t ON t.id = e.task_id\nLEFT JOIN workspace w ON w.id = t.workspace_id\nWHERE e.usage IS NOT NULL AND e.usage <> ''"
       },
       "skills": "unsupported",
       "agents": "unsupported",
@@ -3239,4 +3239,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "88e6da439842ea4a";
+export const TOOL_REGISTRY_VERSION: string = "e880e6b482c7cf48";

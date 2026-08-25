@@ -94,6 +94,19 @@ test("fresh databases default insight enhancement to enabled", (t) => {
   });
 });
 
+test("refresh interval persists independently from insight mode", (t) => {
+  const repository = createSqliteInsightRepository(fixture(t));
+  assert.equal(repository.getRefreshIntervalMs(), 60 * 60 * 1000);
+  repository.setRefreshIntervalMs(2 * 60 * 60 * 1000, 20);
+  assert.equal(repository.getRefreshIntervalMs(), 2 * 60 * 60 * 1000);
+  repository.setRefreshIntervalMs(60 * 60 * 1000, 19);
+  assert.equal(
+    repository.getRefreshIntervalMs(),
+    2 * 60 * 60 * 1000,
+    "older writes must not overwrite a newer interval",
+  );
+});
+
 test("insight toggle preference persists local-rules and enhanced-auto modes", (t) => {
   const repository = createSqliteInsightRepository(fixture(t));
   const base = {

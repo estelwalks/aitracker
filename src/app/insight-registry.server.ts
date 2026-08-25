@@ -128,6 +128,12 @@ export async function createPageInsightsApplicationForRoot(
 
 let cachedApplication: PageInsightsApplication | undefined;
 let cachedRoot: unknown;
+let applicationBuild:
+  | {
+      readonly root: unknown;
+      readonly promise: Promise<PageInsightsApplication>;
+    }
+  | undefined;
 
 /**
  * Returns the singleton page-insights application, keyed to the current
@@ -138,19 +144,28 @@ export async function getPageInsightsApplication(): Promise<PageInsightsApplicat
   const { getCompositionRoot } = await import("./composition.server.ts");
   const root = await getCompositionRoot();
   if (cachedApplication && cachedRoot === root) return cachedApplication;
-  const application = await createPageInsightsApplicationForRoot({
+  if (applicationBuild?.root === root) return applicationBuild.promise;
+
+  const promise = createPageInsightsApplicationForRoot({
     aiExecutor: root.aiExecutor,
     modelProfiles: root.modelProfiles,
     store: root.database.features.insights,
     runtimeFlags: root.database.features.runtimeFlags,
   });
-  cachedApplication = application;
-  cachedRoot = root;
-  return application;
+  applicationBuild = { root, promise };
+  try {
+    const application = await promise;
+    cachedApplication = application;
+    cachedRoot = root;
+    return application;
+  } finally {
+    if (applicationBuild?.promise === promise) applicationBuild = undefined;
+  }
 }
 
 /** Test-only seam: drop the cached application so the next call rebuilds. */
 export function resetPageInsightsApplicationForTests(): void {
   cachedApplication = undefined;
   cachedRoot = undefined;
+  applicationBuild = undefined;
 }

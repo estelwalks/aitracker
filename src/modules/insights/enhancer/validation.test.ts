@@ -334,6 +334,31 @@ test("quality gate removes near-paraphrases and generic guidance per line", () =
   }
 });
 
+test("keeps valid non-mandatory lines when another model line is unsafe", () => {
+  const result = validateEnhancementOutput(
+    text([
+      { candidateId: "c1", analysis: "检测到 42 个风险" },
+      { candidateId: "c2", analysis: "应优先处置以缩短风险暴露时间。" },
+    ]),
+    input({
+      candidates: candidates(2).map((candidate) => ({
+        ...candidate,
+        mandatory: false,
+      })),
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.output, [
+      {
+        candidateId: "c2",
+        analysis: "应优先处置以缩短风险暴露时间。",
+      },
+    ]);
+  }
+});
+
 test("quality gate rejects output when every analysis is empty boilerplate", () => {
   const result = validateEnhancementOutput(
     text([{ candidateId: "c1", analysis: "建议持续关注当前状态" }]),
