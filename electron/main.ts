@@ -68,7 +68,6 @@ import {
   updateTrayTitleIfChanged,
 } from "./tray-title.js";
 import { findTrayIconPath, TRAY_ICON_DATA_URL } from "./tray-icon.js";
-import { createWidgetShellDataUrl } from "./widget-shell.js";
 import {
   completeReleaseDataResetAfterWarmup,
   prepareReleaseDataReset,
@@ -290,11 +289,6 @@ async function showWidgetWindow(
     }
   });
 
-  widgetWindow.once("ready-to-show", () => {
-    positionWidgetWindow(trayBounds);
-    widgetWindow?.show();
-    widgetWindow?.focus();
-  });
   widgetWindow.on("blur", () => {
     if (process.platform === "darwin" && !isQuitting) {
       widgetWindow?.hide();
@@ -317,18 +311,16 @@ async function showWidgetWindow(
       )
     : `${allowedOrigin}/widget?mode=float&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
   try {
-    // Paint a self-contained shell first, then replace it with the real route
-    // without waiting for any Dashboard/widget data request.
-    await widgetWindow.loadURL(createWidgetShellDataUrl());
+    // Load the real route before revealing the window. Showing the standalone
+    // shell first caused a visible second transition from the loading mock to
+    // the styled widget, especially on the first menu-bar click.
+    await widgetWindow.loadURL(widgetUrl);
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     positionWidgetWindow(trayBounds);
     widgetWindow.show();
     widgetWindow.focus();
-    void widgetWindow.loadURL(widgetUrl).catch((error: unknown) => {
-      console.warn("Widget window failed to load", error);
-    });
   } catch (error) {
-    console.warn("Widget shell failed to load", error);
+    console.warn("Widget window failed to load", error);
     widgetWindow?.destroy();
   }
 }
