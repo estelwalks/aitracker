@@ -34,11 +34,14 @@ export interface WslTopologyOptions {
   /** Test seam; defaults to `execFile`. */
   readonly execFileFn?: typeof execFile;
   readonly now?: () => Date;
+  /** Total discovery budget across listing and every distro home probe. */
   readonly timeoutMs?: number;
+  /** Monotonic test seam used to enforce the total discovery budget. */
+  readonly monotonicNow?: () => number;
   readonly signal?: AbortSignal;
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 export function emptyTopology(
   enumeratedAt: string | null,
@@ -104,6 +107,10 @@ export async function enumerateWslTopology(
   const run = options.execFileFn ?? execFile;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const now = options.now ?? (() => new Date());
+  const monotonicNow = options.monotonicNow ?? (() => Date.now());
+  const deadlineMs = monotonicNow() + Math.max(1, timeoutMs);
+  const remainingMs = () => deadlineMs - monotonicNow();
+  const commandTimeoutMs = () => Math.max(1, remainingMs());
   const signal = options.signal;
   const enumeratedAt = now().toISOString();
 
@@ -115,7 +122,7 @@ export async function enumerateWslTopology(
       ["-l", "-q"],
       {
         encoding: "buffer",
-        timeout: timeoutMs,
+        timeout: commandTimeoutMs(),
         windowsHide: true,
         maxBuffer: 1024 * 1024,
       },
@@ -124,6 +131,8 @@ export async function enumerateWslTopology(
   } catch (caught) {
     if (signal?.aborted)
       return emptyTopology(enumeratedAt, true, ["cancelled"]);
+    if (remainingMs() <= 0)
+      return emptyTopology(enumeratedAt, true, ["timeout"]);
     return emptyTopology(enumeratedAt, true, ["wsl-unavailable"]);
   }
 
@@ -134,6 +143,7 @@ export async function enumerateWslTopology(
     .filter(Boolean);
 
   const distros: WslDistroHome[] = [];
+  let timedOut = false;
   for (const distribution of distributions) {
     if (signal?.aborted) {
       return {
@@ -143,6 +153,10 @@ export async function enumerateWslTopology(
         warningCodes: ["cancelled"],
       };
     }
+    if (remainingMs() <= 0) {
+      timedOut = true;
+      break;
+    }
     try {
       const result = await execFileP(
         run,
@@ -150,7 +164,7 @@ export async function enumerateWslTopology(
         ["-d", distribution, "-e", "sh", "-lc", 'printf %s "$HOME"'],
         {
           encoding: "utf8",
-          timeout: timeoutMs,
+          timeout: commandTimeoutMs(),
           windowsHide: true,
           maxBuffer: 1024 * 1024,
         },
@@ -163,10 +177,27 @@ export async function enumerateWslTopology(
       if (!linuxHome.startsWith("/")) continue;
       distros.push({ distribution, home: linuxHome });
     } catch {
+      if (signal?.aborted) {
+        return {
+          distros,
+          enumeratedAt,
+          failed: true,
+          warningCodes: ["cancelled"],
+        };
+      }
+      if (remainingMs() <= 0) {
+        timedOut = true;
+        break;
+      }
       // Skip unresponsive distros; the rest of the topology stays usable.
     }
   }
-  return { distros, enumeratedAt, failed: false, warningCodes: [] };
+  return {
+    distros,
+    enumeratedAt,
+    failed: timedOut,
+    warningCodes: timedOut ? ["timeout"] : [],
+  };
 }
 
 /**
@@ -177,11 +208,10 @@ export function wslRootsFor(
   topology: WslTopology,
   providerDirectory: string,
 ): string[] {
-  return topology.distros.flatMap(({ distribution, home }) => {
+  return topology.distros.map(({ distribution, home }) => {
     const suffix = `${home.replaceAll("/", "\\")}\\${providerDirectory}`;
-    return [
-      `\\\\wsl.localhost\\${distribution}${suffix}`,
-      `\\\\wsl$\\${distribution}${suffix}`,
-    ];
+    // \\wsl$ is supported by both WSL 1 and WSL 2. Scanning its
+    // \\wsl.localhost alias as well only traverses the same files twice.
+    return `\\\\wsl$\\${distribution}${suffix}`;
   });
 }
