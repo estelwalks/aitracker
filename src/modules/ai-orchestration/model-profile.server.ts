@@ -98,6 +98,18 @@ export function modelListUrl(endpoint: string): string {
 
 const MODEL_PROFILE_NETWORK_TIMEOUT_MS = 12_000;
 const DEFAULT_PROFILE_MAX_OUTPUT_TOKENS = 8192;
+const MAX_TRANSIENT_CHAT_RETRIES = 2;
+const TRANSIENT_CHAT_RETRY_DELAY_MS = 350;
+
+function isTransientChatStatus(status: number): boolean {
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+async function waitBeforeChatRetry(): Promise<void> {
+  await new Promise<void>((resolve) =>
+    setTimeout(resolve, TRANSIENT_CHAT_RETRY_DELAY_MS),
+  );
+}
 
 class ModelProfileNetworkTimeout extends Error {
   readonly name = "ModelProfileNetworkTimeout";
@@ -294,22 +306,43 @@ export function createModelProfileNetworkOperations(options?: {
   return { test, listModels };
 }
 
+function textFromContent(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (!part || typeof part !== "object") return "";
+      const record = part as { text?: unknown; content?: unknown };
+      return typeof record.text === "string"
+        ? record.text
+        : typeof record.content === "string"
+          ? record.content
+          : "";
+    })
+    .join("\n")
+    .trim();
+}
+
 function parseChatText(protocol: ProfileProtocol, raw: string): string {
   try {
     const json: unknown = JSON.parse(raw);
     if (protocol === "anthropic") {
       const content = (json as { content?: Array<{ text?: string }> })?.content;
-      if (Array.isArray(content))
-        return content
-          .map((item) => item?.text ?? "")
-          .join("\n")
-          .trim();
-      return "";
+      return textFromContent(content);
     }
-    const choice = (
-      json as { choices?: Array<{ message?: { content?: string } }> }
-    )?.choices?.[0];
-    return (choice?.message?.content ?? "").trim();
+    const record = json as {
+      choices?: Array<{ text?: unknown; message?: { content?: unknown } }>;
+      output_text?: unknown;
+      output?: Array<{ content?: unknown }>;
+    };
+    const choice = record.choices?.[0];
+    return (
+      textFromContent(choice?.message?.content) ||
+      textFromContent(choice?.text) ||
+      textFromContent(record.output_text) ||
+      textFromContent(record.output?.flatMap((item) => item.content ?? []))
+    );
   } catch {
     return "";
   }
@@ -540,7 +573,7 @@ export function createProfileBackedProvider(options: {
         `${request.prompt.template}\n\n${request.input.text}`.trim();
       const maxOutputTokens =
         request.maxOutputTokens ?? DEFAULT_PROFILE_MAX_OUTPUT_TOKENS;
-      const response = await fetchImpl(chatUrl(profile.protocol, endpoint), {
+      const requestInit: RequestInit = {
         method: "POST",
         headers: chatHeaders(
           profile.protocol,
@@ -554,7 +587,39 @@ export function createProfileBackedProvider(options: {
           maxOutputTokens,
         ),
         signal: request.signal,
-      });
+      };
+      let response: Response | undefined;
+      for (
+        let attempt = 0;
+        attempt <= MAX_TRANSIENT_CHAT_RETRIES;
+        attempt += 1
+      ) {
+        if (request.signal.aborted) throw new Error("request cancelled");
+        try {
+          response = await fetchImpl(
+            chatUrl(profile.protocol, endpoint),
+            requestInit,
+          );
+        } catch (error) {
+          if (
+            request.signal.aborted ||
+            attempt === MAX_TRANSIENT_CHAT_RETRIES
+          ) {
+            throw error;
+          }
+          await waitBeforeChatRetry();
+          continue;
+        }
+        if (
+          response.ok ||
+          !isTransientChatStatus(response.status) ||
+          attempt === MAX_TRANSIENT_CHAT_RETRIES
+        ) {
+          break;
+        }
+        await waitBeforeChatRetry();
+      }
+      if (response === undefined) throw new Error("empty model response");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = parseChatText(profile.protocol, await response.text());
       if (!text) throw new Error("empty model response");

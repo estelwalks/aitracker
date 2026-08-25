@@ -93,6 +93,7 @@ test("setInsightPreferences accepts valid input and defaults mode to rules", () 
     profileId: null,
     consentVersion: null,
     dailyCallLimit: null,
+    refreshIntervalMs: undefined,
     surfaceId: undefined,
   });
   assert.deepEqual(
@@ -101,6 +102,7 @@ test("setInsightPreferences accepts valid input and defaults mode to rules", () 
       profileId: "profile-1",
       consentVersion: "v1",
       dailyCallLimit: 10,
+      refreshIntervalMs: undefined,
       surfaceId: "dashboard",
     }),
     {
@@ -108,6 +110,7 @@ test("setInsightPreferences accepts valid input and defaults mode to rules", () 
       profileId: "profile-1",
       consentVersion: "v1",
       dailyCallLimit: 10,
+      refreshIntervalMs: undefined,
       surfaceId: "dashboard",
     },
   );
@@ -141,6 +144,15 @@ test("setInsightPreferences rejects invalid mode/profileId/dailyCallLimit/surfac
   assert.throws(
     () => parseSetInsightPreferencesInput({ dailyCallLimit: 1.5 }),
     /AppError/,
+  );
+  assert.throws(
+    () => parseSetInsightPreferencesInput({ refreshIntervalMs: 60_000 }),
+    /AppError/,
+  );
+  assert.equal(
+    parseSetInsightPreferencesInput({ refreshIntervalMs: 5 * 60 * 1000 })
+      .refreshIntervalMs,
+    5 * 60 * 1000,
   );
   assert.throws(
     () => parseSetInsightPreferencesInput({ surfaceId: "bogus" }),

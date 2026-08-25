@@ -68,7 +68,7 @@ const FUTURE_TIMESTAMP_TOLERANCE_MS =
 // Antigravity's estimated transcript events were added in v14. Rebuild once so cached Claude
 // events gain the new privacy-safe output aggregate instead of retaining a
 // stale "unobserved" capability.
-const PERSISTENT_CACHE_VERSION = 14;
+const PERSISTENT_CACHE_VERSION = 16;
 /**
  * Fingerprint of the tool-registry config that produced this cache. A config
  * change (paths, reader, command, pricing-rule set, or any JSON definition)
@@ -2556,9 +2556,14 @@ export async function scanLocalUsage(
   // This is a rebuildable performance index only. It is deliberately scoped
   // to this process and never persisted as application-owned files.
   const cacheKey = options.cacheDirectory ?? homeDirectory;
-  const persistentIndex = options.disablePersistentCache
+  const cachedIndex = options.disablePersistentCache
     ? undefined
     : processUsageIndexes.get(cacheKey);
+  const persistentIndex =
+    cachedIndex?.version === PERSISTENT_CACHE_VERSION &&
+    cachedIndex.registryFingerprint === REGISTRY_FINGERPRINT
+      ? cachedIndex
+      : undefined;
   const cachedFiles = new Map(
     (persistentIndex?.files ?? []).map((entry) => [entry.path, entry] as const),
   );

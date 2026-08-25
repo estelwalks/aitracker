@@ -20,7 +20,10 @@ import {
   DialogTitle,
 } from "../../../../components/ui/dialog";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import type { RoastRow } from "../../application/tracker.ts";
+import {
+  RECENT_TREND_DAYS,
+  type RoastRow,
+} from "../../application/tracker.ts";
 
 const SUGGEST_KEY: Record<RoastRow["suggestion"], MessageKey> = {
   cache: "tracker.suggest.cache",
@@ -65,12 +68,10 @@ function MetricCard({
   icon: Icon,
   label,
   value,
-  hint,
 }: {
   icon: LucideIcon;
   label: string;
   value: string;
-  hint?: string;
 }) {
   return (
     <div className="rounded-xl bg-surface px-3.5 py-3 ring-1 ring-border/50">
@@ -81,11 +82,6 @@ function MetricCard({
       <div className="tt-num mt-2 truncate font-mono text-[17px] leading-none font-black tracking-tight">
         {value}
       </div>
-      {hint ? (
-        <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-          {hint}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -106,9 +102,13 @@ export function WasteDetail({
   const cacheRate =
     row.cacheRate == null ? "—" : `${row.cacheRate.toFixed(1)}%`;
   const outputPercent = `${(row.outputRatio * 100).toFixed(2)}%`;
+  const tokenValue = (value: number) =>
+    t("tracker.row.tokens", { count: format.formatTokens(value) });
   const cacheLabel = t("tracker.row.cacheRate", { rate: "" }).trim();
-  const outputLabel = t("tracker.row.outputRatio", { ratio: "" }).trim();
   const trendLabel = row.trend ? t(TREND_KEY[row.trend]) : null;
+  const trendPeriod = t("tracker.row.trendPeriod", {
+    days: RECENT_TREND_DAYS,
+  });
   const TrendIcon =
     row.trend === "up"
       ? TrendingUp
@@ -177,38 +177,36 @@ export function WasteDetail({
             </p>
           </section>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <MetricCard
               icon={Coins}
               label={t("tracker.metric.tokens")}
-              value={format.formatNumber(row.tokens)}
-              hint={t("tracker.row.tokens", {
-                count: format.formatTokens(row.tokens),
-              })}
+              value={tokenValue(row.tokens)}
             />
             <MetricCard
               icon={Activity}
               label={t("tracker.row.events", { count: "" }).trim()}
               value={format.formatNumber(row.events)}
-              hint={t("tracker.row.events", {
-                count: format.formatNumber(row.events),
-              })}
+            />
+            <MetricCard
+              icon={Database}
+              label={t("tracker.metric.inputTokens")}
+              value={tokenValue(row.inputTokens ?? 0)}
+            />
+            <MetricCard
+              icon={FileOutput}
+              label={t("tracker.metric.outputTokens")}
+              value={tokenValue(row.outputTokens ?? 0)}
+            />
+            <MetricCard
+              icon={Database}
+              label={t("tracker.metric.cachedTokens")}
+              value={tokenValue(row.cachedInputTokens ?? 0)}
             />
             <MetricCard
               icon={Database}
               label={cacheLabel}
               value={cacheRate}
-              hint={t("tracker.row.cacheRate", {
-                rate: row.cacheRate?.toFixed(1) ?? "—",
-              })}
-            />
-            <MetricCard
-              icon={FileOutput}
-              label={outputLabel}
-              value={outputPercent}
-              hint={t("tracker.row.outputRatio", {
-                ratio: row.outputRatio.toFixed(2),
-              })}
             />
           </div>
 
@@ -219,16 +217,11 @@ export function WasteDetail({
               />
               <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-medium">
-                  {trendLabel ?? t("tracker.row.trendNa")}
+                  {trendLabel ?? t("tracker.row.trendNa")} · {trendPeriod}
                 </div>
                 <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                  {t("tracker.row.tokens", {
-                    count: format.formatTokens(row.previousTokens),
-                  })}
+                  {tokenValue(row.previousTokens)}
                 </div>
-              </div>
-              <div className="tt-num font-mono text-[14px] font-bold">
-                {format.formatNumber(row.previousTokens)}
               </div>
             </div>
           ) : null}
@@ -250,12 +243,6 @@ export function WasteDetail({
               {t("tracker.detail.wastedTotal", {
                 tokens: format.formatTokens(wastedTokens),
               })}
-            </span>
-            <span
-              className="tt-num font-mono text-[16px] font-black"
-              style={{ color: tone.accent }}
-            >
-              {format.formatNumber(wastedTokens)}
             </span>
           </div>
         </div>

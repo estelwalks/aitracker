@@ -398,7 +398,24 @@ export function validateEnhancementOutput(
 
   const actionIdSet = new Set<string>(INSIGHT_ACTION_IDS);
 
-  // L4 — fact / action.
+  // L4/L5 — fact, action and safety. A non-mandatory candidate is isolated
+  // from the rest of the response: one model line containing a digit, an
+  // out-of-scope action, or unsafe wording must not discard valid lines from
+  // the same batch. Mandatory candidates still fail the whole response when
+  // their own line is invalid.
+  const rejected = new Map<
+    string,
+    { stage: ValidationStage; reason: string }
+  >();
+  const reject = (
+    candidateId: string,
+    stage: ValidationStage,
+    reason: string,
+  ): void => {
+    if (!rejected.has(candidateId))
+      rejected.set(candidateId, { stage, reason });
+  };
+
   for (const line of lines) {
     const contentIssue =
       findDigitIssue(line.analysis) ??
@@ -407,29 +424,28 @@ export function validateEnhancementOutput(
       findCommandIssue(line.analysis) ??
       findCodeBlockIssue(line.analysis);
     if (contentIssue !== undefined) {
-      return {
-        ok: false,
-        stage: 4,
-        reason: `analysis contains ${contentIssue}`,
-      };
+      reject(line.candidateId, 4, `analysis contains ${contentIssue}`);
+      continue;
     }
     if (line.actionId !== undefined) {
       if (!actionIdSet.has(line.actionId)) {
-        return { ok: false, stage: 4, reason: "actionId is not allowlisted" };
+        reject(line.candidateId, 4, "actionId is not allowlisted");
+        continue;
       }
       const candidate = candidatesById.get(line.candidateId)!;
       if (!candidate.actionIds.includes(line.actionId as InsightActionId)) {
-        return {
-          ok: false,
-          stage: 4,
-          reason: `actionId "${line.actionId}" is not allowed for candidate "${candidate.id}"`,
-        };
+        reject(
+          line.candidateId,
+          4,
+          `actionId "${line.actionId}" is not allowed for candidate "${candidate.id}"`,
+        );
       }
     }
   }
 
   // L5 — safety.
   for (const line of lines) {
+    if (rejected.has(line.candidateId)) continue;
     const safetyIssue =
       findSecretIssue(line.analysis) ??
       findInjectionIssue(line.analysis) ??
@@ -437,19 +453,33 @@ export function validateEnhancementOutput(
       findForbiddenWordIssue(line.analysis, options.forbiddenWords) ??
       findEntityIssue(line.analysis, options.forbiddenEntities);
     if (safetyIssue !== undefined) {
-      return {
-        ok: false,
-        stage: 5,
-        reason: `analysis contains ${safetyIssue}`,
-      };
+      reject(line.candidateId, 5, `analysis contains ${safetyIssue}`);
     }
   }
 
+  const mandatoryRejected = input.candidates.find(
+    (candidate) => candidate.mandatory && rejected.has(candidate.id),
+  );
+  if (mandatoryRejected !== undefined) {
+    const issue = rejected.get(mandatoryRejected.id)!;
+    return { ok: false, stage: issue.stage, reason: issue.reason };
+  }
+
   const usefulLines = lines.filter((line) => {
+    if (rejected.has(line.candidateId)) return false;
     const candidate = candidatesById.get(line.candidateId)!;
     return isInsightAnalysisUseful(candidate.fact, line.analysis);
   });
   if (usefulLines.length === 0) {
+    const firstRejected = rejected.values().next().value as
+      { stage: ValidationStage; reason: string } | undefined;
+    if (firstRejected !== undefined) {
+      return {
+        ok: false,
+        stage: firstRejected.stage,
+        reason: firstRejected.reason,
+      };
+    }
     return {
       ok: false,
       stage: 5,

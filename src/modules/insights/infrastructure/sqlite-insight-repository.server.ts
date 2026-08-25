@@ -6,6 +6,13 @@ import {
 } from "../../../platform/database/contracts.ts";
 import { bigintToSafeNumber } from "../../../platform/database/infrastructure/node-sqlite-database.server.ts";
 import { assertInsightLineAnalysisSafe } from "../../../platform/database/privacy-guard.server.ts";
+import {
+  DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+  MAX_INSIGHT_REFRESH_INTERVAL_MS,
+  MIN_INSIGHT_REFRESH_INTERVAL_MS,
+} from "../page/contracts.ts";
+
+const REFRESH_INTERVAL_PREFERENCE_KEY = "insight.refreshIntervalMs";
 
 export type InsightMode = "rules" | "enhanced-manual" | "enhanced-auto";
 
@@ -145,6 +152,8 @@ export interface SqliteInsightRepository {
   getPreference(scopeKey: string): InsightPreference | undefined;
   /** Surface preference overrides global; missing preference defaults to LLM on. */
   getEffectivePreference(surfaceId: string): InsightPreference;
+  getRefreshIntervalMs(): number;
+  setRefreshIntervalMs(value: number, updatedAtMs: number): void;
   setPreference(value: InsightPreference): void;
   findValid(
     identity: InsightCacheIdentity,
@@ -165,6 +174,58 @@ export interface SqliteInsightRepository {
 export function createSqliteInsightRepository(
   database: SqliteDatabasePort,
 ): SqliteInsightRepository {
+  function getRefreshIntervalMs(): number {
+    const row = database
+      .prepare(
+        "SELECT value_json FROM app_preferences WHERE preference_key = ?",
+      )
+      .get(REFRESH_INTERVAL_PREFERENCE_KEY);
+    if (!row || typeof row.value_json !== "string") {
+      return DEFAULT_INSIGHT_REFRESH_INTERVAL_MS;
+    }
+    try {
+      const value = JSON.parse(row.value_json);
+      return Number.isSafeInteger(value) &&
+        value >= MIN_INSIGHT_REFRESH_INTERVAL_MS &&
+        value <= MAX_INSIGHT_REFRESH_INTERVAL_MS
+        ? value
+        : DEFAULT_INSIGHT_REFRESH_INTERVAL_MS;
+    } catch {
+      return DEFAULT_INSIGHT_REFRESH_INTERVAL_MS;
+    }
+  }
+
+  function setRefreshIntervalMs(value: number, updatedAtMs: number): void {
+    if (
+      !Number.isSafeInteger(value) ||
+      value < MIN_INSIGHT_REFRESH_INTERVAL_MS ||
+      value > MAX_INSIGHT_REFRESH_INTERVAL_MS ||
+      !Number.isSafeInteger(updatedAtMs) ||
+      updatedAtMs < 0
+    ) {
+      throw new DatabaseError("invalid-argument", "write", {
+        retryable: false,
+      });
+    }
+    database
+      .prepare(
+        `INSERT INTO app_preferences (preference_key, value_json, value_type, updated_at_ms)
+         VALUES (?, ?, 'number', ?)
+         ON CONFLICT (preference_key) DO UPDATE SET
+           value_json = excluded.value_json,
+           value_type = excluded.value_type,
+           updated_at_ms = excluded.updated_at_ms
+         WHERE excluded.updated_at_ms > app_preferences.updated_at_ms
+            OR (excluded.updated_at_ms = app_preferences.updated_at_ms
+                AND excluded.value_json <> app_preferences.value_json)`,
+      )
+      .run(
+        REFRESH_INTERVAL_PREFERENCE_KEY,
+        JSON.stringify(value),
+        BigInt(updatedAtMs),
+      );
+  }
+
   function getPreference(scopeKey: string): InsightPreference | undefined {
     const row = database
       .prepare(
@@ -210,6 +271,8 @@ export function createSqliteInsightRepository(
 
   return {
     getPreference,
+    getRefreshIntervalMs,
+    setRefreshIntervalMs,
     getEffectivePreference(surfaceId) {
       return (
         getPreference(`surface:${surfaceId}`) ??
