@@ -254,6 +254,7 @@ export const settings = {
       timeout: "강화 시간 초과",
       "enhancer-failed": "강화 실패",
       "invalid-output": "강화 결과가 올바르지 않음",
+      "no-eligible-candidates": "강화할 내용이 없음",
       stale: "데이터가 오래되었을 수 있음",
     },
     fallbackStatus: {
@@ -265,6 +266,8 @@ export const settings = {
       "enhancer-failed": "AI 강화에 실패하여 규칙 기반 인사이트를 표시합니다",
       "invalid-output":
         "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
+      "no-eligible-candidates":
+        "강화할 내용이 없어 규칙 기반 인사이트를 표시합니다",
     },
     section: {
       title: "AI 인사이트",
@@ -287,6 +290,16 @@ export const settings = {
         "허용하면 자동 강화는 비식별화된 집계 통계(오늘 토큰, 도구 수, 세션 수, 보안 수치)와 현재 페이지 ID를 전송합니다. 대화 내용, 파일 경로, API 키, 개인 정보는 절대 전송하지 않습니다.",
       dailyLimit: "일일 호출 한도",
       dailyLimitHint: "비워 두면 기본 30회(서버에서 적용)",
+      refreshInterval: "AI 인사이트 업데이트 주기",
+      refreshIntervalHint: "{min}~{max}분마다 업데이트(기본값 60분)",
+      minutes: "분",
+      intervalInvalid: "유효한 업데이트 주기를 입력하세요",
+      intervalSaved: "AI 인사이트 업데이트 주기를 저장했습니다",
+      refreshNow: "AI 인사이트 즉시 새로고침",
+      refreshNowHint: "현재 인사이트 캐시를 지우고 즉시 다시 생성합니다",
+      refreshNowButton: "즉시 새로고침",
+      refreshDone: "AI 인사이트를 새로고침했습니다",
+      refreshFailed: "AI 인사이트 새로고침에 실패했습니다",
       save: "저장",
       saved: "인사이트 설정을 저장했습니다",
       saveFailed: "인사이트 설정 저장에 실패했습니다",

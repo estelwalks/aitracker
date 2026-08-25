@@ -26,6 +26,7 @@ import type { MonitoringStatus } from "../monitoring/contracts.ts";
 import { getMonitoringStatus } from "../../app/monitoring-status.server.ts";
 import { getDashboardAIInsightService } from "./ai-insight.server.ts";
 import type { DashboardProjectClassification } from "./project-classification.server.ts";
+import { safeProjectLabel } from "../../platform/database/snapshot-generation.server.ts";
 
 const SESSION_SOURCE_IDS = new Set(["claude-code", "codex", "grok", "dsh"]);
 const SESSION_REFRESH_GRACE_MS = 30_000;
@@ -219,12 +220,16 @@ function toDashboardEvent(
   classifications: ReadonlyMap<string, DashboardProjectClassification>,
 ): DashboardUsageEvent {
   const classification = classifications.get(event.project);
+  const classifiedLabel =
+    classification?.kind === "unknown"
+      ? safeProjectLabel(event.project)
+      : classification?.label;
   return {
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
     project:
-      event.projectLabel ?? classification?.label ?? projectKey(event.project),
+      event.projectLabel ?? classifiedLabel ?? projectKey(event.project),
     projectKind: event.projectKind ?? classification?.kind ?? "unknown",
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
@@ -702,6 +707,21 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
       ? usageResult.value
       : createEmptyUsageSnapshot();
   const rawBuckets = rawSnapshot.aggregateBuckets ?? [];
+  // AiPy snapshots created before task ids were added have either the generic
+  // `unknown` label or a bare title. Request a non-blocking rebuild so an
+  // already-fresh snapshot can migrate itself. Workspace labels are excluded
+  // because they intentionally remain paths rather than task labels.
+  if (
+    rawBuckets.some(
+      (bucket) =>
+        bucket.source === "aipy" &&
+        bucket.projectKind === "unknown" &&
+        (bucket.projectLabel === "unknown" ||
+          !/^\S+\s-\s/u.test(bucket.projectLabel ?? "")),
+    )
+  ) {
+    void usageSnapshot.requestRefresh({ reason: "event" }).catch(() => {});
+  }
   const [pricingResult, monitoringResult] = await Promise.allSettled([
     getPricingSnapshot({
       data: [...new Set(rawBuckets.map((bucket) => bucket.model))],

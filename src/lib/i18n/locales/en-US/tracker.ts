@@ -4,6 +4,9 @@ export const tracker = {
   insightTitle: "Today's insight",
   metric: {
     tokens: "Total burn",
+    inputTokens: "Input",
+    outputTokens: "Output",
+    cachedTokens: "Cached",
     projects: "Ranked projects",
     skills: "Ranked skills",
     sessions: "Ranked sessions",
@@ -29,6 +32,7 @@ export const tracker = {
     trendDown: "Down vs prior period",
     trendFlat: "Flat vs prior period",
     trendNa: "No comparison",
+    trendPeriod: "compared with the previous {days} days",
   },
   suggest: {
     cache: "Cache hit rate is low; reuse context to improve cache reuse.",

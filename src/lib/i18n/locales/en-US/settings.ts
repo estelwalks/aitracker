@@ -257,6 +257,7 @@ export const settings = {
       timeout: "Enhance timed out",
       "enhancer-failed": "Enhance failed",
       "invalid-output": "Invalid enhancer output",
+      "no-eligible-candidates": "No eligible content to enhance",
       stale: "Data may be stale",
     },
     fallbackStatus: {
@@ -268,6 +269,8 @@ export const settings = {
       "enhancer-failed": "AI enhancement failed; showing rule-based insight",
       "invalid-output":
         "AI returned invalid output; showing rule-based insight",
+      "no-eligible-candidates":
+        "No eligible content; showing rule-based insight",
     },
     section: {
       title: "AI insights",
@@ -291,6 +294,17 @@ export const settings = {
         "When authorized, auto-enhance sends de-identified aggregate stats (today's tokens, tool count, session count, security counts) and the current page id; it never sends conversation content, file paths, API keys, or personal identity.",
       dailyLimit: "Daily call limit",
       dailyLimitHint: "Leave empty to default to 30 (server-enforced)",
+      refreshInterval: "AI insight refresh interval",
+      refreshIntervalHint:
+        "Refresh every {min}–{max} minutes; default is 60 minutes",
+      minutes: "minutes",
+      intervalInvalid: "Enter a valid refresh interval",
+      intervalSaved: "AI insight refresh interval saved",
+      refreshNow: "Refresh AI insights now",
+      refreshNowHint: "Clear the current insight cache and regenerate now",
+      refreshNowButton: "Refresh now",
+      refreshDone: "AI insights refreshed",
+      refreshFailed: "Failed to refresh AI insights",
       save: "Save",
       saved: "Insight settings saved",
       saveFailed: "Failed to save insight settings",

@@ -5,6 +5,9 @@ export const tracker = {
   insightTitle: "오늘의 인사이트",
   metric: {
     tokens: "총 소비",
+    inputTokens: "입력",
+    outputTokens: "출력",
+    cachedTokens: "캐시",
     projects: "랭크 프로젝트",
     skills: "랭크 Skill",
     sessions: "랭크 세션",
@@ -30,6 +33,7 @@ export const tracker = {
     trendDown: "전기 대비 하락",
     trendFlat: "전기 대비 동일",
     trendNa: "비교 데이터 없음",
+    trendPeriod: "이전 {days}일과 비교",
   },
   suggest: {
     cache:

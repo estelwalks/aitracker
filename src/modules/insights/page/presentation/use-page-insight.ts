@@ -4,7 +4,8 @@
  * First render fetches the surface envelope via `getPageInsight` (with cancel
  * protection), then refreshes the mounted page's evidence every 3 hours.
  * It also exposes localized display lines, the enhance action (with a 60s
- * cooldown and silent failure), and the raw envelope for status/modelLabel.
+ * cooldown and visible failure status), and the raw envelope for
+ * status/modelLabel.
  *
  * All heavy reading is delegated to the M3 server fns; this module never
  * touches the enhancer or read models directly.
@@ -205,8 +206,22 @@ export function usePageInsight(
           reason: "auto",
         },
       })
-        .then(setEnvelope)
-        .catch(() => {})
+        .then((next) => {
+          setEnvelope((previous) =>
+            previous?.source === "enhanced" && next.source === "rules"
+              ? previous
+              : next,
+          );
+        })
+        .catch(() => {
+          // Keep the rule lines visible, but expose a stable fallback status
+          // when the browser cannot receive the server's failure envelope.
+          setEnvelope((previous) =>
+            previous == null || previous.source === "enhanced"
+              ? previous
+              : { ...previous, status: "enhancer-failed", source: "rules" },
+          );
+        })
         .finally(() => {
           enhancingRef.current = false;
           setEnhancing(false);
@@ -232,9 +247,19 @@ export function usePageInsight(
             reason,
           },
         });
-        setEnvelope(next);
+        setEnvelope((previous) =>
+          previous?.source === "enhanced" && next.source === "rules"
+            ? previous
+            : next,
+        );
       } catch {
-        // Silent: keep the previous envelope; the card never errors out.
+        // Keep the deterministic rules output, but make a failed request
+        // visible instead of silently looking like enhancement was disabled.
+        setEnvelope((previous) =>
+          previous == null || previous.source === "enhanced"
+            ? previous
+            : { ...previous, status: "enhancer-failed", source: "rules" },
+        );
       } finally {
         enhancingRef.current = false;
         setEnhancing(false);
