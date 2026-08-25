@@ -122,6 +122,8 @@ export const security = {
         "All {total} Skills were allowed in the latest scan, but rules still reported {findings} findings. Expand the reports to review them.",
       riskyLine:
         "The latest scan covers {total} Skills. {risky} need review: {danger} blocked and {warn} warned.",
+      unresolvedLine:
+        "The latest scan covers {total} Skills with no confirmed risks; {unresolved} did not complete fully and remain unresolved.",
       noReportLine:
         "There are no real scan results yet. Run a scan to inspect the Skills installed on this device.",
       boundaryLine:
@@ -294,6 +296,10 @@ export const security = {
       files: "Files",
       detail: "Details",
       noFindings: "No risks found",
+      incompleteNoFindings:
+        "No confirmed risks were found, but this scan was incomplete and cannot be classified as safe or unsafe",
+      riskDetailsUnavailable:
+        "The verdict indicates risk, but detailed findings were not retained. Rescan this Skill.",
       branches: "Scan branches",
       skippedFiles: "Skipped files",
       path: "Relative path",
@@ -323,6 +329,7 @@ export const security = {
       all: "All",
       safe: "Safe",
       unsafe: "Unsafe",
+      needsReview: "Needs review",
       day: "24 hours",
       week: "7 days",
       month: "30 days",

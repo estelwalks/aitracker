@@ -5,6 +5,7 @@ import { assertAppPreferenceValueSafe } from "../platform/database/privacy-guard
 import {
   DESKTOP_HISTORY_KEY,
   projectDesktopSecurityHistory,
+  projectSecurityScheduleRuntime,
 } from "./desktop-state-broker.server.ts";
 
 function historyEntry(index: number, categories: Record<string, unknown> = {}) {
@@ -59,5 +60,21 @@ test("security history projection retains the newest entries below the preferenc
   assert.equal(projected.at(-1)?.skillName, `skill-${projected.length - 1}`);
   assert.doesNotThrow(() =>
     assertAppPreferenceValueSafe(DESKTOP_HISTORY_KEY, projected),
+  );
+});
+
+test("scheduler runtime projection accepts only a hashed cursor and valid dates", () => {
+  const runtime = {
+    scheduleFingerprint: "a".repeat(64),
+    nextRunAt: "2026-08-25T03:00:00.000Z",
+    pending: true,
+    updatedAt: "2026-08-25T02:00:00.000Z",
+  };
+  assert.deepEqual(projectSecurityScheduleRuntime(runtime), runtime);
+  assert.throws(() =>
+    projectSecurityScheduleRuntime({
+      ...runtime,
+      scheduleFingerprint: "/Users/private/skills",
+    }),
   );
 });

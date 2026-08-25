@@ -17,6 +17,32 @@ import type { LocalUsageSource } from "./types.ts";
 
 const NOW = new Date("2026-07-27T12:00:00.000Z");
 
+test("Windows reuses an injected empty WSL topology without enumerating again", async () => {
+  const root = join(tmpdir(), `tt-empty-wsl-${process.pid}-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  let enumerations = 0;
+  try {
+    await scanLocalUsage({
+      homeDirectory: root,
+      cacheDirectory: join(root, "cache"),
+      now: NOW,
+      platform: "win32",
+      wslTopology: {
+        distros: [],
+        enumeratedAt: NOW.toISOString(),
+        failed: true,
+      },
+      enumerateWslTopology: async () => {
+        enumerations += 1;
+        return { distros: [], enumeratedAt: NOW.toISOString(), failed: true };
+      },
+    });
+    assert.equal(enumerations, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function sourceSummary(
   snapshot: Awaited<ReturnType<typeof scanLocalUsage>>,
   source: LocalUsageSource,

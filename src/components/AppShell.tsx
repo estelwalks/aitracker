@@ -1,6 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  AppWindowMac,
   BookHeart,
   Boxes,
   Database,
@@ -22,6 +21,7 @@ import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 import { NativeTrayTitleSync } from "../modules/widget/presentation/NativeTrayTitleSync";
+import { SecurityScanProgressOverlay } from "../modules/security-assessment/presentation/components/SecurityScanProgressOverlay";
 import { PrivacyStrip } from "./PrivacyStrip";
 import { WindowChrome, WINDOW_CHROME_HEIGHT } from "./WindowChrome";
 
@@ -36,8 +36,7 @@ type NavItem = {
     | "/tracker"
     | "/skills"
     | "/market"
-    | "/chats"
-    | "/widget";
+    | "/chats";
   label: MessageKey;
   icon: typeof LayoutDashboard;
   /** 高亮强调项（对齐 V3.0 原型：蒸馏工作台） */
@@ -58,7 +57,6 @@ const navItems: readonly NavItem[] = [
   { to: "/security", label: "nav.guard", icon: ShieldCheck },
   { to: "/market", label: "nav.market", icon: Store },
   { to: "/tracker", label: "nav.tracker", icon: Flame },
-  { to: "/widget", label: "nav.widget", icon: AppWindowMac },
 ];
 
 function isNavActive(pathname: string, to: NavItem["to"]) {
@@ -75,8 +73,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
   // 浮窗小组件（/widget?mode=float）复用本壳层，但不属于主窗口：不渲染自绘标题栏，
   // 顶部也不留标题栏占位。
-  const isWidgetFloat =
-    searchStr.includes("mode=float") || searchStr.includes("mode=bar");
+  const isWidgetFloat = searchStr.includes("mode=float");
   const chromeOffset = isWidgetFloat ? 0 : WINDOW_CHROME_HEIGHT;
 
   useEffect(() => {
@@ -218,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
         >
-          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-4 md:px-8 md:pt-8 2xl:px-10 2xl:pt-10">
+          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-0 md:px-8 md:pt-0 2xl:px-10 2xl:pt-0">
             <div className="tt-container">{children}</div>
           </main>
         </div>
@@ -232,6 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           <PrivacyStrip />
         </div>
+        <SecurityScanProgressOverlay />
       </div>
     </>
   );

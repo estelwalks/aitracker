@@ -4,7 +4,6 @@ import {
   ChevronRight,
   FileText,
   LayoutDashboard,
-  RefreshCw,
   ScanLine,
 } from "lucide-react";
 
@@ -39,16 +38,8 @@ export function GlassOverviewWidget({
 }) {
   const { t, format } = useI18n();
   const navigate = useNavigate();
-  const {
-    today,
-    week,
-    outputs,
-    security,
-    hasData,
-    loading,
-    generatedAt,
-    refresh,
-  } = useWidgetData();
+  const { today, week, outputs, security, hasData, loading, generatedAt } =
+    useWidgetData();
   const mood = resolveWidgetMood(hasData, security);
 
   const topTools = [...today.topTools]
@@ -120,11 +111,6 @@ export function GlassOverviewWidget({
             {t("widget.localRunning")} <i aria-hidden="true">·</i>{" "}
             {t("widget.dataNotUploaded")}
           </p>
-        </div>
-        <div className="tt-glass-header-actions">
-          <button type="button" title={t("widget.refresh")} onClick={refresh}>
-            <RefreshCw className={loading ? "animate-spin" : ""} />
-          </button>
         </div>
       </header>
 

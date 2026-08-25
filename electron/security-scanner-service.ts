@@ -20,8 +20,11 @@ import {
   type SecurityScanCycle,
   type SecurityScanHistoryEntry,
   type SecurityScanMode,
+  type SecurityScanRunRecord,
   type SecurityScanReportDto,
   type SecurityScanSchedule,
+  type SecurityScanScheduleRuntime,
+  type SecurityScanScheduleStatus,
   type SecurityScanScope,
   type SecurityScanStartRequest,
   type SecurityScanState,
@@ -67,6 +70,8 @@ const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
 interface TrustedSkill {
   readonly target: SecuritySkillTarget;
   readonly root: string;
+  /** All installation roots represented by the deduplicated target. */
+  readonly roots: readonly string[];
 }
 
 interface HistoryDocument {
@@ -88,6 +93,9 @@ export interface SecurityScannerServiceOptions {
   readonly env?: Record<string, string | undefined>;
   readonly now?: () => Date;
   readonly scanner?: typeof scanSkill;
+  readonly onScheduleChanged?: (
+    schedule: SecurityScanSchedule,
+  ) => void | Promise<void>;
   /** Deterministic TOCTOU test hook; production never supplies it. */
   readonly beforeOpenFile?: (path: string) => Promise<void>;
 }
@@ -98,6 +106,11 @@ export interface SecurityScannerPersistence {
   clearHistory(): Promise<void>;
   readSchedule(): Promise<SecurityScanSchedule | null>;
   writeSchedule(schedule: SecurityScanSchedule): Promise<void>;
+  readScheduleRuntime(): Promise<SecurityScanScheduleRuntime | null>;
+  writeScheduleRuntime(runtime: SecurityScanScheduleRuntime): Promise<void>;
+  readLatestRun(): Promise<SecurityScanRunRecord | null>;
+  writeRun(run: SecurityScanRunRecord): Promise<void>;
+  recoverInterruptedRuns(finishedAt: string): Promise<number>;
   modelConfig(): Promise<ModelConfig | undefined>;
 }
 
@@ -521,6 +534,7 @@ export class SecurityScannerService {
   #epoch = 0;
   #historyQueue: Promise<void> = Promise.resolve();
   #scheduleQueue: Promise<void> = Promise.resolve();
+  #runRecordQueue: Promise<void> = Promise.resolve();
   #activeRun: Promise<void> | null = null;
   #clearing = false;
 
@@ -548,7 +562,9 @@ export class SecurityScannerService {
     };
   }
 
-  async listSkills(): Promise<SecuritySkillTarget[]> {
+  async listSkills(options?: {
+    readonly additionalRoots?: readonly string[];
+  }): Promise<SecuritySkillTarget[]> {
     const grouped = new Map<string, TrustedSkill>();
     for (const definition of MANAGED_SKILL_ROOTS) {
       for (const suffix of definition.suffixes) {
@@ -562,8 +578,53 @@ export class SecurityScannerService {
         await this.#discoverRoot(root, definition.agent, grouped);
       }
     }
-    for (const [ref, value] of grouped) this.#trusted.set(ref, value);
-    return [...grouped.values()]
+    for (const root of options?.additionalRoots ?? []) {
+      if (typeof root !== "string" || root.trim() === "") continue;
+      await this.#discoverRoot(
+        resolve(root),
+        "Custom directory",
+        grouped,
+        true,
+      );
+    }
+    const deduplicated = new Map<string, TrustedSkill>();
+    for (const value of grouped.values()) {
+      let key = `name:${value.target.name.trim().toLocaleLowerCase()}`;
+      try {
+        // Discovery metadata intentionally stays path-free, so use the same
+        // bounded file fingerprint as scan reports to merge copies whose
+        // installation directories were renamed across Agents.
+        const collected = await this.#collect(value.root, false);
+        key = `content:${contentHashOf(collected.files)}`;
+      } catch {
+        // Keep an unreadable Skill discoverable; name remains the safe fallback
+        // identity until the scan can report its actual read status.
+      }
+      const existing = deduplicated.get(key);
+      if (!existing) {
+        deduplicated.set(key, value);
+        continue;
+      }
+      const agents = [
+        ...new Set([...existing.target.agents, ...value.target.agents]),
+      ];
+      const roots = [...new Set([...existing.roots, ...value.roots])];
+      deduplicated.set(key, {
+        ...existing,
+        roots,
+        target: {
+          ...existing.target,
+          agents,
+          modifiedAt:
+            existing.target.modifiedAt > value.target.modifiedAt
+              ? existing.target.modifiedAt
+              : value.target.modifiedAt,
+        },
+      });
+    }
+    for (const value of deduplicated.values())
+      this.#trusted.set(value.target.skillRef, value);
+    return [...deduplicated.values()]
       .map((item) => item.target)
       .sort((left, right) => left.name.localeCompare(right.name));
   }
@@ -583,7 +644,7 @@ export class SecurityScannerService {
       modifiedAt: details.mtime.toISOString(),
       source: "selected",
     };
-    this.#trusted.set(target.skillRef, { target, root });
+    this.#trusted.set(target.skillRef, { target, root, roots: [root] });
     return structuredClone(target);
   }
 
@@ -674,9 +735,10 @@ export class SecurityScannerService {
         const prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
         return discovered.filter((target) => {
           const trusted = this.#trusted.get(target.skillRef);
+          const roots = trusted?.roots ?? (trusted ? [trusted.root] : []);
           return (
             trusted != null &&
-            (trusted.root === dir || trusted.root.startsWith(prefix))
+            roots.some((root) => root === dir || root.startsWith(prefix))
           );
         });
       }
@@ -684,12 +746,12 @@ export class SecurityScannerService {
   }
 
   /** Run the scan over the already-resolved target list and wire completion. */
-  #executeScan(
+  async #executeScan(
     discovered: SecuritySkillTarget[],
     targets: SecuritySkillTarget[],
     mode: SecurityScanMode,
     trigger: SecurityScanTrigger,
-  ): SecurityScanState {
+  ): Promise<SecurityScanState> {
     if (targets.length === 0)
       throw new Error("No trusted Skill target was found");
 
@@ -706,7 +768,7 @@ export class SecurityScannerService {
       locale,
       startedAt,
       progress: {
-        discovered: discovered.length,
+        discovered: targets.length,
         queued: targets.length,
         started: 0,
         completed: 0,
@@ -716,10 +778,11 @@ export class SecurityScannerService {
       },
       resultIds: [],
     };
+    await this.#persistCurrentRun();
     const activeRun = this.#run(id, epoch, locale, targets, { mode, trigger });
     this.#activeRun = activeRun;
     void activeRun
-      .catch(() => {
+      .catch(async () => {
         if (!this.#isActive(id, epoch)) return;
         this.#state = {
           ...this.#state,
@@ -729,6 +792,7 @@ export class SecurityScannerService {
         };
         delete this.#state.currentSkill;
         this.#cancelRequested = false;
+        await this.#persistCurrentRun();
       })
       .finally(() => {
         if (this.#activeRun === activeRun) this.#activeRun = null;
@@ -749,7 +813,11 @@ export class SecurityScannerService {
       throw new Error("A security scan is already running");
     const mode = (await this.#modelConfig()) ? "full" : "quick";
     const startingEpoch = this.#epoch;
-    const discovered = await this.listSkills();
+    const discovered = await this.listSkills(
+      schedule?.scope === "dir" && schedule.dir
+        ? { additionalRoots: [schedule.dir] }
+        : undefined,
+    );
     if (startingEpoch !== this.#epoch)
       throw new Error("Security scan was cleared");
     const scope = schedule?.scope ?? "all";
@@ -770,11 +838,11 @@ export class SecurityScannerService {
   async clear(): Promise<void> {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     this.#clearing = true;
-    const clearEpoch = ++this.#epoch;
     try {
       this.#cancelRequested = true;
-      this.#state = emptyState();
       await this.#activeRun?.catch(() => undefined);
+      const clearEpoch = ++this.#epoch;
+      this.#state = emptyState();
       await this.#withHistoryLock(() => this.#persistence.clearHistory());
       if (this.#epoch === clearEpoch) this.#cancelRequested = false;
     } finally {
@@ -786,11 +854,28 @@ export class SecurityScannerService {
     return structuredClone(await this.#readSchedule());
   }
 
+  async getScanScheduleStatus(): Promise<SecurityScanScheduleStatus> {
+    const [lastRun, runtime] = await Promise.all([
+      this.#persistence.readLatestRun(),
+      this.#persistence.readScheduleRuntime(),
+    ]);
+    return {
+      lastRun: structuredClone(lastRun),
+      nextRunAt: runtime?.nextRunAt ?? null,
+      pending: runtime?.pending ?? false,
+    };
+  }
+
+  async recoverInterruptedRuns(): Promise<number> {
+    return this.#persistence.recoverInterruptedRuns(this.#now());
+  }
+
   async setScanSchedule(input: unknown): Promise<SecurityScanSchedule> {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     return this.#withScheduleLock(async () => {
       const parsed = parseSchedule(input);
       await this.#persistence.writeSchedule(parsed);
+      await this.#options.onScheduleChanged?.(structuredClone(parsed));
       return structuredClone(parsed);
     });
   }
@@ -958,13 +1043,37 @@ export class SecurityScannerService {
     else this.#state.status = "complete";
     this.#state.progress.percent = 100;
     this.#cancelRequested = false;
+    await this.#persistCurrentRun();
   }
 
   async #discoverRoot(
     root: string,
     agent: string,
     output: Map<string, TrustedSkill>,
+    includeRoot = false,
   ): Promise<void> {
+    if (includeRoot && (await this.#findMarker(root))) {
+      let details;
+      try {
+        details = await lstat(root);
+      } catch {
+        details = undefined;
+      }
+      if (details && !details.isSymbolicLink() && details.isDirectory()) {
+        const ref = skillRef(root);
+        output.set(ref, {
+          root,
+          roots: [root],
+          target: {
+            skillRef: ref,
+            name: this.#skillName(root),
+            agents: [agent],
+            modifiedAt: details.mtime.toISOString(),
+            source: "discovered",
+          },
+        });
+      }
+    }
     const visit = async (directory: string, depth: number): Promise<void> => {
       let handle;
       try {
@@ -994,6 +1103,7 @@ export class SecurityScannerService {
             : [agent];
           output.set(ref, {
             root: entry.path,
+            roots: [entry.path],
             target: {
               skillRef: ref,
               name: this.#skillName(entry.path),
@@ -1030,7 +1140,10 @@ export class SecurityScannerService {
     );
   }
 
-  async #collect(root: string): Promise<CollectedSkill> {
+  async #collect(
+    root: string,
+    invokeBeforeOpenFile = true,
+  ): Promise<CollectedSkill> {
     const rootDetails = await lstat(root);
     if (rootDetails.isSymbolicLink() || !rootDetails.isDirectory())
       throw new Error("Skill root is not a trusted directory");
@@ -1112,7 +1225,8 @@ export class SecurityScannerService {
           fileLimitReached = true;
           return;
         }
-        await this.#options.beforeOpenFile?.(entry.path);
+        if (invokeBeforeOpenFile)
+          await this.#options.beforeOpenFile?.(entry.path);
         let fileHandle;
         try {
           fileHandle = await open(
@@ -1218,6 +1332,47 @@ export class SecurityScannerService {
   #withScheduleLock<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#scheduleQueue.then(operation, operation);
     this.#scheduleQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  #persistCurrentRun(): Promise<void> {
+    const state = this.#state;
+    if (
+      state.scanId == null ||
+      state.mode == null ||
+      state.trigger == null ||
+      state.locale == null ||
+      state.startedAt == null
+    )
+      return Promise.resolve();
+    const status =
+      state.status === "cancelling"
+        ? "running"
+        : state.status === "model-required"
+          ? "failed"
+          : state.status;
+    if (status === "idle") return Promise.resolve();
+    const run: SecurityScanRunRecord = {
+      scanId: state.scanId,
+      mode: state.mode,
+      trigger: state.trigger,
+      locale: state.locale,
+      status,
+      startedAt: state.startedAt,
+      ...(state.finishedAt ? { finishedAt: state.finishedAt } : {}),
+      discoveredCount: state.progress.discovered,
+      queuedCount: state.progress.queued,
+      completedCount: state.progress.completed,
+      failedCount: state.progress.failed,
+      skippedCount: state.progress.skipped,
+      ...(state.errorCode ? { errorCode: state.errorCode } : {}),
+    };
+    const write = () => this.#persistence.writeRun(run);
+    const result = this.#runRecordQueue.then(write, write);
+    this.#runRecordQueue = result.then(
       () => undefined,
       () => undefined,
     );

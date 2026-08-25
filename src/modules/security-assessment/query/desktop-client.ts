@@ -10,6 +10,7 @@ import type {
   SecurityReportView,
   SecurityRuntimeCapabilityView,
   SecurityScanScheduleView,
+  SecurityScanScheduleStatusView,
   SecurityScanStateView,
   SecuritySkillView,
 } from "../presentation/security-view";
@@ -24,6 +25,7 @@ export interface SecurityClient {
   getHistory(): Promise<readonly SecurityHistoryView[]>;
   cancelScan(): Promise<boolean>;
   getScanSchedule(): Promise<SecurityScanScheduleView>;
+  getScanScheduleStatus(): Promise<SecurityScanScheduleStatusView>;
   setScanSchedule(
     schedule: SecurityScanScheduleView,
   ): Promise<SecurityScanScheduleView>;
@@ -118,6 +120,13 @@ export function getDesktopSecurityClient(): SecurityClient | null {
     },
     async getScanSchedule() {
       return { ...(await api.getSecurityScanSchedule()) };
+    },
+    async getScanScheduleStatus() {
+      const status = await api.getSecurityScanScheduleStatus();
+      return {
+        ...status,
+        lastRun: status.lastRun ? { ...status.lastRun } : null,
+      };
     },
     async setScanSchedule(schedule) {
       return { ...(await api.setSecurityScanSchedule(schedule)) };

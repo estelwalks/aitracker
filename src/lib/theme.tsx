@@ -37,6 +37,8 @@ export const themes = [
 
 export type ThemeId = (typeof themes)[number]["id"];
 
+export const DEFAULT_THEME: ThemeId = "system";
+
 /** Resolve the CSS theme class while keeping `system` as the user preference. */
 export function resolveThemeClass(
   theme: ThemeId,
@@ -51,12 +53,12 @@ const ThemeCtx = createContext<{
   theme: ThemeId;
   setTheme: (t: ThemeId) => void;
 }>({
-  theme: "dark",
+  theme: DEFAULT_THEME,
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<ThemeId>("dark");
+  const [theme, setTheme] = useState<ThemeId>(DEFAULT_THEME);
   const [systemPrefersLight, setSystemPrefersLight] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,8 +34,8 @@ import {
 } from "../../../lib/app-config";
 import {
   applyRetentionPolicyQuery,
+  clearCollectedDataQuery,
   clearRegenerableCacheQuery,
-  getStorageUsageQuery,
   type StorageUsage,
 } from "../query";
 import {
@@ -141,6 +142,7 @@ export function SettingsPage({
 }: {
   readonly loaderData: SettingsLoaderData;
 }) {
+  const router = useRouter();
   const [category, setCategory] = useState<SettingsCategory>(() =>
     resolveSettingsCategory(loaderData.section),
   );
@@ -177,6 +179,8 @@ export function SettingsPage({
     loaderData.storageUsage,
   );
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
+  const [clearCollectedDataDialogOpen, setClearCollectedDataDialogOpen] =
+    useState(false);
   const [resetPreferencesDialogOpen, setResetPreferencesDialogOpen] =
     useState(false);
   const [clearingData, setClearingData] = useState(false);
@@ -335,6 +339,34 @@ export function SettingsPage({
     }
   };
 
+  const handleClearCollectedData = async () => {
+    setClearingData(true);
+    try {
+      const result = await clearCollectedDataQuery({
+        data: { confirmed: true },
+      });
+      setStorageUsage(result.usage);
+      // Collection-backed route loaders and read models may still have the
+      // previous snapshot in memory. Invalidate the current route after the
+      // destructive operation so the settings readout and any active loader
+      // state observe the empty data set.
+      await router.invalidate();
+      toast.success(
+        result.cleanup.removedRows > 0
+          ? t("settings.toast.collectedDataCleared", {
+              count: result.cleanup.removedRows,
+              size: format.formatBytes(result.cleanup.removedBytes),
+            })
+          : t("settings.toast.noCollectedDataToClear"),
+      );
+    } catch {
+      toast.error(t("settings.toast.collectedDataClearFailed"));
+    } finally {
+      setClearingData(false);
+      setClearCollectedDataDialogOpen(false);
+    }
+  };
+
   const handleResetPreferences = async () => {
     setClearingData(true);
     try {
@@ -420,7 +452,7 @@ export function SettingsPage({
                 hint={t("settings.dataPathHint", brandParams)}
               >
                 <input
-                  value={storageUsage?.directory ?? settings.dataPath}
+                  value={settings.dataPath}
                   readOnly
                   disabled
                   className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
@@ -511,6 +543,55 @@ export function SettingsPage({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+              <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+                <div>
+                  <div className="text-[13px]">
+                    {t("settings.clearCollectedData")}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {t("settings.clearCollectedDataHint")}
+                  </div>
+                </div>
+                <TTButton
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setClearCollectedDataDialogOpen(true)}
+                >
+                  {t("settings.clearCollectedDataButton")}
+                </TTButton>
+              </div>
+              <AlertDialog
+                open={clearCollectedDataDialogOpen}
+                onOpenChange={setClearCollectedDataDialogOpen}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {t("settings.clearCollectedDataDialogTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {t("settings.clearCollectedDataDialogDesc", brandParams)}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={clearingData}>
+                      {t("common.cancel")}
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(event) => {
+                        event.preventDefault();
+                        void handleClearCollectedData();
+                      }}
+                      disabled={clearingData}
+                      className="bg-danger text-danger-foreground hover:bg-danger/90"
+                    >
+                      {clearingData
+                        ? t("settings.clearingCollectedData")
+                        : t("settings.confirmClearCollectedData")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <div className="flex items-center justify-between gap-3 py-3 last:border-0">
                 <div>
                   <div className="text-[13px]">{t("settings.resetPrefs")}</div>
@@ -593,38 +674,6 @@ export function SettingsPage({
                   <StatusBadge tone="ok">
                     {t("common.status.fresh")}
                   </StatusBadge>
-                </Field>
-                <Field
-                  label={t("settings.retention")}
-                  hint={`${t("settings.scan.retentionNote")} ${t("settings.retentionHint", brandParams)}`}
-                >
-                  <Segmented
-                    value={String(settings.retentionDays)}
-                    onChange={(value) =>
-                      void changeRetentionDays(Number(value))
-                    }
-                    options={retentionOptions.map((days) => ({
-                      value: String(days),
-                      label:
-                        days === 0
-                          ? t("settings.retentionForever")
-                          : t("settings.retentionDays", { count: days }),
-                    }))}
-                  />
-                </Field>
-                <Field label={t("settings.storage")}>
-                  {storageUsage ? (
-                    <span className="tt-num text-[13px]">
-                      {format.formatBytes(storageUsage.bytes)}
-                      {storageUsage.exceedsSoftCap
-                        ? t("settings.storageExceedsSoftCap")
-                        : ""}
-                    </span>
-                  ) : (
-                    <span className="text-[13px] text-muted-foreground">
-                      {t("common.loading")}
-                    </span>
-                  )}
                 </Field>
               </div>
             </div>
