@@ -110,9 +110,10 @@ async function maybeHandleSecurityDevRequest(
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      // First-run collectors form the desktop startup barrier: the main
-      // document opens only after its local workspace data is ready. Web
-      // development resolves this bootstrap to a policy no-op.
+      // First-run collectors form the desktop startup barrier only while a
+      // required local snapshot is empty. An initialized desktop can render
+      // its persisted data while stale collectors continue in the background.
+      // Web development resolves this bootstrap to a policy no-op.
       await ensureBackgroundRuntimeStarted();
       const desktopState = await handleDesktopStateBrokerRequest(request);
       if (desktopState) return desktopState;

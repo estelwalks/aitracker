@@ -1176,10 +1176,10 @@ if (!hasSingleInstanceLock) {
       });
       allowedOrigin = await resolveApplicationOrigin();
       reportStartupMilestone("local-server-ready");
-      // Start first-run collection while the native startup document remains
-      // visible. The renderer opens only after the initial workspace data is
-      // ready. This remains a lightweight internal request, not a duplicate
-      // render.
+      // Initialize an empty workspace while the native startup document remains
+      // visible. Once persisted snapshots exist, stale collectors continue in
+      // the background and the renderer opens from the last completed data.
+      // This remains a lightweight internal request, not a duplicate render.
       if (localWebServer) {
         await completeReleaseDataResetAfterWarmup(
           releaseDataReset,
