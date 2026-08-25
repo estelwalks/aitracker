@@ -98,14 +98,9 @@ body.tt-widget-float-document {
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* The first three families are bundled, so Windows and macOS render the same glyphs. */
-  --font-sans:
-    "Inter Variable", "Noto Sans SC Variable", "Segoe UI Variable", "Segoe UI",
-    -apple-system, BlinkMacSystemFont, system-ui, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  --font-mono:
-    "JetBrains Mono Variable", "Cascadia Mono", "SFMono-Regular", "Menlo",
-    "Consolas", ui-monospace, monospace;
+  /* Keep the primary UI font independent of the host OS and its installed fonts. */
+  --font-sans: "Inter Variable", "Noto Sans SC Variable", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 }
 
 :root {
@@ -316,6 +311,8 @@ body.tt-widget-float-document {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-synthesis: none;
+    font-optical-sizing: auto;
     line-height: 1.7;
     -webkit-font-smoothing: antialiased;
   }
