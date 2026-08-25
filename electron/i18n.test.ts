@@ -130,19 +130,16 @@ test("createTrayTemplate: 结构正确且复选框状态保留", () => {
     {
       autoLaunchEnabled: true,
       autoLaunchSupported: true,
-      browserCompanionSupported: true,
     },
-    { onOpen() {}, onOpenBrowser() {}, onToggleAutoLaunch() {}, onQuit() {} },
+    { onToggleAutoLaunch() {}, onQuit() {} },
   );
-  assert.equal(template.length, 6);
-  assert.equal(template[0]?.label, electronMessages["en-US"].menu.open);
-  assert.equal(template[1]?.label, electronMessages["en-US"].menu.openBrowser);
-  assert.equal(template[2]?.type, "separator");
-  assert.equal(template[3]?.type, "checkbox");
-  assert.equal(template[3]?.checked, true);
-  assert.equal(template[3]?.enabled, true);
-  assert.equal(template[4]?.type, "separator");
-  assert.equal(template[5]?.label, electronMessages["en-US"].menu.quit);
+  assert.equal(template.length, 3);
+  assert.equal(template[0]?.label, electronMessages["en-US"].menu.autoLaunch);
+  assert.equal(template[0]?.type, "checkbox");
+  assert.equal(template[0]?.checked, true);
+  assert.equal(template[0]?.enabled, true);
+  assert.equal(template[1]?.type, "separator");
+  assert.equal(template[2]?.label, electronMessages["en-US"].menu.quit);
 });
 
 test("createTrayTemplate: 不支持自启时禁用复选框", () => {
@@ -151,18 +148,14 @@ test("createTrayTemplate: 不支持自启时禁用复选框", () => {
     {
       autoLaunchEnabled: false,
       autoLaunchSupported: false,
-      browserCompanionSupported: false,
     },
-    { onOpen() {}, onOpenBrowser() {}, onToggleAutoLaunch() {}, onQuit() {} },
+    { onToggleAutoLaunch() {}, onQuit() {} },
   );
-  assert.equal(template[1]?.enabled, false);
-  assert.equal(template[3]?.enabled, false);
-  assert.equal(template[3]?.checked, false);
+  assert.equal(template[0]?.enabled, false);
+  assert.equal(template[0]?.checked, false);
 });
 
 test("createTrayTemplate: 点击回调接线正确", () => {
-  let opened = 0;
-  let browserOpened = 0;
   let toggled: boolean | null = null;
   let quit = 0;
   createTrayTemplate(
@@ -170,17 +163,12 @@ test("createTrayTemplate: 点击回调接线正确", () => {
     {
       autoLaunchEnabled: true,
       autoLaunchSupported: true,
-      browserCompanionSupported: true,
     },
     {
-      onOpen: () => opened++,
-      onOpenBrowser: () => browserOpened++,
       onToggleAutoLaunch: (checked) => (toggled = checked),
       onQuit: () => quit++,
     },
   ).forEach((item) => item.click?.());
-  assert.equal(opened, 1);
-  assert.equal(browserOpened, 1);
   assert.equal(toggled, false); // 从当前 enabled 反转
   assert.equal(quit, 1);
 });
