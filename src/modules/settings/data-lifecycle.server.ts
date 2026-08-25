@@ -12,11 +12,10 @@ import {
 /**
  * Settings data-lifecycle facade (FR-029 / NFR-023).
  *
- * Retention and cache clearing are now database-backed (S-03): the app-owned
- * caches live in the SQLite `http_cache_entries` and `insight_enhancement_cache`
- * tables, and are no longer files under `~/.trusttools/cache/`. Only the
- * storage-usage readout still walks the filesystem to measure the app data
- * directory size — a diagnostic, never a destructive operation.
+ * Retention and cache clearing are database-backed (S-03): HTTP/insight cache
+ * rows live in SQLite, while manual clearing also drops regenerable snapshot,
+ * search and classification indexes. The storage readout walks the filesystem
+ * only to measure the app data directory; it is never destructive.
  */
 
 export const STORAGE_SOFT_CAP_BYTES = 500 * 1024 * 1024;
@@ -34,7 +33,7 @@ export interface StorageUsage {
 }
 
 export interface CleanupStats {
-  /** Deleted cache rows (formerly deleted files). */
+  /** Deleted cache/index entries (formerly deleted files). */
   removedFiles: number;
   /** Database rows carry no file size, so this is always 0. */
   removedBytes: number;
@@ -97,11 +96,19 @@ export async function readStorageUsage(): Promise<StorageUsage> {
 
 function cleanupFromSummary(
   retentionDays: number,
-  summary: { httpCacheDeleted: number; insightCacheDeleted: number },
+  summary: {
+    httpCacheDeleted: number;
+    insightCacheDeleted: number;
+    regenerableIndexDeleted?: number;
+  },
+  removedBytes = 0,
 ): CleanupStats {
   return {
-    removedFiles: summary.httpCacheDeleted + summary.insightCacheDeleted,
-    removedBytes: 0,
+    removedFiles:
+      summary.httpCacheDeleted +
+      summary.insightCacheDeleted +
+      (summary.regenerableIndexDeleted ?? 0),
+    removedBytes,
     retainedFiles: 0,
     retentionDays,
     skipped: false,
@@ -131,9 +138,49 @@ export async function clearRegenerableCache(): Promise<{
   usage: StorageUsage;
 }> {
   const root = await getCompositionRoot();
+  const before = await readStorageUsage();
+  const database = root.database.database;
+  const countRows = (table: string): number =>
+    Number(
+      database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count ??
+        0,
+    );
+  const regenerableIndexDeleted = [
+    "snapshot_generations",
+    "search_documents",
+    "project_classifications",
+  ].reduce((total, table) => total + countRows(table), 0);
+
+  // Clear the in-memory coordinators and their persisted generations together;
+  // otherwise a dashboard can continue serving the old snapshot after the
+  // database rows have been removed.
+  await Promise.all([
+    root.usageSnapshot.clear(),
+    root.sessionSnapshot.clear(),
+    root.skillSnapshot.clear(),
+    root.installationSnapshot.clear(),
+    root.wslSnapshot.clear(),
+    root.database.features.classifications.clear(),
+  ]);
+  const searchResult = await root.searchIndex.rebuildFromSnapshots([]);
+  if (!searchResult.ok) throw new Error("search index cache clear failed");
   const summary = clearRegenerableDatabaseCaches(root.database.database);
+  // DELETE only marks SQLite pages as reusable. Compact the database and
+  // truncate the WAL so the storage readout reflects the reclaimed space.
+  try {
+    root.database.compact();
+  } catch (error) {
+    // Cache rows are already gone; a transient checkpoint/VACUUM failure must
+    // not turn a successful clear into a misleading error toast.
+    console.warn("AITracker cache compaction failed", error);
+  }
+  const usage = await readStorageUsage();
   return {
-    cleanup: cleanupFromSummary(0, summary),
-    usage: await readStorageUsage(),
+    cleanup: cleanupFromSummary(
+      0,
+      { ...summary, regenerableIndexDeleted },
+      Math.max(0, before.bytes - usage.bytes),
+    ),
+    usage,
   };
 }
