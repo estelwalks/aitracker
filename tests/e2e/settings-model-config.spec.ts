@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
   // 偏好已迁移到 SQLite；通过真实 UI 将共享隔离数据库归一化为中文。
   await page.goto("/settings", { waitUntil: "domcontentloaded" });
   await page.waitForURL(/locale=/, { timeout: 15_000 });
-  await page.getByRole("button", { name: "外观", exact: true }).click();
+  await page.getByRole("button", { name: "应用偏好", exact: true }).click();
   await page.getByRole("button", { name: "中文", exact: true }).click();
 });
 
@@ -31,7 +31,7 @@ async function openModelSection(page: Page): Promise<string[]> {
   });
   expect(response?.status() ?? 0).toBeLessThan(400);
   await expect(
-    page.getByText("模型配置", { exact: true }).first(),
+    page.getByText("模型与 AI", { exact: true }).first(),
   ).toBeVisible();
   await page.waitForTimeout(200);
   expect(pageErrors).toEqual([]);
@@ -84,12 +84,12 @@ test("S-005 模型配置页对齐原型：左列表/右表单/操作入口，无
   expect(pageErrors).toEqual([]);
 });
 
-test("S-005 扫描配置分类不再出现模型相关说明", async ({ page }) => {
+test("S-005 扫描与安全分类不再出现模型相关说明", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/settings?section=scan", { waitUntil: "domcontentloaded" });
   await expect(
-    page.getByText("扫描配置", { exact: true }).first(),
+    page.getByText("扫描与安全", { exact: true }).first(),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "扫描计划" })).toBeVisible();
   // 已删除的「自动扫描将根据是否配置模型自动选择快速/深度检测」说明
