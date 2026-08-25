@@ -31,6 +31,29 @@ export interface SecurityScanScheduleView {
   readonly dir: string | null;
   readonly notify: boolean;
 }
+
+export interface SecurityScanRunView {
+  readonly scanId: string;
+  readonly mode: SecurityScanMode;
+  readonly trigger: "manual" | "automatic";
+  readonly locale: Locale;
+  readonly status:
+    "queued" | "running" | "complete" | "partial" | "failed" | "cancelled";
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  readonly discoveredCount: number;
+  readonly queuedCount: number;
+  readonly completedCount: number;
+  readonly failedCount: number;
+  readonly skippedCount: number;
+  readonly errorCode?: string;
+}
+
+export interface SecurityScanScheduleStatusView {
+  readonly lastRun: SecurityScanRunView | null;
+  readonly nextRunAt: string | null;
+  readonly pending: boolean;
+}
 export type SecurityScanPhase =
   | "idle"
   | "running"

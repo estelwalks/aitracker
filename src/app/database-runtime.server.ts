@@ -18,6 +18,7 @@ import { createSqliteKnowledgeRepository } from "../modules/knowledge/infrastruc
 import { createSqliteMonitoringStatusStore } from "../modules/monitoring/sqlite-status-store.server.ts";
 import { createSqliteReportStore } from "../modules/reports/infrastructure/sqlite-report-store.server.ts";
 import { createSqliteSearchIndexRepository } from "../modules/search/infrastructure/sqlite-search-index-repository.server.ts";
+import { createSqliteSecurityScanRunRepository } from "../modules/security-assessment/infrastructure/sqlite-scan-run-repository.server.ts";
 import { createSqliteSessionSnapshotRepository } from "../modules/sessions/infrastructure/sqlite-session-snapshot-repository.server.ts";
 import { createSqlitePreferenceRepository } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
 import { createSqliteSkillSnapshotRepository } from "../modules/skill-catalog/infrastructure/sqlite-skill-snapshot-repository.server.ts";
@@ -108,6 +109,7 @@ export async function createDatabaseRuntime(
       searchIndex: createSqliteSearchIndexRepository({
         database: host,
       }),
+      securityScanRuns: createSqliteSecurityScanRunRepository(host),
       classifications: createSqliteClassificationIndexRepository({
         database: host,
         hmacKey,

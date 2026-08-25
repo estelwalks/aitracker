@@ -25,11 +25,15 @@ import {
   type AutoLaunchState,
   type DesktopAppRoute,
   type RuntimeInfo,
-  type SecurityScanCycle,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
   type SecurityScanState,
 } from "./contracts.js";
+import {
+  createAutomaticSecurityScanScheduler,
+  type AutomaticSecurityScanAttempt,
+  type AutomaticSecurityScanScheduler,
+} from "./automatic-security-scan-scheduler.js";
 import {
   createMacWidgetTrayTemplate,
   createTrayTemplate,
@@ -100,9 +104,8 @@ let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
 let isQuitting = false;
 let securityScanner: SecurityScannerService | null = null;
-let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
-/** Wall-clock deadline for the currently armed automatic scan. */
-let automaticSecurityScanDueAt: number | null = null;
+let automaticSecurityScanScheduler: AutomaticSecurityScanScheduler | null =
+  null;
 let desktopStateBroker: DesktopStateBroker | null = null;
 let startupDocument = "";
 let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
@@ -403,17 +406,6 @@ async function waitForWidgetStyles(window: BrowserWindow): Promise<void> {
     .catch(() => undefined);
 }
 
-const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
-  hourly: 60 * 60 * 1_000,
-  daily: 24 * 60 * 60 * 1_000,
-  weekly: 7 * 24 * 60 * 60 * 1_000,
-};
-
-const DAY_MS = 24 * 60 * 60 * 1_000;
-const WEEK_MS = 7 * DAY_MS;
-/** Wall-clock time of the most recent scheduled automatic run (weekly anchor). */
-let lastAutomaticScanRunAt: number | null = null;
-
 const SECURITY_RISK_NOTICE: Record<
   DesktopLocale,
   { title: string; body: string }
@@ -436,58 +428,13 @@ const SECURITY_RISK_NOTICE: Record<
   },
 };
 
-/** Parse a validated "HH:MM" schedule time into local hour/minute. */
-function parseScheduleTime(time: string): [number, number] {
-  const [hour, minute] = time.split(":").map(Number);
-  return [hour, minute];
-}
-
-/** Next local wall-clock occurrence of `time` strictly after `base`. */
-function nextTimeAtOrAfter(base: Date, time: string): Date {
-  const [hour, minute] = parseScheduleTime(time);
-  const next = new Date(base);
-  next.setHours(hour, minute, 0, 0);
-  if (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 1);
-  return next;
-}
-
-/**
- * Next local occurrence of the anchor weekday's `time` after `base` — the
- * weekly cadence runs once per week on the weekday the schedule was last armed.
- */
-function nextWeeklyAtOrAfter(base: Date, anchor: Date, time: string): Date {
-  const [hour, minute] = parseScheduleTime(time);
-  const next = new Date(anchor);
-  next.setHours(hour, minute, 0, 0);
-  while (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 7);
-  return next;
-}
-
-/**
- * Delay until the next automatic run: hourly reuses the fixed 1h interval;
- * daily/weekly honor the configured "HH:MM" local wall-clock time.
- */
-function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
-  const now = new Date();
-  if (schedule.cycle === "hourly") return SECURITY_SCAN_CYCLE_MS.hourly;
-  if (schedule.cycle === "daily") {
-    return nextTimeAtOrAfter(now, schedule.time).getTime() - now.getTime();
-  }
-  const anchor =
-    lastAutomaticScanRunAt == null ? now : new Date(lastAutomaticScanRunAt);
-  return Math.max(
-    0,
-    nextWeeklyAtOrAfter(now, anchor, schedule.time).getTime() - now.getTime(),
-  );
-}
-
 async function runAutomaticSecurityScan(
   schedule?: SecurityScanSchedule,
-): Promise<void> {
+): Promise<AutomaticSecurityScanAttempt> {
   const scanner = securityScanner;
-  if (!scanner) return;
+  if (!scanner) return "failed";
   const status = scanner.getStatus().status;
-  if (status === "running" || status === "cancelling") return;
+  if (status === "running" || status === "cancelling") return "busy";
   let state: SecurityScanState;
   try {
     state = await scanner.startAutomaticScan(schedule);
@@ -498,10 +445,12 @@ async function runAutomaticSecurityScan(
     // the schedule appear broken.
     const reason = error instanceof Error ? error.message : "unknown";
     console.warn(`[security] automatic scan skipped: ${reason}`);
-    return;
+    return "failed";
   }
-  if (schedule?.notify !== true) return;
-  await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+  if (schedule?.notify === true) {
+    void notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+  }
+  return "started";
 }
 
 /** Wait for the automatic scan to settle, then notify when it found risks. */
@@ -550,65 +499,12 @@ async function waitForAutomaticScanSettled(
   return scanner.getStatus();
 }
 
-function clearAutomaticSecurityScanTimer(): void {
-  if (automaticSecurityScanTimer) {
-    clearTimeout(automaticSecurityScanTimer);
-    automaticSecurityScanTimer = null;
-  }
+function suspendAutomaticSecurityScan(): void {
+  automaticSecurityScanScheduler?.suspend();
 }
 
-/**
- * Schedule the automatic security scan from the persisted schedule: an
- * immediate first pass on launch when enabled, then a time-aware timer for the
- * configured cycle. A disabled schedule clears the timer entirely.
- */
-async function scheduleAutomaticSecurityScan(options?: {
-  readonly runImmediately?: boolean;
-  readonly resume?: boolean;
-}): Promise<void> {
-  clearAutomaticSecurityScanTimer();
-  const scanner = securityScanner;
-  if (!scanner) return;
-  let schedule: SecurityScanSchedule;
-  try {
-    schedule = await scanner.getScanSchedule();
-  } catch {
-    // Corrupt/missing schedule already falls back to the default inside the
-    // service; any unexpected failure simply leaves auto-scan unscheduled.
-    return;
-  }
-  if (!schedule.enabled) {
-    automaticSecurityScanDueAt = null;
-    return;
-  }
-  const runImmediately = options?.runImmediately ?? !options?.resume;
-  const missedDeadline =
-    options?.resume === true &&
-    automaticSecurityScanDueAt != null &&
-    automaticSecurityScanDueAt <= Date.now();
-  // Initial run shortly after launch when enabled. On resume, only run when
-  // the deadline was missed while the machine was asleep; this avoids a scan
-  // every time the user merely locks and unlocks Windows.
-  if (runImmediately || missedDeadline) {
-    automaticSecurityScanDueAt = null;
-    lastAutomaticScanRunAt = Date.now();
-    void runAutomaticSecurityScan(schedule);
-  }
-  // Arm the repeating timer after the optional catch-up pass.
-  automaticSecurityScanDueAt = null;
-  armAutomaticSecurityScanTimer(schedule);
-}
-
-function armAutomaticSecurityScanTimer(schedule: SecurityScanSchedule): void {
-  const delayMs = nextAutomaticScanDelayMs(schedule);
-  automaticSecurityScanDueAt = Date.now() + delayMs;
-  automaticSecurityScanTimer = setTimeout(() => {
-    automaticSecurityScanTimer = null;
-    automaticSecurityScanDueAt = null;
-    lastAutomaticScanRunAt = Date.now();
-    void runAutomaticSecurityScan(schedule);
-    armAutomaticSecurityScanTimer(schedule);
-  }, delayMs);
+function resumeAutomaticSecurityScan(): void {
+  void automaticSecurityScanScheduler?.resume();
 }
 
 function registerIpcHandlers(): void {
@@ -851,13 +747,17 @@ function registerIpcHandlers(): void {
     if (!securityScanner) throw new Error("Security scanner is unavailable");
     return securityScanner.getScanSchedule();
   });
+  ipcMain.handle(desktopIpc.getSecurityScanScheduleStatus, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getScanScheduleStatus();
+  });
   ipcMain.handle(
     desktopIpc.setSecurityScanSchedule,
     async (event, schedule: unknown) => {
       assertTrustedSender(event);
       if (!securityScanner) throw new Error("Security scanner is unavailable");
       const result = await securityScanner.setScanSchedule(schedule);
-      await scheduleAutomaticSecurityScan();
       return result;
     },
   );
@@ -1082,8 +982,9 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
-    clearAutomaticSecurityScanTimer();
-    powerMonitor.removeListener("suspend", clearAutomaticSecurityScanTimer);
+    automaticSecurityScanScheduler?.stop();
+    powerMonitor.removeListener("suspend", suspendAutomaticSecurityScan);
+    powerMonitor.removeListener("resume", resumeAutomaticSecurityScan);
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -1110,6 +1011,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);
     ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
     ipcMain.removeHandler(desktopIpc.getSecurityScanSchedule);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanScheduleStatus);
     ipcMain.removeHandler(desktopIpc.setSecurityScanSchedule);
     ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);
     void localWebServer?.close();
@@ -1124,13 +1026,8 @@ if (!hasSingleInstanceLock) {
         else void createMainWindow();
       });
       reportStartupMilestone("electron-ready");
-      // Electron timers are paused while Windows enters sleep. Keep the
-      // persisted deadline and re-arm on resume so a missed scan is caught up
-      // once, without treating every unlock as a new scheduled run.
-      powerMonitor.on("suspend", clearAutomaticSecurityScanTimer);
-      powerMonitor.on("resume", () => {
-        void scheduleAutomaticSecurityScan({ resume: true });
-      });
+      powerMonitor.on("suspend", suspendAutomaticSecurityScan);
+      powerMonitor.on("resume", resumeAutomaticSecurityScan);
       // Resolve the same interactive user's home in packaged builds. The explicit
       // value also keeps scanner behavior stable when Electron is launched by
       // Finder/login items with a reduced environment. A test-lab override, when
@@ -1154,6 +1051,15 @@ if (!hasSingleInstanceLock) {
             safeStorage.decryptString(Buffer.from(value, "base64")),
         },
         persistence: desktopStateBroker,
+        onScheduleChanged: (schedule) =>
+          automaticSecurityScanScheduler?.update(schedule),
+      });
+      automaticSecurityScanScheduler = createAutomaticSecurityScanScheduler({
+        readSchedule: () => securityScanner!.getScanSchedule(),
+        readRuntime: () => desktopStateBroker!.readScheduleRuntime(),
+        writeRuntime: (runtime) =>
+          desktopStateBroker!.writeScheduleRuntime(runtime),
+        attempt: (schedule) => runAutomaticSecurityScan(schedule),
       });
       // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
       // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
@@ -1210,13 +1116,14 @@ if (!hasSingleInstanceLock) {
         app.getLocale(),
       );
       currentTrayTitle = persistedTrayState.title;
+      await securityScanner.recoverInterruptedRuns();
       registerIpcHandlers();
       rebuildTray();
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.
       await loadMainWindow();
-      void scheduleAutomaticSecurityScan();
+      void automaticSecurityScanScheduler.start();
     })
     .catch((error: unknown) => {
       // A failure before BrowserWindow construction must not leave a headless

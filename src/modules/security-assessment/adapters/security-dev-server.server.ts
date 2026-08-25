@@ -8,7 +8,9 @@ import { createNodeRuntimeIdentity } from "../../../platform/runtime/node-runtim
 import type {
   DesktopLocale,
   SecurityScanHistoryEntry,
+  SecurityScanRunRecord,
   SecurityScanSchedule,
+  SecurityScanScheduleRuntime,
 } from "../../../../electron/contracts";
 import {
   handleSecurityHttpApi,
@@ -23,6 +25,8 @@ import type {
 import {
   DESKTOP_HISTORY_KEY,
   DESKTOP_SCHEDULE_KEY,
+  DESKTOP_SCHEDULE_RUNTIME_KEY,
+  projectSecurityScheduleRuntime,
   projectDesktopSecurityHistory,
 } from "../../../app/desktop-state-broker.server.ts";
 import { getCompositionRoot } from "../../../app/composition.server.ts";
@@ -160,6 +164,41 @@ export function createDevScannerPersistence(): SecurityScannerPersistence {
         value: schedule as unknown as PreferenceValue,
         updatedAtMs: Date.now(),
       });
+    },
+    async readScheduleRuntime() {
+      const root = await getCompositionRoot();
+      const value = root.database.features.appPreferences.get(
+        DESKTOP_SCHEDULE_RUNTIME_KEY,
+      )?.value;
+      return value == null
+        ? null
+        : projectSecurityScheduleRuntime(
+            value as unknown as SecurityScanScheduleRuntime,
+          );
+    },
+    async writeScheduleRuntime(runtime) {
+      const root = await getCompositionRoot();
+      root.database.features.appPreferences.set({
+        key: DESKTOP_SCHEDULE_RUNTIME_KEY,
+        value: projectSecurityScheduleRuntime(
+          runtime,
+        ) as unknown as PreferenceValue,
+        updatedAtMs: Date.now(),
+      });
+    },
+    async readLatestRun() {
+      const root = await getCompositionRoot();
+      return root.database.features.securityScanRuns.latest();
+    },
+    async writeRun(run: SecurityScanRunRecord) {
+      const root = await getCompositionRoot();
+      await root.database.features.securityScanRuns.save(run);
+    },
+    async recoverInterruptedRuns(finishedAt) {
+      const root = await getCompositionRoot();
+      return root.database.features.securityScanRuns.recoverInterrupted(
+        finishedAt,
+      );
     },
     async modelConfig() {
       const root = await getCompositionRoot();
