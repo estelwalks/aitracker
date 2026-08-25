@@ -10,6 +10,7 @@ import {
   EMPTY_SECURITY_PROGRESS,
   EMPTY_SECURITY_TOTALS,
   clampPercent,
+  effectiveSecurityScanMode,
   hitDimensionsOf,
   latestHistory,
   relativeTimeParts,
@@ -53,6 +54,7 @@ test("summarizeReports preserves successes when another Skill fails", () => {
     historyEntry({ report: report() }),
     historyEntry({
       id: "history:two",
+      skillRef: "skill:two",
       status: "failed",
       report: undefined,
     }),
@@ -197,6 +199,13 @@ test("clampPercent rejects fake or invalid percentages", () => {
   assert.equal(clampPercent(Number.NaN), 0);
 });
 
+test("AI-assisted scan mode requires both a model and the feature toggle", () => {
+  assert.equal(effectiveSecurityScanMode("full", true, true), "full");
+  assert.equal(effectiveSecurityScanMode("full", true, false), "quick");
+  assert.equal(effectiveSecurityScanMode("full", false, true), "quick");
+  assert.equal(effectiveSecurityScanMode("quick", true, true), "quick");
+});
+
 test("dedupeHistoryByContentHash collapses re-scans and install copies by content hash", () => {
   const entries = [
     historyEntry({
@@ -245,10 +254,77 @@ test("summarizeReports counts each unique skill once across repeated scans", () 
   assert.equal(totals.findings, 0);
 });
 
+test("historical totals stay global after a single-skill rescan", () => {
+  const history = [
+    historyEntry({
+      id: "history:skill-one",
+      skillName: "skill-one",
+      report: report({ contentHash: "h1" }),
+    }),
+    historyEntry({
+      id: "history:skill-two",
+      skillRef: "skill:two",
+      skillName: "skill-two",
+      report: report({ contentHash: "h2", verdict: "block" }),
+    }),
+    historyEntry({
+      id: "history:skill-three",
+      skillRef: "skill:three",
+      skillName: "skill-three",
+      report: report({ contentHash: "h3" }),
+    }),
+    historyEntry({
+      id: "history:skill-one-rescan",
+      scanId: "scan:single",
+      finishedAt: "2026-08-11T00:00:01.000Z",
+      report: report({ contentHash: "h1" }),
+    }),
+  ];
+
+  const latestScan = history.filter((entry) => entry.scanId === "scan:single");
+  const latestTotals = summarizeReports(latestScan);
+  const historicalTotals = summarizeReports(history);
+
+  assert.equal(latestTotals.total, 1);
+  assert.equal(historicalTotals.total, 3);
+  assert.equal(historicalTotals.safe, 2);
+  assert.equal(detectedRiskCount(historicalTotals), 1);
+});
+
+test("a safe rescan replaces an older unsafe verdict without shrinking history", () => {
+  const totals = summarizeReports([
+    historyEntry({
+      skillName: "fixed-skill",
+      report: report({ contentHash: "old-content", verdict: "block" }),
+    }),
+    historyEntry({
+      id: "history:other",
+      skillRef: "skill:other",
+      skillName: "other",
+      report: report({ contentHash: "other-content" }),
+    }),
+    historyEntry({
+      id: "history:fixed-rescan",
+      scanId: "scan:single",
+      finishedAt: "2026-08-11T00:00:01.000Z",
+      report: report({ contentHash: "new-content", verdict: "allow" }),
+    }),
+  ]);
+
+  assert.equal(totals.total, 2);
+  assert.equal(totals.safe, 2);
+  assert.equal(detectedRiskCount(totals), 0);
+});
+
 test("dedupe keeps failed entries without a content hash", () => {
   const deduped = dedupeHistoryByContentHash([
     historyEntry({ report: report({ contentHash: "h1" }) }),
-    historyEntry({ id: "history:failed", status: "failed", report: undefined }),
+    historyEntry({
+      id: "history:failed",
+      skillRef: "skill:failed",
+      status: "failed",
+      report: undefined,
+    }),
   ]);
   assert.equal(deduped.length, 2);
 });
@@ -518,6 +594,7 @@ test("aggregateScanTask aggregates timestamps and expands unsafe findings", () =
   });
   const second = historyEntry({
     id: "history:second",
+    skillRef: "skill:risky",
     scanId: "scan:multi",
     skillName: "risky-skill",
     startedAt: "2026-08-10T00:00:01.000Z",

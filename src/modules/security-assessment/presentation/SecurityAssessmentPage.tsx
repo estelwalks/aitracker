@@ -5,17 +5,16 @@ import { toast } from "sonner";
 import { brandParams } from "../../../lib/app-config";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
-import { listModelProfiles } from "../../../modules/ai-orchestration/index";
 import {
   getDesktopSecurityClient,
   type SecurityClient,
 } from "../query/desktop-client";
 import { getBrowserSecurityClient } from "../query/browser-client";
+import { getSecurityLlmReviewAvailability } from "../llm-review.server-fns";
 import { AutoScanGuide } from "./components/AutoScanGuide";
 import { ScanHistory } from "./components/ScanHistory";
 import { ScanStatus, type ScanStatusNav } from "./components/ScanStatus";
 import { ScanTaskDetail } from "./components/ScanTaskDetail";
-import { ScanVortex } from "./components/ScanVortex";
 import { SecurityBriefing } from "./components/SecurityBriefing";
 import { SkillReportModal } from "./components/SkillReportModal";
 import { UnsafeSkillList } from "./components/UnsafeSkillList";
@@ -24,6 +23,7 @@ import {
   EMPTY_SECURITY_PROGRESS,
   EMPTY_SECURITY_TOTALS,
   SECURITY_RISK_KINDS,
+  effectiveSecurityScanMode,
   isScanActive,
   latestHistory,
   latestScanEntries,
@@ -60,6 +60,7 @@ export function SecurityAssessmentPage() {
   const [scanState, setScanState] = useState<SecurityScanStateView>(IDLE_STATE);
   const [history, setHistory] = useState<readonly SecurityHistoryView[]>([]);
   const [modelConfigured, setModelConfigured] = useState(false);
+  const [aiAssistedEnabled, setAiAssistedEnabled] = useState(false);
   const [selectedReport, setSelectedReport] =
     useState<SecurityHistoryView | null>(null);
   const [selectedTask, setSelectedTask] = useState<SecurityScanTaskView | null>(
@@ -127,23 +128,21 @@ export function SecurityAssessmentPage() {
     void refresh();
   }, [refresh]);
 
-  // Deep scans use the effective model profile from Settings → Model
-  // configuration (S-500). This is intentionally independent from the
-  // optional report-level AI supplement toggle.
+  // The scan setting is the shared gate for both the optional report review
+  // and the model-assisted full scan. A configured model alone must never
+  // silently turn an immediate detection into a model call.
   useEffect(() => {
     let disposed = false;
-    void listModelProfiles()
-      .then((result) => {
+    void getSecurityLlmReviewAvailability()
+      .then((availability) => {
         if (disposed) return;
-        const active =
-          result.profiles.find(
-            (profile) => profile.id === result.activeProfileId,
-          ) ?? result.profiles[0];
-        setModelConfigured(Boolean(active?.apiKeyMasked));
+        setModelConfigured(availability.configured);
+        setAiAssistedEnabled(availability.enabled);
       })
       .catch(() => {
-        // No profile → deep scan stays unavailable; fall back to quick.
-        if (!disposed) setModelConfigured(false);
+        if (disposed) return;
+        setModelConfigured(false);
+        setAiAssistedEnabled(false);
       });
     return () => {
       disposed = true;
@@ -210,6 +209,7 @@ export function SecurityAssessmentPage() {
     () => summarizeReports(latestEntries),
     [latestEntries],
   );
+  const historicalTotals = useMemo(() => summarizeReports(history), [history]);
   const statusTotals = isScanActive(scanState.status)
     ? {
         ...EMPTY_SECURITY_TOTALS,
@@ -217,7 +217,7 @@ export function SecurityAssessmentPage() {
         failed: scanState.progress.failed,
         skipped: scanState.progress.skipped,
       }
-    : latestTotals;
+    : historicalTotals;
   const lastScanLabel = latest
     ? format.formatDateTime(latest.finishedAt, false)
     : "—";
@@ -237,9 +237,14 @@ export function SecurityAssessmentPage() {
       const client = clientRef.current;
       if (client == null || isScanActive(scanState.status)) return;
       try {
+        const effectiveMode = effectiveSecurityScanMode(
+          mode,
+          modelConfigured,
+          aiAssistedEnabled,
+        );
         const next = await client.startScan({
           scope,
-          mode,
+          mode: effectiveMode,
           trigger: "manual",
           ...(scope === "single" && skillRef
             ? { skillRef: skillRef as `skill:${string}` }
@@ -255,7 +260,7 @@ export function SecurityAssessmentPage() {
         reportError(error);
       }
     },
-    [reportError, scanState.status, t],
+    [aiAssistedEnabled, modelConfigured, reportError, scanState.status, t],
   );
 
   const cancelScan = useCallback(async () => {
@@ -320,7 +325,11 @@ export function SecurityAssessmentPage() {
                 : latestPhase
             }
             scanning={isScanActive(scanState.status)}
-            onScan={() => void startScan(modelConfigured ? "full" : "quick")}
+            onScan={() =>
+              void startScan(
+                modelConfigured && aiAssistedEnabled ? "full" : "quick",
+              )
+            }
           />
 
           <AutoScanGuide />
@@ -346,15 +355,6 @@ export function SecurityAssessmentPage() {
           </div>
         </>
       )}
-
-      <ScanVortex
-        active={isScanActive(scanState.status)}
-        state={scanState}
-        skills={skills}
-        history={history}
-        riskKinds={riskKinds}
-        onCancel={() => void cancelScan()}
-      />
 
       {selectedTask && (
         <ScanTaskDetail
