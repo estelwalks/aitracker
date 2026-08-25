@@ -23,6 +23,7 @@ import { StatusBadge, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
+import { PAGE_INSIGHT_REFRESH_EVENT } from "../../insights/page/presentation/use-page-insight.pure";
 import {
   deleteModelProfile,
   listModelProfiles,
@@ -68,6 +69,12 @@ const EMPTY_FORM: FormState = {
 };
 
 const OFFICIAL_ENTRY_ID = "__official_model__";
+
+function notifyPageInsightsModelChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PAGE_INSIGHT_REFRESH_EVENT));
+  }
+}
 
 function toInput(form: FormState): ModelProfileInput {
   return {
@@ -215,6 +222,7 @@ export function ModelProfilesSection() {
         return;
       }
       setActiveId(profile.id);
+      notifyPageInsightsModelChanged();
       toast.success(
         t("settings.modelProfiles.activatedToast", { name: profile.name }),
       );
@@ -304,6 +312,7 @@ export function ModelProfilesSection() {
       toast.success(
         t("settings.modelProfiles.savedToast", { name: saved.name }),
       );
+      if (saved.id === activeId) notifyPageInsightsModelChanged();
       await load();
     } catch (error) {
       const ui = toUiError(error);
@@ -331,6 +340,7 @@ export function ModelProfilesSection() {
       toast.success(
         t("settings.modelProfiles.deletedToast", { name: deleteTarget.name }),
       );
+      if (deleteTarget.id === activeId) notifyPageInsightsModelChanged();
       await load();
     } catch (error) {
       const ui = toUiError(error);

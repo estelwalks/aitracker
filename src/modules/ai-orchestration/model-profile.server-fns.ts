@@ -11,6 +11,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 
+import type { CompositionRoot } from "../../app/composition.server.ts";
 import { AppError } from "../../lib/errors.ts";
 import type { MessageKey } from "../../lib/i18n/messages.ts";
 import {
@@ -150,6 +151,20 @@ export interface ModelProfileListResult {
   readonly activeProfileId: string | null;
 }
 
+/**
+ * A model edit changes the meaning of every enhanced insight. Invalidate the
+ * old model's cache before the renderer re-reads its cards; the cards then
+ * regenerate through the normal AI-insight toggle/consent path.
+ */
+function invalidateInsightCacheBestEffort(root: CompositionRoot): void {
+  try {
+    root.database.features.insights.invalidateAll?.();
+  } catch {
+    // A cache cleanup failure must never make a valid model configuration look
+    // like it failed to save. The next page read will still use the new model.
+  }
+}
+
 /** Renderer-safe profile list + active id (Settings model panel / distill). */
 export const listModelProfiles = createServerFn({ method: "GET" }).handler(
   async (): Promise<ModelProfileListResult> => {
@@ -171,7 +186,13 @@ export const upsertModelProfile = createServerFn({ method: "POST" })
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
     try {
-      return await (await getCompositionRoot()).modelProfiles.upsert(data);
+      const root = await getCompositionRoot();
+      const activeBefore = await root.modelProfiles.getActiveView();
+      const saved = await root.modelProfiles.upsert(data);
+      if (activeBefore?.id === saved.id) {
+        invalidateInsightCacheBestEffort(root);
+      }
+      return saved;
     } catch (error) {
       const raw = error as { code?: unknown };
       const code =
@@ -194,7 +215,13 @@ export const deleteModelProfile = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ModelProfileActionResult> => {
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
-    return (await getCompositionRoot()).modelProfiles.remove(data.id);
+    const root = await getCompositionRoot();
+    const activeBefore = await root.modelProfiles.getActiveView();
+    const result = await root.modelProfiles.remove(data.id);
+    if (result.ok && activeBefore?.id === data.id) {
+      invalidateInsightCacheBestEffort(root);
+    }
+    return result;
   });
 
 /** Activate a profile (takes effect immediately for profile-based runs). */
@@ -203,7 +230,10 @@ export const setActiveModelProfile = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ModelProfileActionResult> => {
     const { getCompositionRoot } =
       await import("../../app/composition.server.ts");
-    return (await getCompositionRoot()).modelProfiles.setActive(data.id);
+    const root = await getCompositionRoot();
+    const result = await root.modelProfiles.setActive(data.id);
+    if (result.ok) invalidateInsightCacheBestEffort(root);
+    return result;
   });
 
 /**
