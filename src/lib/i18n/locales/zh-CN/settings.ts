@@ -10,11 +10,10 @@ export const settings = {
   theme: "主题",
   themeDesc: "选择界面主题",
   sections: {
-    general: "通用",
-    scan: "扫描配置",
-    model: "模型配置",
-    menuBarApp: "菜单栏 APP",
-    appearance: "个性化",
+    preferences: "应用偏好",
+    scan: "扫描与安全",
+    model: "模型与 AI",
+    data: "数据与存储",
     widget: "小组件",
     about: "关于",
   },
@@ -138,7 +137,7 @@ export const settings = {
   },
   pageHeader: "设置",
   pageHeaderDesc: "一般配置保存在当前设备；系统级选项仅在桌面客户端生效",
-  autoLaunch: "开机自启",
+  autoLaunch: "开机自启动",
   status: {
     reading: "正在读取",
     desktopAvailable: "桌面端可用",
@@ -163,6 +162,7 @@ export const settings = {
   retentionDays: "{count}天",
   retentionForever: "永久",
   storage: "存储占用",
+  dataDangerZone: "危险操作",
   storageExceedsSoftCap: "（已超过 500MB，建议清理缓存）",
   clearCache: "清除缓存",
   clearCacheHint:

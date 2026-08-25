@@ -66,11 +66,10 @@ import {
 } from "../../security-assessment/llm-review.server-fns";
 
 const categoryKeys: Record<SettingsCategory, MessageKey> = {
-  general: "settings.sections.general",
+  preferences: "settings.sections.preferences",
   scan: "settings.sections.scan",
   model: "settings.sections.model",
-  menuBarApp: "settings.sections.menuBarApp",
-  appearance: "settings.sections.appearance",
+  data: "settings.sections.data",
   about: "settings.sections.about",
 };
 
@@ -131,8 +130,9 @@ export interface SettingsLoaderData {
   readonly storageUsage: StorageUsage | null;
   readonly storageError: string | null;
   /**
-   * Deep-link target: `?section=scan` opens the 扫描配置 category,
-   * `?section=model` opens 模型配置；`?section=menu-bar-app` opens 菜单栏 APP.
+   * Deep-link target: `?section=scan` opens 扫描与安全,
+   * `?section=model` opens 模型与 AI；旧的 `?section=menu-bar-app`
+   * 仍然映射到应用偏好。
    */
   readonly section?: SettingsSection;
 }
@@ -285,7 +285,7 @@ export function SettingsPage({
 
   const autoLaunchHint =
     autoLaunchStatus === "浏览器不可用"
-      ? t("settings.autoLaunchHint.browserOnly")
+      ? undefined
       : autoLaunchStatus === "系统不支持"
         ? t("settings.autoLaunchHint.unsupported")
         : autoLaunchStatus === "读取失败"
@@ -427,277 +427,7 @@ export function SettingsPage({
         </Panel>
 
         <Panel className="min-w-0" title={t(categoryKeys[category])}>
-          {category === "general" && (
-            <div>
-              <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
-                <Toggle
-                  value={autoLaunchEnabled}
-                  onChange={changeAutoLaunch}
-                  disabled={autoLaunchStatus !== "桌面端可用"}
-                />
-                <span
-                  className={`text-[11px] ${
-                    autoLaunchStatus === "桌面端可用" ? "text-ok" : "text-warn"
-                  }`}
-                >
-                  {autoLaunchStatus === "桌面端可用"
-                    ? autoLaunchEnabled
-                      ? t("settings.status.enabledInSystem")
-                      : t("settings.status.disabledInSystem")
-                    : t(autoLaunchStatusKeys[autoLaunchStatus])}
-                </span>
-              </Field>
-              <Field
-                label={t("settings.dataPath")}
-                hint={t("settings.dataPathHint", brandParams)}
-              >
-                <input
-                  value={settings.dataPath}
-                  readOnly
-                  disabled
-                  className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
-                />
-              </Field>
-              <Field
-                label={t("settings.retention")}
-                hint={t("settings.retentionHint", brandParams)}
-              >
-                <Segmented
-                  value={String(settings.retentionDays)}
-                  onChange={(value) => void changeRetentionDays(Number(value))}
-                  options={retentionOptions.map((days) => ({
-                    value: String(days),
-                    label:
-                      days === 0
-                        ? t("settings.retentionForever")
-                        : t("settings.retentionDays", { count: days }),
-                  }))}
-                />
-              </Field>
-              <Field label={t("settings.storage")}>
-                {storageUsage ? (
-                  <span
-                    className={`tt-num text-[13px] ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
-                  >
-                    {format.formatBytes(storageUsage.bytes)} /{" "}
-                    {format.formatBytes(storageUsage.softCapBytes)}
-                    {storageUsage.exceedsSoftCap
-                      ? t("settings.storageExceedsSoftCap")
-                      : ""}
-                  </span>
-                ) : loaderData.storageError ? (
-                  <span className="text-[13px] text-warn">
-                    {loaderData.storageError}
-                  </span>
-                ) : (
-                  <span className="text-[13px] text-muted-foreground">
-                    {t("common.loading")}
-                  </span>
-                )}
-              </Field>
-              <Field label={t("settings.language")} hint={localeMode === "system" ? t("settings.languageFollowHint") : t("settings.languageManualHint")}>
-                <Segmented value={localeMode === "manual" ? locale : "system"} onChange={(value) => value === "system" ? setLocaleMode("system") : setLocaleMode("manual", value as Locale)} options={[{ value: "system", label: t("settings.followSystem") }, { value: "zh-CN", label: t("settings.languages.zhCN") }, { value: "en-US", label: t("settings.languages.enUS") }, { value: "ja-JP", label: t("settings.languages.jaJP") }, { value: "ko-KR", label: t("settings.languages.koKR") }]} />
-              </Field>
-              <Field label={t("settings.currency")} hint={currencyMode === "manual" ? t("settings.currencyManualHint") : currencySource === "fallback" ? t("settings.currencyFallbackHint") : t("settings.currencyFollowHint")}>
-                <Segmented value={currencyMode === "manual" ? displayCurrency : "system"} onChange={(value) => value === "system" ? setCurrencyMode("system") : setCurrencyMode("manual", value as Currency)} options={[{ value: "system", label: t("settings.followSystem") }, { value: "CNY", label: "CNY" }, { value: "USD", label: "USD" }, { value: "JPY", label: "JPY" }, { value: "KRW", label: "KRW" }]} />
-              </Field>
-              <div className="flex items-center justify-between gap-3 border-b border-border py-3">
-                <div>
-                  <div className="text-[13px]">{t("settings.clearCache")}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {t("settings.clearCacheHint", brandParams)}
-                  </div>
-                </div>
-                <TTButton
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setClearCacheDialogOpen(true)}
-                >
-                  {t("settings.clearCacheButton")}
-                </TTButton>
-              </div>
-
-              <AlertDialog
-                open={clearCacheDialogOpen}
-                onOpenChange={setClearCacheDialogOpen}
-              >
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("settings.clearCacheDialogTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("settings.clearCacheDialogDesc", brandParams)}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={clearingData}>
-                      {t("common.cancel")}
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void handleClearCache();
-                      }}
-                      disabled={clearingData}
-                      className="bg-danger text-danger-foreground hover:bg-danger/90"
-                    >
-                      {clearingData
-                        ? t("settings.clearing")
-                        : t("settings.confirmClearCache")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <div className="flex items-center justify-between gap-3 border-b border-border py-3">
-                <div>
-                  <div className="text-[13px]">
-                    {t("settings.clearCollectedData")}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {t("settings.clearCollectedDataHint")}
-                  </div>
-                </div>
-                <TTButton
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setClearCollectedDataDialogOpen(true)}
-                >
-                  {t("settings.clearCollectedDataButton")}
-                </TTButton>
-              </div>
-              <AlertDialog
-                open={clearCollectedDataDialogOpen}
-                onOpenChange={setClearCollectedDataDialogOpen}
-              >
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("settings.clearCollectedDataDialogTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("settings.clearCollectedDataDialogDesc", brandParams)}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={clearingData}>
-                      {t("common.cancel")}
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={(event) => {
-                        event.preventDefault();
-                        void handleClearCollectedData();
-                      }}
-                      disabled={clearingData}
-                      className="bg-danger text-danger-foreground hover:bg-danger/90"
-                    >
-                      {clearingData
-                        ? t("settings.clearingCollectedData")
-                        : t("settings.confirmClearCollectedData")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <div className="flex items-center justify-between gap-3 py-3 last:border-0">
-                <div>
-                  <div className="text-[13px]">{t("settings.resetPrefs")}</div>
-                  <div className="mt-0.5 text-[11px] text-muted-foreground">
-                    {t("settings.resetPrefsHint")}
-                  </div>
-                </div>
-                <TTButton
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setResetPreferencesDialogOpen(true)}
-                >
-                  {t("settings.resetButton")}
-                </TTButton>
-              </div>
-              <AlertDialog
-                open={resetPreferencesDialogOpen}
-                onOpenChange={setResetPreferencesDialogOpen}
-              >
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("settings.resetDialogTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("settings.resetDialogDesc", brandParams)}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={clearingData}>
-                      {t("common.cancel")}
-                    </AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={(e) => {
-                        e.preventDefault();
-                        void handleResetPreferences();
-                      }}
-                      disabled={clearingData}
-                      className="bg-danger text-danger-foreground hover:bg-danger/90"
-                    >
-                      {clearingData
-                        ? t("settings.resetting")
-                        : t("settings.confirmReset")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <InsightSettingsSection />
-            </div>
-          )}
-
-          {category === "scan" && (
-            <div>
-              <ScanScheduleSection
-                client={securityClient}
-                status={securityStatus}
-                onRetry={() => void refreshSecurity()}
-              />
-              <div className="mb-3 mt-1 border-t border-border pt-3">
-                <Field
-                  label={t("settings.security.llmReview")}
-                  hint={
-                    llmReviewConfigured
-                      ? t("settings.security.llmReviewHint")
-                      : t("settings.security.llmReviewUnconfiguredHint")
-                  }
-                >
-                  <Toggle
-                    value={llmReviewEnabled}
-                    onChange={(enabled) => void changeLlmReview(enabled)}
-                    disabled={llmReviewLoading}
-                  />
-                </Field>
-              </div>
-              <div className="mb-3 mt-1 border-t border-border pt-3">
-                <Field
-                  label={t("settings.scan.onDemand")}
-                  hint={t("settings.scan.onDemandDesc")}
-                >
-                  <StatusBadge tone="ok">
-                    {t("common.status.fresh")}
-                  </StatusBadge>
-                </Field>
-              </div>
-            </div>
-          )}
-
-          {category === "model" && (
-            <div>
-              <ModelProfilesSection />
-            </div>
-          )}
-
-          {category === "menuBarApp" && (
-            <div>
-              <MenuBarAppSettingsSection />
-            </div>
-          )}
-
-          {category === "appearance" && (
+          {category === "preferences" && (
             <div>
               <Field label={t("settings.theme")} hint={t("settings.themeDesc")}>
                 <Segmented
@@ -707,6 +437,56 @@ export function SettingsPage({
                     value: item.id,
                     label: t(item.labelKey),
                   }))}
+                />
+              </Field>
+              <Field
+                label={t("settings.language")}
+                hint={
+                  localeMode === "system"
+                    ? t("settings.languageFollowHint")
+                    : t("settings.languageManualHint")
+                }
+              >
+                <Segmented
+                  value={localeMode === "manual" ? locale : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setLocaleMode("system")
+                      : setLocaleMode("manual", value as Locale)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "zh-CN", label: t("settings.languages.zhCN") },
+                    { value: "en-US", label: t("settings.languages.enUS") },
+                    { value: "ja-JP", label: t("settings.languages.jaJP") },
+                    { value: "ko-KR", label: t("settings.languages.koKR") },
+                  ]}
+                />
+              </Field>
+              <Field
+                label={t("settings.currency")}
+                hint={
+                  currencyMode === "manual"
+                    ? t("settings.currencyManualHint")
+                    : currencySource === "fallback"
+                      ? t("settings.currencyFallbackHint")
+                      : t("settings.currencyFollowHint")
+                }
+              >
+                <Segmented
+                  value={currencyMode === "manual" ? displayCurrency : "system"}
+                  onChange={(value) =>
+                    value === "system"
+                      ? setCurrencyMode("system")
+                      : setCurrencyMode("manual", value as Currency)
+                  }
+                  options={[
+                    { value: "system", label: t("settings.followSystem") },
+                    { value: "CNY", label: "CNY" },
+                    { value: "USD", label: "USD" },
+                    { value: "JPY", label: "JPY" },
+                    { value: "KRW", label: "KRW" },
+                  ]}
                 />
               </Field>
               <Field
@@ -756,6 +536,280 @@ export function SettingsPage({
                   )}
                 </div>
               </Field>
+              <MenuBarAppSettingsSection />
+              <Field label={t("settings.autoLaunch")} hint={autoLaunchHint}>
+                <Toggle
+                  value={autoLaunchEnabled}
+                  onChange={changeAutoLaunch}
+                  disabled={autoLaunchStatus !== "桌面端可用"}
+                />
+                {autoLaunchStatus !== "浏览器不可用" && (
+                  <span
+                    className={`text-[11px] ${
+                      autoLaunchStatus === "桌面端可用"
+                        ? "text-ok"
+                        : "text-warn"
+                    }`}
+                  >
+                    {autoLaunchStatus === "桌面端可用"
+                      ? autoLaunchEnabled
+                        ? t("settings.status.enabledInSystem")
+                        : t("settings.status.disabledInSystem")
+                      : t(autoLaunchStatusKeys[autoLaunchStatus])}
+                  </span>
+                )}
+              </Field>
+            </div>
+          )}
+
+          {category === "scan" && (
+            <div>
+              <ScanScheduleSection
+                client={securityClient}
+                status={securityStatus}
+                onRetry={() => void refreshSecurity()}
+              />
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                <Field
+                  label={t("settings.security.llmReview")}
+                  hint={
+                    llmReviewConfigured
+                      ? t("settings.security.llmReviewHint")
+                      : t("settings.security.llmReviewUnconfiguredHint")
+                  }
+                >
+                  <Toggle
+                    value={llmReviewEnabled}
+                    onChange={(enabled) => void changeLlmReview(enabled)}
+                    disabled={llmReviewLoading}
+                  />
+                </Field>
+              </div>
+              <div className="mb-3 mt-1 border-t border-border pt-3">
+                <Field
+                  label={t("settings.scan.onDemand")}
+                  hint={t("settings.scan.onDemandDesc")}
+                >
+                  <StatusBadge tone="ok">
+                    {t("common.status.fresh")}
+                  </StatusBadge>
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {category === "model" && (
+            <div>
+              <ModelProfilesSection />
+              <InsightSettingsSection />
+            </div>
+          )}
+
+          {category === "data" && (
+            <div>
+              <Field
+                label={t("settings.dataPath")}
+                hint={t("settings.dataPathHint", brandParams)}
+              >
+                <input
+                  value={settings.dataPath}
+                  readOnly
+                  disabled
+                  className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
+                />
+              </Field>
+              <Field
+                label={t("settings.retention")}
+                hint={t("settings.retentionHint", brandParams)}
+              >
+                <Segmented
+                  value={String(settings.retentionDays)}
+                  onChange={(value) => void changeRetentionDays(Number(value))}
+                  options={retentionOptions.map((days) => ({
+                    value: String(days),
+                    label:
+                      days === 0
+                        ? t("settings.retentionForever")
+                        : t("settings.retentionDays", { count: days }),
+                  }))}
+                />
+              </Field>
+              <Field label={t("settings.storage")}>
+                {storageUsage ? (
+                  <span
+                    className={`tt-num text-[13px] ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
+                  >
+                    {format.formatBytes(storageUsage.bytes)} /{" "}
+                    {format.formatBytes(storageUsage.softCapBytes)}
+                    {storageUsage.exceedsSoftCap
+                      ? t("settings.storageExceedsSoftCap")
+                      : ""}
+                  </span>
+                ) : loaderData.storageError ? (
+                  <span className="text-[13px] text-warn">
+                    {loaderData.storageError}
+                  </span>
+                ) : (
+                  <span className="text-[13px] text-muted-foreground">
+                    {t("common.loading")}
+                  </span>
+                )}
+              </Field>
+              <div className="mt-4 border-t border-border pt-1">
+                <div className="mb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {t("settings.dataDangerZone")}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+                  <div>
+                    <div className="text-[13px]">
+                      {t("settings.clearCache")}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("settings.clearCacheHint", brandParams)}
+                    </div>
+                  </div>
+                  <TTButton
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setClearCacheDialogOpen(true)}
+                  >
+                    {t("settings.clearCacheButton")}
+                  </TTButton>
+                </div>
+                <AlertDialog
+                  open={clearCacheDialogOpen}
+                  onOpenChange={setClearCacheDialogOpen}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {t("settings.clearCacheDialogTitle")}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t("settings.clearCacheDialogDesc", brandParams)}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={clearingData}>
+                        {t("common.cancel")}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void handleClearCache();
+                        }}
+                        disabled={clearingData}
+                        className="bg-danger text-danger-foreground hover:bg-danger/90"
+                      >
+                        {clearingData
+                          ? t("settings.clearing")
+                          : t("settings.confirmClearCache")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+                  <div>
+                    <div className="text-[13px]">
+                      {t("settings.clearCollectedData")}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("settings.clearCollectedDataHint")}
+                    </div>
+                  </div>
+                  <TTButton
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setClearCollectedDataDialogOpen(true)}
+                  >
+                    {t("settings.clearCollectedDataButton")}
+                  </TTButton>
+                </div>
+                <AlertDialog
+                  open={clearCollectedDataDialogOpen}
+                  onOpenChange={setClearCollectedDataDialogOpen}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {t("settings.clearCollectedDataDialogTitle")}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t(
+                          "settings.clearCollectedDataDialogDesc",
+                          brandParams,
+                        )}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={clearingData}>
+                        {t("common.cancel")}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void handleClearCollectedData();
+                        }}
+                        disabled={clearingData}
+                        className="bg-danger text-danger-foreground hover:bg-danger/90"
+                      >
+                        {clearingData
+                          ? t("settings.clearingCollectedData")
+                          : t("settings.confirmClearCollectedData")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <div className="flex items-center justify-between gap-3 py-3 last:border-0">
+                  <div>
+                    <div className="text-[13px]">
+                      {t("settings.resetPrefs")}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("settings.resetPrefsHint")}
+                    </div>
+                  </div>
+                  <TTButton
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setResetPreferencesDialogOpen(true)}
+                  >
+                    {t("settings.resetButton")}
+                  </TTButton>
+                </div>
+                <AlertDialog
+                  open={resetPreferencesDialogOpen}
+                  onOpenChange={setResetPreferencesDialogOpen}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {t("settings.resetDialogTitle")}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t("settings.resetDialogDesc", brandParams)}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={clearingData}>
+                        {t("common.cancel")}
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void handleResetPreferences();
+                        }}
+                        disabled={clearingData}
+                        className="bg-danger text-danger-foreground hover:bg-danger/90"
+                      >
+                        {clearingData
+                          ? t("settings.resetting")
+                          : t("settings.confirmReset")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           )}
 
