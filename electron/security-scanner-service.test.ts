@@ -620,6 +620,29 @@ test("automatic scans with dir scope scan only skills under the directory prefix
   );
 });
 
+test("automatic directory scans discover an explicitly configured custom root", async () => {
+  const { home } = await fixture();
+  const customRoot = join(home, "custom-skills", "local-demo");
+  await mkdir(customRoot, { recursive: true });
+  await writeFile(join(customRoot, "SKILL.md"), "# Safe\n", "utf8");
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  await service.startAutomaticScan({
+    ...DEFAULT_SCHEDULE,
+    scope: "dir",
+    dir: customRoot,
+  });
+  await waitForTerminal(service);
+
+  assert.equal(persistedHistory.length, 1);
+  assert.equal(persistedHistory[0]?.skillName, "local-demo");
+});
+
 test("resolves the active model profile only for an explicit full scan and redacts it from history", async () => {
   const { home } = await fixture();
   let captured: Record<string, unknown> | undefined;

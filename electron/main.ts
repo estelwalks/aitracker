@@ -11,6 +11,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  powerMonitor,
   safeStorage,
   shell,
   screen,
@@ -99,6 +100,8 @@ let allowedOrigin = "";
 let isQuitting = false;
 let securityScanner: SecurityScannerService | null = null;
 let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
+/** Wall-clock deadline for the currently armed automatic scan. */
+let automaticSecurityScanDueAt: number | null = null;
 let desktopStateBroker: DesktopStateBroker | null = null;
 let startupDocument = "";
 let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
@@ -452,9 +455,13 @@ async function runAutomaticSecurityScan(
   let state: SecurityScanState;
   try {
     state = await scanner.startAutomaticScan(schedule);
-  } catch {
-    // No discovered Skills (or a concurrent manual scan) is a recoverable
-    // automatic pass. The next run retries through the same safe service.
+  } catch (error) {
+    // No discovered Skills, a narrowed scope with no matches, and transient
+    // local failures are recoverable automatic passes. Keep the next run
+    // alive, but leave a stable local diagnostic instead of silently making
+    // the schedule appear broken.
+    const reason = error instanceof Error ? error.message : "unknown";
+    console.warn(`[security] automatic scan skipped: ${reason}`);
     return;
   }
   if (schedule?.notify !== true) return;
@@ -519,7 +526,10 @@ function clearAutomaticSecurityScanTimer(): void {
  * immediate first pass on launch when enabled, then a time-aware timer for the
  * configured cycle. A disabled schedule clears the timer entirely.
  */
-async function scheduleAutomaticSecurityScan(): Promise<void> {
+async function scheduleAutomaticSecurityScan(options?: {
+  readonly runImmediately?: boolean;
+  readonly resume?: boolean;
+}): Promise<void> {
   clearAutomaticSecurityScanTimer();
   const scanner = securityScanner;
   if (!scanner) return;
@@ -531,16 +541,34 @@ async function scheduleAutomaticSecurityScan(): Promise<void> {
     // service; any unexpected failure simply leaves auto-scan unscheduled.
     return;
   }
-  if (!schedule.enabled) return;
-  // Initial run shortly after launch when enabled, then arm the repeating timer.
-  void runAutomaticSecurityScan(schedule);
+  if (!schedule.enabled) {
+    automaticSecurityScanDueAt = null;
+    return;
+  }
+  const runImmediately = options?.runImmediately ?? !options?.resume;
+  const missedDeadline =
+    options?.resume === true &&
+    automaticSecurityScanDueAt != null &&
+    automaticSecurityScanDueAt <= Date.now();
+  // Initial run shortly after launch when enabled. On resume, only run when
+  // the deadline was missed while the machine was asleep; this avoids a scan
+  // every time the user merely locks and unlocks Windows.
+  if (runImmediately || missedDeadline) {
+    automaticSecurityScanDueAt = null;
+    lastAutomaticScanRunAt = Date.now();
+    void runAutomaticSecurityScan(schedule);
+  }
+  // Arm the repeating timer after the optional catch-up pass.
+  automaticSecurityScanDueAt = null;
   armAutomaticSecurityScanTimer(schedule);
 }
 
 function armAutomaticSecurityScanTimer(schedule: SecurityScanSchedule): void {
   const delayMs = nextAutomaticScanDelayMs(schedule);
+  automaticSecurityScanDueAt = Date.now() + delayMs;
   automaticSecurityScanTimer = setTimeout(() => {
     automaticSecurityScanTimer = null;
+    automaticSecurityScanDueAt = null;
     lastAutomaticScanRunAt = Date.now();
     void runAutomaticSecurityScan(schedule);
     armAutomaticSecurityScanTimer(schedule);
@@ -1021,6 +1049,7 @@ if (!hasSingleInstanceLock) {
   });
   app.on("will-quit", () => {
     clearAutomaticSecurityScanTimer();
+    powerMonitor.removeListener("suspend", clearAutomaticSecurityScanTimer);
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -1061,6 +1090,13 @@ if (!hasSingleInstanceLock) {
         else void createMainWindow();
       });
       reportStartupMilestone("electron-ready");
+      // Electron timers are paused while Windows enters sleep. Keep the
+      // persisted deadline and re-arm on resume so a missed scan is caught up
+      // once, without treating every unlock as a new scheduled run.
+      powerMonitor.on("suspend", clearAutomaticSecurityScanTimer);
+      powerMonitor.on("resume", () => {
+        void scheduleAutomaticSecurityScan({ resume: true });
+      });
       // Resolve the same interactive user's home in packaged builds. The explicit
       // value also keeps scanner behavior stable when Electron is launched by
       // Finder/login items with a reduced environment. A test-lab override, when

@@ -548,7 +548,9 @@ export class SecurityScannerService {
     };
   }
 
-  async listSkills(): Promise<SecuritySkillTarget[]> {
+  async listSkills(options?: {
+    readonly additionalRoots?: readonly string[];
+  }): Promise<SecuritySkillTarget[]> {
     const grouped = new Map<string, TrustedSkill>();
     for (const definition of MANAGED_SKILL_ROOTS) {
       for (const suffix of definition.suffixes) {
@@ -561,6 +563,15 @@ export class SecurityScannerService {
           : join(this.#options.homeDirectory, suffix);
         await this.#discoverRoot(root, definition.agent, grouped);
       }
+    }
+    for (const root of options?.additionalRoots ?? []) {
+      if (typeof root !== "string" || root.trim() === "") continue;
+      await this.#discoverRoot(
+        resolve(root),
+        "Custom directory",
+        grouped,
+        true,
+      );
     }
     for (const [ref, value] of grouped) this.#trusted.set(ref, value);
     return [...grouped.values()]
@@ -749,7 +760,11 @@ export class SecurityScannerService {
       throw new Error("A security scan is already running");
     const mode = (await this.#modelConfig()) ? "full" : "quick";
     const startingEpoch = this.#epoch;
-    const discovered = await this.listSkills();
+    const discovered = await this.listSkills(
+      schedule?.scope === "dir" && schedule.dir
+        ? { additionalRoots: [schedule.dir] }
+        : undefined,
+    );
     if (startingEpoch !== this.#epoch)
       throw new Error("Security scan was cleared");
     const scope = schedule?.scope ?? "all";
@@ -964,7 +979,29 @@ export class SecurityScannerService {
     root: string,
     agent: string,
     output: Map<string, TrustedSkill>,
+    includeRoot = false,
   ): Promise<void> {
+    if (includeRoot && (await this.#findMarker(root))) {
+      let details;
+      try {
+        details = await lstat(root);
+      } catch {
+        details = undefined;
+      }
+      if (details && !details.isSymbolicLink() && details.isDirectory()) {
+        const ref = skillRef(root);
+        output.set(ref, {
+          root,
+          target: {
+            skillRef: ref,
+            name: this.#skillName(root),
+            agents: [agent],
+            modifiedAt: details.mtime.toISOString(),
+            source: "discovered",
+          },
+        });
+      }
+    }
     const visit = async (directory: string, depth: number): Promise<void> => {
       let handle;
       try {
