@@ -43,12 +43,12 @@ import {
 
 export const INSIGHT_ENHANCER_ID = "insight-enhancer";
 
-/** Keep enhanced text aligned with the active page's 3-hour evidence cycle. */
-export const INSIGHT_ENHANCEMENT_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+/** Refresh enhanced insight text at most once per hour for the same evidence. */
+export const INSIGHT_ENHANCEMENT_CACHE_TTL_MS = 60 * 60 * 1000;
 /**
- * Default budget for automatic enhancement: one page can refresh every
- * 3 hours for 8 calls/day, while up to 14 first visits or page switches add
- * 14 calls (22 baseline calls total), leaving headroom within 500.
+ * Default budget for automatic enhancement: one page can refresh every hour,
+ * while up to 14 first visits or page switches add 14 calls, leaving
+ * headroom within 500.
  */
 const DEFAULT_DAILY_CALL_LIMIT = 500;
 /** The enhancer is the "enhanced" path; manual vs auto is interchangeable for
@@ -95,7 +95,7 @@ export interface InsightEnhancerOptions {
     profileId: string,
   ) => Promise<ActiveInsightProfile | null>;
   readonly now?: () => number;
-  /** Cache TTL. Defaults to 3 hours. */
+  /** Cache TTL. Defaults to one hour. */
   readonly ttlMs?: number;
   /** In-process daily call budget. Defaults to 500. */
   readonly dailyCallLimit?: number;
@@ -190,6 +190,107 @@ export function createInsightEnhancer(
 
   const calls = new Map<string, number>();
   const inflight = new Map<string, Promise<InsightEnhancementResult>>();
+  // The configured gateway is reliable for one request but rejects bursts
+  // from several mounted page cards. Singleflight handles duplicate evidence;
+  // this queue additionally serializes different surfaces.
+  let enhancementQueue = Promise.resolve();
+
+  function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const next = enhancementQueue.then(operation, operation);
+    enhancementQueue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  type EnhancementContext = {
+    readonly profile: ActiveInsightProfile;
+    readonly promptEntry: InsightPrompt;
+    readonly evidenceHash: string;
+    readonly identity: InsightCacheIdentity;
+    readonly requestTtlMs: number;
+  };
+
+  async function buildContext(
+    input: InsightEnhancerInput,
+  ): Promise<EnhancementContext | null> {
+    let profile: ActiveInsightProfile | null = null;
+    try {
+      profile = input.profileId
+        ? resolveProfile
+          ? await resolveProfile(input.profileId)
+          : null
+        : resolveActiveProfile
+          ? await resolveActiveProfile()
+          : null;
+    } catch {
+      profile = null;
+    }
+    if (profile === null) return null;
+
+    const nowMs = now();
+    const dateKey = localDateKey(nowMs);
+    const promptEntry = getInsightPrompt(input.surface);
+    const evidenceHash = sha256(
+      JSON.stringify(canonicalize(canonicalCandidates(input.candidates))),
+    );
+    const scopeHash = sha256(
+      JSON.stringify(
+        canonicalize({
+          surface: input.surface,
+          locale: input.locale,
+          dateKey,
+          adapterVersion: input.adapterVersion,
+        }),
+      ),
+    );
+    const requestTtlMs =
+      input.cacheTtlMs !== undefined &&
+      Number.isSafeInteger(input.cacheTtlMs) &&
+      input.cacheTtlMs > 0
+        ? input.cacheTtlMs
+        : ttlMs;
+
+    return {
+      profile,
+      promptEntry,
+      evidenceHash,
+      requestTtlMs,
+      identity: {
+        surfaceId: input.surface,
+        scopeHash,
+        evidenceHash,
+        locale: input.locale,
+        profileId: profile.id,
+        promptVersionId: promptEntry.id,
+        promptVersion: promptEntry.version,
+      },
+    };
+  }
+
+  function readCachedResult(
+    context: EnhancementContext,
+    nowMs: number,
+  ): InsightEnhancementResult | null {
+    let cached: InsightEnhancementCache | undefined;
+    try {
+      cached = repository.findValid(context.identity, nowMs);
+    } catch {
+      return null;
+    }
+    if (
+      cached === undefined ||
+      cached.generatedAtMs + context.requestTtlMs <= nowMs
+    ) {
+      return null;
+    }
+    return {
+      status: "enhanced-cached",
+      lines: mapCachedLines(cached),
+      modelLabel: cached.modelLabel ?? undefined,
+    };
+  }
 
   function pruneCalls(dateKey: string): void {
     for (const key of [...calls.keys()]) {
@@ -213,6 +314,7 @@ export function createInsightEnhancer(
     identity: InsightCacheIdentity,
     promptEntry: InsightPrompt,
     evidenceHash: string,
+    cacheTtlMs: number,
   ): Promise<InsightEnhancementResult> {
     try {
       const prompt = {
@@ -270,7 +372,7 @@ export function createInsightEnhancer(
         modelLabel: profile.label,
         aiRequestId: generated.requestId,
         generatedAtMs: nowMs,
-        expiresAtMs: nowMs + ttlMs,
+        expiresAtMs: nowMs + cacheTtlMs,
         status: "ready",
         lines: validation.output.map((line, index) => ({
           sequence: index,
@@ -300,66 +402,29 @@ export function createInsightEnhancer(
     }
   }
 
+  async function readCached(
+    input: InsightEnhancerInput,
+  ): Promise<InsightEnhancementResult | null> {
+    const context = await buildContext(input);
+    if (context === null) return null;
+    return readCachedResult(context, now());
+  }
+
   async function enhance(
     input: InsightEnhancerInput,
   ): Promise<InsightEnhancementResult> {
-    let profile: ActiveInsightProfile | null = null;
-    try {
-      profile = input.profileId
-        ? resolveProfile
-          ? await resolveProfile(input.profileId)
-          : null
-        : resolveActiveProfile
-          ? await resolveActiveProfile()
-          : null;
-    } catch {
-      profile = null;
-    }
-    if (profile === null) {
+    const context = await buildContext(input);
+    if (context === null) {
       return { status: "enhancer-unavailable", lines: [] };
     }
 
+    const { identity, evidenceHash, promptEntry, profile, requestTtlMs } =
+      context;
     const nowMs = now();
     const dateKey = localDateKey(nowMs);
     pruneCalls(dateKey);
-
-    const promptEntry = getInsightPrompt(input.surface);
-    const evidenceHash = sha256(
-      JSON.stringify(canonicalize(canonicalCandidates(input.candidates))),
-    );
-    const scopeHash = sha256(
-      JSON.stringify(
-        canonicalize({
-          surface: input.surface,
-          locale: input.locale,
-          dateKey,
-          adapterVersion: input.adapterVersion,
-        }),
-      ),
-    );
-    const identity: InsightCacheIdentity = {
-      surfaceId: input.surface,
-      scopeHash,
-      evidenceHash,
-      locale: input.locale,
-      profileId: profile.id,
-      promptVersionId: promptEntry.id,
-      promptVersion: promptEntry.version,
-    };
-
-    let cached: InsightEnhancementCache | undefined;
-    try {
-      cached = repository.findValid(identity, nowMs);
-    } catch {
-      cached = undefined;
-    }
-    if (cached) {
-      return {
-        status: "enhanced-cached",
-        lines: mapCachedLines(cached),
-        modelLabel: cached.modelLabel ?? undefined,
-      };
-    }
+    const cached = readCachedResult(context, nowMs);
+    if (cached !== null) return cached;
 
     const flightKey = `${input.surface}:${input.locale}:${evidenceHash}`;
     if (singleflight) {
@@ -375,12 +440,15 @@ export function createInsightEnhancer(
     }
     calls.set(budgetKey, used + 1);
 
-    const work = runEnhancement(
-      input,
-      profile,
-      identity,
-      promptEntry,
-      evidenceHash,
+    const work = enqueue(() =>
+      runEnhancement(
+        input,
+        profile,
+        identity,
+        promptEntry,
+        evidenceHash,
+        requestTtlMs,
+      ),
     );
     if (singleflight) {
       inflight.set(flightKey, work);
@@ -389,5 +457,5 @@ export function createInsightEnhancer(
     return work;
   }
 
-  return { id: INSIGHT_ENHANCER_ID, enhance };
+  return { id: INSIGHT_ENHANCER_ID, readCached, enhance };
 }

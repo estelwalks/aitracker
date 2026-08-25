@@ -5,7 +5,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * Shared Jarvis insight card: a rounded hero with an orb, a typewriter
@@ -124,16 +124,17 @@ export function JarvisInsight({
 }) {
   const hero = variant === "hero";
   const Heading = headingLevel === 2 ? "h2" : "h1";
-  const safeLines = useMemo(
-    () => lines.filter((line) => line.length > 0),
-    [lines],
-  );
+  // Callers may map their insight lines during every parent render. Use the
+  // content signature as the dependency so a click on "换一条" cannot be
+  // immediately reset by a newly allocated-but-identical array.
+  const linesKey = JSON.stringify(lines);
+  const safeLines = lines.filter((line) => line.length > 0);
   const [index, setIndex] = useState(0);
   const activeIndex = safeLines.length ? index % safeLines.length : 0;
   const line = safeLines[activeIndex] ?? "";
   const [typed, setTyped] = useState("");
 
-  useEffect(() => setIndex(0), [safeLines]);
+  useEffect(() => setIndex(0), [linesKey]);
 
   useEffect(() => {
     if (safeLines.length === 0) {

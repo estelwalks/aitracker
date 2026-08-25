@@ -2,6 +2,7 @@ import { AppError } from "../../../lib/errors.ts";
 import { INSIGHT_ACTIONS, isInsightActionId } from "./action-registry.ts";
 import type {
   InsightEnhancementInput,
+  InsightEnhancementResult,
   InsightEnvelope,
   InsightEnvelopeLine,
   InsightMode,
@@ -24,6 +25,7 @@ import {
   resolveFactText,
 } from "./domain.ts";
 import { getPageRuleConfig } from "./rule-registry.ts";
+import { DEFAULT_INSIGHT_REFRESH_INTERVAL_MS } from "./contracts.ts";
 
 export interface PageInsightsApplication {
   read(
@@ -76,6 +78,137 @@ export function createPageInsightsApplication(options: {
     );
   }
 
+  function enhancementComposition(
+    surfaceId: InsightSurfaceId,
+    adapter: PageInsightAdapter,
+    bundle: Awaited<ReturnType<PageInsightAdapter["loadEvidence"]>>,
+    locale: string,
+    preference: InsightPreference,
+  ) {
+    const candidates = composePageCandidates(adapter, bundle);
+    const remoteCandidates = composeRemotePageCandidates(adapter, bundle);
+    return {
+      candidates,
+      remoteCandidates,
+      maxLines: getPageRuleConfig(surfaceId).maxLines,
+      input: {
+        surface: surfaceId,
+        adapterVersion: adapter.adapterVersion,
+        locale,
+        profileId: preference.profileId,
+        dailyCallLimit: preference.dailyCallLimit,
+        cacheTtlMs:
+          options.store?.getRefreshIntervalMs() ??
+          DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
+        candidates: remoteCandidates.map((candidate) => ({
+          id: candidate.id,
+          severity: candidate.severity,
+          fact: resolveFactText(locale, candidate),
+          actionIds: [...candidate.allowedActionIds],
+          mandatory: candidate.mandatory ?? false,
+        })),
+      } satisfies InsightEnhancementInput,
+    };
+  }
+
+  function applyEnhancementResult(
+    base: InsightEnvelope,
+    composition: ReturnType<typeof enhancementComposition>,
+    locale: string,
+    result: InsightEnhancementResult,
+  ): InsightEnvelope {
+    if (
+      result.status !== "enhanced-cached" &&
+      result.status !== "enhanced-ready"
+    ) {
+      return {
+        ...base,
+        status: result.status,
+        modelLabel: result.modelLabel,
+      };
+    }
+
+    const candidatesById = new Map(
+      [...composition.candidates, ...composition.remoteCandidates].map(
+        (candidate) => [candidate.id, candidate],
+      ),
+    );
+    const selectedIds = new Set(result.lines.map((line) => line.candidateId));
+    const mandatory = rankCandidates(
+      composition.candidates,
+      composition.candidates.length,
+    ).filter((candidate) => candidate.mandatory === true);
+    const modelSelected = result.lines
+      .map((line) => candidatesById.get(line.candidateId))
+      .filter(
+        (candidate): candidate is NonNullable<typeof candidate> =>
+          candidate !== undefined && candidate.mandatory !== true,
+      );
+    const fallback = rankCandidates(
+      composition.candidates,
+      composition.candidates.length,
+    ).filter(
+      (candidate) =>
+        candidate.mandatory !== true && !selectedIds.has(candidate.id),
+    );
+    const ordered = [...mandatory, ...modelSelected, ...fallback].slice(
+      0,
+      composition.maxLines,
+    );
+
+    const lines: InsightEnvelopeLine[] = ordered.map((candidate) => {
+      const match = result.lines.find(
+        (item) => item.candidateId === candidate.id,
+      );
+      const analysis =
+        match?.analysis !== undefined &&
+        isInsightAnalysisUseful(
+          resolveFactText(locale, candidate),
+          match.analysis,
+        )
+          ? match.analysis.trim()
+          : undefined;
+      const action =
+        analysis !== undefined &&
+        match?.actionId !== undefined &&
+        isInsightActionId(match.actionId) &&
+        candidate.allowedActionIds.includes(match.actionId)
+          ? {
+              id: match.actionId,
+              labelKey: INSIGHT_ACTIONS[match.actionId].labelKey,
+            }
+          : candidate.actionId !== undefined
+            ? {
+                id: candidate.actionId,
+                labelKey: INSIGHT_ACTIONS[candidate.actionId].labelKey,
+              }
+            : undefined;
+      return {
+        id: candidate.id,
+        severity: candidate.severity,
+        key: candidate.factKey,
+        params: formatInsightFactParams(
+          locale,
+          candidate.factKey,
+          candidate.factParams,
+        ),
+        source: analysis === undefined ? "rules" : "enhanced",
+        ...(analysis !== undefined ? { analysis } : {}),
+        ...(action !== undefined ? { action } : {}),
+      };
+    });
+    const hasUsefulEnhancement = lines.some(
+      (line) => line.source === "enhanced",
+    );
+    return {
+      ...base,
+      status: hasUsefulEnhancement ? result.status : "invalid-output",
+      source: hasUsefulEnhancement ? "enhanced" : "rules",
+      lines,
+      modelLabel: result.modelLabel,
+    };
+  }
+
   async function read(
     surfaceId: InsightSurfaceId,
     scope: InsightScope,
@@ -85,7 +218,7 @@ export function createPageInsightsApplication(options: {
     if (adapter === undefined) throw new AppError("errors.generic");
     const bundle = await adapter.loadEvidence(scope);
     const preference = preferenceFor(surfaceId);
-    return composeRulesEnvelope({
+    const base = composeRulesEnvelope({
       adapter,
       bundle,
       locale,
@@ -94,6 +227,36 @@ export function createPageInsightsApplication(options: {
       autoEnhanceAuthorized: hasValidAutoConsent(preference),
       now,
     });
+    const enhancer = options.enhancer;
+    const autoAuthorized = hasValidAutoConsent(preference);
+    const canReadCache =
+      enhancer?.readCached !== undefined &&
+      preference.mode !== "rules" &&
+      (preference.mode === "enhanced-manual" || autoAuthorized);
+    if (!canReadCache) return base;
+
+    const composition = enhancementComposition(
+      surfaceId,
+      adapter,
+      bundle,
+      locale,
+      preference,
+    );
+    if (composition.input.candidates.length === 0) return base;
+    try {
+      const cached = await enhancer.readCached(composition.input);
+      if (
+        cached !== null &&
+        (cached.status === "enhanced-cached" ||
+          cached.status === "enhanced-ready")
+      ) {
+        return applyEnhancementResult(base, composition, locale, cached);
+      }
+    } catch {
+      // A cache read is an optimization; the deterministic rules envelope is
+      // still a valid first paint if the cache store is unavailable.
+    }
+    return base;
   }
 
   async function enhance(
@@ -128,25 +291,18 @@ export function createPageInsightsApplication(options: {
       return { ...base, status: "enhancer-unavailable" };
     }
 
-    const candidates = composePageCandidates(adapter, bundle);
-    const maxLines = getPageRuleConfig(surfaceId).maxLines;
-    const remoteCandidates = composeRemotePageCandidates(adapter, bundle);
-    const input: InsightEnhancementInput = {
-      surface: surfaceId,
-      adapterVersion: adapter.adapterVersion,
+    const composition = enhancementComposition(
+      surfaceId,
+      adapter,
+      bundle,
       locale,
-      profileId: preference.profileId,
-      dailyCallLimit: preference.dailyCallLimit,
-      candidates: remoteCandidates.map((candidate) => ({
-        id: candidate.id,
-        severity: candidate.severity,
-        fact: resolveFactText(locale, candidate),
-        actionIds: [...candidate.allowedActionIds],
-        mandatory: candidate.mandatory ?? false,
-      })),
-    };
+      preference,
+    );
+    const { input } = composition;
 
-    if (input.candidates.length === 0) return base;
+    if (input.candidates.length === 0) {
+      return { ...base, status: "no-eligible-candidates" };
+    }
 
     const result = await enhancer.enhance(input);
 
@@ -166,93 +322,7 @@ export function createPageInsightsApplication(options: {
       });
     }
 
-    if (
-      result.status === "enhanced-cached" ||
-      result.status === "enhanced-ready"
-    ) {
-      const candidatesById = new Map(
-        [...candidates, ...remoteCandidates].map((candidate) => [
-          candidate.id,
-          candidate,
-        ]),
-      );
-      const selectedIds = new Set(result.lines.map((line) => line.candidateId));
-      const mandatory = rankCandidates(candidates, candidates.length).filter(
-        (candidate) => candidate.mandatory === true,
-      );
-      const modelSelected = result.lines
-        .map((line) => candidatesById.get(line.candidateId))
-        .filter(
-          (candidate): candidate is NonNullable<typeof candidate> =>
-            candidate !== undefined && candidate.mandatory !== true,
-        );
-      const fallback = rankCandidates(candidates, candidates.length).filter(
-        (candidate) =>
-          candidate.mandatory !== true && !selectedIds.has(candidate.id),
-      );
-      const ordered = [...mandatory, ...modelSelected, ...fallback].slice(
-        0,
-        maxLines,
-      );
-
-      const lines: InsightEnvelopeLine[] = ordered.map((candidate) => {
-        const match = result.lines.find(
-          (item) => item.candidateId === candidate.id,
-        );
-        const analysis =
-          match?.analysis !== undefined &&
-          isInsightAnalysisUseful(
-            resolveFactText(locale, candidate),
-            match.analysis,
-          )
-            ? match.analysis.trim()
-            : undefined;
-        const action =
-          analysis !== undefined &&
-          match?.actionId !== undefined &&
-          isInsightActionId(match.actionId) &&
-          candidate.allowedActionIds.includes(match.actionId)
-            ? {
-                id: match.actionId,
-                labelKey: INSIGHT_ACTIONS[match.actionId].labelKey,
-              }
-            : candidate.actionId !== undefined
-              ? {
-                  id: candidate.actionId,
-                  labelKey: INSIGHT_ACTIONS[candidate.actionId].labelKey,
-                }
-              : undefined;
-        return {
-          id: candidate.id,
-          severity: candidate.severity,
-          key: candidate.factKey,
-          params: formatInsightFactParams(
-            locale,
-            candidate.factKey,
-            candidate.factParams,
-          ),
-          source: analysis === undefined ? "rules" : "enhanced",
-          ...(analysis !== undefined ? { analysis } : {}),
-          ...(action !== undefined ? { action } : {}),
-        };
-      });
-      const hasUsefulEnhancement = lines.some(
-        (line) => line.source === "enhanced",
-      );
-      return {
-        ...base,
-        status: hasUsefulEnhancement ? result.status : "invalid-output",
-        source: hasUsefulEnhancement ? "enhanced" : "rules",
-        lines,
-        modelLabel: result.modelLabel,
-      };
-    }
-
-    return {
-      ...base,
-      status: result.status,
-      modelLabel: result.modelLabel,
-    };
+    return applyEnhancementResult(base, composition, locale, result);
   }
 
   return { read, enhance };

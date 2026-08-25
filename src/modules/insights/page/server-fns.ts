@@ -22,10 +22,11 @@ import {
   type InsightScope,
   type InsightSurfaceId,
   INSIGHT_AUTO_CONSENT_VERSION,
+  MAX_INSIGHT_REFRESH_INTERVAL_MS,
+  MIN_INSIGHT_REFRESH_INTERVAL_MS,
 } from "./contracts.ts";
 
 const ENTITY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
-
 
 const INSIGHT_MODES: readonly InsightMode[] = [
   "rules",
@@ -48,6 +49,7 @@ export interface SetInsightPreferencesInput {
   readonly profileId?: string | null;
   readonly consentVersion?: string | null;
   readonly dailyCallLimit?: number | null;
+  readonly refreshIntervalMs?: number;
   readonly surfaceId?: InsightSurfaceId;
 }
 
@@ -58,6 +60,7 @@ export interface InsightPreferenceView {
   readonly profileId: string | null;
   readonly consentVersion: string | null;
   readonly dailyCallLimit: number | null;
+  readonly refreshIntervalMs: number;
 }
 
 export interface GetInsightPreferencesInput {
@@ -207,12 +210,30 @@ export function parseSetInsightPreferencesInput(
     throw new AppError("errors.generic");
   }
 
+  const refreshIntervalMs =
+    value.refreshIntervalMs === undefined
+      ? undefined
+      : typeof value.refreshIntervalMs === "number" &&
+          Number.isSafeInteger(value.refreshIntervalMs) &&
+          value.refreshIntervalMs >= MIN_INSIGHT_REFRESH_INTERVAL_MS &&
+          value.refreshIntervalMs <= MAX_INSIGHT_REFRESH_INTERVAL_MS
+        ? value.refreshIntervalMs
+        : null;
+  if (refreshIntervalMs === null) throw new AppError("errors.generic");
+
   if (value.surfaceId !== undefined && !isSurfaceId(value.surfaceId)) {
     throw new AppError("errors.generic");
   }
   const surfaceId = value.surfaceId as InsightSurfaceId | undefined;
 
-  return { mode, profileId, consentVersion, dailyCallLimit, surfaceId };
+  return {
+    mode,
+    profileId,
+    consentVersion,
+    dailyCallLimit,
+    refreshIntervalMs,
+    surfaceId,
+  };
 }
 
 export const getPageInsight = createServerFn({ method: "GET" })
@@ -261,8 +282,18 @@ export const getInsightPreferences = createServerFn({ method: "GET" })
       profileId: preference.profileId,
       consentVersion: preference.consentVersion,
       dailyCallLimit: preference.dailyCallLimit,
+      refreshIntervalMs: root.database.features.insights.getRefreshIntervalMs(),
     };
   });
+
+export const refreshPageInsights = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ invalidated: number }> => {
+    const { getCompositionRoot } =
+      await import("../../../app/composition.server.ts");
+    const store = (await getCompositionRoot()).database.features.insights;
+    return { invalidated: store.invalidateAll?.() ?? 0 };
+  },
+);
 
 export const setInsightPreferences = createServerFn({ method: "POST" })
   .validator((input: unknown): SetInsightPreferencesInput =>
@@ -295,6 +326,12 @@ export const setInsightPreferences = createServerFn({ method: "POST" })
     const consentVersion =
       mode === "enhanced-auto" ? INSIGHT_AUTO_CONSENT_VERSION : null;
     const nowMs = Date.now();
+    const refreshIntervalMs =
+      data.refreshIntervalMs ?? store.getRefreshIntervalMs();
+    if (data.refreshIntervalMs !== undefined) {
+      store.setRefreshIntervalMs(refreshIntervalMs, nowMs);
+      store.invalidateAll?.();
+    }
     const preference: InsightPreference = {
       scopeKey,
       mode,
@@ -312,5 +349,6 @@ export const setInsightPreferences = createServerFn({ method: "POST" })
       profileId,
       consentVersion,
       dailyCallLimit: preference.dailyCallLimit,
+      refreshIntervalMs,
     };
   });

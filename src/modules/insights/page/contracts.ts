@@ -18,6 +18,11 @@ export const INSIGHT_SURFACE_IDS = [
 ] as const;
 export type InsightSurfaceId = (typeof INSIGHT_SURFACE_IDS)[number];
 
+/** User-configurable AI insight refresh period bounds. */
+export const DEFAULT_INSIGHT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+export const MAX_INSIGHT_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface InsightScope {
   readonly range?: "today" | "7d" | "30d" | "all";
   readonly entityId?: string;
@@ -97,6 +102,7 @@ export type InsightEnvelopeStatus =
   | "timeout"
   | "enhancer-failed"
   | "invalid-output"
+  | "no-eligible-candidates"
   | "stale";
 
 export interface InsightEnvelope {
@@ -126,6 +132,8 @@ export interface InsightEnhancementInput {
   /** Effective preference projection. The server, never the renderer, sets it. */
   readonly profileId?: string | null;
   readonly dailyCallLimit?: number | null;
+  /** Effective cache refresh period from the user's local settings. */
+  readonly cacheTtlMs?: number;
   readonly candidates: readonly {
     readonly id: string;
     readonly severity: InsightSeverity;
@@ -156,6 +164,10 @@ export interface InsightEnhancementResult {
 
 export interface InsightEnhancerPort {
   readonly id: string;
+  /** Read a valid persisted result without starting a model request. */
+  readonly readCached?: (
+    input: InsightEnhancementInput,
+  ) => Promise<InsightEnhancementResult | null>;
   enhance(input: InsightEnhancementInput): Promise<InsightEnhancementResult>;
 }
 
@@ -177,4 +189,7 @@ export interface InsightPreference {
 export interface InsightStorePort {
   getEffectivePreference(surfaceId: string): InsightPreference;
   setPreference(value: InsightPreference): void;
+  getRefreshIntervalMs(): number;
+  setRefreshIntervalMs(value: number, updatedAtMs: number): void;
+  invalidateAll?(): number;
 }

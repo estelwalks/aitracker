@@ -103,6 +103,38 @@ test("buildBoard: project dimension aggregates one row per project", () => {
   assert.equal(a.outputRatio, 60 / 260);
 });
 
+test("buildBoard exposes formatted-detail token composition fields", () => {
+  const board = buildBoard(
+    [
+      event({
+        timestamp: "2026-08-01T00:00:00Z",
+        project: "composition",
+        inputTokens: 100,
+        cacheCreationInputTokens: 5,
+        cachedInputTokens: 20,
+        outputTokens: 50,
+        totalTokens: 175,
+      }),
+    ],
+    "project",
+  );
+
+  assert.deepEqual(
+    {
+      tokens: board.rows[0]?.tokens,
+      inputTokens: board.rows[0]?.inputTokens,
+      outputTokens: board.rows[0]?.outputTokens,
+      cachedInputTokens: board.rows[0]?.cachedInputTokens,
+    },
+    {
+      tokens: 175,
+      inputTokens: 105,
+      outputTokens: 50,
+      cachedInputTokens: 20,
+    },
+  );
+});
+
 test("buildBoard: session dimension skips events without a session id", () => {
   const events = [
     event({ timestamp: "2026-08-01T00:00:00Z", sessionId: "s1" }),
