@@ -5,14 +5,15 @@ export interface DesktopStartupTaskState {
 }
 
 /**
- * Windows must finish an empty workspace before first paint. Once a complete
- * snapshot exists, a stale refresh may continue behind the already initialized
- * homepage. macOS retains the existing strict refresh barrier.
+ * Supported desktop platforms must finish an empty workspace before first
+ * paint. Once a complete snapshot exists, a stale refresh may continue behind
+ * the already initialized homepage. Network-only exchange refreshes never
+ * belong to the native startup barrier.
  */
 export function shouldAwaitDesktopStartupTask(
   state: DesktopStartupTaskState,
 ): boolean {
-  if (state.platform !== "win32") return true;
+  if (state.platform !== "darwin" && state.platform !== "win32") return true;
   if (state.taskId === "exchange.refresh") return false;
   return !state.hasPersistedSnapshot;
 }

@@ -36,16 +36,46 @@ test("Windows reuses an initialized snapshot while refreshing it", () => {
   );
 });
 
-test("macOS retains the strict startup barrier and collector limit", () => {
+test("macOS waits when a required startup snapshot is empty", () => {
+  assert.equal(
+    shouldAwaitDesktopStartupTask({
+      platform: "darwin",
+      taskId: "sessions.refresh",
+      hasPersistedSnapshot: false,
+    }),
+    true,
+  );
+});
+
+test("macOS reuses initialized snapshots while refreshing in the background", () => {
   assert.equal(
     shouldAwaitDesktopStartupTask({
       platform: "darwin",
       taskId: "usage.refresh",
       hasPersistedSnapshot: true,
     }),
-    true,
+    false,
+  );
+  assert.equal(
+    shouldAwaitDesktopStartupTask({
+      platform: "darwin",
+      taskId: "exchange.refresh",
+      hasPersistedSnapshot: false,
+    }),
+    false,
   );
   assert.equal(desktopHeavyCollectorLimit("darwin"), undefined);
+});
+
+test("unsupported platforms retain the strict startup barrier", () => {
+  assert.equal(
+    shouldAwaitDesktopStartupTask({
+      platform: "linux",
+      taskId: "usage.refresh",
+      hasPersistedSnapshot: true,
+    }),
+    true,
+  );
 });
 
 test("Windows permits two startup collectors", () => {
