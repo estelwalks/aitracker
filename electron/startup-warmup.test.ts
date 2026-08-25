@@ -81,14 +81,24 @@ test("internal warmup rejects a non-2xx response", async () => {
   await writeFile(
     join(root, "server", "index.mjs"),
     `export default { fetch() {
-      return new Response("workspace initialization failed", { status: 503 });
+      return new Response("workspace initialization failed", {
+        status: 503,
+        headers: { "x-trusttools-startup-failure-code": "database.already-open" },
+      });
     } }`,
   );
   const server = await startLocalWebServer(root);
   try {
     await assert.rejects(
       server.warmup("desktop-test-token"),
-      /warmup failed with HTTP 503/,
+      (error: unknown) => {
+        assert.match(String(error), /warmup failed with HTTP 503/);
+        assert.equal(
+          (error as { startupFailureCode?: unknown }).startupFailureCode,
+          "database.already-open",
+        );
+        return true;
+      },
     );
   } finally {
     await server.close();

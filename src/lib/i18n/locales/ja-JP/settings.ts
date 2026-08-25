@@ -26,8 +26,6 @@ export const settings = {
     onDemand: "スキャン方式",
     onDemandDesc:
       "スキャンはオンデマンドで実行され、対応するローカル AI ツールのログを読み取り増分インデックスを構築します。",
-    retentionNote:
-      "以下の保持期間は使用量・スキャンキャッシュにも適用されます：",
   },
   modelProfiles: {
     count: "モデル設定（{count}）",
@@ -105,7 +103,7 @@ export const settings = {
       desc: "利用可能なセキュリティ検出サービスがありません（デスクトップアプリまたはローカルコンパニオンに未接続）。自動スキャン予定の保存にはそのサービスが必要です。",
       retry: "再接続",
     },
-    llmReview: "AI 補助検出",
+    llmReview: "AI検出",
     llmReviewHint:
       "有効にすると、full 検出はスキャン対象 Skill のファイル内容を選択したモデルのエンドポイントへ送信します。ローカルエンドポイントならデータはこの端末内に留まり、ルール判定は常に保持されます。",
     llmReviewUnconfiguredHint:
@@ -130,6 +128,15 @@ export const settings = {
       dirHint:
         "スキャン対象の Skill ルートディレクトリ（絶対パス）を入力してください。未入力の場合は自動スキャンは実行されません。",
       notify: "アラート通知",
+      lastRun: "前回のスキャン",
+      nextRun: "次回のスキャン",
+      neverRun: "まだ実行されていません",
+      allUnchanged: "{time}・{count} 件を確認、すべて変更なし",
+      runSummary: "{time}・完了 {completed}、失敗 {failed}、スキップ {skipped}",
+      pending: "現在のスキャン完了後に再試行します",
+      disabledStatus: "無効",
+      processRequiredHint:
+        "アプリの起動中またはメニューバー常駐中は予定どおり実行します。終了中に逃した処理は次回起動後に実行します。",
       saved: "スキャン予定を保存しました",
       saveFailed: "スキャン予定の保存に失敗しました",
       loadFailed: "スキャン予定の読み込みに失敗しました",
@@ -167,15 +174,24 @@ export const settings = {
   storage: "ストレージ使用量",
   storageExceedsSoftCap:
     "（500MB を超えています。キャッシュの削除をおすすめします）",
-  clearCache: "再生成可能なローカルインデックス/キャッシュを削除",
+  clearCache: "キャッシュを削除",
   clearCacheHint:
-    "現在の {appName} データディレクトリ内のキャッシュのみ削除します。AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",
+    "現在の {appName} データディレクトリ内のキャッシュのみ削除します。ローカル収集データ、AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",
   clearCacheButton: "キャッシュを削除",
-  clearCacheDialogTitle: "ローカルインデックス/キャッシュを削除しますか？",
+  clearCacheDialogTitle: "キャッシュを削除しますか？",
   clearCacheDialogDesc:
-    "{appName} 管理ディレクトリ内の再生成可能なインデックスとキャッシュが削除されます。外部 AI ツールのログ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
+    "{appName} 管理ディレクトリ内のキャッシュを削除し、ディスク容量を回収します。ローカル収集データ、外部 AI ツールのログ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
   clearing: "削除中...",
   confirmClearCache: "キャッシュを削除",
+  clearCollectedData: "収集データを削除",
+  clearCollectedDataHint:
+    "ローカルで収集した結果を削除してデータを初期化します。元の AI ツールログ、アプリ設定、アダプター設定は保持されます",
+  clearCollectedDataButton: "収集データを削除",
+  clearCollectedDataDialogTitle: "収集データを削除しますか？",
+  clearCollectedDataDialogDesc:
+    "{appName} で収集したローカル結果を削除し、データを初期化した後、元のログからバックグラウンドで再収集します。元の AI ツールログ、アプリ設定、アダプター設定、セキュリティ履歴には影響しません。",
+  clearingCollectedData: "収集データを削除中…",
+  confirmClearCollectedData: "削除して再収集",
   resetPrefs: "アプリ設定とセキュリティ履歴をリセット",
   resetPrefsHint:
     "設定、更新履歴、セキュリティ検査履歴、今日の検査回数をリセットします。ローカルインデックス/キャッシュや外部 AI ツールのログは削除しません",
@@ -248,7 +264,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI 強化を利用できないため、ルール洞察を表示しています",
+        "AI 強化は一時的に利用できません。AI モデルを設定してください",
       "budget-exceeded":
         "AI 強化の上限に達したため、ルール洞察を表示しています",
       timeout: "AI 強化がタイムアウトしたため、ルール洞察を表示しています",
@@ -256,7 +272,7 @@ export const settings = {
       "invalid-output": "AI の出力が無効なため、ルール洞察を表示しています",
     },
     section: {
-      title: "今日のインサイト",
+      title: "AIインサイト",
       desc: "オフではローカルルールのみ、オンではモデルを呼び出してインサイトを強化します。",
       mode: "生成方法",
       modeRules: "ローカルルールのみ",
@@ -291,15 +307,18 @@ export const settings = {
     keepForever: "キャッシュを無期限で保持する設定にしました",
     retentionSaved: "キャッシュ保持ポリシーを保存しました",
     retentionFailed: "保持ポリシーの保存に失敗しました",
-    cleared:
-      "ローカルインデックス/キャッシュ {count} 件を削除しました（{size}）",
-    nothingToClear: "削除できるローカルインデックス/キャッシュはありません",
-    clearFailed: "データの削除に失敗しました",
+    cleared: "キャッシュデータ {count} 件を削除し、{size} を回収しました",
+    nothingToClear: "削除できるキャッシュはありません",
+    clearFailed: "キャッシュの削除に失敗しました",
+    collectedDataCleared:
+      "収集データ {count} 件を削除し、{size} を回収しました",
+    noCollectedDataToClear: "削除できる収集データはありません",
+    collectedDataClearFailed: "収集データの削除に失敗しました",
     resetDone: "アプリ設定とセキュリティ履歴を {count} 件リセットしました",
     resetDoneBrowser:
       "ブラウザのアプリ設定とセキュリティ履歴をリセットしました",
     resetFailed: "アプリ設定のリセットに失敗しました",
-    llmReviewSaved: "AI 補助検出の設定を保存しました",
-    llmReviewSaveFailed: "AI 補助検出の設定の保存に失敗しました",
+    llmReviewSaved: "AI検出の設定を保存しました",
+    llmReviewSaveFailed: "AI検出の設定の保存に失敗しました",
   },
 } as const;

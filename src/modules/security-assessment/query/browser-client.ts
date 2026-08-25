@@ -12,6 +12,7 @@ import type {
 import type {
   SecurityRuntimeCapabilityView,
   SecurityScanScheduleView,
+  SecurityScanScheduleStatusView,
 } from "../presentation/security-view";
 import {
   historyView,
@@ -239,6 +240,40 @@ const scanScheduleSchema = z
   })
   .strict();
 
+const scanRunSchema = z
+  .object({
+    scanId: z.string().regex(/^scan:/u),
+    mode: modeSchema,
+    trigger: triggerSchema,
+    locale: localeSchema,
+    status: z.enum([
+      "queued",
+      "running",
+      "complete",
+      "partial",
+      "failed",
+      "cancelled",
+    ]),
+    startedAt: z.string(),
+    finishedAt: z.string().optional(),
+    discoveredCount: z.number().int().nonnegative(),
+    queuedCount: z.number().int().nonnegative(),
+    completedCount: z.number().int().nonnegative(),
+    failedCount: z.number().int().nonnegative(),
+    skippedCount: z.number().int().nonnegative(),
+    errorCode: z.string().optional(),
+    ruleVersion: z.string().optional(),
+  })
+  .strict();
+
+const scanScheduleStatusSchema = z
+  .object({
+    lastRun: scanRunSchema.nullable(),
+    nextRunAt: z.string().nullable(),
+    pending: z.boolean(),
+  })
+  .strict();
+
 const scanStartSchema = z
   .object({
     scope: z.enum(["single", "all"]),
@@ -410,6 +445,12 @@ function createCompanionClient(
         "/scan-schedule",
         scanScheduleSchema,
       )) as SecurityScanScheduleView;
+    },
+    async getScanScheduleStatus() {
+      return (await request(
+        "/scan-schedule-status",
+        scanScheduleStatusSchema,
+      )) as SecurityScanScheduleStatusView;
     },
     async setScanSchedule(schedule: SecurityScanScheduleView) {
       const requestBody = scanScheduleSchema.parse(schedule);

@@ -81,7 +81,7 @@ export function WindowChrome() {
       className={`tt-window-chrome ${isMac ? "tt-window-chrome--mac" : ""}`}
       style={isMac ? { paddingLeft: MAC_TRAFFIC_LIGHT_INSET } : undefined}
     >
-      <div className="tt-window-chrome-title">{APP_NAME}</div>
+      {!isMac && <div className="tt-window-chrome-title">{APP_NAME}</div>}
 
       {!isMac && (
         <div className="tt-window-controls">

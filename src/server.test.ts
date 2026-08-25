@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { markDynamicResponseNoStore } from "./server.ts";
+import { ENV } from "./lib/app-config.ts";
+import serverEntry, { markDynamicResponseNoStore } from "./server.ts";
 
 test("dynamic server responses are never reused from browser cache", () => {
   for (const response of [
@@ -14,5 +18,56 @@ test("dynamic server responses are never reused from browser cache", () => {
       markDynamicResponseNoStore(response).headers.get("cache-control"),
       "no-store",
     );
+  }
+});
+
+test("desktop warmup receives a safe database failure code", async () => {
+  const dataRoot = await mkdtemp(join(tmpdir(), "tt-server-startup-error-"));
+  const previousRuntime = process.env[ENV.RUNTIME];
+  const previousUsageHome = process.env[ENV.USAGE_HOME];
+  const previousBrokerToken = process.env[ENV.DESKTOP_BROKER_TOKEN];
+  process.env[ENV.RUNTIME] = "desktop";
+  process.env[ENV.USAGE_HOME] = dataRoot;
+  process.env[ENV.DESKTOP_BROKER_TOKEN] = "startup-test-token";
+  try {
+    const databaseDirectory = join(dataRoot, ".trusttools", "data");
+    await mkdir(databaseDirectory, { recursive: true });
+    await writeFile(
+      join(databaseDirectory, "trusttools.v1.db.writer.lock"),
+      `${JSON.stringify({
+        pid: process.pid,
+        token: "test-owner",
+        createdAtMs: Date.now(),
+      })}\n`,
+      "utf8",
+    );
+
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      const response = await serverEntry.fetch(
+        new Request("http://127.0.0.1/api/desktop-state/preferences", {
+          headers: { "x-trusttools-desktop-broker": "startup-test-token" },
+        }),
+        {},
+        {},
+      );
+      assert.equal(response.status, 500);
+      assert.equal(
+        response.headers.get("x-trusttools-startup-failure-code"),
+        "database.already-open",
+      );
+    } finally {
+      console.error = originalConsoleError;
+    }
+  } finally {
+    if (previousRuntime == null) delete process.env[ENV.RUNTIME];
+    else process.env[ENV.RUNTIME] = previousRuntime;
+    if (previousUsageHome == null) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = previousUsageHome;
+    if (previousBrokerToken == null)
+      delete process.env[ENV.DESKTOP_BROKER_TOKEN];
+    else process.env[ENV.DESKTOP_BROKER_TOKEN] = previousBrokerToken;
+    await rm(dataRoot, { recursive: true, force: true });
   }
 });

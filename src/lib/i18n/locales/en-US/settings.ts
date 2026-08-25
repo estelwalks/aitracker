@@ -25,8 +25,6 @@ export const settings = {
     onDemand: "Scan mode",
     onDemandDesc:
       "Scanning runs on demand: it reads supported local AI tool logs and builds an incremental index.",
-    retentionNote:
-      "The retention period below also applies to usage and scan caches:",
   },
   modelProfiles: {
     count: "Model profiles ({count})",
@@ -104,7 +102,7 @@ export const settings = {
       desc: "No security scan service is available (not connected to the desktop app or the local companion). The auto-scan schedule needs that service to be saved.",
       retry: "Reconnect",
     },
-    llmReview: "AI-assisted detection",
+    llmReview: "AI detection",
     llmReviewHint:
       "When enabled, full detection sends the scanned Skill file contents to the selected model endpoint. Data sent to a local endpoint stays on this device. Rule-based findings are always retained.",
     llmReviewUnconfiguredHint:
@@ -128,6 +126,16 @@ export const settings = {
       dirHint:
         "Enter an absolute Skill root directory to scan. Leave empty to disable the automatic scan.",
       notify: "Alert notification",
+      lastRun: "Last scan",
+      nextRun: "Next scan",
+      neverRun: "Not run yet",
+      allUnchanged: "{time} · Checked {count}; all unchanged",
+      runSummary:
+        "{time} · Completed {completed}, failed {failed}, skipped {skipped}",
+      pending: "Waiting for the current scan to finish before retrying",
+      disabledStatus: "Disabled",
+      processRequiredHint:
+        "Runs on time while the app is open or in the menu bar. Missed runs catch up after the next launch.",
       saved: "Scan schedule saved",
       saveFailed: "Failed to save scan schedule",
       loadFailed: "Failed to read scan schedule",
@@ -163,15 +171,24 @@ export const settings = {
   retentionForever: "Forever",
   storage: "Storage used",
   storageExceedsSoftCap: " (over 500 MB — consider clearing the cache)",
-  clearCache: "Clear regenerable local indexes/caches",
+  clearCache: "Clear cache",
   clearCacheHint:
-    "Deletes only caches inside the current {appName} data directory; never AI tool logs, adapter configs or security history",
+    "Deletes only caches inside the current {appName} data directory; never local collected data, AI tool logs, adapter configs or security history",
   clearCacheButton: "Clear cache",
-  clearCacheDialogTitle: "Clear local indexes/caches?",
+  clearCacheDialogTitle: "Clear cache?",
   clearCacheDialogDesc:
-    "Regenerable indexes and caches inside the {appName}-controlled directory will be deleted. External AI tool logs, adapter configs, app preferences and security history are unaffected.",
+    "Caches inside the {appName}-controlled directory will be deleted and the space reclaimed. Local collected data, external AI tool logs, adapter configs, app preferences and security history are unaffected.",
   clearing: "Clearing…",
   confirmClearCache: "Clear cache",
+  clearCollectedData: "Clear collected data",
+  clearCollectedDataHint:
+    "Deletes locally collected results and reinitializes the data set; source AI tool logs, app settings and adapter configuration are kept",
+  clearCollectedDataButton: "Clear collected data",
+  clearCollectedDataDialogTitle: "Clear collected data?",
+  clearCollectedDataDialogDesc:
+    "Locally collected results in {appName} will be deleted and the data set reinitialized, then rebuilt in the background from the original logs. Source AI tool logs, app settings, adapter configuration and security history are not affected.",
+  clearingCollectedData: "Clearing collected data…",
+  confirmClearCollectedData: "Clear and recollect",
   resetPrefs: "Reset app preferences & security history",
   resetPrefsHint:
     "Resets settings, update records, security scan history and today's scan count; never deletes local indexes/caches or external AI tool logs",
@@ -244,7 +261,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI enhancement is unavailable; showing rule-based insight",
+        "AI enhancement is temporarily unavailable — configure an AI model",
       "budget-exceeded":
         "AI enhancement limit reached; showing rule-based insight",
       timeout: "AI enhancement timed out; showing rule-based insight",
@@ -253,7 +270,7 @@ export const settings = {
         "AI returned invalid output; showing rule-based insight",
     },
     section: {
-      title: "Today's insights",
+      title: "AI insights",
       desc: "Off uses local rules only; on automatically calls the model for enhanced insights.",
       mode: "Generation mode",
       modeRules: "Local rules only",
@@ -290,13 +307,17 @@ export const settings = {
     keepForever: "Cache will be kept forever",
     retentionSaved: "Cache retention policy saved",
     retentionFailed: "Failed to save retention policy",
-    cleared: "Cleared {count} local index/cache files ({size})",
-    nothingToClear: "No local indexes or caches to clear",
-    clearFailed: "Failed to clear data",
+    cleared: "Cleared {count} cache data items, reclaimed {size}",
+    nothingToClear: "No caches to clear",
+    clearFailed: "Failed to clear cache",
+    collectedDataCleared:
+      "Cleared {count} collected data items, reclaimed {size}",
+    noCollectedDataToClear: "No collected data to clear",
+    collectedDataClearFailed: "Failed to clear collected data",
     resetDone: "Reset {count} app preferences & security history items",
     resetDoneBrowser: "Reset app preferences & security history in the browser",
     resetFailed: "Failed to reset app preferences",
-    llmReviewSaved: "AI-assisted detection settings saved",
-    llmReviewSaveFailed: "Failed to save AI-assisted detection settings",
+    llmReviewSaved: "AI detection settings saved",
+    llmReviewSaveFailed: "Failed to save AI detection settings",
   },
 } as const;

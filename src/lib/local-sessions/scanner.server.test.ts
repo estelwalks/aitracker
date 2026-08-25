@@ -1207,10 +1207,12 @@ test("P1-3: a newly registered session reader is scanned via the registry plan",
     const registry = compileToolRegistry([fakeTool]);
 
     const scannedRoots: string[] = [];
+    let observedSignal: AbortSignal | undefined;
     registerSessionReader({
       key: readerKey,
-      scan: async (root) => {
+      scan: async (root, signal) => {
         scannedRoots.push(root);
+        observedSignal = signal;
         // Mini parser: one JSON metadata record per line (privacy-safe).
         const raw = await readFile(
           join(root, "sessions", `${sessionId}.jsonl`),
@@ -1261,14 +1263,18 @@ test("P1-3: a newly registered session reader is scanned via the registry plan",
     });
 
     try {
+      const controller = new AbortController();
       const summary = await scanLocalSessions({
         homeDirectory: home,
         now: NOW,
         registry,
+        signal: controller.signal,
+        platform: "win32",
       });
       // The scan root came from the platform path plan (storage.dataRoots +
       // home base), not from a hardcoded suffix.
       assert.deepEqual(scannedRoots, [join(home, ".fake")]);
+      assert.equal(observedSignal, controller.signal);
       const session = soleSession(summary.sessions);
       assert.equal(session.source, toolId);
       assert.equal(session.sessionId, sessionId);

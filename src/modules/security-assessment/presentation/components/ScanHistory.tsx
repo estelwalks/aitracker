@@ -1,9 +1,17 @@
 import { useMemo, useState } from "react";
-import { Boxes, ChevronRight, ShieldCheck, ShieldX } from "lucide-react";
+import {
+  Boxes,
+  ChevronRight,
+  ShieldCheck,
+  ShieldX,
+  TriangleAlert,
+} from "lucide-react";
 
 import { useI18n } from "../../../../lib/i18n/context";
 import {
   aggregateScanTasks,
+  detectedRiskCount,
+  unresolvedScanCount,
   type SecurityHistoryView,
   type SecurityScanTaskView,
 } from "../security-view";
@@ -69,7 +77,10 @@ export function ScanHistory({
           options={[
             { value: "all", label: t("security.center.history.all") },
             { value: "safe", label: t("security.center.history.safe") },
-            { value: "unsafe", label: t("security.center.history.unsafe") },
+            {
+              value: "unsafe",
+              label: t("security.center.history.needsReview"),
+            },
           ]}
         />
       </div>
@@ -82,8 +93,8 @@ export function ScanHistory({
         <div className="border-t border-border/60">
           {list.map((group) => {
             const totals = group.totals;
-            const unsafe =
-              totals.warn + totals.danger + totals.unknown + totals.failed;
+            const unsafe = detectedRiskCount(totals);
+            const unresolved = unresolvedScanCount(totals);
             const safe = group.safe;
             return (
               <div
@@ -111,16 +122,26 @@ export function ScanHistory({
                   </span>
                   <span
                     className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px]"
-                    style={{ color: safe ? "var(--ok)" : "var(--danger)" }}
+                    style={{
+                      color: safe
+                        ? "var(--ok)"
+                        : unsafe > 0
+                          ? "var(--danger)"
+                          : "var(--warn)",
+                    }}
                   >
                     {safe ? (
                       <ShieldCheck className="size-3" />
-                    ) : (
+                    ) : unsafe > 0 ? (
                       <ShieldX className="size-3" />
+                    ) : (
+                      <TriangleAlert className="size-3" />
                     )}
                     {safe
                       ? t("security.center.history.safe")
-                      : `${t("security.center.history.unsafe")} · ${unsafe}`}
+                      : unsafe > 0
+                        ? `${t("security.center.history.unsafe")} · ${unsafe}`
+                        : `${t("security.center.history.needsReview")} · ${unresolved}`}
                   </span>
                   <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-primary">
                     {t("security.center.task.viewDetails")}
