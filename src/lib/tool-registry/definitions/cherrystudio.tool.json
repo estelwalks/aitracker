@@ -2,7 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "cherrystudio",
-  "display": { "name": "Cherry Studio", "nameZh": "Cherry Studio", "icon": "https://www.cherryai.com/assets/logo-Bz2G6ABc.png", "color": "#ec4899" },
+  "display": { "name": "Cherry Studio", "nameZh": "Cherry Studio", "icon": "other", "color": "#ec4899" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {
     "locations": [
