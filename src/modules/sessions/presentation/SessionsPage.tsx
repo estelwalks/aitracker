@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { MessagesSquare, RefreshCw, Sparkles, Wrench } from "lucide-react";
+import { MessagesSquare, Sparkles, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import {
@@ -10,13 +9,11 @@ import {
   Pagination,
   SearchInput,
   Segmented,
-  TTButton,
 } from "../../../components/tt.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
-import { toUiError } from "../../../lib/errors.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
-import { refreshSessionsQuery, getSessionsQuery } from "../query.ts";
+import { getSessionsQuery } from "../query.ts";
 import type {
   SessionFilter,
   SessionPage,
@@ -81,7 +78,7 @@ function localDateKey(date: Date): string {
 }
 
 /**
- * Real local-session list. Filtering, pagination and refresh all call the
+ * Real local-session list. Filtering and pagination call the
  * server query facade; no prototype fixtures or client-generated records are
  * used here. Layout mirrors the V3.0 prototype: Jarvis hero, three
  * period-scoped stat cards, a filter rail, and date-grouped session rows.
@@ -92,8 +89,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [source, setSource] = useState<string | "all">("all");
-  const [projectId, setProjectId] = useState("all");
-  const [status, setStatus] = useState<SessionStatus | "all">("all");
   const [range, setRange] =
     useState<NonNullable<SessionFilter["range"]>>("all");
   const [loading, setLoading] = useState(false);
@@ -110,11 +105,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     () => ({
       ...(keyword ? { keyword } : {}),
       ...(source === "all" ? {} : { source }),
-      ...(projectId === "all" ? {} : { projectId }),
-      ...(status === "all" ? {} : { status }),
       ...(range === "all" ? {} : { range }),
     }),
-    [keyword, projectId, range, source, status],
+    [keyword, range, source],
   );
   const request = useMemo(
     () => ({
@@ -160,11 +153,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         ...new Set([...initialSources, ...page.sessions.map((s) => s.source)]),
       ].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b))),
     [initialSources, page.sessions],
-  );
-  const projects = useMemo(
-    () =>
-      [...new Set(page.sessions.map((session) => session.projectKey))].sort(),
-    [page.sessions],
   );
   const totals = useMemo(
     () => ({
@@ -248,23 +236,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
     setPage((current) => ({ ...current, page: 1 }));
   };
 
-  async function refresh() {
-    if (loading) return;
-    setLoading(true);
-    setError(false);
-    try {
-      const next = await refreshSessionsQuery({ data: request });
-      setPage(next);
-      toast.success(t("sessions.toast.refreshed"));
-    } catch (caught) {
-      setError(true);
-      const ui = toUiError(caught);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.error"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <div className="space-y-4 pb-12">
       <InsightCard
@@ -300,7 +271,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         ))}
       </div>
 
-      {/* 筛选栏：搜索 + 时间 + 项目/状态 + 刷新 + 蒸馏（刷新与批量蒸馏在右侧） */}
+      {/* 筛选栏：搜索 + 时间 + 工具 */}
       <section className="space-y-3">
         <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
           <SearchInput
@@ -318,50 +289,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
               label: t(option.labelKey),
             }))}
           />
-          <select
-            value={projectId}
-            onChange={(event) =>
-              changeFilter(() => setProjectId(event.target.value))
-            }
-            aria-label={t("sessions.project.all")}
-            className="h-[28px] shrink-0 rounded-full bg-surface-2/70 px-3 text-[12px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">{t("sessions.project.all")}</option>
-            {projects.map((project) => (
-              <option key={project} value={project}>
-                {project}
-              </option>
-            ))}
-          </select>
-          <select
-            value={status}
-            onChange={(event) =>
-              changeFilter(() =>
-                setStatus(event.target.value as SessionStatus | "all"),
-              )
-            }
-            aria-label={t("sessions.status.all")}
-            className="h-[28px] shrink-0 rounded-full bg-surface-2/70 px-3 text-[12px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">{t("sessions.status.all")}</option>
-            {Object.entries(STATUS_META).map(([value, meta]) => (
-              <option key={value} value={value}>
-                {t(meta.labelKey)}
-              </option>
-            ))}
-          </select>
-          <TTButton
-            size="sm"
-            onClick={refresh}
-            disabled={loading}
-            title={t("common.refresh")}
-            className="ml-auto"
-          >
-            <RefreshCw
-              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-            />
-            <span className="sr-only">{t("common.refresh")}</span>
-          </TTButton>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 px-1">
@@ -394,9 +321,6 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         {error ? (
           <div className="px-4 py-10 text-center">
             <p className="text-sm font-medium">{t("common.pageLoadFailed")}</p>
-            <TTButton className="mt-3" onClick={refresh}>
-              {t("common.retry")}
-            </TTButton>
           </div>
         ) : page.sessions.length === 0 ? (
           <EmptyState

@@ -15,6 +15,7 @@ export const distill = {
   grainSession: "By session",
   grainProject: "By project",
   stepMaterial: "Select material",
+  stepConfig: "Configure",
   materialProject: "Project",
   materialSession: "Session",
   materialSource: "Source",
@@ -24,7 +25,6 @@ export const distill = {
   drawerTitle: "Material library · Pick session segments",
   drawerSub:
     "Pick a session on the left, then check the exact segments to distill on the right",
-  drawerEsc: "ESC to close",
   joinWhole: "Select all",
   footerSelected: "Selected",
   footerSessions: "session(s)",

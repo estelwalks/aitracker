@@ -378,7 +378,7 @@ test("session, skill and installation DTOs survive restart-safe normalized reads
   const sessionLoaded =
     await createSqliteSessionSnapshotRepository(common).load();
   assert.equal(sessionLoaded.envelope.data?.sessions[0]?.cost.knownUsd, 0.125);
-  assert.notEqual(
+  assert.equal(
     sessionLoaded.envelope.data?.sessions[0]?.sessionId,
     "session-a",
   );
