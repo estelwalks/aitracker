@@ -319,6 +319,8 @@ async function showWidgetWindow(
     // the styled widget, especially on the first menu-bar click.
     await widgetWindow.loadURL(widgetUrl);
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    await waitForWidgetStyles(widgetWindow);
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
     positionWidgetWindow(trayBounds);
     widgetWindow.show();
     widgetWindow.focus();
@@ -365,6 +367,39 @@ function positionWidgetWindow(trayBounds?: Electron.Rectangle): void {
     ? Math.min(Math.max(preferredY, y + 8), y + height - windowHeight - 8)
     : preferredY;
   widgetWindow.setPosition(positionX, positionY, false);
+}
+
+/**
+ * `loadURL()` resolves after the document is available, not after the lazy
+ * widget chunk and its CSS have painted. Waiting for the real card's computed
+ * styles prevents Electron from revealing the transparent window for one
+ * frame with unstyled text on a black compositor surface.
+ */
+async function waitForWidgetStyles(window: BrowserWindow): Promise<void> {
+  await window.webContents
+    .executeJavaScript(
+      `(() => new Promise((resolve) => {
+        const deadline = performance.now() + 1800;
+        const check = () => {
+          const card = document.querySelector('.tt-glass-overview');
+          if (card) {
+            const style = getComputedStyle(card);
+            if (style.display === 'flex' && style.borderRadius === '30px') {
+              requestAnimationFrame(() => requestAnimationFrame(resolve));
+              return;
+            }
+          }
+          if (performance.now() >= deadline) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      }))()`,
+      true,
+    )
+    .catch(() => undefined);
 }
 
 const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
