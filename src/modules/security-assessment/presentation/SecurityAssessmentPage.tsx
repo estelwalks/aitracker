@@ -45,6 +45,9 @@ const IDLE_STATE: SecurityScanStateView = {
   resultIds: [],
 };
 
+const ACTIVE_SCAN_POLL_INTERVAL_MS = 450;
+const IDLE_SCAN_POLL_INTERVAL_MS = 5_000;
+
 export function SecurityAssessmentPage() {
   const { t, format } = useI18n();
   const clientRef = useRef<SecurityClient | null>(null);
@@ -148,7 +151,7 @@ export function SecurityAssessmentPage() {
   }, []);
 
   useEffect(() => {
-    if (!isScanActive(scanState.status)) return;
+    if (connection !== "available") return;
     const client = clientRef.current;
     if (client == null) return;
     let disposed = false;
@@ -174,13 +177,19 @@ export function SecurityAssessmentPage() {
         busy = false;
       }
     };
-    const timer = window.setInterval(() => void poll(), 450);
+    // Keep a low-frequency watcher while idle so a background automatic scan
+    // that starts after the page mounted is reflected in the UI. Active scans
+    // retain the fast progress cadence used by the manual-scan flow.
+    const interval = isScanActive(scanState.status)
+      ? ACTIVE_SCAN_POLL_INTERVAL_MS
+      : IDLE_SCAN_POLL_INTERVAL_MS;
+    const timer = window.setInterval(() => void poll(), interval);
     void poll();
     return () => {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [reportError, scanState.status]);
+  }, [connection, reportError, scanState.status]);
 
   useEffect(() => {
     const previous = previousStatus.current;
