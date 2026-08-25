@@ -29,7 +29,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "codex",
       "name": "Codex",
       "nameZh": "Codex",
-      "icon": "https://chatgpt.com/cdn/assets/favicon-l4nq08hd.svg",
+      "icon": "other",
       "color": "#10a37f",
       "platforms": {
         "macos": "supported",
@@ -71,7 +71,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "kiro",
       "name": "Kiro",
       "nameZh": "Kiro",
-      "icon": "https://kiro.dev/icon.svg?fe599162bb293ea0",
+      "icon": "other",
       "color": "#01a4ff",
       "platforms": {
         "macos": "supported",
@@ -92,7 +92,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "gemini-cli",
       "name": "Gemini CLI",
       "nameZh": "Gemini CLI",
-      "icon": "https://geminicli.com/favicon.ico",
+      "icon": "other",
       "color": "#4285f4",
       "platforms": {
         "macos": "supported",
@@ -113,7 +113,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "opencode",
       "name": "OpenCode",
       "nameZh": "OpenCode",
-      "icon": "https://opencode.ai/favicon-v3.ico",
+      "icon": "other",
       "color": "#f59e0b",
       "platforms": {
         "macos": "supported",
@@ -155,7 +155,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "every-code",
       "name": "Every Code",
       "nameZh": "Every Code",
-      "icon": "https://justevery.com/img/favicon.svg",
+      "icon": "other",
       "color": "#00c2a8",
       "platforms": {
         "macos": "supported",
@@ -281,7 +281,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "workbuddy",
       "name": "WorkBuddy",
       "nameZh": "WorkBuddy",
-      "icon": "https://codebuddy-1328495429.cos.accelerate.myqcloud.com/web/workbuddy/7c350554d6e526d96bb1d2ba32fd594611e9e711/assets/logo.svg",
+      "icon": "other",
       "color": "#22d3ee",
       "platforms": {
         "macos": "supported",
@@ -386,7 +386,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "pi",
       "name": "pi",
       "nameZh": "pi",
-      "icon": "https://pi.dev/favicon.svg",
+      "icon": "other",
       "color": "#fe2857",
       "platforms": {
         "macos": "supported",
@@ -407,7 +407,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "craft",
       "name": "Craft Agents",
       "nameZh": "Craft Agents",
-      "icon": "https://agents.craft.do/favicon.ico",
+      "icon": "other",
       "color": "#f97316",
       "platforms": {
         "macos": "supported",
@@ -428,7 +428,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "roo-code",
       "name": "Roo Code",
       "nameZh": "Roo Code",
-      "icon": "https://roomote.dev/favicon.ico",
+      "icon": "other",
       "color": "#f0524d",
       "platforms": {
         "macos": "supported",
@@ -449,7 +449,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "zed",
       "name": "Zed Agent",
       "nameZh": "Zed Agent",
-      "icon": "https://zed.dev/favicon_black_32.png",
+      "icon": "other",
       "color": "#3b82f6",
       "platforms": {
         "macos": "supported",
@@ -470,7 +470,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "goose",
       "name": "Goose",
       "nameZh": "Goose",
-      "icon": "https://goose-docs.ai/img/favicon.ico",
+      "icon": "other",
       "color": "#22c55e",
       "platforms": {
         "macos": "supported",
@@ -491,7 +491,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "droid",
       "name": "Droid",
       "nameZh": "Droid",
-      "icon": "https://factory.ai/favicon.svg",
+      "icon": "other",
       "color": "#1f6feb",
       "platforms": {
         "macos": "supported",
@@ -512,7 +512,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "mimo",
       "name": "Mimo Code",
       "nameZh": "Mimo Code",
-      "icon": "https://cdn.cnbj1.fds.api.mi-img.com/aife/mimo-blog-fe/doc_build/mimo.ico",
+      "icon": "other",
       "color": "#ff6900",
       "platforms": {
         "macos": "supported",
@@ -596,7 +596,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "aipy",
       "name": "AiPy",
       "nameZh": "AiPy",
-      "icon": "https://www.aipyaipy.com/image/logo.webp",
+      "icon": "other",
       "color": "#14b8a6",
       "legacy": true,
       "platforms": {
@@ -618,7 +618,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cline",
       "name": "Cline",
       "nameZh": "Cline",
-      "icon": "https://cline.bot/assets/branding/favicons/favicon-32x32.png",
+      "icon": "other",
       "color": "#5b8def",
       "legacy": true,
       "platforms": {
@@ -640,7 +640,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "qwen",
       "name": "Qwen CLI",
       "nameZh": "Qwen CLI",
-      "icon": "https://img.alicdn.com/imgextra/i4/O1CN01OXv3EM1FN8t9W4P79_!!6000000000474-2-tps-80-80.png",
+      "icon": "other",
       "color": "#615ced",
       "platforms": {
         "macos": "supported",
@@ -661,7 +661,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "commandcode",
       "name": "Command Code",
       "nameZh": "Command Code",
-      "icon": "https://commandcode.ai/favicon.ico",
+      "icon": "other",
       "color": "#8b5cf6",
       "platforms": {
         "macos": "supported",
@@ -682,7 +682,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "proma",
       "name": "Proma",
       "nameZh": "Proma",
-      "icon": "https://proma.cool/favicon.png",
+      "icon": "other",
       "color": "#f97316",
       "platforms": {
         "macos": "supported",
@@ -703,7 +703,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "qodercn",
       "name": "Qoder CN",
       "nameZh": "Qoder CN",
-      "icon": "https://img.alicdn.com/imgextra/i3/O1CN01KliT1u1jEq947NlKH_!!6000000004517-55-tps-180-180.svg",
+      "icon": "other",
       "color": "#22c55e",
       "platforms": {
         "macos": "supported",
@@ -745,7 +745,7 @@ export const PUBLIC_TOOL_MANIFEST: PublicToolManifest = {
       "id": "cherrystudio",
       "name": "Cherry Studio",
       "nameZh": "Cherry Studio",
-      "icon": "https://www.cherryai.com/assets/logo-Bz2G6ABc.png",
+      "icon": "other",
       "color": "#ec4899",
       "platforms": {
         "macos": "supported",

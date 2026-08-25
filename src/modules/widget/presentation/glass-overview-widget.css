@@ -130,32 +130,6 @@
   box-shadow: 0 0 0 3px oklch(0.62 0.22 25 / 0.09);
 }
 
-.tt-glass-header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.tt-glass-header-actions button {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  color: var(--glass-muted);
-  cursor: pointer;
-  background: oklch(1 0 0 / 0.09);
-  border: 1px solid oklch(1 0 0 / 0.16);
-  border-radius: 999px;
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.16);
-  transition: 160ms ease;
-}
-
-.tt-glass-header-actions button:hover {
-  color: var(--glass-ink);
-  background: oklch(1 0 0 / 0.2);
-  transform: translateY(-1px);
-}
-
-.tt-glass-header-actions svg,
 .tt-glass-footer svg,
 .tt-glass-security > svg {
   width: 15px;

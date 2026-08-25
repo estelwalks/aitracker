@@ -4,6 +4,10 @@ import { ensureBackgroundRuntimeStarted } from "./app/bootstrap.server.ts";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleDesktopStateBrokerRequest } from "./app/desktop-state-broker.server.ts";
+import {
+  STARTUP_FAILURE_CODE_HEADER,
+  startupFailureCode,
+} from "./app/startup-diagnostics.server.ts";
 
 // SECURITY_API_PREFIX must stay in sync with electron/security-http-api.ts.
 const SECURITY_API_PREFIX = "/api/security";
@@ -106,8 +110,10 @@ async function maybeHandleSecurityDevRequest(
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      // The bootstrap is a no-op for web development by policy, while desktop
-      // composition may inject the scheduler before the first SSR request.
+      // First-run collectors form the desktop startup barrier only while a
+      // required local snapshot is empty. An initialized desktop can render
+      // its persisted data while stale collectors continue in the background.
+      // Web development resolves this bootstrap to a policy no-op.
       await ensureBackgroundRuntimeStarted();
       const desktopState = await handleDesktopStateBrokerRequest(request);
       if (desktopState) return desktopState;
@@ -122,12 +128,19 @@ export default {
       return markDynamicResponseNoStore(normalized);
     } catch (error) {
       console.error(error);
+      const headers = new Headers({
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": NO_STORE,
+      });
+      // The Electron warmup request must distinguish an unavailable database
+      // from a generic server failure. This stable code contains neither a
+      // path nor a driver message and is emitted only when startup fails.
+      if (new URL(request.url).pathname === "/api/desktop-state/preferences") {
+        headers.set(STARTUP_FAILURE_CODE_HEADER, startupFailureCode(error));
+      }
       return new Response(renderErrorPage(request.url), {
         status: 500,
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": NO_STORE,
-        },
+        headers,
       });
     }
   },

@@ -1139,7 +1139,6 @@ export function ToolOverview({
         dotsLabel={t("insights.dots")}
         rotateLabel={t("skills.agentOverview.rotateInsight")}
         headingLevel={2}
-        showSeverity={false}
       />
 
       <AgentMetricCards

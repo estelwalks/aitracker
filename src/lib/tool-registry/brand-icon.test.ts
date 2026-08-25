@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { brandColorOf } from "../../components/BrandIcon.tsx";
+import { PUBLIC_TOOL_MANIFEST } from "./public-manifest.generated.ts";
 
 test("brandColorOf prefers the registry display.color over name heuristics", () => {
   // 配置值（definitions/*.tool.json 的 display.color），按 id 或展示名命中
@@ -11,4 +12,13 @@ test("brandColorOf prefers the registry display.color over name heuristics", () 
   assert.equal(brandColorOf("windsurf"), "#09b6a2");
   // 模型名等未知字符串回退 currentColor
   assert.equal(brandColorOf("gpt-4o-unknown-model"), "#10a37f");
+});
+
+test("public tool icons are offline registry kinds", () => {
+  for (const tool of PUBLIC_TOOL_MANIFEST.tools) {
+    assert.ok(
+      tool.icon == null || !/^https?:\/\//i.test(tool.icon),
+      `${tool.id} must not use a remote icon URL`,
+    );
+  }
 });

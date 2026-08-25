@@ -7,6 +7,10 @@ import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
 import {
+  desktopHeavyCollectorLimit,
+  shouldAwaitDesktopStartupTask,
+} from "./desktop-startup-barrier.ts";
+import {
   createDatabaseRuntime,
   type DatabaseRuntime,
 } from "./database-runtime.server.ts";
@@ -637,10 +641,30 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   });
 
   // P5-T5-06: the scheduler's heavy collectors share the global resource
-  // budget (maxHeavyCollectors = 1 from the runtime policy).
+  // budget. Windows overlaps two collectors to shorten its initialization
+  // critical path; macOS retains the generated policy limit of one. Both
+  // platforms may render an existing snapshot while a stale refresh runs.
   const { createResourceBudget } =
     await import("../platform/runtime/resource-budget.ts");
-  const resourceBudget = createResourceBudget();
+  const windowsHeavyLimit = desktopHeavyCollectorLimit();
+  const resourceBudget = createResourceBudget(
+    windowsHeavyLimit == null ? undefined : { heavy: windowsHeavyLimit },
+  );
+
+  const startupSnapshots: Partial<
+    Record<
+      string,
+      {
+        ensureHydrated(): Promise<void>;
+        readLatest(): { readonly data: unknown | null };
+      }
+    >
+  > = {
+    "usage.refresh": usageSnapshot,
+    "sessions.refresh": sessionSnapshot,
+    "skills.refresh": skillSnapshot,
+    "installation.refresh": installationSnapshot,
+  };
 
   const scheduler = createTaskScheduler({
     preferences,
@@ -648,6 +672,18 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     clock,
     executors: executorRegistry.executors,
     resourceBudget,
+    shouldAwaitStartupTask:
+      process.platform === "darwin" || process.platform === "win32"
+        ? async (definition) => {
+            const snapshot = startupSnapshots[definition.id];
+            await snapshot?.ensureHydrated();
+            return shouldAwaitDesktopStartupTask({
+              platform: process.platform,
+              taskId: definition.id,
+              hasPersistedSnapshot: snapshot?.readLatest().data != null,
+            });
+          }
+        : undefined,
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });

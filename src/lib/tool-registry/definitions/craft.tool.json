@@ -5,7 +5,7 @@
   "display": {
     "name": "Craft Agents",
     "nameZh": "Craft Agents",
-    "icon": "https://agents.craft.do/favicon.ico",
+    "icon": "other",
     "color": "#f97316"
   },
   "platforms": {

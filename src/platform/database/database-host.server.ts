@@ -224,6 +224,12 @@ export class DatabaseHost implements SqliteDatabasePort {
     };
   }
 
+  /** Reclaims free pages after a destructive cache cleanup. */
+  vacuum(): void {
+    this.assertOpen("write");
+    this.connection.exec("VACUUM");
+  }
+
   /** Closes the connection and releases the singleton registration. */
   close(): void {
     if (this.activeBorrows > 0) {

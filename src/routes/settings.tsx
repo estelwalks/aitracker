@@ -13,23 +13,21 @@ export const Route = createFileRoute("/settings")({
   loader: async ({ location }) => {
     const search = location.search as Record<string, unknown>;
     const section = parseSettingsSection(search.section);
+    const locale = resolveLocaleFromSearch(search);
     try {
       const usage = await getStorageUsageQuery();
       return {
-        locale: resolveLocaleFromSearch(search),
+        locale,
         section,
         storageUsage: usage,
         storageError: null,
       };
-    } catch (error) {
+    } catch {
       return {
-        locale: resolveLocaleFromSearch(search),
+        locale,
         section,
         storageUsage: null,
-        storageError:
-          error instanceof Error
-            ? error.message
-            : getMessage(catalogs["zh-CN"], "errors.generic"),
+        storageError: getMessage(catalogs[locale], "errors.generic"),
       };
     }
   },

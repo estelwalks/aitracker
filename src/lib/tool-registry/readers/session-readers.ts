@@ -20,7 +20,10 @@ import type { SessionRecord } from "../../local-sessions/types.ts";
  * the built-in readers the tool home directory (`~/.claude`, `~/.codex`,
  * `~/.grok`), from which the implementation derives its own sub-roots.
  */
-export type SessionReader = (root: string) => Promise<SessionRecord[]>;
+export type SessionReader = (
+  root: string,
+  signal?: AbortSignal,
+) => Promise<SessionRecord[]>;
 
 export interface SessionReaderDefinition {
   /** Controlled key declared in `capabilities.sessions.reader`. */

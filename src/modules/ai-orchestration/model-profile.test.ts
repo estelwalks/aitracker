@@ -351,14 +351,15 @@ test("model profile list accepts common provider envelopes and model field names
   }
 });
 
-test("model profile list falls back on HTTP failure and test maps timeout", async () => {
+test("model profile list reports HTTP failure without default models", async () => {
   const httpFailure = createModelProfileNetworkOperations({
     fetchFn: mockFetch(async () => new Response("no", { status: 503 })),
   });
   const failed = await httpFailure.listModels(VALID_CUSTOM);
-  assert.equal(failed.ok, true);
+  assert.equal(failed.ok, false);
   assert.equal(failed.source, "fallback");
-  assert.deepEqual(failed.models, ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"]);
+  assert.equal(failed.models, undefined);
+  assert.match(failed.message ?? "", /HTTP 503/);
 
   const timeout = createModelProfileNetworkOperations({
     timeoutMs: 5,

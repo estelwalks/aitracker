@@ -24,7 +24,6 @@ export const settings = {
   scan: {
     onDemand: "扫描方式",
     onDemandDesc: "扫描按需触发，读取本机受支持 AI 工具日志并建立增量索引。",
-    retentionNote: "以下保留期同样作用于用量与扫描缓存：",
   },
   modelProfiles: {
     count: "模型配置（{count}）",
@@ -100,7 +99,7 @@ export const settings = {
       desc: "当前没有可用的安全检测服务（未连接桌面端或本机伴随服务）。自动扫描计划需要该服务才能保存。",
       retry: "重新连接",
     },
-    llmReview: "AI 辅助检测",
+    llmReview: "AI检测",
     llmReviewHint:
       "开启后，full 检测会将待扫描 Skill 的文件内容发送到所选模型端点；本地端点的数据留在本机。规则判定始终保留。",
     llmReviewUnconfiguredHint:
@@ -123,6 +122,15 @@ export const settings = {
       dirHint:
         "输入要纳入自动扫描的 Skill 根目录（绝对路径），未填写时自动扫描不会执行",
       notify: "告警通知",
+      lastRun: "最近一次扫描",
+      nextRun: "下次扫描",
+      neverRun: "尚未运行",
+      allUnchanged: "{time} · 已检查 {count} 项，内容均未变化",
+      runSummary: "{time} · 完成 {completed}，失败 {failed}，跳过 {skipped}",
+      pending: "等待当前扫描结束后重试",
+      disabledStatus: "未启用",
+      processRequiredHint:
+        "应用在运行或隐藏到菜单栏时会准时执行；完全退出期间错过的任务会在下次启动后补跑",
       saved: "扫描计划已保存",
       saveFailed: "保存扫描计划失败",
       loadFailed: "读取扫描计划失败",
@@ -156,15 +164,24 @@ export const settings = {
   retentionForever: "永久",
   storage: "存储占用",
   storageExceedsSoftCap: "（已超过 500MB，建议清理缓存）",
-  clearCache: "清除可再生成本地索引/缓存",
+  clearCache: "清除缓存",
   clearCacheHint:
-    "仅删除当前 {appName} 数据目录下的缓存；不会删除 AI 工具日志、适配器配置或安全历史",
+    "仅删除当前 {appName} 数据目录下的缓存；不会删除本地采集数据、AI 工具日志、适配器配置或安全历史",
   clearCacheButton: "清除缓存",
-  clearCacheDialogTitle: "确认清除本地索引/缓存",
+  clearCacheDialogTitle: "确认清除缓存",
   clearCacheDialogDesc:
-    "将删除当前 {appName} 受控目录中的可再生成索引和缓存。外部 AI 工具日志、适配器配置、应用偏好与安全历史不会受影响。",
+    "将删除当前 {appName} 受控目录中的缓存并回收磁盘空间。本地采集数据、外部 AI 工具日志、适配器配置、应用偏好与安全历史不会受影响。",
   clearing: "清除中...",
   confirmClearCache: "确认清除缓存",
+  clearCollectedData: "清除采集数据",
+  clearCollectedDataHint:
+    "删除本地已采集的结果并重新初始化；不会删除原始 AI 工具日志、应用设置或适配器配置",
+  clearCollectedDataButton: "清除采集数据",
+  clearCollectedDataDialogTitle: "确认清除采集数据",
+  clearCollectedDataDialogDesc:
+    "将删除当前 {appName} 中已采集的本地结果并重新初始化数据，随后在后台从原始日志重新收集。原始 AI 工具日志、应用设置、适配器配置和安全历史不会受影响。",
+  clearingCollectedData: "清除采集数据中...",
+  confirmClearCollectedData: "确认清除并重新收集",
   resetPrefs: "重置应用偏好与安全历史",
   resetPrefsHint:
     "重置设置、更新记录、安全检测历史与今日扫描次数；不会删除本地索引/缓存或外部 AI 工具日志",
@@ -234,14 +251,14 @@ export const settings = {
       stale: "数据可能过期",
     },
     fallbackStatus: {
-      "enhancer-unavailable": "AI 增强不可用，已显示规则洞察",
+      "enhancer-unavailable": "AI 增强暂不可用，去配置AI 模型",
       "budget-exceeded": "AI 增强已达调用上限，已显示规则洞察",
       timeout: "AI 增强超时，已显示规则洞察",
       "enhancer-failed": "AI 增强失败，已显示规则洞察",
       "invalid-output": "AI 返回格式无效，已显示规则洞察",
     },
     section: {
-      title: "今日洞察",
+      title: "AI洞察",
       desc: "关闭时仅使用本地规则；打开后自动调用模型生成增强洞察。",
       mode: "生成方式",
       modeRules: "仅本地规则",
@@ -260,8 +277,8 @@ export const settings = {
       dailyLimit: "每日调用上限",
       dailyLimitHint: "留空默认 30 次，由系统兜底",
       save: "保存",
-      saved: "今日洞察设置已保存",
-      saveFailed: "保存今日洞察设置失败",
+      saved: "AI洞察设置已保存",
+      saveFailed: "保存 AI洞察设置失败",
     },
   },
   toast: {
@@ -274,13 +291,16 @@ export const settings = {
     keepForever: "已设置为永久保留缓存",
     retentionSaved: "已保存缓存保留策略",
     retentionFailed: "保存保留策略失败",
-    cleared: "已清理 {count} 个本地索引/缓存文件（{size}）",
-    nothingToClear: "没有可清理的本地索引或缓存",
-    clearFailed: "清除数据失败",
+    cleared: "已清理 {count} 项缓存数据，释放 {size}",
+    nothingToClear: "没有可清理的缓存",
+    clearFailed: "清除缓存失败",
+    collectedDataCleared: "已清除 {count} 项采集数据，释放 {size}",
+    noCollectedDataToClear: "没有可清除的采集数据",
+    collectedDataClearFailed: "清除采集数据失败",
     resetDone: "已重置 {count} 项应用偏好与安全历史",
     resetDoneBrowser: "已重置浏览器中的应用偏好与安全历史",
     resetFailed: "重置应用偏好失败",
-    llmReviewSaved: "AI 辅助检测设置已保存",
-    llmReviewSaveFailed: "保存 AI 辅助检测设置失败",
+    llmReviewSaved: "AI检测设置已保存",
+    llmReviewSaveFailed: "保存 AI检测设置失败",
   },
 } as const;

@@ -65,6 +65,8 @@ export interface ScanLocalSessionsOptions {
   registry?: CompiledRegistry;
   /** P5-T5-03: real cancellation; checked before and during tool scans. */
   signal?: AbortSignal;
+  /** Test seam for Windows-only deep cancellation behavior. */
+  platform?: NodeJS.Platform;
 }
 
 interface JsonObject {
@@ -249,15 +251,18 @@ interface FileCandidate {
 async function collectJsonlFiles(
   roots: string[],
   matches: (relativePath: string, name: string) => boolean,
+  signal?: AbortSignal,
 ): Promise<FileCandidate[]> {
   const files: FileCandidate[] = [];
   const seen = new Set<string>();
   let discoveredEntries = 0;
 
   for (const root of roots) {
+    signal?.throwIfAborted();
     if (!(await directoryAvailable(root))) continue;
     const pending = [root];
     while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+      signal?.throwIfAborted();
       const directoryPath = pending.pop();
       if (directoryPath == null) break;
       let directory;
@@ -267,6 +272,7 @@ async function collectJsonlFiles(
         continue;
       }
       for await (const entry of directory) {
+        signal?.throwIfAborted();
         discoveredEntries += 1;
         if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
         const entryPath = join(directoryPath, entry.name);
@@ -421,9 +427,10 @@ function claudeFallbackTitle(
 
 async function scanClaudeCodeSessions(
   claudeDirectory: string,
+  signal?: AbortSignal,
 ): Promise<SessionRecord[]> {
   const projectsRoot = join(claudeDirectory, "projects");
-  const files = await collectJsonlFiles([projectsRoot], () => true);
+  const files = await collectJsonlFiles([projectsRoot], () => true, signal);
   const fragments = new Map<string, SessionFragment>();
   const usageByMessage = new Map<
     string,
@@ -436,6 +443,7 @@ async function scanClaudeCodeSessions(
   const assistantMessages = new Set<string>();
 
   for (const file of files) {
+    signal?.throwIfAborted();
     let sawSessionId = false;
     let sawUsefulRecord = false;
     const local: {
@@ -684,7 +692,9 @@ function asArray(value: unknown): unknown[] {
 async function readCodexSessionIndex(
   codexDirectory: string,
   cache: Map<string, { mtimeMs: number; titles: Map<string, string> }>,
+  signal?: AbortSignal,
 ): Promise<Map<string, string>> {
+  signal?.throwIfAborted();
   const indexPath = join(codexDirectory, "session_index.jsonl");
   const info = await stat(indexPath).catch(() => undefined);
   if (info == null) return new Map();
@@ -758,6 +768,7 @@ function codexFallbackTitle(
 
 async function scanCodexSessions(
   codexDirectory: string,
+  signal?: AbortSignal,
 ): Promise<SessionRecord[]> {
   const sessionsRoot = join(codexDirectory, "sessions");
   const archivedRoot = join(codexDirectory, "archived_sessions");
@@ -765,16 +776,22 @@ async function scanCodexSessions(
     string,
     { mtimeMs: number; titles: Map<string, string> }
   >();
-  const titles = await readCodexSessionIndex(codexDirectory, indexCache);
+  const titles = await readCodexSessionIndex(
+    codexDirectory,
+    indexCache,
+    signal,
+  );
 
   const files = await collectJsonlFiles(
     [sessionsRoot, archivedRoot],
     (relativePath) => CODEX_ROLLOUT_PATTERN.test(relativePath),
+    signal,
   );
 
   const fragments = new Map<string, SessionFragment>();
 
   for (const file of files) {
+    signal?.throwIfAborted();
     const fileName = basename(file.path);
     const fallbackId = codexSessionIdFromFilename(fileName);
     let resolvedId: string | undefined;
@@ -1013,6 +1030,7 @@ async function readJsonFile<T>(path: string): Promise<T | undefined> {
 
 async function collectGrokSessionDirectories(
   sessionsRoot: string,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   if (!(await directoryAvailable(sessionsRoot))) return [];
   const sessionDirectories: string[] = [];
@@ -1020,6 +1038,7 @@ async function collectGrokSessionDirectories(
 
   const pending = [sessionsRoot];
   while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+    signal?.throwIfAborted();
     const directoryPath = pending.pop();
     if (directoryPath == null) break;
     let directory;
@@ -1031,6 +1050,7 @@ async function collectGrokSessionDirectories(
     let hasUpdatesJsonl = false;
     const subdirectories: string[] = [];
     for await (const entry of directory) {
+      signal?.throwIfAborted();
       discoveredEntries += 1;
       if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
       if (entry.name === "updates.jsonl") hasUpdatesJsonl = true;
@@ -1049,13 +1069,18 @@ async function collectGrokSessionDirectories(
 
 async function scanGrokSessions(
   grokDirectory: string,
+  signal?: AbortSignal,
 ): Promise<SessionRecord[]> {
   const sessionsRoot = join(grokDirectory, "sessions");
-  const sessionDirectories = await collectGrokSessionDirectories(sessionsRoot);
+  const sessionDirectories = await collectGrokSessionDirectories(
+    sessionsRoot,
+    signal,
+  );
 
   const fragments = new Map<string, SessionFragment>();
 
   for (const sessionDirectory of sessionDirectories) {
+    signal?.throwIfAborted();
     const summary = asObject(
       await readJsonFile<unknown>(join(sessionDirectory, "summary.json")),
     );
@@ -1281,6 +1306,7 @@ function isDshSubagentTool(name: string): boolean {
 /* DSH session files live at ~/.dsh/sessions/<workspace>/<session-id>/, named session.jsonl or session.jsonl.zstd. */
 async function collectDshSessionFiles(
   sessionsRoot: string,
+  signal?: AbortSignal,
 ): Promise<FileCandidate[]> {
   const files: FileCandidate[] = [];
   if (!(await directoryAvailable(sessionsRoot))) return files;
@@ -1288,6 +1314,7 @@ async function collectDshSessionFiles(
   let discoveredEntries = 0;
   const pending = [sessionsRoot];
   while (pending.length > 0 && discoveredEntries < MAX_DIRECTORY_ENTRIES) {
+    signal?.throwIfAborted();
     const directoryPath = pending.pop();
     if (directoryPath == null) break;
     let directory;
@@ -1297,6 +1324,7 @@ async function collectDshSessionFiles(
       continue;
     }
     for await (const entry of directory) {
+      signal?.throwIfAborted();
       discoveredEntries += 1;
       if (discoveredEntries >= MAX_DIRECTORY_ENTRIES) break;
       const entryPath = join(directoryPath, entry.name);
@@ -1333,12 +1361,16 @@ async function collectDshSessionFiles(
   return [...byDirectory.values()].map((path) => ({ path }));
 }
 
-async function scanDshSessions(dshDirectory: string): Promise<SessionRecord[]> {
+async function scanDshSessions(
+  dshDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
   const sessionsRoot = join(dshDirectory, "sessions");
-  const files = await collectDshSessionFiles(sessionsRoot);
+  const files = await collectDshSessionFiles(sessionsRoot, signal);
   const fragments = new Map<string, SessionFragment>();
 
   for (const file of files) {
+    signal?.throwIfAborted();
     const fallbackSessionId = basename(dirname(file.path));
     let content: string;
     try {
@@ -1363,6 +1395,7 @@ async function scanDshSessions(dshDirectory: string): Promise<SessionRecord[]> {
     let subagentCalls = 0;
 
     for (const line of content.split("\n")) {
+      signal?.throwIfAborted();
       if (line.trim().length === 0) continue;
       let record: JsonObject;
       try {
@@ -1628,6 +1661,10 @@ export async function scanLocalSessions(
   const now = options.now ?? new Date();
   // P5-T5-03: stop before starting any per-tool I/O when cancelled.
   options.signal?.throwIfAborted();
+  const traversalSignal =
+    (options.platform ?? process.platform) === "win32"
+      ? options.signal
+      : undefined;
   const isolatedUsageHome = process.env[ENV.USAGE_HOME]?.trim();
   const homeDirectory =
     options.homeDirectory ??
@@ -1662,7 +1699,10 @@ export async function scanLocalSessions(
           : reader.defaultRoots.map((root) => join(homeDirectory, root));
       const scanned = await Promise.all(
         roots.map((root) =>
-          reader.scan(root).catch(() => [] as SessionRecord[]),
+          reader.scan(root, traversalSignal).catch(() => {
+            traversalSignal?.throwIfAborted();
+            return [] as SessionRecord[];
+          }),
         ),
       );
       return scanned.flat();

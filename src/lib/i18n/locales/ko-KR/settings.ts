@@ -26,7 +26,6 @@ export const settings = {
     onDemand: "스캔 방식",
     onDemandDesc:
       "스캔은 요청 시 실행되며, 지원되는 로컬 AI 도구 로그를 읽고 증분 인덱스를 구축합니다.",
-    retentionNote: "아래 보존 기간은 사용량 및 스캔 캐시에도 적용됩니다:",
   },
   modelProfiles: {
     count: "모델 설정（{count}）",
@@ -103,7 +102,7 @@ export const settings = {
       desc: "사용 가능한 보안 검사 서비스가 없습니다(데스크톱 앱 또는 로컬 컴패니언 미연결). 자동 검사 일정을 저장하려면 해당 서비스가 필요합니다.",
       retry: "다시 연결",
     },
-    llmReview: "AI 보조 검사",
+    llmReview: "AI 검사",
     llmReviewHint:
       "활성화하면 full 검사가 스캔할 Skill 파일 내용을 선택한 모델 엔드포인트로 전송합니다. 로컬 엔드포인트를 사용하면 데이터가 이 기기에 남으며 규칙 기반 판정은 항상 유지됩니다.",
     llmReviewUnconfiguredHint:
@@ -127,6 +126,15 @@ export const settings = {
       dirHint:
         "검사할 Skill 루트 디렉터리(절대 경로)를 입력하세요. 입력하지 않으면 자동 검사가 실행되지 않습니다.",
       notify: "경고 알림",
+      lastRun: "최근 검사",
+      nextRun: "다음 검사",
+      neverRun: "아직 실행되지 않음",
+      allUnchanged: "{time} · {count}개 확인, 모두 변경 없음",
+      runSummary: "{time} · 완료 {completed}, 실패 {failed}, 건너뜀 {skipped}",
+      pending: "현재 검사 완료 후 다시 시도합니다",
+      disabledStatus: "사용 안 함",
+      processRequiredHint:
+        "앱이 열려 있거나 메뉴 막대에 있을 때 제시간에 실행됩니다. 종료 중 놓친 검사는 다음 실행 후 보충합니다.",
       saved: "검사 일정을 저장했습니다",
       saveFailed: "검사 일정을 저장하지 못했습니다",
       loadFailed: "검사 일정을 읽지 못했습니다",
@@ -162,15 +170,24 @@ export const settings = {
   retentionForever: "무기한",
   storage: "저장 공간 사용량",
   storageExceedsSoftCap: "（500MB 초과, 캐시 정리를 권장합니다）",
-  clearCache: "재생성 가능한 로컬 인덱스/캐시 정리",
+  clearCache: "캐시 정리",
   clearCacheHint:
-    "현재 {appName} 데이터 디렉터리 안의 캐시만 삭제합니다. AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
+    "현재 {appName} 데이터 디렉터리 안의 캐시만 삭제합니다. 로컬 수집 데이터, AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
   clearCacheButton: "캐시 정리",
-  clearCacheDialogTitle: "로컬 인덱스/캐시를 정리하시겠습니까?",
+  clearCacheDialogTitle: "캐시를 정리하시겠습니까?",
   clearCacheDialogDesc:
-    "{appName} 관리 디렉터리 안의 재생성 가능한 인덱스와 캐시가 삭제됩니다. 외부 AI 도구 로그, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
+    "{appName} 관리 디렉터리 안의 캐시를 삭제하고 디스크 공간을 회수합니다. 로컬 수집 데이터, 외부 AI 도구 로그, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
   clearing: "정리 중...",
   confirmClearCache: "캐시 정리",
+  clearCollectedData: "수집 데이터 삭제",
+  clearCollectedDataHint:
+    "로컬로 수집한 결과를 삭제하고 데이터를 초기화합니다. 원본 AI 도구 로그, 앱 설정 및 어댑터 구성은 유지됩니다",
+  clearCollectedDataButton: "수집 데이터 삭제",
+  clearCollectedDataDialogTitle: "수집 데이터를 삭제하시겠습니까?",
+  clearCollectedDataDialogDesc:
+    "{appName}에서 수집한 로컬 결과를 삭제하고 데이터를 초기화한 뒤 원본 로그에서 백그라운드로 다시 수집합니다. 원본 AI 도구 로그, 앱 설정, 어댑터 구성 및 보안 기록에는 영향을 주지 않습니다.",
+  clearingCollectedData: "수집 데이터 삭제 중…",
+  confirmClearCollectedData: "삭제 후 다시 수집",
   resetPrefs: "앱 설정 및 보안 기록 초기화",
   resetPrefsHint:
     "설정, 업데이트 기록, 보안 검사 기록과 오늘의 검사 횟수를 초기화합니다. 로컬 인덱스/캐시나 외부 AI 도구 로그는 삭제하지 않습니다",
@@ -241,7 +258,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI 강화를 사용할 수 없어 규칙 기반 인사이트를 표시합니다",
+        "AI 강화는 일시적으로 사용할 수 없습니다. AI 모델을 설정하세요",
       "budget-exceeded":
         "AI 강화 호출 한도에 도달하여 규칙 기반 인사이트를 표시합니다",
       timeout: "AI 강화 시간이 초과되어 규칙 기반 인사이트를 표시합니다",
@@ -250,7 +267,7 @@ export const settings = {
         "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
     },
     section: {
-      title: "오늘의 인사이트",
+      title: "AI 인사이트",
       desc: "끄면 로컬 규칙만 사용하고, 켜면 모델을 호출해 인사이트를 강화합니다.",
       mode: "생성 방식",
       modeRules: "로컬 규칙만",
@@ -286,13 +303,17 @@ export const settings = {
     keepForever: "캐시를 무기한 보존하도록 설정했습니다",
     retentionSaved: "캐시 보존 정책을 저장했습니다",
     retentionFailed: "보존 정책 저장에 실패했습니다",
-    cleared: "로컬 인덱스/캐시 파일 {count}개를 정리했습니다（{size}）",
-    nothingToClear: "정리할 로컬 인덱스나 캐시가 없습니다",
-    clearFailed: "데이터 정리에 실패했습니다",
+    cleared: "캐시 데이터 {count}개를 정리하고 {size}를 회수했습니다",
+    nothingToClear: "정리할 캐시가 없습니다",
+    clearFailed: "캐시 정리에 실패했습니다",
+    collectedDataCleared:
+      "수집 데이터 {count}개를 삭제하고 {size}를 회수했습니다",
+    noCollectedDataToClear: "삭제할 수집 데이터가 없습니다",
+    collectedDataClearFailed: "수집 데이터 삭제에 실패했습니다",
     resetDone: "앱 설정과 보안 기록 {count}개를 초기화했습니다",
     resetDoneBrowser: "브라우저의 앱 설정과 보안 기록을 초기화했습니다",
     resetFailed: "앱 설정 초기화에 실패했습니다",
-    llmReviewSaved: "AI 보조 검사 설정을 저장했습니다",
-    llmReviewSaveFailed: "AI 보조 검사 설정 저장에 실패했습니다",
+    llmReviewSaved: "AI 검사 설정을 저장했습니다",
+    llmReviewSaveFailed: "AI 검사 설정 저장에 실패했습니다",
   },
 } as const;
