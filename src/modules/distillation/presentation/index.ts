@@ -1,5 +1,8 @@
 import type { SessionStatus } from "../../sessions/contracts.ts";
-import type { CandidateOutput } from "../contracts.ts";
+import type {
+  CandidateOutput,
+  DistillationTaskProgress,
+} from "../contracts.ts";
 
 /** Browser-safe projection of a selectable session. No paths, no content. */
 export interface DistillationSessionItem {
@@ -94,6 +97,7 @@ export interface DistillationStartResponse {
   readonly ok: boolean;
   readonly errorCode?: string;
   readonly candidate?: CandidateOutput;
+  readonly task?: DistillationTaskProgress;
 }
 
 export interface DistillationActionResponse {

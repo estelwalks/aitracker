@@ -22,6 +22,10 @@ import { homedir } from "node:os";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { promptForKind } from "./prompts.ts";
 import { qualifySkillFiles, type SkillQualification } from "./qualify.ts";
+import {
+  createDistillationTask,
+  updateDistillationTask,
+} from "./task-state.server.ts";
 
 import type { Locale } from "../../lib/i18n/locale.ts";
 import type { SessionSummary } from "../sessions/contracts.ts";
@@ -181,6 +185,20 @@ export async function loadDistillationActivity(): Promise<{
 export async function startDistillation(
   input: DistillationStartInput,
 ): Promise<DistillationStartResponse> {
+  const task = createDistillationTask(input.kind ?? "memory");
+  void runDistillationTask(task.taskId, input).catch(() => {
+    updateDistillationTask(task.taskId, "failed", 100, {
+      errorCode: "errors.distillation.aiFailed",
+    });
+  });
+  return { ok: true, task };
+}
+
+async function runDistillationTask(
+  taskId: string,
+  input: DistillationStartInput,
+): Promise<void> {
+  updateDistillationTask(taskId, "reading-material", 10);
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
@@ -201,7 +219,10 @@ export async function startDistillation(
     if (profile) providerId = "profile";
   }
   if (!providerId && modelId !== "offline")
-    return { ok: false, errorCode: "errors.distillation.noModelConfigured" };
+    return void updateDistillationTask(taskId, "failed", 100, {
+      errorCode: "errors.distillation.noModelConfigured",
+    });
+  updateDistillationTask(taskId, "generating", 30);
   const result = await root.distillation.start({
     requestId: `distill:${crypto.randomUUID()}`,
     selection: {
@@ -218,8 +239,44 @@ export async function startDistillation(
     },
     timeoutMs: 120_000,
   });
-  if (!result.ok) return { ok: false, errorCode: result.error.code };
-  return { ok: true, candidate: result.value.candidate };
+  if (!result.ok) {
+    updateDistillationTask(taskId, "failed", 100, {
+      errorCode: result.error.code,
+    });
+    return;
+  }
+  if (!result.value.candidate) {
+    updateDistillationTask(taskId, "failed", 100, {
+      errorCode: "errors.distillation.aiFailed",
+    });
+    return;
+  }
+  updateDistillationTask(taskId, "quality-check", 70);
+  updateDistillationTask(taskId, "persisting-candidate", 90, {
+    candidateId: result.value.candidate.candidateId,
+    candidate: result.value.candidate,
+  });
+  updateDistillationTask(taskId, "syncing-target", 95, {
+    candidateId: result.value.candidate.candidateId,
+    candidate: result.value.candidate,
+  });
+  const approved = await root.distillation.approve(
+    result.value.candidate.candidateId,
+    "user",
+  );
+  if (!approved.ok || !approved.value.candidate) {
+    updateDistillationTask(taskId, "failed", 100, {
+      candidateId: result.value.candidate.candidateId,
+      errorCode: approved.ok
+        ? "errors.distillation.aiFailed"
+        : approved.error.code,
+    });
+    return;
+  }
+  updateDistillationTask(taskId, "completed", 100, {
+    candidateId: approved.value.candidate.candidateId,
+    candidate: approved.value.candidate,
+  });
 }
 
 /**

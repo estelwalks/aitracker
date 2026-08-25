@@ -174,6 +174,24 @@ export const getDistillationActivity = createServerFn({
   return loadDistillationActivity();
 });
 
+/** Poll the server-owned progress of a distillation task. */
+export const getDistillationTask = createServerFn({ method: "GET" })
+  .validator((input: { taskId: string }) => {
+    if (
+      typeof input?.taskId !== "string" ||
+      !/^distill-task:[A-Za-z0-9-]+$/.test(input.taskId)
+    ) {
+      throw new AppError("errors.distillation.notFound");
+    }
+    return input;
+  })
+  .handler(async ({ data }) => {
+    const { getDistillationTask: read } = await import(
+      "./task-state.server.ts"
+    );
+    return read(data.taskId);
+  });
+
 /** Start a distillation run from the selected session refs (+ optional segments). */
 export const startDistillation = createServerFn({ method: "POST" })
   .validator(validateStartDistillationInput)

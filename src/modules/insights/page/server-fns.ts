@@ -26,6 +26,7 @@ import {
 
 const ENTITY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
+
 const INSIGHT_MODES: readonly InsightMode[] = [
   "rules",
   "enhanced-manual",
@@ -222,7 +223,12 @@ export const getPageInsight = createServerFn({ method: "GET" })
     const { getPageInsightsApplication } =
       await import("../../../app/insight-registry.server.ts");
     const application = await getPageInsightsApplication();
-    return application.read(data.surfaceId, data.scope, data.locale);
+    const envelope = await application.read(
+      data.surfaceId,
+      data.scope,
+      data.locale,
+    );
+    return envelope;
   });
 
 export const enhancePageInsight = createServerFn({ method: "POST" })
