@@ -260,6 +260,7 @@ export const settings = {
       timeout: "強化がタイムアウトしました",
       "enhancer-failed": "強化に失敗しました",
       "invalid-output": "強化結果が無効です",
+      "no-eligible-candidates": "強化できる対象がありません",
       stale: "データが古い可能性があります",
     },
     fallbackStatus: {
@@ -270,6 +271,8 @@ export const settings = {
       timeout: "AI 強化がタイムアウトしたため、ルール洞察を表示しています",
       "enhancer-failed": "AI 強化に失敗したため、ルール洞察を表示しています",
       "invalid-output": "AI の出力が無効なため、ルール洞察を表示しています",
+      "no-eligible-candidates":
+        "強化できる対象がないため、ルール洞察を表示しています",
     },
     section: {
       title: "AIインサイト",
@@ -291,6 +294,16 @@ export const settings = {
         "許可すると、自動強化は匿名化された集計統計（今日のトークン・ツール数・セッション数・セキュリティ件数）と現在のページ ID を送信します。会話内容・ファイルパス・API キー・個人情報は一切送信しません。",
       dailyLimit: "1日の呼び出し上限",
       dailyLimitHint: "空欄の場合は既定の 30 回（サーバー側で適用）",
+      refreshInterval: "AIインサイトの更新周期",
+      refreshIntervalHint: "{min}～{max}分ごとに更新（既定値は60分）",
+      minutes: "分",
+      intervalInvalid: "有効な更新周期を入力してください",
+      intervalSaved: "AIインサイトの更新周期を保存しました",
+      refreshNow: "AIインサイトを今すぐ更新",
+      refreshNowHint: "現在のインサイトキャッシュを消去して再生成します",
+      refreshNowButton: "今すぐ更新",
+      refreshDone: "AIインサイトを更新しました",
+      refreshFailed: "AIインサイトの更新に失敗しました",
       save: "保存",
       saved: "インサイト設定を保存しました",
       saveFailed: "インサイト設定の保存に失敗しました",

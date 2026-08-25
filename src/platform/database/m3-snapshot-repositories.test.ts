@@ -200,6 +200,55 @@ test("usage aggregate generation is atomic and never reads or writes legacy even
   );
 });
 
+test("usage aggregate keeps safe labels for unknown task-like project refs", async (t) => {
+  const database = openDatabase(t);
+  const hmacKey = "test-installation-key";
+  const project = "Standalone AiPy task";
+  await createSqliteClassificationIndexRepository({ database, hmacKey }).commit(
+    [
+      {
+        ref: project,
+        kind: "unknown",
+        label: "unknown",
+        classifiedAt: "2026-08-19T01:01:00.000Z",
+        fingerprint: null,
+      },
+    ],
+  );
+  const repository = createSqliteUsageSnapshotRepository({ database, hmacKey });
+  const snapshot = buildLocalUsageSnapshot(
+    [
+      {
+        source: "aipy",
+        timestamp: "2026-08-19T01:00:00.000Z",
+        model: "auto",
+        project,
+        inputTokens: 10,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        outputTokens: 5,
+        reasoningOutputTokens: 0,
+        totalTokens: 15,
+      },
+    ],
+    [],
+    new Date("2026-08-19T01:02:00.000Z"),
+  );
+
+  await repository.save(envelope("aipy-title", snapshot));
+
+  const persisted = database
+    .prepare("SELECT project_label, project_kind FROM usage_aggregate_buckets")
+    .get();
+  assert.equal(persisted?.project_label, project);
+  assert.equal(persisted?.project_kind, "unknown");
+  const loaded = await repository.load();
+  assert.equal(
+    loaded.envelope.data?.aggregateBuckets?.[0]?.projectLabel,
+    project,
+  );
+});
+
 test("same-name projects keep distinct HMAC identities and persisted classification", async (t) => {
   const database = openDatabase(t);
   const hmacKey = "same-name-project-test-key";

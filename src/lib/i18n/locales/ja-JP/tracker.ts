@@ -5,6 +5,9 @@ export const tracker = {
   insightTitle: "今日のインサイト",
   metric: {
     tokens: "総消費",
+    inputTokens: "入力",
+    outputTokens: "出力",
+    cachedTokens: "キャッシュ",
     projects: "ランクイン プロジェクト",
     skills: "ランクイン Skill",
     sessions: "ランクイン セッション",
@@ -30,6 +33,7 @@ export const tracker = {
     trendDown: "前期比で下降",
     trendFlat: "前期比で横ばい",
     trendNa: "比較データなし",
+    trendPeriod: "前の{days}日間との比較",
   },
   suggest: {
     cache:
