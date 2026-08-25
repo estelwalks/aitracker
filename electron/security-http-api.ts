@@ -13,6 +13,7 @@ type SecurityHttpService = Pick<
   | "history"
   | "cancel"
   | "getScanSchedule"
+  | "getScanScheduleStatus"
   | "setScanSchedule"
   | "getRuntimeCapability"
 >;
@@ -127,6 +128,9 @@ export async function handleSecurityHttpApi(
           return json(await service.getScanSchedule());
         if (request.method !== "POST") return method(request, "POST");
         return json(await service.setScanSchedule(await jsonBody(request)));
+      case "/scan-schedule-status":
+        if (request.method !== "GET") return method(request, "GET");
+        return json(await service.getScanScheduleStatus());
       case "/start": {
         if (request.method !== "POST") return method(request, "POST");
         const input = await jsonBody(request);

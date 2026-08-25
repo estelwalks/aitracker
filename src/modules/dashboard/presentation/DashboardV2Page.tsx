@@ -12,6 +12,7 @@ import type {
 import { windowToView } from "../summary-contracts.ts";
 import { getDashboardCustomWindow } from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
+import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -73,6 +74,7 @@ export function DashboardV2Page({
   readonly onRetry: () => Promise<void>;
 }) {
   const { format, t } = useI18n();
+  const securityScan = useSecurityScanOverview();
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   // Date-only range inputs must use the same local calendar convention as
   // resolveUsageRange. Serialising with toISOString() would move the default
@@ -248,6 +250,7 @@ export function DashboardV2Page({
         today={today}
         hero={hero}
         security={data.monitoring?.security}
+        securityScan={securityScan}
       />
       {/* 时间范围：全页吸顶（与原型一致的横贯细条） */}
       <div className="dashboard-range-bar sticky top-0 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-y border-border/60 bg-background px-4 py-2 md:-mx-8 md:px-8 2xl:-mx-10 2xl:px-10">
@@ -281,6 +284,7 @@ export function DashboardV2Page({
         view={view}
         monitoring={hero.monitoring}
         security={data.monitoring?.security}
+        securityScan={securityScan}
         baselineLabel={baselineLabel}
       />
       <DashboardToolSwitcher

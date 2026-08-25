@@ -3,6 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveNpmSpawn } from "./npm-spawn.mjs";
+
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const labHome = join(projectRoot, ".tt-lab", "first-run-home");
 const prepareOnly = process.argv.includes("--prepare-only");
@@ -51,8 +53,8 @@ async function seedWorkbuddyUsage() {
 }
 
 async function launchDesktop() {
-  const command = process.platform === "win32" ? "npm.cmd" : "npm";
-  const child = spawn(command, ["run", "dev:desktop"], {
+  const invocation = resolveNpmSpawn(["run", "dev:desktop"]);
+  const child = spawn(invocation.executable, invocation.argumentsList, {
     cwd: projectRoot,
     env: {
       ...process.env,

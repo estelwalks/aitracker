@@ -54,6 +54,61 @@ test("broker rejects HTTP failures and never returns a fallback value", async ()
   }
 });
 
+test("broker persists scheduler cursor and run-level scan evidence", async () => {
+  const previous = process.env[ENV.DESKTOP_BROKER_TOKEN];
+  process.env[ENV.DESKTOP_BROKER_TOKEN] = "test-broker-token";
+  const requests: Request[] = [];
+  try {
+    const broker = new DesktopStateBroker({
+      origin: () => "http://127.0.0.1:3210",
+      capabilityToken: () => undefined,
+      fetchFn: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        if (request.url.endsWith("/security-scan-run/latest"))
+          return Response.json(null);
+        return Response.json({ ok: true });
+      },
+    });
+    await broker.writeScheduleRuntime({
+      scheduleFingerprint: "a".repeat(64),
+      nextRunAt: "2026-08-25T03:00:00.000Z",
+      pending: false,
+      updatedAt: "2026-08-25T02:00:00.000Z",
+    });
+    await broker.writeRun({
+      scanId: "scan:11111111-1111-4111-8111-111111111111",
+      mode: "quick",
+      trigger: "automatic",
+      locale: "zh-CN",
+      status: "complete",
+      startedAt: "2026-08-25T02:00:00.000Z",
+      finishedAt: "2026-08-25T02:00:01.000Z",
+      discoveredCount: 1,
+      queuedCount: 1,
+      completedCount: 0,
+      failedCount: 0,
+      skippedCount: 1,
+    });
+    assert.equal(await broker.readLatestRun(), null);
+
+    assert.deepEqual(
+      requests.map((request) => [
+        new URL(request.url).pathname,
+        request.method,
+      ]),
+      [
+        ["/api/desktop-state/scan-schedule-runtime", "PUT"],
+        ["/api/desktop-state/security-scan-run", "PUT"],
+        ["/api/desktop-state/security-scan-run/latest", "GET"],
+      ],
+    );
+  } finally {
+    if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];
+    else process.env[ENV.DESKTOP_BROKER_TOKEN] = previous;
+  }
+});
+
 test("model config is unavailable when no model profile exists", async () => {
   const previous = process.env[ENV.DESKTOP_BROKER_TOKEN];
   process.env[ENV.DESKTOP_BROKER_TOKEN] = "test-broker-token";

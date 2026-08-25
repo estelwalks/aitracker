@@ -24,6 +24,10 @@ import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import {
+  PAGE_INSIGHT_REFRESH_CHANNEL,
+  PAGE_INSIGHT_REFRESH_EVENT,
+} from "../../insights/page/presentation/use-page-insight.pure";
+import {
   deleteModelProfile,
   listModelProfiles,
   listRemoteModels,
@@ -68,6 +72,17 @@ const EMPTY_FORM: FormState = {
 };
 
 const OFFICIAL_ENTRY_ID = "__official_model__";
+
+function notifyPageInsightsModelChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PAGE_INSIGHT_REFRESH_EVENT));
+    if (typeof BroadcastChannel === "function") {
+      const channel = new BroadcastChannel(PAGE_INSIGHT_REFRESH_CHANNEL);
+      channel.postMessage({ reason: "model-profile-changed" });
+      channel.close();
+    }
+  }
+}
 
 function toInput(form: FormState): ModelProfileInput {
   return {
@@ -215,6 +230,7 @@ export function ModelProfilesSection() {
         return;
       }
       setActiveId(profile.id);
+      notifyPageInsightsModelChanged();
       toast.success(
         t("settings.modelProfiles.activatedToast", { name: profile.name }),
       );
@@ -246,22 +262,30 @@ export function ModelProfilesSection() {
           ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
         },
       });
-      const models = [...(result.models ?? [])];
+      const remoteSucceeded = result.ok && result.source === "remote";
+      const models = remoteSucceeded ? [...(result.models ?? [])] : [];
       setForm((current) => ({
         ...current,
         models,
         listing: false,
-        listMsg: result.ok
-          ? result.source === "remote"
-            ? t("settings.modelProfiles.listModelsDone", {
-                count: models.length,
-              })
-            : t("settings.modelProfiles.listModelsFallback")
+        listMsg: remoteSucceeded
+          ? t("settings.modelProfiles.listModelsDone", {
+              count: models.length,
+            })
           : "",
-        model: current.model.trim() || models[0] || current.model,
+        model: remoteSucceeded
+          ? current.model.trim() || models[0] || current.model
+          : current.model,
       }));
-      if (!result.ok && result.errorCode) {
-        toast.error(t(result.errorCode as MessageKey));
+      if (!remoteSucceeded) {
+        const baseMessage = result.errorCode
+          ? t(result.errorCode as MessageKey)
+          : t("common.failed");
+        toast.error(
+          result.message?.trim()
+            ? `${baseMessage}：${result.message.trim()}`
+            : baseMessage,
+        );
       }
     } catch (error) {
       const ui = toUiError(error);
@@ -304,6 +328,7 @@ export function ModelProfilesSection() {
       toast.success(
         t("settings.modelProfiles.savedToast", { name: saved.name }),
       );
+      if (saved.id === activeId) notifyPageInsightsModelChanged();
       await load();
     } catch (error) {
       const ui = toUiError(error);
@@ -331,6 +356,7 @@ export function ModelProfilesSection() {
       toast.success(
         t("settings.modelProfiles.deletedToast", { name: deleteTarget.name }),
       );
+      if (deleteTarget.id === activeId) notifyPageInsightsModelChanged();
       await load();
     } catch (error) {
       const ui = toUiError(error);

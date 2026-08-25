@@ -16,9 +16,9 @@ const PAGE_SIZE = 6;
 /**
  * 不安全 Skill 名单：与 V3.0 原型一致的「不安全 Skill 名单」卡片。
  *
- * 仅列出最近一次扫描中未通过（block / warn / unknown / failed / 含跳过文件等）
- * 的 Skill，每页 6 项分页；「查看报告」打开该 Skill 的真实扫描报告弹窗。
- * 无报告（失败/跳过）的项禁用报告入口，避免空转。
+ * 仅列出最近一次扫描中明确判定为 block / warn 的 Skill。unknown、失败
+ * 和部分完成属于「未能确认」，不能误报成不安全；这些状态仍保留在统计与历史中。
+ * 每页 6 项分页；「查看报告」打开该 Skill 的真实扫描报告弹窗。
  */
 export function UnsafeSkillList({
   entries,

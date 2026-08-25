@@ -1,12 +1,19 @@
-import { RadarIcon, ScanLine } from "lucide-react";
+import { RadarIcon, RefreshCw, ScanLine } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useI18n } from "../../../../lib/i18n/context";
 import {
   insightFallbackStatusLabel,
+  insightSeverityLabelKey,
   usePageInsight,
 } from "../../../insights/page/presentation/use-page-insight";
-import type { SecurityScanPhase, SecurityTotals } from "../security-view";
+import {
+  detectedRiskCount,
+  unresolvedScanCount,
+  type SecurityScanPhase,
+  type SecurityTotals,
+} from "../security-view";
 
 const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 8000;
@@ -37,15 +44,15 @@ export function SecurityBriefing({
     envelope,
     loading: insightLoading,
   } = usePageInsight({ surfaceId: "security", locale });
-  const risky = totals.warn + totals.danger + totals.unknown + totals.failed;
-  const suspicious = totals.warn + totals.unknown + totals.failed;
+  const risky = detectedRiskCount(totals);
+  const unresolved = unresolvedScanCount(totals);
   const health = totals.total
     ? Math.round((totals.safe / totals.total) * 100)
     : 0;
   const tone =
     totals.danger > 0
       ? "var(--danger)"
-      : risky > 0
+      : risky > 0 || unresolved > 0
         ? "var(--warn)"
         : "var(--ok)";
 
@@ -58,17 +65,22 @@ export function SecurityBriefing({
               total: totals.total,
               risky,
               danger: totals.danger,
-              warn: suspicious,
+              warn: totals.warn,
             })
-          : totals.findings > 0
-            ? t("security.center.briefing.findingLine", {
+          : unresolved > 0
+            ? t("security.center.briefing.unresolvedLine", {
                 total: totals.total,
-                findings: totals.findings,
+                unresolved,
               })
-            : t("security.center.briefing.cleanLine", {
-                dimensions,
-                total: totals.total,
-              });
+            : totals.findings > 0
+              ? t("security.center.briefing.findingLine", {
+                  total: totals.total,
+                  findings: totals.findings,
+                })
+              : t("security.center.briefing.cleanLine", {
+                  dimensions,
+                  total: totals.total,
+                });
     const status =
       latestStatus === "partial"
         ? t("security.center.briefing.partialLine")
@@ -83,7 +95,7 @@ export function SecurityBriefing({
     lastScan,
     latestStatus,
     risky,
-    suspicious,
+    unresolved,
     t,
     totals,
   ]);
@@ -96,15 +108,33 @@ export function SecurityBriefing({
   const lines = useLocalLines
     ? localLines
     : sharedInsightLines.map((insight) => insight.text);
+  const topInsight = sharedInsightLines[0];
   const fallbackStatusKey = envelope
     ? insightFallbackStatusLabel(envelope.status)
     : null;
   const renderMessage = t as unknown as (key: string) => string;
-
+  const fallbackStatus =
+    envelope?.status === "enhancer-unavailable" && fallbackStatusKey ? (
+      <Link
+        to="/settings"
+        search={{ section: "model" }}
+        className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+      >
+        {renderMessage(fallbackStatusKey)}
+      </Link>
+    ) : fallbackStatusKey ? (
+      <span
+        role="status"
+        className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+      >
+        {renderMessage(fallbackStatusKey)}
+      </span>
+    ) : null;
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const activeIndex = index % lines.length;
   const line = lines[activeIndex] ?? "";
+  const rotateNext = () => setIndex((current) => (current + 1) % lines.length);
 
   useEffect(() => setIndex(0), [lines]);
 
@@ -163,19 +193,30 @@ export function SecurityBriefing({
               <h2 className="text-[15px] font-semibold tracking-tight">
                 {t("security.center.briefing.title")}
               </h2>
+              {topInsight?.severity ? (
+                <span
+                  className="inline-flex h-5 items-center gap-1 rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground"
+                  title={topInsight.severity}
+                  aria-label={t(insightSeverityLabelKey(topInsight.severity))}
+                >
+                  <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                  {t(insightSeverityLabelKey(topInsight.severity))}
+                </span>
+              ) : null}
               {envelope?.source === "enhanced" ? (
                 <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground">
                   {t("settings.insight.enhanced")}
                 </span>
               ) : null}
-              {fallbackStatusKey ? (
-                <span
-                  role="status"
-                  className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
-                >
-                  {renderMessage(fallbackStatusKey)}
-                </span>
-              ) : null}
+              {fallbackStatus}
+              <button
+                type="button"
+                onClick={rotateNext}
+                className="dashboard-hero-refresh ml-auto"
+              >
+                <RefreshCw className="size-3" strokeWidth={2} />
+                {t("security.center.briefing.refresh")}
+              </button>
             </div>
 
             <p

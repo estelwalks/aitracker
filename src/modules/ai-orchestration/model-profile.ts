@@ -140,7 +140,7 @@ export interface ModelProfileTestResult {
 /**
  * Result of a "list remote models" request. `source: "remote"` means the list
  * came from the provider's `/models` endpoint; `source: "fallback"` means the
- * request failed and a known provider default list was returned instead.
+ * request failed and no model list is available.
  */
 export interface ModelListResult {
   readonly ok: boolean;

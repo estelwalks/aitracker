@@ -5,7 +5,7 @@
   "display": {
     "name": "Zed Agent",
     "nameZh": "Zed Agent",
-    "icon": "https://zed.dev/favicon_black_32.png",
+    "icon": "other",
     "color": "#3b82f6"
   },
   "platforms": {

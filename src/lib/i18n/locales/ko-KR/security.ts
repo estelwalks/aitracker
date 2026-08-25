@@ -121,6 +121,8 @@ export const security = {
         "최근 Skill {total}개는 모두 허용 판정이지만 규칙에서 {findings}건이 탐지되었습니다. 보고서를 펼쳐 확인하세요.",
       riskyLine:
         "최근 검사는 Skill {total}개를 다뤘으며 {risky}개를 확인해야 합니다. 차단 {danger}개, 경고 {warn}개입니다.",
+      unresolvedLine:
+        "최근 검사에서 Skill {total}개를 확인했으며 명확한 위험은 없습니다. {unresolved}개는 검사가 완료되지 않아 판정 대기 상태입니다.",
       noReportLine:
         "아직 실제 검사 결과가 없습니다. 검사를 실행해 이 장치의 Skill을 확인하세요.",
       boundaryLine:
@@ -291,6 +293,10 @@ export const security = {
       files: "파일",
       detail: "상세",
       noFindings: "리스크를 발견하지 못했습니다",
+      incompleteNoFindings:
+        "명확한 위험은 발견되지 않았지만 검사가 완료되지 않아 안전 또는 위험으로 판정할 수 없습니다",
+      riskDetailsUnavailable:
+        "판정은 위험을 나타내지만 상세 항목이 보존되지 않았습니다. 이 Skill을 다시 검사하세요",
       branches: "검사 분기",
       skippedFiles: "건너뛴 파일",
       path: "상대 경로",
@@ -320,6 +326,7 @@ export const security = {
       all: "전체",
       safe: "안전",
       unsafe: "확인 필요",
+      needsReview: "확인 필요",
       day: "24시간",
       week: "7일",
       month: "30일",

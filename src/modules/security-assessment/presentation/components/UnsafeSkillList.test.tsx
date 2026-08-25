@@ -117,3 +117,26 @@ test("UnsafeSkillList shows the empty state when every skill passed", () => {
   assert.match(markup, /暂无不安全 Skill/);
   assert.doesNotMatch(markup, /<tr/);
 });
+
+test("UnsafeSkillList does not mislabel incomplete or failed scans as unsafe", () => {
+  const markup = renderToStaticMarkup(
+    <UnsafeSkillList
+      entries={[
+        entry({
+          id: "history:partial",
+          skillName: "partial-skill",
+          status: "partial",
+          report: report({ status: "partial", verdict: "unknown" }),
+        }),
+        entry({
+          id: "history:failed",
+          skillName: "failed-skill",
+          status: "failed",
+        }),
+      ]}
+      onOpenReport={() => {}}
+    />,
+  );
+  assert.match(markup, /暂无不安全 Skill/);
+  assert.doesNotMatch(markup, /partial-skill|failed-skill/);
+});

@@ -27,8 +27,19 @@ export interface DatabaseCacheClearSummary {
   readonly insightCacheDeleted: number;
 }
 
+/** Rows removed by the explicit "clear collected data" action. */
+export interface DatabaseCollectedDataClearSummary {
+  readonly snapshotGenerationsDeleted: number;
+  readonly projectClassificationsDeleted: number;
+  readonly searchDocumentsDeleted: number;
+}
+
 function changes(value: number | bigint): number {
   return Number(value);
+}
+
+function countValue(row: Record<string, unknown> | undefined): number {
+  return Number(row?.count ?? 0);
 }
 
 /**
@@ -74,4 +85,75 @@ export function clearRegenerableDatabaseCaches(
       database.prepare("DELETE FROM insight_enhancement_cache").run().changes,
     ),
   };
+}
+
+/**
+ * Removes local collector results while leaving user-owned configuration and
+ * history intact. Snapshot child tables are linked with ON DELETE CASCADE, so
+ * deleting generations also removes their aggregate rows, blobs and domain
+ * projections atomically. Search rows are limited to collector projections;
+ * report, knowledge and security indexes remain available.
+ */
+export function clearCollectedDatabaseData(
+  database: SqliteDatabasePort,
+): DatabaseCollectedDataClearSummary {
+  const transaction = database.transaction();
+  transaction.begin();
+  try {
+    const snapshotGenerationsDeleted = countValue(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM snapshot_generations")
+        .get(),
+    );
+    const projectClassificationsDeleted = countValue(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM project_classifications")
+        .get(),
+    );
+    const searchDocumentsDeleted = countValue(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM search_documents WHERE type IN ('agent', 'skill', 'session')",
+        )
+        .get(),
+    );
+
+    // snapshot_heads references generations with ON DELETE RESTRICT.
+    database.prepare("DELETE FROM snapshot_heads").run();
+    database.prepare("DELETE FROM snapshot_generations").run();
+    database.prepare("DELETE FROM project_classifications").run();
+    database
+      .prepare(
+        "DELETE FROM search_documents WHERE type IN ('agent', 'skill', 'session')",
+      )
+      .run();
+
+    // Monitoring state is a derived view of collector activity. Do not touch
+    // the security history tables; only reset the collection heartbeat and
+    // collector rows so the next startup/refresh starts from initialization.
+    database.prepare("DELETE FROM monitoring_collectors").run();
+    database
+      .prepare(
+        `UPDATE monitoring_state
+         SET running = 0, started_at_ms = NULL, heartbeat_at_ms = NULL,
+             pending_count = 0, security_summary_json = NULL,
+             updated_at_ms = ?
+         WHERE singleton_id = 1`,
+      )
+      .run(Date.now());
+
+    transaction.commit();
+    return {
+      snapshotGenerationsDeleted,
+      projectClassificationsDeleted,
+      searchDocumentsDeleted,
+    };
+  } catch (error) {
+    try {
+      transaction.rollback();
+    } catch {
+      // Preserve the original database failure.
+    }
+    throw error;
+  }
 }
