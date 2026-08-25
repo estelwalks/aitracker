@@ -28,7 +28,7 @@ export const skills = {
   },
   form: {
     all: "전체 형태",
-    package: "증류 스킬",
+    package: "완전 패키지",
     workflow: "워크플로우",
     prompt: "Prompt",
   },

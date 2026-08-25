@@ -97,7 +97,7 @@ export const sessions = {
   },
   transcript: {
     loading: "正在读取本地会话对话…",
-    empty: "未找到该会话的本地对话记录",
+    empty: "该会话没有可读取的对话正文",
     error: "对话读取失败，请重试",
     retry: "重试",
     localOnly: "对话仅在本机内存中读取展示，绝不持久化、绝不上传",

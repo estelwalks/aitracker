@@ -495,6 +495,12 @@ export function SettingsPage({
                   </span>
                 )}
               </Field>
+              <Field label={t("settings.language")} hint={localeMode === "system" ? t("settings.languageFollowHint") : t("settings.languageManualHint")}>
+                <Segmented value={localeMode === "manual" ? locale : "system"} onChange={(value) => value === "system" ? setLocaleMode("system") : setLocaleMode("manual", value as Locale)} options={[{ value: "system", label: t("settings.followSystem") }, { value: "zh-CN", label: t("settings.languages.zhCN") }, { value: "en-US", label: t("settings.languages.enUS") }, { value: "ja-JP", label: t("settings.languages.jaJP") }, { value: "ko-KR", label: t("settings.languages.koKR") }]} />
+              </Field>
+              <Field label={t("settings.currency")} hint={currencyMode === "manual" ? t("settings.currencyManualHint") : currencySource === "fallback" ? t("settings.currencyFallbackHint") : t("settings.currencyFollowHint")}>
+                <Segmented value={currencyMode === "manual" ? displayCurrency : "system"} onChange={(value) => value === "system" ? setCurrencyMode("system") : setCurrencyMode("manual", value as Currency)} options={[{ value: "system", label: t("settings.followSystem") }, { value: "CNY", label: "CNY" }, { value: "USD", label: "USD" }, { value: "JPY", label: "JPY" }, { value: "KRW", label: "KRW" }]} />
+              </Field>
               <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                 <div>
                   <div className="text-[13px]">{t("settings.clearCache")}</div>
@@ -701,56 +707,6 @@ export function SettingsPage({
                     value: item.id,
                     label: t(item.labelKey),
                   }))}
-                />
-              </Field>
-              <Field
-                label={t("settings.language")}
-                hint={
-                  localeMode === "system"
-                    ? t("settings.languageFollowHint")
-                    : t("settings.languageManualHint")
-                }
-              >
-                <Segmented
-                  value={localeMode === "manual" ? locale : "system"}
-                  onChange={(value) =>
-                    value === "system"
-                      ? setLocaleMode("system")
-                      : setLocaleMode("manual", value as Locale)
-                  }
-                  options={[
-                    { value: "system", label: t("settings.followSystem") },
-                    { value: "zh-CN", label: t("settings.languages.zhCN") },
-                    { value: "en-US", label: t("settings.languages.enUS") },
-                    { value: "ja-JP", label: t("settings.languages.jaJP") },
-                    { value: "ko-KR", label: t("settings.languages.koKR") },
-                  ]}
-                />
-              </Field>
-              <Field
-                label={t("settings.currency")}
-                hint={
-                  currencyMode === "manual"
-                    ? t("settings.currencyManualHint")
-                    : currencySource === "fallback"
-                      ? t("settings.currencyFallbackHint")
-                      : t("settings.currencyFollowHint")
-                }
-              >
-                <Segmented
-                  value={currencyMode === "manual" ? displayCurrency : "system"}
-                  onChange={(value) =>
-                    value === "system"
-                      ? setCurrencyMode("system")
-                      : setCurrencyMode("manual", value as Currency)
-                  }
-                  options={[
-                    { value: "system", label: t("settings.followSystem") },
-                    { value: "CNY", label: "CNY" },
-                    { value: "USD", label: "USD" },
-                    { value: "JPY", label: "JPY" },
-                    { value: "KRW", label: "KRW" },
-                  ]}
                 />
               </Field>
               <Field

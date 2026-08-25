@@ -956,7 +956,7 @@ body.tt-widget-float-document {
 }
 
 .tt-nav-item[aria-current="page"]::after {
-  border-color: color-mix(in oklab, var(--color-primary) 24%, transparent);
+  border-color: transparent;
 }
 
 .tt-app-main {

@@ -10,8 +10,7 @@ export const reports = {
     runs: "{count} generation runs triggered",
     sessions: "covers {count} sessions",
     empty: 'No briefings yet — click "Generate now" to create a draft.',
-    modelNotConfigured:
-      "No model configured: briefings will be drafted from local session data and can be edited after generation.",
+    modelNotConfigured: "Briefing requires a model. Configure now →",
     rotate: "Shuffle",
     dots: "Insight carousel",
   },

@@ -414,6 +414,7 @@ async function readClaudeTranscript(
   };
 
   for (const file of files) {
+    const fileMatchesSession = file.path.includes(sessionId);
     await readJsonLines(
       file.path,
       (record) => {
@@ -424,7 +425,7 @@ async function readClaudeTranscript(
         const recordSessionId = stringValue(
           record.sessionId ?? record.session_id ?? record.conversationId,
         );
-        if (recordSessionId !== sessionId) return;
+        if (recordSessionId !== sessionId && !(fileMatchesSession && recordSessionId == null)) return;
         const message = asObject(record.message);
         if (message == null) return;
         const role = stringValue(message.role);
@@ -498,14 +499,19 @@ async function readCodexTranscript(
   );
   const seenItemIds = new Set<string>();
   for (const file of files) {
-    // Session files carry the id in the directory or the rollout filename.
-    if (!file.path.includes(sessionId)) continue;
+    // Most files carry the id in the rollout filename. Some exporters omit
+    // it from the record payload, so a matching filename is authoritative.
+    const fileMatchesSession = file.path.includes(sessionId);
     await readJsonLines(
       file.path,
       (record) => {
         if (out.length >= limits.maxMessages) return;
         const payload = asObject(record.payload);
         if (payload == null) return;
+        const recordSessionId = stringValue(
+          record.sessionId ?? record.session_id ?? record.conversationId,
+        );
+        if (!fileMatchesSession && recordSessionId !== sessionId) return;
         const message = extractCodexMessage(payload, seenItemIds);
         if (message == null) return;
         pushMessage(
