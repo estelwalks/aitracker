@@ -234,6 +234,7 @@ export function createSnapshotCoordinator<T>(
     },
     async refreshNow(signal) {
       await hydrate();
+      if (clearing) return view(current);
       if (refreshPromise) return refreshPromise;
       refreshPromise = runRefresh(signal).finally(() => {
         refreshPromise = undefined;
@@ -259,10 +260,14 @@ export function createSnapshotCoordinator<T>(
     },
     async clear() {
       clearing = true;
-      current = emptyEnvelope();
-      await options.repository.clear();
-      hydrated = true;
-      clearing = false;
+      try {
+        if (refreshPromise) await refreshPromise.catch(() => {});
+        current = emptyEnvelope();
+        await options.repository.clear();
+        hydrated = true;
+      } finally {
+        clearing = false;
+      }
     },
   };
 }
