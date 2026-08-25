@@ -163,13 +163,22 @@ export const settings = {
   storageExceedsSoftCap: " (over 500 MB — consider clearing the cache)",
   clearCache: "Clear cache",
   clearCacheHint:
-    "Deletes caches and regenerable indexes inside the current {appName} data directory; never AI tool logs, raw collected data, adapter configs or security history",
+    "Deletes only caches inside the current {appName} data directory; never local collected data, AI tool logs, adapter configs or security history",
   clearCacheButton: "Clear cache",
   clearCacheDialogTitle: "Clear cache?",
   clearCacheDialogDesc:
-    "Caches and regenerable indexes inside the {appName}-controlled directory will be deleted and the space reclaimed. External AI tool logs, raw collected data, adapter configs, app preferences and security history are unaffected.",
+    "Caches inside the {appName}-controlled directory will be deleted and the space reclaimed. Local collected data, external AI tool logs, adapter configs, app preferences and security history are unaffected.",
   clearing: "Clearing…",
   confirmClearCache: "Clear cache",
+  clearCollectedData: "Clear collected data",
+  clearCollectedDataHint:
+    "Deletes locally collected results and reinitializes the data set; source AI tool logs, app settings and adapter configuration are kept",
+  clearCollectedDataButton: "Clear collected data",
+  clearCollectedDataDialogTitle: "Clear collected data?",
+  clearCollectedDataDialogDesc:
+    "Locally collected results in {appName} will be deleted and the data set reinitialized, then rebuilt in the background from the original logs. Source AI tool logs, app settings, adapter configuration and security history are not affected.",
+  clearingCollectedData: "Clearing collected data…",
+  confirmClearCollectedData: "Clear and recollect",
   resetPrefs: "Reset app preferences & security history",
   resetPrefsHint:
     "Resets settings, update records, security scan history and today's scan count; never deletes local indexes/caches or external AI tool logs",
@@ -291,6 +300,10 @@ export const settings = {
     cleared: "Cleared {count} cache data items, reclaimed {size}",
     nothingToClear: "No caches to clear",
     clearFailed: "Failed to clear cache",
+    collectedDataCleared:
+      "Cleared {count} collected data items, reclaimed {size}",
+    noCollectedDataToClear: "No collected data to clear",
+    collectedDataClearFailed: "Failed to clear collected data",
     resetDone: "Reset {count} app preferences & security history items",
     resetDoneBrowser: "Reset app preferences & security history in the browser",
     resetFailed: "Failed to reset app preferences",

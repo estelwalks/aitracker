@@ -157,13 +157,22 @@ export const settings = {
   storageExceedsSoftCap: "（已超过 500MB，建议清理缓存）",
   clearCache: "清除缓存",
   clearCacheHint:
-    "删除当前 {appName} 数据目录下的缓存和可再生成索引；不会删除 AI 工具日志、原始采集数据、适配器配置或安全历史",
+    "仅删除当前 {appName} 数据目录下的缓存；不会删除本地采集数据、AI 工具日志、适配器配置或安全历史",
   clearCacheButton: "清除缓存",
   clearCacheDialogTitle: "确认清除缓存",
   clearCacheDialogDesc:
-    "将删除当前 {appName} 受控目录中的缓存和可再生成索引并回收磁盘空间。外部 AI 工具日志、原始采集数据、适配器配置、应用偏好与安全历史不会受影响。",
+    "将删除当前 {appName} 受控目录中的缓存并回收磁盘空间。本地采集数据、外部 AI 工具日志、适配器配置、应用偏好与安全历史不会受影响。",
   clearing: "清除中...",
   confirmClearCache: "确认清除缓存",
+  clearCollectedData: "清除采集数据",
+  clearCollectedDataHint:
+    "删除本地已采集的结果并重新初始化；不会删除原始 AI 工具日志、应用设置或适配器配置",
+  clearCollectedDataButton: "清除采集数据",
+  clearCollectedDataDialogTitle: "确认清除采集数据",
+  clearCollectedDataDialogDesc:
+    "将删除当前 {appName} 中已采集的本地结果并重新初始化数据，随后在后台从原始日志重新收集。原始 AI 工具日志、应用设置、适配器配置和安全历史不会受影响。",
+  clearingCollectedData: "清除采集数据中...",
+  confirmClearCollectedData: "确认清除并重新收集",
   resetPrefs: "重置应用偏好与安全历史",
   resetPrefsHint:
     "重置设置、更新记录、安全检测历史与今日扫描次数；不会删除本地索引/缓存或外部 AI 工具日志",
@@ -276,6 +285,9 @@ export const settings = {
     cleared: "已清理 {count} 项缓存数据，释放 {size}",
     nothingToClear: "没有可清理的缓存",
     clearFailed: "清除缓存失败",
+    collectedDataCleared: "已清除 {count} 项采集数据，释放 {size}",
+    noCollectedDataToClear: "没有可清除的采集数据",
+    collectedDataClearFailed: "清除采集数据失败",
     resetDone: "已重置 {count} 项应用偏好与安全历史",
     resetDoneBrowser: "已重置浏览器中的应用偏好与安全历史",
     resetFailed: "重置应用偏好失败",
