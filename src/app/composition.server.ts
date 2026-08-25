@@ -6,7 +6,6 @@ import { SystemClock } from "../platform/persistence/clock.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 import type { SnapshotRefreshPort } from "../platform/snapshot-runtime/contracts.ts";
 import { RUNTIME_POLICY } from "./runtime-policy.generated.ts";
-import { shouldAwaitStartupCollectors } from "./desktop-startup-policy.ts";
 import {
   createDatabaseRuntime,
   type DatabaseRuntime,
@@ -649,7 +648,6 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     clock,
     executors: executorRegistry.executors,
     resourceBudget,
-    awaitStartupTasks: shouldAwaitStartupCollectors(),
   });
 
   const taskApi = createTaskApi({ scheduler, preferences, runs });
