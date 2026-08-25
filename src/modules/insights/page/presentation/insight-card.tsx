@@ -91,8 +91,7 @@ export function InsightCard({
     : null;
   const renderMessage = t as unknown as (key: string) => string;
   const shouldShowFallbackStatus =
-    fallbackStatusKey !== null &&
-    (showFallbackStatus || envelope?.status === "enhancer-unavailable");
+    showFallbackStatus && fallbackStatusKey !== null;
   const fallbackStatus =
     shouldShowFallbackStatus && fallbackStatusKey ? (
       envelope?.status === "enhancer-unavailable" ? (
