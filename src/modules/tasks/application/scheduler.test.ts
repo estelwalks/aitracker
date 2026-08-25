@@ -132,44 +132,6 @@ test("startup does not resolve before all initial collectors are terminal", asyn
   await scheduler.stop();
 });
 
-test("non-blocking startup resolves while initial collectors continue", async () => {
-  const h = harness();
-  let releaseUsage!: () => void;
-  const usageGate = new Promise<void>((resolve) => {
-    releaseUsage = resolve;
-  });
-  let completed = false;
-  const scheduler = createTaskScheduler({
-    preferences: h.prefs,
-    runs: h.repository,
-    catalog: startupCatalog(),
-    awaitStartupTasks: false,
-    executors: {
-      ...successfulStartupExecutors(),
-      "refresh-usage-v1": async () => {
-        await usageGate;
-        completed = true;
-      },
-    },
-  });
-
-  await scheduler.start();
-  assert.equal(completed, false);
-  assert.equal(
-    h.runs.some(
-      (run) =>
-        run.taskId === "usage.refresh" &&
-        run.trigger === "startup-recovery" &&
-        run.status === "running",
-    ),
-    true,
-  );
-
-  releaseUsage();
-  await scheduler.stop();
-  assert.equal(completed, true);
-});
-
 test("startup resolves after all required collectors succeed", async () => {
   const h = harness();
   const scheduler = createTaskScheduler({

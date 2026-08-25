@@ -60,6 +60,7 @@ import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
 import { startupFailureDialogMessage } from "./startup-failure.js";
+import { resolveMainWindowSize } from "./main-window-size.js";
 import {
   normalizeTrayTitle,
   persistTrayTitleBestEffort,
@@ -966,11 +967,9 @@ function rebuildTray(): void {
 }
 
 async function createMainWindow(): Promise<void> {
+  const mainWindowSize = resolveMainWindowSize();
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 940,
-    minWidth: 1100,
-    minHeight: 720,
+    ...mainWindowSize,
     // 无边框 + 自绘标题栏：隐藏系统原生标题栏与窗口按钮，由渲染进程
     // 提供与主题一致的深色标题栏（macOS 保留原生红绿灯按钮）。
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
@@ -1177,10 +1176,10 @@ if (!hasSingleInstanceLock) {
       });
       allowedOrigin = await resolveApplicationOrigin();
       reportStartupMilestone("local-server-ready");
-      // Initialize the database/runtime while the native startup document is
-      // visible. macOS also waits for first-run collectors here; Windows only
-      // schedules them and lets the renderer open from persisted snapshots.
-      // This remains a lightweight internal request, not a duplicate render.
+      // Start first-run collection while the native startup document remains
+      // visible. The renderer opens only after the initial workspace data is
+      // ready. This remains a lightweight internal request, not a duplicate
+      // render.
       if (localWebServer) {
         await completeReleaseDataResetAfterWarmup(
           releaseDataReset,
