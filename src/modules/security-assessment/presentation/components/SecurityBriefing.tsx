@@ -1,8 +1,13 @@
 import { RadarIcon, RefreshCw, ScanLine } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useI18n } from "../../../../lib/i18n/context";
-import { usePageInsight } from "../../../insights/page/presentation/use-page-insight";
+import {
+  insightFallbackStatusLabel,
+  insightSeverityLabelKey,
+  usePageInsight,
+} from "../../../insights/page/presentation/use-page-insight";
 import type { SecurityScanPhase, SecurityTotals } from "../security-view";
 
 const TYPE_INTERVAL_MS = 18;
@@ -93,6 +98,28 @@ export function SecurityBriefing({
   const lines = useLocalLines
     ? localLines
     : sharedInsightLines.map((insight) => insight.text);
+  const topInsight = sharedInsightLines[0];
+  const fallbackStatusKey = envelope
+    ? insightFallbackStatusLabel(envelope.status)
+    : null;
+  const renderMessage = t as unknown as (key: string) => string;
+  const fallbackStatus =
+    envelope?.status === "enhancer-unavailable" && fallbackStatusKey ? (
+      <Link
+        to="/settings"
+        search={{ section: "model" }}
+        className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+      >
+        {renderMessage(fallbackStatusKey)}
+      </Link>
+    ) : fallbackStatusKey ? (
+      <span
+        role="status"
+        className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+      >
+        {renderMessage(fallbackStatusKey)}
+      </span>
+    ) : null;
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const activeIndex = index % lines.length;
@@ -156,11 +183,22 @@ export function SecurityBriefing({
               <h2 className="text-[15px] font-semibold tracking-tight">
                 {t("security.center.briefing.title")}
               </h2>
+              {topInsight?.severity ? (
+                <span
+                  className="inline-flex h-5 items-center gap-1 rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground"
+                  title={topInsight.severity}
+                  aria-label={t(insightSeverityLabelKey(topInsight.severity))}
+                >
+                  <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+                  {t(insightSeverityLabelKey(topInsight.severity))}
+                </span>
+              ) : null}
               {envelope?.source === "enhanced" ? (
                 <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground">
                   {t("settings.insight.enhanced")}
                 </span>
               ) : null}
+              {fallbackStatus}
               <button
                 type="button"
                 onClick={rotateNext}

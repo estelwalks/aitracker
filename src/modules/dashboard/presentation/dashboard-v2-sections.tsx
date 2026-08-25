@@ -91,7 +91,6 @@ export function DashboardJarvisInsight() {
       title={t("dashboard.v2.heroTitle")}
       dotsLabel={t("dashboard.v2.insightDotsAria")}
       rotateLabel={t("dashboard.v2.rotateInsight")}
-      showFallbackStatus={false}
     />
   );
 }

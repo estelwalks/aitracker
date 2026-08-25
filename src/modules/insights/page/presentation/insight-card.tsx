@@ -56,11 +56,8 @@ export function InsightCard({
   dotsLabel,
   rotateLabel,
   headingLevel = 1,
-  // Severity is useful to the insight engine, but the page card should keep
-  // the title row quiet and consistent with the Agent and Security surfaces.
-  // Callers can still opt in explicitly for a future risk-focused surface.
-  showSeverity = false,
-  showFallbackStatus = false,
+  showSeverity = true,
+  showFallbackStatus = true,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
