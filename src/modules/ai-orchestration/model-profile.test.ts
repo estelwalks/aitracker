@@ -636,6 +636,109 @@ test("createProfileBackedProvider: resolves profile and parses OpenAI response",
   assert.equal(response.modelId, profile.id);
 });
 
+test("createProfileBackedProvider: retries transient gateway failures", async () => {
+  const profile: ModelProfile = {
+    id: "m-retry",
+    name: "Retry profile",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "retry-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let calls = 0;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response("busy", { status: 503 })
+        : jsonResponse({ choices: [{ message: { content: "note" } }] });
+    }),
+  });
+
+  const response = await provider.invoke({
+    modelId: profile.id,
+    prompt: { id: "p", version: 1, template: "T" },
+    input: { text: "meta" },
+    signal: new AbortController().signal,
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(response.text, "note");
+});
+
+test("createProfileBackedProvider: accepts common OpenAI-compatible text envelopes", async () => {
+  const profile: ModelProfile = {
+    id: "m-envelope",
+    name: "Envelope profile",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "envelope-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const responses = [
+    { choices: [{ message: { content: [{ type: "text", text: "one" }] } }] },
+    { choices: [{ text: "two" }] },
+    { output_text: "three" },
+  ];
+  let index = 0;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async () =>
+      jsonResponse(responses[index++ % responses.length]),
+    ),
+  });
+
+  for (const expected of ["one", "two", "three"]) {
+    const response = await provider.invoke({
+      modelId: profile.id,
+      prompt: { id: "p", version: 1, template: "T" },
+      input: { text: "meta" },
+      signal: new AbortController().signal,
+    });
+    assert.equal(response.text, expected);
+  }
+});
+
+test("createProfileBackedProvider: does not retry permanent client failures", async () => {
+  const profile: ModelProfile = {
+    id: "m-client-error",
+    name: "Client error profile",
+    mode: "custom",
+    protocol: "openai",
+    apiKey: VALID_KEY,
+    endpoint: "https://api.example.test/v1",
+    model: "client-error-model",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+  let calls = 0;
+  const provider = createProfileBackedProvider({
+    resolve: async () => profile,
+    fetchFn: mockFetch(async () => {
+      calls += 1;
+      return new Response("bad request", { status: 400 });
+    }),
+  });
+
+  await assert.rejects(
+    provider.invoke({
+      modelId: profile.id,
+      prompt: { id: "p", version: 1, template: "T" },
+      input: { text: "meta" },
+      signal: new AbortController().signal,
+    }),
+    /HTTP 400/,
+  );
+  assert.equal(calls, 1);
+});
+
 test("createProfileBackedProvider: uses the requested max output tokens", async () => {
   const profile: ModelProfile = {
     id: "m-token-limit",

@@ -193,6 +193,20 @@ test("dashboard keeps pending projects unknown instead of promoting them to work
   );
 });
 
+test("dashboard preserves task-like labels for unknown classifications", () => {
+  const taskTitle = "Standalone AiPy task";
+  const result = projectedDashboardSnapshot(
+    {
+      ...rawSnapshot,
+      details: [{ ...rawSnapshot.details[0]!, project: taskTitle }],
+    },
+    new Map([[taskTitle, { kind: "unknown", label: "unknown" }]]),
+  );
+
+  assert.equal(result.details[0]?.project, taskTitle);
+  assert.equal(result.details[0]?.projectKind, "unknown");
+});
+
 test("dashboard V2 projection contains only aggregate-safe context and no session id", () => {
   const snapshot = projectedDashboardSnapshot(rawSnapshot);
   const result = toDashboardV2Snapshot({

@@ -21,6 +21,12 @@ export interface RoastRow {
   /** Agent/tool id for skill rows; omitted where not meaningful. */
   readonly source?: string;
   readonly tokens: number;
+  /** Input tokens excluding cached input and including cache creation input. */
+  readonly inputTokens?: number;
+  /** Output tokens included in the total. */
+  readonly outputTokens?: number;
+  /** Cached input tokens included in the total. */
+  readonly cachedInputTokens?: number;
   readonly events: number;
   /** Total attributed skill calls (0 for project/session rows). */
   readonly calls: number;
@@ -126,6 +132,9 @@ function rowFor(
     name,
     ...(source === undefined ? {} : { source }),
     tokens: Math.round(acc.tokens),
+    inputTokens: Math.round(acc.netInputTokens),
+    outputTokens: Math.round(acc.outputTokens),
+    cachedInputTokens: Math.round(acc.cachedInputTokens),
     events: acc.events,
     calls: acc.calls,
     cacheRate,

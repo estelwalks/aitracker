@@ -56,6 +56,14 @@ class FakeInsightRepository implements SqliteInsightRepository {
     };
   }
 
+  getRefreshIntervalMs(): number {
+    return 60 * 60 * 1000;
+  }
+
+  setRefreshIntervalMs(): void {
+    // not used by the enhancer
+  }
+
   setPreference(): void {
     // not used by the enhancer
   }
@@ -78,6 +86,10 @@ class FakeInsightRepository implements SqliteInsightRepository {
     this.saved.push(input.value);
     this.entries.set(keyFor(input.value), input.value);
     return true;
+  }
+
+  seed(value: InsightEnhancementCache): void {
+    this.entries.set(keyFor(value), value);
   }
 
   invalidate(cacheKey: string): boolean {
@@ -252,11 +264,23 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(second.modelLabel, "Model");
   assert.equal(second.lines.length, 2);
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
-  assert.equal(requests()[0]?.timeoutMs, 60_000);
+  assert.equal(requests()[0]?.timeoutMs, 90_000);
   assert.equal(requests()[0]?.maxOutputTokens, 8192);
 });
 
-test("default cache expires with the 3-hour page refresh cycle", async () => {
+test("readCached returns persisted AI lines without invoking the model", async () => {
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const target = enhancer(ai, repository);
+
+  await target.enhance(input());
+  const cached = await target.readCached?.(input());
+  assert.equal(cached?.status, "enhanced-cached");
+  assert.equal(cached?.lines.length, 2);
+  assert.equal(calls(), 1);
+});
+
+test("default cache expires after one hour", async () => {
   let nowMs = FIXED_NOW;
   const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
   const repository = new FakeInsightRepository();
@@ -267,7 +291,7 @@ test("default cache expires with the 3-hour page refresh cycle", async () => {
     now: () => nowMs,
   });
 
-  assert.equal(INSIGHT_ENHANCEMENT_CACHE_TTL_MS, 3 * 60 * 60 * 1000);
+  assert.equal(INSIGHT_ENHANCEMENT_CACHE_TTL_MS, 60 * 60 * 1000);
   assert.equal((await target.enhance(input())).status, "enhanced-ready");
   assert.equal(
     repository.saved[0]!.expiresAtMs - repository.saved[0]!.generatedAtMs,
@@ -279,6 +303,29 @@ test("default cache expires with the 3-hour page refresh cycle", async () => {
   assert.equal(calls(), 1);
 
   nowMs += 1;
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  assert.equal(calls(), 2);
+});
+
+test("legacy cache entries older than one hour are refreshed", async () => {
+  const nowMs = FIXED_NOW;
+  const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
+  const repository = new FakeInsightRepository();
+  const target = createInsightEnhancer({
+    ai,
+    repository,
+    resolveActiveProfile: resolveProfile,
+    now: () => nowMs,
+  });
+
+  assert.equal((await target.enhance(input())).status, "enhanced-ready");
+  const saved = repository.saved[0]!;
+  repository.seed({
+    ...saved,
+    generatedAtMs: FIXED_NOW - 2 * 60 * 60 * 1000,
+    expiresAtMs: FIXED_NOW + 2 * 60 * 60 * 1000,
+  });
+
   assert.equal((await target.enhance(input())).status, "enhanced-ready");
   assert.equal(calls(), 2);
 });
@@ -449,6 +496,28 @@ test("singleflight merges concurrent same-scope calls", async () => {
   assert.equal(calls(), 1);
   assert.deepEqual(r1, r2);
   assert.equal(r1.status, "enhanced-ready");
+});
+
+test("serializes different surfaces for a burst-sensitive provider", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const { ai } = fakeAI(async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    active -= 1;
+    return completedResult(VALID_OUTPUT);
+  });
+  const target = enhancer(ai, new FakeInsightRepository());
+
+  const [first, second] = await Promise.all([
+    target.enhance(input()),
+    target.enhance(input({ surface: "agents" })),
+  ]);
+
+  assert.equal(first.status, "enhanced-ready");
+  assert.equal(second.status, "enhanced-ready");
+  assert.equal(maxActive, 1);
 });
 
 test("recordExecution receives the execution summary on success", async () => {

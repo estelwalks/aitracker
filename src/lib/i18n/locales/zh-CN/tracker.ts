@@ -4,6 +4,9 @@ export const tracker = {
   insightTitle: "今日洞察",
   metric: {
     tokens: "总消耗",
+    inputTokens: "输入",
+    outputTokens: "输出",
+    cachedTokens: "缓存",
     projects: "上榜项目",
     skills: "上榜 Skill",
     sessions: "上榜会话",
@@ -29,6 +32,7 @@ export const tracker = {
     trendDown: "环比下降",
     trendFlat: "环比持平",
     trendNa: "无环比",
+    trendPeriod: "对比前 {days} 天",
   },
   suggest: {
     cache: "缓存命中率偏低，建议复用上下文以提升缓存命中。",
