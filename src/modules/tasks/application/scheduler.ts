@@ -58,6 +58,13 @@ export interface SchedulerOptions {
   ) => ReturnType<typeof setTimeout>;
   readonly clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
   /**
+   * Whether `start()` must wait for every due startup collector to finish.
+   * Defaults to true for backwards compatibility. The Windows desktop passes
+   * false so its renderer can open from the persisted snapshots while the
+   * expensive filesystem collectors continue through the normal scheduler.
+   */
+  readonly awaitStartupTasks?: boolean;
+  /**
    * P5-T5-06: global resource budget. Collection tasks acquire the "heavy"
    * permit before running so at most one heavy collector executes at a time.
    * Manual triggers raise queue priority but never bypass the budget.
@@ -270,6 +277,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
   const setTimer =
     options.setTimeout ?? ((handler, delay) => setTimeout(handler, delay));
   const clearTimer = options.clearTimeout ?? ((timer) => clearTimeout(timer));
+  const awaitStartupTasks = options.awaitStartupTasks ?? true;
   const queue: Array<{
     run: JobRun;
     definition: JobTypeDefinition;
@@ -625,7 +633,9 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
       correlationId: createCorrelationId(`corr-${sequence}`),
     };
     const startupCompletion =
-      reason === "startup" && STARTUP_BARRIER_TASK_IDS.has(definition.id)
+      awaitStartupTasks &&
+      reason === "startup" &&
+      STARTUP_BARRIER_TASK_IDS.has(definition.id)
         ? createStartupCompletion(run.runId)
         : undefined;
     try {
@@ -685,11 +695,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
             expectedLifecycle,
           );
           assertCurrentStart();
-          if (STARTUP_BARRIER_TASK_IDS.has(definition.id))
+          if (awaitStartupTasks && STARTUP_BARRIER_TASK_IDS.has(definition.id))
             startupRuns.push({ definition, run });
         }
       }
-      await awaitStartupBarrier(startupRuns);
+      if (awaitStartupTasks) await awaitStartupBarrier(startupRuns);
       assertCurrentStart();
       await scheduleNext(expectedLifecycle);
     } catch {

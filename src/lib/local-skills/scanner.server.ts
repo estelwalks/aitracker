@@ -125,11 +125,13 @@ const MAX_TEXT_BYTES = 1_024 * 1_024;
  */
 async function measureSkillDirectory(
   root: string,
+  signal?: AbortSignal,
 ): Promise<{ sizeBytes: number; chars: number }> {
   let sizeBytes = 0;
   let chars = 0;
   const stack = [root];
   while (stack.length > 0) {
+    signal?.throwIfAborted();
     const directory = stack.pop()!;
     let handle;
     try {
@@ -138,6 +140,7 @@ async function measureSkillDirectory(
       continue; // Missing/unreadable directory: skip.
     }
     for await (const entry of handle) {
+      signal?.throwIfAborted();
       if (entry.name.startsWith(".")) continue;
       const entryPath = join(directory, entry.name);
       let entryStat;
@@ -297,6 +300,8 @@ interface ScanOptions {
   env?: Record<string, string | undefined>;
   /** P5-T5-03: real cancellation; checked before and during scans. */
   signal?: AbortSignal;
+  /** Test seam for Windows-only deep cancellation behavior. */
+  platform?: NodeJS.Platform;
   stateRepository?: SkillStateRepository;
 }
 
@@ -742,8 +747,10 @@ async function assertMarketSkillPath(
 async function findMarker(
   directoryPath: string,
   markers: readonly string[],
+  signal?: AbortSignal,
 ): Promise<string | null> {
   for (const marker of markers) {
+    signal?.throwIfAborted();
     try {
       const markerStat = await stat(join(directoryPath, marker));
       if (markerStat.isFile()) return marker;
@@ -769,6 +776,7 @@ interface SkillWalkContext {
   installations: Map<string, SkillInstallation[]>;
   descriptions: Map<string, string | null>;
   forms: Map<string, SkillForm>;
+  signal?: AbortSignal;
 }
 
 async function recordSkill(
@@ -776,6 +784,7 @@ async function recordSkill(
   marker: string,
   context: SkillWalkContext,
 ): Promise<void> {
+  context.signal?.throwIfAborted();
   const details = await stat(skillPath);
   const frontmatter = await readSkillManifest(skillPath, [marker]);
   const name = frontmatter.name?.trim() || basename(skillPath) || "Skill";
@@ -815,6 +824,7 @@ async function walkSkillDirectory(
   depth: number,
   context: SkillWalkContext,
 ): Promise<void> {
+  context.signal?.throwIfAborted();
   let directory;
   try {
     directory = await opendir(directoryPath);
@@ -824,11 +834,13 @@ async function walkSkillDirectory(
 
   const entries: { name: string; path: string }[] = [];
   for await (const entry of directory) {
+    context.signal?.throwIfAborted();
     entries.push({ name: entry.name, path: join(directoryPath, entry.name) });
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
 
   for (const entry of entries) {
+    context.signal?.throwIfAborted();
     if (entry.name.startsWith(".")) continue;
     let entryStat;
     try {
@@ -841,6 +853,7 @@ async function walkSkillDirectory(
     const marker = await findMarker(
       entry.path,
       context.rule.markers ?? DEFAULT_MARKERS,
+      context.signal,
     );
     if (marker !== null) {
       await recordSkill(entry.path, marker, context);
@@ -853,6 +866,7 @@ async function walkSkillDirectory(
 async function scanInstallations(
   roots: Record<SkillAgent, string[]>,
   origins: MarketOriginsFile,
+  signal?: AbortSignal,
 ): Promise<{
   installations: Map<string, SkillInstallation[]>;
   descriptions: Map<string, string | null>;
@@ -863,6 +877,7 @@ async function scanInstallations(
   const forms = new Map<string, SkillForm>();
   await Promise.all(
     SKILL_AGENTS.map(async (agent) => {
+      signal?.throwIfAborted();
       const rule = RULE_BY_AGENT.get(agent);
       if (rule === undefined) return;
       const context: SkillWalkContext = {
@@ -872,8 +887,10 @@ async function scanInstallations(
         installations,
         descriptions,
         forms,
+        signal,
       };
       for (const root of roots[agent] ?? []) {
+        signal?.throwIfAborted();
         await walkSkillDirectory(root, 0, context);
       }
     }),
@@ -885,6 +902,10 @@ export async function scanLocalSkills(
   options: ScanOptions = {},
 ): Promise<SkillSnapshot> {
   options.signal?.throwIfAborted();
+  const traversalSignal =
+    (options.platform ?? process.platform) === "win32"
+      ? options.signal
+      : undefined;
   const homeDirectory = options.homeDirectory ?? homedir();
   const now = options.now ?? new Date();
   const roots = resolveAgentRoots(homeDirectory, options.env ?? process.env);
@@ -892,12 +913,18 @@ export async function scanLocalSkills(
   const [origins, blacklist, installationFacts] = await Promise.all([
     state.readOrigins(),
     state.readBlacklist(),
-    detectToolInstallations(AI_TOOLS, homeDirectory),
+    detectToolInstallations(
+      AI_TOOLS,
+      homeDirectory,
+      undefined,
+      traversalSignal,
+    ),
   ]);
   const agents = agentInstallationFacts(installationFacts);
   const { installations, descriptions, forms } = await scanInstallations(
     roots,
     origins,
+    traversalSignal,
   );
   const usageEvidence = skillUsageEvidence(options.usageEvents ?? []);
 
@@ -922,10 +949,13 @@ export async function scanLocalSkills(
   // P5-T5-03: stop launching further directory I/O when cancelled.
   const measures = await Promise.all(
     skills.map(async (skill) => {
-      options.signal?.throwIfAborted();
+      traversalSignal?.throwIfAborted();
       const firstPath = skill.installations[0]?.path;
       if (!firstPath) return { sizeBytes: 0, tokenEstimate: 0 };
-      const { sizeBytes, chars } = await measureSkillDirectory(firstPath);
+      const { sizeBytes, chars } = await measureSkillDirectory(
+        firstPath,
+        traversalSignal,
+      );
       return { sizeBytes, tokenEstimate: Math.round(chars / 4) };
     }),
   );
