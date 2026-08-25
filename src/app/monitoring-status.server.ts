@@ -6,9 +6,6 @@ import { getMonitoringSecuritySummary } from "./security-summary.server.ts";
 export async function getMonitoringStatus() {
   const { monitoring } = await getCompositionRoot();
   const status = await createMonitoringServerApi(monitoring).status();
-  if (status.security == null) {
-    const security = await getMonitoringSecuritySummary();
-    if (security != null) return { ...status, security };
-  }
-  return status;
+  const security = await getMonitoringSecuritySummary();
+  return security == null ? status : { ...status, security };
 }

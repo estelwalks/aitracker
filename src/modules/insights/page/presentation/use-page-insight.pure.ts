@@ -5,6 +5,10 @@
  */
 import { isInsightAnalysisUseful } from "../analysis-quality.ts";
 
+/** Renderer event emitted after the active model profile changes. */
+export const PAGE_INSIGHT_REFRESH_EVENT = "trusttools:page-insight-refresh";
+export const PAGE_INSIGHT_REFRESH_CHANNEL = PAGE_INSIGHT_REFRESH_EVENT;
+
 /**
  * Severity of a single envelope line. Matches the frozen M1 contract
  * (`InsightSeverity`) without importing it, so this module stays decoupled.

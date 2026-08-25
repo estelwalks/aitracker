@@ -5,7 +5,7 @@
   "display": {
     "name": "pi",
     "nameZh": "pi",
-    "icon": "https://pi.dev/favicon.svg",
+    "icon": "other",
     "color": "#fe2857"
   },
   "platforms": {

@@ -1,50 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { brandParams } from "../lib/app-config";
-import { catalogs, getMessage } from "../lib/i18n/route-messages";
-import { resolveLocaleFromSearch } from "../lib/i18n/locale";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 interface WidgetSearchParams {
-  /** Electron 浮窗加载本页时传入：只渲染浮窗面板，不带 PageBar/三个 Section。 */
-  readonly mode?: "float" | "bar" | null;
+  /** Electron 浮窗加载本页时传入；该路由不再提供应用内预览页面。 */
+  readonly mode?: "float" | null;
 }
 
-// The page component lives in widget.lazy.tsx (P6-T6-04 route splitting).
+// This route is an implementation detail for the Electron floating panel.
+// Direct navigation is redirected so the removed in-app widget page cannot be
+// reached from a saved URL.
 export const Route = createFileRoute("/widget")({
   validateSearch: (search: Record<string, unknown>): WidgetSearchParams => ({
-    mode: search.mode === "float" || search.mode === "bar" ? search.mode : null,
+    mode: search.mode === "float" ? "float" : null,
   }),
-  loaderDeps: ({ search }) => ({
-    locale: resolveLocaleFromSearch(search as Record<string, unknown>),
-    mode:
-      (search as Record<string, unknown>).mode === "float" ||
-      (search as Record<string, unknown>).mode === "bar"
-        ? ((search as Record<string, unknown>).mode as "float" | "bar")
-        : null,
-  }),
-  loader: async ({ deps }) => ({
-    locale: deps.locale,
-  }),
-  staleTime: 30_000,
-  gcTime: 5 * 60_000,
-  preloadStaleTime: 30_000,
-  head: ({ loaderData }) => ({
-    meta: [
-      {
-        title: getMessage(
-          catalogs[loaderData?.locale ?? "zh-CN"],
-          "meta.titles.widget",
-          brandParams,
-        ),
-      },
-      {
-        name: "description",
-        content: getMessage(
-          catalogs[loaderData?.locale ?? "zh-CN"],
-          "widget.metaDescription",
-          brandParams,
-        ),
-      },
-    ],
-  }),
+  beforeLoad: ({ search }) => {
+    if (search.mode !== "float") {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
 });

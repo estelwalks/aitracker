@@ -58,6 +58,13 @@ export interface SchedulerOptions {
   ) => ReturnType<typeof setTimeout>;
   readonly clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
   /**
+   * Decides whether a due startup refresh belongs to the native startup
+   * barrier. Defaults to true, preserving the strict existing behavior.
+   */
+  readonly shouldAwaitStartupTask?: (
+    definition: JobTypeDefinition,
+  ) => boolean | Promise<boolean>;
+  /**
    * P5-T5-06: global resource budget. Collection tasks acquire the "heavy"
    * permit before running so at most one heavy collector executes at a time.
    * Manual triggers raise queue priority but never bypass the budget.
@@ -383,21 +390,27 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
     controller: AbortController,
   ): Promise<void> => {
     const executor = executors[definition.executorKey];
-    const timeoutTimer = setTimer(
-      () => controller.abort(),
-      definition.timeoutMs,
-    );
     // P5-T5-06: heavy collectors (category "collection") share the global
     // heavy permit; the release is idempotent and always runs, so cancelled
     // or failed tasks can never leak a permit. Manual triggers raise queue
     // priority (runNow) but never bypass this budget.
     const isHeavy = definition.category === "collection";
-    const releaseHeavy = isHeavy
-      ? await options.resourceBudget
-          ?.acquire("heavy", controller.signal)
-          .catch(() => undefined)
-      : undefined;
+    let releaseHeavy: (() => void) | undefined;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
     try {
+      // Queue time is governed by the shared resource budget and must not
+      // consume a task's execution budget. On first launch all collectors are
+      // queued together; starting every timer here previously cancelled the
+      // 60-second installation task while it was still waiting behind usage,
+      // sessions and skills.
+      if (isHeavy && options.resourceBudget) {
+        releaseHeavy = await options.resourceBudget.acquire(
+          "heavy",
+          controller.signal,
+        );
+      }
+      controller.signal.throwIfAborted();
+      timeoutTimer = setTimer(() => controller.abort(), definition.timeoutMs);
       if (!executor)
         throw Object.assign(new Error("Executor unavailable"), {
           code: "errors.tasks.executor-unavailable",
@@ -459,7 +472,7 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
           retryable: Boolean(error.retryable),
         });
     } finally {
-      clearTimer(timeoutTimer);
+      if (timeoutTimer !== undefined) clearTimer(timeoutTimer);
       releaseHeavy?.();
       active.delete(run.taskId);
     }
@@ -669,6 +682,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         assertCurrentStart();
         if (await isDue(definition, preference, now)) {
           assertCurrentStart();
+          const shouldAwaitStartupTask =
+            STARTUP_BARRIER_TASK_IDS.has(definition.id) &&
+            (options.shouldAwaitStartupTask == null ||
+              (await options.shouldAwaitStartupTask(definition)));
+          assertCurrentStart();
           scheduledByThisStart.set(definition.id, {
             previous: lastScheduledAt.get(definition.id),
             scheduled: now,
@@ -679,8 +697,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
             expectedLifecycle,
           );
           assertCurrentStart();
-          if (STARTUP_BARRIER_TASK_IDS.has(definition.id))
+          if (shouldAwaitStartupTask) {
             startupRuns.push({ definition, run });
+          } else {
+            startupCompletions.delete(run.runId);
+          }
         }
       }
       await awaitStartupBarrier(startupRuns);

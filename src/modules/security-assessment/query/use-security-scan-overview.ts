@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { MonitoringSecuritySummary } from "../../monitoring/contracts";
-import { latestHistory, summarizeReports } from "../presentation/security-view";
+import {
+  dedupeHistoryByContentHash,
+  latestHistory,
+  summarizeReports,
+} from "../presentation/security-view";
 import { getBrowserSecurityClient } from "./browser-client";
 import {
   getDesktopSecurityClient,
@@ -16,6 +20,8 @@ export interface SecurityScanOverview {
   readonly runCount: number;
   /** Deduplicated count of unique scanned Skills across ALL scan history. */
   readonly coverage: number;
+  /** Deduplicated count of all discovered Skills on this machine. */
+  readonly totalSkills: number;
   readonly loading: boolean;
   /**
    * True once a real scan-history client (desktop IPC or companion API) has
@@ -44,6 +50,7 @@ export function useSecurityScanOverview(): SecurityScanOverview {
   );
   const [runCount, setRunCount] = useState(0);
   const [coverage, setCoverage] = useState(0);
+  const [totalSkills, setTotalSkills] = useState(0);
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
 
@@ -69,11 +76,15 @@ export function useSecurityScanOverview(): SecurityScanOverview {
           setSummary(null);
           setRunCount(0);
           setCoverage(0);
+          setTotalSkills(0);
           setAvailable(false);
           setLoading(false);
           return;
         }
-        const history = await client.getHistory();
+        const [history, skills] = await Promise.all([
+          client.getHistory(),
+          client.listSkills(),
+        ]);
         if (disposed) return;
         // The real scan history was read successfully: from here on the
         // overview counts are authoritative even if a later tick fails
@@ -88,14 +99,11 @@ export function useSecurityScanOverview(): SecurityScanOverview {
         // 检测次数 = the number of scan RUNS (distinct scanIds), not history
         // entries: one full scan covering 16 skills counts as 1, not 16.
         setRunCount(new Set(history.map((entry) => entry.scanId)).size);
-        // Dedup by the stable content hash so each skill is counted once (an
-        // unchanged skill re-scanned, or installed under two roots, shares one
-        // content hash — consistent with skill management's dedup).
-        setCoverage(
-          new Set(
-            history.map((entry) => entry.report?.contentHash ?? entry.skillRef),
-          ).size,
-        );
+        // Use the same current-state projection as the security page: a
+        // rescan replaces the previous verdict, then identical installations
+        // collapse by content hash.
+        setCoverage(dedupeHistoryByContentHash(history).length);
+        setTotalSkills(skills.length);
         setSummary(
           totals.total === 0
             ? null
@@ -129,5 +137,5 @@ export function useSecurityScanOverview(): SecurityScanOverview {
     };
   }, []);
 
-  return { summary, runCount, coverage, loading, available };
+  return { summary, runCount, coverage, totalSkills, loading, available };
 }

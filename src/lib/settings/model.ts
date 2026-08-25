@@ -7,7 +7,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLoginRequested: false,
   retentionDays: 90,
-  dataPath: "~/",
+  dataPath: "~/.trusttools",
 };
 
 export function parseSettings(raw: string | null): AppSettings {
@@ -20,6 +20,10 @@ export function parseSettings(raw: string | null): AppSettings {
       candidate >= 0
         ? candidate
         : fallback;
+    const dataPath =
+      typeof value.dataPath === "string" && value.dataPath.length > 0
+        ? value.dataPath
+        : DEFAULT_SETTINGS.dataPath;
     return {
       ...DEFAULT_SETTINGS,
       launchAtLoginRequested:
@@ -30,10 +34,9 @@ export function parseSettings(raw: string | null): AppSettings {
         value.retentionDays,
         DEFAULT_SETTINGS.retentionDays,
       ),
-      dataPath:
-        typeof value.dataPath === "string" && value.dataPath.length > 0
-          ? value.dataPath
-          : DEFAULT_SETTINGS.dataPath,
+      // `~/` was the old, incomplete default. Migrate it on read so existing
+      // installations display the actual app-owned data root as well.
+      dataPath: dataPath === "~/" ? DEFAULT_SETTINGS.dataPath : dataPath,
     };
   } catch {
     return DEFAULT_SETTINGS;

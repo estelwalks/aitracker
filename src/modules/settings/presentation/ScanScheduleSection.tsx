@@ -7,6 +7,7 @@ import type {
   SecurityClient,
   SecurityScanCycle,
   SecurityScanScheduleView,
+  SecurityScanScheduleStatusView,
   SecurityScanScope,
 } from "../../security-assessment/index";
 import {
@@ -57,7 +58,7 @@ export function ScanScheduleSection({
   status: SecurityConnectionStatus;
   onRetry: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, format } = useI18n();
   const [schedule, setSchedule] = useState<SecurityScanScheduleView | null>(
     null,
   );
@@ -65,16 +66,20 @@ export function ScanScheduleSection({
   const [reloadTick, setReloadTick] = useState(0);
   const [saving, setSaving] = useState(false);
   const [agents, setAgents] = useState<readonly string[]>([]);
+  const [scheduleStatus, setScheduleStatus] =
+    useState<SecurityScanScheduleStatusView | null>(null);
 
   useEffect(() => {
     if (client == null) return;
     let cancelled = false;
     setLoadError(false);
     setSchedule(null);
-    client
-      .getScanSchedule()
-      .then((next) => {
-        if (!cancelled) setSchedule(next);
+    Promise.all([client.getScanSchedule(), client.getScanScheduleStatus()])
+      .then(([next, nextStatus]) => {
+        if (!cancelled) {
+          setSchedule(next);
+          setScheduleStatus(nextStatus);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -85,6 +90,24 @@ export function ScanScheduleSection({
       cancelled = true;
     };
   }, [client, reloadTick, t]);
+
+  useEffect(() => {
+    if (client == null) return;
+    let cancelled = false;
+    const refresh = () => {
+      void client
+        .getScanScheduleStatus()
+        .then((next) => {
+          if (!cancelled) setScheduleStatus(next);
+        })
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(refresh, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [client]);
 
   // 真实可选的 Agent 列表来自已发现 Skill 的 agents 元数据。
   useEffect(() => {
@@ -117,6 +140,7 @@ export function ScanScheduleSection({
     try {
       const saved = await client.setScanSchedule(next);
       setSchedule(saved);
+      setScheduleStatus(await client.getScanScheduleStatus());
       toast.success(t("settings.security.schedule.saved"));
     } catch {
       if (previous != null) setSchedule(previous);
@@ -146,6 +170,36 @@ export function ScanScheduleSection({
     );
   } else {
     const disabled = saving;
+    const lastRun = scheduleStatus?.lastRun;
+    const lastRunDetail =
+      lastRun == null
+        ? t("settings.security.schedule.neverRun")
+        : lastRun.status === "complete" &&
+            lastRun.queuedCount > 0 &&
+            lastRun.skippedCount === lastRun.queuedCount
+          ? t("settings.security.schedule.allUnchanged", {
+              time: format.formatDateTime(
+                lastRun.finishedAt ?? lastRun.startedAt,
+                false,
+              ),
+              count: lastRun.skippedCount,
+            })
+          : t("settings.security.schedule.runSummary", {
+              time: format.formatDateTime(
+                lastRun.finishedAt ?? lastRun.startedAt,
+                false,
+              ),
+              completed: lastRun.completedCount,
+              failed: lastRun.failedCount,
+              skipped: lastRun.skippedCount,
+            });
+    const nextRunDetail = !schedule.enabled
+      ? t("settings.security.schedule.disabledStatus")
+      : scheduleStatus?.pending
+        ? t("settings.security.schedule.pending")
+        : scheduleStatus?.nextRunAt
+          ? format.formatDateTime(scheduleStatus.nextRunAt, false)
+          : t("common.loading");
     content = (
       <div>
         <Field
@@ -268,6 +322,21 @@ export function ScanScheduleSection({
             onChange={(notify) => void save({ ...schedule, notify })}
             disabled={disabled}
           />
+        </Field>
+
+        <Field label={t("settings.security.schedule.lastRun")}>
+          <span className="text-right font-mono text-[11px] text-muted-foreground">
+            {lastRunDetail}
+          </span>
+        </Field>
+
+        <Field
+          label={t("settings.security.schedule.nextRun")}
+          hint={t("settings.security.schedule.processRequiredHint")}
+        >
+          <span className="text-right font-mono text-[11px] text-muted-foreground">
+            {nextRunDetail}
+          </span>
         </Field>
       </div>
     );

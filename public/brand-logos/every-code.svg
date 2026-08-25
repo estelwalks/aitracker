@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Black background -->
+  <rect width="32" height="32" fill="#000000"/>
+  <!-- White slanted dash - horizontally flipped, correct angle -->
+  <path d="M 4 26 L 6 21 L 28 21 L 26 26 Z" fill="#ffffff"/>
+</svg>

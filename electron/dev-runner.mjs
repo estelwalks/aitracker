@@ -4,6 +4,8 @@ import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { resolveNpmSpawn } from "../scripts/npm-spawn.mjs";
+
 // Env-var names below mirror src/lib/app-config.ts ENV (plain JS cannot import
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
@@ -16,7 +18,6 @@ const viteOptimizationMetadata = join(
 const host = process.env.TRUSTTOOLS_DEV_HOST ?? "127.0.0.1";
 const port = process.env.TRUSTTOOLS_DEV_PORT ?? "5173";
 const origin = `http://${host}:${port}`;
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
 const desktopBrokerToken = randomUUID();
 let shuttingDown = false;
@@ -34,6 +35,15 @@ export const desktopViteWarmupPaths = Object.freeze([
   "/src/router.tsx",
   "/src/routeTree.gen.ts",
 ]);
+
+/**
+ * A clean Windows checkout may spend well over one minute optimizing Vite's
+ * dependency graph. These limits apply only to the development launcher; the
+ * packaged application's workspace startup policy is unchanged.
+ */
+export const desktopDevColdStartTimeoutMs = 300_000;
+export const desktopDevProbeTimeoutMs = 5_000;
+const desktopDevPollIntervalMs = 500;
 
 /** Pure timestamp decision used by both incremental prepare stages. */
 export function shouldRebuild(inputModifiedAt, outputModifiedTimes) {
@@ -113,6 +123,15 @@ async function runCommand(
   });
 }
 
+async function runNpmCommand(argumentsList, environment = process.env) {
+  const invocation = resolveNpmSpawn(argumentsList, { environment });
+  await runCommand(
+    invocation.executable,
+    invocation.argumentsList,
+    environment,
+  );
+}
+
 async function prepareIfStale({ label, inputs, outputs, build }) {
   const [inputModifiedAt, outputTimes] = await Promise.all([
     inputsModifiedAt(inputs),
@@ -144,7 +163,7 @@ export async function prepareDesktop() {
       join(skillScannerRoot, "dist/index.d.ts"),
       join(skillScannerRoot, "dist/cli.js"),
     ],
-    build: () => runCommand(npmCommand, ["run", "build:skill-scanner"]),
+    build: () => runNpmCommand(["run", "build:skill-scanner"]),
   });
 
   const electronSourceInputs = (
@@ -169,7 +188,7 @@ export async function prepareDesktop() {
       join(projectRoot, "build/electron/preload.cjs"),
     ],
     build: async () => {
-      await runCommand(npmCommand, [
+      await runNpmCommand([
         "exec",
         "--",
         "tsc",
@@ -182,7 +201,8 @@ export async function prepareDesktop() {
 }
 
 function startProcess(argumentsList, environment = process.env) {
-  const child = spawn(npmCommand, argumentsList, {
+  const invocation = resolveNpmSpawn(argumentsList, { environment });
+  const child = spawn(invocation.executable, invocation.argumentsList, {
     cwd: projectRoot,
     env: environment,
     stdio: "inherit",
@@ -204,15 +224,20 @@ async function fetchReady(url, timeoutMilliseconds) {
   return response;
 }
 
-async function waitForServer(url, timeoutMilliseconds = 60_000) {
+async function waitForServer(
+  url,
+  timeoutMilliseconds = desktopDevColdStartTimeoutMs,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     try {
-      const response = await fetchReady(url, 1_000);
+      const response = await fetchReady(url, desktopDevProbeTimeoutMs);
       await response.body?.cancel();
       return;
     } catch {
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+      await new Promise((resolvePromise) =>
+        setTimeout(resolvePromise, desktopDevPollIntervalMs),
+      );
     }
   }
   throw new Error(`Vite did not become ready at ${url}`);
@@ -226,7 +251,9 @@ export function createStaticWarmupUrls(
   return paths.map((path) => new URL(path, baseUrl).href);
 }
 
-async function waitForOptimizationMetadata(timeoutMilliseconds = 30_000) {
+async function waitForOptimizationMetadata(
+  timeoutMilliseconds = desktopDevColdStartTimeoutMs,
+) {
   const deadline = Date.now() + timeoutMilliseconds;
   while (Date.now() < deadline) {
     try {
@@ -244,7 +271,10 @@ async function warmStaticViteModules(baseUrl) {
   console.log("[desktop:ready] warming static Vite modules");
   await Promise.all(
     createStaticWarmupUrls(baseUrl).map(async (url) => {
-      const moduleResponse = await fetchReady(url, 60_000);
+      const moduleResponse = await fetchReady(
+        url,
+        desktopDevColdStartTimeoutMs,
+      );
       await moduleResponse.body?.cancel();
     }),
   );

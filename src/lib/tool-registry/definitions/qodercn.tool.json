@@ -2,7 +2,7 @@
   "$schema": "../tool-definition.schema.json",
   "configVersion": 1,
   "id": "qodercn",
-  "display": { "name": "Qoder CN", "nameZh": "Qoder CN", "icon": "https://img.alicdn.com/imgextra/i3/O1CN01KliT1u1jEq947NlKH_!!6000000004517-55-tps-180-180.svg", "color": "#22c55e" },
+  "display": { "name": "Qoder CN", "nameZh": "Qoder CN", "icon": "other", "color": "#22c55e" },
   "platforms": { "macos": "supported", "windows": "supported", "linux": "planned" },
   "detection": {
     "locations": [

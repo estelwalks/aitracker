@@ -5,7 +5,7 @@
   "display": {
     "name": "Droid",
     "nameZh": "Droid",
-    "icon": "https://factory.ai/favicon.svg",
+    "icon": "other",
     "color": "#1f6feb"
   },
   "platforms": {
