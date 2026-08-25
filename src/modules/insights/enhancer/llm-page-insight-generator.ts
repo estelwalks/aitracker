@@ -23,7 +23,7 @@ import { MAX_PAYLOAD_BYTES, assertPayloadSafe } from "./validation.ts";
  * total token budget. Visible output remains bounded by the strict response
  * schema, 160 characters per analysis and at most 10 lines.
  */
-export const INSIGHT_MODEL_TIMEOUT_MS = 30_000;
+export const INSIGHT_MODEL_TIMEOUT_MS = 60_000;
 export const INSIGHT_MAX_OUTPUT_TOKENS = 8192;
 
 export interface InsightGeneratePrompt {

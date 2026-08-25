@@ -2,6 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 
 import { ENV, STORAGE_KEY_PREFIX } from "../lib/app-config.ts";
 import type { PreferenceValue } from "../modules/settings/infrastructure/sqlite-preference-repository.server.ts";
+import type {
+  SecurityScanRunRecord,
+  SecurityScanScheduleRuntime,
+} from "../../electron/contracts.ts";
 import { getCompositionRoot } from "./composition.server.ts";
 import {
   STARTUP_FAILURE_CODE_HEADER,
@@ -11,6 +15,7 @@ import {
 export const DESKTOP_STATE_API_PREFIX = "/api/desktop-state";
 export const DESKTOP_HISTORY_KEY = `${STORAGE_KEY_PREFIX}security.desktop-history.v1`;
 export const DESKTOP_SCHEDULE_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule.v1`;
+export const DESKTOP_SCHEDULE_RUNTIME_KEY = `${STORAGE_KEY_PREFIX}security.scan-schedule-runtime.v1`;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 // app_preferences rejects JSON documents larger than 64 KiB. Security history
 // is intentionally a compact summary, so keep a little headroom for schema
@@ -162,6 +167,38 @@ export function projectDesktopSecurityHistory(value: unknown): PreferenceValue {
   return projected;
 }
 
+export function projectSecurityScheduleRuntime(
+  value: unknown,
+): SecurityScanScheduleRuntime {
+  if (value == null || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("Security schedule runtime is required");
+  const item = value as Record<string, unknown>;
+  if (
+    typeof item.scheduleFingerprint !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(item.scheduleFingerprint)
+  )
+    throw new TypeError("Invalid security schedule fingerprint");
+  if (
+    item.nextRunAt !== null &&
+    (typeof item.nextRunAt !== "string" ||
+      !Number.isFinite(Date.parse(item.nextRunAt)))
+  )
+    throw new TypeError("Invalid next security scan time");
+  if (typeof item.pending !== "boolean")
+    throw new TypeError("Invalid pending security scan state");
+  if (
+    typeof item.updatedAt !== "string" ||
+    !Number.isFinite(Date.parse(item.updatedAt))
+  )
+    throw new TypeError("Invalid security schedule update time");
+  return {
+    scheduleFingerprint: item.scheduleFingerprint,
+    nextRunAt: item.nextRunAt,
+    pending: item.pending,
+    updatedAt: item.updatedAt,
+  };
+}
+
 export async function handleDesktopStateBrokerRequest(
   request: Request,
 ): Promise<Response | null> {
@@ -219,6 +256,44 @@ export async function handleDesktopStateBrokerRequest(
         updatedAtMs: Date.now(),
       });
       return json({ ok: true });
+    }
+    if (request.method === "GET" && route === "/scan-schedule-runtime") {
+      return json(preferences.get(DESKTOP_SCHEDULE_RUNTIME_KEY)?.value ?? null);
+    }
+    if (request.method === "PUT" && route === "/scan-schedule-runtime") {
+      const input = await body(request);
+      preferences.set({
+        key: DESKTOP_SCHEDULE_RUNTIME_KEY,
+        value: projectSecurityScheduleRuntime(
+          input.runtime,
+        ) as unknown as PreferenceValue,
+        updatedAtMs: Date.now(),
+      });
+      return json({ ok: true });
+    }
+    if (request.method === "GET" && route === "/security-scan-run/latest") {
+      return json(await root.database.features.securityScanRuns.latest());
+    }
+    if (request.method === "PUT" && route === "/security-scan-run") {
+      const input = await body(request);
+      await root.database.features.securityScanRuns.save(
+        input.run as unknown as SecurityScanRunRecord,
+      );
+      return json({ ok: true });
+    }
+    if (request.method === "POST" && route === "/security-scan-run/recover") {
+      const input = await body(request);
+      if (
+        typeof input.finishedAt !== "string" ||
+        !Number.isFinite(Date.parse(input.finishedAt))
+      )
+        throw new TypeError("Valid recovery time is required");
+      return json({
+        recovered:
+          await root.database.features.securityScanRuns.recoverInterrupted(
+            input.finishedAt,
+          ),
+      });
     }
     if (request.method === "GET" && route === "/model-profile") {
       const active = await root.modelProfiles.getActiveView();

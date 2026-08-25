@@ -20,8 +20,11 @@ import {
   type SecurityScanCycle,
   type SecurityScanHistoryEntry,
   type SecurityScanMode,
+  type SecurityScanRunRecord,
   type SecurityScanReportDto,
   type SecurityScanSchedule,
+  type SecurityScanScheduleRuntime,
+  type SecurityScanScheduleStatus,
   type SecurityScanScope,
   type SecurityScanStartRequest,
   type SecurityScanState,
@@ -88,6 +91,9 @@ export interface SecurityScannerServiceOptions {
   readonly env?: Record<string, string | undefined>;
   readonly now?: () => Date;
   readonly scanner?: typeof scanSkill;
+  readonly onScheduleChanged?: (
+    schedule: SecurityScanSchedule,
+  ) => void | Promise<void>;
   /** Deterministic TOCTOU test hook; production never supplies it. */
   readonly beforeOpenFile?: (path: string) => Promise<void>;
 }
@@ -98,6 +104,11 @@ export interface SecurityScannerPersistence {
   clearHistory(): Promise<void>;
   readSchedule(): Promise<SecurityScanSchedule | null>;
   writeSchedule(schedule: SecurityScanSchedule): Promise<void>;
+  readScheduleRuntime(): Promise<SecurityScanScheduleRuntime | null>;
+  writeScheduleRuntime(runtime: SecurityScanScheduleRuntime): Promise<void>;
+  readLatestRun(): Promise<SecurityScanRunRecord | null>;
+  writeRun(run: SecurityScanRunRecord): Promise<void>;
+  recoverInterruptedRuns(finishedAt: string): Promise<number>;
   modelConfig(): Promise<ModelConfig | undefined>;
 }
 
@@ -521,6 +532,7 @@ export class SecurityScannerService {
   #epoch = 0;
   #historyQueue: Promise<void> = Promise.resolve();
   #scheduleQueue: Promise<void> = Promise.resolve();
+  #runRecordQueue: Promise<void> = Promise.resolve();
   #activeRun: Promise<void> | null = null;
   #clearing = false;
 
@@ -695,12 +707,12 @@ export class SecurityScannerService {
   }
 
   /** Run the scan over the already-resolved target list and wire completion. */
-  #executeScan(
+  async #executeScan(
     discovered: SecuritySkillTarget[],
     targets: SecuritySkillTarget[],
     mode: SecurityScanMode,
     trigger: SecurityScanTrigger,
-  ): SecurityScanState {
+  ): Promise<SecurityScanState> {
     if (targets.length === 0)
       throw new Error("No trusted Skill target was found");
 
@@ -727,10 +739,11 @@ export class SecurityScannerService {
       },
       resultIds: [],
     };
+    await this.#persistCurrentRun();
     const activeRun = this.#run(id, epoch, locale, targets, { mode, trigger });
     this.#activeRun = activeRun;
     void activeRun
-      .catch(() => {
+      .catch(async () => {
         if (!this.#isActive(id, epoch)) return;
         this.#state = {
           ...this.#state,
@@ -740,6 +753,7 @@ export class SecurityScannerService {
         };
         delete this.#state.currentSkill;
         this.#cancelRequested = false;
+        await this.#persistCurrentRun();
       })
       .finally(() => {
         if (this.#activeRun === activeRun) this.#activeRun = null;
@@ -785,11 +799,11 @@ export class SecurityScannerService {
   async clear(): Promise<void> {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     this.#clearing = true;
-    const clearEpoch = ++this.#epoch;
     try {
       this.#cancelRequested = true;
-      this.#state = emptyState();
       await this.#activeRun?.catch(() => undefined);
+      const clearEpoch = ++this.#epoch;
+      this.#state = emptyState();
       await this.#withHistoryLock(() => this.#persistence.clearHistory());
       if (this.#epoch === clearEpoch) this.#cancelRequested = false;
     } finally {
@@ -801,11 +815,28 @@ export class SecurityScannerService {
     return structuredClone(await this.#readSchedule());
   }
 
+  async getScanScheduleStatus(): Promise<SecurityScanScheduleStatus> {
+    const [lastRun, runtime] = await Promise.all([
+      this.#persistence.readLatestRun(),
+      this.#persistence.readScheduleRuntime(),
+    ]);
+    return {
+      lastRun: structuredClone(lastRun),
+      nextRunAt: runtime?.nextRunAt ?? null,
+      pending: runtime?.pending ?? false,
+    };
+  }
+
+  async recoverInterruptedRuns(): Promise<number> {
+    return this.#persistence.recoverInterruptedRuns(this.#now());
+  }
+
   async setScanSchedule(input: unknown): Promise<SecurityScanSchedule> {
     if (this.#clearing) throw new Error("Security scanner is being cleared");
     return this.#withScheduleLock(async () => {
       const parsed = parseSchedule(input);
       await this.#persistence.writeSchedule(parsed);
+      await this.#options.onScheduleChanged?.(structuredClone(parsed));
       return structuredClone(parsed);
     });
   }
@@ -973,6 +1004,7 @@ export class SecurityScannerService {
     else this.#state.status = "complete";
     this.#state.progress.percent = 100;
     this.#cancelRequested = false;
+    await this.#persistCurrentRun();
   }
 
   async #discoverRoot(
@@ -1255,6 +1287,47 @@ export class SecurityScannerService {
   #withScheduleLock<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#scheduleQueue.then(operation, operation);
     this.#scheduleQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  #persistCurrentRun(): Promise<void> {
+    const state = this.#state;
+    if (
+      state.scanId == null ||
+      state.mode == null ||
+      state.trigger == null ||
+      state.locale == null ||
+      state.startedAt == null
+    )
+      return Promise.resolve();
+    const status =
+      state.status === "cancelling"
+        ? "running"
+        : state.status === "model-required"
+          ? "failed"
+          : state.status;
+    if (status === "idle") return Promise.resolve();
+    const run: SecurityScanRunRecord = {
+      scanId: state.scanId,
+      mode: state.mode,
+      trigger: state.trigger,
+      locale: state.locale,
+      status,
+      startedAt: state.startedAt,
+      ...(state.finishedAt ? { finishedAt: state.finishedAt } : {}),
+      discoveredCount: state.progress.discovered,
+      queuedCount: state.progress.queued,
+      completedCount: state.progress.completed,
+      failedCount: state.progress.failed,
+      skippedCount: state.progress.skipped,
+      ...(state.errorCode ? { errorCode: state.errorCode } : {}),
+    };
+    const write = () => this.#persistence.writeRun(run);
+    const result = this.#runRecordQueue.then(write, write);
+    this.#runRecordQueue = result.then(
       () => undefined,
       () => undefined,
     );

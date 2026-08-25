@@ -126,6 +126,15 @@ export const settings = {
       dirHint:
         "검사할 Skill 루트 디렉터리(절대 경로)를 입력하세요. 입력하지 않으면 자동 검사가 실행되지 않습니다.",
       notify: "경고 알림",
+      lastRun: "최근 검사",
+      nextRun: "다음 검사",
+      neverRun: "아직 실행되지 않음",
+      allUnchanged: "{time} · {count}개 확인, 모두 변경 없음",
+      runSummary: "{time} · 완료 {completed}, 실패 {failed}, 건너뜀 {skipped}",
+      pending: "현재 검사 완료 후 다시 시도합니다",
+      disabledStatus: "사용 안 함",
+      processRequiredHint:
+        "앱이 열려 있거나 메뉴 막대에 있을 때 제시간에 실행됩니다. 종료 중 놓친 검사는 다음 실행 후 보충합니다.",
       saved: "검사 일정을 저장했습니다",
       saveFailed: "검사 일정을 저장하지 못했습니다",
       loadFailed: "검사 일정을 읽지 못했습니다",

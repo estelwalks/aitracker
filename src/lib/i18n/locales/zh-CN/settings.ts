@@ -122,6 +122,15 @@ export const settings = {
       dirHint:
         "输入要纳入自动扫描的 Skill 根目录（绝对路径），未填写时自动扫描不会执行",
       notify: "告警通知",
+      lastRun: "最近一次扫描",
+      nextRun: "下次扫描",
+      neverRun: "尚未运行",
+      allUnchanged: "{time} · 已检查 {count} 项，内容均未变化",
+      runSummary: "{time} · 完成 {completed}，失败 {failed}，跳过 {skipped}",
+      pending: "等待当前扫描结束后重试",
+      disabledStatus: "未启用",
+      processRequiredHint:
+        "应用在运行或隐藏到菜单栏时会准时执行；完全退出期间错过的任务会在下次启动后补跑",
       saved: "扫描计划已保存",
       saveFailed: "保存扫描计划失败",
       loadFailed: "读取扫描计划失败",

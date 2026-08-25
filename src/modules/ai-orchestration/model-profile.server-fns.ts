@@ -251,9 +251,9 @@ export const testModelProfile = createServerFn({ method: "POST" })
 
 /**
  * Fetch the remote model list for the (effective) profile config. Blank keys
- * are allowed: on edit the stored secret is merged server-side. Falls back to
- * a known provider default list when the live request fails; the result never
- * contains the key.
+ * are allowed: on edit the stored secret is merged server-side. When the live
+ * request fails, the result contains no model list and a sanitized reason; it
+ * never contains the key.
  */
 export const listRemoteModels = createServerFn({ method: "POST" })
   .validator((input: unknown): ListRemoteModelsInput =>

@@ -28,6 +28,7 @@ export const desktopIpc = {
   getSecurityScanHistory: "security:get-scan-history",
   cancelSecurityScan: "security:cancel-scan",
   getSecurityScanSchedule: "security:get-scan-schedule",
+  getSecurityScanScheduleStatus: "security:get-scan-schedule-status",
   setSecurityScanSchedule: "security:set-scan-schedule",
   getSecurityRuntimeCapability: "security:get-runtime-capability",
 } as const;
@@ -166,6 +167,41 @@ export interface SecurityScanSchedule {
   readonly dir: string | null;
   /** Fire an alert notification when a scheduled scan finds risks. */
   readonly notify: boolean;
+}
+
+export type SecurityScanRunStatus =
+  "queued" | "running" | "complete" | "partial" | "failed" | "cancelled";
+
+/** Durable run-level evidence, including automatic passes that skipped all Skills. */
+export interface SecurityScanRunRecord {
+  readonly scanId: string;
+  readonly mode: SecurityScanMode;
+  readonly trigger: SecurityScanTrigger;
+  readonly locale: DesktopLocale;
+  readonly status: SecurityScanRunStatus;
+  readonly startedAt: string;
+  readonly finishedAt?: string;
+  readonly discoveredCount: number;
+  readonly queuedCount: number;
+  readonly completedCount: number;
+  readonly failedCount: number;
+  readonly skippedCount: number;
+  readonly errorCode?: string;
+  readonly ruleVersion?: string;
+}
+
+/** Persisted scheduler cursor used for restart/sleep catch-up and UI status. */
+export interface SecurityScanScheduleRuntime {
+  readonly scheduleFingerprint: string;
+  readonly nextRunAt: string | null;
+  readonly pending: boolean;
+  readonly updatedAt: string;
+}
+
+export interface SecurityScanScheduleStatus {
+  readonly lastRun: SecurityScanRunRecord | null;
+  readonly nextRunAt: string | null;
+  readonly pending: boolean;
 }
 
 export interface SecurityFindingDto {
@@ -343,6 +379,7 @@ export interface DesktopApi {
   getSecurityScanHistory(): Promise<SecurityScanHistoryEntry[]>;
   cancelSecurityScan(): Promise<{ cancelled: boolean }>;
   getSecurityScanSchedule(): Promise<SecurityScanSchedule>;
+  getSecurityScanScheduleStatus(): Promise<SecurityScanScheduleStatus>;
   setSecurityScanSchedule(
     schedule: SecurityScanSchedule,
   ): Promise<SecurityScanSchedule>;

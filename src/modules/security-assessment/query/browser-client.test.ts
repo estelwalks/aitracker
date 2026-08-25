@@ -222,6 +222,38 @@ test("scan schedule rejects incomplete persisted responses", async () => {
   await assert.rejects(client.getScanSchedule());
 });
 
+test("scan schedule status reads all-skipped run evidence", async () => {
+  const client = await connectBrowserSecurityClient({
+    location,
+    fetchFn: async (input) => {
+      if (String(input).endsWith("/capability"))
+        return jsonResponse(capability);
+      return jsonResponse({
+        lastRun: {
+          scanId: "scan:11111111-1111-4111-8111-111111111111",
+          mode: "quick",
+          trigger: "automatic",
+          locale: "zh-CN",
+          status: "complete",
+          startedAt: "2026-08-25T02:00:00.000Z",
+          finishedAt: "2026-08-25T02:00:01.000Z",
+          discoveredCount: 2,
+          queuedCount: 2,
+          completedCount: 0,
+          failedCount: 0,
+          skippedCount: 2,
+        },
+        nextRunAt: "2026-08-25T03:00:00.000Z",
+        pending: false,
+      });
+    },
+  });
+  assert.ok(client);
+  const status = await client.getScanScheduleStatus();
+  assert.equal(status.lastRun?.skippedCount, 2);
+  assert.equal(status.nextRunAt, "2026-08-25T03:00:00.000Z");
+});
+
 test("setScanSchedule posts the full widened schedule including agents and dir", async () => {
   const requests: Array<{ input: unknown; init: RequestInit | undefined }> = [];
   const client = await connectBrowserSecurityClient({

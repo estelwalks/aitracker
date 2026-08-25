@@ -1,7 +1,9 @@
 import { COOKIE_TOKEN_NAME, ENV } from "./app-config.js";
 import type {
   SecurityScanHistoryEntry,
+  SecurityScanRunRecord,
   SecurityScanSchedule,
+  SecurityScanScheduleRuntime,
 } from "./contracts.js";
 import type { ModelConfig } from "skill-scanner";
 
@@ -99,6 +101,38 @@ export class DesktopStateBroker {
       method: "PUT",
       body: { schedule },
     });
+  }
+
+  readScheduleRuntime(): Promise<SecurityScanScheduleRuntime | null> {
+    return this.#request("/scan-schedule-runtime");
+  }
+
+  async writeScheduleRuntime(
+    runtime: SecurityScanScheduleRuntime,
+  ): Promise<void> {
+    await this.#request("/scan-schedule-runtime", {
+      method: "PUT",
+      body: { runtime },
+    });
+  }
+
+  readLatestRun(): Promise<SecurityScanRunRecord | null> {
+    return this.#request("/security-scan-run/latest");
+  }
+
+  async writeRun(run: SecurityScanRunRecord): Promise<void> {
+    await this.#request("/security-scan-run", {
+      method: "PUT",
+      body: { run },
+    });
+  }
+
+  async recoverInterruptedRuns(finishedAt: string): Promise<number> {
+    const result = await this.#request<{ recovered: number }>(
+      "/security-scan-run/recover",
+      { method: "POST", body: { finishedAt } },
+    );
+    return result.recovered;
   }
 
   async modelConfig(): Promise<ModelConfig | undefined> {

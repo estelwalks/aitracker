@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   chmod,
   mkdtemp,
@@ -28,6 +29,8 @@ test.afterEach(async () => {
   persistedSchedule = null;
   persistedModel = undefined;
   persistedModelError = undefined;
+  persistedRun = null;
+  persistedScheduleRuntime = null;
   await Promise.all(
     cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
@@ -93,6 +96,9 @@ let persistedSchedule: Awaited<
 > | null = null;
 let persistedModel: ModelConfig | undefined;
 let persistedModelError: Error | undefined;
+let persistedRun: import("./contracts.js").SecurityScanRunRecord | null = null;
+let persistedScheduleRuntime:
+  import("./contracts.js").SecurityScanScheduleRuntime | null = null;
 const testPersistence: SecurityScannerPersistence = {
   readHistory: async () => structuredClone(persistedHistory),
   writeHistory: async (entries) => {
@@ -104,6 +110,25 @@ const testPersistence: SecurityScannerPersistence = {
   readSchedule: async () => structuredClone(persistedSchedule),
   writeSchedule: async (schedule) => {
     persistedSchedule = structuredClone(schedule);
+  },
+  readScheduleRuntime: async () => structuredClone(persistedScheduleRuntime),
+  writeScheduleRuntime: async (runtime) => {
+    persistedScheduleRuntime = structuredClone(runtime);
+  },
+  readLatestRun: async () => structuredClone(persistedRun),
+  writeRun: async (run) => {
+    persistedRun = structuredClone(run);
+  },
+  recoverInterruptedRuns: async (finishedAt) => {
+    if (persistedRun?.status !== "running" && persistedRun?.status !== "queued")
+      return 0;
+    persistedRun = {
+      ...persistedRun,
+      status: "cancelled",
+      finishedAt,
+      errorCode: "security.scanInterrupted",
+    };
+    return 1;
   },
   modelConfig: async () => {
     if (persistedModelError) throw persistedModelError;
@@ -309,6 +334,73 @@ test("automatic scans default to quick when no model is configured", async () =>
   assert.equal(captured?.locale, "ko-KR");
   assert.equal("model" in (captured ?? {}), false);
   assert.equal(persistedHistory[0]?.trigger, "automatic");
+});
+
+test("persists an automatic run when every unchanged Skill is skipped", async () => {
+  const { home } = await fixture();
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async (request: {
+      files: Array<{ path: string; content: string }>;
+    }) => {
+      const result = report();
+      const hash = createHash("sha256");
+      for (const file of [...request.files].sort((left, right) =>
+        left.path.localeCompare(right.path),
+      ))
+        hash.update(file.path).update("\0").update(file.content);
+      result.contentHash = hash.digest("hex");
+      return result;
+    }) as never,
+  });
+
+  await service.startAutomaticScan();
+  await waitForTerminal(service);
+  assert.equal((await service.history()).length, 1);
+
+  const second = await service.startAutomaticScan();
+  assert.equal(second.status, "running");
+  await waitForTerminal(service);
+
+  assert.equal((await service.history()).length, 1);
+  assert.equal(persistedRun?.scanId, second.scanId);
+  assert.equal(persistedRun?.trigger, "automatic");
+  assert.equal(persistedRun?.status, "complete");
+  assert.equal(persistedRun?.queuedCount, 1);
+  assert.equal(persistedRun?.completedCount, 0);
+  assert.equal(persistedRun?.skippedCount, 1);
+});
+
+test("recovers interrupted durable scan runs after restart", async () => {
+  const { home } = await fixture();
+  persistedRun = {
+    scanId: "scan:11111111-1111-4111-8111-111111111111",
+    mode: "quick",
+    trigger: "automatic",
+    locale: "zh-CN",
+    status: "running",
+    startedAt: "2026-08-25T01:00:00.000Z",
+    discoveredCount: 1,
+    queuedCount: 1,
+    completedCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+  };
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+  });
+
+  assert.equal(await service.recoverInterruptedRuns(), 1);
+  const status = await service.getScanScheduleStatus();
+  assert.equal(status.lastRun?.status, "cancelled");
+  assert.equal(status.lastRun?.errorCode, "security.scanInterrupted");
+  assert.ok(status.lastRun?.finishedAt);
 });
 
 test("automatic scans use full model-aware analysis when a model is configured", async () => {
