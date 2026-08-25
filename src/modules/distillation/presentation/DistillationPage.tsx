@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle,
   ArrowRight,
   ChevronRight,
   FlaskConical,
@@ -578,20 +577,6 @@ export function DistillationPage({
           </TTButton>
         </div>
       </header>
-
-      {!hasRealModel && (
-        <Link
-          to="/settings"
-          search={{ section: "model" }}
-          className="group flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 transition-colors hover:border-warn/50 hover:bg-warn/15"
-        >
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
-          <p className="flex-1 text-[12.5px] leading-6 text-foreground/85">
-            {t("distill.noModelHint")}
-          </p>
-          <ArrowRight className="mt-1.5 size-3.5 shrink-0 text-warn transition-transform group-hover:translate-x-0.5" />
-        </Link>
-      )}
 
       <div className="mb-3">
         <InsightCard

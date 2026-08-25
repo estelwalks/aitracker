@@ -11,6 +11,7 @@
  * requested AI enhancement safely falls back to rule output.
  */
 import type { LucideIcon } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { useI18n } from "../../../../lib/i18n/context";
@@ -71,6 +72,7 @@ export function InsightCard({
   readonly showSeverity?: boolean;
 }) {
   const { locale, t } = useI18n();
+  const navigate = useNavigate();
   const { lines, loading, envelope } = usePageInsight({
     surfaceId,
     scope,
@@ -106,9 +108,19 @@ export function InsightCard({
         fallbackStatusKey ? (
           <span
             role="status"
-            className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+            className="inline-flex max-w-full min-h-6 items-center gap-1.5 rounded-full border border-border/70 bg-background/35 px-2.5 text-[10px] font-medium tracking-normal text-muted-foreground"
           >
+            <span className="size-1.5 shrink-0 rounded-full bg-amber-400" />
             {renderMessage(fallbackStatusKey)}
+            <button
+              type="button"
+              className="rounded-full px-1.5 py-0.5 font-semibold text-foreground/80 underline decoration-foreground/30 underline-offset-2 transition-colors hover:text-foreground"
+              onClick={() => {
+                void navigate({ to: "/settings", search: { section: "model" } });
+              }}
+            >
+              {t("settings.insight.configureModel")}
+            </button>
           </span>
         ) : undefined
       }

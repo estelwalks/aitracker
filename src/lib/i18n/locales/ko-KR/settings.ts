@@ -222,7 +222,8 @@ export const settings = {
     enhanced: "AI 강화",
     enhance: "표현 강화",
     enhancing: "강화 중…",
-    unavailableHint: "모델이 설정되지 않아 강화할 수 없습니다(설정에서 구성)",
+    unavailableHint: "AI 모델을 연결해 심층 연관 원인 분석과 지능형 대응 제안을 사용하세요",
+    configureModel: "지금 연결",
     severity: {
       info: "정보",
       attention: "주의",

@@ -225,7 +225,8 @@ export const settings = {
     enhance: "Enhance wording",
     enhancing: "Enhancing…",
     unavailableHint:
-      "No model configured — enhance is unavailable (configure in Settings)",
+      "AI enhancement unavailable; showing rule-based insights",
+    configureModel: "Connect now",
     severity: {
       info: "Info",
       attention: "Attention",
