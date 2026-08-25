@@ -57,7 +57,7 @@ export function InsightCard({
   rotateLabel,
   headingLevel = 1,
   showSeverity = true,
-  showFallbackStatus = true,
+  showFallbackStatus = false,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
