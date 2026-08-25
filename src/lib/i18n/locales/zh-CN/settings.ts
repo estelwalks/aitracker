@@ -216,7 +216,8 @@ export const settings = {
     enhanced: "AI 增强",
     enhance: "增强表达",
     enhancing: "增强中…",
-    unavailableHint: "未配置模型，暂无法增强（可在设置中配置）",
+    unavailableHint: "AI 增强不可用，已显示规则洞察",
+    configureModel: "立即接入",
     severity: {
       info: "提示",
       attention: "注意",
