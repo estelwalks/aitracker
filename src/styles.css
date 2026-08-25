@@ -885,11 +885,6 @@ body.tt-widget-float-document {
   color: var(--color-muted-foreground);
 }
 
-/* macOS：原生红绿灯按钮占据左侧，标题文字右移避让。 */
-.tt-window-chrome--mac .tt-window-chrome-title {
-  padding-left: 0;
-}
-
 .tt-window-controls {
   display: flex;
   height: 100%;
