@@ -5,11 +5,10 @@
  * boilerplate.
  *
  * The card is intentionally minimal: title + severity/增强 marks + typed
- * insight line. Action buttons, the enhance control, the "换一条" rotate
- * control and configuration hint are no longer surfaced here — pages show the
- * insight as a passive read-only caption. A compact status mark remains when a
- * requested AI enhancement safely falls back to rule output.
+ * insight line. Every page-level card exposes the same "换一条" rotate
+ * control, while a missing model is surfaced as a link to model settings.
  */
+import { Link } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
@@ -58,6 +57,7 @@ export function InsightCard({
   rotateLabel,
   headingLevel = 1,
   showSeverity = true,
+  showFallbackStatus = true,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
@@ -69,6 +69,8 @@ export function InsightCard({
   readonly rotateLabel?: string;
   readonly headingLevel?: 1 | 2;
   readonly showSeverity?: boolean;
+  /** Hide the fallback status on surfaces whose header should stay minimal. */
+  readonly showFallbackStatus?: boolean;
 }) {
   const { locale, t } = useI18n();
   const { lines, loading, envelope } = usePageInsight({
@@ -88,6 +90,28 @@ export function InsightCard({
     ? insightFallbackStatusLabel(envelope.status)
     : null;
   const renderMessage = t as unknown as (key: string) => string;
+  const shouldShowFallbackStatus =
+    fallbackStatusKey !== null &&
+    (showFallbackStatus || envelope?.status === "enhancer-unavailable");
+  const fallbackStatus =
+    shouldShowFallbackStatus && fallbackStatusKey ? (
+      envelope?.status === "enhancer-unavailable" ? (
+        <Link
+          to="/settings"
+          search={{ section: "model" }}
+          className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+        >
+          {renderMessage(fallbackStatusKey)}
+        </Link>
+      ) : (
+        <span
+          role="status"
+          className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+        >
+          {renderMessage(fallbackStatusKey)}
+        </span>
+      )
+    ) : undefined;
 
   return (
     <JarvisInsight
@@ -102,18 +126,9 @@ export function InsightCard({
       }
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
-      pills={
-        fallbackStatusKey ? (
-          <span
-            role="status"
-            className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
-          >
-            {renderMessage(fallbackStatusKey)}
-          </span>
-        ) : undefined
-      }
-      dotsLabel={dotsLabel}
-      rotateLabel={rotateLabel}
+      pills={fallbackStatus}
+      dotsLabel={dotsLabel ?? t("insights.dots")}
+      rotateLabel={rotateLabel ?? t("insights.rotate")}
       headingLevel={headingLevel}
     />
   );

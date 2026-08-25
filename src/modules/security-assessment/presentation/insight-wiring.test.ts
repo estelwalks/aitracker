@@ -24,6 +24,8 @@ test("security briefing uses the shared security insight envelope with local fal
   assert.match(briefingSource, /insightFallbackStatusLabel/);
   assert.match(briefingSource, /settings\.insight\.enhanced/);
   assert.match(briefingSource, /useLocalLines/);
+  assert.match(briefingSource, /security\.center\.briefing\.refresh/);
+  assert.match(briefingSource, /search=\{\{ section: "model" \}\}/);
 });
 
 test("security route keeps one bespoke briefing and does not add a second insight card", () => {

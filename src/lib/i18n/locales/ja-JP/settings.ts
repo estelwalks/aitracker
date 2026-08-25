@@ -255,7 +255,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI 強化を利用できないため、ルール洞察を表示しています",
+        "AI 強化は一時的に利用できません。AI モデルを設定してください",
       "budget-exceeded":
         "AI 強化の上限に達したため、ルール洞察を表示しています",
       timeout: "AI 強化がタイムアウトしたため、ルール洞察を表示しています",

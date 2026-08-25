@@ -242,7 +242,7 @@ export const settings = {
       stale: "数据可能过期",
     },
     fallbackStatus: {
-      "enhancer-unavailable": "AI 增强不可用，已显示规则洞察",
+      "enhancer-unavailable": "AI 增强暂不可用，去配置AI 模型",
       "budget-exceeded": "AI 增强已达调用上限，已显示规则洞察",
       timeout: "AI 增强超时，已显示规则洞察",
       "enhancer-failed": "AI 增强失败，已显示规则洞察",

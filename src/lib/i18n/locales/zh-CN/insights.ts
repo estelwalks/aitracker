@@ -5,7 +5,7 @@
  */
 export const insights = {
   title: "今日洞察",
-  rotate: "切换洞察",
+  rotate: "换一条",
   dots: "洞察列表",
   sources: {
     empty: "暂无来源数据，扫描工具后这里会出现真实洞察。",
