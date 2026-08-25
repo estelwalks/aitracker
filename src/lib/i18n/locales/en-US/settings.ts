@@ -126,6 +126,16 @@ export const settings = {
       dirHint:
         "Enter an absolute Skill root directory to scan. Leave empty to disable the automatic scan.",
       notify: "Alert notification",
+      lastRun: "Last scan",
+      nextRun: "Next scan",
+      neverRun: "Not run yet",
+      allUnchanged: "{time} · Checked {count}; all unchanged",
+      runSummary:
+        "{time} · Completed {completed}, failed {failed}, skipped {skipped}",
+      pending: "Waiting for the current scan to finish before retrying",
+      disabledStatus: "Disabled",
+      processRequiredHint:
+        "Runs on time while the app is open or in the menu bar. Missed runs catch up after the next launch.",
       saved: "Scan schedule saved",
       saveFailed: "Failed to save scan schedule",
       loadFailed: "Failed to read scan schedule",

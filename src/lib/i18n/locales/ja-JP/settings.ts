@@ -128,6 +128,15 @@ export const settings = {
       dirHint:
         "スキャン対象の Skill ルートディレクトリ（絶対パス）を入力してください。未入力の場合は自動スキャンは実行されません。",
       notify: "アラート通知",
+      lastRun: "前回のスキャン",
+      nextRun: "次回のスキャン",
+      neverRun: "まだ実行されていません",
+      allUnchanged: "{time}・{count} 件を確認、すべて変更なし",
+      runSummary: "{time}・完了 {completed}、失敗 {failed}、スキップ {skipped}",
+      pending: "現在のスキャン完了後に再試行します",
+      disabledStatus: "無効",
+      processRequiredHint:
+        "アプリの起動中またはメニューバー常駐中は予定どおり実行します。終了中に逃した処理は次回起動後に実行します。",
       saved: "スキャン予定を保存しました",
       saveFailed: "スキャン予定の保存に失敗しました",
       loadFailed: "スキャン予定の読み込みに失敗しました",

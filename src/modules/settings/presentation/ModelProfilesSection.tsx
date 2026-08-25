@@ -262,22 +262,30 @@ export function ModelProfilesSection() {
           ...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
         },
       });
-      const models = [...(result.models ?? [])];
+      const remoteSucceeded = result.ok && result.source === "remote";
+      const models = remoteSucceeded ? [...(result.models ?? [])] : [];
       setForm((current) => ({
         ...current,
         models,
         listing: false,
-        listMsg: result.ok
-          ? result.source === "remote"
-            ? t("settings.modelProfiles.listModelsDone", {
-                count: models.length,
-              })
-            : t("settings.modelProfiles.listModelsFallback")
+        listMsg: remoteSucceeded
+          ? t("settings.modelProfiles.listModelsDone", {
+              count: models.length,
+            })
           : "",
-        model: current.model.trim() || models[0] || current.model,
+        model: remoteSucceeded
+          ? current.model.trim() || models[0] || current.model
+          : current.model,
       }));
-      if (!result.ok && result.errorCode) {
-        toast.error(t(result.errorCode as MessageKey));
+      if (!remoteSucceeded) {
+        const baseMessage = result.errorCode
+          ? t(result.errorCode as MessageKey)
+          : t("common.failed");
+        toast.error(
+          result.message?.trim()
+            ? `${baseMessage}：${result.message.trim()}`
+            : baseMessage,
+        );
       }
     } catch (error) {
       const ui = toUiError(error);

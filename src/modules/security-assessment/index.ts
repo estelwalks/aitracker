@@ -76,6 +76,8 @@ export {
   type SecurityScanCycle,
   type SecurityScanScope,
   type SecurityScanScheduleView,
+  type SecurityScanRunView,
+  type SecurityScanScheduleStatusView,
   type SecurityScanPhase,
   type SecurityVerdict,
   type SecuritySeverity,

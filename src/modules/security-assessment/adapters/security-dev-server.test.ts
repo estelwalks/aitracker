@@ -6,8 +6,12 @@ import test from "node:test";
 
 import type { ScanSkillReport } from "skill-scanner";
 
-import type { DesktopLocale } from "../../../../electron/contracts";
-import type { SecurityScanSchedule } from "../../../../electron/contracts";
+import type {
+  DesktopLocale,
+  SecurityScanRunRecord,
+  SecurityScanSchedule,
+  SecurityScanScheduleRuntime,
+} from "../../../../electron/contracts";
 import {
   handleSecurityHttpApi,
   SECURITY_API_PREFIX,
@@ -138,6 +142,8 @@ function memoryPersistence(
 ): SecurityScannerPersistence {
   let entries = structuredClone(initial) as never[];
   let schedule: SecurityScanSchedule | null = null;
+  let runtime: SecurityScanScheduleRuntime | null = null;
+  let latestRun: SecurityScanRunRecord | null = null;
   return {
     readHistory: async () => structuredClone(entries),
     writeHistory: async (value) => {
@@ -150,6 +156,15 @@ function memoryPersistence(
     writeSchedule: async (value) => {
       schedule = structuredClone(value) as never;
     },
+    readScheduleRuntime: async () => structuredClone(runtime),
+    writeScheduleRuntime: async (value) => {
+      runtime = structuredClone(value);
+    },
+    readLatestRun: async () => structuredClone(latestRun),
+    writeRun: async (value) => {
+      latestRun = structuredClone(value);
+    },
+    recoverInterruptedRuns: async () => 0,
     modelConfig: async () => structuredClone(modelConfig),
   };
 }

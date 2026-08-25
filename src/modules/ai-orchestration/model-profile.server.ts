@@ -98,18 +98,6 @@ export function modelListUrl(endpoint: string): string {
 
 const MODEL_PROFILE_NETWORK_TIMEOUT_MS = 12_000;
 const DEFAULT_PROFILE_MAX_OUTPUT_TOKENS = 8192;
-const KNOWN_MODEL_FALLBACKS: Record<ProfileProtocol, readonly string[]> = {
-  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
-  anthropic: [
-    "claude-sonnet-4-5",
-    "claude-3-7-sonnet-latest",
-    "claude-3-5-haiku-latest",
-  ],
-};
-const OFFICIAL_MODEL_FALLBACKS = [
-  "deepseek-chat",
-  "deepseek-reasoner",
-] as const;
 
 class ModelProfileNetworkTimeout extends Error {
   readonly name = "ModelProfileNetworkTimeout";
@@ -262,21 +250,15 @@ export function createModelProfileNetworkOperations(options?: {
   ): Promise<ModelListResult> {
     const endpoint = effectiveEndpoint(input);
     const protocol = effectiveProtocol(input.mode, input.protocol);
-    const fallback =
-      input.mode === "official"
-        ? OFFICIAL_MODEL_FALLBACKS
-        : KNOWN_MODEL_FALLBACKS[protocol];
-    const fallbackResult = (reason: string): ModelListResult => ({
-      ok: true,
-      models: fallback,
+    const failureResult = (reason: string): ModelListResult => ({
+      ok: false,
       source: "fallback",
-      message: `Remote model list unavailable (${reason}); showing known ${protocol} models.`,
+      message: `Remote model list unavailable (${reason}).`,
       errorCode: "errors.modelProfile.listFailed",
     });
     const apiKey = input.apiKey?.trim() ?? "";
-    if (!apiKey) return fallbackResult("API key is missing");
-    if (!endpointIsValid(endpoint))
-      return fallbackResult("base URL is invalid");
+    if (!apiKey) return failureResult("API key is missing");
+    if (!endpointIsValid(endpoint)) return failureResult("base URL is invalid");
 
     try {
       const response = await withNetworkTimeout(
@@ -288,13 +270,16 @@ export function createModelProfileNetworkOperations(options?: {
           }),
         timeoutMs,
       );
-      if (!response.ok) return fallbackResult(`HTTP ${response.status}`);
+      if (!response.ok)
+        return failureResult(
+          `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`,
+        );
       const payload = await withNetworkTimeout(
         () => response.json(),
         timeoutMs,
       );
       const ids = parseRemoteModelIds(payload);
-      if (ids.length === 0) return fallbackResult("empty response");
+      if (ids.length === 0) return failureResult("empty response");
       return {
         ok: true,
         models: ids,
@@ -302,7 +287,7 @@ export function createModelProfileNetworkOperations(options?: {
         message: `Fetched ${ids.length} models from the remote endpoint.`,
       };
     } catch (error) {
-      return fallbackResult(safeNetworkMessage(error));
+      return failureResult(safeNetworkMessage(error));
     }
   }
 
@@ -524,8 +509,8 @@ export interface ModelProfileRepository {
   /** One minimal completion call with a short timeout. Never returns a key. */
   test(input: ModelProfileInput): Promise<ModelProfileTestResult>;
   /**
-   * List remote models via `GET {endpoint}/models`. Falls back to a known
-   * provider default list when the live request fails. Never returns a key.
+   * List remote models via `GET {endpoint}/models`. A failed request returns no
+   * model list and includes a sanitized reason. Never returns a key.
    */
   listModels(input: ModelProfileInput): Promise<ModelListResult>;
 }

@@ -28,6 +28,11 @@ function service(
       dir: null,
       notify: false,
     }),
+    getScanScheduleStatus: async () => ({
+      lastRun: null,
+      nextRunAt: "2026-08-25T03:00:00.000Z",
+      pending: false,
+    }),
     setScanSchedule: async () => ({
       enabled: false,
       cycle: "hourly",
@@ -254,5 +259,19 @@ test("scan schedule POST rejects without the CSRF header", async () => {
   assert.equal(response?.status, 403);
   assert.deepEqual(await response?.json(), {
     error: { code: "security.http.csrf_required" },
+  });
+});
+
+test("scan schedule status exposes durable last and next run evidence", async () => {
+  const response = await handleSecurityHttpApi(
+    new Request(`${origin}/api/security/scan-schedule-status`),
+    origin,
+    service(),
+  );
+  assert.equal(response?.status, 200);
+  assert.deepEqual(await response?.json(), {
+    lastRun: null,
+    nextRunAt: "2026-08-25T03:00:00.000Z",
+    pending: false,
   });
 });
