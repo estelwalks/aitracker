@@ -249,7 +249,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI 강화를 사용할 수 없어 규칙 기반 인사이트를 표시합니다",
+        "AI 강화는 일시적으로 사용할 수 없습니다. AI 모델을 설정하세요",
       "budget-exceeded":
         "AI 강화 호출 한도에 도달하여 규칙 기반 인사이트를 표시합니다",
       timeout: "AI 강화 시간이 초과되어 규칙 기반 인사이트를 표시합니다",
