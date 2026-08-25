@@ -642,7 +642,8 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
 
   // P5-T5-06: the scheduler's heavy collectors share the global resource
   // budget. Windows overlaps two collectors to shorten its initialization
-  // critical path; macOS retains the generated policy limit of one.
+  // critical path; macOS retains the generated policy limit of one. Both
+  // platforms may render an existing snapshot while a stale refresh runs.
   const { createResourceBudget } =
     await import("../platform/runtime/resource-budget.ts");
   const windowsHeavyLimit = desktopHeavyCollectorLimit();
@@ -672,12 +673,12 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     executors: executorRegistry.executors,
     resourceBudget,
     shouldAwaitStartupTask:
-      process.platform === "win32"
+      process.platform === "darwin" || process.platform === "win32"
         ? async (definition) => {
             const snapshot = startupSnapshots[definition.id];
             await snapshot?.ensureHydrated();
             return shouldAwaitDesktopStartupTask({
-              platform: "win32",
+              platform: process.platform,
               taskId: definition.id,
               hasPersistedSnapshot: snapshot?.readLatest().data != null,
             });
