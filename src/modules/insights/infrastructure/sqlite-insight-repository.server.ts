@@ -157,6 +157,8 @@ export interface SqliteInsightRepository {
     readonly forbiddenEntities?: readonly string[];
   }): boolean;
   invalidate(cacheKey: string): boolean;
+  /** Mark every persisted enhancement stale after the active model changes. */
+  invalidateAll?(): number;
   pruneExpired(nowMs: number): number;
 }
 
@@ -360,6 +362,15 @@ export function createSqliteInsightRepository(
             )
             .run(cacheKey).changes,
         ) > 0
+      );
+    },
+    invalidateAll() {
+      return Number(
+        database
+          .prepare(
+            "UPDATE insight_enhancement_cache SET status = 'invalidated' WHERE status = 'ready'",
+          )
+          .run().changes,
       );
     },
     pruneExpired(nowMs) {

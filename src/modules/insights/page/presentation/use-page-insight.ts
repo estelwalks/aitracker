@@ -27,6 +27,7 @@ import {
   canEnhanceNow,
   composeLineText,
   ENHANCE_COOLDOWN_MS,
+  PAGE_INSIGHT_REFRESH_EVENT,
   insightActionPath,
   insightFallbackStatusLabel,
   insightStatusLabel,
@@ -37,6 +38,7 @@ export {
   canEnhanceNow,
   composeLineText,
   ENHANCE_COOLDOWN_MS,
+  PAGE_INSIGHT_REFRESH_EVENT,
   insightActionPath,
   insightFallbackStatusLabel,
   insightStatusLabel,
@@ -161,9 +163,17 @@ export function usePageInsight(
     const stopRefreshTimer = startPageInsightRefreshTimer(() =>
       refreshEvidence(false),
     );
+    const onModelProfileChanged = () => {
+      void refreshEvidence(false);
+    };
+    window.addEventListener(PAGE_INSIGHT_REFRESH_EVENT, onModelProfileChanged);
     return () => {
       cancelled = true;
       stopRefreshTimer();
+      window.removeEventListener(
+        PAGE_INSIGHT_REFRESH_EVENT,
+        onModelProfileChanged,
+      );
     };
   }, [surfaceId, locale, scopeData]);
 
