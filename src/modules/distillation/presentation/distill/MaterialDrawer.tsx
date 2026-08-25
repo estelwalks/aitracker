@@ -481,9 +481,6 @@ export function MaterialDrawer({
               {t("distill.drawerSub")}
             </p>
           </div>
-          <span className="relative hidden rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[10.5px] text-muted-foreground sm:inline">
-            {t("distill.drawerEsc")}
-          </span>
           <button
             type="button"
             onClick={onClose}

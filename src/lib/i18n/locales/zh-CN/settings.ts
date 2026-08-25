@@ -14,7 +14,7 @@ export const settings = {
     scan: "扫描配置",
     model: "模型配置",
     menuBarApp: "菜单栏 APP",
-    appearance: "外观",
+    appearance: "个性化",
     widget: "小组件",
     about: "关于",
   },
@@ -233,7 +233,7 @@ export const settings = {
     enhanced: "AI 增强",
     enhance: "增强表达",
     enhancing: "增强中…",
-    unavailableHint: "AI 增强不可用，已显示规则洞察",
+    unavailableHint: "接入 AI 模型，解锁深度数据分析与智能化处置建议",
     configureModel: "立即接入",
     severity: {
       info: "提示",
@@ -252,7 +252,7 @@ export const settings = {
       stale: "数据可能过期",
     },
     fallbackStatus: {
-      "enhancer-unavailable": "AI 增强暂不可用，去配置AI 模型",
+      "enhancer-unavailable": "接入 AI 模型，解锁深度数据分析与智能化处置建议",
       "budget-exceeded": "AI 增强已达调用上限，已显示规则洞察",
       timeout: "AI 增强超时，已显示规则洞察",
       "enhancer-failed": "AI 增强失败，已显示规则洞察",

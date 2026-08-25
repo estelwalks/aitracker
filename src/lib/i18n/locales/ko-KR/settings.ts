@@ -15,7 +15,7 @@ export const settings = {
     scan: "스캔 구성",
     model: "모델 구성",
     menuBarApp: "메뉴 막대 APP",
-    appearance: "모양",
+    appearance: "개인 설정",
     widget: "위젯",
     about: "정보",
   },

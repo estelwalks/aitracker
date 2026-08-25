@@ -238,6 +238,18 @@ export const cancelCandidate = createServerFn({ method: "POST" })
     return run(data.candidateId);
   });
 
+export const deleteCandidates = createServerFn({ method: "POST" })
+  .validator((input: { candidateIds: string[] }) => {
+    if (!Array.isArray(input?.candidateIds) || input.candidateIds.length === 0 || input.candidateIds.length > 100 || input.candidateIds.some((id) => typeof id !== "string" || id.length > 200)) {
+      throw new AppError("errors.distillation.notFound");
+    }
+    return input;
+  })
+  .handler(async ({ data }) => {
+    const { deleteCandidates: run } = await import("./api.server.ts");
+    return run(data.candidateIds);
+  });
+
 /**
  * Save an approved candidate's knowledge note as a local Skill. The server
  * re-validates the candidate (must be approved), the skill name and the

@@ -14,7 +14,7 @@ export const settings = {
     scan: "Scan config",
     model: "Model config",
     menuBarApp: "Menu Bar App",
-    appearance: "Appearance",
+    appearance: "Personalization",
     widget: "Widgets",
     about: "About",
   },

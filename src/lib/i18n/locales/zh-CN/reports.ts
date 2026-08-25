@@ -10,8 +10,7 @@ export const reports = {
     runs: "累计触发 {count} 次生成",
     sessions: "覆盖 {count} 场会话",
     empty: "暂无简报，点击「立即生成」创建一份草稿。",
-    modelNotConfigured:
-      "未配置模型：简报将基于本地会话数据自动生成草稿，可生成后人工编辑。",
+    modelNotConfigured: "简报需配置模型。去配置 →",
     rotate: "换一条",
     dots: "洞察轮播",
   },

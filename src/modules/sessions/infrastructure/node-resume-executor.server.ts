@@ -111,6 +111,7 @@ export function createNodeResumeExecutor(
   options: NodeResumeExecutorOptions = {},
 ): ResumeCommandExecutor {
   const start = options.spawn ?? spawn;
+  const useVisibleTerminal = options.spawn === undefined;
   const resolveExecutable =
     options.resolveExecutable ?? resolveExecutableForLaunch;
   return {
@@ -130,6 +131,7 @@ export function createNodeResumeExecutor(
       const [file, ...args] = command;
       if (!file) throw new Error("missing resume executable");
       const executable = await resolveExecutable(file);
+      const launch = visibleTerminalCommand(executable, args, useVisibleTerminal);
 
       await new Promise<void>((resolve, reject) => {
         let child: ChildProcess;
@@ -150,11 +152,11 @@ export function createNodeResumeExecutor(
         };
 
         try {
-          child = start(executable, args, {
-            detached: true,
+          child = start(launch.file, launch.args, {
+            detached: useVisibleTerminal ? false : true,
             shell: false,
-            stdio: "ignore",
-            windowsHide: true,
+            stdio: useVisibleTerminal ? "ignore" : "ignore",
+            windowsHide: useVisibleTerminal ? false : true,
           });
         } catch (error) {
           finish(() => reject(error));
@@ -178,4 +180,27 @@ export function createNodeResumeExecutor(
       });
     },
   };
+}
+
+function appleScriptString(value: string): string {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+function visibleTerminalCommand(
+  executable: string,
+  args: readonly string[],
+  enabled: boolean,
+): { file: string; args: string[] } {
+  if (!enabled) return { file: executable, args: [...args] };
+  if (process.platform === "darwin") {
+    const command = [executable, ...args].map(appleScriptString).join(" ");
+    return {
+      file: "/usr/bin/osascript",
+      args: ["-e", `tell application "Terminal" to do script ${appleScriptString(command)}`],
+    };
+  }
+  if (process.platform === "win32") {
+    return { file: "cmd.exe", args: ["/d", "/k", executable, ...args] };
+  }
+  return { file: "x-terminal-emulator", args: ["-e", executable, ...args] };
 }

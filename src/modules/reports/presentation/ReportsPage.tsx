@@ -181,8 +181,8 @@ function definitionFor(
  * All figures come from the server read model: `feed.density` aggregates real
  * sessions by day, report/run counts come from persisted documents/runs, and
  * each archived pill maps to a persisted report. Generation stays real
- * (`generateReportNow`), so even without a model profile the deterministic
- * offline draft still lands in the archive. Edits are user-authored drafts
+ * (`generateReportNow`). Without a model profile the generation entry point
+ * becomes a setup CTA. Edits are user-authored drafts
  * kept in this browser (`tt.report.<period>.md`, 30s autosave), the
  * server's persisted bodies stay read-only.
  */
@@ -191,10 +191,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
   const router = useRouter();
   const feed = initial.feed;
   const offline = feed.offline;
-  // Generation is never blocked by `offline` (no model profile): the adapter
-  // produces a deterministic draft from the real collected context. Only a
-  // hard module `disabled` state blocks it.
-  const generateBlocked = feed.disabled;
+  const generateBlocked = feed.disabled || offline;
 
   const [now] = useState(() => new Date());
   const [kind, setKind] = useState<PeriodGranularity>("day");
@@ -409,21 +406,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         title={t("reports.insight.title")}
         dotsLabel={t("reports.insight.dots")}
       />
-
-      {offline && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-[12px]">
-          <p className="min-w-0 flex-1 leading-6 text-foreground/85">
-            {t("reports.insight.modelNotConfigured")}
-          </p>
-          <Link
-            to="/settings"
-            search={{ section: "model" }}
-            className="shrink-0 rounded-full bg-warn/15 px-3 py-1.5 font-medium text-warn transition-colors hover:bg-warn/25"
-          >
-            {t("settings.modelProfiles.add")}
-          </Link>
-        </div>
-      )}
 
       <div className="space-y-4">
         <ReportSchedule />
@@ -642,27 +624,37 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <p className="mt-3 text-[12.5px] text-muted-foreground">
                   {t("reports.body.emptyTitle")}
                 </p>
-                {!generationFailure && (
-                  <button
-                    type="button"
-                    onClick={() => void doGenerate()}
-                    disabled={generating || generateBlocked}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
-                    style={{ background: "var(--chart-1)" }}
-                  >
-                    {generating ? (
-                      <>
-                        <RefreshCw className="size-3.5 animate-spin" />
-                        {t("reports.header.generating")}
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="size-3.5" />
-                        {t("reports.body.draft")}
-                      </>
-                    )}
-                  </button>
-                )}
+                {!generationFailure &&
+                  (offline ? (
+                    <Link
+                      to="/settings"
+                      search={{ section: "model" }}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-warn/15 px-4 py-2 text-[12px] font-semibold text-warn transition-colors hover:bg-warn/25"
+                    >
+                      <Sparkles className="size-3.5" />
+                      {t("reports.insight.modelNotConfigured")}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void doGenerate()}
+                      disabled={generating || generateBlocked}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+                      style={{ background: "var(--chart-1)" }}
+                    >
+                      {generating ? (
+                        <>
+                          <RefreshCw className="size-3.5 animate-spin" />
+                          {t("reports.header.generating")}
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="size-3.5" />
+                          {t("reports.body.draft")}
+                        </>
+                      )}
+                    </button>
+                  ))}
               </div>
             ) : (
               <>
@@ -803,12 +795,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         </div>
       )}
 
-      {/* offline 不阻止生成（确定性草稿），仅停用态需提示 */}
-      {offline && generateBlocked && (
-        <p className="rounded-sm border border-border bg-surface px-3 py-2 text-[12px] text-muted-foreground">
-          {t("reports.insight.modelNotConfigured")}
-        </p>
-      )}
     </div>
   );
 }
