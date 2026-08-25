@@ -599,7 +599,6 @@ export function DistillationPage({
           variant="hero"
           title={t("insights.title")}
           dotsLabel={t("distill.insightDots")}
-          showFallbackStatus={false}
         />
       </div>
 
