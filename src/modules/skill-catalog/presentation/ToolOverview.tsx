@@ -208,7 +208,7 @@ function AgentMetricCards({
   ];
 
   return (
-    <div className="overflow-hidden bg-card">
+    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
       <div className="grid grid-cols-2 gap-px bg-[var(--rowline)] sm:grid-cols-4">
         {metrics.map(({ icon: Icon, label, value, sub }) => (
           <div
