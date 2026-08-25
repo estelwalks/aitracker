@@ -102,7 +102,7 @@ export const settings = {
       desc: "사용 가능한 보안 검사 서비스가 없습니다(데스크톱 앱 또는 로컬 컴패니언 미연결). 자동 검사 일정을 저장하려면 해당 서비스가 필요합니다.",
       retry: "다시 연결",
     },
-    llmReview: "AI 보조 검사",
+    llmReview: "AI 검사",
     llmReviewHint:
       "활성화하면 full 검사가 스캔할 Skill 파일 내용을 선택한 모델 엔드포인트로 전송합니다. 로컬 엔드포인트를 사용하면 데이터가 이 기기에 남으며 규칙 기반 판정은 항상 유지됩니다.",
     llmReviewUnconfiguredHint:
@@ -267,7 +267,7 @@ export const settings = {
         "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
     },
     section: {
-      title: "오늘의 인사이트",
+      title: "AI 인사이트",
       desc: "끄면 로컬 규칙만 사용하고, 켜면 모델을 호출해 인사이트를 강화합니다.",
       mode: "생성 방식",
       modeRules: "로컬 규칙만",
@@ -313,7 +313,7 @@ export const settings = {
     resetDone: "앱 설정과 보안 기록 {count}개를 초기화했습니다",
     resetDoneBrowser: "브라우저의 앱 설정과 보안 기록을 초기화했습니다",
     resetFailed: "앱 설정 초기화에 실패했습니다",
-    llmReviewSaved: "AI 보조 검사 설정을 저장했습니다",
-    llmReviewSaveFailed: "AI 보조 검사 설정 저장에 실패했습니다",
+    llmReviewSaved: "AI 검사 설정을 저장했습니다",
+    llmReviewSaveFailed: "AI 검사 설정 저장에 실패했습니다",
   },
 } as const;

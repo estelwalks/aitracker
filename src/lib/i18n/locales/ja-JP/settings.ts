@@ -103,7 +103,7 @@ export const settings = {
       desc: "利用可能なセキュリティ検出サービスがありません（デスクトップアプリまたはローカルコンパニオンに未接続）。自動スキャン予定の保存にはそのサービスが必要です。",
       retry: "再接続",
     },
-    llmReview: "AI 補助検出",
+    llmReview: "AI検出",
     llmReviewHint:
       "有効にすると、full 検出はスキャン対象 Skill のファイル内容を選択したモデルのエンドポイントへ送信します。ローカルエンドポイントならデータはこの端末内に留まり、ルール判定は常に保持されます。",
     llmReviewUnconfiguredHint:
@@ -272,7 +272,7 @@ export const settings = {
       "invalid-output": "AI の出力が無効なため、ルール洞察を表示しています",
     },
     section: {
-      title: "今日のインサイト",
+      title: "AIインサイト",
       desc: "オフではローカルルールのみ、オンではモデルを呼び出してインサイトを強化します。",
       mode: "生成方法",
       modeRules: "ローカルルールのみ",
@@ -318,7 +318,7 @@ export const settings = {
     resetDoneBrowser:
       "ブラウザのアプリ設定とセキュリティ履歴をリセットしました",
     resetFailed: "アプリ設定のリセットに失敗しました",
-    llmReviewSaved: "AI 補助検出の設定を保存しました",
-    llmReviewSaveFailed: "AI 補助検出の設定の保存に失敗しました",
+    llmReviewSaved: "AI検出の設定を保存しました",
+    llmReviewSaveFailed: "AI検出の設定の保存に失敗しました",
   },
 } as const;

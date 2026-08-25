@@ -102,7 +102,7 @@ export const settings = {
       desc: "No security scan service is available (not connected to the desktop app or the local companion). The auto-scan schedule needs that service to be saved.",
       retry: "Reconnect",
     },
-    llmReview: "AI-assisted detection",
+    llmReview: "AI detection",
     llmReviewHint:
       "When enabled, full detection sends the scanned Skill file contents to the selected model endpoint. Data sent to a local endpoint stays on this device. Rule-based findings are always retained.",
     llmReviewUnconfiguredHint:
@@ -270,7 +270,7 @@ export const settings = {
         "AI returned invalid output; showing rule-based insight",
     },
     section: {
-      title: "Today's insights",
+      title: "AI insights",
       desc: "Off uses local rules only; on automatically calls the model for enhanced insights.",
       mode: "Generation mode",
       modeRules: "Local rules only",
@@ -317,7 +317,7 @@ export const settings = {
     resetDone: "Reset {count} app preferences & security history items",
     resetDoneBrowser: "Reset app preferences & security history in the browser",
     resetFailed: "Failed to reset app preferences",
-    llmReviewSaved: "AI-assisted detection settings saved",
-    llmReviewSaveFailed: "Failed to save AI-assisted detection settings",
+    llmReviewSaved: "AI detection settings saved",
+    llmReviewSaveFailed: "Failed to save AI detection settings",
   },
 } as const;

@@ -30,7 +30,7 @@ import {
 import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
-import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
+import type { SecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,
@@ -100,11 +100,13 @@ export function DashboardTrustHero({
   today,
   hero,
   security,
+  securityScan,
 }: {
   view: DashboardV2View;
   today: DashboardV2View;
   hero: DashboardV2HeroView;
   security?: MonitoringStatus["security"];
+  securityScan: SecurityScanOverview;
 }) {
   const { t, format } = useI18n();
   const distill = view.outputAvailability.distillationOutputs;
@@ -124,21 +126,37 @@ export function DashboardTrustHero({
     distilledMemoryCount == null
       ? t("dashboard.kpi.unavailable")
       : t("dashboard.v2.assetMemoryCount", { count: distilledMemoryCount });
-  const securityValue =
-    security == null
+  const securityScanReal =
+    securityScan.available &&
+    !securityScan.loading &&
+    securityScan.totalSkills > 0;
+  const securityValue = securityScanReal
+    ? `${format.formatNumber(securityScan.coverage)}/${format.formatNumber(securityScan.totalSkills)}`
+    : security == null
       ? t("common.unknown")
       : `${format.formatNumber(security.cleanCount)}/${format.formatNumber(security.assessedAssetCount)}`;
   const securitySub =
-    security == null
-      ? t("dashboard.v2.securityNotScanned")
-      : t("dashboard.v2.securitySafeUnsafe", {
-          safe: security.cleanCount,
+    securityScanReal && securityScan.summary != null
+      ? t("dashboard.v2.securitySafeUnsafe", {
+          safe: securityScan.summary.cleanCount,
           unsafe:
-            security.suspiciousCount +
-            security.dangerousCount +
-            security.unknownCount +
-            security.failedAssetCount,
-        });
+            securityScan.summary.suspiciousCount +
+            securityScan.summary.dangerousCount +
+            securityScan.summary.unknownCount +
+            securityScan.summary.failedAssetCount,
+        })
+      : securityScanReal
+        ? t("dashboard.v2.securityNotScanned")
+        : security == null
+          ? t("dashboard.v2.securityNotScanned")
+          : t("dashboard.v2.securitySafeUnsafe", {
+              safe: security.cleanCount,
+              unsafe:
+                security.suspiciousCount +
+                security.dangerousCount +
+                security.unknownCount +
+                security.failedAssetCount,
+            });
   const todaySub =
     today.estimatedCostUsd == null
       ? t("dashboard.kpi.unavailable")
@@ -221,11 +239,13 @@ export function DashboardMetricGrid({
   view,
   monitoring,
   security,
+  securityScan,
   baselineLabel,
 }: {
   view: DashboardV2View;
   monitoring: DashboardV2HeroView["monitoring"];
   security?: MonitoringStatus["security"];
+  securityScan: SecurityScanOverview;
   /**
    * Comparison-baseline label for cards that show a delta (e.g. "较前 30 天").
    * Only delta cards append it to their hint line, matching the reference.
@@ -237,7 +257,6 @@ export function DashboardMetricGrid({
   // 真实扫描历史（Electron IPC / 本地 companion API）解析成功后，安全扫描卡
   // 显示累计扫描次数（runCount），不再使用 monitoring 占位摘要；解析失败时
   // 保留原有服务端回退，绝不凭空捏造数字。
-  const securityScan = useSecurityScanOverview();
   const securityRunsReal = securityScan.available && !securityScan.loading;
   // 休眠 = 已检测 − 本周期活跃（与系统快照卡 toolCountHint 口径一致，
   // 保证「活跃 + 休眠 = 已检测」自洽；不用实时 liveTools，避免口径打架）

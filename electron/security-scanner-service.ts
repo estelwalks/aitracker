@@ -70,6 +70,8 @@ const MANAGED_SKILL_ROOTS: readonly ManagedSkillRoot[] = [
 interface TrustedSkill {
   readonly target: SecuritySkillTarget;
   readonly root: string;
+  /** All installation roots represented by the deduplicated target. */
+  readonly roots: readonly string[];
 }
 
 interface HistoryDocument {
@@ -585,8 +587,44 @@ export class SecurityScannerService {
         true,
       );
     }
-    for (const [ref, value] of grouped) this.#trusted.set(ref, value);
-    return [...grouped.values()]
+    const deduplicated = new Map<string, TrustedSkill>();
+    for (const value of grouped.values()) {
+      let key = `name:${value.target.name.trim().toLocaleLowerCase()}`;
+      try {
+        // Discovery metadata intentionally stays path-free, so use the same
+        // bounded file fingerprint as scan reports to merge copies whose
+        // installation directories were renamed across Agents.
+        const collected = await this.#collect(value.root, false);
+        key = `content:${contentHashOf(collected.files)}`;
+      } catch {
+        // Keep an unreadable Skill discoverable; name remains the safe fallback
+        // identity until the scan can report its actual read status.
+      }
+      const existing = deduplicated.get(key);
+      if (!existing) {
+        deduplicated.set(key, value);
+        continue;
+      }
+      const agents = [
+        ...new Set([...existing.target.agents, ...value.target.agents]),
+      ];
+      const roots = [...new Set([...existing.roots, ...value.roots])];
+      deduplicated.set(key, {
+        ...existing,
+        roots,
+        target: {
+          ...existing.target,
+          agents,
+          modifiedAt:
+            existing.target.modifiedAt > value.target.modifiedAt
+              ? existing.target.modifiedAt
+              : value.target.modifiedAt,
+        },
+      });
+    }
+    for (const value of deduplicated.values())
+      this.#trusted.set(value.target.skillRef, value);
+    return [...deduplicated.values()]
       .map((item) => item.target)
       .sort((left, right) => left.name.localeCompare(right.name));
   }
@@ -606,7 +644,7 @@ export class SecurityScannerService {
       modifiedAt: details.mtime.toISOString(),
       source: "selected",
     };
-    this.#trusted.set(target.skillRef, { target, root });
+    this.#trusted.set(target.skillRef, { target, root, roots: [root] });
     return structuredClone(target);
   }
 
@@ -697,9 +735,10 @@ export class SecurityScannerService {
         const prefix = dir.endsWith(sep) ? dir : `${dir}${sep}`;
         return discovered.filter((target) => {
           const trusted = this.#trusted.get(target.skillRef);
+          const roots = trusted?.roots ?? (trusted ? [trusted.root] : []);
           return (
             trusted != null &&
-            (trusted.root === dir || trusted.root.startsWith(prefix))
+            roots.some((root) => root === dir || root.startsWith(prefix))
           );
         });
       }
@@ -729,7 +768,7 @@ export class SecurityScannerService {
       locale,
       startedAt,
       progress: {
-        discovered: discovered.length,
+        discovered: targets.length,
         queued: targets.length,
         started: 0,
         completed: 0,
@@ -1024,6 +1063,7 @@ export class SecurityScannerService {
         const ref = skillRef(root);
         output.set(ref, {
           root,
+          roots: [root],
           target: {
             skillRef: ref,
             name: this.#skillName(root),
@@ -1063,6 +1103,7 @@ export class SecurityScannerService {
             : [agent];
           output.set(ref, {
             root: entry.path,
+            roots: [entry.path],
             target: {
               skillRef: ref,
               name: this.#skillName(entry.path),
@@ -1099,7 +1140,10 @@ export class SecurityScannerService {
     );
   }
 
-  async #collect(root: string): Promise<CollectedSkill> {
+  async #collect(
+    root: string,
+    invokeBeforeOpenFile = true,
+  ): Promise<CollectedSkill> {
     const rootDetails = await lstat(root);
     if (rootDetails.isSymbolicLink() || !rootDetails.isDirectory())
       throw new Error("Skill root is not a trusted directory");
@@ -1181,7 +1225,8 @@ export class SecurityScannerService {
           fileLimitReached = true;
           return;
         }
-        await this.#options.beforeOpenFile?.(entry.path);
+        if (invokeBeforeOpenFile)
+          await this.#options.beforeOpenFile?.(entry.path);
         let fileHandle;
         try {
           fileHandle = await open(
