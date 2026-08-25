@@ -130,13 +130,20 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
       total: latest.data.sessions?.length ?? 0,
     };
   };
+  const activeView = await root.modelProfiles.getActiveView();
+  const activeProfile = activeView
+    ? await root.modelProfiles.getProfileForExecution(activeView.id)
+    : null;
+  const hasExecutableModel = Boolean(
+    activeProfile?.apiKey?.trim() && activeProfile.model?.trim(),
+  );
   const presentation = createReportsPresentation({
     reports,
     source: compositionReportsSource(reports, getSessionSnapshot),
     // Generation runs only when an S-500 model profile is active; without one
     // the page shows the honest offline state so it disables generation
     // instead of faking it.
-    offline: !(await root.modelProfiles.getActiveView()),
+    offline: !hasExecutableModel,
   });
   const result = await presentation.query();
   if (!result.ok) {
@@ -185,7 +192,10 @@ export async function generateReport(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const activeProfile = await root.modelProfiles.getActiveView();
+  const activeView = await root.modelProfiles.getActiveView();
+  const activeProfile = activeView
+    ? await root.modelProfiles.getProfileForExecution(activeView.id)
+    : null;
   const result = await root.reports.generate({
     definitionId,
     trigger: "manual",

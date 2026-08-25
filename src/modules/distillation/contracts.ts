@@ -38,6 +38,30 @@ export type ApprovalState = "waiting-approval" | "approved" | "cancelled";
 export type DistillationMode =
   "model" | "offline" | "fallback" | "budget-exceeded";
 
+/** Durable progress phases shared by every distillation output kind. */
+export type DistillationTaskPhase =
+  | "queued"
+  | "reading-material"
+  | "generating"
+  | "quality-check"
+  | "persisting-candidate"
+  | "syncing-target"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface DistillationTaskProgress {
+  readonly taskId: string;
+  readonly phase: DistillationTaskPhase;
+  /** 0–100; 100 is emitted only after candidate persistence completes. */
+  readonly percent: number;
+  readonly kind: CandidateOutput["kind"];
+  readonly candidateId?: string;
+  readonly candidate?: CandidateOutput;
+  readonly errorCode?: DistillationErrorCode;
+  readonly updatedAt: string;
+}
+
 /** An opaque reference; it is never a filesystem path or an external command. */
 export interface SessionRef {
   readonly source: string;
