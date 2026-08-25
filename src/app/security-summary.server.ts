@@ -22,12 +22,9 @@ export interface SecuritySkillVerdictReadModel {
  * Resolves the renderer-safe security summary shared by the dashboard, the
  * security/widge insight adapters and the monitoring facade.
  *
- * Precedence:
- *  1. the explicitly-recorded `monitoring.security` summary (the push path,
- *     wired when a scanner completion is published through the monitoring
- *     runtime);
- *  2. a lazy derivation from the real scan history persisted by the
- *     desktop/dev scanner service under `DESKTOP_HISTORY_KEY`.
+ * The real scan history persisted by the desktop/dev scanner service under
+ * `DESKTOP_HISTORY_KEY` is authoritative. The monitoring summary is retained
+ * only as a fallback for installations that have no persisted scan history.
  *
  * The derivation reuses the exact `summarizeReports`/`latestHistory` logic the
  * dashboard's client-side overview already applies, so a completed scan becomes
@@ -40,31 +37,34 @@ export async function getMonitoringSecuritySummary(): Promise<MonitoringSecurity
   const root = await getCompositionRoot();
 
   const status = await root.monitoring.status().catch(() => null);
-  if (status?.security) return status.security;
 
   try {
     const raw =
       root.database.features.appPreferences.get(DESKTOP_HISTORY_KEY)?.value;
-    if (!Array.isArray(raw) || raw.length === 0) return null;
-    const history = (raw as unknown as SecurityScanHistoryEntry[]).map(
-      historyView,
-    );
-    const totals = summarizeReports(history);
-    if (totals.total === 0) return null;
-    const latest = latestHistory(history);
-    return {
-      assessedAt: latest?.finishedAt ?? new Date().toISOString(),
-      discoveredAssetCount: totals.total,
-      assessedAssetCount: totals.total,
-      failedAssetCount: totals.failed,
-      cleanCount: totals.safe,
-      suspiciousCount: totals.warn,
-      dangerousCount: totals.danger,
-      unknownCount: totals.unknown,
-    };
+    if (Array.isArray(raw) && raw.length > 0) {
+      const history = (raw as unknown as SecurityScanHistoryEntry[]).map(
+        historyView,
+      );
+      const totals = summarizeReports(history);
+      if (totals.total > 0) {
+        const latest = latestHistory(history);
+        return {
+          assessedAt: latest?.finishedAt ?? new Date().toISOString(),
+          discoveredAssetCount: totals.total,
+          assessedAssetCount: totals.total,
+          failedAssetCount: totals.failed,
+          cleanCount: totals.safe,
+          suspiciousCount: totals.warn,
+          dangerousCount: totals.danger,
+          unknownCount: totals.unknown,
+        };
+      }
+    }
   } catch {
-    return null;
+    // Fall through to the last monitoring snapshot when history is not
+    // readable, preserving the existing unavailable-state behavior.
   }
+  return status?.security ?? null;
 }
 
 /**

@@ -236,19 +236,32 @@ export function unresolvedScanCount(totals: SecurityTotals): number {
 }
 
 /**
- * Deduplicate history to one entry per unique skill, keyed by the stable
- * content hash (`report.contentHash`). The same skill installed under two
- * roots, or re-scanned unchanged, shares one content hash, so statistics count
- * each skill once — consistent with skill management, which already dedups by
- * skill name. Entries without a content hash (failed/older scans) are kept
- * as-is since they cannot be reliably mapped to a skill's content.
+ * Project scan history into the current state of each unique Skill.
+ *
+ * A single-skill rescan must replace that Skill's previous verdict while
+ * leaving the other historical Skills in the global totals. After selecting
+ * the latest entry per stable Skill reference, content hashes collapse
+ * duplicate installations of the same Skill. Entries without a content hash
+ * (failed/older scans) remain visible as the latest state for their reference.
  */
 export function dedupeHistoryByContentHash(
   history: readonly SecurityHistoryView[],
 ): SecurityHistoryView[] {
+  const latestBySkillRef = new Map<string, SecurityHistoryView>();
+  for (const entry of history) {
+    const previous = latestBySkillRef.get(entry.skillRef);
+    if (
+      previous &&
+      Date.parse(previous.finishedAt) >= Date.parse(entry.finishedAt)
+    ) {
+      continue;
+    }
+    latestBySkillRef.set(entry.skillRef, entry);
+  }
+
   const latestByKey = new Map<string, SecurityHistoryView>();
   const withoutHash: SecurityHistoryView[] = [];
-  for (const entry of history) {
+  for (const entry of latestBySkillRef.values()) {
     const key = entry.report?.contentHash;
     if (!key) {
       withoutHash.push(entry);
@@ -393,6 +406,17 @@ export function isScanActive(status: SecurityScanPhase): boolean {
 
 export function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+}
+
+/** A model profile is usable for a full scan only when its feature gate is on. */
+export function effectiveSecurityScanMode(
+  requested: SecurityScanMode,
+  modelConfigured: boolean,
+  aiAssistedEnabled: boolean,
+): SecurityScanMode {
+  return requested === "full" && modelConfigured && aiAssistedEnabled
+    ? "full"
+    : "quick";
 }
 
 /**

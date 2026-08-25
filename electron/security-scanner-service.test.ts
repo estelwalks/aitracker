@@ -257,6 +257,39 @@ test("discovers managed Skills and passes only bounded relative in-memory files"
   assert.equal(JSON.stringify(entry).includes(home), false);
 });
 
+test("deduplicates the same Skill installed for multiple agents", async () => {
+  const { home } = await fixture();
+  const duplicate = join(home, ".claude", "skills", "renamed-demo");
+  await mkdir(duplicate, { recursive: true });
+  await writeFile(
+    join(duplicate, "SKILL.md"),
+    "---\nname: Demo Skill\n---\n# Safe\n",
+    "utf8",
+  );
+  let scanCalls = 0;
+  const service = new SecurityScannerService({
+    homeDirectory: home,
+    locale: () => "zh-CN",
+    env: {},
+    secretStorage: unavailableStorage,
+    scanner: (async () => {
+      scanCalls += 1;
+      return report();
+    }) as never,
+  });
+
+  const skills = await service.listSkills();
+  assert.equal(skills.length, 1);
+  assert.deepEqual(skills[0]?.agents, ["Claude Code", "Codex"]);
+
+  const initial = await service.start({ scope: "all", mode: "quick" });
+  assert.equal(initial.progress.discovered, 1);
+  assert.equal(initial.progress.queued, 1);
+  await waitForTerminal(service);
+  assert.equal(scanCalls, 1);
+  assert.equal((await service.history()).length, 1);
+});
+
 test("rejects renderer paths and unknown opaque references", async () => {
   const { home, skill } = await fixture();
   const service = new SecurityScannerService({

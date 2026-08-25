@@ -21,6 +21,7 @@ import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 import { NativeTrayTitleSync } from "../modules/widget/presentation/NativeTrayTitleSync";
+import { SecurityScanProgressOverlay } from "../modules/security-assessment/presentation/components/SecurityScanProgressOverlay";
 import { PrivacyStrip } from "./PrivacyStrip";
 import { WindowChrome, WINDOW_CHROME_HEIGHT } from "./WindowChrome";
 
@@ -214,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
         >
-          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-4 md:px-8 md:pt-8 2xl:px-10 2xl:pt-10">
+          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-0 md:px-8 md:pt-0 2xl:px-10 2xl:pt-0">
             <div className="tt-container">{children}</div>
           </main>
         </div>
@@ -228,6 +229,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           <PrivacyStrip />
         </div>
+        <SecurityScanProgressOverlay />
       </div>
     </>
   );

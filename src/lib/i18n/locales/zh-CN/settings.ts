@@ -99,7 +99,7 @@ export const settings = {
       desc: "当前没有可用的安全检测服务（未连接桌面端或本机伴随服务）。自动扫描计划需要该服务才能保存。",
       retry: "重新连接",
     },
-    llmReview: "AI 辅助检测",
+    llmReview: "AI检测",
     llmReviewHint:
       "开启后，full 检测会将待扫描 Skill 的文件内容发送到所选模型端点；本地端点的数据留在本机。规则判定始终保留。",
     llmReviewUnconfiguredHint:
@@ -258,7 +258,7 @@ export const settings = {
       "invalid-output": "AI 返回格式无效，已显示规则洞察",
     },
     section: {
-      title: "今日洞察",
+      title: "AI洞察",
       desc: "关闭时仅使用本地规则；打开后自动调用模型生成增强洞察。",
       mode: "生成方式",
       modeRules: "仅本地规则",
@@ -277,8 +277,8 @@ export const settings = {
       dailyLimit: "每日调用上限",
       dailyLimitHint: "留空默认 30 次，由系统兜底",
       save: "保存",
-      saved: "今日洞察设置已保存",
-      saveFailed: "保存今日洞察设置失败",
+      saved: "AI洞察设置已保存",
+      saveFailed: "保存 AI洞察设置失败",
     },
   },
   toast: {
@@ -300,7 +300,7 @@ export const settings = {
     resetDone: "已重置 {count} 项应用偏好与安全历史",
     resetDoneBrowser: "已重置浏览器中的应用偏好与安全历史",
     resetFailed: "重置应用偏好失败",
-    llmReviewSaved: "AI 辅助检测设置已保存",
-    llmReviewSaveFailed: "保存 AI 辅助检测设置失败",
+    llmReviewSaved: "AI检测设置已保存",
+    llmReviewSaveFailed: "保存 AI检测设置失败",
   },
 } as const;
