@@ -122,12 +122,9 @@ async function discoverWindowsWslHomes(
   platform: NodeJS.Platform,
 ): Promise<string[]> {
   if (platform !== "win32") return [];
-  return topology.distros.flatMap(({ distribution, home }) => {
+  return topology.distros.map(({ distribution, home }) => {
     const suffix = `${home.replaceAll("/", "\\")}\\${providerDirectory}`;
-    return [
-      `\\\\wsl.localhost\\${distribution}${suffix}`,
-      `\\\\wsl$\\${distribution}${suffix}`,
-    ];
+    return `\\\\wsl$\\${distribution}${suffix}`;
   });
 }
 

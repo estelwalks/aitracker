@@ -58,6 +58,13 @@ export interface SchedulerOptions {
   ) => ReturnType<typeof setTimeout>;
   readonly clearTimeout?: (timer: ReturnType<typeof setTimeout>) => void;
   /**
+   * Decides whether a due startup refresh belongs to the native startup
+   * barrier. Defaults to true, preserving the strict existing behavior.
+   */
+  readonly shouldAwaitStartupTask?: (
+    definition: JobTypeDefinition,
+  ) => boolean | Promise<boolean>;
+  /**
    * P5-T5-06: global resource budget. Collection tasks acquire the "heavy"
    * permit before running so at most one heavy collector executes at a time.
    * Manual triggers raise queue priority but never bypass the budget.
@@ -675,6 +682,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         assertCurrentStart();
         if (await isDue(definition, preference, now)) {
           assertCurrentStart();
+          const shouldAwaitStartupTask =
+            STARTUP_BARRIER_TASK_IDS.has(definition.id) &&
+            (options.shouldAwaitStartupTask == null ||
+              (await options.shouldAwaitStartupTask(definition)));
+          assertCurrentStart();
           scheduledByThisStart.set(definition.id, {
             previous: lastScheduledAt.get(definition.id),
             scheduled: now,
@@ -685,8 +697,11 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
             expectedLifecycle,
           );
           assertCurrentStart();
-          if (STARTUP_BARRIER_TASK_IDS.has(definition.id))
+          if (shouldAwaitStartupTask) {
             startupRuns.push({ definition, run });
+          } else {
+            startupCompletions.delete(run.runId);
+          }
         }
       }
       await awaitStartupBarrier(startupRuns);
