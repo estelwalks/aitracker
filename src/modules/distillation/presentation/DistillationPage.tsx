@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRight,
@@ -25,7 +25,7 @@ import {
 } from "../../../lib/preferences/client.ts";
 import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
-import { approveCandidate, startDistillation } from "../query";
+import { getDistillationTask, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { ExpCard } from "./distill/ExpCard";
@@ -51,6 +51,7 @@ import {
 const EST_TOKENS_PER_TURN = 900;
 /** 蒸馏历史每页条数（原型 HIST_PAGE = 10）。 */
 const HIST_PAGE = 10;
+const DISTILL_TASK_KEY = "trusttools.distillation.active-task";
 
 function keyOf(item: { source: string; sessionId: string }): string {
   return materialKeyOf(item);
@@ -62,8 +63,8 @@ function toRef(item: { source: string; sessionId: string }): SessionRef {
 
 /**
  * 运行中结果卡（原型 ExpCard running 态 1832-1875）：与 done 态同一张卡结构
- * —— 完整 meta 头（kind chip + 时间 + 模型）+ 素材行 + 进度条。服务端同步
- * 完成、无真实进度遥测,用模拟进度(~3.8 秒跑满 100%) + 已耗时秒数,视觉对齐
+ * —— 完整 meta 头（kind chip + 时间 + 模型）+ 素材行 + 进度条。进度来自
+ * 服务端任务阶段；服务端没有细粒度遥测时，最高保持在 92%。
  * 原型梯度条与百分比文案。
  */
 function RunningExpCard({
@@ -72,12 +73,14 @@ function RunningExpCard({
   modelLabel,
   segCount,
   sources,
+  progress: serverProgress,
 }: {
   color: string;
   kindLabel: string;
   modelLabel: string;
   segCount: number;
   sources: string;
+  progress: number;
 }) {
   const { t, format } = useI18n();
   const [elapsed, setElapsed] = useState(0);
@@ -85,15 +88,16 @@ function RunningExpCard({
   useEffect(() => {
     const started = Date.now();
     const tid = window.setInterval(() => setElapsed((s) => s + 1), 1000);
-    const pid = window.setInterval(
-      () => setProgress(Math.min(1, (Date.now() - started) / 3800)),
-      120,
-    );
+    const pid = window.setInterval(() => {
+      if (serverProgress > 0) return;
+      setProgress(Math.min(0.92, (Date.now() - started) / 30000));
+    }, 120);
     return () => {
       window.clearInterval(tid);
       window.clearInterval(pid);
     };
-  }, []);
+  }, [serverProgress]);
+  const visibleProgress = serverProgress > 0 ? serverProgress : progress;
   return (
     <article
       className="animate-fade-in relative overflow-hidden rounded-xl bg-card"
@@ -124,13 +128,13 @@ function RunningExpCard({
           <div
             className="h-full rounded-full transition-all"
             style={{
-              width: `${Math.round(progress * 100)}%`,
+              width: `${Math.round(visibleProgress * 100)}%`,
               background: `linear-gradient(90deg, ${color}, color-mix(in oklab, ${color} 50%, var(--chart-2)))`,
             }}
           />
         </div>
         <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-          {t("distill.running")} {Math.round(progress * 100)}%
+          {t("distill.running")} {Math.round(visibleProgress * 100)}%
           {t("distill.runningElapsed", { seconds: elapsed })}
         </p>
       </div>
@@ -155,6 +159,7 @@ export function DistillationPage({
   initialSegment?: SegmentRefCodec | null;
 }) {
   const { t, format } = useI18n();
+  const router = useRouter();
   // A carried-over `?segment=` session is seeded into the selection right away
   // (its segment is meaningless unless the session is part of sessionRefs).
   // Seeding here — rather than re-adding it in an effect — lets the drop
@@ -169,6 +174,7 @@ export function DistillationPage({
   const [busy, setBusy] = useState(false);
   /** True only while a distillation run is in flight (drives 蒸馏中… states). */
   const [distilling, setDistilling] = useState(false);
+  const [distillProgress, setDistillProgress] = useState(0);
   const [mode, setMode] = useState<"quick" | "pro">("quick");
   const [outType, setOutType] = useState<OutTypeId>("skill");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -209,6 +215,53 @@ export function DistillationPage({
       setShowGuide(seen !== true);
     });
   }, []);
+
+  // Keep the active task outside the route component. Electron can minimize
+  // or navigate away from the workbench while the server task continues.
+  // Re-entering the page resumes the progress display instead of starting a
+  // second run or losing the running card.
+  useEffect(() => {
+    let disposed = false;
+    const storedTaskId = window.localStorage.getItem(DISTILL_TASK_KEY);
+    if (!storedTaskId) return;
+    setDistilling(true);
+    setBusy(true);
+    setDistillView("result");
+    const poll = async () => {
+      try {
+        const task = await getDistillationTask({
+          data: { taskId: storedTaskId },
+        });
+        if (disposed) return;
+        if (!task) {
+          window.localStorage.removeItem(DISTILL_TASK_KEY);
+          setDistilling(false);
+          setBusy(false);
+          return;
+        }
+        setDistillProgress(
+          task.phase === "completed"
+            ? 1
+            : Math.min(0.92, task.percent / 100),
+        );
+        if (["completed", "failed", "cancelled"].includes(task.phase)) {
+          window.localStorage.removeItem(DISTILL_TASK_KEY);
+          setDistilling(false);
+          setBusy(false);
+          if (task.phase === "completed") void router.invalidate();
+        }
+      } catch {
+        // Keep the task id for the next page entry; a transient IPC failure
+        // must not make the running task disappear.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 600);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [router]);
 
   const sessions = useMemo(() => initial.sessions, [initial.sessions]);
   const materialSessions = useMemo(
@@ -262,7 +315,8 @@ export function DistillationPage({
     selectedModel?.official === true &&
     initial.quota != null &&
     initial.quota.remaining <= 0;
-  const canStart = !busy && selectionCount > 0 && !quotaExhausted;
+  const canStart =
+    !busy && selectionCount > 0 && !quotaExhausted && hasRealModel;
 
   const selectedItems = useMemo(
     () => sessions.filter((item) => selected.has(keyOf(item))),
@@ -370,6 +424,7 @@ export function DistillationPage({
     if (refs.length === 0) return;
     setBusy(true);
     setDistilling(true);
+    setDistillProgress(0);
     let accepted: CandidateOutput | null = null;
     try {
       const result = await startDistillation({
@@ -393,30 +448,42 @@ export function DistillationPage({
         );
         return;
       }
-      if (result.candidate) {
+      // Task protocol: when the server runs asynchronously, wait for the
+      // terminal state before exposing the result or refreshing read models.
+      let task = result.task;
+      if (task) window.localStorage.setItem(DISTILL_TASK_KEY, task.taskId);
+      while (task && !["completed", "failed", "cancelled"].includes(task.phase)) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        task =
+          (await getDistillationTask({ data: { taskId: task.taskId } })) ??
+          undefined;
+        if (task) setDistillProgress(Math.min(0.92, task.percent / 100));
+      }
+      if (task?.phase !== "completed") {
+        window.localStorage.removeItem(DISTILL_TASK_KEY);
+        toast.error(
+          task?.errorCode ? t(task.errorCode as MessageKey) : t("common.failed"),
+        );
+        return;
+      }
+      setDistillProgress(1);
+      window.localStorage.removeItem(DISTILL_TASK_KEY);
+      if (task.candidate) {
         // Prototype parity: a run completes straight into a usable result — no
         // waiting/approve step. The candidate is approved on completion so
         // memory kinds write into the knowledge library immediately and
         // capability kinds are instantly savable.
-        accepted = result.candidate;
-        try {
-          const approved = await approveCandidate({
-            data: { candidateId: result.candidate.candidateId },
-          });
-          if (approved.ok && approved.candidate) {
-            accepted = approved.candidate;
-            setApproved((current) => current + 1);
-          }
-        } catch {
-          // The approval write failed (no knowledge port); the result is still
-          // shown, just not counted as 已入库.
-        }
+        accepted = task.candidate;
+        setApproved((current) => current + 1);
         setCandidates((prev) => [accepted!, ...prev]);
         // 完成后切到结果视图并展开这条产物，但保持页面停留在顶部视角，
         // 不自动滚动定位到进度条（用户可自行滚动查看进度）。
         setViewId(accepted!.candidateId);
         setDistillView("result");
         setHistPage(1);
+        // Refresh route-owned read models so Reports/Memory do not wait for
+        // the next navigation or the Windows snapshot polling interval.
+        await router.invalidate();
       }
       setRuns((current) => current + 1);
       toast.success(
@@ -450,6 +517,10 @@ export function DistillationPage({
   }
 
   function handleStart() {
+    if (!hasRealModel) {
+      toast.error(t("errors.distillation.noModelConfigured"));
+      return;
+    }
     setViewId(null);
     setDistillView("result");
     // Quick mode also forwards the selected model: the page defaults `modelId`
@@ -656,6 +727,7 @@ export function DistillationPage({
                   sources={[
                     ...new Set(selectedItems.map((item) => item.source)),
                   ].join(" / ")}
+                  progress={distillProgress}
                 />
               )}
 

@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // the config); check-app-config-sync.mjs cross-checks them on every check:i18n.
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const skillScannerRoot = resolve(projectRoot, "../skill-scanner");
+const skillScannerRoot = resolve(projectRoot, "../skill-scanner-main");
 const viteOptimizationMetadata = join(
   projectRoot,
   "node_modules/.vite/deps/_metadata.json",

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   ChevronLeft,
   ChevronRight,
@@ -408,6 +409,21 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         title={t("reports.insight.title")}
         dotsLabel={t("reports.insight.dots")}
       />
+
+      {offline && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 text-[12px]">
+          <p className="min-w-0 flex-1 leading-6 text-foreground/85">
+            {t("reports.insight.modelNotConfigured")}
+          </p>
+          <Link
+            to="/settings"
+            search={{ section: "model" }}
+            className="shrink-0 rounded-full bg-warn/15 px-3 py-1.5 font-medium text-warn transition-colors hover:bg-warn/25"
+          >
+            {t("settings.modelProfiles.add")}
+          </Link>
+        </div>
+      )}
 
       <div className="space-y-4">
         <ReportSchedule />
