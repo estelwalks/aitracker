@@ -309,6 +309,16 @@ export async function cancelCandidate(
   return { ok: true, candidate: result.value.candidate };
 }
 
+export async function deleteCandidates(candidateIds: readonly string[]): Promise<{ deleted: number }> {
+  const { getCompositionRoot } = await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  let deleted = 0;
+  for (const candidateId of candidateIds) {
+    if (await root.distillation.delete(candidateId)) deleted += 1;
+  }
+  return { deleted };
+}
+
 function isPathInside(root: string, candidate: string): boolean {
   const pathFromRoot = relative(resolve(root), resolve(candidate));
   return (

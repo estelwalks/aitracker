@@ -26,7 +26,7 @@ export const skills = {
   },
   form: {
     all: "全部形态",
-    package: "蒸馏skill",
+    package: "完整包",
     workflow: "工作流",
     prompt: "Prompt",
   },

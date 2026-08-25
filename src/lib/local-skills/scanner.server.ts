@@ -761,9 +761,22 @@ async function findMarker(
   return null;
 }
 
-/** SKILL.md frontmatter `form` → 形态枚举（缺失视为完整包）。 */
+/**
+ * Skill manifest shape → product form. Imported/migrated Skills in the wild
+ * use `form`, `type`, `kind`, or `format`; accept all of them so the shape
+ * tabs do not silently classify every non-standard manifest as a package.
+ */
 function formOf(frontmatter: Record<string, string>): SkillForm {
-  const raw = frontmatter.form?.trim().toLowerCase() ?? "";
+  const raw = [
+    frontmatter.form,
+    frontmatter.type,
+    frontmatter.kind,
+    frontmatter.format,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .trim()
+    .toLowerCase();
   if (raw.includes("workflow")) return "workflow";
   if (raw.includes("prompt")) return "prompt";
   return "package";

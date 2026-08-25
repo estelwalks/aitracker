@@ -191,6 +191,7 @@ export interface CandidatePersistence {
   list(): Promise<readonly CandidateOutput[]>;
   /** Upsert a candidate by id. */
   save(candidate: CandidateOutput): Promise<void>;
+  delete?(candidateId: string): Promise<void>;
 }
 
 export interface DistillationPorts {
@@ -257,6 +258,7 @@ export interface DistillationApplication {
    * writing it as a local Skill.
    */
   get(candidateId: string): Promise<CandidateOutput | undefined>;
+  delete(candidateId: string): Promise<boolean>;
 }
 
 export interface DistillationAssetCounts {

@@ -558,9 +558,9 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     transcriptPort: {
       async load(ref) {
         try {
-          const { loadSessionTranscript } =
-            await import("../modules/sessions/api.server.ts");
-          return await loadSessionTranscript({
+          const { readSessionContent } =
+            await import("../modules/sessions/infrastructure/session-content-reader.server.ts");
+          return await readSessionContent({
             source: ref.source,
             sessionId: ref.sessionId,
           });

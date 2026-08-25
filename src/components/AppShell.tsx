@@ -190,9 +190,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => setCollapsed((value) => !value)}
               title={t("nav.collapse")}
-              className={`flex w-full items-center rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground ${
-                collapsed ? "justify-center px-0" : "gap-3 px-3"
-              }`}
+              className="flex w-full items-center justify-start gap-3 rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
             >
               {collapsed ? (
                 <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.75} />
@@ -215,7 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
         >
-          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-0 md:px-8 md:pt-0 2xl:px-10 2xl:pt-0">
+          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-2 md:px-8 md:pt-4 2xl:px-10 2xl:pt-5">
             <div className="tt-container">{children}</div>
           </main>
         </div>
