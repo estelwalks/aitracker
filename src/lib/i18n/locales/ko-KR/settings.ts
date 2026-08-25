@@ -163,13 +163,22 @@ export const settings = {
   storageExceedsSoftCap: "（500MB 초과, 캐시 정리를 권장합니다）",
   clearCache: "캐시 정리",
   clearCacheHint:
-    "현재 {appName} 데이터 디렉터리 안의 캐시와 재생성 가능한 인덱스를 삭제합니다. AI 도구 로그, 원본 수집 데이터, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
+    "현재 {appName} 데이터 디렉터리 안의 캐시만 삭제합니다. 로컬 수집 데이터, AI 도구 로그, 어댑터 설정, 보안 기록은 삭제하지 않습니다",
   clearCacheButton: "캐시 정리",
   clearCacheDialogTitle: "캐시를 정리하시겠습니까?",
   clearCacheDialogDesc:
-    "{appName} 관리 디렉터리 안의 캐시와 재생성 가능한 인덱스를 삭제하고 디스크 공간을 회수합니다. 외부 AI 도구 로그, 원본 수집 데이터, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
+    "{appName} 관리 디렉터리 안의 캐시를 삭제하고 디스크 공간을 회수합니다. 로컬 수집 데이터, 외부 AI 도구 로그, 어댑터 설정, 앱 설정, 보안 기록은 영향을 받지 않습니다.",
   clearing: "정리 중...",
   confirmClearCache: "캐시 정리",
+  clearCollectedData: "수집 데이터 삭제",
+  clearCollectedDataHint:
+    "로컬로 수집한 결과를 삭제하고 데이터를 초기화합니다. 원본 AI 도구 로그, 앱 설정 및 어댑터 구성은 유지됩니다",
+  clearCollectedDataButton: "수집 데이터 삭제",
+  clearCollectedDataDialogTitle: "수집 데이터를 삭제하시겠습니까?",
+  clearCollectedDataDialogDesc:
+    "{appName}에서 수집한 로컬 결과를 삭제하고 데이터를 초기화한 뒤 원본 로그에서 백그라운드로 다시 수집합니다. 원본 AI 도구 로그, 앱 설정, 어댑터 구성 및 보안 기록에는 영향을 주지 않습니다.",
+  clearingCollectedData: "수집 데이터 삭제 중…",
+  confirmClearCollectedData: "삭제 후 다시 수집",
   resetPrefs: "앱 설정 및 보안 기록 초기화",
   resetPrefsHint:
     "설정, 업데이트 기록, 보안 검사 기록과 오늘의 검사 횟수를 초기화합니다. 로컬 인덱스/캐시나 외부 AI 도구 로그는 삭제하지 않습니다",
@@ -288,6 +297,10 @@ export const settings = {
     cleared: "캐시 데이터 {count}개를 정리하고 {size}를 회수했습니다",
     nothingToClear: "정리할 캐시가 없습니다",
     clearFailed: "캐시 정리에 실패했습니다",
+    collectedDataCleared:
+      "수집 데이터 {count}개를 삭제하고 {size}를 회수했습니다",
+    noCollectedDataToClear: "삭제할 수집 데이터가 없습니다",
+    collectedDataClearFailed: "수집 데이터 삭제에 실패했습니다",
     resetDone: "앱 설정과 보안 기록 {count}개를 초기화했습니다",
     resetDoneBrowser: "브라우저의 앱 설정과 보안 기록을 초기화했습니다",
     resetFailed: "앱 설정 초기화에 실패했습니다",

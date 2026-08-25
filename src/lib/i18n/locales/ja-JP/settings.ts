@@ -167,13 +167,22 @@ export const settings = {
     "（500MB を超えています。キャッシュの削除をおすすめします）",
   clearCache: "キャッシュを削除",
   clearCacheHint:
-    "現在の {appName} データディレクトリ内のキャッシュと再生成可能なインデックスを削除します。AI ツールのログ、元の収集データ、アダプター設定、セキュリティ履歴は削除しません",
+    "現在の {appName} データディレクトリ内のキャッシュのみ削除します。ローカル収集データ、AI ツールのログ、アダプター設定、セキュリティ履歴は削除しません",
   clearCacheButton: "キャッシュを削除",
   clearCacheDialogTitle: "キャッシュを削除しますか？",
   clearCacheDialogDesc:
-    "{appName} 管理ディレクトリ内のキャッシュと再生成可能なインデックスを削除し、ディスク容量を回収します。外部 AI ツールのログ、元の収集データ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
+    "{appName} 管理ディレクトリ内のキャッシュを削除し、ディスク容量を回収します。ローカル収集データ、外部 AI ツールのログ、アダプター設定、アプリ設定、セキュリティ履歴には影響しません。",
   clearing: "削除中...",
   confirmClearCache: "キャッシュを削除",
+  clearCollectedData: "収集データを削除",
+  clearCollectedDataHint:
+    "ローカルで収集した結果を削除してデータを初期化します。元の AI ツールログ、アプリ設定、アダプター設定は保持されます",
+  clearCollectedDataButton: "収集データを削除",
+  clearCollectedDataDialogTitle: "収集データを削除しますか？",
+  clearCollectedDataDialogDesc:
+    "{appName} で収集したローカル結果を削除し、データを初期化した後、元のログからバックグラウンドで再収集します。元の AI ツールログ、アプリ設定、アダプター設定、セキュリティ履歴には影響しません。",
+  clearingCollectedData: "収集データを削除中…",
+  confirmClearCollectedData: "削除して再収集",
   resetPrefs: "アプリ設定とセキュリティ履歴をリセット",
   resetPrefsHint:
     "設定、更新履歴、セキュリティ検査履歴、今日の検査回数をリセットします。ローカルインデックス/キャッシュや外部 AI ツールのログは削除しません",
@@ -292,6 +301,10 @@ export const settings = {
     cleared: "キャッシュデータ {count} 件を削除し、{size} を回収しました",
     nothingToClear: "削除できるキャッシュはありません",
     clearFailed: "キャッシュの削除に失敗しました",
+    collectedDataCleared:
+      "収集データ {count} 件を削除し、{size} を回収しました",
+    noCollectedDataToClear: "削除できる収集データはありません",
+    collectedDataClearFailed: "収集データの削除に失敗しました",
     resetDone: "アプリ設定とセキュリティ履歴を {count} 件リセットしました",
     resetDoneBrowser:
       "ブラウザのアプリ設定とセキュリティ履歴をリセットしました",
