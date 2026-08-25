@@ -67,6 +67,19 @@ describe("RawToolDefinitionSchema - positive fixtures", () => {
     parseOk(validTool());
   });
 
+  test("remote icon URLs are rejected", () => {
+    parseFail(
+      validTool({
+        display: {
+          name: "Remote Icon Tool",
+          nameZh: "Remote Icon Tool",
+          icon: "https://example.com/icon.svg" as never,
+        },
+      }),
+      "offline kind",
+    );
+  });
+
   test("catalogVisible=false allowed for aipy/cline legacy sources", () => {
     parseOk(validTool({ id: "aipy", catalogVisible: false }));
     parseOk(validTool({ id: "cline", catalogVisible: false }));

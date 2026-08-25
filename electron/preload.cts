@@ -13,6 +13,7 @@ import {
   type SecurityRuntimeCapability,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
+  type SecurityScanScheduleStatus,
   type SecurityScanStartRequest,
   type SecurityScanState,
   type SecuritySkillTarget,
@@ -126,6 +127,10 @@ const desktopApi: DesktopApi = Object.freeze({
     ipcRenderer.invoke(
       desktopIpc.getSecurityScanSchedule,
     ) as Promise<SecurityScanSchedule>,
+  getSecurityScanScheduleStatus: () =>
+    ipcRenderer.invoke(
+      desktopIpc.getSecurityScanScheduleStatus,
+    ) as Promise<SecurityScanScheduleStatus>,
   setSecurityScanSchedule: (schedule: SecurityScanSchedule) =>
     ipcRenderer.invoke(
       desktopIpc.setSecurityScanSchedule,

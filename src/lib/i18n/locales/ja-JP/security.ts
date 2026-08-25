@@ -123,6 +123,8 @@ export const security = {
         "最新の {total} 個の Skill はすべて許可判定ですが、ルールで {findings} 件が検出されています。レポートを展開して確認してください。",
       riskyLine:
         "最新検査は {total} 個の Skill を対象とし、{risky} 個を要確認です。ブロック {danger}、警告 {warn}。",
+      unresolvedLine:
+        "最新検査は {total} 個の Skill を対象とし、明確なリスクはありません。{unresolved} 個は検査が未完了で、判定待ちです。",
       noReportLine:
         "実際の検査結果はまだありません。スキャンでこの端末の Skill を検査してください。",
       boundaryLine:
@@ -294,6 +296,10 @@ export const security = {
       files: "ファイル",
       detail: "詳細",
       noFindings: "リスクは見つかりませんでした",
+      incompleteNoFindings:
+        "明確なリスクは見つかりませんでしたが、検査が未完了のため安全・不安全を判定できません",
+      riskDetailsUnavailable:
+        "判定はリスクを示していますが、詳細が保持されていません。この Skill を再検査してください",
       branches: "スキャン分岐",
       skippedFiles: "スキップしたファイル",
       path: "相対パス",
@@ -323,6 +329,7 @@ export const security = {
       all: "すべて",
       safe: "安全",
       unsafe: "要確認",
+      needsReview: "要確認",
       day: "24 時間",
       week: "7 日",
       month: "30 日",

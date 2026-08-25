@@ -1,3 +1,7 @@
+/* Bundled fonts keep the browser renderer and Electron renderer identical across OSes. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/noto-sans-sc/wght.css";
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -94,12 +98,9 @@ body.tt-widget-float-document {
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Native font stacks avoid an external request during offline desktop startup. */
-  --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
-    sans-serif;
-  --font-mono:
-    "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
+  /* Keep the primary UI font independent of the host OS and its installed fonts. */
+  --font-sans: "Inter Variable", "Noto Sans SC Variable", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 }
 
 :root {
@@ -310,6 +311,8 @@ body.tt-widget-float-document {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-synthesis: none;
+    font-optical-sizing: auto;
     line-height: 1.7;
     -webkit-font-smoothing: antialiased;
   }
@@ -883,11 +886,6 @@ body.tt-widget-float-document {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-muted-foreground);
-}
-
-/* macOS：原生红绿灯按钮占据左侧，标题文字右移避让。 */
-.tt-window-chrome--mac .tt-window-chrome-title {
-  padding-left: 0;
 }
 
 .tt-window-controls {

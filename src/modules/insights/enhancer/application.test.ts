@@ -252,7 +252,7 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(second.modelLabel, "Model");
   assert.equal(second.lines.length, 2);
   assert.equal(calls(), 1, "cache hit must not invoke the model again");
-  assert.equal(requests()[0]?.timeoutMs, 30_000);
+  assert.equal(requests()[0]?.timeoutMs, 60_000);
   assert.equal(requests()[0]?.maxOutputTokens, 8192);
 });
 

@@ -11,6 +11,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  powerMonitor,
   safeStorage,
   shell,
   screen,
@@ -24,11 +25,15 @@ import {
   type AutoLaunchState,
   type DesktopAppRoute,
   type RuntimeInfo,
-  type SecurityScanCycle,
   type SecurityScanHistoryEntry,
   type SecurityScanSchedule,
   type SecurityScanState,
 } from "./contracts.js";
+import {
+  createAutomaticSecurityScanScheduler,
+  type AutomaticSecurityScanAttempt,
+  type AutomaticSecurityScanScheduler,
+} from "./automatic-security-scan-scheduler.js";
 import {
   createMacWidgetTrayTemplate,
   createTrayTemplate,
@@ -58,6 +63,8 @@ import { SecurityScannerService } from "./security-scanner-service.js";
 import { isTrustedIpcSender } from "./ipc-security.js";
 import { DesktopStateBroker } from "./desktop-state-broker.js";
 import { createStartupDocument } from "./startup-screen.js";
+import { startupFailureDialogMessage } from "./startup-failure.js";
+import { resolveMainWindowSize } from "./main-window-size.js";
 import {
   normalizeTrayTitle,
   persistTrayTitleBestEffort,
@@ -67,7 +74,6 @@ import {
   updateTrayTitleIfChanged,
 } from "./tray-title.js";
 import { findTrayIconPath, TRAY_ICON_DATA_URL } from "./tray-icon.js";
-import { createWidgetShellDataUrl } from "./widget-shell.js";
 import {
   completeReleaseDataResetAfterWarmup,
   prepareReleaseDataReset,
@@ -98,7 +104,8 @@ let localWebServer: LocalWebServer | null = null;
 let allowedOrigin = "";
 let isQuitting = false;
 let securityScanner: SecurityScannerService | null = null;
-let automaticSecurityScanTimer: NodeJS.Timeout | null = null;
+let automaticSecurityScanScheduler: AutomaticSecurityScanScheduler | null =
+  null;
 let desktopStateBroker: DesktopStateBroker | null = null;
 let startupDocument = "";
 let currentTrayTitle = TRAY_TITLE_PLACEHOLDER;
@@ -226,14 +233,6 @@ function openMainWindowRoute(
     );
 }
 
-function openBrowserCompanion(): void {
-  if (!localWebServer) return;
-  const url = localWebServer.createBrowserBootstrapUrl(
-    `/security?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
-  );
-  void shell.openExternal(url);
-}
-
 /**
  * Show the floating widget window (420×680, frameless, always-on-top, hidden
  * from the taskbar/dock). Created lazily on first use and reused afterwards:
@@ -297,11 +296,6 @@ async function showWidgetWindow(
     }
   });
 
-  widgetWindow.once("ready-to-show", () => {
-    positionWidgetWindow(trayBounds);
-    widgetWindow?.show();
-    widgetWindow?.focus();
-  });
   widgetWindow.on("blur", () => {
     if (process.platform === "darwin" && !isQuitting) {
       widgetWindow?.hide();
@@ -324,18 +318,18 @@ async function showWidgetWindow(
       )
     : `${allowedOrigin}/widget?mode=float&locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`;
   try {
-    // Paint a self-contained shell first, then replace it with the real route
-    // without waiting for any Dashboard/widget data request.
-    await widgetWindow.loadURL(createWidgetShellDataUrl());
+    // Load the real route before revealing the window. Showing the standalone
+    // shell first caused a visible second transition from the loading mock to
+    // the styled widget, especially on the first menu-bar click.
+    await widgetWindow.loadURL(widgetUrl);
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    await waitForWidgetStyles(widgetWindow);
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     positionWidgetWindow(trayBounds);
     widgetWindow.show();
     widgetWindow.focus();
-    void widgetWindow.loadURL(widgetUrl).catch((error: unknown) => {
-      console.warn("Widget window failed to load", error);
-    });
   } catch (error) {
-    console.warn("Widget shell failed to load", error);
+    console.warn("Widget window failed to load", error);
     widgetWindow?.destroy();
   }
 }
@@ -379,16 +373,38 @@ function positionWidgetWindow(trayBounds?: Electron.Rectangle): void {
   widgetWindow.setPosition(positionX, positionY, false);
 }
 
-const SECURITY_SCAN_CYCLE_MS: Record<SecurityScanCycle, number> = {
-  hourly: 60 * 60 * 1_000,
-  daily: 24 * 60 * 60 * 1_000,
-  weekly: 7 * 24 * 60 * 60 * 1_000,
-};
-
-const DAY_MS = 24 * 60 * 60 * 1_000;
-const WEEK_MS = 7 * DAY_MS;
-/** Wall-clock time of the most recent scheduled automatic run (weekly anchor). */
-let lastAutomaticScanRunAt: number | null = null;
+/**
+ * `loadURL()` resolves after the document is available, not after the lazy
+ * widget chunk and its CSS have painted. Waiting for the real card's computed
+ * styles prevents Electron from revealing the transparent window for one
+ * frame with unstyled text on a black compositor surface.
+ */
+async function waitForWidgetStyles(window: BrowserWindow): Promise<void> {
+  await window.webContents
+    .executeJavaScript(
+      `(() => new Promise((resolve) => {
+        const deadline = performance.now() + 1800;
+        const check = () => {
+          const card = document.querySelector('.tt-glass-overview');
+          if (card) {
+            const style = getComputedStyle(card);
+            if (style.display === 'flex' && style.borderRadius === '30px') {
+              requestAnimationFrame(() => requestAnimationFrame(resolve));
+              return;
+            }
+          }
+          if (performance.now() >= deadline) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(check);
+        };
+        check();
+      }))()`,
+      true,
+    )
+    .catch(() => undefined);
+}
 
 const SECURITY_RISK_NOTICE: Record<
   DesktopLocale,
@@ -412,68 +428,29 @@ const SECURITY_RISK_NOTICE: Record<
   },
 };
 
-/** Parse a validated "HH:MM" schedule time into local hour/minute. */
-function parseScheduleTime(time: string): [number, number] {
-  const [hour, minute] = time.split(":").map(Number);
-  return [hour, minute];
-}
-
-/** Next local wall-clock occurrence of `time` strictly after `base`. */
-function nextTimeAtOrAfter(base: Date, time: string): Date {
-  const [hour, minute] = parseScheduleTime(time);
-  const next = new Date(base);
-  next.setHours(hour, minute, 0, 0);
-  if (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 1);
-  return next;
-}
-
-/**
- * Next local occurrence of the anchor weekday's `time` after `base` — the
- * weekly cadence runs once per week on the weekday the schedule was last armed.
- */
-function nextWeeklyAtOrAfter(base: Date, anchor: Date, time: string): Date {
-  const [hour, minute] = parseScheduleTime(time);
-  const next = new Date(anchor);
-  next.setHours(hour, minute, 0, 0);
-  while (next.getTime() <= base.getTime()) next.setDate(next.getDate() + 7);
-  return next;
-}
-
-/**
- * Delay until the next automatic run: hourly reuses the fixed 1h interval;
- * daily/weekly honor the configured "HH:MM" local wall-clock time.
- */
-function nextAutomaticScanDelayMs(schedule: SecurityScanSchedule): number {
-  const now = new Date();
-  if (schedule.cycle === "hourly") return SECURITY_SCAN_CYCLE_MS.hourly;
-  if (schedule.cycle === "daily") {
-    return nextTimeAtOrAfter(now, schedule.time).getTime() - now.getTime();
-  }
-  const anchor =
-    lastAutomaticScanRunAt == null ? now : new Date(lastAutomaticScanRunAt);
-  return Math.max(
-    0,
-    nextWeeklyAtOrAfter(now, anchor, schedule.time).getTime() - now.getTime(),
-  );
-}
-
 async function runAutomaticSecurityScan(
   schedule?: SecurityScanSchedule,
-): Promise<void> {
+): Promise<AutomaticSecurityScanAttempt> {
   const scanner = securityScanner;
-  if (!scanner) return;
+  if (!scanner) return "failed";
   const status = scanner.getStatus().status;
-  if (status === "running" || status === "cancelling") return;
+  if (status === "running" || status === "cancelling") return "busy";
   let state: SecurityScanState;
   try {
     state = await scanner.startAutomaticScan(schedule);
-  } catch {
-    // No discovered Skills (or a concurrent manual scan) is a recoverable
-    // automatic pass. The next run retries through the same safe service.
-    return;
+  } catch (error) {
+    // No discovered Skills, a narrowed scope with no matches, and transient
+    // local failures are recoverable automatic passes. Keep the next run
+    // alive, but leave a stable local diagnostic instead of silently making
+    // the schedule appear broken.
+    const reason = error instanceof Error ? error.message : "unknown";
+    console.warn(`[security] automatic scan skipped: ${reason}`);
+    return "failed";
   }
-  if (schedule?.notify !== true) return;
-  await notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+  if (schedule?.notify === true) {
+    void notifyIfAutomaticScanFoundRisks(scanner, state.scanId);
+  }
+  return "started";
 }
 
 /** Wait for the automatic scan to settle, then notify when it found risks. */
@@ -522,44 +499,12 @@ async function waitForAutomaticScanSettled(
   return scanner.getStatus();
 }
 
-function clearAutomaticSecurityScanTimer(): void {
-  if (automaticSecurityScanTimer) {
-    clearTimeout(automaticSecurityScanTimer);
-    automaticSecurityScanTimer = null;
-  }
+function suspendAutomaticSecurityScan(): void {
+  automaticSecurityScanScheduler?.suspend();
 }
 
-/**
- * Schedule the automatic security scan from the persisted schedule: an
- * immediate first pass on launch when enabled, then a time-aware timer for the
- * configured cycle. A disabled schedule clears the timer entirely.
- */
-async function scheduleAutomaticSecurityScan(): Promise<void> {
-  clearAutomaticSecurityScanTimer();
-  const scanner = securityScanner;
-  if (!scanner) return;
-  let schedule: SecurityScanSchedule;
-  try {
-    schedule = await scanner.getScanSchedule();
-  } catch {
-    // Corrupt/missing schedule already falls back to the default inside the
-    // service; any unexpected failure simply leaves auto-scan unscheduled.
-    return;
-  }
-  if (!schedule.enabled) return;
-  // Initial run shortly after launch when enabled, then arm the repeating timer.
-  void runAutomaticSecurityScan(schedule);
-  armAutomaticSecurityScanTimer(schedule);
-}
-
-function armAutomaticSecurityScanTimer(schedule: SecurityScanSchedule): void {
-  const delayMs = nextAutomaticScanDelayMs(schedule);
-  automaticSecurityScanTimer = setTimeout(() => {
-    automaticSecurityScanTimer = null;
-    lastAutomaticScanRunAt = Date.now();
-    void runAutomaticSecurityScan(schedule);
-    armAutomaticSecurityScanTimer(schedule);
-  }, delayMs);
+function resumeAutomaticSecurityScan(): void {
+  void automaticSecurityScanScheduler?.resume();
 }
 
 function registerIpcHandlers(): void {
@@ -802,13 +747,17 @@ function registerIpcHandlers(): void {
     if (!securityScanner) throw new Error("Security scanner is unavailable");
     return securityScanner.getScanSchedule();
   });
+  ipcMain.handle(desktopIpc.getSecurityScanScheduleStatus, async (event) => {
+    assertTrustedSender(event);
+    if (!securityScanner) throw new Error("Security scanner is unavailable");
+    return securityScanner.getScanScheduleStatus();
+  });
   ipcMain.handle(
     desktopIpc.setSecurityScanSchedule,
     async (event, schedule: unknown) => {
       assertTrustedSender(event);
       if (!securityScanner) throw new Error("Security scanner is unavailable");
       const result = await securityScanner.setScanSchedule(schedule);
-      await scheduleAutomaticSecurityScan();
       return result;
     },
   );
@@ -853,11 +802,16 @@ function rebuildTray(): void {
     resourcesPath: process.resourcesPath,
     appPath: app.getAppPath(),
   });
+  // NativeImage loads the adjacent `@2x` representation when constructed from
+  // the Template filename. This is required for a crisp, visible status-item
+  // icon on Retina Apple Silicon Macs; retain a PNG-only fallback if a resource
+  // is unexpectedly unavailable or corrupt.
   let trayIcon = trayIconPath
     ? nativeImage.createFromPath(trayIconPath)
     : nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
-  if (trayIcon.isEmpty())
+  if (trayIcon.isEmpty()) {
     trayIcon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL);
+  }
   if (process.platform === "darwin") {
     trayIcon.setTemplateImage(true);
   }
@@ -868,12 +822,8 @@ function rebuildTray(): void {
     {
       autoLaunchEnabled: autoLaunch.enabled,
       autoLaunchSupported: autoLaunch.supported,
-      browserCompanionSupported: localWebServer != null,
     },
     {
-      onOpen: showMainWindow,
-      onOpenWidget: showWidgetWindow,
-      onOpenBrowser: openBrowserCompanion,
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -912,16 +862,14 @@ function rebuildTray(): void {
       void toggleWidgetWindow(bounds);
       return;
     }
-    void showWidgetWindow();
+    showMainWindow();
   });
 }
 
 async function createMainWindow(): Promise<void> {
+  const mainWindowSize = resolveMainWindowSize();
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 940,
-    minWidth: 1100,
-    minHeight: 720,
+    ...mainWindowSize,
     // 无边框 + 自绘标题栏：隐藏系统原生标题栏与窗口按钮，由渲染进程
     // 提供与主题一致的深色标题栏（macOS 保留原生红绿灯按钮）。
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
@@ -1034,7 +982,9 @@ if (!hasSingleInstanceLock) {
     }
   });
   app.on("will-quit", () => {
-    clearAutomaticSecurityScanTimer();
+    automaticSecurityScanScheduler?.stop();
+    powerMonitor.removeListener("suspend", suspendAutomaticSecurityScan);
+    powerMonitor.removeListener("resume", resumeAutomaticSecurityScan);
     ipcMain.removeHandler(desktopIpc.getRuntimeInfo);
     ipcMain.removeHandler(desktopIpc.getAutoLaunch);
     ipcMain.removeHandler(desktopIpc.setAutoLaunch);
@@ -1061,6 +1011,7 @@ if (!hasSingleInstanceLock) {
     ipcMain.removeHandler(desktopIpc.getSecurityScanHistory);
     ipcMain.removeHandler(desktopIpc.cancelSecurityScan);
     ipcMain.removeHandler(desktopIpc.getSecurityScanSchedule);
+    ipcMain.removeHandler(desktopIpc.getSecurityScanScheduleStatus);
     ipcMain.removeHandler(desktopIpc.setSecurityScanSchedule);
     ipcMain.removeHandler(desktopIpc.getSecurityRuntimeCapability);
     void localWebServer?.close();
@@ -1075,6 +1026,8 @@ if (!hasSingleInstanceLock) {
         else void createMainWindow();
       });
       reportStartupMilestone("electron-ready");
+      powerMonitor.on("suspend", suspendAutomaticSecurityScan);
+      powerMonitor.on("resume", resumeAutomaticSecurityScan);
       // Resolve the same interactive user's home in packaged builds. The explicit
       // value also keeps scanner behavior stable when Electron is launched by
       // Finder/login items with a reduced environment. A test-lab override, when
@@ -1098,6 +1051,15 @@ if (!hasSingleInstanceLock) {
             safeStorage.decryptString(Buffer.from(value, "base64")),
         },
         persistence: desktopStateBroker,
+        onScheduleChanged: (schedule) =>
+          automaticSecurityScanScheduler?.update(schedule),
+      });
+      automaticSecurityScanScheduler = createAutomaticSecurityScanScheduler({
+        readSchedule: () => securityScanner!.getScanSchedule(),
+        readRuntime: () => desktopStateBroker!.readScheduleRuntime(),
+        writeRuntime: (runtime) =>
+          desktopStateBroker!.writeScheduleRuntime(runtime),
+        attempt: (schedule) => runAutomaticSecurityScan(schedule),
       });
       // 打包后的 Windows/Linux 去掉默认 File/Edit/View 菜单栏（标题栏已自绘，
       // 菜单栏既遮挡又难看）；开发模式与 macOS 保留：macOS 菜单在系统菜单栏，
@@ -1120,10 +1082,10 @@ if (!hasSingleInstanceLock) {
       });
       allowedOrigin = await resolveApplicationOrigin();
       reportStartupMilestone("local-server-ready");
-      // Start first-run collection while the native startup document remains
-      // visible. This is intentionally a lightweight internal request, not a
-      // speculative homepage render: it starts the scheduler without doing
-      // the same SSR/hydration work twice.
+      // Initialize an empty workspace while the native startup document remains
+      // visible. Once persisted snapshots exist, stale collectors continue in
+      // the background and the renderer opens from the last completed data.
+      // This remains a lightweight internal request, not a duplicate render.
       if (localWebServer) {
         await completeReleaseDataResetAfterWarmup(
           releaseDataReset,
@@ -1154,13 +1116,14 @@ if (!hasSingleInstanceLock) {
         app.getLocale(),
       );
       currentTrayTitle = persistedTrayState.title;
+      await securityScanner.recoverInterruptedRuns();
       registerIpcHandlers();
       rebuildTray();
       // Let the renderer own the first document request. A second hidden SSR
       // request duplicates route-loader, hydration, and SQLite work precisely
       // when the visible page needs those resources most.
       await loadMainWindow();
-      void scheduleAutomaticSecurityScan();
+      void automaticSecurityScanScheduler.start();
     })
     .catch((error: unknown) => {
       // A failure before BrowserWindow construction must not leave a headless
@@ -1169,7 +1132,10 @@ if (!hasSingleInstanceLock) {
       console.error("TrustTools startup failed", error);
       const startupFailure =
         electronMessages[currentPreferences.locale].dialog.startupFailure;
-      dialog.showErrorBox(startupFailure.title, startupFailure.message);
+      dialog.showErrorBox(
+        startupFailure.title,
+        startupFailureDialogMessage(startupFailure, error),
+      );
       app.quit();
     });
 }

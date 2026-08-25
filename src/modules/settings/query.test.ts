@@ -18,6 +18,34 @@ test("settings query facade exposes no filesystem implementation symbols", () =>
   const source = readFileSync(new URL("./query.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /node:fs|node:path|homedir|readdir|rm\(/);
   assert.match(source, /await import\([\s\S]*data-lifecycle\.server/);
+  assert.match(source, /readStorageUsage/);
+  assert.doesNotMatch(
+    source,
+    /getStorageUsageFn|applyRetentionPolicyFn|clearRegenerableCacheFn/,
+  );
+});
+
+test("settings lifecycle helpers do not create nested server functions", () => {
+  const source = readFileSync(
+    new URL("./data-lifecycle.server.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /createServerFn/);
+  assert.match(source, /export async function readStorageUsage/);
+  assert.match(source, /export async function applyRetentionPolicy/);
+  assert.match(source, /export async function clearRegenerableCache/);
+});
+
+test("scan settings do not duplicate general data lifecycle controls", () => {
+  const source = readFileSync(
+    new URL("./presentation/SettingsPage.tsx", import.meta.url),
+    "utf8",
+  );
+  const scanSection = source
+    .split('{category === "scan" &&')[1]
+    ?.split('{category === "model"')[0];
+  assert.ok(scanSection);
+  assert.doesNotMatch(scanSection, /settings\.retention|settings\.storage/);
 });
 
 test("settings route delegates rendering to the module presentation", () => {

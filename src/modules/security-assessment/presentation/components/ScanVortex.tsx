@@ -50,6 +50,25 @@ const FLY_DURATION_MS = 220;
 const DIMENSION_DURATION_MS = 130;
 const EXIT_DURATION_MS = 900;
 const MIN_VISIBLE_DURATION_MS = 2000;
+const MINIMIZED_STORAGE_KEY = "trusttools.security-scan.minimized";
+
+function readMinimizedState(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(MINIMIZED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function persistMinimizedState(value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(MINIMIZED_STORAGE_KEY, String(value));
+  } catch {
+    // Session storage can be unavailable in privacy-restricted contexts.
+  }
+}
 
 /** V3.0 prototype radar/track animation driven by real scanner state. */
 export function ScanVortex({
@@ -70,7 +89,7 @@ export function ScanVortex({
   const { t } = useI18n();
   const [visible, setVisible] = useState(active);
   const [exiting, setExiting] = useState(false);
-  const [mini, setMini] = useState(false);
+  const [mini, setMiniState] = useState(readMinimizedState);
   const [dimension, setDimension] = useState(-1);
   const [sidebarInset, setSidebarInset] = useState(0);
   const visibleStartedAt = useRef(active ? Date.now() : 0);
@@ -80,7 +99,6 @@ export function ScanVortex({
       if (!visible) visibleStartedAt.current = Date.now();
       setVisible(true);
       setExiting(false);
-      setMini(false);
       return;
     }
     if (!visible) return;
@@ -98,6 +116,11 @@ export function ScanVortex({
       window.clearTimeout(hide);
     };
   }, [active, visible]);
+
+  const setMini = (value: boolean) => {
+    setMiniState(value);
+    persistMinimizedState(value);
+  };
 
   useEffect(() => {
     const sidebar = document.querySelector<HTMLElement>(".tt-sidebar");

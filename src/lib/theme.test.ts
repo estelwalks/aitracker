@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveThemeClass, themes } from "./theme.tsx";
+import { DEFAULT_THEME, resolveThemeClass, themes } from "./theme.tsx";
+
+test("default theme follows the system", () => {
+  assert.equal(DEFAULT_THEME, "system");
+});
 
 test("theme options expose system, light, and dark in the settings order", () => {
   assert.deepEqual(

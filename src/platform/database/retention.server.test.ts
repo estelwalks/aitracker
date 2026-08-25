@@ -8,6 +8,7 @@ import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
 import {
   applyDatabaseRetention,
+  clearCollectedDatabaseData,
   clearRegenerableDatabaseCaches,
 } from "./retention.server.ts";
 
@@ -119,4 +120,88 @@ test("clearRegenerableDatabaseCaches removes every regenerable row", (t) => {
   assert.equal(summary.insightCacheDeleted, 1);
   assert.equal(count(host, "http_cache_entries"), 0);
   assert.equal(count(host, "insight_enhancement_cache"), 0);
+});
+
+test("clearCollectedDatabaseData removes collector projections but preserves user data", (t) => {
+  const host = openMigratedHost(t);
+  const now = 2_000_000_000_000;
+  host
+    .prepare(
+      `INSERT INTO snapshot_generations (
+        snapshot_id, domain, schema_version, revision, generated_at_ms,
+        status, created_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run("usage-snapshot", "usage", 1, "r1", now, "fresh", now);
+  host
+    .prepare(
+      "INSERT INTO snapshot_heads (domain, snapshot_id, updated_at_ms) VALUES (?, ?, ?)",
+    )
+    .run("usage", "usage-snapshot", now);
+  host
+    .prepare(
+      "INSERT INTO project_classifications (ref_hash, kind, label, classified_at_ms, revision) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run("ref", "workspace", "project", now, 1);
+  const insertSearch = host.prepare(
+    `INSERT INTO search_documents
+      (document_id, type, source_ref, title, tags_json, text_summary, freshness, updated_at_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  insertSearch.run(
+    "session:1",
+    "session",
+    "session:1",
+    "Session",
+    "[]",
+    "Session summary",
+    "fresh",
+    now,
+  );
+  insertSearch.run(
+    "report:1",
+    "report",
+    "report:1",
+    "Report",
+    "[]",
+    "Report summary",
+    "fresh",
+    now,
+  );
+  host
+    .prepare(
+      `INSERT INTO monitoring_state
+        (singleton_id, running, started_at_ms, heartbeat_at_ms, pending_count, security_summary_json, updated_at_ms)
+       VALUES (1, 1, ?, ?, 1, ?, ?)`,
+    )
+    .run(now, now, JSON.stringify({ assessed: 1 }), now);
+  host
+    .prepare(
+      `INSERT INTO monitoring_collectors
+        (collector_id, state, pending, last_started_at_ms)
+       VALUES (?, ?, ?, ?)`,
+    )
+    .run("usage", "running", 1, now);
+
+  const summary = clearCollectedDatabaseData(host);
+  assert.deepEqual(summary, {
+    snapshotGenerationsDeleted: 1,
+    projectClassificationsDeleted: 1,
+    searchDocumentsDeleted: 1,
+  });
+  assert.equal(count(host, "snapshot_generations"), 0);
+  assert.equal(count(host, "snapshot_heads"), 0);
+  assert.equal(count(host, "project_classifications"), 0);
+  assert.equal(count(host, "search_documents"), 1);
+  assert.equal(count(host, "monitoring_collectors"), 0);
+  const monitoring = host
+    .prepare(
+      "SELECT running, started_at_ms, heartbeat_at_ms, pending_count, security_summary_json FROM monitoring_state WHERE singleton_id = 1",
+    )
+    .get();
+  assert.equal(Number(monitoring?.running), 0);
+  assert.equal(monitoring?.started_at_ms, null);
+  assert.equal(monitoring?.heartbeat_at_ms, null);
+  assert.equal(Number(monitoring?.pending_count), 0);
+  assert.equal(monitoring?.security_summary_json, null);
 });

@@ -20,6 +20,10 @@ import {
 } from "node:path";
 
 const DATA_DIRECTORY_NAME = ".trusttools";
+const DATABASE_WRITER_LOCK_PATH = [
+  "data",
+  "trusttools.v1.db.writer.lock",
+] as const;
 const MARKER_PREFIX = ".trusttools-release-data-reset-";
 const MARKER_SUFFIX = ".complete";
 
@@ -154,6 +158,59 @@ async function removeResetTarget(resetTarget: string): Promise<void> {
   await rm(resetTarget, { recursive: true, force: true });
 }
 
+/**
+ * A compatibility reset must never remove data while another local runtime is
+ * still writing it. This mirrors the database host's fail-closed ownership
+ * check without importing the server-only database implementation into the
+ * Electron bootstrap bundle.
+ */
+async function assertNoActiveDatabaseWriter(
+  resetTarget: string,
+): Promise<void> {
+  const lockPath = join(resetTarget, ...DATABASE_WRITER_LOCK_PATH);
+  let raw: string;
+  try {
+    raw = await readFile(lockPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw resetBlockedByActiveWriter();
+  }
+
+  let pid: unknown;
+  try {
+    pid = (JSON.parse(raw) as { pid?: unknown }).pid;
+  } catch {
+    throw resetBlockedByActiveWriter();
+  }
+  if (!Number.isSafeInteger(pid) || Number(pid) <= 0) {
+    throw resetBlockedByActiveWriter();
+  }
+  try {
+    process.kill(Number(pid), 0);
+    throw resetBlockedByActiveWriter();
+  } catch (error) {
+    if (
+      (error as NodeJS.ErrnoException).code === "ESRCH" &&
+      !(error instanceof StartupDataWriterError)
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
+class StartupDataWriterError extends Error {
+  readonly startupFailureCode = "database.already-open" as const;
+
+  constructor() {
+    super("TrustTools local data reset blocked by an active database writer");
+  }
+}
+
+function resetBlockedByActiveWriter(): StartupDataWriterError {
+  return new StartupDataWriterError();
+}
+
 async function writeMarkerAtomically(
   markerPath: string,
   appVersion: string,
@@ -183,14 +240,22 @@ async function writeMarkerAtomically(
 }
 
 /**
- * Prepare the one-time packaged macOS data reset. This function removes the
+ * Prepare the one-time packaged desktop data reset. This function removes the
  * old product data but intentionally does not mark success; the caller owns
  * the later initialization gate and must explicitly persist completion.
  */
 export async function prepareReleaseDataReset(
   options: ReleaseDataResetOptions,
 ): Promise<ReleaseDataReset> {
-  if (options.platform !== "darwin" || !options.isPackaged) {
+  // The initial-schema-v1 release deliberately replaced the prior migration
+  // lineage. Keeping an old Windows database would make the strict
+  // forward-only migration check reject startup, while macOS was already
+  // reset here. Both supported packaged desktop platforms must therefore
+  // follow the same one-time, marker-guarded reset.
+  if (
+    (options.platform !== "darwin" && options.platform !== "win32") ||
+    !options.isPackaged
+  ) {
     return {
       status: "not-applicable",
       markInitializationComplete: async () => undefined,
@@ -205,6 +270,7 @@ export async function prepareReleaseDataReset(
     };
   }
 
+  await assertNoActiveDatabaseWriter(resetTarget);
   await removeResetTarget(resetTarget);
   let completed = false;
   return {
@@ -221,7 +287,12 @@ export async function prepareReleaseDataReset(
 export async function readReleaseDataResetMarker(
   options: ReleaseDataResetOptions,
 ): Promise<string | null> {
-  if (options.platform !== "darwin" || !options.isPackaged) return null;
+  if (
+    (options.platform !== "darwin" && options.platform !== "win32") ||
+    !options.isPackaged
+  ) {
+    return null;
+  }
   const { markerPath } = resolveResetPaths(options);
   try {
     return await readFile(markerPath, "utf8");
