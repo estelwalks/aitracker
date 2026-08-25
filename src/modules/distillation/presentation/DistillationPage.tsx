@@ -597,8 +597,9 @@ export function DistillationPage({
         <InsightCard
           surfaceId="distill"
           variant="hero"
-          title={t("distill.jarvisTitle")}
+          title={t("insights.title")}
           dotsLabel={t("distill.insightDots")}
+          showFallbackStatus={false}
         />
       </div>
 
