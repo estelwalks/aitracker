@@ -165,6 +165,29 @@ test("enhancement cache enforces identity replacement, line ordering and TTL", (
   );
 });
 
+test("model changes invalidate every ready enhancement cache", (t) => {
+  const host = fixture(t);
+  const repository = createSqliteInsightRepository(host);
+  const first = cache("cache-first");
+  const second = {
+    ...cache("cache-second"),
+    surfaceId: "tracker" as const,
+    scopeHash: "tracker-scope",
+    evidenceHash: "tracker-evidence",
+  };
+  assert.equal(
+    repository.saveEnhancement({ mode: "enhanced-auto", value: first }),
+    true,
+  );
+  assert.equal(
+    repository.saveEnhancement({ mode: "enhanced-auto", value: second }),
+    true,
+  );
+  assert.equal(repository.invalidateAll?.(), 2);
+  assert.equal(repository.findValid(first, 150), undefined);
+  assert.equal(repository.findValid(second, 150), undefined);
+});
+
 test("privacy guard rejects facts, URLs, commands and current entity names atomically", (t) => {
   const host = fixture(t);
   const repository = createSqliteInsightRepository(host);
