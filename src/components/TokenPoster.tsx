@@ -34,9 +34,10 @@ type TFunction = ReturnType<typeof useI18n>["t"];
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
-const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
+const MONO =
+  '"JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace';
 const SANS =
-  '"PingFang SC", "Hiragino Sans GB", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans KR", "Microsoft YaHei", system-ui, sans-serif';
+  '"Inter Variable", "Noto Sans SC Variable", "PingFang SC", "Hiragino Sans GB", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans KR", "Microsoft YaHei", system-ui, sans-serif';
 
 const skins = {
   dark: {

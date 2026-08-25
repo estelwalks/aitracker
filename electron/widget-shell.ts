@@ -13,7 +13,7 @@ export function createWidgetShellHtml(): string {
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
     html, body { width: 100%; height: 100%; margin: 0; background: transparent; overflow: hidden; }
-    body { display: grid; place-items: stretch; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { display: grid; place-items: stretch; font-family: "Inter Variable", "Noto Sans SC Variable", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
     .shell {
       width: ${WIDGET_WIDTH}px;
       height: ${WIDGET_HEIGHT}px;
