@@ -467,6 +467,14 @@ export function createDistillationApplication(
       return candidates.get(candidateId);
     },
 
+    async delete(candidateId: string): Promise<boolean> {
+      await ready();
+      if (!candidates.has(candidateId)) return false;
+      candidates.delete(candidateId);
+      if (ports.persistence?.delete) await ports.persistence.delete(candidateId);
+      return true;
+    },
+
     async count(): Promise<number | null> {
       if (!ports.knowledge) return null;
       const result = await ports.knowledge.list();

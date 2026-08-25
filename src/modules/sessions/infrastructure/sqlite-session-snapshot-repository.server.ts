@@ -102,8 +102,8 @@ export function createSqliteSessionSnapshotRepository(
             }));
           return {
             collectorVersion:
-              generation.source_fingerprint === "sessions-v2-dsh"
-                ? "sessions-v2-dsh"
+              generation.source_fingerprint === "sessions-v3-stable-id"
+                ? "sessions-v3-stable-id"
                 : undefined,
             generatedAt:
               msToIso(generation.generated_at_ms) ?? new Date(0).toISOString(),
@@ -122,11 +122,12 @@ export function createSqliteSessionSnapshotRepository(
         createId: options.createId,
         writeData(snapshotId, data) {
           for (const session of data.sessions) {
-            const sessionId = hashSensitiveRef(
-              options.hmacKey,
-              "session",
-              `${session.source}\0${session.sessionId}`,
-            );
+            // Session ids are opaque local client identifiers, not paths or
+            // conversation content. They must remain stable because the same
+            // id is the join key used by transcript readers and CLI resume.
+            // Hashing it here made the persisted snapshot impossible to join
+            // back to Claude Code/Codex logs after an app restart.
+            const sessionId = session.sessionId;
             database
               .prepare(
                 `INSERT INTO sessions VALUES (${Array.from({ length: 30 }, () => "?").join(",")})`,

@@ -8,8 +8,7 @@ export const reports = {
     sessions: "セッション {count} 件をカバー",
     empty:
       "まだブリーフィングはありません。「今すぐ生成」で草稿を作成できます。",
-    modelNotConfigured:
-      "モデル未設定：ローカルのセッションデータから草稿を自動生成し、生成後に編集できます。",
+    modelNotConfigured: "日報にはモデル設定が必要です。設定する →",
     rotate: "別のインサイト",
     dots: "インサイトカルーセル",
   },

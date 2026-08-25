@@ -141,9 +141,9 @@ export async function loadSessionTranscript(
   input: TranscriptInput,
 ): Promise<SessionTranscript> {
   try {
-    const { loadSessionTranscript: readTranscript } =
-      await import("./infrastructure/transcript-reader.server.ts");
-    return await readTranscript(input);
+    const { readSessionContent } =
+      await import("./infrastructure/session-content-reader.server.ts");
+    return await readSessionContent(input);
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError("errors.sessions.transcriptUnavailable");

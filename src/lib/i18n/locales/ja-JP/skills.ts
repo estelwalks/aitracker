@@ -28,7 +28,7 @@ export const skills = {
   },
   form: {
     all: "全形態",
-    package: "蒸留スキル",
+    package: "完全パッケージ",
     workflow: "ワークフロー",
     prompt: "Prompt",
   },

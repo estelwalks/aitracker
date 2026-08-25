@@ -253,7 +253,7 @@ export function DashboardV2Page({
         securityScan={securityScan}
       />
       {/* 时间范围：全页吸顶（与原型一致的横贯细条） */}
-      <div className="dashboard-range-bar sticky top-0 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-y border-border/60 bg-background px-4 py-2 md:-mx-8 md:px-8 2xl:-mx-10 2xl:px-10">
+      <div className="dashboard-range-bar sticky top-0 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-background px-4 py-2 md:-mx-8 md:px-8 2xl:-mx-10 2xl:px-10">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <span className="shrink-0 font-mono text-[10px] tracking-[0.14em] text-muted-foreground/70 uppercase">
             {t("dashboard.v2.overviewLabel")}

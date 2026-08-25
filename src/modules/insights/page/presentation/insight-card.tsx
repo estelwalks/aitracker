@@ -95,13 +95,17 @@ export function InsightCard({
   const fallbackStatus =
     shouldShowFallbackStatus && fallbackStatusKey ? (
       envelope?.status === "enhancer-unavailable" ? (
-        <Link
-          to="/settings"
-          search={{ section: "model" }}
-          className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
-        >
+        <span className="inline-flex min-h-7 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.08] px-3 text-[11px] font-semibold tracking-normal text-foreground/85">
+          <span aria-hidden="true">✨</span>
           {renderMessage(fallbackStatusKey)}
-        </Link>
+          <Link
+            to="/settings"
+            search={{ section: "model" }}
+            className="border-l border-foreground/20 pl-2 font-semibold text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:text-emerald-200"
+          >
+            {t("settings.insight.configureModel")}
+          </Link>
+        </span>
       ) : (
         <span
           role="status"

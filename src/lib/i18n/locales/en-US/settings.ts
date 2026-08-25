@@ -14,7 +14,7 @@ export const settings = {
     scan: "Scan config",
     model: "Model config",
     menuBarApp: "Menu Bar App",
-    appearance: "Appearance",
+    appearance: "Personalization",
     widget: "Widgets",
     about: "About",
   },
@@ -242,7 +242,8 @@ export const settings = {
     enhance: "Enhance wording",
     enhancing: "Enhancing…",
     unavailableHint:
-      "No model configured — enhance is unavailable (configure in Settings)",
+      "AI enhancement unavailable; showing rule-based insights",
+    configureModel: "Connect now",
     severity: {
       info: "Info",
       attention: "Attention",

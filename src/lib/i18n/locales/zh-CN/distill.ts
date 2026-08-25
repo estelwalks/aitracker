@@ -15,6 +15,7 @@ export const distill = {
   grainSession: "按会话",
   grainProject: "按项目",
   stepMaterial: "选素材",
+  stepConfig: "配参数",
   materialProject: "项目",
   materialSession: "会话",
   materialSource: "来源",
@@ -23,7 +24,6 @@ export const distill = {
   projectSessions: "{count} 场会话",
   drawerTitle: "素材库 · 选择会话片段",
   drawerSub: "左侧选会话，右侧勾选要蒸馏的具体片段",
-  drawerEsc: "ESC 关闭",
   joinWhole: "全选",
   footerSelected: "已选",
   footerSessions: "场会话",
@@ -207,6 +207,5 @@ export const distill = {
     crossCount: " · 当前已跨 {count} 场会话",
   },
   anotherHistoryResults: "另有 {count} 次历史结果 · 查看",
-  noModelHint:
-    "尚未配置 AI 模型。请在「设置 → 模型」添加带 API Key 的模型，否则蒸馏无法产出真实结果。",
+  noModelHint: "蒸馏需配置模型。去配置 →",
 } as const;
