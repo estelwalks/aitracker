@@ -268,6 +268,41 @@ test("successful generation writes the cache and a second call hits it", async (
   assert.equal(requests()[0]?.maxOutputTokens, 8192);
 });
 
+test("dotted page candidate ids do not trip outbound URL validation", async () => {
+  const { ai } = fakeAI(() =>
+    completedResult(
+      JSON.stringify({
+        lines: [
+          {
+            candidateId: "tracker.top-model",
+            analysis: "该维度可用于聚焦当前消耗结构",
+          },
+        ],
+      }),
+    ),
+  );
+  const repository = new FakeInsightRepository();
+  const target = enhancer(ai, repository);
+
+  const result = await target.enhance(
+    input({
+      surface: "tracker",
+      candidates: [
+        {
+          id: "tracker.top-model",
+          severity: "info",
+          fact: "当前使用的模型已汇总",
+          actionIds: ["open_tracker"],
+          mandatory: false,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(result.status, "enhanced-ready");
+  assert.equal(repository.saved.length, 1);
+});
+
 test("readCached returns persisted AI lines without invoking the model", async () => {
   const { ai, calls } = fakeAI(() => completedResult(VALID_OUTPUT));
   const repository = new FakeInsightRepository();

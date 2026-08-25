@@ -96,9 +96,20 @@ export function createLLMInsightGenerator(options: {
         candidates: request.candidates,
       };
       try {
-        assertPayloadSafe(payload, {
-          forbiddenEntities: request.forbiddenEntities,
-        });
+        // Candidate ids and action ids are local protocol identifiers. They
+        // may contain dotted slugs such as `tracker.top-model`; checking the
+        // whole envelope would mistake those identifiers for hostnames. Only
+        // the fact text is user-derived and needs outbound safety validation.
+        assertPayloadSafe(
+          {
+            candidates: request.candidates.map((candidate) => ({
+              fact: candidate.fact,
+            })),
+          },
+          {
+            forbiddenEntities: request.forbiddenEntities,
+          },
+        );
       } catch {
         return { status: "failed", requestId };
       }

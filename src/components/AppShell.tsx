@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     aria-current={active ? "page" : undefined}
                   >
                     <Icon
-                      className={`size-4 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
+                      className={`size-5 shrink-0 ${item.hero && !active ? "text-foreground" : ""}`}
                       strokeWidth={1.75}
                     />
                     {!collapsed && (
@@ -167,9 +167,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 collapsed ? "justify-center px-0" : "gap-3 px-3"
               } ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
             >
-              <Database className="size-4 shrink-0" strokeWidth={1.75} />
+              <Database className="size-5 shrink-0" strokeWidth={1.75} />
               {!collapsed && (
-                <span className="truncate">{t("nav.sources")}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {t("nav.sources")}
+                </span>
               )}
             </Link>
             <Link
@@ -181,27 +183,31 @@ export function AppShell({ children }: { children: ReactNode }) {
                 collapsed ? "justify-center px-0" : "gap-3 px-3"
               } ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
             >
-              <Settings className="size-4 shrink-0" strokeWidth={1.75} />
+              <Settings className="size-5 shrink-0" strokeWidth={1.75} />
               {!collapsed && (
-                <span className="truncate">{t("nav.settings")}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {t("nav.settings")}
+                </span>
               )}
             </Link>
             <button
               type="button"
               onClick={() => setCollapsed((value) => !value)}
               title={t("nav.collapse")}
-              className="flex w-full items-center justify-start gap-3 rounded-md px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+              className={`flex w-full items-center rounded-md py-2 text-[13px] transition-colors ${
+                collapsed ? "justify-center px-0" : "gap-3 px-3"
+              } text-left text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground`}
             >
               {collapsed ? (
-                <PanelLeftOpen className="size-4 shrink-0" strokeWidth={1.75} />
+                <PanelLeftOpen className="size-5 shrink-0" strokeWidth={1.75} />
               ) : (
                 <PanelLeftClose
-                  className="size-4 shrink-0"
+                  className="size-5 shrink-0"
                   strokeWidth={1.75}
                 />
               )}
               {!collapsed && (
-                <span className="min-w-0 flex-1 truncate">
+                <span className="min-w-0 flex-1 truncate font-medium">
                   {t("nav.collapse")}
                 </span>
               )}

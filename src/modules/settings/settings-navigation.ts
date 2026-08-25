@@ -1,9 +1,8 @@
 export const SETTINGS_CATEGORIES = [
-  "general",
+  "preferences",
   "scan",
   "model",
-  "menuBarApp",
-  "appearance",
+  "data",
   "about",
 ] as const;
 
@@ -21,5 +20,10 @@ export function parseSettingsSection(
 export function resolveSettingsCategory(
   section: SettingsSection | undefined,
 ): SettingsCategory {
-  return section === "menu-bar-app" ? "menuBarApp" : (section ?? "general");
+  // `menu-bar-app` was a standalone category in older builds. Keep the
+  // deep-link working while placing its sole preference with the other app
+  // preferences.
+  return section === "menu-bar-app"
+    ? "preferences"
+    : (section ?? "preferences");
 }

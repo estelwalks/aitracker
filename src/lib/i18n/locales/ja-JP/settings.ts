@@ -11,11 +11,10 @@ export const settings = {
   theme: "テーマ",
   themeDesc: "テーマを選択します",
   sections: {
-    general: "一般",
-    scan: "スキャン設定",
-    model: "モデル設定",
-    menuBarApp: "メニューバー APP",
-    appearance: "パーソナライズ",
+    preferences: "アプリ設定",
+    scan: "スキャンとセキュリティ",
+    model: "モデルと AI",
+    data: "データとストレージ",
     widget: "ウィジェット",
     about: "情報",
   },
@@ -172,6 +171,7 @@ export const settings = {
   retentionDays: "{count}日",
   retentionForever: "無期限",
   storage: "ストレージ使用量",
+  dataDangerZone: "危険な操作",
   storageExceedsSoftCap:
     "（500MB を超えています。キャッシュの削除をおすすめします）",
   clearCache: "キャッシュを削除",
