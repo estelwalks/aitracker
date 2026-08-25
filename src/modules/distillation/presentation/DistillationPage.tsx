@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
 import {
-  AlertTriangle,
   ArrowRight,
   ChevronRight,
   FlaskConical,
-  HelpCircle,
   Loader2,
   PackageCheck,
 } from "lucide-react";
@@ -13,7 +11,7 @@ import { toast } from "sonner";
 
 import "./distill/distill.css";
 
-import { Pagination, TTButton } from "../../../components/tt";
+import { Pagination } from "../../../components/tt";
 import { InsightCard } from "../../insights/page/presentation/insight-card";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
@@ -25,7 +23,7 @@ import {
 } from "../../../lib/preferences/client.ts";
 import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
-import { getDistillationTask, startDistillation } from "../query";
+import { deleteCandidates, getDistillationTask, startDistillation } from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { ExpCard } from "./distill/ExpCard";
@@ -189,6 +187,9 @@ export function DistillationPage({
   const [candidates, setCandidates] = useState<CandidateOutput[]>(() => [
     ...initial.candidates,
   ]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   // 蒸馏次数（持久化累计 + 本次页面会话增量）。刷新后回到持久化总数，与
   // `approved` 同口径，避免 runs 归零而 approved 保留总量的矛盾。
   const [runs, setRuns] = useState(initial.stats.runs);
@@ -341,6 +342,14 @@ export function DistillationPage({
   const curHistPage = Math.min(histPage, histPageCount);
   const winStart = (curHistPage - 1) * HIST_PAGE;
   const shownCandidates = candidates.slice(winStart, winStart + HIST_PAGE);
+  async function removeCandidates(ids: readonly string[]) {
+    if (ids.length === 0) return;
+    await deleteCandidates({ data: { candidateIds: [...ids] } });
+    setCandidates((current) => current.filter((item) => !ids.includes(item.candidateId)));
+    setSelectedCandidateIds(new Set());
+    setViewId((current) => (current && ids.includes(current) ? null : current));
+    await router.invalidate();
+  }
 
   function toggle(item: DistillationSessionItem) {
     setSelected(
@@ -556,43 +565,6 @@ export function DistillationPage({
   return (
     <div className="distill-workbench relative space-y-5 pb-10">
       {showGuide && <DistillGuide onClose={dismissGuide} />}
-      {/* Page header mirrors the prototype (738-757): title + workflow hint +
-            help. The mode switch / quota status / history / manage-models
-            controls live in the config card header. */}
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-[15px] font-semibold tracking-tight">
-          {t("common.distillation.pageTitle")}
-        </h1>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {t("distill.workflow")}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          {/* Prototype help control: icon only, title reveals 蒸馏是什么？ */}
-          <TTButton
-            variant="ghost"
-            title={t("distill.guideTitle")}
-            aria-label={t("distill.guideTitle")}
-            onClick={() => setShowGuide(true)}
-          >
-            <HelpCircle className="size-3.5" />
-          </TTButton>
-        </div>
-      </header>
-
-      {!hasRealModel && (
-        <Link
-          to="/settings"
-          search={{ section: "model" }}
-          className="group flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-4 py-3 transition-colors hover:border-warn/50 hover:bg-warn/15"
-        >
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" />
-          <p className="flex-1 text-[12.5px] leading-6 text-foreground/85">
-            {t("distill.noModelHint")}
-          </p>
-          <ArrowRight className="mt-1.5 size-3.5 shrink-0 text-warn transition-transform group-hover:translate-x-0.5" />
-        </Link>
-      )}
-
       <div className="mb-3">
         <InsightCard
           surfaceId="distill"
@@ -604,69 +576,6 @@ export function DistillationPage({
 
       {/* 工作区：配置 / 结果 切换（原型 distill.tsx 873-1370，窄屏不再左右挤压） */}
       <section className="relative min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
-          <div className="tt-toolbar gap-1">
-            {(
-              [
-                {
-                  k: "config",
-                  label: t("distill.viewConfig"),
-                  Icon: FlaskConical,
-                  badge: null,
-                },
-                {
-                  k: "result",
-                  label: t("distill.historyTitle"),
-                  Icon: PackageCheck,
-                  badge: totalRuns || null,
-                },
-              ] as const
-            ).map(({ k, label, Icon, badge }) => {
-              const on = distillView === k;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setDistillView(k)}
-                  className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
-                >
-                  <Icon className="size-3.5" /> {label}
-                  {badge != null && badge > 0 && (
-                    <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-            {distillView === "config"
-              ? t("distill.workbenchHint")
-              : t("distill.summaryRuns", {
-                  count: totalRuns,
-                  saved: totalSaved,
-                })}
-          </span>
-          {distilling && (
-            <span
-              className="inline-flex items-center gap-1.5 font-mono text-[11px]"
-              style={{ color: "var(--chart-1)" }}
-            >
-              <Loader2 className="size-3.5 animate-spin" />{" "}
-              {t("distill.running")}
-            </span>
-          )}
-          {distillView === "result" && (
-            <Link
-              to="/skills"
-              className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-primary hover:underline"
-            >
-              {t("distill.goSkills")} <ArrowRight className="size-3" />
-            </Link>
-          )}
-        </div>
-
         {distillView === "config" && (
           <>
             <DistillMetrics
@@ -676,6 +585,35 @@ export function DistillationPage({
               approved={approved}
               busy={distilling}
             />
+
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
+              <div className="tt-toolbar gap-1">
+                {(
+                  [
+                    { k: "config", label: t("distill.viewConfig"), Icon: FlaskConical, badge: null },
+                    { k: "result", label: t("distill.historyTitle"), Icon: PackageCheck, badge: totalRuns || null },
+                  ] as const
+                ).map(({ k, label, Icon, badge }) => {
+                  const on = distillView === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setDistillView(k)}
+                      className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                    >
+                      <Icon className="size-3.5" /> {label}
+                      {badge != null && badge > 0 && (
+                        <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">{badge}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+                {t("distill.workbenchHint")}
+              </span>
+            </div>
 
             <DistillConfig
               mode={mode}
@@ -692,9 +630,7 @@ export function DistillationPage({
               onPromptText={setPromptText}
               outType={outType}
               onOutType={setOutType}
-              historyCount={candidates.length}
               segments={segments}
-              onHistory={() => setDistillView("result")}
               onSwitchModel={handleSwitchModel}
               availableItems={materialSessions}
               selected={selected}
@@ -706,9 +642,31 @@ export function DistillationPage({
               onClearSegments={clearSegments}
               onRun={handleStart}
               canRun={canStart}
+              modelConfigured={hasRealModel}
               busy={busy}
             />
           </>
+        )}
+
+        {distillView === "result" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
+            <div className="tt-toolbar gap-1">
+              <button type="button" onClick={() => setDistillView("config")} className="tt-chip font-mono">
+                <FlaskConical className="size-3.5" /> {t("distill.viewConfig")}
+              </button>
+              <button type="button" onClick={() => setDistillView("result")} className="tt-chip font-mono tt-chip-on">
+                <PackageCheck className="size-3.5" /> {t("distill.historyTitle")}
+                {totalRuns > 0 && <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">{totalRuns}</span>}
+              </button>
+            </div>
+            <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+              {t("distill.summaryRuns", { count: totalRuns, saved: totalSaved })}
+            </span>
+            {distilling && <span className="inline-flex items-center gap-1.5 font-mono text-[11px]" style={{ color: "var(--chart-1)" }}><Loader2 className="size-3.5 animate-spin" /> {t("distill.running")}</span>}
+            <Link to="/skills" className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-primary hover:underline">
+              {t("distill.goSkills")} <ArrowRight className="size-3" />
+            </Link>
+          </div>
         )}
 
         {distillView === "result" && (
@@ -744,6 +702,39 @@ export function DistillationPage({
               )}
 
               {shownCandidates.length > 0 && (
+                <>
+                  <div className="mb-2 flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={shownCandidates.every((item) => selectedCandidateIds.has(item.candidateId))}
+                        onChange={(event) => {
+                          // Snapshot the DOM value before scheduling the state
+                          // update. Synthetic events may no longer expose
+                          // currentTarget when React runs the updater.
+                          const checked = event.currentTarget.checked;
+                          setSelectedCandidateIds((current) => {
+                            const next = new Set(current);
+                            for (const item of shownCandidates) {
+                              if (checked) next.add(item.candidateId);
+                              else next.delete(item.candidateId);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                      已选 {selectedCandidateIds.size} 条
+                    </label>
+                    {selectedCandidateIds.size > 0 && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-destructive hover:underline"
+                        onClick={() => void removeCandidates([...selectedCandidateIds])}
+                      >
+                        删除选中
+                      </button>
+                    )}
+                  </div>
                 <ul className="overflow-hidden rounded-xl border border-border bg-card">
                   {shownCandidates.map((candidate, i0) => {
                     const i = winStart + i0;
@@ -777,6 +768,21 @@ export function DistillationPage({
                           }
                           className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
                         >
+                          <input
+                            type="checkbox"
+                            checked={selectedCandidateIds.has(candidate.candidateId)}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setSelectedCandidateIds((current) => {
+                                const next = new Set(current);
+                                if (checked) next.add(candidate.candidateId);
+                                else next.delete(candidate.candidateId);
+                                return next;
+                              });
+                            }}
+                            className="mt-2 size-3.5 shrink-0"
+                          />
                           <span
                             className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md"
                             style={{
@@ -858,6 +864,7 @@ export function DistillationPage({
                     );
                   })}
                 </ul>
+                </>
               )}
 
               {totalRuns > HIST_PAGE && (

@@ -206,5 +206,11 @@ export function createSqliteCandidatePersistence(
     async save(candidate) {
       transaction(database, () => save(candidate));
     },
+    async delete(candidateId) {
+      transaction(database, () => {
+        database.prepare("DELETE FROM distillation_candidate_sessions WHERE candidate_id = ?").run(candidateId);
+        database.prepare("DELETE FROM distillation_candidates WHERE candidate_id = ?").run(candidateId);
+      });
+    },
   };
 }

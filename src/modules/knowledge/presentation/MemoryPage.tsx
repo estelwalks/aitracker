@@ -2,7 +2,6 @@ import {
   Brain,
   Download,
   Pencil,
-  Plus,
   Sparkles,
   Trash2,
   UserRound,
@@ -25,7 +24,6 @@ import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import {
   archiveMemory,
-  createMemory,
   getMemoryAssets,
   updateMemory,
 } from "../query";
@@ -48,14 +46,6 @@ function sourceLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
   if (item.source === "distill") return t("memory.sourceDistill");
   if (item.source === "unknown") return t("memory.sourceUnknown");
   return item.source;
-}
-
-/** FR-024 来源分组的显示名：固定 token 走 i18n，工具名原样显示。 */
-function sourceTokenLabel(token: string, t: ReturnType<typeof useI18n>["t"]) {
-  if (token === "distill") return t("memory.sourceDistill");
-  if (token === "manual") return t("memory.originManual");
-  if (token === "unknown") return t("memory.sourceUnknown");
-  return token;
 }
 
 function typeLabel(item: MemoryEntry, t: ReturnType<typeof useI18n>["t"]) {
@@ -111,10 +101,7 @@ export function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [type, setType] = useState<TypeFilter>("all");
-  // FR-024：来源分组筛选。取值 "all" 或某个来源 token（distill / manual / 工具名）。
-  const [source, setSource] = useState<string>("all");
   const [editing, setEditing] = useState<MemoryEntry | null>(null);
-  const [creating, setCreating] = useState(false);
   const [confirmDel, setConfirmDel] = useState<MemoryEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -140,7 +127,6 @@ export function MemoryPage() {
     const keyword = q.trim().toLowerCase();
     return entries
       .filter((item) => (type === "all" ? true : item.type === type))
-      .filter((item) => (source === "all" ? true : item.source === source))
       .filter((item) => {
         if (!keyword) return true;
         // 与原型一致（搜「正文」）：搜 title/正文/来源/项目。正文是记忆产物
@@ -156,23 +142,7 @@ export function MemoryPage() {
           .toLowerCase()
           .includes(keyword);
       });
-  }, [entries, q, type, source, t]);
-
-  // FR-024：来源分组——固定 token（distill/manual/unknown）置前，工具名按字母序。
-  const sourceOptions = useMemo(() => {
-    const tokens = [...new Set(entries.map((item) => item.source))].filter(
-      Boolean,
-    );
-    const rank = (token: string) =>
-      token === "distill"
-        ? 0
-        : token === "manual"
-          ? 1
-          : token === "unknown"
-            ? 2
-            : 3;
-    return tokens.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  }, [entries]);
+  }, [entries, q, type, t]);
 
   const distillCount = useMemo(
     () => entries.filter((item) => item.origin === "distill").length,
@@ -243,27 +213,6 @@ export function MemoryPage() {
     }
   }
 
-  /** FR-025：手动新增一条记忆（body 服务端 hash，仅存摘要）。 */
-  async function handleCreate(input: MemoryCreateInput) {
-    setBusy(true);
-    try {
-      const result = await createMemory({ data: input });
-      if (!result.ok || !result.entry) {
-        toast.error(errorMessage(result.errorCode));
-        return;
-      }
-      setCreating(false);
-      // counts 来自服务端投影，重新拉取保证统计准确。
-      await reload();
-      toast.success(t("memory.added"));
-    } catch (error) {
-      const ui = toUiError(error);
-      toast.error(ui ? t(ui.code, ui.params) : t("common.failed"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleDelete(assetId: string) {
     setBusy(true);
     try {
@@ -294,7 +243,7 @@ export function MemoryPage() {
     }
   }
 
-  const filtered = q.trim() !== "" || type !== "all" || source !== "all";
+  const filtered = q.trim() !== "" || type !== "all";
 
   return (
     <div className="space-y-4 pb-12">
@@ -370,56 +319,18 @@ export function MemoryPage() {
             </button>
           ))}
         </div>
-        {/* FR-024：按来源分组（全部 / 蒸馏 / 手动 / 工具名） */}
-        <div className="inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-sm border border-border bg-surface-2 p-0.5">
-          <button
-            key="all"
-            type="button"
-            onClick={() => setSource("all")}
-            className={`rounded-sm px-2.5 py-1 text-xs transition-colors ${
-              source === "all"
-                ? "bg-primary/15 font-medium text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t("memory.allSources")}
-          </button>
-          {sourceOptions.map((token) => (
-            <button
-              key={token}
-              type="button"
-              onClick={() => setSource(token)}
-              className={`rounded-sm px-2.5 py-1 text-xs transition-colors ${
-                source === token
-                  ? "bg-primary/15 font-medium text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {sourceTokenLabel(token, t)}
-            </button>
-          ))}
-        </div>
         {filtered && (
           <button
             type="button"
             onClick={() => {
               setQ("");
               setType("all");
-              setSource("all");
             }}
             className="shrink-0 rounded-full px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
           >
             {t("memory.reset")}
           </button>
         )}
-        <TTButton
-          size="sm"
-          onClick={() => setCreating(true)}
-          className="ml-auto shrink-0"
-        >
-          <Plus className="size-3.5" strokeWidth={2} />
-          {t("memory.add")}
-        </TTButton>
       </div>
 
       {/* 列表头 */}
@@ -488,27 +399,6 @@ export function MemoryPage() {
         </ChunkErrorBoundary>
       )}
 
-      {creating && (
-        <ChunkErrorBoundary>
-          <Suspense
-            fallback={
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60">
-                <span className="text-[12.5px] text-muted-foreground">
-                  {t("common.loading")}
-                </span>
-              </div>
-            }
-          >
-            <MemoryForm
-              item={null}
-              busy={busy}
-              onClose={() => setCreating(false)}
-              onSubmit={(input) => void handleCreate(input)}
-            />
-          </Suspense>
-        </ChunkErrorBoundary>
-      )}
-
       {confirmDel && (
         <MemoryModal
           title={t("memory.deleteTitle")}
@@ -549,7 +439,6 @@ function MemoryCard({
   onDelete: () => void;
 }) {
   const { t, format } = useI18n();
-  const label = sourceLabel(item, t);
   // 透明白玻璃卡片：无强配色，仅用图标区分类型（画像=人像、任务记忆=大脑），
   // 正文用紧凑 Markdown 渲染（标题/列表/粗体），让卡片内容更丰富。
   const Icon = item.type === "profile" ? UserRound : Brain;
@@ -560,16 +449,13 @@ function MemoryCard({
       {/* 玻璃顶部内高光 */}
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[var(--glass-highlight)]" />
       <div className="relative flex min-w-0 flex-1 flex-col gap-2">
-        {/* 顶部：类型 + 来源 */}
+        {/* 顶部：记忆类型 */}
         <div className="flex items-center gap-2">
           <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--glass-strong)] text-foreground/70">
             <Icon className="size-3.5" strokeWidth={1.8} />
           </span>
           <span className="truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
             {typeLabel(item, t)}
-          </span>
-          <span className="ml-auto shrink-0 rounded-full bg-[var(--glass-strong)] px-2 py-px font-mono text-[10px] text-foreground/70">
-            {label}
           </span>
         </div>
 

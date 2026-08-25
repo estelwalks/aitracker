@@ -15,7 +15,7 @@ export const settings = {
     scan: "スキャン設定",
     model: "モデル設定",
     menuBarApp: "メニューバー APP",
-    appearance: "外観",
+    appearance: "パーソナライズ",
     widget: "ウィジェット",
     about: "情報",
   },
@@ -245,7 +245,8 @@ export const settings = {
     enhance: "表現を強化",
     enhancing: "強化中…",
     unavailableHint:
-      "モデルが未設定のため強化できません（設定で構成してください）",
+      "AIモデルを接続して、深い関連分析とインテリジェントな対処提案を解放しましょう",
+    configureModel: "今すぐ接続",
     severity: {
       info: "情報",
       attention: "注意",

@@ -4,7 +4,6 @@ import {
   ChevronDown,
   FlaskConical,
   FolderOpen,
-  History,
   Loader2,
   Search,
   Trash2,
@@ -67,24 +66,6 @@ export interface DistillQuotaView {
   readonly limit: number;
   /** Calls still available today (`max(0, limit - used)`). */
   readonly remaining: number;
-}
-
-/** ①/②/③ 步骤标签（原型 StepTag）：编号为 chart-1 底色圆点。 */
-function StepTag({ n, text }: { n: string; text: string }) {
-  return (
-    <span className="flex w-[60px] shrink-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
-      <span
-        className="grid size-4 shrink-0 place-items-center rounded-full text-[9.5px] font-semibold"
-        style={{
-          background: "color-mix(in oklab, var(--chart-1) 20%, transparent)",
-          color: "var(--chart-1)",
-        }}
-      >
-        {n}
-      </span>
-      {text}
-    </span>
-  );
 }
 
 /** 素材列表行左侧标签：与 StepTag 文本对齐（原型 pl-[22px]）。 */
@@ -337,9 +318,7 @@ export function DistillConfig({
   onPromptText,
   outType,
   onOutType,
-  historyCount,
   segments,
-  onHistory,
   onSwitchModel,
   availableItems,
   selected,
@@ -351,6 +330,7 @@ export function DistillConfig({
   onClearSegments,
   onRun,
   canRun,
+  modelConfigured = true,
   busy,
 }: {
   mode: "quick" | "pro";
@@ -369,12 +349,8 @@ export function DistillConfig({
   /** Selected output type (prototype ② 出产物). */
   outType: OutTypeId;
   onOutType: (value: OutTypeId) => void;
-  /** Number of persisted candidates, shown on the header history chip. */
-  historyCount: number;
   /** User-picked transcript windows (pro 素材盒 chips + run hint counts). */
   segments: readonly SegmentRef[];
-  /** Open the distill-history dialog (E-600). */
-  onHistory: () => void;
   /** Switch the pro-mode model to the first own (non-official) profile. */
   onSwitchModel: () => void;
   availableItems: readonly DistillationSessionItem[];
@@ -389,6 +365,7 @@ export function DistillConfig({
   onClearSegments: () => void;
   onRun: () => void;
   canRun: boolean;
+  modelConfigured?: boolean;
   busy: boolean;
 }) {
   const { t, format } = useI18n();
@@ -491,15 +468,6 @@ export function DistillConfig({
         >
           {statusLabel}
         </span>
-        <button
-          type="button"
-          onClick={onHistory}
-          className="tt-chip shrink-0 font-mono"
-        >
-          <History className="size-3" />
-          {t("distill.historyHeader")}
-          {historyCount > 0 ? ` · ${historyCount}` : ""}
-        </button>
         <Link
           to="/settings"
           search={{ section: "model" }}
@@ -538,7 +506,7 @@ export function DistillConfig({
             只暴露「按会话 / 按项目」两个粒度；config 素材是原型里的死代码
             （material 状态硬编码为 chat，无入口），故工作台不提供该选项。 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
-          <StepTag n="1" text={t("distill.stepMaterial")} />
+          <RowLabel>{t("distill.stepMaterial")}</RowLabel>
           {mode === "quick" && (
             <>
               <div className="tt-toolbar gap-1">
@@ -817,17 +785,23 @@ export function DistillConfig({
 
         {/* ② 出产物：能力资产 → Skill 库 / 记忆资产 → 记忆库 */}
         <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-3">
-          <StepTag n="2" text={t("distill.outLabel")} />
+          <RowLabel>{t("distill.outLabel")}</RowLabel>
           <OutTypePicker value={outType} onChange={onOutType} />
         </div>
 
         {/* ③ 跑蒸馏 */}
         <div className="flex flex-wrap items-center gap-3 py-3 pb-0">
-          <StepTag n="3" text={t("distill.runLabel")} />
+          <RowLabel>{t("distill.runLabel")}</RowLabel>
           <button
             type="button"
-            onClick={onRun}
-            disabled={!canRun || busy}
+            onClick={() => {
+              if (!modelConfigured) {
+                onRun();
+                return;
+              }
+              onRun();
+            }}
+            disabled={busy || (!canRun && modelConfigured)}
             className="inline-flex items-center gap-2 rounded-[10px] px-3.5 py-2 font-mono text-[11.5px] font-semibold transition-opacity hover:opacity-90 disabled:opacity-40"
             style={{
               background: "var(--foreground)",
@@ -848,7 +822,17 @@ export function DistillConfig({
                 : t("distill.runPro", { type: t(typeMeta.labelKey) })}
           </button>
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-            {runHint}
+            {!modelConfigured ? (
+              <Link
+                to="/settings"
+                search={{ section: "model" }}
+                className="text-warn underline underline-offset-2"
+              >
+                {t("distill.noModelHint")}
+              </Link>
+            ) : (
+              runHint
+            )}
           </span>
         </div>
       </div>

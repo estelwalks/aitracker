@@ -27,7 +27,7 @@ export const skills = {
   },
   form: {
     all: "All forms",
-    package: "Distilled skill",
+    package: "Package",
     workflow: "Workflow",
     prompt: "Prompt",
   },

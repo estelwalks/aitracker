@@ -7,8 +7,7 @@ export const reports = {
     runs: "생성 {count}회 실행됨",
     sessions: "세션 {count}개 커버",
     empty: "아직 브리핑이 없습니다. '지금 생성'을 클릭하여 초안을 만드세요.",
-    modelNotConfigured:
-      "모델 미설정: 로컬 세션 데이터로 초안을 자동 생성하며, 생성 후 편집할 수 있습니다.",
+    modelNotConfigured: "브리핑에는 모델 설정이 필요합니다. 설정하기 →",
     rotate: "다른 인사이트",
     dots: "인사이트 캐러셀",
   },
