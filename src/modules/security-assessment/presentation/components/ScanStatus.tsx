@@ -13,6 +13,7 @@ import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import {
   clampPercent,
+  detectedRiskCount,
   isScanActive,
   relativeTimeParts,
   type SecurityRiskKind,
@@ -88,7 +89,7 @@ export function ScanStatus({
   const { t, format } = useI18n();
   const [dimsOpen, setDimsOpen] = useState(false);
   const active = isScanActive(state.status);
-  const unsafe = totals.warn + totals.danger + totals.unknown + totals.failed;
+  const unsafe = detectedRiskCount(totals);
   const settled =
     state.progress.completed + state.progress.failed + state.progress.skipped;
 

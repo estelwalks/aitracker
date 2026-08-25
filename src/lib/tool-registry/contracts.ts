@@ -161,9 +161,9 @@ export interface ToolDisplay {
   name: string;
   nameZh: string;
   /**
-   * BrandIcon kind key (claude/codex/cursor/gemini/kimi/deepseek/other) or an
-   * http(s) logo URL (rendered as a remote <img>). Unknown values fall back to
-   * the generic icon; the UI prefers this over name-based heuristics.
+   * Offline BrandIcon kind key (claude/codex/cursor/gemini/kimi/deepseek/other).
+   * Brand assets are bundled with the application; unknown values fall back to
+   * the generic icon and the UI prefers this over name-based heuristics.
    */
   icon?: string;
   /** Brand primary color (#rrggbb); the UI falls back to heuristics when unset. */

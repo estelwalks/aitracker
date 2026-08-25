@@ -116,6 +116,8 @@ export const security = {
         "最近一次检测中的 {total} 个 Skill 结论均为允许，但规则仍命中 {findings} 项提示，请展开报告核对。",
       riskyLine:
         "最近一次检测覆盖 {total} 个 Skill，其中 {risky} 个需要确认：阻止 {danger} 个、警告 {warn} 个。",
+      unresolvedLine:
+        "最近一次检测覆盖 {total} 个 Skill，未发现明确风险；其中 {unresolved} 个扫描未完整完成，结论仍待确认。",
       noReportLine:
         "尚无真实检测结果。开始检测后，这里会显示本机 Skill 的实际结论。",
       boundaryLine:
@@ -281,6 +283,10 @@ export const security = {
       files: "文件",
       detail: "详情",
       noFindings: "未发现风险项",
+      incompleteNoFindings:
+        "未发现明确风险项，但本次扫描未完整完成，不能判定为不安全或安全",
+      riskDetailsUnavailable:
+        "报告结论提示风险，但详细风险项未保留，请重新检测此 Skill",
       branches: "扫描分支",
       skippedFiles: "跳过文件",
       path: "相对路径",
@@ -310,6 +316,7 @@ export const security = {
       all: "全部",
       safe: "安全",
       unsafe: "不安全",
+      needsReview: "待确认",
       day: "24 小时",
       week: "7 天",
       month: "30 天",

@@ -4,6 +4,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Sparkles,
+  TriangleAlert,
   Wrench,
 } from "lucide-react";
 
@@ -20,6 +21,7 @@ import type { MessageKey } from "../../../../lib/i18n/messages";
 import { useSecurityLlmReview } from "../use-security-llm-review";
 import type { SecurityLlmReviewConfidence } from "../../llm-review.contracts";
 import {
+  securityReportEvidenceState,
   severityCounts,
   skippedReasonCode,
   type SecurityBranchName,
@@ -111,6 +113,9 @@ export function SkillReportModal({
   const { t } = useI18n();
   const report = entry.report;
   const llm = useSecurityLlmReview(entry);
+  const evidenceState = securityReportEvidenceState(entry);
+  const incomplete = evidenceState === "incomplete";
+  const missingRiskDetails = evidenceState === "risk-details-unavailable";
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -131,14 +136,29 @@ export function SkillReportModal({
               <ScoreHeader
                 score={report.riskScore}
                 verdict={report.verdict}
+                partial={incomplete}
                 counts={severityCounts(report)}
                 dimensions={dimensions}
               />
 
               {report.findings.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-8 font-mono text-[12px] text-muted-foreground">
-                  <ShieldCheck className="size-4 text-ok" />
-                  {t("security.center.result.noFindings")}
+                <div
+                  className={`flex items-center justify-center gap-2 py-8 font-mono text-[12px] ${
+                    incomplete || missingRiskDetails
+                      ? "text-amber-500"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {incomplete || missingRiskDetails ? (
+                    <TriangleAlert className="size-4" />
+                  ) : (
+                    <ShieldCheck className="size-4 text-ok" />
+                  )}
+                  {incomplete
+                    ? t("security.center.result.incompleteNoFindings")
+                    : missingRiskDetails
+                      ? t("security.center.result.riskDetailsUnavailable")
+                      : t("security.center.result.noFindings")}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -312,11 +332,13 @@ export function SkillReportModal({
 function ScoreHeader({
   score,
   verdict,
+  partial,
   counts,
   dimensions,
 }: {
   score: number;
   verdict: SecurityVerdict;
+  partial: boolean;
   counts: Record<SecuritySeverity, number>;
   dimensions: number;
 }) {
@@ -345,6 +367,11 @@ function ScoreHeader({
       >
         {t(verdictKeys[verdict])}
       </span>
+      {partial && (
+        <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-[10px] text-amber-500">
+          {t("security.center.result.statusPartial")}
+        </span>
+      )}
       <div className="ml-auto flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
         {severityLabels.map((severity) => (
           <span key={severity} className="inline-flex items-center gap-1.5">

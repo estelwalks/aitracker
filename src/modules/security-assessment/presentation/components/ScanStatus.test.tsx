@@ -62,3 +62,23 @@ test("ScanStatus shows the running phase label while a scan is active", () => {
   );
   assert.match(markup, /扫描进行中/);
 });
+
+test("ScanStatus does not count unresolved scans as unsafe", () => {
+  const markup = renderToStaticMarkup(
+    <ScanStatus
+      state={IDLE}
+      totals={{
+        ...EMPTY_SECURITY_TOTALS,
+        total: 2,
+        unknown: 2,
+        failed: 1,
+      }}
+      scanCount={1}
+      dimensions={11}
+      latestFinishedAt={null}
+      riskKinds={SECURITY_RISK_KINDS}
+      onGo={() => {}}
+    />,
+  );
+  assert.match(markup, /不安全[\s\S]*?>0 个</);
+});

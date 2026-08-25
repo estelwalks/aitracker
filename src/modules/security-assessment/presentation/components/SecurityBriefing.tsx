@@ -8,7 +8,12 @@ import {
   insightSeverityLabelKey,
   usePageInsight,
 } from "../../../insights/page/presentation/use-page-insight";
-import type { SecurityScanPhase, SecurityTotals } from "../security-view";
+import {
+  detectedRiskCount,
+  unresolvedScanCount,
+  type SecurityScanPhase,
+  type SecurityTotals,
+} from "../security-view";
 
 const TYPE_INTERVAL_MS = 18;
 const ROTATE_AFTER_MS = 8000;
@@ -39,15 +44,15 @@ export function SecurityBriefing({
     envelope,
     loading: insightLoading,
   } = usePageInsight({ surfaceId: "security", locale });
-  const risky = totals.warn + totals.danger + totals.unknown + totals.failed;
-  const suspicious = totals.warn + totals.unknown + totals.failed;
+  const risky = detectedRiskCount(totals);
+  const unresolved = unresolvedScanCount(totals);
   const health = totals.total
     ? Math.round((totals.safe / totals.total) * 100)
     : 0;
   const tone =
     totals.danger > 0
       ? "var(--danger)"
-      : risky > 0
+      : risky > 0 || unresolved > 0
         ? "var(--warn)"
         : "var(--ok)";
 
@@ -60,17 +65,22 @@ export function SecurityBriefing({
               total: totals.total,
               risky,
               danger: totals.danger,
-              warn: suspicious,
+              warn: totals.warn,
             })
-          : totals.findings > 0
-            ? t("security.center.briefing.findingLine", {
+          : unresolved > 0
+            ? t("security.center.briefing.unresolvedLine", {
                 total: totals.total,
-                findings: totals.findings,
+                unresolved,
               })
-            : t("security.center.briefing.cleanLine", {
-                dimensions,
-                total: totals.total,
-              });
+            : totals.findings > 0
+              ? t("security.center.briefing.findingLine", {
+                  total: totals.total,
+                  findings: totals.findings,
+                })
+              : t("security.center.briefing.cleanLine", {
+                  dimensions,
+                  total: totals.total,
+                });
     const status =
       latestStatus === "partial"
         ? t("security.center.briefing.partialLine")
@@ -85,7 +95,7 @@ export function SecurityBriefing({
     lastScan,
     latestStatus,
     risky,
-    suspicious,
+    unresolved,
     t,
     totals,
   ]);
