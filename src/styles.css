@@ -1,3 +1,7 @@
+/* Bundled fonts keep the browser renderer and Electron renderer identical across OSes. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/noto-sans-sc/wght.css";
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -94,12 +98,14 @@ body.tt-widget-float-document {
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Native font stacks avoid an external request during offline desktop startup. */
+  /* The first three families are bundled, so Windows and macOS render the same glyphs. */
   --font-sans:
-    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
-    sans-serif;
+    "Inter Variable", "Noto Sans SC Variable", "Segoe UI Variable", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, system-ui, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   --font-mono:
-    "JetBrains Mono", "SFMono-Regular", "Menlo", ui-monospace, monospace;
+    "JetBrains Mono Variable", "Cascadia Mono", "SFMono-Regular", "Menlo",
+    "Consolas", ui-monospace, monospace;
 }
 
 :root {

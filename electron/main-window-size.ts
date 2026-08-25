@@ -12,22 +12,19 @@ const DEFAULT_MAIN_WINDOW_SIZE: MainWindowSize = {
   minHeight: 720,
 };
 
-const WINDOWS_SIZE_SCALE = 0.75;
+const WINDOWS_MAIN_WINDOW_SIZE: MainWindowSize = {
+  width: 1280,
+  height: 800,
+  // Keep the reduced minimum from the previous Windows layout.
+  minWidth: 891,
+  minHeight: 583,
+};
 
-/** Keeps the existing macOS dimensions and reduces Windows by one quarter. */
+/** Keeps macOS unchanged while using a fixed 1280×800 Windows default. */
 export function resolveMainWindowSize(
   platform: NodeJS.Platform = process.platform,
 ): MainWindowSize {
   if (platform !== "win32") return DEFAULT_MAIN_WINDOW_SIZE;
 
-  return {
-    width: Math.round(DEFAULT_MAIN_WINDOW_SIZE.width * WINDOWS_SIZE_SCALE),
-    height: Math.round(DEFAULT_MAIN_WINDOW_SIZE.height * WINDOWS_SIZE_SCALE),
-    minWidth: Math.round(
-      DEFAULT_MAIN_WINDOW_SIZE.minWidth * WINDOWS_SIZE_SCALE,
-    ),
-    minHeight: Math.round(
-      DEFAULT_MAIN_WINDOW_SIZE.minHeight * WINDOWS_SIZE_SCALE,
-    ),
-  };
+  return WINDOWS_MAIN_WINDOW_SIZE;
 }
