@@ -91,6 +91,42 @@ test("successful enumeration returns distros with homes and no warnings", async 
   assert.deepEqual(topology.warningCodes, []);
 });
 
+test("the timeout is a total budget across all WSL commands", async () => {
+  let elapsedMs = 0;
+  const commandTimeouts: number[] = [];
+  let calls = 0;
+  const fn = (
+    _file: string,
+    _args: readonly string[],
+    options: { timeout?: number },
+    callback: ExecCallback,
+  ) => {
+    calls += 1;
+    commandTimeouts.push(options.timeout ?? 0);
+    const child = fakeChild();
+    if (calls === 1) {
+      elapsedMs = 3_000;
+      callback(null, Buffer.from("Ubuntu\r\nDebian\r\n", "utf16le"));
+    } else {
+      elapsedMs = 10_000;
+      callback(new Error("timed out"));
+    }
+    return child as never;
+  };
+
+  const topology = await enumerateWslTopology({
+    platform: "win32",
+    execFileFn: fn as unknown as typeof import("node:child_process").execFile,
+    timeoutMs: 10_000,
+    monotonicNow: () => elapsedMs,
+  });
+
+  assert.equal(calls, 2);
+  assert.deepEqual(commandTimeouts, [10_000, 7_000]);
+  assert.equal(topology.failed, true);
+  assert.deepEqual(topology.warningCodes, ["timeout"]);
+});
+
 test("T5-04: running abort kills the child and records a cancelled warning", async () => {
   const controller = new AbortController();
   let child: ReturnType<typeof fakeChild> | undefined;
@@ -142,7 +178,7 @@ test("T5-04: pre-aborted signal returns cancelled without starting a child", asy
   assert.equal(started, false);
 });
 
-test("wslRootsFor builds UNC roots for every distro", () => {
+test("wslRootsFor builds one non-duplicated UNC root for every distro", () => {
   const topology: WslTopology = {
     distros: [
       { distribution: "Ubuntu", home: "/home/dev" },
@@ -154,9 +190,7 @@ test("wslRootsFor builds UNC roots for every distro", () => {
   };
   const roots = wslRootsFor(topology, ".claude");
   assert.deepEqual(roots, [
-    "\\\\wsl.localhost\\Ubuntu\\home\\dev\\.claude",
     "\\\\wsl$\\Ubuntu\\home\\dev\\.claude",
-    "\\\\wsl.localhost\\Debian\\home\\debian\\.claude",
     "\\\\wsl$\\Debian\\home\\debian\\.claude",
   ]);
 });

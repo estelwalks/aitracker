@@ -132,6 +132,35 @@ test("startup does not resolve before all initial collectors are terminal", asyn
   await scheduler.stop();
 });
 
+test("an existing snapshot refresh does not extend the startup barrier", async () => {
+  const h = harness();
+  let releaseUsage!: () => void;
+  const usageGate = new Promise<void>((resolve) => {
+    releaseUsage = resolve;
+  });
+  let usageCompleted = false;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: startupCatalog(),
+    shouldAwaitStartupTask: (definition) => definition.id !== "usage.refresh",
+    executors: {
+      ...successfulStartupExecutors(),
+      "refresh-usage-v1": async () => {
+        await usageGate;
+        usageCompleted = true;
+      },
+    },
+  });
+
+  await scheduler.start();
+  assert.equal(usageCompleted, false);
+
+  releaseUsage();
+  await scheduler.stop();
+  assert.equal(usageCompleted, true);
+});
+
 test("startup resolves after all required collectors succeed", async () => {
   const h = harness();
   const scheduler = createTaskScheduler({
