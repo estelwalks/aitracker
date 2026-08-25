@@ -463,34 +463,42 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
             ? "page-insight"
             : "distillation";
         const amountUsd = result.summary.cost.amountUsd;
-        audit.recordWithBudget({
-          mode: "enhanced-manual",
-          key: {
-            dateKey: new Date(finishedAtMs).toISOString().slice(0, 10),
-            capability,
-            profileKey:
-              request.providerId === "profile"
-                ? request.modelId
-                : (request.providerId ?? "offline"),
-          },
-          dailyCallLimit: null,
-          execution: {
-            capability,
-            summary: result.summary,
-            ...(result.response?.usage ? { usage: result.response.usage } : {}),
-            ...(amountUsd !== undefined && Number.isFinite(amountUsd)
-              ? {
-                  costMicrousd: BigInt(
-                    Math.max(0, Math.round(amountUsd * 1_000_000)),
-                  ),
-                }
-              : {}),
-            startedAtMs,
-            finishedAtMs,
-            durationMs: finishedAtMs - startedAtMs,
-          },
-          nowMs: finishedAtMs,
-        });
+        try {
+          audit.recordWithBudget({
+            mode: "enhanced-manual",
+            key: {
+              dateKey: new Date(finishedAtMs).toISOString().slice(0, 10),
+              capability,
+              profileKey:
+                request.providerId === "profile"
+                  ? request.modelId
+                  : (request.providerId ?? "offline"),
+            },
+            dailyCallLimit: null,
+            execution: {
+              capability,
+              summary: result.summary,
+              ...(result.response?.usage
+                ? { usage: result.response.usage }
+                : {}),
+              ...(amountUsd !== undefined && Number.isFinite(amountUsd)
+                ? {
+                    costMicrousd: BigInt(
+                      Math.max(0, Math.round(amountUsd * 1_000_000)),
+                    ),
+                  }
+                : {}),
+              startedAtMs,
+              finishedAtMs,
+              durationMs: finishedAtMs - startedAtMs,
+            },
+            nowMs: finishedAtMs,
+          });
+        } catch {
+          // Audit persistence is best effort. A database lock or telemetry
+          // schema problem must never turn a successful model response into
+          // an enhancement failure.
+        }
       }
       return result;
     },

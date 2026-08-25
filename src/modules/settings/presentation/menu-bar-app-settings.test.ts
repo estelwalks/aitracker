@@ -19,15 +19,36 @@ function categoryBlock(category: string, nextCategory: string): string {
   return source.slice(start, end);
 }
 
-test("通用分类不再包含动态栏设置", () => {
-  assert.doesNotMatch(
-    categoryBlock("general", "scan"),
-    /menuBarEnabled|动态栏/,
+test("应用偏好按主题、语言、货币、汇率、动态栏、开机自启动排列", () => {
+  const block = categoryBlock("preferences", "scan");
+  const order = [
+    'label={t("settings.theme")',
+    'label={t("settings.language")',
+    'label={t("settings.currency")',
+    'label={t("settings.rate.title")',
+    "<MenuBarAppSettingsSection />",
+    'label={t("settings.autoLaunch")',
+  ].map((marker) => block.indexOf(marker));
+  assert.ok(order.every((index) => index >= 0));
+  assert.deepEqual(
+    [...order].sort((left, right) => left - right),
+    order,
   );
 });
 
-test("菜单栏 APP 分类只配置动态栏开关", () => {
-  const block = categoryBlock("menuBarApp", "appearance");
+test("应用偏好分类包含动态栏设置", () => {
+  assert.doesNotMatch(
+    categoryBlock("preferences", "scan"),
+    /barStyle|barClick|defaultTab|lastTab|tone|rotate|smallContent|mediumContent|widgetTheme|WidgetConfigPanel/,
+  );
+  assert.match(
+    categoryBlock("preferences", "scan"),
+    /<MenuBarAppSettingsSection \/>/,
+  );
+});
+
+test("动态栏设置只配置动态栏开关", () => {
+  const block = categoryBlock("preferences", "scan");
   assert.match(block, /<MenuBarAppSettingsSection \/>/);
   assert.doesNotMatch(
     block,

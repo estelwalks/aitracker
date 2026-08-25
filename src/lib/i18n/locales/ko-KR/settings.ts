@@ -11,11 +11,10 @@ export const settings = {
   theme: "테마",
   themeDesc: "테마를 선택합니다",
   sections: {
-    general: "일반",
-    scan: "스캔 구성",
-    model: "모델 구성",
-    menuBarApp: "메뉴 막대 APP",
-    appearance: "개인 설정",
+    preferences: "앱 환경설정",
+    scan: "스캔 및 보안",
+    model: "모델 및 AI",
+    data: "데이터 및 저장소",
     widget: "위젯",
     about: "정보",
   },
@@ -169,6 +168,7 @@ export const settings = {
   retentionDays: "{count}일",
   retentionForever: "무기한",
   storage: "저장 공간 사용량",
+  dataDangerZone: "위험 작업",
   storageExceedsSoftCap: "（500MB 초과, 캐시 정리를 권장합니다）",
   clearCache: "캐시 정리",
   clearCacheHint:
