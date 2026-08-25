@@ -227,14 +227,6 @@ function openMainWindowRoute(
     );
 }
 
-function openBrowserCompanion(): void {
-  if (!localWebServer) return;
-  const url = localWebServer.createBrowserBootstrapUrl(
-    `/security?locale=${currentPreferences.locale}&currency=${currentPreferences.displayCurrency}`,
-  );
-  void shell.openExternal(url);
-}
-
 /**
  * Show the floating widget window (420×680, frameless, always-on-top, hidden
  * from the taskbar/dock). Created lazily on first use and reused afterwards:
@@ -874,12 +866,8 @@ function rebuildTray(): void {
     {
       autoLaunchEnabled: autoLaunch.enabled,
       autoLaunchSupported: autoLaunch.supported,
-      browserCompanionSupported: localWebServer != null,
     },
     {
-      onOpen: showMainWindow,
-      onOpenWidget: showWidgetWindow,
-      onOpenBrowser: openBrowserCompanion,
       onToggleAutoLaunch: (checked) => {
         setAutoLaunch(checked);
       },
@@ -918,7 +906,7 @@ function rebuildTray(): void {
       void toggleWidgetWindow(bounds);
       return;
     }
-    void showWidgetWindow();
+    showMainWindow();
   });
 }
 

@@ -477,17 +477,9 @@ export interface TrayTemplateItem {
 export interface TrayTemplateState {
   autoLaunchEnabled: boolean;
   autoLaunchSupported: boolean;
-  browserCompanionSupported: boolean;
 }
 
 export interface TrayTemplateCallbacks {
-  onOpen(): void;
-  /**
-   * Optional — when provided, a 「小组件」 item is inserted right after
-   * 「打开」 so the floating widget window can be opened straight from the tray.
-   */
-  onOpenWidget?(): void;
-  onOpenBrowser(): void;
   onToggleAutoLaunch(checked: boolean): void;
   onQuit(): void;
 }
@@ -520,16 +512,6 @@ export function createTrayTemplate(
 ): TrayTemplateItem[] {
   const t = electronMessages[locale];
   return [
-    { label: t.menu.open, click: callbacks.onOpen },
-    ...(callbacks.onOpenWidget
-      ? [{ label: t.menu.widget, click: callbacks.onOpenWidget }]
-      : []),
-    {
-      label: t.menu.openBrowser,
-      enabled: state.browserCompanionSupported,
-      click: callbacks.onOpenBrowser,
-    },
-    { type: "separator" },
     {
       label: t.menu.autoLaunch,
       type: "checkbox",
