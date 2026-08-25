@@ -105,31 +105,24 @@ export interface LocalUsageScanOptions {
   disablePersistentCache?: boolean;
   /** Shared WSL topology (P3-T3-04); when absent the scanner enumerates once. */
   wslTopology?: import("../wsl-topology-types.ts").WslTopologyInput;
+  /** Test seam for the one allowed WSL enumeration per scan. */
+  enumerateWslTopology?: (options: {
+    readonly platform: NodeJS.Platform;
+    readonly signal?: AbortSignal;
+  }) => Promise<import("../wsl-topology-types.ts").WslTopologyInput>;
+  /** Test seam for Windows-only topology behavior. */
+  platform?: NodeJS.Platform;
   /** P5-T5-02: real cancellation; directory loops and file reads check it. */
   signal?: AbortSignal;
 }
 
 async function discoverWindowsWslHomes(
   providerDirectory: string,
-  topology?: import("../wsl-topology-types.ts").WslTopologyInput | undefined,
-  signal?: AbortSignal,
+  topology: import("../wsl-topology-types.ts").WslTopologyInput,
+  platform: NodeJS.Platform,
 ): Promise<string[]> {
-  if (process.platform !== "win32") return [];
-  if (topology && topology.distros.length > 0) {
-    const homes: string[] = [];
-    for (const distro of topology.distros) {
-      const suffix = `${distro.home.replaceAll("/", "\\")}\\${providerDirectory}`;
-      homes.push(`\\\\wsl.localhost\\${distro.distribution}${suffix}`);
-      homes.push(`\\\\wsl$\\${distro.distribution}${suffix}`);
-    }
-    return homes;
-  }
-
-  const { enumerateWslTopology } =
-    await import("../../platform/discovery/wsl-topology.server.ts");
-  // P5-T5-04: the fallback enumeration is cancelled together with the scan.
-  const local = await enumerateWslTopology({ signal });
-  return local.distros.flatMap(({ distribution, home }) => {
+  if (platform !== "win32") return [];
+  return topology.distros.flatMap(({ distribution, home }) => {
     const suffix = `${home.replaceAll("/", "\\")}\\${providerDirectory}`;
     return [
       `\\\\wsl.localhost\\${distribution}${suffix}`,
@@ -2459,6 +2452,7 @@ export async function scanLocalUsage(
   options: LocalUsageScanOptions = {},
 ): Promise<LocalUsageSnapshot> {
   const now = options.now ?? new Date();
+  const platform = options.platform ?? process.platform;
   const nowTime = now.getTime();
   const lookbackDays = Math.max(
     1,
@@ -2518,17 +2512,22 @@ export async function scanLocalUsage(
     // providers. An injected topology (from the shared WSL fact snapshot)
     // skips the local enumeration entirely.
     const topology =
-      options.wslTopology && options.wslTopology.distros.length > 0
-        ? options.wslTopology
-        : await (async () => {
-            const { enumerateWslTopology } =
-              await import("../../platform/discovery/wsl-topology.server.ts");
-            // P5-T5-04: the fallback enumeration is cancelled with the scan.
-            return enumerateWslTopology({ signal: options.signal });
-          })();
+      options.wslTopology ??
+      (await (async () => {
+        if (options.enumerateWslTopology) {
+          return options.enumerateWslTopology({
+            platform,
+            signal: options.signal,
+          });
+        }
+        const { enumerateWslTopology } =
+          await import("../../platform/discovery/wsl-topology.server.ts");
+        // P5-T5-04: the fallback enumeration is cancelled with the scan.
+        return enumerateWslTopology({ platform, signal: options.signal });
+      })());
     return [
-      await discoverWindowsWslHomes(".claude", topology, options.signal),
-      await discoverWindowsWslHomes(".codex", topology, options.signal),
+      await discoverWindowsWslHomes(".claude", topology, platform),
+      await discoverWindowsWslHomes(".codex", topology, platform),
     ];
   })();
   const claudeRoots = uniqueRoots([

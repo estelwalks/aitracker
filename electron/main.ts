@@ -1177,10 +1177,10 @@ if (!hasSingleInstanceLock) {
       });
       allowedOrigin = await resolveApplicationOrigin();
       reportStartupMilestone("local-server-ready");
-      // Start first-run collection while the native startup document remains
-      // visible. This is intentionally a lightweight internal request, not a
-      // speculative homepage render: it starts the scheduler without doing
-      // the same SSR/hydration work twice.
+      // Initialize the database/runtime while the native startup document is
+      // visible. macOS also waits for first-run collectors here; Windows only
+      // schedules them and lets the renderer open from persisted snapshots.
+      // This remains a lightweight internal request, not a duplicate render.
       if (localWebServer) {
         await completeReleaseDataResetAfterWarmup(
           releaseDataReset,

@@ -110,9 +110,10 @@ async function maybeHandleSecurityDevRequest(
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
-      // First-run collectors intentionally form the desktop startup barrier:
-      // the main document should not open before its local workspace data is
-      // ready. Web development resolves this bootstrap to a policy no-op.
+      // macOS keeps first-run collectors on the desktop startup barrier.
+      // Windows starts the same collectors through the scheduler but does not
+      // await their filesystem/WSL work before serving the main document.
+      // Web development resolves this bootstrap to a policy no-op.
       await ensureBackgroundRuntimeStarted();
       const desktopState = await handleDesktopStateBrokerRequest(request);
       if (desktopState) return desktopState;
