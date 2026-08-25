@@ -140,10 +140,13 @@ export function usePageInsight(
     let cancelled = false;
     let refreshInFlight = false;
 
-    const refreshEvidence = async (initial: boolean): Promise<void> => {
+    const refreshEvidence = async (
+      initial: boolean,
+      showLoading = false,
+    ): Promise<void> => {
       if (refreshInFlight) return;
       refreshInFlight = true;
-      if (initial) setLoading(true);
+      if (initial || showLoading) setLoading(true);
       setError(false);
       try {
         const next = await getPageInsight({
@@ -158,7 +161,7 @@ export function usePageInsight(
         if (!cancelled) setError(true);
       } finally {
         refreshInFlight = false;
-        if (!cancelled && initial) setLoading(false);
+        if (!cancelled && (initial || showLoading)) setLoading(false);
       }
     };
 
@@ -167,7 +170,11 @@ export function usePageInsight(
       refreshEvidence(false),
     );
     const onModelProfileChanged = () => {
-      void refreshEvidence(false);
+      // A manual cache refresh must be allowed to retry immediately. The
+      // normal 60s guard prevents duplicate automatic requests, but keeping
+      // it here makes a failed tracker/chats insight look permanently stuck.
+      lastEnhanceAtRef.current = null;
+      void refreshEvidence(false, true);
     };
     const refreshChannel =
       typeof BroadcastChannel === "function"

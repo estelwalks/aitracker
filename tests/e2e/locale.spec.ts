@@ -14,7 +14,9 @@ async function selectLanguage(
   await page.goto("/settings");
   await page.waitForURL(/locale=/, { timeout: 15_000 });
   await page
-    .getByRole("button", { name: /^(外观|Appearance|外観|모양)$/ })
+    .getByRole("button", {
+      name: /^(应用偏好|App preferences|アプリ設定|앱 환경설정)$/,
+    })
     .click();
   await page.getByRole("button", { name: label, exact: true }).click();
 }

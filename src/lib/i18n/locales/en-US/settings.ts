@@ -10,11 +10,10 @@ export const settings = {
   theme: "Theme",
   themeDesc: "Choose the interface theme",
   sections: {
-    general: "General",
-    scan: "Scan config",
-    model: "Model config",
-    menuBarApp: "Menu Bar App",
-    appearance: "Personalization",
+    preferences: "App preferences",
+    scan: "Scan & security",
+    model: "Models & AI",
+    data: "Data & storage",
     widget: "Widgets",
     about: "About",
   },
@@ -170,6 +169,7 @@ export const settings = {
   retentionDays: "{count} days",
   retentionForever: "Forever",
   storage: "Storage used",
+  dataDangerZone: "Dangerous actions",
   storageExceedsSoftCap: " (over 500 MB — consider clearing the cache)",
   clearCache: "Clear cache",
   clearCacheHint:
