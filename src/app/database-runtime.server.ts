@@ -142,6 +142,13 @@ export async function createDatabaseRuntime(
       checkpoint() {
         if (!closed && host.isOpen) host.checkpoint("passive");
       },
+      compact() {
+        if (!closed && host.isOpen) {
+          host.checkpoint("truncate");
+          host.vacuum();
+          host.checkpoint("truncate");
+        }
+      },
       close() {
         if (closed) return;
         closed = true;

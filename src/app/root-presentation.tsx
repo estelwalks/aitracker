@@ -17,6 +17,7 @@ import {
   isChunkLoadError,
 } from "../lib/chunk-recovery";
 import { useI18n } from "../lib/i18n/context";
+import { useTheme } from "../lib/theme";
 import { AppShell } from "../components/AppShell";
 import { AppProviders } from "./providers";
 import type { QueryClient } from "@tanstack/react-query";
@@ -57,6 +58,15 @@ export function RootComponent({
       initialDisplayCurrency={loaderData.displayCurrency}
       initialRates={loaderData.rates}
     >
+      <RootAppContent />
+    </AppProviders>
+  );
+}
+
+function RootAppContent() {
+  const { theme } = useTheme();
+  return (
+    <>
       <ChunkRecoveryCompletion />
       <NavigationPerformanceMarks />
       <PlatformPersistenceSeed />
@@ -65,10 +75,10 @@ export function RootComponent({
       </AppShell>
       <Toaster
         position="top-right"
-        theme="dark"
+        theme={theme}
         toastOptions={{ duration: 3000 }}
       />
-    </AppProviders>
+    </>
   );
 }
 
