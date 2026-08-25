@@ -27,6 +27,7 @@ import {
   canEnhanceNow,
   composeLineText,
   ENHANCE_COOLDOWN_MS,
+  PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,
   insightActionPath,
   insightFallbackStatusLabel,
@@ -38,6 +39,7 @@ export {
   canEnhanceNow,
   composeLineText,
   ENHANCE_COOLDOWN_MS,
+  PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,
   insightActionPath,
   insightFallbackStatusLabel,
@@ -166,6 +168,11 @@ export function usePageInsight(
     const onModelProfileChanged = () => {
       void refreshEvidence(false);
     };
+    const refreshChannel =
+      typeof BroadcastChannel === "function"
+        ? new BroadcastChannel(PAGE_INSIGHT_REFRESH_CHANNEL)
+        : null;
+    refreshChannel?.addEventListener("message", onModelProfileChanged);
     window.addEventListener(PAGE_INSIGHT_REFRESH_EVENT, onModelProfileChanged);
     return () => {
       cancelled = true;
@@ -174,6 +181,8 @@ export function usePageInsight(
         PAGE_INSIGHT_REFRESH_EVENT,
         onModelProfileChanged,
       );
+      refreshChannel?.removeEventListener("message", onModelProfileChanged);
+      refreshChannel?.close();
     };
   }, [surfaceId, locale, scopeData]);
 
