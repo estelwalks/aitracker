@@ -23,7 +23,10 @@ import { StatusBadge, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import { PAGE_INSIGHT_REFRESH_EVENT } from "../../insights/page/presentation/use-page-insight.pure";
+import {
+  PAGE_INSIGHT_REFRESH_CHANNEL,
+  PAGE_INSIGHT_REFRESH_EVENT,
+} from "../../insights/page/presentation/use-page-insight.pure";
 import {
   deleteModelProfile,
   listModelProfiles,
@@ -73,6 +76,11 @@ const OFFICIAL_ENTRY_ID = "__official_model__";
 function notifyPageInsightsModelChanged(): void {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(PAGE_INSIGHT_REFRESH_EVENT));
+    if (typeof BroadcastChannel === "function") {
+      const channel = new BroadcastChannel(PAGE_INSIGHT_REFRESH_CHANNEL);
+      channel.postMessage({ reason: "model-profile-changed" });
+      channel.close();
+    }
   }
 }
 
