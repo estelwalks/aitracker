@@ -225,6 +225,16 @@ export const EMPTY_SECURITY_TOTALS: SecurityTotals = {
   files: 0,
 };
 
+/** Only explicit warn/block verdicts are detected risks. */
+export function detectedRiskCount(totals: SecurityTotals): number {
+  return totals.warn + totals.danger;
+}
+
+/** Unknown and failed scans require review but are not evidence of risk. */
+export function unresolvedScanCount(totals: SecurityTotals): number {
+  return totals.unknown + totals.failed;
+}
+
 /**
  * Deduplicate history to one entry per unique skill, keyed by the stable
  * content hash (`report.contentHash`). The same skill installed under two
@@ -299,6 +309,26 @@ export function securityHistoryEntryIsSafe(item: SecurityHistoryView): boolean {
     item.report.skippedFiles.length === 0 &&
     !item.report.branches.some((branch) => branch.status === "failed")
   );
+}
+
+export type SecurityReportEvidenceState =
+  "findings" | "clean" | "incomplete" | "risk-details-unavailable";
+
+/** Keeps an empty findings array from contradicting the report verdict/status. */
+export function securityReportEvidenceState(
+  item: SecurityHistoryView,
+): SecurityReportEvidenceState {
+  const report = item.report;
+  if (report?.findings.length) return "findings";
+  if (
+    item.status !== "complete" ||
+    report?.status !== "complete" ||
+    report?.verdict === "unknown"
+  )
+    return "incomplete";
+  if (report.verdict === "warn" || report.verdict === "block")
+    return "risk-details-unavailable";
+  return "clean";
 }
 
 export function skippedReasonCode(
@@ -414,10 +444,13 @@ export function countScanTasks(
 export function unsafeEntries(
   entries: readonly SecurityHistoryView[],
 ): SecurityHistoryView[] {
-  return entries.filter((item) => !securityHistoryEntryIsSafe(item));
+  return entries.filter(
+    (item) =>
+      item.report?.verdict === "warn" || item.report?.verdict === "block",
+  );
 }
 
-/** block verdict reads as high-risk; everything else unsafe is a warning. */
+/** block verdict reads as high-risk; warn verdict reads as a warning. */
 export function unsafeVerdictTone(
   item: SecurityHistoryView,
 ): "danger" | "warn" {
@@ -452,9 +485,8 @@ export function severityCounts(
 
 /**
  * Aggregate one scan's history entries (which must share a single scanId)
- * into the task view the detail modal consumes. Entries without a report
- * (failed/skipped) degrade to entry-level finding rows rather than being
- * silently dropped.
+ * into the task view the detail modal consumes. Failed/incomplete entries stay
+ * visible through task status and totals, but never become fabricated risks.
  */
 export function aggregateScanTask(
   entries: readonly SecurityHistoryView[],
@@ -478,9 +510,15 @@ export function aggregateScanTask(
 
   const findings: SecurityTaskFindingView[] = [];
   for (const entry of entries) {
-    if (securityHistoryEntryIsSafe(entry)) continue;
-    const tone = unsafeVerdictTone(entry);
     const report = entry.report;
+    if (
+      report == null ||
+      (report.findings.length === 0 &&
+        report.verdict !== "warn" &&
+        report.verdict !== "block")
+    )
+      continue;
+    const tone = unsafeVerdictTone(entry);
     if (report && report.findings.length > 0) {
       for (const finding of report.findings) {
         findings.push({
@@ -503,10 +541,7 @@ export function aggregateScanTask(
         severityDisplay: "",
         kindDisplay: "",
         issue:
-          entry.errorCode ??
-          report?.summary ??
-          report?.threatLevelDisplay ??
-          "",
+          entry.errorCode ?? report.summary ?? report.threatLevelDisplay ?? "",
         advice: "",
       });
     }

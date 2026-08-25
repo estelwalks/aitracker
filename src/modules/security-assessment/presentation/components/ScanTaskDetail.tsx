@@ -15,9 +15,11 @@ import {
   DialogTitle,
 } from "../../../../components/ui/dialog";
 import { useI18n } from "../../../../lib/i18n/context";
-import type {
-  SecurityHistoryView,
-  SecurityScanTaskView,
+import type { MessageKey } from "../../../../lib/i18n/messages";
+import {
+  detectedRiskCount,
+  type SecurityHistoryView,
+  type SecurityScanTaskView,
 } from "../security-view";
 import { RelativeTime } from "./RelativeTime";
 
@@ -39,11 +41,12 @@ export function ScanTaskDetail({
   onOpenReport: (entry: SecurityHistoryView) => void;
 }) {
   const { t, format } = useI18n();
-  const unsafe =
-    task.totals.warn +
-    task.totals.danger +
-    task.totals.unknown +
-    task.totals.failed;
+  const unsafe = detectedRiskCount(task.totals);
+  const taskStatusKeys: Record<SecurityScanTaskView["status"], MessageKey> = {
+    complete: "security.center.result.statusComplete",
+    partial: "security.center.result.statusPartial",
+    failed: "security.center.result.statusFailed",
+  };
   const skillFindings = [
     ...new Map(
       task.findings.map((finding) => [finding.entryId, finding]),
@@ -63,7 +66,7 @@ export function ScanTaskDetail({
             />
             {t("security.center.task.title")}
             <span className="font-mono text-[11px] font-normal text-muted-foreground">
-              · {t("security.center.task.done")} ·{" "}
+              · {t(taskStatusKeys[task.status])} ·{" "}
               <RelativeTime iso={task.finishedAt} />
             </span>
           </DialogTitle>

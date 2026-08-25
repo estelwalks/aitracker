@@ -5,7 +5,7 @@
   "display": {
     "name": "Goose",
     "nameZh": "Goose",
-    "icon": "https://goose-docs.ai/img/favicon.ico",
+    "icon": "other",
     "color": "#22c55e"
   },
   "platforms": {

@@ -7,8 +7,8 @@
  * display.icon / display.color，浏览器安全投影），按工具 id 或展示名
  * 匹配；未配置时回退到名称启发式。因此全站同一工具始终使用同一配色。
  *
- * display.icon 除内置 kind 键外还可配置 http(s) logo URL —— 此时渲染为远程
- * <img>（去掉 referrer）。调用方直接把 URL 当作 name 传入时同样生效。
+ * display.icon 只允许使用内置 kind 键；品牌图形统一来自本项目的
+ * public/brand-logos/ 离线资源或组件内联 SVG。
  */
 
 import { PUBLIC_TOOL_MANIFEST } from "../lib/tool-registry/public-manifest.generated.ts";
@@ -79,30 +79,38 @@ const brandColor: Record<string, string> = {
 };
 
 /**
- * 官方品牌 logo 静态资源（public/brand-logos/，来自早期原型使用的
- * @lobehub/icons 资产）：优先于内置自绘 SVG 使用，让图标显示真实品牌图形。
- * 点亮/未点亮由调用方控制（未安装置灰 grayscale），logo 本身保留品牌原色。
+ * 官方品牌 logo 静态资源（public/brand-logos/，构建时从注册表中的官方
+ * 图标地址下载并随应用发布）：优先于内置自绘 SVG 使用，让图标显示真实品牌
+ * 图形。点亮/未点亮由调用方控制（未安装置灰 grayscale），logo 本身保留品牌原色。
  */
 const BRAND_LOGO_BY_NAME: Record<string, string> = {
   antigravity: "/brand-logos/antigravity.svg",
+  aipy: "/brand-logos/aipy.webp",
   anythingllm: "/brand-logos/anythingllm.svg",
   "anythingllm desktop": "/brand-logos/anythingllm.svg",
+  "cherry studio": "/brand-logos/cherrystudio.png",
+  cline: "/brand-logos/cline.png",
+  "command code": "/brand-logos/commandcode.ico",
   claude: "/brand-logos/claude-code.svg",
   "claude code": "/brand-logos/claude-code.svg",
   "claude science": "/brand-logos/claude-code.svg",
   codebuddy: "/brand-logos/codebuddy.svg",
-  workbuddy: "/brand-logos/codebuddy.svg",
+  workbuddy: "/brand-logos/workbuddy.svg",
   codex: "/brand-logos/codex.svg",
-  "every code": "/brand-logos/codex.svg",
+  "every code": "/brand-logos/every-code.svg",
   copilot: "/brand-logos/copilot.svg",
   "github copilot": "/brand-logos/copilot.svg",
   cursor: "/brand-logos/cursor.svg",
+  craft: "/brand-logos/craft.ico",
+  "craft agents": "/brand-logos/craft.ico",
+  droid: "/brand-logos/droid.svg",
   deepseek: "/brand-logos/deepseek.svg",
   "deepseek harness": "/brand-logos/deepseek.svg",
   gemini: "/brand-logos/gemini.svg",
-  "gemini cli": "/brand-logos/gemini.svg",
+  "gemini cli": "/brand-logos/gemini-cli.ico",
   grok: "/brand-logos/grok.svg",
   "grok build": "/brand-logos/grok.svg",
+  goose: "/brand-logos/goose.ico",
   hermes: "/brand-logos/hermes.svg",
   "hermes agent": "/brand-logos/hermes.svg",
   kilo: "/brand-logos/kilo.svg",
@@ -111,17 +119,24 @@ const BRAND_LOGO_BY_NAME: Record<string, string> = {
   kimi: "/brand-logos/kimi.svg",
   "kimi code": "/brand-logos/kimi.svg",
   kiro: "/brand-logos/kiro.svg",
-  mimo: "/brand-logos/mimo.svg",
-  "mimo code": "/brand-logos/mimo.svg",
+  mimo: "/brand-logos/mimo.ico",
+  "mimo code": "/brand-logos/mimo.ico",
   "oh-my-pi": "/brand-logos/omp.svg",
   "oh my pi": "/brand-logos/omp.svg",
   omp: "/brand-logos/omp.svg",
   openclaw: "/brand-logos/openclaw.svg",
-  opencode: "/brand-logos/opencode.svg",
+  opencode: "/brand-logos/opencode.ico",
   pi: "/brand-logos/pi.svg",
+  proma: "/brand-logos/proma.png",
+  qwen: "/brand-logos/qwen.png",
+  "qwen cli": "/brand-logos/qwen.png",
   qoder: "/brand-logos/qoder.svg",
   "qoder cn": "/brand-logos/qoder-cn.svg",
   reasonix: "/brand-logos/reasonix.png",
+  roo: "/brand-logos/roo.ico",
+  "roo code": "/brand-logos/roo.ico",
+  zed: "/brand-logos/zed.png",
+  "zed agent": "/brand-logos/zed.png",
   zcode: "/brand-logos/zcode.svg",
 };
 
@@ -180,9 +195,6 @@ export function brandColorOf(name: string) {
 
 export function BrandIcon({ name, className = "size-3.5", color }: Props) {
   const display = displayOf(name);
-  // display.icon 可以是内置 kind 键，也可以是 http(s) logo URL；调用方也
-  // 可能直接把 URL 当 name 传入（如 tool.icon）。二者都走远程 <img> 分支。
-  const rawIcon = display?.icon ?? name;
   const kind = display?.icon ?? match(name);
   const fill = color ?? display?.color ?? brandColor[kind];
   const common = {
@@ -191,22 +203,9 @@ export function BrandIcon({ name, className = "size-3.5", color }: Props) {
     "aria-hidden": true as const,
   };
 
-  // 外链品牌 logo（definitions/*.tool.json 的 display.icon 指向厂商图片）：
-  // 渲染为远程 <img>，去掉 referrer，避免把本站地址泄漏给第三方。
-  if (/^https?:\/\//i.test(rawIcon)) {
-    return (
-      <img
-        src={rawIcon}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        className={`object-contain ${className}`}
-      />
-    );
-  }
-
+  // BrandIcon is intentionally offline-only. Resolve by the visible tool name
+  // before the configured kind so legacy/invalid URL values cannot trigger a
+  // browser request.
   const localLogoSrc =
     brandLogoSrc(name) ??
     (display

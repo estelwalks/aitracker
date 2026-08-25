@@ -6,18 +6,22 @@ import {
   aggregateScanTasks,
   countScanTasks,
   dedupeHistoryByContentHash,
+  detectedRiskCount,
   EMPTY_SECURITY_PROGRESS,
+  EMPTY_SECURITY_TOTALS,
   clampPercent,
   hitDimensionsOf,
   latestHistory,
   relativeTimeParts,
   reportNeedsLocaleRefresh,
+  securityReportEvidenceState,
   securityHistoryEntryIsSafe,
   severityCounts,
   skippedReasonCode,
   summarizeReports,
   unsafeEntries,
   unsafeVerdictTone,
+  unresolvedScanCount,
   type SecurityHistoryView,
   type SecurityReportView,
 } from "./security-view.ts";
@@ -249,7 +253,7 @@ test("dedupe keeps failed entries without a content hash", () => {
   assert.equal(deduped.length, 2);
 });
 
-test("unsafeEntries keeps only entries that are not safe", () => {
+test("unsafeEntries includes only explicit warn/block verdicts", () => {
   const block = historyEntry({
     id: "history:block",
     skillName: "blocker",
@@ -280,15 +284,43 @@ test("unsafeEntries keeps only entries that are not safe", () => {
     unsafeEntries([safe, block, warn, unknown, failed, partial]).map(
       (entry) => entry.id,
     ),
-    [
-      "history:block",
-      "history:warn",
-      "history:unknown",
-      "history:failed-entry",
-      "history:partial",
-    ],
+    ["history:block", "history:warn"],
   );
   assert.deepEqual(unsafeEntries([safe]), []);
+});
+
+test("detected risks stay separate from incomplete and failed scans", () => {
+  const totals = {
+    ...EMPTY_SECURITY_TOTALS,
+    warn: 1,
+    danger: 2,
+    unknown: 3,
+    failed: 1,
+  };
+  assert.equal(detectedRiskCount(totals), 3);
+  assert.equal(unresolvedScanCount(totals), 4);
+});
+
+test("a partial unknown 100-point report is incomplete, not unsafe or clean", () => {
+  const incomplete = historyEntry({
+    status: "partial",
+    report: report({
+      status: "partial",
+      verdict: "unknown",
+      riskScore: 100,
+      findings: [],
+    }),
+  });
+  assert.equal(securityReportEvidenceState(incomplete), "incomplete");
+  assert.deepEqual(unsafeEntries([incomplete]), []);
+
+  const missingDetails = historyEntry({
+    report: report({ verdict: "warn", findings: [] }),
+  });
+  assert.equal(
+    securityReportEvidenceState(missingDetails),
+    "risk-details-unavailable",
+  );
 });
 
 test("unsafeVerdictTone maps block to danger and everything else to warn", () => {
@@ -519,7 +551,7 @@ test("aggregateScanTask aggregates timestamps and expands unsafe findings", () =
   assert.equal(task.findings[0].tone, "warn");
 });
 
-test("aggregateScanTask degrades a failed no-report entry to an entry-level finding", () => {
+test("aggregateScanTask does not fabricate a risk for a failed no-report entry", () => {
   const task = aggregateScanTask([
     historyEntry({
       id: "history:failed-entry",
@@ -529,11 +561,7 @@ test("aggregateScanTask degrades a failed no-report entry to an entry-level find
     }),
   ]);
   assert.equal(task.status, "failed");
-  assert.equal(task.findings.length, 1);
-  assert.equal(task.findings[0].severity, null);
-  assert.equal(task.findings[0].kindDisplay, "");
-  assert.equal(task.findings[0].issue, "errors.security.scanFailed");
-  assert.equal(task.findings[0].advice, "");
+  assert.equal(task.findings.length, 0);
 });
 
 test("aggregateScanTask of an all-safe scan yields no findings", () => {

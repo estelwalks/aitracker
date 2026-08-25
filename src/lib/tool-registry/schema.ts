@@ -377,21 +377,19 @@ export const RawModelObservationSchema = z
   });
 
 /**
- * display.icon: a built-in BrandIcon kind key or an http(s) logo URL. URL icons
- * are rendered as a remote <img> by BrandIcon; unknown kind keys fall back to
- * the generic icon.
+ * display.icon is an offline BrandIcon kind key. Brand assets are bundled under
+ * public/brand-logos/ or rendered from the component's inline SVGs; network
+ * URLs are deliberately not part of the registry contract.
  */
-export const ToolIconSchema = z.union([
-  z.enum(["claude", "codex", "cursor", "gemini", "kimi", "deepseek", "other"], {
+export const ToolIconSchema = z.enum(
+  ["claude", "codex", "cursor", "gemini", "kimi", "deepseek", "other"],
+  {
     errorMap: () => ({
       message:
-        "display.icon must be one of claude | codex | cursor | gemini | kimi | deepseek | other, or an http(s) logo URL",
+        "display.icon must be an offline kind: claude | codex | cursor | gemini | kimi | deepseek | other",
     }),
-  }),
-  z.string().regex(/^https?:\/\/\S+$/i, {
-    message: "display.icon URL must start with http:// or https://",
-  }),
-]);
+  },
+);
 
 /**
  * Strict v1.5 tool definition (the JSON world). `catalogVisible=false` is only
