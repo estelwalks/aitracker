@@ -1,4 +1,5 @@
-import { RadarIcon, ScanLine } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { RadarIcon, RefreshCw, ScanLine } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { useI18n } from "../../../../lib/i18n/context";
@@ -105,6 +106,7 @@ export function SecurityBriefing({
   const [typed, setTyped] = useState("");
   const activeIndex = index % lines.length;
   const line = lines[activeIndex] ?? "";
+  const rotateNext = () => setIndex((current) => (current + 1) % lines.length);
 
   useEffect(() => setIndex(0), [lines]);
 
@@ -169,13 +171,31 @@ export function SecurityBriefing({
                 </span>
               ) : null}
               {fallbackStatusKey ? (
-                <span
-                  role="status"
-                  className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
-                >
-                  {renderMessage(fallbackStatusKey)}
-                </span>
+                envelope?.status === "enhancer-unavailable" ? (
+                  <Link
+                    to="/settings"
+                    search={{ section: "model" }}
+                    className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                  >
+                    {renderMessage(fallbackStatusKey)}
+                  </Link>
+                ) : (
+                  <span
+                    role="status"
+                    className="inline-flex h-5 items-center rounded-full border border-border px-2 text-[9px] tracking-[0.04em] text-muted-foreground"
+                  >
+                    {renderMessage(fallbackStatusKey)}
+                  </span>
+                )
               ) : null}
+              <button
+                type="button"
+                onClick={rotateNext}
+                className="dashboard-hero-refresh ml-auto"
+              >
+                <RefreshCw className="size-3" strokeWidth={2} />
+                {t("security.center.briefing.refresh")}
+              </button>
             </div>
 
             <p

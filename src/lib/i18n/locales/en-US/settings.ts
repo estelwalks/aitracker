@@ -251,7 +251,7 @@ export const settings = {
     },
     fallbackStatus: {
       "enhancer-unavailable":
-        "AI enhancement is unavailable; showing rule-based insight",
+        "AI enhancement is temporarily unavailable — configure an AI model",
       "budget-exceeded":
         "AI enhancement limit reached; showing rule-based insight",
       timeout: "AI enhancement timed out; showing rule-based insight",
