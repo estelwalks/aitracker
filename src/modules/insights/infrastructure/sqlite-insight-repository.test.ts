@@ -96,13 +96,13 @@ test("fresh databases default insight enhancement to enabled", (t) => {
 
 test("refresh interval persists independently from insight mode", (t) => {
   const repository = createSqliteInsightRepository(fixture(t));
-  assert.equal(repository.getRefreshIntervalMs(), 60 * 60 * 1000);
-  repository.setRefreshIntervalMs(2 * 60 * 60 * 1000, 20);
-  assert.equal(repository.getRefreshIntervalMs(), 2 * 60 * 60 * 1000);
-  repository.setRefreshIntervalMs(60 * 60 * 1000, 19);
+  assert.equal(repository.getRefreshIntervalMs(), 5 * 60 * 60 * 1000);
+  repository.setRefreshIntervalMs(6 * 60 * 60 * 1000, 20);
+  assert.equal(repository.getRefreshIntervalMs(), 6 * 60 * 60 * 1000);
+  repository.setRefreshIntervalMs(5 * 60 * 60 * 1000, 19);
   assert.equal(
     repository.getRefreshIntervalMs(),
-    2 * 60 * 60 * 1000,
+    6 * 60 * 60 * 1000,
     "older writes must not overwrite a newer interval",
   );
 });

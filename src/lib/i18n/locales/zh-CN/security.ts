@@ -100,7 +100,7 @@ export const security = {
       retry: "重新连接",
     },
     briefing: {
-      title: "安全播报",
+      title: "今日洞察",
       devOnly: "仅开发模式",
       startGlobalScan: "立即检测",
       allPassed: "全部通过",

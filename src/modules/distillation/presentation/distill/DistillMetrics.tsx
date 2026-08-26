@@ -60,14 +60,17 @@ export function DistillMetrics({
     },
   ];
   return (
-    <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <section className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
       {cards.map((m) => (
-        <div key={m.k} className="rounded-xl bg-card p-4">
+        <div
+          key={m.k}
+          className="min-w-0 overflow-hidden rounded-xl bg-card p-4"
+        >
           <div className="truncate text-[11px] leading-4 text-muted-foreground">
             {m.k}
           </div>
           <div
-            className="tt-num mt-1.5 font-mono text-[20px] leading-none font-bold"
+            className="tt-num tt-text-metric mt-1.5 min-w-0 truncate font-mono leading-none font-bold"
             style={{ color: m.c }}
           >
             {m.v}

@@ -10,7 +10,7 @@
  * See `src/lib/app-config.ts` for the compat-sensitivity notes: values
  * marked [compat] must not change without a migration plan.
  */
-export const APP_NAME = "TrustTools";
+export const APP_NAME = "AITracker";
 export const APP_DATA_DIR = ".trusttools";
 export const STORAGE_KEY_PREFIX = "trusttools.";
 export const COOKIE_TOKEN_NAME = "trusttools_token";

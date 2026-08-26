@@ -82,6 +82,8 @@ const PAGE_SIZE = 12;
 
 type SyncTargetState = { title: string; skills: LocalSkill[] };
 type RemoveTargetState = { title: string; skills: LocalSkill[] };
+type SkillCategoryFilter =
+  "all" | "workflow" | "prompt" | "distilled" | "market";
 
 export function SkillsPage({
   initial,
@@ -246,6 +248,17 @@ export function SkillsPage({
       prompt: map.get("prompt") ?? 0,
     };
   }, [workspace]);
+
+  const categoryFilter: SkillCategoryFilter =
+    source === "unknown"
+      ? "distilled"
+      : source === "market"
+        ? "market"
+        : form === "workflow"
+          ? "workflow"
+          : form === "prompt"
+            ? "prompt"
+            : "all";
 
   const securitySummary = security
     ? {
@@ -585,13 +598,13 @@ export function SkillsPage({
                   index > 0 ? "border-l border-border/60" : ""
                 }`}
               >
-                <div className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+                <div className="text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
                   {kpi.label}
                 </div>
-                <div className="tt-num mt-2 font-mono text-[22px] leading-none font-black tracking-tight">
+                <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
                   {kpi.value}
                 </div>
-                <div className="mt-1.5 truncate text-[11px] text-muted-foreground/80">
+                <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
                   {kpi.hint}
                 </div>
               </div>
@@ -611,61 +624,12 @@ export function SkillsPage({
                 ariaLabel={t("skills.searchPlaceholder")}
                 className="min-w-0 flex-1"
               />
-              {/* 原型 Segmented：细分段控件（rounded-sm + 边框 + 激活主色底） */}
-              <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
-                {(
-                  [
-                    {
-                      v: "all",
-                      label: `${t("skills.origin.all")} ${originCounts.total}`,
-                    },
-                    {
-                      v: "unknown",
-                      label: `${t("skills.origin.distilled")} ${originCounts.distilled}`,
-                    },
-                    {
-                      v: "market",
-                      label: `${t("skills.origin.external")} ${originCounts.external}`,
-                    },
-                    {
-                      v: "frontmatter",
-                      label: `${t("skills.origin.other")} ${originCounts.other}`,
-                    },
-                  ] as const
-                ).map((option) => (
-                  <button
-                    key={option.v}
-                    type="button"
-                    onClick={() => {
-                      setSource(option.v);
-                      setPage(1);
-                    }}
-                    className={`rounded-sm px-2.5 py-1 text-xs whitespace-nowrap transition-colors ${
-                      source === option.v
-                        ? "bg-primary/15 font-medium text-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 分隔线：来源与形态两组分段控件视觉上分开，避免看起来合并成一个 */}
-              <span
-                aria-hidden="true"
-                className="h-5 w-px shrink-0 bg-border"
-              />
-              {/* 原型 Segmented：形态（完整包/工作流/Prompt） */}
+              {/* 统一筛选：来源与形态合并为一组，避免重复切换。 */}
               <div className="inline-flex shrink-0 rounded-sm border border-border bg-surface-2 p-0.5">
                 {[
                   {
                     v: "all" as const,
-                    label: `${t("skills.form.all")} ${formCounts.total}`,
-                  },
-                  {
-                    v: "package" as const,
-                    label: `${t("skills.form.package")} ${formCounts.package}`,
+                    label: `${t("skills.origin.all")} ${originCounts.total}`,
                   },
                   {
                     v: "workflow" as const,
@@ -675,16 +639,37 @@ export function SkillsPage({
                     v: "prompt" as const,
                     label: `${t("skills.form.prompt")} ${formCounts.prompt}`,
                   },
+                  {
+                    v: "distilled" as const,
+                    label: `${t("skills.filter.distilledSkill")} ${originCounts.distilled}`,
+                  },
+                  {
+                    v: "market" as const,
+                    label: `${t("skills.filter.securityMarket")} ${originCounts.external}`,
+                  },
                 ].map((option) => (
                   <button
                     key={option.v}
                     type="button"
                     onClick={() => {
-                      setForm(option.v);
+                      setSource(
+                        option.v === "distilled"
+                          ? "unknown"
+                          : option.v === "market"
+                            ? "market"
+                            : "all",
+                      );
+                      setForm(
+                        option.v === "workflow"
+                          ? "workflow"
+                          : option.v === "prompt"
+                            ? "prompt"
+                            : "all",
+                      );
                       setPage(1);
                     }}
                     className={`rounded-sm px-2.5 py-1 text-xs whitespace-nowrap transition-colors ${
-                      form === option.v
+                      categoryFilter === option.v
                         ? "bg-primary/15 font-medium text-primary"
                         : "text-muted-foreground hover:text-foreground"
                     }`}

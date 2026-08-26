@@ -34,7 +34,11 @@ import {
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
   OFFICIAL_MODEL_DISPLAY_NAME,
+  RECOMMENDED_MODEL,
+  RECOMMENDED_MODEL_OPTIONS,
+  isRecommendedModel,
   protocolMeta,
+  recommendedModelDisplayName,
   setActiveModelProfile,
   testModelProfile,
   upsertModelProfile,
@@ -96,9 +100,7 @@ function toInput(form: FormState): ModelProfileInput {
     ...(form.mode === "custom" && form.endpoint.trim()
       ? { endpoint: form.endpoint.trim() }
       : {}),
-    ...(form.mode === "custom" && form.model.trim()
-      ? { model: form.model.trim() }
-      : {}),
+    ...(form.model.trim() ? { model: form.model.trim() } : {}),
   };
 }
 
@@ -119,6 +121,7 @@ function fromProfile(profile: ModelProfileView): FormState {
 }
 
 function fromOfficialProfile(profile: ModelProfileView): FormState {
+  const model = profile.model ?? "";
   return {
     id: profile.id === OFFICIAL_ENTRY_ID ? null : profile.id,
     name: profile.name,
@@ -127,7 +130,7 @@ function fromOfficialProfile(profile: ModelProfileView): FormState {
     apiKey: "",
     storedApiKey: profile.apiKeyMasked,
     endpoint: OFFICIAL_ENDPOINT,
-    model: OFFICIAL_MODEL,
+    model: isRecommendedModel(model) ? model : RECOMMENDED_MODEL,
     models: [],
     listing: false,
     listMsg: "",
@@ -142,7 +145,7 @@ function officialEntry(name: string): ModelProfileView {
     protocol: "openai",
     apiKeyMasked: false,
     endpoint: OFFICIAL_ENDPOINT,
-    model: OFFICIAL_MODEL,
+    model: RECOMMENDED_MODEL,
     auth: "bearer",
     createdAt: "",
     updatedAt: "",
@@ -388,7 +391,7 @@ export function ModelProfilesSection() {
         </div>
 
         {loading ? (
-          <div className="px-3 py-8 text-center text-[12px] text-muted-foreground">
+          <div className="tt-text-body-sm px-3 py-8 text-center text-muted-foreground">
             {t("common.loading")}
           </div>
         ) : (
@@ -402,12 +405,14 @@ export function ModelProfilesSection() {
                 ? OFFICIAL_ENDPOINT
                 : (profile.endpoint ?? protocolMeta[profile.protocol].endpoint);
               const model = isOfficial
-                ? OFFICIAL_MODEL_DISPLAY_NAME
+                ? profile.model
+                  ? recommendedModelDisplayName(profile.model)
+                  : OFFICIAL_MODEL_DISPLAY_NAME
                 : (profile.model ?? "—");
               return (
                 <li
                   key={profile.id}
-                  className={`flex items-start gap-3 px-3 py-2.5 text-[12px] transition-colors ${active ? "bg-accent/50" : "hover:bg-accent/30"}`}
+                  className={`tt-text-body-sm flex items-start gap-3 px-3 py-2.5 transition-colors ${active ? "bg-accent/50" : "hover:bg-accent/30"}`}
                 >
                   <div className="min-w-0 flex-1 text-left">
                     <span className="flex items-center gap-1.5">
@@ -422,7 +427,7 @@ export function ModelProfilesSection() {
                         </StatusBadge>
                       )}
                     </span>
-                    <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+                    <span className="tt-text-caption mt-0.5 block truncate text-muted-foreground">
                       {endpoint} · {model}
                     </span>
                   </div>
@@ -513,12 +518,12 @@ export function ModelProfilesSection() {
                     className="security-config-input"
                   />
                   {form.storedApiKey && (
-                    <p className="mt-1 text-[10.5px] text-muted-foreground">
+                    <p className="tt-text-caption mt-1 text-muted-foreground">
                       {t("settings.modelProfiles.apiKeyConfigured")}
                     </p>
                   )}
                 </div>
-                <dl className="space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                <dl className="tt-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
                   <div className="flex gap-2">
                     <dt className="w-20 shrink-0">
                       {t("settings.modelProfiles.apiFormatLabel")}
@@ -538,7 +543,19 @@ export function ModelProfilesSection() {
                       {t("settings.modelProfiles.modelLabel")}
                     </dt>
                     <dd className="text-foreground">
-                      {OFFICIAL_MODEL_DISPLAY_NAME}
+                      <select
+                        value={form.model}
+                        onChange={(event) =>
+                          updateForm({ model: event.target.value })
+                        }
+                        className="security-config-input h-8 min-w-48 py-1"
+                      >
+                        {RECOMMENDED_MODEL_OPTIONS.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.displayName}
+                          </option>
+                        ))}
+                      </select>
                     </dd>
                   </div>
                 </dl>
@@ -578,14 +595,14 @@ export function ModelProfilesSection() {
                         }
                         className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${form.protocol === protocol ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"}`}
                       >
-                        <span className="block text-[12px] text-foreground">
+                        <span className="tt-text-body-sm block text-foreground">
                           {t(
                             protocol === "openai"
                               ? "settings.modelProfiles.protocolOpenai"
                               : "settings.modelProfiles.protocolAnthropic",
                           )}
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        <span className="tt-text-caption mt-0.5 block text-muted-foreground">
                           {t(
                             protocol === "openai"
                               ? "settings.modelProfiles.protocolOpenaiHint"
@@ -615,7 +632,7 @@ export function ModelProfilesSection() {
                       className="security-config-input"
                     />
                     {form.storedApiKey && (
-                      <p className="mt-1 text-[10.5px] text-muted-foreground">
+                      <p className="tt-text-caption mt-1 text-muted-foreground">
                         {t("settings.modelProfiles.apiKeyConfigured")}
                       </p>
                     )}
@@ -649,7 +666,7 @@ export function ModelProfilesSection() {
                         (form.apiKey.trim() === "" && form.id === null)
                       }
                       onClick={() => void loadModels()}
-                      className="tt-num flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                      className="tt-num tt-text-caption flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {form.listing ? (
                         <Loader2 className="size-3 animate-spin" />
@@ -705,13 +722,13 @@ export function ModelProfilesSection() {
                     />
                   )}
                   {form.listMsg && (
-                    <div className="tt-num mt-1 text-[11px] text-muted-foreground">
+                    <div className="tt-num tt-text-caption mt-1 text-muted-foreground">
                       {form.listMsg}
                     </div>
                   )}
                 </div>
 
-                <dl className="tt-num space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                <dl className="tt-num tt-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
                   <div className="flex gap-2">
                     <dt className="w-16 shrink-0">
                       {t("settings.modelProfiles.requestPath")}

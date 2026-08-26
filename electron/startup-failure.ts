@@ -52,7 +52,7 @@ export function createStartupWarmupError(
   code: unknown,
 ): Error & { readonly startupFailureCode: StartupFailureCode } {
   const error = new Error(
-    `TrustTools workspace warmup failed with HTTP ${String(status)}`,
+    `AITracker workspace warmup failed with HTTP ${String(status)}`,
   ) as Error & { startupFailureCode: StartupFailureCode };
   error.startupFailureCode = normalizeStartupFailureCode(code);
   return error;

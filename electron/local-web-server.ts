@@ -549,7 +549,7 @@ export async function startLocalWebServer(
     },
     async warmup(desktopBrokerToken) {
       if (!desktopBrokerToken) {
-        throw new Error("TrustTools workspace warmup token is unavailable");
+        throw new Error("AITracker workspace warmup token is unavailable");
       }
 
       // Use the already-listening loopback server so packaged Nitro builds

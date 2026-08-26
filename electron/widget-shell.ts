@@ -35,8 +35,8 @@ export function createWidgetShellHtml(): string {
   </style>
 </head>
 <body>
-  <main class="shell" aria-label="TrustTools widget loading">
-    <div class="header">TrustTools <span class="dot"></span></div>
+  <main class="shell" aria-label="AITracker widget loading">
+    <div class="header">AITracker <span class="dot"></span></div>
     <div class="line short"></div>
     <div class="cards"><div class="card"></div><div class="card"></div></div>
     <div class="panel"></div>

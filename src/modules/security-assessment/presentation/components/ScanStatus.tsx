@@ -241,11 +241,11 @@ function Cell({
   const inner = (
     <>
       <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
-        <Icon className="size-3" strokeWidth={1.8} />
+        <Icon className="size-4" strokeWidth={1.8} />
         <span className="truncate">{label}</span>
       </div>
       <div
-        className="tt-num mt-1.5 font-mono text-[20px] leading-none font-black tracking-tight"
+        className="tt-num tt-text-metric mt-1.5 font-mono leading-none font-black tracking-tight"
         style={color ? { color } : undefined}
       >
         {value}

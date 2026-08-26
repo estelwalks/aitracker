@@ -154,7 +154,7 @@ export async function clearRegenerableCache(): Promise<{
   } catch (error) {
     // Cache rows are already gone; a transient checkpoint/VACUUM failure must
     // not turn a successful clear into a misleading error toast.
-    console.warn("TrustTools cache compaction failed", error);
+    console.warn("AITracker cache compaction failed", error);
   }
   const usage = await readStorageUsage();
   return {
@@ -207,7 +207,7 @@ export async function clearCollectedData(): Promise<{
   try {
     root.database.compact();
   } catch (error) {
-    console.warn("TrustTools collected-data compaction failed", error);
+    console.warn("AITracker collected-data compaction failed", error);
   }
   // Start the same background collectors used by first-run initialization.
   // The reset request returns without waiting for filesystem scans; pages can
@@ -218,7 +218,7 @@ export async function clearCollectedData(): Promise<{
     root.skillSnapshot.requestRefresh({ reason: "manual" }),
     root.installationSnapshot.requestRefresh({ reason: "manual" }),
   ]).catch((error: unknown) => {
-    console.warn("TrustTools collected-data reinitialization failed", error);
+    console.warn("AITracker collected-data reinitialization failed", error);
   });
   const usage = await readStorageUsage();
   return {

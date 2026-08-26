@@ -14,16 +14,11 @@ const securityPageSource = source(
   "src/modules/security-assessment/presentation/SecurityAssessmentPage.tsx",
 );
 
-test("security briefing uses the shared security insight envelope with local fallback", () => {
-  assert.match(briefingSource, /usePageInsight/);
-  assert.match(briefingSource, /surfaceId:\s*["']security["']/);
-  assert.match(
-    briefingSource,
-    /sharedInsightLines\.map\(\(insight\) => insight\.text\)/,
-  );
-  assert.match(briefingSource, /settings\.insight\.enhanced/);
-  assert.match(briefingSource, /useLocalLines/);
-  assert.match(briefingSource, /security\.center\.briefing\.refresh/);
+test("security briefing delegates copy and layout to the shared insight card", () => {
+  assert.match(briefingSource, /InsightCard/);
+  assert.match(briefingSource, /surfaceId=["']security["']/);
+  assert.match(briefingSource, /showRotate={false}/);
+  assert.match(briefingSource, /actions=\{actions\}/);
 });
 
 test("security route keeps one bespoke briefing and does not add a second insight card", () => {

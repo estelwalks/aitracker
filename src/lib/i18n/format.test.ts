@@ -124,5 +124,6 @@ test("formatMoney: JPY/KRW 固定 0 小数位, CNY/USD 保留幅度规则", () =
   assert.equal(formatMoney("zh-CN", 12.34, "USD"), "US$12.34");
   assert.equal(formatMoney("en-US", 12.34, "USD"), "$12.34");
   assert.equal(formatMoney("en-US", 123, "USD"), "$123"); // 幅度规则:>=100 无小数
+  assert.equal(formatMoney("zh-CN", 41.2911, "CNY"), "¥41.29"); // 展示最多保留 2 位
   assert.equal(formatMoney("zh-CN", 1.2, "JPY"), "JP¥1"); // 不做截断性误差,四舍五入
 });

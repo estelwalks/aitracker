@@ -2,8 +2,9 @@
  * Central application configuration — the single source of truth for the
  * product name and every runtime identifier derived from it.
  *
- * The product will be renamed later. To rebrand, change `APP_NAME` and/or
- * `APP_ID` below; every other constant derives from them and the renderer
+ * The product display name is independent from the compatibility identifiers.
+ * To rebrand, change `APP_NAME`; every other constant derives from `APP_ID`
+ * and the renderer
  * must never hardcode a brand literal (enforced by
  * `scripts/check-app-config-sync.mjs` via the `check:i18n` chain).
  *
@@ -19,7 +20,7 @@
  * tsconfig boundary prevents a cross-import); `check-app-config-sync.mjs`
  * enforces that the mirror stays textually in sync.
  */
-export const APP_NAME = "TrustTools";
+export const APP_NAME = "AITracker";
 export const APP_ID = "trusttools";
 
 /** Product version shown in the UI; bump together with package.json `version`. */

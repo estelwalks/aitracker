@@ -8,9 +8,9 @@
  *
  * Validation rules: URL protocol http/https without embedded credentials,
  * model charset/length, plus the S-500 spec: name 1..64, model 1..120,
- * apiKey 8..512 for profiles. Official profiles use the built-in managed
- * preset for their endpoint/protocol/model, while their API key is still
- * supplied by the user and stored server-side.
+ * apiKey 8..512 for profiles. Recommended profiles use the built-in managed
+ * endpoint/protocol and one of the supported DeepSeek models, while their API
+ * key is still supplied by the user and stored server-side.
  */
 
 export type ProfileMode = "official" | "custom";
@@ -28,10 +28,34 @@ export function defaultAuth(protocol: ProfileProtocol): ProfileAuth {
   return protocol === "anthropic" ? "x-api-key" : "bearer";
 }
 
-/** Model used by the built-in official DeepSeek profile preset. */
+/** Models available in the built-in recommended DeepSeek profile. */
+export const RECOMMENDED_MODEL_OPTIONS = [
+  { id: "deepseek-v4-flash", displayName: "DeepSeek-V4-Flash" },
+  { id: "deepseek-v4-pro", displayName: "DeepSeek-V4-Pro" },
+] as const;
+export type RecommendedModelId =
+  (typeof RECOMMENDED_MODEL_OPTIONS)[number]["id"];
+
+/** Legacy default kept for existing profiles created before V4 model ids. */
 export const OFFICIAL_MODEL = "deepseek-chat";
-/** Product-facing label shown beneath the official model entry. */
-export const OFFICIAL_MODEL_DISPLAY_NAME = "DeepSeek-V4-Flash";
+/** Default model used when a new recommended profile has no selection yet. */
+export const RECOMMENDED_MODEL = RECOMMENDED_MODEL_OPTIONS[0].id;
+/** Product-facing label for the legacy/default recommended model. */
+export const OFFICIAL_MODEL_DISPLAY_NAME =
+  RECOMMENDED_MODEL_OPTIONS[0].displayName;
+
+export function isRecommendedModel(value: string): value is RecommendedModelId {
+  return RECOMMENDED_MODEL_OPTIONS.some((option) => option.id === value);
+}
+
+export function recommendedModelDisplayName(
+  value: string | null | undefined,
+): string {
+  const option = RECOMMENDED_MODEL_OPTIONS.find(
+    (candidate) => candidate.id === value,
+  );
+  return option?.displayName ?? OFFICIAL_MODEL_DISPLAY_NAME;
+}
 export const OFFICIAL_ENDPOINT = "https://api.deepseek.com";
 export const OFFICIAL_PROTOCOL: ProfileProtocol = "openai";
 
@@ -169,13 +193,14 @@ export function effectiveEndpoint(profile: {
   return trimmed || protocolMeta[profile.protocol ?? "openai"].endpoint;
 }
 
-/** Effective model id for a profile (official preset / stored / undefined). */
+/** Effective model id for a profile (recommended selection / stored / undefined). */
 export function effectiveModel(profile: {
   readonly mode: ProfileMode;
   readonly protocol?: ProfileProtocol;
   readonly model?: string;
 }): string | undefined {
-  if (profile.mode === "official") return OFFICIAL_MODEL;
+  if (profile.mode === "official")
+    return profile.model?.trim() || OFFICIAL_MODEL;
   return profile.model?.trim() || undefined;
 }
 
@@ -214,10 +239,11 @@ function validKey(value: string): boolean {
 }
 
 /**
- * Validate a form payload. Official profiles use the managed preset for all
- * non-secret configuration. The repository additionally checks that an
- * official profile has a stored key before activating it. For edits, an empty
- * key means "keep the stored secret" (the key is never echoed back).
+ * Validate a form payload. Recommended profiles use the managed endpoint and
+ * protocol plus a supported model selection. The repository additionally
+ * checks that a recommended profile has a stored key before activating it.
+ * For edits, an empty key means "keep the stored secret" (the key is never
+ * echoed back).
  */
 export function validateModelProfileInput(
   input: ModelProfileInput,
@@ -244,6 +270,12 @@ export function validateModelProfileInput(
     if (!model)
       return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
     if (!MODEL_ID_PATTERN.test(model))
+      return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
+  }
+
+  if (input.mode === "official" && input.model?.trim()) {
+    const model = input.model.trim();
+    if (model !== OFFICIAL_MODEL && !isRecommendedModel(model))
       return { ok: false, errorCode: "errors.modelProfile.invalidModel" };
   }
 

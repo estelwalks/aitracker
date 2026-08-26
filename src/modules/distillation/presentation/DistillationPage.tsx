@@ -23,7 +23,11 @@ import {
 } from "../../../lib/preferences/client.ts";
 import type { CandidateOutput, SegmentRef, SessionRef } from "../contracts";
 import type { DistillationSessionItem, DistillationViewModel } from "./index";
-import { deleteCandidates, getDistillationTask, startDistillation } from "../query";
+import {
+  deleteCandidates,
+  getDistillationTask,
+  startDistillation,
+} from "../query";
 import { DistillMetrics } from "./distill/DistillMetrics";
 import { MaterialDrawer } from "./distill/MaterialDrawer";
 import { ExpCard } from "./distill/ExpCard";
@@ -241,9 +245,7 @@ export function DistillationPage({
           return;
         }
         setDistillProgress(
-          task.phase === "completed"
-            ? 1
-            : Math.min(0.92, task.percent / 100),
+          task.phase === "completed" ? 1 : Math.min(0.92, task.percent / 100),
         );
         if (["completed", "failed", "cancelled"].includes(task.phase)) {
           window.localStorage.removeItem(DISTILL_TASK_KEY);
@@ -345,7 +347,9 @@ export function DistillationPage({
   async function removeCandidates(ids: readonly string[]) {
     if (ids.length === 0) return;
     await deleteCandidates({ data: { candidateIds: [...ids] } });
-    setCandidates((current) => current.filter((item) => !ids.includes(item.candidateId)));
+    setCandidates((current) =>
+      current.filter((item) => !ids.includes(item.candidateId)),
+    );
     setSelectedCandidateIds(new Set());
     setViewId((current) => (current && ids.includes(current) ? null : current));
     await router.invalidate();
@@ -461,7 +465,10 @@ export function DistillationPage({
       // terminal state before exposing the result or refreshing read models.
       let task = result.task;
       if (task) window.localStorage.setItem(DISTILL_TASK_KEY, task.taskId);
-      while (task && !["completed", "failed", "cancelled"].includes(task.phase)) {
+      while (
+        task &&
+        !["completed", "failed", "cancelled"].includes(task.phase)
+      ) {
         await new Promise((resolve) => window.setTimeout(resolve, 500));
         task =
           (await getDistillationTask({ data: { taskId: task.taskId } })) ??
@@ -471,7 +478,9 @@ export function DistillationPage({
       if (task?.phase !== "completed") {
         window.localStorage.removeItem(DISTILL_TASK_KEY);
         toast.error(
-          task?.errorCode ? t(task.errorCode as MessageKey) : t("common.failed"),
+          task?.errorCode
+            ? t(task.errorCode as MessageKey)
+            : t("common.failed"),
         );
         return;
       }
@@ -590,8 +599,18 @@ export function DistillationPage({
               <div className="tt-toolbar gap-1">
                 {(
                   [
-                    { k: "config", label: t("distill.viewConfig"), Icon: FlaskConical, badge: null },
-                    { k: "result", label: t("distill.historyTitle"), Icon: PackageCheck, badge: totalRuns || null },
+                    {
+                      k: "config",
+                      label: t("distill.viewConfig"),
+                      Icon: FlaskConical,
+                      badge: null,
+                    },
+                    {
+                      k: "result",
+                      label: t("distill.historyTitle"),
+                      Icon: PackageCheck,
+                      badge: totalRuns || null,
+                    },
                   ] as const
                 ).map(({ k, label, Icon, badge }) => {
                   const on = distillView === k;
@@ -602,9 +621,11 @@ export function DistillationPage({
                       onClick={() => setDistillView(k)}
                       className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
                     >
-                      <Icon className="size-3.5" /> {label}
+                      <Icon className="size-4" /> {label}
                       {badge != null && badge > 0 && (
-                        <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">{badge}</span>
+                        <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">
+                          {badge}
+                        </span>
                       )}
                     </button>
                   );
@@ -651,19 +672,45 @@ export function DistillationPage({
         {distillView === "result" && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
             <div className="tt-toolbar gap-1">
-              <button type="button" onClick={() => setDistillView("config")} className="tt-chip font-mono">
-                <FlaskConical className="size-3.5" /> {t("distill.viewConfig")}
+              <button
+                type="button"
+                onClick={() => setDistillView("config")}
+                className="tt-chip font-mono"
+              >
+                <FlaskConical className="size-4" /> {t("distill.viewConfig")}
               </button>
-              <button type="button" onClick={() => setDistillView("result")} className="tt-chip font-mono tt-chip-on">
-                <PackageCheck className="size-3.5" /> {t("distill.historyTitle")}
-                {totalRuns > 0 && <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">{totalRuns}</span>}
+              <button
+                type="button"
+                onClick={() => setDistillView("result")}
+                className="tt-chip font-mono tt-chip-on"
+              >
+                <PackageCheck className="size-4" /> {t("distill.historyTitle")}
+                {totalRuns > 0 && (
+                  <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">
+                    {totalRuns}
+                  </span>
+                )}
               </button>
             </div>
             <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-              {t("distill.summaryRuns", { count: totalRuns, saved: totalSaved })}
+              {t("distill.summaryRuns", {
+                count: totalRuns,
+                saved: totalSaved,
+              })}
             </span>
-            {distilling && <span className="inline-flex items-center gap-1.5 font-mono text-[11px]" style={{ color: "var(--chart-1)" }}><Loader2 className="size-3.5 animate-spin" /> {t("distill.running")}</span>}
-            <Link to="/skills" className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-primary hover:underline">
+            {distilling && (
+              <span
+                className="inline-flex items-center gap-1.5 font-mono text-[11px]"
+                style={{ color: "var(--chart-1)" }}
+              >
+                <Loader2 className="size-3.5 animate-spin" />{" "}
+                {t("distill.running")}
+              </span>
+            )}
+            <Link
+              to="/skills"
+              className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-primary hover:underline"
+            >
               {t("distill.goSkills")} <ArrowRight className="size-3" />
             </Link>
           </div>
@@ -707,7 +754,9 @@ export function DistillationPage({
                     <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <input
                         type="checkbox"
-                        checked={shownCandidates.every((item) => selectedCandidateIds.has(item.candidateId))}
+                        checked={shownCandidates.every((item) =>
+                          selectedCandidateIds.has(item.candidateId),
+                        )}
                         onChange={(event) => {
                           // Snapshot the DOM value before scheduling the state
                           // update. Synthetic events may no longer expose
@@ -729,141 +778,145 @@ export function DistillationPage({
                       <button
                         type="button"
                         className="text-[11px] text-destructive hover:underline"
-                        onClick={() => void removeCandidates([...selectedCandidateIds])}
+                        onClick={() =>
+                          void removeCandidates([...selectedCandidateIds])
+                        }
                       >
                         删除选中
                       </button>
                     )}
                   </div>
-                <ul className="overflow-hidden rounded-xl border border-border bg-card">
-                  {shownCandidates.map((candidate, i0) => {
-                    const i = winStart + i0;
-                    const badge = kindMeta(candidate.kind);
-                    const resolved = resolveCandidateSource(
-                      candidate,
-                      sessions,
-                    );
-                    const sources =
-                      resolved.sources.join(" / ") ||
-                      [
-                        ...new Set(
-                          candidate.selectedSessionRefs.map((r) => r.source),
-                        ),
-                      ].join(" / ");
-                    const open = viewId === candidate.candidateId;
-                    const saved = candidate.approvalState === "approved";
-                    return (
-                      <li
-                        key={candidate.candidateId}
-                        className={`group relative transition-colors hover:bg-surface-2/40 ${
-                          i > 0
-                            ? "[box-shadow:inset_0_1px_0_var(--rowline)]"
-                            : ""
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setViewId(open ? null : candidate.candidateId)
-                          }
-                          className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
+                  <ul className="overflow-hidden rounded-xl border border-border bg-card">
+                    {shownCandidates.map((candidate, i0) => {
+                      const i = winStart + i0;
+                      const badge = kindMeta(candidate.kind);
+                      const resolved = resolveCandidateSource(
+                        candidate,
+                        sessions,
+                      );
+                      const sources =
+                        resolved.sources.join(" / ") ||
+                        [
+                          ...new Set(
+                            candidate.selectedSessionRefs.map((r) => r.source),
+                          ),
+                        ].join(" / ");
+                      const open = viewId === candidate.candidateId;
+                      const saved = candidate.approvalState === "approved";
+                      return (
+                        <li
+                          key={candidate.candidateId}
+                          className={`group relative transition-colors hover:bg-surface-2/40 ${
+                            i > 0
+                              ? "[box-shadow:inset_0_1px_0_var(--rowline)]"
+                              : ""
+                          }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selectedCandidateIds.has(candidate.candidateId)}
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => {
-                              const checked = event.currentTarget.checked;
-                              setSelectedCandidateIds((current) => {
-                                const next = new Set(current);
-                                if (checked) next.add(candidate.candidateId);
-                                else next.delete(candidate.candidateId);
-                                return next;
-                              });
-                            }}
-                            className="mt-2 size-3.5 shrink-0"
-                          />
-                          <span
-                            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md"
-                            style={{
-                              background: `color-mix(in oklab, ${badge.color} 12%, transparent)`,
-                              color: badge.color,
-                            }}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewId(open ? null : candidate.candidateId)
+                            }
+                            className="flex w-full items-start gap-3 px-3.5 py-3 text-left"
                           >
-                            {saved ? (
-                              <PackageCheck className="size-4" />
-                            ) : (
-                              <FlaskConical className="size-4" />
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                              <span className="tt-num truncate text-[14px] font-semibold">
-                                {candidate.title || t(badge.labelKey)}
-                              </span>
-                              <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
-                                {t(badge.labelKey)}
-                              </span>
-                              <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
-                                {t("distill.histSegments", {
-                                  count: candidate.selectedSessionRefs.length,
-                                })}{" "}
-                                ·{" "}
-                                {format.formatDateTime(
-                                  candidate.generatedAt,
-                                  false,
-                                )}
-                              </span>
-                              <span
-                                className="shrink-0 rounded-full px-2 py-px font-mono text-[10px]"
-                                style={
-                                  saved
-                                    ? {
-                                        background:
-                                          "color-mix(in oklab, var(--chart-1) 16%, transparent)",
-                                        color: "var(--chart-1)",
-                                      }
-                                    : {
-                                        background: "var(--surface-2)",
-                                        color: "var(--muted-foreground)",
-                                      }
-                                }
-                              >
-                                {saved
-                                  ? t("distill.histSaved")
-                                  : t("distill.statusUnsaved")}
-                              </span>
-                            </span>
-                            <span className="mt-1 block truncate text-[12.5px] leading-relaxed text-muted-foreground">
-                              {sources}
-                            </span>
-                          </span>
-                          <ChevronRight
-                            className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform ${
-                              open ? "rotate-90" : ""
-                            }`}
-                          />
-                        </button>
-                        {open && (
-                          <div className="px-3.5 pb-3.5">
-                            <ExpCard
-                              candidate={candidate}
-                              sessions={sessions}
-                              modelOptions={initial.modelOptions}
-                              busy={busy}
-                              bare
-                              onRegenerate={() => handleRegenerate(candidate)}
-                              onSaved={() => {
-                                setViewId(candidate.candidateId);
-                                setDistillView("result");
+                            <input
+                              type="checkbox"
+                              checked={selectedCandidateIds.has(
+                                candidate.candidateId,
+                              )}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) => {
+                                const checked = event.currentTarget.checked;
+                                setSelectedCandidateIds((current) => {
+                                  const next = new Set(current);
+                                  if (checked) next.add(candidate.candidateId);
+                                  else next.delete(candidate.candidateId);
+                                  return next;
+                                });
                               }}
+                              className="mt-2 size-3.5 shrink-0"
                             />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                            <span
+                              className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md"
+                              style={{
+                                background: `color-mix(in oklab, ${badge.color} 12%, transparent)`,
+                                color: badge.color,
+                              }}
+                            >
+                              {saved ? (
+                                <PackageCheck className="size-4" />
+                              ) : (
+                                <FlaskConical className="size-4" />
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                <span className="tt-num truncate text-[14px] font-semibold">
+                                  {candidate.title || t(badge.labelKey)}
+                                </span>
+                                <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
+                                  {t(badge.labelKey)}
+                                </span>
+                                <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                                  {t("distill.histSegments", {
+                                    count: candidate.selectedSessionRefs.length,
+                                  })}{" "}
+                                  ·{" "}
+                                  {format.formatDateTime(
+                                    candidate.generatedAt,
+                                    false,
+                                  )}
+                                </span>
+                                <span
+                                  className="shrink-0 rounded-full px-2 py-px font-mono text-[10px]"
+                                  style={
+                                    saved
+                                      ? {
+                                          background:
+                                            "color-mix(in oklab, var(--chart-1) 16%, transparent)",
+                                          color: "var(--chart-1)",
+                                        }
+                                      : {
+                                          background: "var(--surface-2)",
+                                          color: "var(--muted-foreground)",
+                                        }
+                                  }
+                                >
+                                  {saved
+                                    ? t("distill.histSaved")
+                                    : t("distill.statusUnsaved")}
+                                </span>
+                              </span>
+                              <span className="mt-1 block truncate text-[12.5px] leading-relaxed text-muted-foreground">
+                                {sources}
+                              </span>
+                            </span>
+                            <ChevronRight
+                              className={`mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform ${
+                                open ? "rotate-90" : ""
+                              }`}
+                            />
+                          </button>
+                          {open && (
+                            <div className="px-3.5 pb-3.5">
+                              <ExpCard
+                                candidate={candidate}
+                                sessions={sessions}
+                                modelOptions={initial.modelOptions}
+                                busy={busy}
+                                bare
+                                onRegenerate={() => handleRegenerate(candidate)}
+                                onSaved={() => {
+                                  setViewId(candidate.candidateId);
+                                  setDistillView("result");
+                                }}
+                              />
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </>
               )}
 

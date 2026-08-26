@@ -83,6 +83,40 @@
   background-color: var(--overlay);
 }
 
+/* 16px controls need a little more room on narrow windows. Stack each
+   configuration row instead of squeezing the fixed desktop label column and
+   letting the controls disappear beyond the viewport. */
+@media (max-width: 640px) {
+  .distill-workbench .distill-config-card {
+    padding: 1rem;
+  }
+
+  .distill-workbench .distill-config-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .distill-workbench .distill-config-row > .distill-row-label {
+    width: auto;
+    padding-left: 0;
+  }
+
+  .distill-workbench .distill-config-row > .min-w-0.flex-1,
+  .distill-workbench .distill-config-row > .tt-toolbar {
+    width: 100%;
+  }
+
+  .distill-workbench .distill-config-row > .h-4.w-px {
+    display: none;
+  }
+
+  .distill-workbench .distill-config-row .tt-toolbar .tt-chip {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
 /* ── 入场动画 ─────────────────────────────────────────────────── */
 /* 原型(styles.css @theme inline)用 animate-fade-in / animate-scale-in;
    drawer 等通过 portal 挂到 body,脱离 .distill-workbench 作用域,故独立定义。

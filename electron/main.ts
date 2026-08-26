@@ -229,7 +229,7 @@ function openMainWindowRoute(
     .loadURL(url)
     .then(showMainWindow)
     .catch((error: unknown) =>
-      console.warn("TrustTools main-window navigation failed", error),
+      console.warn("AITracker main-window navigation failed", error),
     );
 }
 
@@ -560,7 +560,7 @@ function registerIpcHandlers(): void {
           (value) => broker.setPreference(TRAY_TITLE_PREF_KEY, value),
           nextTitle,
           (error) =>
-            console.warn("TrustTools tray title cache write failed", error),
+            console.warn("AITracker tray title cache write failed", error),
         );
       }
     },
@@ -1101,14 +1101,14 @@ if (!hasSingleInstanceLock) {
         // runtime warmup. Never mark it successful merely because an external
         // development URL happened to be configured in the environment.
         throw new Error(
-          "TrustTools release data reset requires local workspace warmup",
+          "AITracker release data reset requires local workspace warmup",
         );
       }
       const broker = desktopStateBroker;
       const persistedTrayState = await readTrayPreferencesBestEffort(
         () => broker.preferences(),
         (error) =>
-          console.warn("TrustTools desktop preferences unavailable", error),
+          console.warn("AITracker desktop preferences unavailable", error),
       );
       const persistedPreferences = persistedTrayState.preferences;
       currentPreferences = resolveDesktopPreferences(
@@ -1129,7 +1129,7 @@ if (!hasSingleInstanceLock) {
       // A failure before BrowserWindow construction must not leave a headless
       // process holding the single-instance lock and making later launches look
       // like they do nothing.
-      console.error("TrustTools startup failed", error);
+      console.error("AITracker startup failed", error);
       const startupFailure =
         electronMessages[currentPreferences.locale].dialog.startupFailure;
       dialog.showErrorBox(

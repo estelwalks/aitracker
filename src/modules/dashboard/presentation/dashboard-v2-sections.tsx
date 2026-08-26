@@ -27,6 +27,12 @@ import {
   DistillButton,
   notifyDistillStarted,
 } from "../../../components/DistillButton.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../../components/ui/tooltip.tsx";
 import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
@@ -56,7 +62,7 @@ export function DashboardDeltaChip({
   const { format, t } = useI18n();
   if (value == null || !Number.isFinite(value)) {
     return (
-      <span className="font-mono text-[10px] text-muted-foreground">
+      <span className="tt-text-caption font-mono text-muted-foreground">
         {t("dashboard.kpi.unavailable")}
       </span>
     );
@@ -71,7 +77,7 @@ export function DashboardDeltaChip({
         : "text-[var(--color-warn)]";
   return (
     <span
-      className={`inline-flex items-center gap-0.5 font-mono text-[10px] ${tone} ${className}`}
+      className={`tt-text-caption inline-flex items-center gap-0.5 font-mono ${tone} ${className}`}
       title={t("dashboard.kpi.vsPrevious")}
     >
       <ArrowIcon className="size-3" strokeWidth={2.2} />
@@ -204,28 +210,42 @@ export function DashboardTrustHero({
     },
   ];
   return (
-    <section>
-      <div className="dashboard-spotlight-grid">
-        {cards.map(({ icon: Icon, label, value, sub, to, action, accent }) => (
-          <article key={label} className="dashboard-spotlight-card">
-            <div className="dashboard-spotlight-card-heading">
-              <p>{label}</p>
-              <Icon
-                className={
-                  accent
-                    ? "size-4 text-[var(--color-ok)]"
-                    : "size-3.5 text-muted-foreground"
-                }
-                strokeWidth={1.8}
-              />
-            </div>
-            <strong className="tt-num">{value}</strong>
-            <small title={sub}>{sub}</small>
-            <Link to={to}>{action}</Link>
-          </article>
-        ))}
-      </div>
-    </section>
+    <TooltipProvider>
+      <section>
+        <div className="dashboard-spotlight-grid">
+          {cards.map(
+            ({ icon: Icon, label, value, sub, to, action, accent }) => (
+              <article key={label} className="dashboard-spotlight-card">
+                <div className="dashboard-spotlight-card-heading">
+                  <p>{label}</p>
+                  <Icon
+                    className={
+                      accent
+                        ? "size-4 text-[var(--color-ok)]"
+                        : "size-4 text-muted-foreground"
+                    }
+                    strokeWidth={1.8}
+                  />
+                </div>
+                <strong className="tt-num">{value}</strong>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <small title={sub}>{sub}</small>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="max-w-[min(32rem,80vw)] whitespace-normal break-words tt-text-caption"
+                  >
+                    {sub}
+                  </TooltipContent>
+                </Tooltip>
+                <Link to={to}>{action}</Link>
+              </article>
+            ),
+          )}
+        </div>
+      </section>
+    </TooltipProvider>
   );
 }
 
@@ -450,46 +470,58 @@ export function DashboardMetricGrid({
     },
   ] as const;
   return (
-    <section
-      className="dashboard-metric-grid"
-      aria-label={t("dashboard.v2.overviewLabel")}
-    >
-      {cards.map((card) => {
-        const Icon = card.icon;
-        const cardBaselineLabel =
-          "baselineLabel" in card ? card.baselineLabel : baselineLabel;
-        // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
-        const showBaseline =
-          cardBaselineLabel &&
-          (card.delta != null ||
-            ("alwaysBaseline" in card && card.alwaysBaseline === true));
-        const hintLine = showBaseline
-          ? `${card.hint} · ${cardBaselineLabel}`
-          : card.hint;
-        return (
-          <article key={card.label} className="dashboard-metric-card">
-            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
-              <Icon className="size-3 shrink-0" strokeWidth={1.8} />
-              <span className="truncate">{card.label}</span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <strong className="tt-num min-w-0 flex-1 truncate text-[22px] leading-none font-black tracking-tight">
-                {card.value}
-              </strong>
-              {card.delta != null ? (
-                <DashboardDeltaChip value={card.delta} className="shrink-0" />
-              ) : null}
-            </div>
-            <p
-              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
-              title={hintLine}
-            >
-              {hintLine}
-            </p>
-          </article>
-        );
-      })}
-    </section>
+    <TooltipProvider>
+      <section
+        className="dashboard-metric-grid"
+        aria-label={t("dashboard.v2.overviewLabel")}
+      >
+        {cards.map((card) => {
+          const Icon = card.icon;
+          const cardBaselineLabel =
+            "baselineLabel" in card ? card.baselineLabel : baselineLabel;
+          // 基准文案：有环比时（或卡片声明始终展示，如会话总数）追加「· 较前 N 天」
+          const showBaseline =
+            cardBaselineLabel &&
+            (card.delta != null ||
+              ("alwaysBaseline" in card && card.alwaysBaseline === true));
+          const hintLine = showBaseline
+            ? `${card.hint} · ${cardBaselineLabel}`
+            : card.hint;
+          return (
+            <article key={card.label} className="dashboard-metric-card">
+              <div className="flex items-center gap-1.5 text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
+                <Icon className="size-4 shrink-0" strokeWidth={1.8} />
+                <span className="truncate">{card.label}</span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <strong className="tt-num tt-text-metric min-w-0 flex-1 truncate leading-none font-black tracking-tight">
+                  {card.value}
+                </strong>
+                {card.delta != null ? (
+                  <DashboardDeltaChip value={card.delta} className="shrink-0" />
+                ) : null}
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p
+                    className="mt-1 truncate text-[10px] text-muted-foreground/70"
+                    title={hintLine}
+                  >
+                    {hintLine}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  className="max-w-[min(32rem,80vw)] whitespace-normal break-words tt-text-caption"
+                >
+                  {hintLine}
+                </TooltipContent>
+              </Tooltip>
+            </article>
+          );
+        })}
+      </section>
+    </TooltipProvider>
   );
 }
 
@@ -587,7 +619,7 @@ export function DashboardRangePicker({
           }}
         >
           <label className="space-y-1">
-            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+            <span className="tt-text-body block tracking-wide text-muted-foreground uppercase">
               {t("dashboard.header.customFrom")}
             </span>
             <input
@@ -597,11 +629,11 @@ export function DashboardRangePicker({
               value={draftFrom}
               max={draftTo}
               onChange={(event) => setDraftFrom(event.target.value)}
-              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
+              className="tt-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
             />
           </label>
           <label className="space-y-1">
-            <span className="block text-[10.5px] tracking-wide text-muted-foreground uppercase">
+            <span className="tt-text-body block tracking-wide text-muted-foreground uppercase">
               {t("dashboard.header.customTo")}
             </span>
             <input
@@ -611,15 +643,15 @@ export function DashboardRangePicker({
               value={draftTo}
               min={draftFrom}
               onChange={(event) => setDraftTo(event.target.value)}
-              className="w-full rounded-lg bg-surface px-2 py-1.5 font-mono text-[11.5px] font-normal outline-none"
+              className="tt-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={!draftFrom || !draftTo || draftFrom > draftTo}
-            className="col-span-2 mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
+            className="tt-text-body col-span-2 mt-3 inline-flex min-h-[var(--tt-control-height)] items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
           >
-            <Check className="size-3.5" strokeWidth={2.2} />
+            <Check className="size-4" strokeWidth={2.2} />
             {t("common.confirm")}
           </button>
         </form>
@@ -968,7 +1000,7 @@ export function DashboardProjectOverview({
           <div className="relative flex items-center justify-center">
             <ThinRing rows={top} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="tt-num font-mono text-[22px] leading-none font-black">
+              <span className="tt-num tt-text-metric font-mono leading-none font-black">
                 {format.formatNumber(view.projectCount)}
               </span>
               <span className="mt-1 font-mono text-[9.5px] tracking-widest text-muted-foreground uppercase">
@@ -1338,7 +1370,7 @@ export function DashboardContribHeatmap({
         <div className="inline-block min-w-full">
           <div className="flex">
             <div style={{ width: LABEL_W }} />
-            <div className="relative h-[14px] flex-1">
+            <div className="relative h-6 flex-1">
               {monthTicks.map((tick) => (
                 <span
                   key={`${tick.column}-${tick.label}`}
@@ -1461,7 +1493,7 @@ export function DashboardContribHeatmap({
                 ) : (
                   <>
                     <div className="mt-1.5 flex items-baseline gap-1.5">
-                      <span className="tt-num font-mono text-[20px] leading-none font-black">
+                      <span className="tt-num tt-text-metric font-mono leading-none font-black">
                         {format.formatTokens(point.tokens)}
                       </span>
                     </div>

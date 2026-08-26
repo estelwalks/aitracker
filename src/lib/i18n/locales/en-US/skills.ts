@@ -13,6 +13,8 @@ export const skills = {
     sourceRecorded: "Recorded origin",
     sourceManaged: "Managed entries",
     sourceUnclassified: "Unclassified",
+    distilledSkill: "Distilled Skill",
+    securityMarket: "Security Market",
     updateStatus: "Update status",
     updateAll: "All update states",
     sort: "Sort",
@@ -138,7 +140,7 @@ export const skills = {
     version: "Version evidence",
   },
   agentOverview: {
-    title: "Agent overview · TrustTools",
+    title: "Agent overview · AITracker",
     insightTitle: "Today's insight",
     dedicatedInsight: "Dedicated insight",
     insightDescription:

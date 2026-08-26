@@ -19,9 +19,9 @@ export const INSIGHT_SURFACE_IDS = [
 export type InsightSurfaceId = (typeof INSIGHT_SURFACE_IDS)[number];
 
 /** User-configurable AI insight refresh period bounds. */
-export const DEFAULT_INSIGHT_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
-export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-export const MAX_INSIGHT_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+export const DEFAULT_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
+export const MIN_INSIGHT_REFRESH_INTERVAL_MS = 5 * 60 * 60 * 1000;
+export const MAX_INSIGHT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export interface InsightScope {
   readonly range?: "today" | "7d" | "30d" | "all";

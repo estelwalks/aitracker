@@ -1,7 +1,7 @@
 {
   "name": "trusttools-desktop",
   "version": "3.0.1",
-  "description": "TrustTools local AI development asset dashboard",
+  "description": "AITracker local AI development asset dashboard",
   "private": true,
   "main": "build/electron/main.js",
   "sideEffects": false,

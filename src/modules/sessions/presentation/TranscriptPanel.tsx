@@ -56,7 +56,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[14px] font-semibold tracking-tight">
+            <h1 className="tt-text-page-title truncate font-semibold tracking-tight">
               {session.title || t("sessions.row.untitled")}
             </h1>
             <div className="tt-num mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">

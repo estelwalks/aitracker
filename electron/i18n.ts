@@ -115,11 +115,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "database.access-denied":
             "当前 Windows 帐户没有本地数据的读写权限，请检查安全软件或受控文件夹访问设置。",
           "database.already-open":
-            "本地数据正被另一个 TrustTools 实例或开发服务器使用。请关闭占用者后重试。",
+            "本地数据正被另一个 AITracker 实例或开发服务器使用。请关闭占用者后重试。",
           "database.busy":
-            "本地数据仍被占用。请关闭其他 TrustTools 实例后重试。",
+            "本地数据仍被占用。请关闭其他 AITracker 实例后重试。",
           "database.capability-mismatch":
-            "本机 SQLite 运行环境不满足当前版本要求。请重新安装此版本的 TrustTools。",
+            "本机 SQLite 运行环境不满足当前版本要求。请重新安装此版本的 AITracker。",
           "database.corrupt":
             "本地数据库已损坏。请先备份数据，再清除应用数据并重新启动。",
           "database.integrity-check-failed":
@@ -170,11 +170,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "database.access-denied":
             "Your Windows account cannot read or write the local data. Check security software or Controlled Folder Access.",
           "database.already-open":
-            "Another TrustTools instance or development server is using the local data. Close it and try again.",
+            "Another AITracker instance or development server is using the local data. Close it and try again.",
           "database.busy":
-            "The local data is still in use. Close other TrustTools instances and try again.",
+            "The local data is still in use. Close other AITracker instances and try again.",
           "database.capability-mismatch":
-            "The bundled SQLite runtime is incompatible. Reinstall this TrustTools version.",
+            "The bundled SQLite runtime is incompatible. Reinstall this AITracker version.",
           "database.corrupt":
             "The local database is damaged. Back up the data, then clear the application data and restart.",
           "database.integrity-check-failed":
@@ -225,11 +225,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "database.access-denied":
             "Windows アカウントにローカルデータの読み書き権限がありません。セキュリティソフトまたは保護されたフォルダーアクセスを確認してください。",
           "database.already-open":
-            "別の TrustTools または開発サーバーがローカルデータを使用しています。終了してから再試行してください。",
+            "別の AITracker または開発サーバーがローカルデータを使用しています。終了してから再試行してください。",
           "database.busy":
-            "ローカルデータはまだ使用中です。他の TrustTools を終了してから再試行してください。",
+            "ローカルデータはまだ使用中です。他の AITracker を終了してから再試行してください。",
           "database.capability-mismatch":
-            "同梱の SQLite 実行環境に互換性がありません。このバージョンの TrustTools を再インストールしてください。",
+            "同梱の SQLite 実行環境に互換性がありません。このバージョンの AITracker を再インストールしてください。",
           "database.corrupt":
             "ローカルデータベースが破損しています。データをバックアップしてからアプリデータを消去し、再起動してください。",
           "database.integrity-check-failed":
@@ -280,11 +280,11 @@ const rawElectronMessages: Record<DesktopLocale, ElectronMessages> = {
           "database.access-denied":
             "현재 Windows 계정에 로컬 데이터 읽기 또는 쓰기 권한이 없습니다. 보안 소프트웨어나 제어된 폴더 액세스를 확인하세요.",
           "database.already-open":
-            "다른 TrustTools 인스턴스 또는 개발 서버가 로컬 데이터를 사용 중입니다. 종료한 뒤 다시 시도하세요.",
+            "다른 AITracker 인스턴스 또는 개발 서버가 로컬 데이터를 사용 중입니다. 종료한 뒤 다시 시도하세요.",
           "database.busy":
-            "로컬 데이터가 아직 사용 중입니다. 다른 TrustTools 인스턴스를 종료한 뒤 다시 시도하세요.",
+            "로컬 데이터가 아직 사용 중입니다. 다른 AITracker 인스턴스를 종료한 뒤 다시 시도하세요.",
           "database.capability-mismatch":
-            "번들 SQLite 런타임이 호환되지 않습니다. 이 버전의 TrustTools를 다시 설치하세요.",
+            "번들 SQLite 런타임이 호환되지 않습니다. 이 버전의 AITracker를 다시 설치하세요.",
           "database.corrupt":
             "로컬 데이터베이스가 손상되었습니다. 데이터를 백업한 뒤 앱 데이터를 지우고 다시 시작하세요.",
           "database.integrity-check-failed":

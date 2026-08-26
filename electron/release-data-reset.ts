@@ -112,7 +112,7 @@ function resolveResetPaths(options: ReleaseDataResetOptions): {
     basename(resetTarget) !== DATA_DIRECTORY_NAME ||
     dirname(resetTarget) !== homeDirectory
   ) {
-    throw new TypeError("Refusing unsafe TrustTools data reset target");
+    throw new TypeError("Refusing unsafe AITracker data reset target");
   }
   if (isPathInside(resetTarget, userDataDirectory)) {
     throw new TypeError("Reset marker must live outside the reset target");
@@ -203,7 +203,7 @@ class StartupDataWriterError extends Error {
   readonly startupFailureCode = "database.already-open" as const;
 
   constructor() {
-    super("TrustTools local data reset blocked by an active database writer");
+    super("AITracker local data reset blocked by an active database writer");
   }
 }
 

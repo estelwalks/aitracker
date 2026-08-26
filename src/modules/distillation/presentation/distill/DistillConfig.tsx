@@ -78,7 +78,7 @@ function RowLabel({
 }) {
   return (
     <span
-      className={`w-[60px] shrink-0 pl-[22px] font-mono text-[11px] text-muted-foreground ${className}`}
+      className={`distill-row-label w-[60px] shrink-0 whitespace-nowrap pl-[22px] font-mono text-[11px] text-muted-foreground ${className}`}
     >
       {children}
     </span>
@@ -438,7 +438,7 @@ export function DistillConfig({
         });
 
   return (
-    <section className="shrink-0 rounded-xl bg-card p-5">
+    <section className="distill-config-card min-w-0 rounded-xl bg-card p-5">
       {/* 卡头：标题 + quick/pro chips + 额度/模型状态 + 历史 + 管理模型 */}
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="text-[13px] font-semibold tracking-tight">
@@ -505,7 +505,7 @@ export function DistillConfig({
         {/* ① 选素材：粒度（会话 / 项目）+ 时间（quick 模式）。原型 distill.tsx
             只暴露「按会话 / 按项目」两个粒度；config 素材是原型里的死代码
             （material 状态硬编码为 chat，无入口），故工作台不提供该选项。 */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+        <div className="distill-config-row flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
           <RowLabel>{t("distill.stepMaterial")}</RowLabel>
           {mode === "quick" && (
             <>
@@ -574,7 +574,7 @@ export function DistillConfig({
         </div>
 
         {/* 素材列表行：quick = 会话/项目卡片；pro = 素材盒；config = 诚实空态 */}
-        <div className="flex flex-wrap items-start gap-3 py-3">
+        <div className="distill-config-row flex flex-wrap items-start gap-3 py-3">
           <RowLabel className="mt-1">
             {granularity === "project"
               ? t("distill.materialProject")
@@ -722,7 +722,7 @@ export function DistillConfig({
 
         {mode === "pro" && (
           <>
-            <div className="flex flex-wrap items-center gap-3 py-3">
+            <div className="distill-config-row flex flex-wrap items-center gap-3 py-3">
               <RowLabel>{t("distill.proModel")}</RowLabel>
               <div className="min-w-0 flex-1">
                 <ModelSelect
@@ -732,7 +732,7 @@ export function DistillConfig({
                 />
               </div>
             </div>
-            <div className="flex flex-wrap items-start gap-3 py-3">
+            <div className="distill-config-row flex flex-wrap items-start gap-3 py-3">
               <RowLabel className="mt-2">{t("distill.proPresets")}</RowLabel>
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -784,13 +784,13 @@ export function DistillConfig({
         )}
 
         {/* ② 出产物：能力资产 → Skill 库 / 记忆资产 → 记忆库 */}
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-2 py-3">
+        <div className="distill-config-row flex flex-wrap items-start gap-x-3 gap-y-2 py-3">
           <RowLabel>{t("distill.outLabel")}</RowLabel>
           <OutTypePicker value={outType} onChange={onOutType} />
         </div>
 
         {/* ③ 跑蒸馏 */}
-        <div className="flex flex-wrap items-center gap-3 py-3 pb-0">
+        <div className="distill-config-row flex flex-wrap items-center gap-3 py-3 pb-0">
           <RowLabel>{t("distill.runLabel")}</RowLabel>
           <button
             type="button"
