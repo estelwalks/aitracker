@@ -11,29 +11,9 @@
  * public/brand-logos/ 离线资源或组件内联 SVG。
  */
 
-import { PUBLIC_TOOL_MANIFEST } from "../lib/tool-registry/public-manifest.generated.ts";
+import { displayOf } from "./BrandIcon.helpers.ts";
 
 type Props = { name: string; className?: string; color?: string };
-
-/** 工具 id 或展示名 → 注册表展示配置（icon kind + 品牌色）。 */
-const toolDisplayById = new Map(
-  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.id, tool]),
-);
-const toolDisplayByName = new Map(
-  PUBLIC_TOOL_MANIFEST.tools.map((tool) => [tool.name, tool]),
-);
-
-function displayOf(name: string): PublicToolDisplay | undefined {
-  return toolDisplayById.get(name) ?? toolDisplayByName.get(name) ?? undefined;
-}
-
-type PublicToolDisplay = {
-  id: string;
-  name: string;
-  nameZh: string;
-  icon?: string;
-  color?: string;
-};
 
 function match(name: string) {
   const n = name.toLowerCase();
@@ -148,49 +128,6 @@ function brandLogoSrc(name: string): string | undefined {
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
   return BRAND_LOGO_BY_NAME[normalized];
-}
-
-/** 各产品品牌原色（顺序优先：第一个命中的规则胜出）。 */
-const productColor: { test: (n: string) => boolean; color: string }[] = [
-  {
-    test: (n) =>
-      n.includes("claude") ||
-      n.includes("sonnet") ||
-      n.includes("opus") ||
-      n.includes("haiku"),
-    color: "#d97757",
-  },
-  {
-    test: (n) =>
-      n.includes("codex") ||
-      n.includes("openai") ||
-      n.startsWith("gpt") ||
-      n.startsWith("o5"),
-    color: "#10a37f",
-  },
-  {
-    test: (n) => n.includes("gemini") || n.includes("antigravity"),
-    color: "#4285f4",
-  },
-  { test: (n) => n.includes("cursor"), color: "#cfcfcf" },
-  { test: (n) => n.includes("kimi"), color: "#7c5cff" },
-  { test: (n) => n.includes("deepseek"), color: "#4d6bfe" },
-  { test: (n) => n.includes("windsurf"), color: "#09b6a2" },
-  { test: (n) => n.includes("cline"), color: "#5b8def" },
-  { test: (n) => n.includes("roo"), color: "#f0524d" },
-  { test: (n) => n.includes("aider"), color: "#14b8a6" },
-  { test: (n) => n.includes("qwen"), color: "#615ced" },
-  { test: (n) => n.includes("opencode"), color: "#f59e0b" },
-  { test: (n) => n.includes("grok"), color: "#d1d5db" },
-  { test: (n) => n.includes("trae"), color: "#ff4d4f" },
-  { test: (n) => n.includes("zed"), color: "#3b82f6" },
-];
-
-export function brandColorOf(name: string) {
-  const display = displayOf(name);
-  if (display?.color) return display.color;
-  const n = name.toLowerCase();
-  return productColor.find((p) => p.test(n))?.color ?? "currentColor";
 }
 
 export function BrandIcon({ name, className = "size-3.5", color }: Props) {

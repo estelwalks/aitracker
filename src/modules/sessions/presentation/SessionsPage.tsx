@@ -9,7 +9,8 @@ import {
   SearchInput,
   Segmented,
 } from "../../../components/tt.tsx";
-import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
+import { BrandIcon } from "../../../components/BrandIcon.tsx";
+import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { getSessionsQuery } from "../query.ts";

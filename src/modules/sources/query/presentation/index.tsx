@@ -32,8 +32,6 @@ export type {
   SourcesQueryStatus,
   SourcesQuerySummary,
 } from "./model";
-export { toSourcesQuerySummary } from "./model";
-export { getSourcesQuery };
 
 const STATUS_META: Record<
   SourcesQueryStatus,

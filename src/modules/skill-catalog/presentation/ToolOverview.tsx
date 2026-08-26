@@ -21,7 +21,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
+import { BrandIcon } from "../../../components/BrandIcon";
+import { brandColorOf } from "../../../components/BrandIcon.helpers";
 import { InsightCard } from "../../insights/index.ts";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";

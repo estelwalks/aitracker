@@ -9,7 +9,8 @@ import {
   SelectValue,
 } from "../../../../components/ui/select";
 
-import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
+import { BrandIcon } from "../../../../components/BrandIcon";
+import { brandColorOf } from "../../../../components/BrandIcon.helpers";
 import { EmptyState } from "../../../../components/tt";
 import { SESSION_TOOL_IDS } from "../../../../lib/local-sessions/types";
 import { useI18n } from "../../../../lib/i18n/context";
