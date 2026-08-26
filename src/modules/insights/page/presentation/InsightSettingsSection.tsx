@@ -138,10 +138,10 @@ export function InsightSettingsSection() {
     <div className="mt-4 border-t border-border pt-3">
       <div className="flex flex-wrap items-center justify-between gap-3 py-3">
         <div>
-          <div className="text-[13px]">
+          <div className="tt-text-body">
             {t("settings.insight.section.title")}
           </div>
-          <div className="mt-0.5 max-w-2xl text-[11px] text-muted-foreground">
+          <div className="tt-text-caption mt-0.5 max-w-2xl text-muted-foreground">
             {t("settings.insight.section.desc")}
           </div>
         </div>
@@ -153,10 +153,10 @@ export function InsightSettingsSection() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border py-3">
         <div>
-          <div className="text-[13px]">
+          <div className="tt-text-body">
             {t("settings.insight.section.refreshInterval")}
           </div>
-          <div className="mt-0.5 max-w-2xl text-[11px] text-muted-foreground">
+          <div className="tt-text-caption mt-0.5 max-w-2xl text-muted-foreground">
             {t("settings.insight.section.refreshIntervalHint", {
               min: MIN_REFRESH_MINUTES,
               max: MAX_REFRESH_MINUTES,
@@ -172,17 +172,17 @@ export function InsightSettingsSection() {
             value={intervalMinutes}
             onChange={(event) => setIntervalMinutes(event.target.value)}
             disabled={loading || savingInterval}
-            className="h-8 w-24 rounded-md border border-border bg-background px-2 text-right text-[12px] outline-none focus:border-foreground/50 disabled:opacity-50"
+            className="tt-text-body-sm h-8 w-24 rounded-md border border-border bg-background px-2 text-right outline-none focus:border-foreground/50 disabled:opacity-50"
             aria-label={t("settings.insight.section.refreshInterval")}
           />
-          <span className="text-[11px] text-muted-foreground">
+          <span className="tt-text-caption text-muted-foreground">
             {t("settings.insight.section.minutes")}
           </span>
           <button
             type="button"
             onClick={() => void saveInterval()}
             disabled={loading || savingInterval}
-            className="h-8 rounded-md bg-surface-2 px-3 text-[11px] transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="tt-text-caption h-8 rounded-md bg-surface-2 px-3 transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("settings.insight.section.save")}
           </button>
@@ -190,10 +190,10 @@ export function InsightSettingsSection() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border py-3">
         <div>
-          <div className="text-[13px]">
+          <div className="tt-text-body">
             {t("settings.insight.section.refreshNow")}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
+          <div className="tt-text-caption mt-0.5 text-muted-foreground">
             {t("settings.insight.section.refreshNowHint")}
           </div>
         </div>
@@ -201,7 +201,7 @@ export function InsightSettingsSection() {
           type="button"
           onClick={() => void refreshNow()}
           disabled={loading || refreshing}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-surface-2 px-3 text-[11px] transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+          className="tt-text-caption inline-flex h-8 items-center gap-1.5 rounded-md bg-surface-2 px-3 transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className={`size-3 ${refreshing ? "animate-spin" : ""}`} />
           {t("settings.insight.section.refreshNowButton")}

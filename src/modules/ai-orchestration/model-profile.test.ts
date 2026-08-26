@@ -19,6 +19,7 @@ import {
   effectiveEndpoint,
   effectiveModel,
   effectiveProtocol,
+  RECOMMENDED_MODEL_OPTIONS,
   validateModelProfileInput,
 } from "./model-profile.ts";
 import {
@@ -219,6 +220,13 @@ test("effective helpers: official fixes protocol/endpoint/model", () => {
     "https://api.openai.com/v1",
   );
   assert.equal(effectiveModel({ mode: "official" }), "deepseek-chat");
+  assert.equal(
+    effectiveModel({
+      mode: "official",
+      model: RECOMMENDED_MODEL_OPTIONS[1].id,
+    }),
+    "deepseek-v4-pro",
+  );
   assert.equal(effectiveModel({ mode: "custom", model: " gpt-4o " }), "gpt-4o");
 });
 
@@ -589,6 +597,21 @@ test("sqlite repository: official mode stores the fixed preset and encrypted key
     assert.equal(view.model, "deepseek-chat");
     const full = await repository.getProfileForExecution(view.id);
     assert.equal(full?.apiKey, VALID_KEY);
+  });
+});
+
+test("sqlite repository: recommended pro model is persisted and exposed", async (t) => {
+  await withRepo(t, async (repository) => {
+    const view = await repository.upsert({
+      mode: "official",
+      name: "推荐 Pro",
+      model: "deepseek-v4-pro",
+      apiKey: VALID_KEY,
+    });
+    assert.equal(view.model, "deepseek-v4-pro");
+    const profile = await repository.getProfileForExecution(view.id);
+    assert.equal(profile?.model, "deepseek-v4-pro");
+    assert.equal(effectiveModel(profile!), "deepseek-v4-pro");
   });
 });
 

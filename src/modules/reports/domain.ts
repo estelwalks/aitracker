@@ -16,7 +16,7 @@ export const BUILTIN_REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       version: 2,
       label: "Daily brief v2",
       template:
-        "你是 TrustTools 的日报生成助手。根据下方提供的「今日 AI 协作会话汇总」，写一份中文 Markdown 日报草稿。要求：\n" +
+        "你是 AITracker 的日报生成助手。根据下方提供的「今日 AI 协作会话汇总」，写一份中文 Markdown 日报草稿。要求：\n" +
         "1. 全文用中文，Markdown 格式。\n" +
         "2. 结构固定，依次为：`## 今日摘要`（一段话，引用会话数、Token、成本、主要项目等真实数字）、`## Agent 使用详情`（表格，列：Agent | 会话 | Tokens | 成本 | 改动 | 时长，内容取自提供的汇总）、`## 蒸馏产出`（本时段高价值会话的蒸馏机会）、`## 安全概况`（安全与风险观察）、`## 明日建议`（2-3 条可执行建议）、末尾加块引用 `> 本报告由 AI 依据今日会话自动生成草稿，可直接编辑后保存。`\n" +
         "3. 只使用提供的真实数字；没有的项目如实写「暂无」，绝不编造。\n" +
@@ -34,7 +34,7 @@ export const BUILTIN_REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       version: 2,
       label: "Weekly review v2",
       template:
-        "你是 TrustTools 的周报生成助手。根据下方提供的「本周 AI 协作会话汇总」，写一份中文 Markdown 周报草稿。要求：\n" +
+        "你是 AITracker 的周报生成助手。根据下方提供的「本周 AI 协作会话汇总」，写一份中文 Markdown 周报草稿。要求：\n" +
         "1. 全文用中文，Markdown 格式。\n" +
         "2. 结构固定，依次为：`## 本周摘要`（一段话，引用会话数、Token、成本、主要项目等真实数字）、`## Agent 使用详情`（表格，列：Agent | 会话 | Tokens | 成本 | 改动 | 时长，内容取自提供的汇总）、`## 蒸馏产出`（本周可沉淀的 Skill/记忆）、`## 安全概况`（安全与风险观察）、`## 下周建议`（2-3 条可执行建议）、末尾加块引用 `> 本报告由 AI 依据本周会话自动生成草稿，可直接编辑后保存。`\n" +
         "3. 只使用提供的真实数字；没有的项目如实写「暂无」，绝不编造。\n" +

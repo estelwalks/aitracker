@@ -161,7 +161,7 @@ export function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="tt-num text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">
+        <h2 className="tt-text-section-title mt-4 font-semibold text-foreground">
           {t("common.notFound")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -205,7 +205,7 @@ export function ErrorComponent({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        <h1 className="tt-text-page-title font-semibold tracking-tight text-foreground">
           {t("common.pageLoadFailed")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">

@@ -68,7 +68,11 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
       // the platform's native UI and monospace fonts, avoiding a remote font
       // request that can hold up text settling on an offline machine.
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      {
+        rel: "icon",
+        href: "/brand-logos/ai-tracker/ai-tracker-icon-mono.png",
+        type: "image/png",
+      },
     ],
   };
 }

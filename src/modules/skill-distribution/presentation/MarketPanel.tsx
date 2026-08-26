@@ -347,13 +347,13 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               index > 0 ? "border-l border-rowline" : ""
             }`}
           >
-            <div className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+            <div className="text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
               {kpi.label}
             </div>
-            <div className="tt-num mt-2 font-mono text-[22px] leading-none font-black tracking-tight">
+            <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
               {kpi.value}
             </div>
-            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/80">
+            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
               {kpi.hint}
             </div>
           </div>
@@ -410,7 +410,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Layers className="size-3.5 shrink-0" strokeWidth={1.8} />
+            <Layers className="size-4 shrink-0" strokeWidth={1.8} />
             {t("market.domainAll")}
             <span className="ml-0.5 text-[10px] opacity-60">
               {result.stats?.totalSkills ?? 0}
@@ -432,7 +432,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <item.icon className="size-3.5 shrink-0" strokeWidth={1.8} />
+                <item.icon className="size-4 shrink-0" strokeWidth={1.8} />
                 {item.label}
                 <span className="ml-0.5 text-[10px] opacity-60">
                   {domainCounts[item.label] ?? 0}

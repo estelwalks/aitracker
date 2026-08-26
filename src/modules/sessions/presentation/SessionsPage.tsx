@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
 import {
-  ChipTabs,
   EmptyState,
   Pagination,
   SearchInput,
@@ -253,7 +252,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
             className={`px-4 py-3.5 ${index > 0 ? "border-l border-border/60" : ""}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+              <span className="text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
                 {card.label}
               </span>
               <card.icon
@@ -261,10 +260,10 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
                 strokeWidth={1.8}
               />
             </div>
-            <div className="tt-num mt-2 font-mono text-[22px] leading-none font-black tracking-tight">
+            <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
               {card.value}
             </div>
-            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/80">
+            <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
               {card.hint}
             </div>
           </div>
@@ -291,28 +290,36 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 px-1">
-          <ChipTabs
-            value={source}
-            onChange={(value) =>
-              changeFilter(() => setSource(value === source ? "all" : value))
-            }
-            options={[
-              { value: "all", label: t("sessions.source.all") },
-              ...sources.map((value) => ({
-                value,
-                label: (
-                  <span className="inline-flex items-center gap-1.5">
-                    <BrandIcon
-                      name={sourceLabel(value)}
-                      className="size-3.5 shrink-0"
-                    />
-                    {sourceLabel(value)}
-                  </span>
-                ),
-              })),
-            ]}
-          />
+        <div className="tt-xscroll flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1">
+          <button
+            type="button"
+            onClick={() => changeFilter(() => setSource("all"))}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+              source === "all"
+                ? "bg-primary/15 text-primary"
+                : "bg-surface-2 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("sessions.source.all")}
+          </button>
+          {sources.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => changeFilter(() => setSource(value))}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
+                source === value
+                  ? "bg-primary/15 text-primary"
+                  : "bg-surface-2 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BrandIcon
+                name={sourceLabel(value)}
+                className="size-3.5 shrink-0"
+              />
+              {sourceLabel(value)}
+            </button>
+          ))}
         </div>
       </section>
 

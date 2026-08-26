@@ -41,7 +41,9 @@ import type {
 } from "../application";
 
 const DASH = "—";
-const BADGE_STEP = 240;
+// Keep the rail aligned to roughly one card per arrow click after cards become
+// large enough to remain readable at desktop sizes.
+const BADGE_STEP = 260;
 
 type AgentMetricsProps = {
   selected: ToolOverviewCard | null;
@@ -215,15 +217,15 @@ function AgentMetricCards({
             key={label}
             className="bg-[var(--card)] px-4 py-3.5 transition-colors hover:bg-surface-2"
           >
-            <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
-              <Icon className="size-3" strokeWidth={1.8} />
+            <div className="flex items-center gap-1.5 text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
+              <Icon className="size-4" strokeWidth={1.8} />
               {label}
             </div>
-            <div className="tt-num mt-2 truncate font-mono text-[22px] leading-none font-black tracking-tight">
+            <div className="tt-num tt-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
               {value}
             </div>
             <div
-              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+              className="mt-1 truncate text-[10px] text-muted-foreground/70"
               title={sub}
             >
               {sub}
@@ -343,25 +345,21 @@ function ToolBadgeWall({
                 style={{ background: color }}
               />
               <span
-                className="flex size-6 items-center justify-center rounded-md"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg"
                 style={{ background: `${color}1f` }}
               >
-                <BrandIcon
-                  name={card.name}
-                  className="size-3.5"
-                  color={color}
-                />
+                <BrandIcon name={card.name} className="size-5" color={color} />
               </span>
               <span className="flex flex-col">
-                <span className="flex items-center gap-1.5 text-[12.5px] font-semibold tracking-tight whitespace-nowrap">
+                <span className="tt-text-body flex items-center gap-1.5 font-semibold tracking-tight whitespace-nowrap">
                   {card.name}
                   <span
-                    className="inline-block size-1.5 rounded-full"
+                    className="inline-block size-2 shrink-0 rounded-full"
                     style={{ background: statusColor }}
                     title={statusLabel}
                   />
                 </span>
-                <span className="tt-num font-mono text-[10.5px] whitespace-nowrap text-muted-foreground">
+                <span className="tt-num tt-text-caption font-mono whitespace-nowrap text-muted-foreground">
                   {t("skills.agentOverview.badgeSubline", {
                     tokens:
                       card.tokens > 0 ? format.formatTokens(card.tokens) : DASH,

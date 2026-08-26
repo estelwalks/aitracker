@@ -130,7 +130,7 @@ export const insights = {
       "security-history":
         "扫描历史会留档，出问题时可以对比前后版本，快速定位是哪次更新引入的风险。",
       "security-guide-posture":
-        "最近一次安全摘要记录了 {risky} 项可疑或危险资产。",
+        "今日发现 {risky} 项安全风险待处理，建议前往安全页复查。",
       "security-guide-failures": "最近一次扫描有 {failed} 个资产检查失败。",
       "security-guide-coverage":
         "最近一次扫描发现 {discovered} 个资产，已评估 {assessed} 个。",

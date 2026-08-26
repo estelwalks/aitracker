@@ -35,15 +35,15 @@ export const settings = {
     activateTitle: "Set active",
     edit: "Edit",
     delete: "Delete",
-    officialDeleteDisabled: "The official model cannot be deleted",
-    modeOfficial: "Official",
+    officialDeleteDisabled: "Recommended models cannot be deleted",
+    modeOfficial: "Recommended",
     modeCustom: "Custom",
-    modeOfficialCard: "Use official model",
+    modeOfficialCard: "Use recommended model",
     modeCustomCard: "Custom model",
     officialModelLabel: "DeepSeek-V4-Flash",
-    officialFormTitle: "Configure official model",
+    officialFormTitle: "Configure recommended model",
     use: "Use",
-    officialDefault: "Official default",
+    officialDefault: "Recommended default",
     currentActive: "Active now",
     apiFormatLabel: "API format",
     protocolLabel: "API format",
@@ -53,7 +53,7 @@ export const settings = {
       "For Chat Completions APIs such as OpenAI / DeepSeek / Kimi / Qwen",
     protocolAnthropicHint:
       "For Claude official and Messages-API-compatible gateways",
-    officialDesc: "DeepSeek · {model} · No parameters required",
+    officialDesc: "DeepSeek · {model} · Recommended model",
     formTitleNew: "New model profile",
     formTitleEdit: "Edit: {name}",
     nameLabel: "Display name",
@@ -241,8 +241,7 @@ export const settings = {
     enhanced: "AI enhanced",
     enhance: "Enhance wording",
     enhancing: "Enhancing…",
-    unavailableHint:
-      "AI enhancement unavailable; showing rule-based insights",
+    unavailableHint: "AI enhancement unavailable; showing rule-based insights",
     configureModel: "Connect now",
     severity: {
       info: "Info",
@@ -256,7 +255,7 @@ export const settings = {
       "enhancer-unavailable": "Enhancer unavailable",
       "budget-exceeded": "Daily call limit reached",
       timeout: "Enhance timed out",
-      "enhancer-failed": "Enhance failed",
+      "enhancer-failed": "Model configuration failed",
       "invalid-output": "Invalid enhancer output",
       "no-eligible-candidates": "No eligible content to enhance",
       stale: "Data may be stale",
@@ -267,7 +266,8 @@ export const settings = {
       "budget-exceeded":
         "AI enhancement limit reached; showing rule-based insight",
       timeout: "AI enhancement timed out; showing rule-based insight",
-      "enhancer-failed": "AI enhancement failed; showing rule-based insight",
+      "enhancer-failed":
+        "Model configuration failed; showing rule-based insight",
       "invalid-output":
         "AI returned invalid output; showing rule-based insight",
       "no-eligible-candidates":

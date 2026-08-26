@@ -1,12 +1,12 @@
-# TrustTools V3.0 Client
+# AITracker V3.0 Client
 
-TrustTools V3.0 本地客户端。同一套 React + TypeScript UI 支持浏览器调试和 Electron 桌面运行。
+AITracker V3.0 本地客户端。同一套 React + TypeScript UI 支持浏览器调试和 Electron 桌面运行。
 
 ## 产品手册
 
-面向最终用户的操作说明请参阅：[TrustTools 用户手册](docs/user-guide.md)。
+面向最终用户的操作说明请参阅：[AITracker 用户手册](docs/user-guide.md)。
 
-TrustTools 是面向 AI 开发者的本地优先工作台：它读取本机 AI 工具的用量与会话数据，在一个桌面应用中提供 Agent 概览、Skill 管理、安全检测、记忆沉淀、蒸馏和日报/周报能力。
+AITracker 是面向 AI 开发者的本地优先工作台：它读取本机 AI 工具的用量与会话数据，在一个桌面应用中提供 Agent 概览、Skill 管理、安全检测、记忆沉淀、蒸馏和日报/周报能力。
 
 ### 核心功能
 
@@ -21,7 +21,7 @@ TrustTools 是面向 AI 开发者的本地优先工作台：它读取本机 AI �
 
 ### 首次使用
 
-1. 启动 TrustTools，等待本地数据首次扫描完成。
+1. 启动 AITracker，等待本地数据首次扫描完成。
 2. 打开“设置 → 模型配置”，添加一个兼容的 AI 模型。
 3. 填写 API Endpoint、模型名称和 API Key，保存并测试连接。
 4. 返回首页或蒸馏、日报页面开始使用。
@@ -75,13 +75,13 @@ TrustTools 是面向 AI 开发者的本地优先工作台：它读取本机 AI �
 Electron 客户端提供系统托盘、单实例、窗口隐藏/恢复、开机启动和顶部动态栏能力：
 
 - 关闭主窗口时可隐藏到托盘，不等于退出进程。
-- 从托盘菜单可以打开 TrustTools、显示小组件、在浏览器打开或退出应用。
+- 从托盘菜单可以打开 AITracker、显示小组件、在浏览器打开或退出应用。
 - 顶部动态栏默认显示实时用量、安全状态和任务进度；可在“设置 → 通用”开关。
 - 点击动态栏可展开对应的概览卡片；再次点击或关闭按钮可隐藏。
 
 ### 数据与隐私
 
-TrustTools 是本地优先应用：
+AITracker 是本地优先应用：
 
 - 本地会话日志和用量数据默认只在当前设备读取和保存。
 - 用量采集主要提取 Token、模型、时间、来源和项目等结构化信息，不返回 prompt 或回复正文。
@@ -239,7 +239,7 @@ Dashboard 和 Token 分析页面默认建立当前用户本机的历史用量索
 
 首次启动会先执行完整历史同步，再显示主窗口；检测到本地历史时，首页第一次打开即可看到真实数据。首次扫描后会把结构化 Token 事件写入 SQLite 快照（`usage_events` 等），并建立进程内增量索引。后续按增量游标和文件变化刷新，增量缓存为进程内重建，不落盘。
 
-采集范围覆盖 28 个产品目录工具（含 DeepSeek Harness/DSH，读取 `~/.dsh/sessions/**/session.jsonl.zstd` 的 zstd 会话日志），并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel、zstd 帧容器和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex、WorkBuddy 和 DSH 同时保留 TrustTools 原生 reader 作为校验与降级路径。
+采集范围覆盖 28 个产品目录工具（含 DeepSeek Harness/DSH，读取 `~/.dsh/sessions/**/session.jsonl.zstd` 的 zstd 会话日志），并额外支持 AiPy 和 Cline 遗留采集源。复杂来源（SQLite、累计快照、OTel、zstd 帧容器和多文件会话）由内置采集运行时处理；AiPy、Claude Code、Codex、WorkBuddy 和 DSH 同时保留 AITracker 原生 reader 作为校验与降级路径。
 
 真实采集实现位于：
 
@@ -283,9 +283,9 @@ Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可�
 - `/memory`：记忆聚合
 - `/settings`：本地设置
 
-# TrustTools
+# AITracker
 
-TrustTools is a local-first, cross-platform dashboard for AI development assets.
+AITracker is a local-first, cross-platform dashboard for AI development assets.
 
 ## Open-source hygiene
 

@@ -15,9 +15,11 @@ export function Field({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0">
       <div>
-        <div className="text-[13px]">{label}</div>
+        <div className="tt-text-body">{label}</div>
         {hint && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
+          <div className="tt-text-caption mt-0.5 text-muted-foreground">
+            {hint}
+          </div>
         )}
       </div>
       <div className="flex items-center gap-2">{children}</div>
@@ -66,7 +68,9 @@ export function SectionHeading({
           {icon}
         </span>
       )}
-      <h3 className="text-[13px] font-semibold tracking-tight">{children}</h3>
+      <h3 className="tt-text-section-title font-semibold tracking-tight">
+        {children}
+      </h3>
     </div>
   );
 }
@@ -81,14 +85,14 @@ export function SecurityLoadError({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-[12px] text-warn">
+    <div className="tt-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
       <AlertTriangle className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0">
         <p className="font-medium">{message}</p>
         <button
           type="button"
           onClick={onRetry}
-          className="mt-1 inline-flex items-center gap-1 text-[11px] hover:opacity-80"
+          className="tt-text-caption mt-1 inline-flex items-center gap-1 hover:opacity-80"
         >
           <RefreshCw className="size-3" />
           {t("common.retry")}
@@ -102,7 +106,7 @@ export function SecurityLoadError({
 export function SecurityUnavailable({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-[12px] text-warn">
+    <div className="tt-text-body-sm flex items-start gap-2 rounded-xl bg-warn/10 px-3.5 py-3 text-warn">
       <MonitorX className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0">
         <p className="font-medium">
@@ -114,7 +118,7 @@ export function SecurityUnavailable({ onRetry }: { onRetry: () => void }) {
         <button
           type="button"
           onClick={onRetry}
-          className="mt-2 inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-1 text-[11px] hover:bg-accent"
+          className="tt-text-caption mt-2 inline-flex items-center gap-1 rounded-md bg-surface-2 px-2 py-1 hover:bg-accent"
         >
           <RefreshCw className="size-3" />
           {t("settings.security.unavailable.retry")}

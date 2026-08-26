@@ -14,6 +14,8 @@ export const skills = {
     sourceRecorded: "記録済みの起点",
     sourceManaged: "管理対象エントリ",
     sourceUnclassified: "未分類",
+    distilledSkill: "蒸留 Skill",
+    securityMarket: "セキュリティマーケット",
     updateStatus: "更新状態",
     updateAll: "すべての更新状態",
     sort: "並び替え",
@@ -136,7 +138,7 @@ export const skills = {
     version: "バージョン情報",
   },
   agentOverview: {
-    title: "Agent 概要 · TrustTools",
+    title: "Agent 概要 · AITracker",
     insightTitle: "今日のインサイト",
     dedicatedInsight: "専用インサイト",
     insightDescription:

@@ -163,7 +163,7 @@ export function ScanScheduleSection({
   } else if (schedule == null) {
     content = (
       <Field label={t("settings.security.schedule.title")}>
-        <span className="text-[13px] text-muted-foreground">
+        <span className="tt-text-body text-muted-foreground">
           {t("common.loading")}
         </span>
       </Field>
@@ -270,7 +270,7 @@ export function ScanScheduleSection({
             hint={t("settings.security.schedule.agentHint")}
           >
             {agents.length === 0 ? (
-              <span className="font-mono text-[12px] text-muted-foreground">
+              <span className="tt-text-body-sm font-mono text-muted-foreground">
                 {t("common.loading")}
               </span>
             ) : (
@@ -325,7 +325,7 @@ export function ScanScheduleSection({
         </Field>
 
         <Field label={t("settings.security.schedule.lastRun")}>
-          <span className="text-right font-mono text-[11px] text-muted-foreground">
+          <span className="tt-text-caption text-right font-mono text-muted-foreground">
             {lastRunDetail}
           </span>
         </Field>
@@ -334,7 +334,7 @@ export function ScanScheduleSection({
           label={t("settings.security.schedule.nextRun")}
           hint={t("settings.security.schedule.processRequiredHint")}
         >
-          <span className="text-right font-mono text-[11px] text-muted-foreground">
+          <span className="tt-text-caption text-right font-mono text-muted-foreground">
             {nextRunDetail}
           </span>
         </Field>
@@ -369,7 +369,7 @@ function Chip({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 font-mono text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`tt-text-caption rounded-lg px-2.5 py-1.5 font-mono transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "bg-foreground text-background"
           : "bg-surface text-muted-foreground hover:text-foreground"
