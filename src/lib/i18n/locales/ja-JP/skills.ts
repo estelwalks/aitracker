@@ -14,6 +14,8 @@ export const skills = {
     sourceRecorded: "記録済みの起点",
     sourceManaged: "管理対象エントリ",
     sourceUnclassified: "未分類",
+    distilledSkill: "蒸留 Skill",
+    securityMarket: "セキュリティマーケット",
     updateStatus: "更新状態",
     updateAll: "すべての更新状態",
     sort: "並び替え",

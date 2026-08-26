@@ -186,7 +186,7 @@ function profileWithoutSecret(row: ProfileRow): ModelProfile {
     protocol: row.mode === "official" ? "openai" : row.protocol,
     ...(row.auth ? { auth: row.auth } : {}),
     ...(row.mode === "official"
-      ? { endpoint: OFFICIAL_ENDPOINT, model: OFFICIAL_MODEL }
+      ? { endpoint: OFFICIAL_ENDPOINT, model: row.model ?? OFFICIAL_MODEL }
       : {
           ...(row.endpoint ? { endpoint: row.endpoint } : {}),
           ...(row.model ? { model: row.model } : {}),
@@ -334,7 +334,7 @@ export function createSqliteModelProfileRepository(
               ? OFFICIAL_ENDPOINT
               : input.endpoint?.trim() || null,
             input.mode === "official"
-              ? OFFICIAL_MODEL
+              ? input.model?.trim() || OFFICIAL_MODEL
               : input.model?.trim() || null,
             secretId,
             isActive,

@@ -36,15 +36,15 @@ export const settings = {
     activateTitle: "활성화",
     edit: "편집",
     delete: "삭제",
-    officialDeleteDisabled: "공식 모델은 삭제할 수 없습니다",
-    modeOfficial: "공식",
+    officialDeleteDisabled: "추천 모델은 삭제할 수 없습니다",
+    modeOfficial: "추천",
     modeCustom: "사용자 지정",
-    modeOfficialCard: "공식 모델 사용",
+    modeOfficialCard: "추천 모델 사용",
     modeCustomCard: "사용자 지정 모델",
     officialModelLabel: "DeepSeek-V4-Flash",
-    officialFormTitle: "공식 모델 설정",
+    officialFormTitle: "추천 모델 설정",
     use: "사용",
-    officialDefault: "공식 기본값",
+    officialDefault: "추천 기본값",
     currentActive: "현재 활성",
     apiFormatLabel: "API 형식",
     protocolLabel: "API 형식",
@@ -53,7 +53,7 @@ export const settings = {
     protocolOpenaiHint:
       "OpenAI / DeepSeek / Kimi / Qwen 등 Chat Completions API 지원",
     protocolAnthropicHint: "Claude 공식 및 Messages API 호환 게이트웨이 지원",
-    officialDesc: "DeepSeek · {model} · 별도 설정 없음",
+    officialDesc: "DeepSeek · {model} · 추천 모델",
     formTitleNew: "새 모델 설정",
     formTitleEdit: "편집: {name}",
     nameLabel: "표시 이름",
@@ -239,7 +239,8 @@ export const settings = {
     enhanced: "AI 강화",
     enhance: "표현 강화",
     enhancing: "강화 중…",
-    unavailableHint: "AI 모델을 연결해 심층 연관 원인 분석과 지능형 대응 제안을 사용하세요",
+    unavailableHint:
+      "AI 모델을 연결해 심층 연관 원인 분석과 지능형 대응 제안을 사용하세요",
     configureModel: "지금 연결",
     severity: {
       info: "정보",
@@ -253,7 +254,7 @@ export const settings = {
       "enhancer-unavailable": "강화 서비스를 사용할 수 없음",
       "budget-exceeded": "일일 호출 한도 도달",
       timeout: "강화 시간 초과",
-      "enhancer-failed": "강화 실패",
+      "enhancer-failed": "모델 설정 실패",
       "invalid-output": "강화 결과가 올바르지 않음",
       "no-eligible-candidates": "강화할 내용이 없음",
       stale: "데이터가 오래되었을 수 있음",
@@ -264,7 +265,7 @@ export const settings = {
       "budget-exceeded":
         "AI 강화 호출 한도에 도달하여 규칙 기반 인사이트를 표시합니다",
       timeout: "AI 강화 시간이 초과되어 규칙 기반 인사이트를 표시합니다",
-      "enhancer-failed": "AI 강화에 실패하여 규칙 기반 인사이트를 표시합니다",
+      "enhancer-failed": "모델 설정에 실패하여 규칙 기반 인사이트를 표시합니다",
       "invalid-output":
         "AI 출력이 올바르지 않아 규칙 기반 인사이트를 표시합니다",
       "no-eligible-candidates":

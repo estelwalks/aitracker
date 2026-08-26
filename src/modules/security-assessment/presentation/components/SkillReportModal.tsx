@@ -355,7 +355,7 @@ function ScoreHeader({
         <div className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
           {t("security.center.reportModal.securityScore")}
         </div>
-        <div className="tt-num mt-1 text-3xl leading-none font-semibold">
+        <div className="tt-num tt-text-metric mt-1 leading-none font-semibold">
           {score}
           <span className="ml-1 font-mono text-[11px] text-muted-foreground">
             / 100

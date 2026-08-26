@@ -5,11 +5,12 @@
  * boilerplate.
  *
  * The card is intentionally minimal: title + severity/增强 marks + typed
- * insight line. Every page-level card exposes the same "换一条" rotate
- * control, while a missing model is surfaced as a link to model settings.
+ * insight line. Page-level cards expose the same "换一条" rotate control by
+ * default; surfaces can opt out when their own action column is already full.
  */
 import { Link } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
 import { useI18n } from "../../../../lib/i18n/context";
@@ -57,7 +58,9 @@ export function InsightCard({
   rotateLabel,
   headingLevel = 1,
   showSeverity = true,
+  showRotate = true,
   showFallbackStatus = true,
+  actions,
 }: {
   readonly surfaceId: InsightSurfaceId;
   readonly scope?: InsightScope;
@@ -69,8 +72,12 @@ export function InsightCard({
   readonly rotateLabel?: string;
   readonly headingLevel?: 1 | 2;
   readonly showSeverity?: boolean;
+  /** Hide the rotate control on surfaces with a dedicated action column. */
+  readonly showRotate?: boolean;
   /** Hide the fallback status on surfaces whose header should stay minimal. */
   readonly showFallbackStatus?: boolean;
+  /** Optional right-hand actions kept outside the shared insight copy. */
+  readonly actions?: ReactNode;
 }) {
   const { locale, t } = useI18n();
   const { lines, loading, envelope } = usePageInsight({
@@ -85,7 +92,12 @@ export function InsightCard({
   if (lines.length === 0) return null;
 
   const textLines = lines.map((line) => line.text);
-  const topSeverity = showSeverity ? lines[0]?.severity : undefined;
+  // Neutral informational lines should not add a distracting “提示” pill;
+  // reserve the badge for actionable attention/risk states.
+  const topSeverity =
+    showSeverity && lines[0]?.severity !== "info"
+      ? lines[0]?.severity
+      : undefined;
   const fallbackStatusKey = envelope
     ? insightFallbackStatusLabel(envelope.status)
     : null;
@@ -130,8 +142,9 @@ export function InsightCard({
       source={envelope?.source}
       enhancedLabel={t("settings.insight.enhanced")}
       pills={fallbackStatus}
+      actions={actions}
       dotsLabel={dotsLabel ?? t("insights.dots")}
-      rotateLabel={rotateLabel ?? t("insights.rotate")}
+      rotateLabel={showRotate ? (rotateLabel ?? t("insights.rotate")) : null}
       headingLevel={headingLevel}
     />
   );

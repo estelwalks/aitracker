@@ -109,9 +109,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div
             className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
           >
-            <div className="tt-brand-mark flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground font-mono text-[11px] font-black text-background">
-              TT
-            </div>
+            <img
+              src="/brand-logos/ai-tracker/ai-tracker-icon-mono.png"
+              alt=""
+              aria-hidden="true"
+              className="tt-brand-mark size-7 shrink-0 rounded-md object-cover"
+            />
             {!collapsed && (
               <div className="min-w-0 leading-tight">
                 <div className="truncate text-[13px] font-semibold tracking-tight">

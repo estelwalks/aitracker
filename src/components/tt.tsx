@@ -28,7 +28,7 @@ export function SearchInput({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className="h-[34px] w-full rounded-full border border-transparent bg-surface-2 pr-3.5 pl-9 text-[12.5px] outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:bg-surface"
+        className="tt-text-body-sm h-[34px] w-full rounded-full border border-transparent bg-surface-2 pr-3.5 pl-9 outline-none transition placeholder:text-muted-foreground focus:border-primary/40 focus:bg-surface"
       />
     </div>
   );
@@ -62,7 +62,7 @@ export function Panel({
     <section className={`tt-panel flex flex-col ${className}`}>
       {(title || action) && (
         <header className="flex min-h-12 shrink-0 items-center justify-between gap-3 px-5 py-2.5">
-          <h2 className="text-[13px] font-medium tracking-[0.025em]">
+          <h2 className="tt-text-section-title font-medium tracking-[0.025em]">
             {title}
           </h2>
           {action}
@@ -85,9 +85,11 @@ export function PageHeader({
   return (
     <div className="tt-page-header mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <h1 className="tt-text-page-title font-semibold tracking-tight">
+          {title}
+        </h1>
         {desc && (
-          <p className="mt-0.5 text-[13px] text-muted-foreground">{desc}</p>
+          <p className="tt-text-body mt-0.5 text-muted-foreground">{desc}</p>
         )}
       </div>
       {children}
@@ -112,7 +114,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`rounded-md px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          className={`tt-text-control min-h-[var(--tt-control-height)] rounded-md px-3 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
             value === o.value
               ? "bg-card font-medium text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -141,7 +143,7 @@ export function EmptyState({
       {icon && <div className="mb-3 text-muted-foreground">{icon}</div>}
       <p className="text-sm font-medium">{title}</p>
       {desc && (
-        <p className="mt-1 max-w-md text-[13px] text-muted-foreground">
+        <p className="tt-text-body mt-1 max-w-md text-muted-foreground">
           {desc}
         </p>
       )}
@@ -184,7 +186,9 @@ export function TTButton({
       disabled={disabled}
       onClick={onClick}
       className={`inline-flex items-center justify-center gap-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-40 ${
-        size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-[13px]"
+        size === "sm"
+          ? "min-h-[var(--tt-control-height-sm)] px-2.5 tt-text-control"
+          : "min-h-[var(--tt-control-height)] px-3.5 tt-text-body"
       } ${variants[variant]} ${className}`}
     >
       {children}
@@ -212,9 +216,11 @@ export function Stat({
   return (
     <div className="tt-stat px-4 py-3">
       <div className="tt-label">{label}</div>
-      <div className="tt-num mt-1 text-lg">{value}</div>
+      <div className="tt-num tt-text-metric mt-1">{value}</div>
       {hint && (
-        <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
+        <div className="tt-text-caption mt-0.5 text-muted-foreground">
+          {hint}
+        </div>
       )}
     </div>
   );
@@ -257,11 +263,11 @@ export function Pagination({
   );
 
   const stepButton =
-    "inline-flex h-7 items-center justify-center gap-1.5 rounded-[6px] border border-border bg-surface-2 px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+    "tt-text-control inline-flex min-h-[var(--tt-control-height)] items-center justify-center gap-1.5 rounded-[6px] border border-border bg-surface-2 px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[12px] text-muted-foreground ${className}`}
+      className={`tt-text-body-sm flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-muted-foreground ${className}`}
     >
       <div className="flex items-center gap-1">
         <button
@@ -272,7 +278,7 @@ export function Pagination({
           title={resolvedPrev}
           className={stepButton}
         >
-          <ChevronLeft className="size-3" />
+          <ChevronLeft className="size-4" />
           {resolvedPrev}
         </button>
         {nums.map((p, idx) => (
@@ -284,7 +290,7 @@ export function Pagination({
               type="button"
               aria-current={p === current ? "page" : undefined}
               onClick={() => onChange(p)}
-              className={`tt-num size-7 rounded-[6px] border text-[12px] transition-colors ${
+              className={`tt-num tt-text-body-sm size-[var(--tt-control-height)] rounded-[6px] border transition-colors ${
                 p === current
                   ? "border-ok bg-ok/15 text-ok"
                   : "border-border hover:text-foreground"
@@ -303,7 +309,7 @@ export function Pagination({
           className={stepButton}
         >
           {resolvedNext}
-          <ChevronRight className="size-3" />
+          <ChevronRight className="size-4" />
         </button>
       </div>
       {rangeLabel ? (
@@ -362,9 +368,11 @@ export function PageBar({
   return (
     <div className="sticky top-14 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border/60 bg-background px-4 py-2.5 md:-mx-8 md:px-8">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-[13px] font-semibold tracking-tight">{title}</h1>
+        <h1 className="tt-text-page-title font-semibold tracking-tight">
+          {title}
+        </h1>
         {summary && (
-          <span className="tt-num truncate font-mono text-[11px] text-muted-foreground">
+          <span className="tt-num tt-text-caption truncate font-mono text-muted-foreground">
             {summary}
           </span>
         )}
@@ -391,13 +399,13 @@ export function MetricGrid({
           key={m.label}
           className="group rounded-xl bg-card px-4 py-3.5 ring-1 ring-border/50 transition-colors hover:bg-surface-2"
         >
-          <div className="flex items-center gap-1.5 font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
-            {m.icon && <m.icon className="size-3" strokeWidth={1.8} />}
+          <div className="flex items-center gap-1.5 text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
+            {m.icon && <m.icon className="size-4" strokeWidth={1.8} />}
             <span className="truncate">{m.label}</span>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span
-              className="tt-num min-w-0 flex-1 truncate font-mono text-[22px] leading-none font-black tracking-tight"
+              className="tt-num tt-text-metric min-w-0 flex-1 truncate font-mono leading-none font-black tracking-tight"
               style={m.color ? { color: m.color } : undefined}
             >
               {m.v}
@@ -406,7 +414,7 @@ export function MetricGrid({
           </div>
           {m.sub && (
             <div
-              className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+              className="mt-1 truncate text-[10px] text-muted-foreground/70"
               title={m.hint ?? undefined}
             >
               {m.sub}
@@ -491,11 +499,11 @@ export function Card({
       {(title || action) && (
         <header className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
           <div className="min-w-0">
-            <h2 className="truncate text-[13px] font-semibold tracking-tight">
+            <h2 className="tt-text-body truncate font-semibold tracking-tight">
               {title}
             </h2>
             {desc && (
-              <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
+              <p className="tt-text-caption mt-0.5 truncate text-muted-foreground/70">
                 {desc}
               </p>
             )}

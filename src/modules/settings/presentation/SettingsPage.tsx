@@ -119,9 +119,9 @@ function NumberField({
         onChange={(event) =>
           onChange(Math.max(0, Number(event.target.value) || 0))
         }
-        className="tt-num h-8 w-24 rounded-sm border border-border bg-surface-2 px-2 text-right text-[13px]"
+        className="tt-num tt-text-body h-8 w-24 rounded-sm border border-border bg-surface-2 px-2 text-right"
       />
-      <span className="text-[11px] text-muted-foreground">{suffix}</span>
+      <span className="tt-text-caption text-muted-foreground">{suffix}</span>
     </span>
   );
 }
@@ -415,7 +415,7 @@ export function SettingsPage({
             <button
               key={item}
               onClick={() => setCategory(item)}
-              className={`relative flex w-full rounded-sm px-3 py-2 text-left text-[13px] ${
+              className={`tt-text-body relative flex w-full rounded-sm px-3 py-2 text-left ${
                 category === item
                   ? "bg-accent font-medium"
                   : "text-muted-foreground hover:bg-accent/50"
@@ -495,12 +495,12 @@ export function SettingsPage({
               >
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="tt-num text-[13px]">
+                    <span className="tt-num tt-text-body">
                       {rates
                         ? t("settings.rate.line", {
                             rate: format.formatNumber(
                               rates.rates[displayCurrency] ?? 1,
-                              { maximumFractionDigits: 4 },
+                              { maximumFractionDigits: 2 },
                             ),
                             currency: displayCurrency,
                           })
@@ -518,7 +518,7 @@ export function SettingsPage({
                     </TTButton>
                   </div>
                   {rates && (
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="tt-text-caption text-muted-foreground">
                       {t("settings.rate.updatedAt", { date: rates.date })}
                       {" · "}
                       {t(
@@ -545,7 +545,7 @@ export function SettingsPage({
                 />
                 {autoLaunchStatus !== "浏览器不可用" && (
                   <span
-                    className={`text-[11px] ${
+                    className={`tt-text-caption ${
                       autoLaunchStatus === "桌面端可用"
                         ? "text-ok"
                         : "text-warn"
@@ -615,7 +615,7 @@ export function SettingsPage({
                   value={settings.dataPath}
                   readOnly
                   disabled
-                  className="h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-[13px] text-muted-foreground disabled:cursor-not-allowed"
+                  className="tt-text-body h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-muted-foreground disabled:cursor-not-allowed"
                 />
               </Field>
               <Field
@@ -637,7 +637,7 @@ export function SettingsPage({
               <Field label={t("settings.storage")}>
                 {storageUsage ? (
                   <span
-                    className={`tt-num text-[13px] ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
+                    className={`tt-num tt-text-body ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
                   >
                     {format.formatBytes(storageUsage.bytes)} /{" "}
                     {format.formatBytes(storageUsage.softCapBytes)}
@@ -646,25 +646,25 @@ export function SettingsPage({
                       : ""}
                   </span>
                 ) : loaderData.storageError ? (
-                  <span className="text-[13px] text-warn">
+                  <span className="tt-text-body text-warn">
                     {loaderData.storageError}
                   </span>
                 ) : (
-                  <span className="text-[13px] text-muted-foreground">
+                  <span className="tt-text-body text-muted-foreground">
                     {t("common.loading")}
                   </span>
                 )}
               </Field>
               <div className="mt-4 border-t border-border pt-1">
-                <div className="mb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="tt-text-caption mb-1 pt-2 font-medium uppercase tracking-wide text-muted-foreground">
                   {t("settings.dataDangerZone")}
                 </div>
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <div>
-                    <div className="text-[13px]">
+                    <div className="tt-text-body">
                       {t("settings.clearCache")}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.clearCacheHint", brandParams)}
                     </div>
                   </div>
@@ -710,10 +710,10 @@ export function SettingsPage({
                 </AlertDialog>
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <div>
-                    <div className="text-[13px]">
+                    <div className="tt-text-body">
                       {t("settings.clearCollectedData")}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.clearCollectedDataHint")}
                     </div>
                   </div>
@@ -762,10 +762,10 @@ export function SettingsPage({
                 </AlertDialog>
                 <div className="flex items-center justify-between gap-3 py-3 last:border-0">
                   <div>
-                    <div className="text-[13px]">
+                    <div className="tt-text-body">
                       {t("settings.resetPrefs")}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.resetPrefsHint")}
                     </div>
                   </div>
@@ -816,10 +816,10 @@ export function SettingsPage({
           {category === "about" && (
             <div>
               <Field label={t("settings.version")}>
-                <span className="tt-num text-[13px]">V{APP_VERSION}</span>
+                <span className="tt-num tt-text-body">V{APP_VERSION}</span>
               </Field>
               <Field label={t("settings.releaseDate")}>
-                <span className="text-[13px] text-muted-foreground">
+                <span className="tt-text-body text-muted-foreground">
                   {APP_RELEASE_DATE}
                 </span>
               </Field>
@@ -836,7 +836,7 @@ export function SettingsPage({
                       : t("settings.checkUpdate")}
                   </TTButton>
                   {versionResult && (
-                    <span className="text-[12px] text-muted-foreground">
+                    <span className="tt-text-body-sm text-muted-foreground">
                       {versionResult.status === "newer"
                         ? t("settings.updateFound", {
                             version: versionResult.latestVersion ?? "",
@@ -850,7 +850,7 @@ export function SettingsPage({
                 {versionResult && versionResult.status === "newer" && (
                   <div className="mt-2 rounded-sm border border-primary/30 bg-primary/5 p-3">
                     {versionResult.changelog && (
-                      <p className="text-[12px] leading-relaxed text-muted-foreground">
+                      <p className="tt-text-body-sm leading-relaxed text-muted-foreground">
                         {versionResult.changelog}
                       </p>
                     )}
@@ -859,7 +859,7 @@ export function SettingsPage({
                         href={versionResult.releaseUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-[12px] text-primary hover:underline"
+                        className="tt-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
                       >
                         <ExternalLink className="size-3" />
                         {t("settings.viewRelease")}
@@ -873,7 +873,7 @@ export function SettingsPage({
                   href={APP_REPO_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[13px] text-primary hover:underline"
+                  className="tt-text-body inline-flex items-center gap-1 text-primary hover:underline"
                 >
                   <ExternalLink className="size-3.5" />
                   {APP_REPO_URL}

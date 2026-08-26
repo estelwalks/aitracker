@@ -22,11 +22,7 @@ import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
-import {
-  archiveMemory,
-  getMemoryAssets,
-  updateMemory,
-} from "../query";
+import { archiveMemory, getMemoryAssets, updateMemory } from "../query";
 import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
 import { md } from "../../../lib/markdown";
@@ -262,14 +258,14 @@ export function MemoryPage() {
               key={card.label}
               className="bg-card px-4 py-3.5 transition-colors hover:bg-surface-2"
             >
-              <div className="truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
+              <div className="truncate text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
                 {card.label}
               </div>
-              <div className="tt-num mt-2 truncate text-[22px] leading-none font-black tracking-tight">
+              <div className="tt-num tt-text-metric mt-2 truncate leading-none font-black tracking-tight">
                 {card.value}
               </div>
               <div
-                className="mt-1 truncate font-mono text-[10px] text-muted-foreground"
+                className="mt-1 truncate text-[10px] text-muted-foreground/70"
                 title={card.sub}
               >
                 {card.sub}
@@ -452,7 +448,7 @@ function MemoryCard({
         {/* 顶部：记忆类型 */}
         <div className="flex items-center gap-2">
           <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--glass-strong)] text-foreground/70">
-            <Icon className="size-3.5" strokeWidth={1.8} />
+            <Icon className="size-4" strokeWidth={1.8} />
           </span>
           <span className="truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground/70 uppercase">
             {typeLabel(item, t)}

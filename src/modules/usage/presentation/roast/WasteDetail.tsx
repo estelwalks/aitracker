@@ -20,10 +20,7 @@ import {
   DialogTitle,
 } from "../../../../components/ui/dialog";
 import type { MessageKey } from "../../../../lib/i18n/messages";
-import {
-  RECENT_TREND_DAYS,
-  type RoastRow,
-} from "../../application/tracker.ts";
+import { RECENT_TREND_DAYS, type RoastRow } from "../../application/tracker.ts";
 
 const SUGGEST_KEY: Record<RoastRow["suggestion"], MessageKey> = {
   cache: "tracker.suggest.cache",
@@ -79,7 +76,7 @@ function MetricCard({
         <Icon className="size-3.5" strokeWidth={1.8} />
         <span className="truncate">{label}</span>
       </div>
-      <div className="tt-num mt-2 truncate font-mono text-[17px] leading-none font-black tracking-tight">
+      <div className="tt-num tt-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
         {value}
       </div>
     </div>
@@ -129,7 +126,7 @@ export function WasteDetail({
               <div className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground/70 uppercase">
                 {t("tracker.title")}
               </div>
-              <DialogTitle className="mt-1 truncate text-[18px] tracking-tight">
+              <DialogTitle className="tt-text-section-title mt-1 truncate tracking-tight">
                 {row.name}
               </DialogTitle>
               <DialogDescription className="mt-1.5 max-w-md text-[11.5px] leading-relaxed">
@@ -141,7 +138,7 @@ export function WasteDetail({
                 {t("tracker.row.waste")}
               </div>
               <div
-                className="tt-num mt-1 font-mono text-[24px] leading-none font-black"
+                className="tt-num tt-text-metric mt-1 font-mono leading-none font-black"
                 style={{ color: tone.accent }}
               >
                 {row.waste.toFixed(1)}%
@@ -203,11 +200,7 @@ export function WasteDetail({
               label={t("tracker.metric.cachedTokens")}
               value={tokenValue(row.cachedInputTokens ?? 0)}
             />
-            <MetricCard
-              icon={Database}
-              label={cacheLabel}
-              value={cacheRate}
-            />
+            <MetricCard icon={Database} label={cacheLabel} value={cacheRate} />
           </div>
 
           {row.previousTokens != null ? (

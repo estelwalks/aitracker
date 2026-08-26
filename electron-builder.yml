@@ -36,7 +36,7 @@ mac:
       arch:
         - x64
         - arm64
-  icon: build/icon.png
+  icon: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -52,7 +52,7 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: build/icon.png
+  icon: public/brand-logos/ai-tracker/ai-tracker-icon-app.png
 nsis:
   artifactName: "${productName}-Setup-${version}-${arch}.${ext}"
   oneClick: false

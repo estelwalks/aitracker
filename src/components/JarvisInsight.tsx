@@ -92,7 +92,7 @@ export function JarvisInsight({
   onRefresh?: () => void;
   refreshLabel?: string;
   /** Localized label for the rotate-to-next-insight button. */
-  rotateLabel?: string;
+  rotateLabel?: string | null;
   /** Localized accessible label for the dot rail. */
   dotsLabel?: string;
   /** Orb icon override; defaults to Sparkles. */
@@ -189,7 +189,7 @@ export function JarvisInsight({
 
   const severityBadge = severity ? (
     <span
-      className={`inline-flex h-5 items-center gap-1 rounded-full border px-2 text-[9px] tracking-[0.08em] ${SEVERITY_TONE[severity].border} ${SEVERITY_TONE[severity].text}`}
+      className={`inline-flex min-h-[var(--tt-control-height-sm)] items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] leading-tight tracking-[0.08em] ${SEVERITY_TONE[severity].border} ${SEVERITY_TONE[severity].text}`}
       title={severity}
       aria-label={severityLabel ?? severity}
     >
@@ -202,7 +202,7 @@ export function JarvisInsight({
 
   const enhancedMark =
     source === "enhanced" ? (
-      <span className="inline-flex h-5 items-center gap-1 rounded-full border border-border px-2 text-[9px] tracking-[0.08em] text-muted-foreground">
+      <span className="inline-flex min-h-[var(--tt-control-height-sm)] items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[9px] leading-tight tracking-[0.08em] text-muted-foreground">
         <Sparkles className="size-2.5" strokeWidth={1.75} />
         {enhancedLabel}
       </span>
@@ -296,7 +296,7 @@ export function JarvisInsight({
           <div className="flex flex-wrap items-center gap-2">
             {title ? (
               <Heading
-                className={`${hero ? "text-[15px]" : "text-[13px]"} font-semibold tracking-tight`}
+                className={`${hero ? "tt-text-section-title" : "tt-text-body"} font-semibold tracking-tight`}
               >
                 {title}
               </Heading>
@@ -316,8 +316,8 @@ export function JarvisInsight({
           <p
             className={
               hero
-                ? "mt-2 min-h-[62px] text-[17px] leading-[1.65] font-medium tracking-tight text-foreground/90 md:text-[19px]"
-                : "mt-2 min-h-[42px] text-[14px] leading-relaxed text-foreground/90"
+                ? "tt-text-section-title mt-2 min-h-[62px] leading-[1.65] font-medium tracking-tight text-foreground/90"
+                : "tt-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
             }
             aria-label={line}
           >

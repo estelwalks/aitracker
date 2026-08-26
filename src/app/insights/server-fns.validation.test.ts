@@ -150,9 +150,16 @@ test("setInsightPreferences rejects invalid mode/profileId/dailyCallLimit/surfac
     /AppError/,
   );
   assert.equal(
-    parseSetInsightPreferencesInput({ refreshIntervalMs: 5 * 60 * 1000 })
+    parseSetInsightPreferencesInput({ refreshIntervalMs: 5 * 60 * 60 * 1000 })
       .refreshIntervalMs,
-    5 * 60 * 1000,
+    5 * 60 * 60 * 1000,
+  );
+  assert.throws(
+    () =>
+      parseSetInsightPreferencesInput({
+        refreshIntervalMs: 4 * 60 * 60 * 1000,
+      }),
+    /AppError/,
   );
   assert.throws(
     () => parseSetInsightPreferencesInput({ surfaceId: "bogus" }),

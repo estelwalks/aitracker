@@ -37,8 +37,8 @@ export const sessions = {
     tools: "会话工具数",
     turns: "对话轮次数",
     countHint: "{range}内的会话",
-    toolsHint: "覆盖的 AI 工具",
-    turnsHint: "累计人机往返",
+    toolsHint: "覆盖的 Agent 工具",
+    turnsHint: "累计会话轮次",
   },
   empty: {
     title: "没有匹配的会话",

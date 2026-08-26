@@ -71,14 +71,7 @@ function Heading({
   level: 1 | 2 | 3 | 4;
   children: ReactNode;
 }) {
-  const size =
-    level === 1
-      ? "text-[17px]"
-      : level === 2
-        ? "text-[14.5px]"
-        : level === 3
-          ? "text-[13px]"
-          : "text-[12.5px]";
+  const size = level === 1 ? "tt-text-page-title" : "tt-text-section-title";
   const className = `mt-5 mb-2 font-semibold tracking-tight first:mt-0 ${size}`;
   if (level === 1) return <h1 className={className}>{children}</h1>;
   if (level === 2) return <h2 className={className}>{children}</h2>;

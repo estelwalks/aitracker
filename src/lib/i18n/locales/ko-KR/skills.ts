@@ -14,6 +14,8 @@ export const skills = {
     sourceRecorded: "기록된 원본",
     sourceManaged: "관리 항목",
     sourceUnclassified: "미분류",
+    distilledSkill: "증류 Skill",
+    securityMarket: "보안 마켓",
     updateStatus: "업데이트 상태",
     updateAll: "모든 업데이트 상태",
     sort: "정렬",

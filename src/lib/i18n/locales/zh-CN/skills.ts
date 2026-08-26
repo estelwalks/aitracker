@@ -12,6 +12,8 @@ export const skills = {
     sourceRecorded: "已记录来源",
     sourceManaged: "受管条目",
     sourceUnclassified: "待归类",
+    distilledSkill: "蒸馏 Skill",
+    securityMarket: "安全市场",
     updateStatus: "更新状态",
     updateAll: "全部更新状态",
     sort: "排序",

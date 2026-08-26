@@ -13,6 +13,8 @@ export const skills = {
     sourceRecorded: "Recorded origin",
     sourceManaged: "Managed entries",
     sourceUnclassified: "Unclassified",
+    distilledSkill: "Distilled Skill",
+    securityMarket: "Security Market",
     updateStatus: "Update status",
     updateAll: "All update states",
     sort: "Sort",

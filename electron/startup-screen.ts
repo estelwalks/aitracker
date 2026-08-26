@@ -16,7 +16,7 @@ export function createStartupDocument(locale: DesktopLocale): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html lang="${locale}">
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AITracker</title></head>
-  <body><main aria-label="AITracker ${message}"><div class="mark">TT</div><h1>AITracker</h1><p>${message}</p><span aria-hidden="true"></span></main></body>
+  <body><main aria-label="AITracker ${message}"><div class="mark">AI</div><h1>AITracker</h1><p>${message}</p><span aria-hidden="true"></span></main></body>
   <style>
     :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b0b10;color:#f4f4f5;font-family:"Inter Variable","Noto Sans SC Variable",sans-serif;font-synthesis:none}main{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;letter-spacing:.01em}.mark{display:grid;place-items:center;width:44px;height:44px;border-radius:10px;background:#f4f4f5;color:#0b0b10;font:800 15px "JetBrains Mono Variable",ui-monospace,monospace}h1{margin:4px 0 0;font-size:18px;font-weight:650}p{margin:0;color:#a1a1aa;font-size:13px}span{width:96px;height:2px;overflow:hidden;border-radius:99px;background:#27272a}span::after{content:"";display:block;width:45%;height:100%;border-radius:inherit;background:#f4f4f5;animation:load 1.1s ease-in-out infinite}@keyframes load{from{transform:translateX(-120%)}to{transform:translateX(260%)}}</style>
 </html>`)}`;

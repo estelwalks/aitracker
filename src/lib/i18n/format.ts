@@ -12,7 +12,7 @@ import type { Locale } from "./locale";
 export interface MoneyFormatOptions {
   /** Minimum fraction digits (default 2, 0 for amounts ≥ 100). */
   minimumFractionDigits?: number;
-  /** Maximum fraction digits (default 4, 0 for amounts ≥ 100). */
+  /** Maximum fraction digits (default 2, 0 for amounts ≥ 100). */
   maximumFractionDigits?: number;
 }
 
@@ -95,7 +95,7 @@ export function formatTime(locale: Locale, value: string | Date): string {
 /**
  * Currency fraction-digit rules (docs/plan v1.2 展示货币策略):
  * JPY/KRW always use 0 digits; CNY/USD keep the magnitude-based behavior
- * (0 digits for amounts ≥ 100, otherwise 2–4).
+ * (0 digits for amounts ≥ 100, otherwise 2 digits).
  */
 function currencyFractionDigits(
   currency: string,
@@ -117,7 +117,7 @@ function currencyFractionDigits(
   const autoDigits = Math.abs(amount) >= 100;
   return {
     minimumFractionDigits: autoDigits ? 0 : 2,
-    maximumFractionDigits: autoDigits ? 0 : 4,
+    maximumFractionDigits: autoDigits ? 0 : 2,
   };
 }
 
