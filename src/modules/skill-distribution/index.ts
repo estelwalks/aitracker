@@ -3,7 +3,6 @@ export type {
   SkillDistributionModuleContract,
   SkillDistributionModuleId,
 } from "./contracts";
-export type { SkillDistributionViewModel } from "./presentation";
 export {
   createInstallPlan,
   createUninstallPlan,
@@ -16,18 +15,4 @@ export type {
   TargetCapability,
   UninstallPlan,
 } from "./contracts.ts";
-export {
-  getLocalSkills,
-  getMarketSkills,
-  MARKET_AGENTS,
-  requestApprovedSkillInstall,
-  requestMarketSkillUninstall,
-} from "./query.ts";
-export type {
-  InstallSkillResult,
-  MarketAgent,
-  MarketListResult,
-  MarketSkill,
-  MarketSort,
-  SkillSnapshot,
-} from "./query.ts";
+export { AgentInstallBar } from "./presentation/AgentInstallBar.tsx";

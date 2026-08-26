@@ -22,7 +22,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   PageInsightAdapter,
-} from "../insights/page/contracts.ts";
+} from "../insights/index.ts";
 import { getUsagePlan } from "../../lib/tool-registry/registry.ts";
 import { suggestionFor, wasteIndex } from "./application/tracker.ts";
 

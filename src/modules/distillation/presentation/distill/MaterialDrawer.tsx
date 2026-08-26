@@ -14,7 +14,7 @@ import { EmptyState } from "../../../../components/tt";
 import { SESSION_TOOL_IDS } from "../../../../lib/local-sessions/types";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { SessionTranscriptMessage } from "../../../../modules/sessions/contracts";
-import { getSessionTranscript } from "../../../../modules/sessions/query";
+import { getSessionTranscript } from "../../../../modules/sessions/index.ts";
 import type { SegmentRef } from "../../contracts";
 import type { DistillationSessionItem } from "../index.ts";
 import {

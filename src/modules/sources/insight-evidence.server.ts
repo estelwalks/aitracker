@@ -24,7 +24,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   PageInsightAdapter,
-} from "../insights/page/contracts.ts";
+} from "../insights/index.ts";
 
 function composeSourcesCandidates(
   bundle: InsightEvidenceBundle,

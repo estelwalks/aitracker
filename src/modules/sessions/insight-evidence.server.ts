@@ -21,7 +21,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   PageInsightAdapter,
-} from "../insights/page/contracts.ts";
+} from "../insights/index.ts";
 
 function isRecoverable(status: string): boolean {
   return status === "available" || status === "interrupted";

@@ -10,7 +10,7 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "../../../../lib/i18n/context";
-import { Toggle } from "../../../settings/presentation/fields";
+import { Toggle } from "../../../settings/index.ts";
 import {
   DEFAULT_INSIGHT_REFRESH_INTERVAL_MS,
   MAX_INSIGHT_REFRESH_INTERVAL_MS,

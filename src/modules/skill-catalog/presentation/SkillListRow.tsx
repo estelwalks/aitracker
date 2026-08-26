@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
-import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
+import { AgentInstallBar } from "../../skill-distribution/index.ts";
 import type { SkillAgent } from "../query.ts";
 import type { SkillAssetView } from "../application/index.ts";
 import { compactNumber, formatSizeBytes } from "./skill-format.ts";

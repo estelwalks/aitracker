@@ -1,5 +1,17 @@
 import type { SessionRepository } from "../contracts.ts";
+import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
 import type { SessionSnapshotData } from "./session-snapshot.contracts.ts";
+
+// AiPy emits placeholder task rows without usage; those zero-token rows are
+// intentionally hidden. Other read-only readers have no token accounting by
+// design, so their sessions must remain visible.
+const ZERO_TOKEN_SESSION_SOURCES = new Set(
+  PUBLIC_TOOL_MANIFEST.tools
+    .filter(
+      (tool) => tool.id === "aipy" && tool.capabilities.sessions === "read",
+    )
+    .map((tool) => tool.id),
+);
 
 /**
  * P3-T3-01 (fix): Session repository backed by the SessionSnapshot
@@ -54,9 +66,13 @@ export function createSnapshotSessionRepository(
       // boundary (sessions page, distillation transport). The dashboard reads
       // the snapshot directly through its own adapter and also reduces refs to
       // display-safe aggregates.
-      return latest.data.sessions.map(
-        ({ projectRef: _ref, ...summary }) => summary,
-      );
+      return latest.data.sessions
+        .filter(
+          (summary) =>
+            !ZERO_TOKEN_SESSION_SOURCES.has(summary.source) ||
+            summary.totals.totalTokens > 0,
+        )
+        .map(({ projectRef: _ref, ...summary }) => summary);
     },
   };
 }

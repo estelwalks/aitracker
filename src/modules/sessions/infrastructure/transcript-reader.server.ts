@@ -425,7 +425,11 @@ async function readClaudeTranscript(
         const recordSessionId = stringValue(
           record.sessionId ?? record.session_id ?? record.conversationId,
         );
-        if (recordSessionId !== sessionId && !(fileMatchesSession && recordSessionId == null)) return;
+        if (
+          recordSessionId !== sessionId &&
+          !(fileMatchesSession && recordSessionId == null)
+        )
+          return;
         const message = asObject(record.message);
         if (message == null) return;
         const role = stringValue(message.role);

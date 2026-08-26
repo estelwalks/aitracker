@@ -131,7 +131,11 @@ export function createNodeResumeExecutor(
       const [file, ...args] = command;
       if (!file) throw new Error("missing resume executable");
       const executable = await resolveExecutable(file);
-      const launch = visibleTerminalCommand(executable, args, useVisibleTerminal);
+      const launch = visibleTerminalCommand(
+        executable,
+        args,
+        useVisibleTerminal,
+      );
 
       await new Promise<void>((resolve, reject) => {
         let child: ChildProcess;
@@ -196,7 +200,10 @@ function visibleTerminalCommand(
     const command = [executable, ...args].map(appleScriptString).join(" ");
     return {
       file: "/usr/bin/osascript",
-      args: ["-e", `tell application "Terminal" to do script ${appleScriptString(command)}`],
+      args: [
+        "-e",
+        `tell application "Terminal" to do script ${appleScriptString(command)}`,
+      ],
     };
   }
   if (process.platform === "win32") {

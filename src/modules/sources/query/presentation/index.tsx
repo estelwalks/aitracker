@@ -10,7 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { BrandIcon } from "../../../../components/BrandIcon";
-import { InsightCard } from "../../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../../insights/index.ts";
 import {
   Card,
   ChipTabs,

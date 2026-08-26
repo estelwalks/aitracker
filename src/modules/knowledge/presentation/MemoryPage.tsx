@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../insights/index.ts";
 import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";

@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context";
 import {
   getBrowserSecurityClient,
   getDesktopSecurityClient,
   type SecurityHistoryView,
 } from "../../security-assessment/index";
-import { SkillsPage } from "../../skill-catalog/index.ts";
-import type { SkillWorkspaceSnapshot } from "../../skill-catalog/index.ts";
-import { getDistillationActivity } from "../../distillation/query";
+import {
+  SkillsPage,
+  type SkillWorkspaceSnapshot,
+} from "../../skill-catalog/index.ts";
+import { getDistillationActivity } from "../../distillation/index.ts";
 
 /** Real distillation activity surfaced by the composition root. */
 export interface SkillsDistillationView {

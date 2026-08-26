@@ -10,10 +10,16 @@ import { TranscriptPanel } from "./TranscriptPanel.tsx";
  * local logs, held in memory only, serialized into this page's response, and
  * never persisted or uploaded.
  */
-export function SessionDetailPage({ session }: { session: SessionSummary }) {
+export function SessionDetailPage({
+  session,
+  source,
+}: {
+  session: SessionSummary;
+  source?: string;
+}) {
   return (
     <div className="flex items-start gap-4">
-      <ChatHistorySidebar activeId={session.sessionId} />
+      <ChatHistorySidebar activeId={session.sessionId} source={source} />
       <TranscriptPanel session={session} />
     </div>
   );

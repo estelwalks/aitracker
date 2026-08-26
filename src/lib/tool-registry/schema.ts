@@ -226,27 +226,30 @@ const UsageCapabilitySchema = z
 
 const SessionsCapabilitySchema = z
   .object({
-    mode: z.enum(["resume", "unsupported"]),
+    mode: z.enum(["read", "resume", "unsupported"]),
     reader: z.string().min(1).optional(),
     /** Resume command as a token array; must contain exactly the {sessionId} placeholder. */
     command: z.array(z.string().min(1)).optional(),
   })
   .superRefine((sessions, ctx) => {
-    if (sessions.mode === "resume") {
+    if (sessions.mode === "read" || sessions.mode === "resume") {
       if (sessions.reader === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["sessions.reader"],
-          message: "sessions.mode=resume requires a reader key",
+          message: `sessions.mode=${sessions.mode} requires a reader key`,
         });
       }
-      if (!sessions.command || sessions.command.length === 0) {
+      if (
+        sessions.mode === "resume" &&
+        (!sessions.command || sessions.command.length === 0)
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["sessions.command"],
           message: "sessions.mode=resume requires a command template",
         });
-      } else {
+      } else if (sessions.mode === "resume" && sessions.command) {
         const placeholders = sessions.command.filter((t) =>
           t.includes("{sessionId}"),
         );
@@ -265,6 +268,13 @@ const SessionsCapabilitySchema = z
             message: "session command tokens must not contain NUL",
           });
         }
+      }
+      if (sessions.mode === "read" && sessions.command !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["sessions.command"],
+          message: "sessions.mode=read must not declare a command template",
+        });
       }
     } else if (
       sessions.reader !== undefined ||

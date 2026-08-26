@@ -21,7 +21,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   PageInsightAdapter,
-} from "../../modules/insights/page/contracts.ts";
+} from "../../modules/insights/index.ts";
 import { countInstalledMarketSkills } from "./api.server.ts";
 import { marketCacheKey, readMarketCache } from "./cache.server.ts";
 
