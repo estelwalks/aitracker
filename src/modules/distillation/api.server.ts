@@ -309,8 +309,11 @@ export async function cancelCandidate(
   return { ok: true, candidate: result.value.candidate };
 }
 
-export async function deleteCandidates(candidateIds: readonly string[]): Promise<{ deleted: number }> {
-  const { getCompositionRoot } = await import("../../app/composition.server.ts");
+export async function deleteCandidates(
+  candidateIds: readonly string[],
+): Promise<{ deleted: number }> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
   let deleted = 0;
   for (const candidateId of candidateIds) {

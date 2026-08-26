@@ -40,7 +40,7 @@ export function buildResumeCommandTokens(
 ): readonly string[] | null {
   if (!isResumeSafeId(sessionId)) return null;
   const plan = getSessionPlan(source);
-  if (!plan) return null;
+  if (!plan || plan.command.length === 0) return null;
   const command = plan.command.map((token) =>
     token === "{sessionId}" ? sessionId : token,
   );

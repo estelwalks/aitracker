@@ -9,6 +9,10 @@ directories:
   output: release
 files:
   - build/electron/**/*
+  # Tests are compiled by the Electron TypeScript project for local unit-test
+  # runs, but are not runtime dependencies of the packaged application.
+  - "!build/electron/**/*.test.js"
+  - "!build/electron/**/*.test.js.map"
   - package.json
   - "!node_modules/**/*"
   # Main-process-only scanner runtime. Its ESM bundle loads Prompt markdown at
@@ -61,6 +65,3 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  # 选择任意目录时自动安装到 <所选目录>\AITracker 子目录
-  # （覆盖静默安装等内置 sanitize 不生效的场景）
-  include: build/installer.nsh

@@ -8,14 +8,21 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const tasks = new Map<string, DistillationTaskProgress>();
-const taskFile = join(homedir(), ".trusttools", "tasks", "distillation-tasks.json");
+const taskFile = join(
+  homedir(),
+  ".trusttools",
+  "tasks",
+  "distillation-tasks.json",
+);
 let loaded = false;
 
 function loadTasks() {
   if (loaded) return;
   loaded = true;
   try {
-    const parsed = JSON.parse(readFileSync(taskFile, "utf8")) as DistillationTaskProgress[];
+    const parsed = JSON.parse(
+      readFileSync(taskFile, "utf8"),
+    ) as DistillationTaskProgress[];
     for (const task of parsed) {
       if (task?.taskId && task.phase) tasks.set(task.taskId, task);
     }
@@ -49,7 +56,10 @@ export function updateDistillationTask(
   taskId: string,
   phase: DistillationTaskPhase,
   percent: number,
-  extra: Pick<DistillationTaskProgress, "candidateId" | "candidate" | "errorCode"> = {},
+  extra: Pick<
+    DistillationTaskProgress,
+    "candidateId" | "candidate" | "errorCode"
+  > = {},
 ): DistillationTaskProgress | undefined {
   loadTasks();
   const current = tasks.get(taskId);

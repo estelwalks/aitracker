@@ -26,11 +26,8 @@ import type { MessageKey } from "../../../lib/i18n/messages";
 import {
   PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,
-} from "../../insights/page/presentation/use-page-insight.pure";
+} from "../../insights/index.ts";
 import {
-  deleteModelProfile,
-  listModelProfiles,
-  listRemoteModels,
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
   OFFICIAL_MODEL_DISPLAY_NAME,
@@ -39,12 +36,17 @@ import {
   isRecommendedModel,
   protocolMeta,
   recommendedModelDisplayName,
-  setActiveModelProfile,
-  testModelProfile,
-  upsertModelProfile,
   type ModelProfileInput,
   type ModelProfileView,
   type ProfileMode,
+} from "../../ai-orchestration/index.ts";
+import {
+  deleteModelProfile,
+  listModelProfiles,
+  listRemoteModels,
+  setActiveModelProfile,
+  testModelProfile,
+  upsertModelProfile,
 } from "../../ai-orchestration/index.ts";
 
 interface FormState {

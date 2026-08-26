@@ -2221,6 +2221,18 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
         }
       ]
     },
+    "storage": {
+      "dataRoots": [
+        {
+          "base": "appData",
+          "path": "aipy-pro"
+        },
+        {
+          "base": "appDataRoaming",
+          "path": "aipy-pro"
+        }
+      ]
+    },
     "capabilities": {
       "usage": {
         "mode": "adapter",
@@ -2278,7 +2290,8 @@ export const RAW_TOOL_DEFINITIONS: readonly RawToolDefinition[] = [
       "skills": "unsupported",
       "agents": "unsupported",
       "sessions": {
-        "mode": "unsupported"
+        "mode": "read",
+        "reader": "aipy-session-v1"
       },
       "market": "unsupported",
       "security": "unsupported"
@@ -3239,4 +3252,4 @@ export const SHARED_POLICY_PACKS: SharedPolicyPacks = {
   }
 };
 
-export const TOOL_REGISTRY_VERSION: string = "e880e6b482c7cf48";
+export const TOOL_REGISTRY_VERSION: string = "fb1ba632e68b66aa";

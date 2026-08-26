@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 
 import { useI18n } from "../lib/i18n/context";
-import { InsightCard } from "../modules/insights/page/presentation/insight-card";
+import { InsightCard } from "../modules/insights/index.ts";
 import { MarketPanel } from "../modules/skill-distribution/presentation/MarketPanel";
 
 export const Route = createLazyFileRoute("/market")({

@@ -16,8 +16,3 @@ export type {
   DashboardWindowSummary,
 } from "./summary-contracts";
 export { windowToView } from "./summary-contracts";
-export { DashboardPage } from "./presentation/DashboardPage";
-export {
-  getDashboardCustomWindow,
-  getDashboardSummaryReadModel,
-} from "./summary-query";

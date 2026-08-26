@@ -39,6 +39,7 @@ export const BUILTIN_SESSION_READERS: ReadonlySet<string> = new Set([
   "codex-session-v1",
   "grok-session-v1",
   "dsh-session-v1",
+  "aipy-session-v1",
 ]);
 
 export const BUILTIN_CONTEXT_READERS: ReadonlySet<string> = new Set([
@@ -270,12 +271,12 @@ export function validateToolDefinitions(
 
     // Sessions capability.
     const sessions = def.capabilities.sessions;
-    if (sessions.mode === "resume") {
+    if (sessions.mode === "read" || sessions.mode === "resume") {
       if (sessions.reader === undefined) {
         diag(
           id,
           "sessions-missing-reader",
-          "sessions.mode=resume requires a reader key",
+          `sessions.mode=${sessions.mode} requires a reader key`,
         );
       } else if (!knownSessionReaders.has(sessions.reader)) {
         diag(
@@ -284,13 +285,16 @@ export function validateToolDefinitions(
           `session reader "${sessions.reader}" is not registered`,
         );
       }
-      if (!sessions.command || sessions.command.length === 0) {
+      if (
+        sessions.mode === "resume" &&
+        (!sessions.command || sessions.command.length === 0)
+      ) {
         diag(
           id,
           "sessions-missing-command",
           "sessions.mode=resume requires a command template",
         );
-      } else {
+      } else if (sessions.mode === "resume" && sessions.command) {
         if (!sessions.command.includes("{sessionId}")) {
           diag(
             id,
@@ -306,6 +310,12 @@ export function validateToolDefinitions(
               "session command token contains NUL",
             );
         }
+      } else if (sessions.mode === "read" && sessions.command !== undefined) {
+        diag(
+          id,
+          "read-sessions-has-command",
+          "sessions.mode=read must not declare a command",
+        );
       }
     } else if (
       sessions.reader !== undefined ||

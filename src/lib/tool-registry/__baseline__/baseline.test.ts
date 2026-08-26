@@ -70,8 +70,10 @@ test("baseline usage parsing matches usageLogParsingFor for every tool", () => {
   }
 });
 
-test("baseline skill agents match the live SKILL_AGENT_RULES (9 agents)", () => {
-  assert.equal(SKILL_AGENT_RULES.length, BASELINE_SKILL_AGENTS.length);
+test("baseline skill agents remain present in the live Skill rules", () => {
+  // Preserve the frozen nine-agent baseline while allowing supported
+  // extensions to be appended.
+  assert.ok(SKILL_AGENT_RULES.length >= BASELINE_SKILL_AGENTS.length);
   for (const expected of BASELINE_SKILL_AGENTS) {
     const live = SKILL_AGENT_RULES.find(
       (rule) => rule.toolId === expected.toolId,

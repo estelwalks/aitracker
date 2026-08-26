@@ -10,7 +10,7 @@ export interface AgentCapabilities {
   readonly usage: "native" | "adapter" | "unsupported";
   readonly skills: "read-write" | "read" | "unsupported";
   readonly agents: "read" | "unsupported";
-  readonly sessions: "resume" | "unsupported";
+  readonly sessions: "read" | "resume" | "unsupported";
   readonly market: "install-target" | "unsupported";
   readonly security: "scan" | "unsupported";
 }

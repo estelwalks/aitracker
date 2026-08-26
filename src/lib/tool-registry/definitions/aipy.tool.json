@@ -32,6 +32,18 @@
       }
     ]
   },
+  "storage": {
+    "dataRoots": [
+      {
+        "base": "appData",
+        "path": "aipy-pro"
+      },
+      {
+        "base": "appDataRoaming",
+        "path": "aipy-pro"
+      }
+    ]
+  },
   "capabilities": {
     "usage": {
       "mode": "adapter",
@@ -89,7 +101,8 @@
     "skills": "unsupported",
     "agents": "unsupported",
     "sessions": {
-      "mode": "unsupported"
+      "mode": "read",
+      "reader": "aipy-session-v1"
     },
     "market": "unsupported",
     "security": "unsupported"

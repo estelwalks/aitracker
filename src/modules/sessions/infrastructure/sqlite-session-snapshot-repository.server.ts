@@ -102,8 +102,9 @@ export function createSqliteSessionSnapshotRepository(
             }));
           return {
             collectorVersion:
-              generation.source_fingerprint === "sessions-v3-stable-id"
-                ? "sessions-v3-stable-id"
+              typeof generation.source_fingerprint === "string" &&
+              generation.source_fingerprint.startsWith("sessions-v")
+                ? generation.source_fingerprint
                 : undefined,
             generatedAt:
               msToIso(generation.generated_at_ms) ?? new Date(0).toISOString(),

@@ -18,7 +18,7 @@ import type {
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
 const SESSION_SOURCES = new Set(
   PUBLIC_TOOL_MANIFEST.tools
-    .filter((tool) => tool.capabilities.sessions === "resume")
+    .filter((tool) => tool.capabilities.sessions !== "unsupported")
     .map((tool) => tool.id),
 );
 const RANGE_VALUES = new Set<NonNullable<SessionFilter["range"]>>([

@@ -80,7 +80,9 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
               ) : null}
             </div>
           </div>
-          <ResumeSessionButton session={session} />
+          {session.resumeAvailable ? (
+            <ResumeSessionButton session={session} />
+          ) : null}
         </div>
       </div>
 

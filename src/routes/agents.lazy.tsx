@@ -8,7 +8,7 @@ import type { AgentUsageOverviewReadModel } from "../modules/skill-catalog/usage
 import {
   getSecuritySkillVerdicts,
   type SecuritySkillVerdictReadModel,
-} from "../modules/security-assessment/query/agent-verdicts";
+} from "../modules/security-assessment/index.ts";
 
 export const Route = createLazyFileRoute("/agents")({
   component: AgentsRoute,
