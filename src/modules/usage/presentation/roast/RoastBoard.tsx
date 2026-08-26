@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Flame, Minus } from "lucide-react";
 
-import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
+import { BrandIcon } from "../../../../components/BrandIcon";
+import { brandColorOf } from "../../../../components/BrandIcon.helpers";
 import { ChipTabs, EmptyState, Panel } from "../../../../components/tt";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";

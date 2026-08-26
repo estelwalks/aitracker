@@ -22,11 +22,10 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
-import {
-  DistillButton,
-  notifyDistillStarted,
-} from "../../../components/DistillButton.tsx";
+import { BrandIcon } from "../../../components/BrandIcon.tsx";
+import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
+import { DistillButton } from "../../../components/DistillButton.tsx";
+import { notifyDistillStarted } from "../../../components/DistillButton.helpers.ts";
 import {
   Tooltip,
   TooltipContent,
