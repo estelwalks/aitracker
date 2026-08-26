@@ -12,7 +12,8 @@ import type { LocalUsageEvent } from "../../lib/local-usage";
 import { useI18n } from "../../lib/i18n/context";
 import type { MessageKey } from "../../lib/i18n/messages";
 import { Panel } from "../tt";
-import { BrandIcon, brandColorOf } from "../BrandIcon";
+import { BrandIcon } from "../BrandIcon";
+import { brandColorOf } from "../BrandIcon.helpers";
 
 type DimensionKey =
   "model" | "messages" | "reasoning" | "tool" | "mcp" | "skill";
