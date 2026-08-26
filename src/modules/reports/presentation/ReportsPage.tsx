@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../insights/index.ts";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import {
@@ -794,7 +794,6 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }

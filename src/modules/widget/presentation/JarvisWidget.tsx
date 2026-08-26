@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
-import { usePageInsight } from "../../insights/page/presentation/use-page-insight";
+import { usePageInsight } from "../../insights/index.ts";
 import { setWidgetPref, useWidgetPrefs, type WidgetTab } from "./widget-prefs";
 import { WidgetThemeScope } from "./widget-theme";
 import { WidgetConfigPanel } from "./WidgetConfigPanel";

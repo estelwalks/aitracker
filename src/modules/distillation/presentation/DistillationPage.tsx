@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import "./distill/distill.css";
 
 import { Pagination } from "../../../components/tt";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
 import type { MessageKey } from "../../../lib/i18n/messages";
@@ -677,14 +677,15 @@ export function DistillationPage({
                 onClick={() => setDistillView("config")}
                 className="tt-chip font-mono"
               >
-                <FlaskConical className="size-4" /> {t("distill.viewConfig")}
+                <FlaskConical className="size-3.5" /> {t("distill.viewConfig")}
               </button>
               <button
                 type="button"
                 onClick={() => setDistillView("result")}
                 className="tt-chip font-mono tt-chip-on"
               >
-                <PackageCheck className="size-4" /> {t("distill.historyTitle")}
+                <PackageCheck className="size-3.5" />{" "}
+                {t("distill.historyTitle")}
                 {totalRuns > 0 && (
                   <span className="ml-1 rounded-full bg-foreground/10 px-1.5 text-[10px]">
                     {totalRuns}

@@ -1,15 +1,15 @@
-import { Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { MessagesSquare, Sparkles, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
+import { InsightCard } from "../../insights/index.ts";
 import {
   EmptyState,
   Pagination,
   SearchInput,
   Segmented,
 } from "../../../components/tt.tsx";
-import { BrandIcon } from "../../../components/BrandIcon.tsx";
+import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
 import { getSessionsQuery } from "../query.ts";
@@ -89,7 +89,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   const [keyword, setKeyword] = useState("");
   const [source, setSource] = useState<string | "all">("all");
   const [range, setRange] =
-    useState<NonNullable<SessionFilter["range"]>>("all");
+    useState<NonNullable<SessionFilter["range"]>>("30d");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const firstRequest = useRef(true);
@@ -144,7 +144,9 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   // 稳定的源列表：以初始（未过滤）页为准，只增不减——选中某个 agent 后
   // 其它 agent tab 不会被隐藏（agent 是切换/筛选，不是单选后隐藏其它）。
   const [initialSources] = useState(() => [
-    ...new Set(initial.sessions.map((session) => session.source)),
+    ...new Set(
+      initial.sources ?? initial.sessions.map((session) => session.source),
+    ),
   ]);
   const sources = useMemo(
     () =>
@@ -290,36 +292,62 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
           />
         </div>
 
-        <div className="tt-xscroll flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1">
-          <button
-            type="button"
-            onClick={() => changeFilter(() => setSource("all"))}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
-              source === "all"
-                ? "bg-primary/15 text-primary"
-                : "bg-surface-2 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t("sessions.source.all")}
-          </button>
-          {sources.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => changeFilter(() => setSource(value))}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] whitespace-nowrap transition-colors ${
-                source === value
-                  ? "bg-primary/15 text-primary"
-                  : "bg-surface-2 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <BrandIcon
-                name={sourceLabel(value)}
-                className="size-3.5 shrink-0"
-              />
-              {sourceLabel(value)}
-            </button>
-          ))}
+        <div
+          className="tt-xscroll flex items-center gap-2 overflow-x-auto px-1 pb-1"
+          role="group"
+          aria-label={t("sessions.summary.tools")}
+        >
+          {["all", ...sources].map((value) => {
+            const active = source === value;
+            const label =
+              value === "all" ? t("sessions.source.all") : sourceLabel(value);
+            const color =
+              value === "all" ? "var(--color-primary)" : brandColorOf(label);
+
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  changeFilter(() =>
+                    setSource(value === source ? "all" : value),
+                  )
+                }
+                className={`relative inline-flex shrink-0 items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-[12.5px] font-medium transition-colors ${
+                  active ? "bg-surface-2" : "bg-card hover:bg-surface-2"
+                }`}
+                style={
+                  active
+                    ? {
+                        background: `linear-gradient(180deg, color-mix(in oklab, ${color} 14%, transparent), transparent 72%), var(--color-surface-2)`,
+                      }
+                    : undefined
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-x-2 bottom-0 h-0.5 origin-left rounded-full transition-transform duration-200 ${
+                    active ? "scale-x-100" : "scale-x-0"
+                  }`}
+                  style={{ background: color }}
+                />
+                {value !== "all" ? (
+                  <span
+                    className="flex size-6 items-center justify-center rounded-md"
+                    style={{ background: `${color}1f` }}
+                  >
+                    <BrandIcon
+                      name={label}
+                      className="size-3.5"
+                      color={color}
+                    />
+                  </span>
+                ) : null}
+                <span className="truncate">{label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -353,6 +381,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
                   <SessionRow
                     key={`${session.source}:${session.sessionId}:${session.startedAt}`}
                     session={session}
+                    sourceFilter={source === "all" ? undefined : source}
                   />
                 ))}
               </ul>
@@ -381,13 +410,57 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
   );
 }
 
-function SessionRow({ session }: { session: SessionSummary }) {
+function SessionRow({
+  session,
+  sourceFilter,
+}: {
+  session: SessionSummary;
+  sourceFilter?: string;
+}) {
   const { t, format } = useI18n();
+  const navigate = useNavigate();
   const status = STATUS_META[session.status];
   const detailAvailable = session.sessionId !== "unavailable";
+  const openDetail = () => {
+    if (!detailAvailable) return;
+    void navigate({
+      to: "/chats/$id",
+      params: { id: session.sessionId },
+      search: sourceFilter ? { source: sourceFilter } : {},
+    });
+  };
 
   return (
-    <li className="group flex items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-surface-2/60">
+    <li
+      className={`group flex items-center gap-x-4 px-4 py-3.5 transition-colors hover:bg-surface-2/60 ${
+        detailAvailable
+          ? "cursor-pointer focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
+          : ""
+      }`}
+      role={detailAvailable ? "link" : undefined}
+      tabIndex={detailAvailable ? 0 : undefined}
+      aria-label={
+        detailAvailable
+          ? session.title || t("sessions.row.untitled")
+          : undefined
+      }
+      onClick={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest("a,button,input,select,textarea")
+        ) {
+          return;
+        }
+        openDetail();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openDetail();
+      }}
+    >
       {/* 左侧：来源/状态 + 标题 + 项目·时间·时长·轮次·Token 元数据 */}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -405,18 +478,12 @@ function SessionRow({ session }: { session: SessionSummary }) {
             {t(status.labelKey)}
           </span>
         </div>
-        <p className="mt-1 truncate text-[13px] font-medium text-foreground">
-          {detailAvailable ? (
-            <Link
-              to="/chats/$id"
-              params={{ id: session.sessionId }}
-              className="transition-colors hover:text-primary"
-            >
-              {session.title || t("sessions.row.untitled")}
-            </Link>
-          ) : (
-            session.title || t("sessions.row.untitled")
-          )}
+        <p
+          className={`mt-1 truncate text-[13px] font-medium text-foreground ${
+            detailAvailable ? "transition-colors group-hover:text-primary" : ""
+          }`}
+        >
+          {session.title || t("sessions.row.untitled")}
         </p>
         <div className="tt-num mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
           <span>{session.projectKey}</span>
@@ -443,7 +510,9 @@ function SessionRow({ session }: { session: SessionSummary }) {
       </div>
       {/* 右侧：恢复对话/命令行按钮 */}
       <div className="flex shrink-0 items-center gap-2">
-        <ResumeSessionButton session={session} />
+        {session.resumeAvailable ? (
+          <ResumeSessionButton session={session} />
+        ) : null}
       </div>
     </li>
   );

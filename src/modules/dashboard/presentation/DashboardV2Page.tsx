@@ -12,7 +12,7 @@ import type {
 import { windowToView } from "../summary-contracts.ts";
 import { getDashboardCustomWindow } from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
-import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
+import { useSecurityScanOverview } from "../../security-assessment/index.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,

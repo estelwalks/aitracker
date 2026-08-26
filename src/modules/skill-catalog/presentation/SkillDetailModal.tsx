@@ -28,7 +28,7 @@ import {
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import { Progress } from "../../../components/ui/progress";
-import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
+import { AgentInstallBar } from "../../skill-distribution/index.ts";
 import {
   getSkillFiles,
   requestApprovedSkillInstall,

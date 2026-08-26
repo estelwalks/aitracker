@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { InsightCard } from "../../insights/index.ts";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
@@ -32,7 +32,7 @@ import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import { getAgentUsageOverview } from "../usage-overview-query";
 import type { SkillSnapshot } from "../query";
-import type { SecuritySkillVerdictReadModel } from "../../security-assessment/query/agent-verdicts";
+import type { SecuritySkillVerdictReadModel } from "../../security-assessment/index.ts";
 import type {
   ToolOverviewBreakdownRow,
   ToolOverviewCard,

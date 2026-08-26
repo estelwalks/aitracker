@@ -33,10 +33,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../../../components/ui/tooltip.tsx";
-import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
+import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
-import type { SecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
+import type { SecurityScanOverview } from "../../security-assessment/index.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,

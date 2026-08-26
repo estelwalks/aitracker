@@ -6,6 +6,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 export const ROUTE_LINE_LIMIT = 80;
 export const MODULE_REQUIRED_ENTRIES = Object.freeze([
@@ -51,15 +52,44 @@ async function listSourceFiles(directory) {
   return nested.flat();
 }
 
-export function extractImportSources(source) {
-  const imports = new Set();
-  for (const pattern of [
-    /\bfrom\s*["']([^"']+)["']/g,
-    /\bimport\s*["']([^"']+)["']/g,
-  ]) {
-    for (const match of source.matchAll(pattern)) imports.add(match[1]);
+export function extractImportEntries(source) {
+  const file = ts.createSourceFile(
+    "architecture-audit.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const entries = new Map();
+
+  for (const statement of file.statements) {
+    if (
+      (ts.isImportDeclaration(statement) ||
+        ts.isExportDeclaration(statement)) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      const typeOnly = ts.isImportDeclaration(statement)
+        ? statement.importClause?.isTypeOnly === true
+        : statement.isTypeOnly === true;
+      const source = statement.moduleSpecifier.text;
+      const previous = entries.get(source);
+      entries.set(source, {
+        source,
+        // If the same module is imported both as a value and as a type, the
+        // dependency is runtime-reachable and must remain a runtime edge.
+        typeOnly: previous ? previous.typeOnly && typeOnly : typeOnly,
+      });
+    }
   }
-  return [...imports].sort();
+
+  return [...entries.values()].sort((a, b) => a.source.localeCompare(b.source));
+}
+
+export function extractImportSources(source) {
+  return extractImportEntries(source).map(
+    ({ source: importSource }) => importSource,
+  );
 }
 
 /**
@@ -233,13 +263,18 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
     ),
   );
   const graph = new Map();
+  const runtimeGraph = new Map();
   const violations = [];
 
   for (const file of files) {
     const repoPath = toRepoPath(root, file);
     const source = contents.get(file);
-    const imports = extractImportSources(source);
+    const importEntries = extractImportEntries(source);
+    const imports = importEntries.map(
+      ({ source: importSource }) => importSource,
+    );
     const dependencies = [];
+    const runtimeDependencies = [];
 
     if (repoPath.startsWith("src/routes/")) {
       const lineCount = source.split(/\r?\n/).length;
@@ -258,9 +293,11 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
             "setInterval is not allowed in routes; use a Task/Job status query instead",
         });
       }
-      for (const importSource of imports.filter(
-        routeHasForbiddenDirectImport,
+      for (const { source: importSource, typeOnly } of importEntries.filter(
+        ({ source: importSource }) =>
+          routeHasForbiddenDirectImport(importSource),
       )) {
+        if (typeOnly) continue;
         violations.push({
           type: "route-direct-server-import",
           file: repoPath,
@@ -269,10 +306,11 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
       }
     }
 
-    for (const importSource of imports) {
+    for (const { source: importSource, typeOnly } of importEntries) {
       const target = resolveRelativeImport(file, importSource, sourceFiles);
       if (!target) continue;
       dependencies.push(target);
+      if (!typeOnly) runtimeDependencies.push(target);
 
       const fromModule = getModuleName(repoPath);
       const targetPath = toRepoPath(root, target);
@@ -281,6 +319,8 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
         fromModule &&
         targetModule &&
         fromModule !== targetModule &&
+        !typeOnly &&
+        !repoPath.includes(".test.") &&
         !isPublicModuleEntry(targetPath, targetModule)
       ) {
         violations.push({
@@ -291,6 +331,7 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
       }
     }
     graph.set(file, dependencies.sort());
+    runtimeGraph.set(file, runtimeDependencies.sort());
   }
 
   for (const moduleName of moduleNames) {
@@ -310,7 +351,7 @@ export async function analyzeProject(root, allowlist = MIGRATION_ALLOWLIST) {
     if (!sourceFiles.has(publicEntry)) continue;
     const leakedImplementation = findReachableServerImplementation(
       publicEntry,
-      graph,
+      runtimeGraph,
       root,
     );
     if (leakedImplementation) {

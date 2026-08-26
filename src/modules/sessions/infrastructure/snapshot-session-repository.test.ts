@@ -142,6 +142,32 @@ test("stale snapshot remains readable and schedules a refresh", async () => {
   assert.equal(reader.refreshCalls, 1);
 });
 
+test("hides AiPy zero-token placeholders", async () => {
+  const base = summary("placeholder");
+  const aipy = {
+    ...base,
+    sessionId: "aipy-zero",
+    source: "aipy" as const,
+    totals: {
+      ...base.totals,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    },
+  };
+  const repository = createSnapshotSessionRepository(
+    readerWith({
+      generatedAt: "2026-01-01T00:00:00.000Z",
+      sessions: [aipy],
+      density: [],
+    }),
+  );
+  assert.deepEqual(
+    (await repository.list()).map((session) => session.sessionId),
+    [],
+  );
+});
+
 test("aborted signal returns without reading or refreshing", async () => {
   const reader = readerWith(null);
   const controller = new AbortController();

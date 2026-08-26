@@ -53,7 +53,7 @@ import { SkillDetailModal } from "./SkillDetailModal.tsx";
 import { SkillSecurityModal } from "./SkillSecurityModal.tsx";
 import { SyncTargetModal } from "./SyncTargetModal.tsx";
 import { ToolOverview } from "./ToolOverview";
-import type { SecuritySkillVerdictReadModel } from "../../security-assessment/query/agent-verdicts";
+import type { SecuritySkillVerdictReadModel } from "../../security-assessment/index.ts";
 
 export type SkillsPageProps = {
   initial: SkillWorkspaceSnapshot;

@@ -253,34 +253,29 @@ src/lib/local-usage/
 └── types.ts
 ```
 
-统一客户端数据访问契约位于：
-
-```text
-src/lib/client-data/
-├── types.ts
-├── mock.ts
-├── runtime.ts
-└── index.ts
-```
-
 当前运行方式：
 
-- 浏览器 Dashboard/Token：TanStack Server Function 调用本地采集器
-- Electron：Preload 注入的类型化 IPC Adapter
-- Node 包：Node 本地采集 Adapter
+- 浏览器页面：通过 TanStack Server Function 调用本地采集器和 SQLite 投影
+- Electron：Renderer 继续使用同一套 Server Function；Preload 只提供桌面能力 IPC
+- Node/Electron 主进程：由本地服务器、任务运行时和数据库基础设施承载文件访问
 
-Skill、市场、安全检测和 Memory 页面目前仍使用 `src/lib/mock-data.ts` 中的演示数据，等待对应本地扫描器接入。
-
-Electron 客户端不需要 localhost HTTP。未来的 `trusttools preview` 可以单独提供可选的浏览器预览 Host，不作为桌面客户端内部通信方式。
+Electron 生产客户端不能直接加载 `file://`：打包后的 Nitro 输出由主进程通过
+`127.0.0.1` 随机端口的本地 HTTP 适配器托管，详见上文“生产构建”。
 
 ## 页面
 
 - `/`：首页 Dashboard
-- `/tokens`：Token 分析
 - `/agents`：工具概览与 Skill 管理
+- `/skills`：Skill 工作台
 - `/market`：Skill 市场
 - `/security`：安全检测
 - `/memory`：记忆聚合
+- `/distill`：蒸馏工作台
+- `/reports`：日报/报告
+- `/tracker`：Token 追踪
+- `/chats`、`/chats/$id`：会话列表与详情
+- `/sources`：数据源状态
+- `/widget`：桌面 Widget
 - `/settings`：本地设置
 
 # AITracker

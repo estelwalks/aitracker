@@ -1,5 +1,5 @@
 import { useI18n } from "../../../lib/i18n/context";
-import { useWidgetPrefs } from "../../widget/presentation/widget-prefs";
+import { useWidgetPrefs } from "../../widget/index.ts";
 import { Field, Toggle } from "./fields";
 
 /** Mounted only while the dedicated Menu Bar App settings category is open. */

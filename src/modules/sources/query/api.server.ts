@@ -1,5 +1,5 @@
 import type { UsageSourcesSummary } from "../../../lib/local-usage/get-usage-sources";
-import type { SkillSnapshotData } from "../../skill-catalog";
+import type { SkillSnapshotData } from "../../skill-catalog/index.ts";
 import { SKILL_AGENTS } from "../../../lib/local-skills/types";
 import { AI_TOOLS } from "../../../lib/tools/catalog";
 import { osFromProcess } from "../../../lib/tools/detection.server";
@@ -138,7 +138,33 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
   await usageSnapshot.ensureHydrated();
   await installationSnapshot.ensureHydrated();
   const latest = usageSnapshot.readLatest();
-  const installations = installationSnapshot.readLatest();
+  let installations = installationSnapshot.readLatest();
+  const knownInstallationIds = new Set(
+    installations.data?.facts.map((fact) => fact.id) ?? [],
+  );
+  const catalogChanged = AI_TOOLS.some(
+    (tool) => !knownInstallationIds.has(tool.id),
+  );
+  if (installations.data == null || catalogChanged) {
+    // A registry upgrade can add a tool while the persisted installation
+    // snapshot is still inside its six-hour freshness window. Repair that
+    // shape mismatch inline so a newly supported tool is visible immediately.
+    await installationSnapshot
+      .requestRefresh({
+        reason: installations.data == null ? "empty" : "event",
+      })
+      .catch(() => {});
+    installations = installationSnapshot.readLatest();
+  } else if (
+    installations.status === "stale" ||
+    installations.status === "failed"
+  ) {
+    // Age-based refresh remains non-blocking; the last-known-good projection
+    // is safe to render while the task runtime refreshes in the background.
+    void installationSnapshot
+      .requestRefresh({ reason: "event" })
+      .catch(() => {});
+  }
   const { deriveUsageSources } =
     await import("../../../lib/local-usage/get-usage-sources");
   const { homedir } = await import("node:os");
@@ -164,7 +190,7 @@ async function readSourcesFromSnapshot(): Promise<UsageSourcesSummary> {
   );
 }
 
-/** Fire-and-forget refresh of the Usage + Installation snapshots. */
+/** Refresh the Usage + Installation snapshots through the task runtime. */
 async function refreshSourcesFromSnapshot(): Promise<void> {
   const { getCompositionRoot } =
     await import("../../../app/composition.server.ts");
@@ -173,7 +199,7 @@ async function refreshSourcesFromSnapshot(): Promise<void> {
   // single-flighted against scheduled runs, recorded in the run store and
   // subject to the heavy-collector budget.
   void usageSnapshot.requestRefresh({ reason: "manual" }).catch(() => {});
-  void installationSnapshot
+  await installationSnapshot
     .requestRefresh({ reason: "manual" })
     .catch(() => {});
 }

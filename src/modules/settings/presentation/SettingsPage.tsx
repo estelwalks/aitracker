@@ -59,11 +59,11 @@ import {
   type SettingsCategory,
   type SettingsSection,
 } from "../settings-navigation";
-import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
+import { InsightSettingsSection } from "../../insights/index.ts";
 import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
-} from "../../security-assessment/llm-review.server-fns";
+} from "../../security-assessment/index.ts";
 
 const categoryKeys: Record<SettingsCategory, MessageKey> = {
   preferences: "settings.sections.preferences",

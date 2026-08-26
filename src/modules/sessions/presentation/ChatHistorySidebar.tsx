@@ -40,7 +40,13 @@ function projectItem(
  * title / source / date / project — never conversation content. Hidden below
  * the xl breakpoint; the data comes from the public sessions query facade.
  */
-export function ChatHistorySidebar({ activeId }: { activeId: string }) {
+export function ChatHistorySidebar({
+  activeId,
+  source,
+}: {
+  activeId: string;
+  source?: string;
+}) {
   const { t, format } = useI18n();
   const [items, setItems] = useState<SidebarItem[]>([]);
   const [failed, setFailed] = useState(false);
@@ -50,6 +56,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
     let cancelled = false;
     void getSessionsQuery({
       data: {
+        ...(source ? { filter: { source } } : {}),
         pageSize: 100,
         sort: { field: "startedAt", direction: "desc" },
       },
@@ -64,7 +71,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [format]);
+  }, [format, source]);
 
   const groups = useMemo(() => {
     const keyword = q.trim().toLocaleLowerCase();
@@ -140,6 +147,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
                         key={item.sessionId}
                         to="/chats/$id"
                         params={{ id: item.sessionId }}
+                        search={source ? { source } : {}}
                         title={item.title}
                         className={`flex items-start gap-2 rounded-md px-2 py-1.5 transition-colors ${
                           active

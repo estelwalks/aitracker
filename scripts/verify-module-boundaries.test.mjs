@@ -7,6 +7,7 @@ import {
   MODULE_REQUIRED_ENTRIES,
   ROUTE_LINE_LIMIT,
   analyzeProject,
+  extractImportEntries,
   extractImportSources,
   getBlockingFindings,
   hasPageCollectionInterval,
@@ -37,6 +38,18 @@ test("extractImportSources finds static imports and exports", () => {
       'import { value } from "./value"; export { value } from "./value"; import "./side-effect";',
     ),
     ["./side-effect", "./value"],
+  );
+});
+
+test("extractImportEntries distinguishes type-only imports", () => {
+  assert.deepEqual(
+    extractImportEntries(
+      'import type { Value } from "./types"; import { run } from "./runtime"; export type { Value } from "./types";',
+    ),
+    [
+      { source: "./runtime", typeOnly: false },
+      { source: "./types", typeOnly: true },
+    ],
   );
 });
 

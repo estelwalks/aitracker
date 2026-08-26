@@ -471,7 +471,8 @@ export function createDistillationApplication(
       await ready();
       if (!candidates.has(candidateId)) return false;
       candidates.delete(candidateId);
-      if (ports.persistence?.delete) await ports.persistence.delete(candidateId);
+      if (ports.persistence?.delete)
+        await ports.persistence.delete(candidateId);
       return true;
     },
 

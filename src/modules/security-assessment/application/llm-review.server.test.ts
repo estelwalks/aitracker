@@ -6,7 +6,7 @@ import type {
   AIExecutionStatus,
   AIRequest,
 } from "../../ai-orchestration/contracts.ts";
-import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
+import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
 import {
   SECURITY_LLM_DIMENSIONS,
   buildSecurityLlmReviewAggregate,
