@@ -42,6 +42,7 @@ export {
   REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
   reportSchedulePreferenceRequests,
+  reportSchedulesPreferenceValue,
   serializeReportSchedule,
   serializeReportSchedules,
 } from "./schedule.ts";

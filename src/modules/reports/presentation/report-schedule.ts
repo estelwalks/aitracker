@@ -13,6 +13,7 @@ import {
   DEFAULT_REPORT_SCHEDULES,
   parseReportSchedulesWithMigration,
   REPORT_SCHEDULE_KEY,
+  reportSchedulesPreferenceValue,
   serializeReportSchedules,
   type ReportSchedulesConfig,
 } from "../schedule.ts";
@@ -34,7 +35,10 @@ async function loadFromPlatform(): Promise<unknown> {
 }
 
 async function saveToPlatform(config: ReportSchedulesConfig): Promise<void> {
-  await setPreference(REPORT_SCHEDULE_KEY, config);
+  await setPreference(
+    REPORT_SCHEDULE_KEY,
+    reportSchedulesPreferenceValue(config),
+  );
 }
 
 async function syncScheduleToTasks(
