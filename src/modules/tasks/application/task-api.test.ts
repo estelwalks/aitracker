@@ -56,7 +56,8 @@ function fixtures() {
     async compact() {},
     async rotate() {},
   };
-  const scheduler: Pick<TaskScheduler, "runNow" | "cancel"> = {
+  const scheduler: Pick<TaskScheduler, "runNow" | "cancel"> &
+    Partial<Pick<TaskScheduler, "refresh">> = {
     async runNow() {
       return run({ status: "queued" });
     },
@@ -112,6 +113,24 @@ test("updatePreference accepts a monthly schedule for reports.generate", async (
     enabled: true,
     schedule: { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
   });
+});
+
+test("updatePreference refreshes a running scheduler after persistence", async () => {
+  const f = fixtures();
+  let refreshed = 0;
+  f.scheduler = {
+    ...f.scheduler,
+    refresh: async () => {
+      refreshed += 1;
+    },
+  };
+  const result = await createTaskApi(f).updatePreference({
+    taskId: "reports.generate",
+    enabled: true,
+    schedule: { kind: "daily", localTime: "18:30" },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(refreshed, 1);
 });
 
 test("manual run and cancellation delegate through controlled identifiers", async () => {

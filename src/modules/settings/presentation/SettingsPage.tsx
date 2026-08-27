@@ -52,6 +52,7 @@ import { Field, Toggle } from "./fields";
 import { ModelProfilesSection } from "./ModelProfilesSection";
 import { MenuBarAppSettingsSection } from "./MenuBarAppSettingsSection";
 import { ScanScheduleSection } from "./ScanScheduleSection";
+import { ReportSchedule } from "../../reports/index.ts";
 import { useSecurityClient } from "./use-security-client";
 import {
   SETTINGS_CATEGORIES,
@@ -68,6 +69,7 @@ import {
 const categoryKeys: Record<SettingsCategory, MessageKey> = {
   preferences: "settings.sections.preferences",
   scan: "settings.sections.scan",
+  reports: "settings.sections.reports",
   model: "settings.sections.model",
   data: "settings.sections.data",
   about: "settings.sections.about",
@@ -133,7 +135,7 @@ export interface SettingsLoaderData {
   readonly storageError: string | null;
   /**
    * Deep-link target: `?section=scan` opens 扫描与安全,
-   * `?section=model` opens 模型与 AI；旧的 `?section=menu-bar-app`
+   * `?section=reports` opens 日报与周报, `?section=model` opens 模型与 AI；旧的 `?section=menu-bar-app`
    * 仍然映射到应用偏好。
    */
   readonly section?: SettingsSection;
@@ -597,6 +599,12 @@ export function SettingsPage({
                   </StatusBadge>
                 </Field>
               </div>
+            </div>
+          )}
+
+          {category === "reports" && (
+            <div>
+              <ReportSchedule />
             </div>
           )}
 

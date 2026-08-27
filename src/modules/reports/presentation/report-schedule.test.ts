@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_REPORT_SCHEDULE,
+  nextReportScheduleAt,
   parseReportSchedule,
   serializeReportSchedule,
 } from "./report-schedule.ts";
@@ -55,4 +56,30 @@ test("parseReportSchedule accepts valid monthly/monthly variants", () => {
   assert.equal(monthly.granularity, "monthly");
   assert.equal(monthly.time, "09:00");
   assert.equal(monthly.dayOfMonth, 15);
+});
+
+test("nextReportScheduleAt follows local daily, weekly and month-end semantics", () => {
+  const base = new Date(2026, 7, 28, 18, 0, 0, 0); // Friday
+  const common = {
+    configured: true,
+    enabled: true,
+    time: "18:30",
+    dayOfWeek: 0,
+    dayOfMonth: 31,
+  } as const;
+  assert.equal(
+    nextReportScheduleAt({ ...common, granularity: "daily" }, base).getDate(),
+    28,
+  );
+  assert.equal(
+    nextReportScheduleAt({ ...common, granularity: "weekly" }, base).getDate(),
+    31,
+  );
+  const january = new Date(2026, 0, 31, 19, 0, 0, 0);
+  const monthly = nextReportScheduleAt(
+    { ...common, granularity: "monthly" },
+    january,
+  );
+  assert.equal(monthly.getMonth(), 1);
+  assert.equal(monthly.getDate(), 28);
 });

@@ -97,3 +97,23 @@ test("retention executor delegates to the injected application port", async () =
   await registry.executors["apply-retention-v1"](context());
   assert.equal(calls, 1);
 });
+
+test("report executor uses the persisted cadence to select daily or weekly definition", async () => {
+  const calls: string[] = [];
+  const app = {
+    definitions: [
+      { definitionId: "reports.daily", kind: "daily", enabled: true },
+      { definitionId: "reports.weekly", kind: "weekly", enabled: true },
+    ],
+    generate: async (input: { definitionId: string; trigger: string }) => {
+      calls.push(`${input.definitionId}:${input.trigger}`);
+      return { ok: true, value: {} };
+    },
+  } as never;
+  const registry = createExecutorRegistry({
+    reports: app,
+    reportSchedule: async () => "weekly",
+  });
+  await registry.executors["generate-report-v1"](context());
+  assert.deepEqual(calls, ["reports.weekly:schedule"]);
+});

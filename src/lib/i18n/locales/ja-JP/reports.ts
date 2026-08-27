@@ -53,6 +53,7 @@ export const reports = {
     daily: "毎日",
     weekly: "毎週",
     monthly: "毎月",
+    monthDaySuffix: "日",
     save: "保存",
     enabled: "定期生成を有効にしました",
     disabled: "定期生成を無効にしました",
@@ -60,6 +61,24 @@ export const reports = {
       "スケジュールの同期に失敗しました。ローカル設定は保持されています",
     editorNote:
       "保存するとバックグラウンドタスクスケジューラに同期され、アプリ実行中は設定した間隔で自動生成されます。",
+    lastRun: "前回の生成",
+    nextRun: "次回の生成",
+    neverRun: "未実行",
+    pending: "現在の生成が完了するまで待機中",
+    disabledStatus: "無効",
+    processRequiredHint:
+      "アプリ起動中またはメニューバーに隠れている間に実行され、終了中に逃した分は次回起動時に実行されます。",
+    runSummary: "{time} · {result}",
+    loadFailed: "レポートスケジュールの読み込みに失敗しました",
+    runStatus: {
+      queued: "待機中",
+      running: "生成中",
+      succeeded: "完了",
+      failed: "失敗",
+      cancelled: "キャンセル済み",
+      skipped: "スキップ",
+      abandoned: "中断",
+    },
     days: {
       mon: "月",
       tue: "火",
