@@ -119,7 +119,7 @@ export const distill = {
   savedStep3: "Click “Sync” to pick an Agent",
   savedStep3Desc: "Distribute to Claude Code / Codex, etc.",
   savedStep4: "Local directory",
-  savedStep4Desc: "~/.trusttools/skills/<skill-name>/",
+  savedStep4Desc: "~/.aitracker/skills/<skill-name>/",
   savedGuideGo: "Go to Skill Manager",
   savedGuideStay: "Stay here",
   guideTitle: "What is distillation?",

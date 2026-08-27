@@ -25,7 +25,7 @@ import type {
 const NOW = new Date("2026-08-03T12:00:00.000Z");
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await mkdtemp(join(tmpdir(), "tt-sessions-"));
+  const home = await mkdtemp(join(tmpdir(), "aitracker-sessions-"));
   try {
     return await fn(home);
   } finally {
@@ -1390,12 +1390,12 @@ function dshJsonl(cwd: string): string {
 
 test("DSH: parses session.jsonl (compression none) with turns/project/tools", async () => {
   await withTempHome(async (home) => {
-    const cwd = join(home, "trusttools_webapp");
+    const cwd = join(home, "aitracker_webapp");
     const sessionDir = join(
       home,
       ".dsh",
       "sessions",
-      "trusttools_webapp",
+      "aitracker_webapp",
       DSH_SESSION_ID,
     );
     await mkdir(sessionDir, { recursive: true });
@@ -1408,8 +1408,8 @@ test("DSH: parses session.jsonl (compression none) with turns/project/tools", as
     assert.equal(session.sessionId, DSH_SESSION_ID);
     assert.equal(session.title, "Refactor scanner");
     assert.equal(session.model, "deepseek-v4-flash");
-    assert.equal(session.projectKey, "trusttools_webapp");
-    assert.equal(session.projectRef, "~/trusttools_webapp");
+    assert.equal(session.projectKey, "aitracker_webapp");
+    assert.equal(session.projectRef, "~/aitracker_webapp");
     assert.equal(session.turns, 1);
     assert.equal(session.editTurns, 1);
     assert.equal(session.subagentCalls, 1);

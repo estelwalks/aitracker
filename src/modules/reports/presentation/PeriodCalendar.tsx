@@ -157,7 +157,7 @@ export function PeriodCalendar({
             >
               <ChevronLeft className="size-3.5" />
             </button>
-            <span className="tt-num font-mono text-[12px] tracking-tight">
+            <span className="aitracker-num font-mono text-[12px] tracking-tight">
               {monthLabel}
             </span>
             <button

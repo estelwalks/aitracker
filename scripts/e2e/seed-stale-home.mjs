@@ -1,10 +1,10 @@
-// Seed a throwaway TrustTools home with a STALE usage + skills snapshot in
+// Seed a throwaway AITracker home with a STALE usage + skills snapshot in
 // SQLite, so the stale-snapshot e2e scenarios (performance-stale-offline.spec.ts)
 // reproduce "stale last-known-good + offline" without scanning the real machine.
 //
 // Usage: node scripts/e2e/seed-stale-home.mjs <targetHomeDir> [--now-ms <epochMs>]
 //
-// Produces <targetHomeDir>/.trusttools/data/trusttools.v1.db by:
+// Produces <targetHomeDir>/.aitracker/data/aitracker.v1.db by:
 //   1. running the real fresh-install baseline
 //      with a fixed clock, so the database is byte-schema-identical to a fresh
 //      app install and its schema_migrations ledger checksums match what the
@@ -108,9 +108,9 @@ function main() {
     return;
   }
 
-  const dataDir = join(args.targetDir, ".trusttools", "data");
+  const dataDir = join(args.targetDir, ".aitracker", "data");
   mkdirSync(dataDir, { recursive: true });
-  const dbPath = join(dataDir, "trusttools.v1.db");
+  const dbPath = join(dataDir, "aitracker.v1.db");
 
   const database = new DatabaseSync(dbPath);
   try {

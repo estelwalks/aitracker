@@ -3,7 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { BrandIcon } from "../../../components/BrandIcon";
-import { TTButton } from "../../../components/tt";
+import { AITrackerButton } from "../../../components/aitracker";
 import {
   Dialog,
   DialogContent,
@@ -239,16 +239,16 @@ export function SyncTargetModal({
               available: availableAgents.length,
             })}
           </span>
-          <TTButton variant="default" disabled={busy} onClick={onClose}>
+          <AITrackerButton variant="default" disabled={busy} onClick={onClose}>
             {t("common.cancel")}
-          </TTButton>
-          <TTButton
+          </AITrackerButton>
+          <AITrackerButton
             variant="primary"
             disabled={busy || selected.size === 0}
             onClick={() => void confirm()}
           >
             <Download className="size-3.5" /> {t("skills.syncTarget.enable")}
-          </TTButton>
+          </AITrackerButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -46,7 +46,7 @@ function rmTempDir(directory: string): void {
 
 /** Opens a migrated, file-backed database in a fresh temp directory. */
 function openMigratedHost(scope: TestScope): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-constraints-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-constraints-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: versionsProvider(),
@@ -948,7 +948,7 @@ test("enforces the analysis forbidden-content CHECK at the SQL level (P1-8)", (t
     "INSERT INTO insight_enhancement_lines (cache_key, sequence, analysis) VALUES (?, ?, ?)",
     "ck-analysis",
     1,
-    "~/Documents/trusttools",
+    "~/Documents/aitracker",
   );
   assert.equal(count(host, "insight_enhancement_lines"), 2);
 
@@ -991,7 +991,7 @@ test("enforces the value_json forbidden-content CHECK at the SQL level (P1-8)", 
     );
   };
 
-  insertPreference("p1", JSON.stringify("~/Documents/trusttools"));
+  insertPreference("p1", JSON.stringify("~/Documents/aitracker"));
   insertPreference("p2", JSON.stringify("普通中文文本"));
 
   expectRejected(

@@ -11,7 +11,7 @@
 	    渲染进程 JIT 内存必需。
 
 	  刻意不包含:
-	  - com.apple.security.app-sandbox(应用非沙盒:数据只读写 ~/.trusttools 与
+	  - com.apple.security.app-sandbox(应用非沙盒:数据只读写 ~/.aitracker 与
 	    Application Support,无需沙盒容器;沙盒反而会引入文件访问 entitlement)
 	  - 任何 com.apple.security.files.* 权限(不请求文稿/桌面/下载/网络卷访问,
 	    用户主动选择 TCC 目录中的文件时由 macOS 按需询问,不做预授权)

@@ -58,7 +58,7 @@ function openMigratedDb(scope: TestScope): {
   directory: string;
   databasePath: string;
 } {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-integrity-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-integrity-"));
   const databasePath = join(directory, "platform.db");
   const host = DatabaseHost.open({
     path: databasePath,

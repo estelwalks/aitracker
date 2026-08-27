@@ -28,7 +28,7 @@ test("rejects legacy stores, imports, shadow writes and read switches", async ()
         'const prefs = new ElectronStore(); // "electron-store" is forbidden',
         "const shadow = createShadowTaskRunRepository({ legacyStore });",
         "await importAtomicJsonStore(source);",
-        "const flag = TRUSTTOOLS_FORCE_LEGACY_READ_PATH;",
+        "const flag = FORCE_LEGACY_READ_PATH;",
       ].join("\n"),
     },
     analyzeSqliteOnly,

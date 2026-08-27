@@ -101,7 +101,7 @@ export function RuntimeBlockPanel({
         <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
           <span
             className={`size-1.5 rounded-full ${
-              monitoring ? "bg-ok tt-breathe" : "bg-border"
+              monitoring ? "bg-ok aitracker-breathe" : "bg-border"
             }`}
           />
           {monitoring

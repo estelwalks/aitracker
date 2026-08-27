@@ -6,6 +6,7 @@ import {
   createReportContextPort,
   type SnapshotSession,
 } from "./usage-context-adapter.ts";
+import type { UsageSnapshotDto } from "../../usage/contracts.ts";
 
 const daily = BUILTIN_REPORT_DEFINITIONS[0]!;
 const weekly = BUILTIN_REPORT_DEFINITIONS[1]!;
@@ -38,6 +39,24 @@ function snapshotWith(sessions: readonly SnapshotSession[]) {
     readLatest: () => ({ data: { sessions } }),
   };
 }
+
+function usageSnapshotWith(
+  data: Pick<UsageSnapshotDto, "daily" | "aggregateBuckets">,
+) {
+  return {
+    ensureHydrated: async () => undefined,
+    readLatest: () => ({ data: data as UsageSnapshotDto }),
+  };
+}
+
+const tokenCounts = (totalTokens: number) => ({
+  inputTokens: totalTokens,
+  cachedInputTokens: 0,
+  cacheCreationInputTokens: 0,
+  outputTokens: 0,
+  reasoningOutputTokens: 0,
+  totalTokens,
+});
 
 const AUG_SAMPLE = [
   session(localIso(2026, 8, 15, 10)), // local 08-15
@@ -108,4 +127,108 @@ test("no period falls back to the current local day for daily", async () => {
   const ctx = await port.collect({ definition: daily });
   assert.equal(ctx.stats?.sessions, 1);
   assert.equal(ctx.stats?.tokens, 1000);
+});
+
+test("uses event-day usage for tokens while keeping session metrics", async () => {
+  const port = createReportContextPort({
+    snapshot: snapshotWith([
+      session(localIso(2026, 8, 15), {
+        source: "codex",
+        totals: { totalTokens: 1000 },
+      }),
+      session(localIso(2026, 8, 14), {
+        source: "codex",
+        totals: { totalTokens: 900 },
+      }),
+    ]),
+    usage: usageSnapshotWith({
+      daily: [
+        {
+          date: "2026-08-15",
+          ...tokenCounts(3000),
+          events: 3,
+          bySource: {
+            codex: tokenCounts(2500),
+            aipy: tokenCounts(500),
+          },
+        } as UsageSnapshotDto["daily"][number],
+      ],
+      aggregateBuckets: [
+        {
+          date: "2026-08-15",
+          latestTimestamp: localIso(2026, 8, 15),
+          source: "codex",
+          model: "test-model",
+          project: "opaque-project",
+          projectLabel: "event-project",
+          ...tokenCounts(2500),
+          measurement: "observed",
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 0,
+            tools: [],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+          evidence: {
+            textResponses: false,
+            toolCalls: false,
+            skillCalls: false,
+            toolOutputCalls: false,
+            reasoningTokens: false,
+            systemPromptTokens: false,
+          },
+        },
+        {
+          date: "2026-08-15",
+          latestTimestamp: localIso(2026, 8, 15),
+          source: "aipy",
+          model: "test-model",
+          project: "quick-project",
+          projectLabel: "quick-project",
+          ...tokenCounts(500),
+          measurement: "observed",
+          events: 1,
+          context: {
+            textResponses: 0,
+            toolCalls: 0,
+            tools: [],
+            skillCalls: 0,
+            toolOutputCalls: 0,
+          },
+          evidence: {
+            textResponses: false,
+            toolCalls: false,
+            skillCalls: false,
+            toolOutputCalls: false,
+            reasoningTokens: false,
+            systemPromptTokens: false,
+          },
+        },
+      ] as NonNullable<UsageSnapshotDto["aggregateBuckets"]>,
+    }),
+  });
+  const ctx = await port.collect({
+    definition: daily,
+    period: { granularity: "day", key: "2026-08-15" },
+  });
+
+  assert.equal(ctx.stats?.sessions, 1);
+  assert.equal(ctx.stats?.turns, 5);
+  assert.equal(ctx.stats?.durationMin, 10);
+  assert.equal(ctx.stats?.tokens, 3000);
+  assert.deepEqual(
+    ctx.stats?.bySource.map(({ source, sessions, tokens }) => ({
+      source,
+      sessions,
+      tokens,
+    })),
+    [
+      { source: "codex", sessions: 1, tokens: 2500 },
+      { source: "aipy", sessions: 0, tokens: 500 },
+    ],
+  );
+  assert.deepEqual(ctx.stats?.projects, ["event-project", "quick-project"]);
+  assert.match(ctx.summary, /含内部 Agent 调用/);
 });

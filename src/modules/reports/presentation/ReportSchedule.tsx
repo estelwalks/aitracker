@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AlarmClock, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { toast } from "sonner";
 
-import { Segmented, TTButton } from "../../../components/tt";
+import { Segmented, AITrackerButton } from "../../../components/aitracker";
 import { Switch } from "../../../components/ui/switch";
 import { useI18n } from "../../../lib/i18n/context";
 import {
@@ -80,7 +80,7 @@ export function ReportSchedule() {
   // First-run guide card.
   if (!schedule.configured && !editing) {
     return (
-      <section className="tt-panel mt-3 flex flex-col gap-3 p-5">
+      <section className="aitracker-panel mt-3 flex flex-col gap-3 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
             <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -95,10 +95,10 @@ export function ReportSchedule() {
               </p>
             </div>
           </div>
-          <TTButton variant="primary" onClick={beginConfigure}>
+          <AITrackerButton variant="primary" onClick={beginConfigure}>
             <Zap className="size-3.5" />
             {t("reports.schedule.enable")}
-          </TTButton>
+          </AITrackerButton>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
           <span className="rounded-full bg-surface-2 px-2.5 py-1">
@@ -112,7 +112,7 @@ export function ReportSchedule() {
 
   // Configured status bar (or active edit panel).
   return (
-    <section className="tt-panel mt-3 flex flex-col">
+    <section className="aitracker-panel mt-3 flex flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -136,7 +136,7 @@ export function ReportSchedule() {
             onCheckedChange={(next) => void handleToggle(next)}
             aria-label={t("reports.schedule.enable")}
           />
-          <TTButton
+          <AITrackerButton
             size="sm"
             variant="ghost"
             onClick={() => {
@@ -150,7 +150,7 @@ export function ReportSchedule() {
               <ChevronDown className="size-3.5" />
             )}
             {editing ? t("common.cancel") : t("reports.schedule.configure")}
-          </TTButton>
+          </AITrackerButton>
         </div>
       </div>
 
@@ -158,7 +158,7 @@ export function ReportSchedule() {
         <div className="border-t border-border px-5 py-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <span className="tt-label block text-[11px] text-muted-foreground">
+              <span className="aitracker-label block text-[11px] text-muted-foreground">
                 {t("reports.schedule.granularity")}
               </span>
               <Segmented<ScheduleGranularity>
@@ -175,7 +175,7 @@ export function ReportSchedule() {
             </div>
 
             <div className="space-y-1.5">
-              <span className="tt-label block text-[11px] text-muted-foreground">
+              <span className="aitracker-label block text-[11px] text-muted-foreground">
                 {t("reports.schedule.time")}
               </span>
               <input
@@ -193,7 +193,7 @@ export function ReportSchedule() {
 
             {draft.granularity === "weekly" && (
               <div className="space-y-1.5">
-                <span className="tt-label block text-[11px] text-muted-foreground">
+                <span className="aitracker-label block text-[11px] text-muted-foreground">
                   {t("reports.schedule.weekday")}
                 </span>
                 <div className="flex flex-wrap gap-1">
@@ -223,7 +223,7 @@ export function ReportSchedule() {
 
             {draft.granularity === "monthly" && (
               <div className="space-y-1.5">
-                <span className="tt-label block text-[11px] text-muted-foreground">
+                <span className="aitracker-label block text-[11px] text-muted-foreground">
                   {t("reports.schedule.monthDay")}
                 </span>
                 <input
@@ -247,9 +247,12 @@ export function ReportSchedule() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <TTButton variant="primary" onClick={() => void handleSave()}>
+            <AITrackerButton
+              variant="primary"
+              onClick={() => void handleSave()}
+            >
               {t("reports.schedule.save")}
-            </TTButton>
+            </AITrackerButton>
             <span className="text-[11px] text-muted-foreground">
               {t("reports.schedule.editorNote")}
             </span>

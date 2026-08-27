@@ -8,7 +8,7 @@
  *   - 卡片:`border-radius: var(--radius)`,不带阴影(工作台扁平风格)。
  *     尖角(rounded-none/sm/md)统一收成 calc(var(--radius) - 4px)。
  *   - 分隔线:不做描边,用 inset 顶线分层(--rowline)。
- *   - tt-toolbar:原型是裸 flex(无边框盒);tt-overlay 透明度 0.68(当前全局是 0.62)。
+ *   - aitracker-toolbar:原型是裸 flex(无边框盒);aitracker-overlay 透明度 0.68(当前全局是 0.62)。
  */
 .distill-workbench {
   /* 原型 token:当前全局 --elev-1/--hairline 已与之一致,这里自包含一份; */
@@ -24,9 +24,9 @@
 
 /* ── 卡片:连续圆角,去投影(卡片不再带阴影,保持与工作台扁平一致) ────── */
 .distill-workbench .bg-card,
-.distill-workbench .tt-panel,
-.distill-workbench .tt-glass,
-.distill-workbench .tt-metric,
+.distill-workbench .aitracker-panel,
+.distill-workbench .aitracker-glass,
+.distill-workbench .aitracker-metric,
 .distill-workbench .bg-popover {
   border-radius: var(--radius);
   box-shadow: none;
@@ -34,13 +34,13 @@
 }
 
 .distill-workbench .bg-card:hover,
-.distill-workbench .tt-panel:hover,
-.distill-workbench .tt-metric:hover {
+.distill-workbench .aitracker-panel:hover,
+.distill-workbench .aitracker-metric:hover {
   box-shadow: none;
 }
 
-/* 当前项目的 .tt-panel > header 加了渐隐底,原型 Panel 没有——作用域内复位。 */
-.distill-workbench .tt-panel > header {
+/* 当前项目的 .aitracker-panel > header 加了渐隐底,原型 Panel 没有——作用域内复位。 */
+.distill-workbench .aitracker-panel > header {
   background: none;
 }
 
@@ -64,8 +64,8 @@
 }
 
 /* ── 共享工具类覆盖(作用域内,只影响工作台) ─────────────────────── */
-/* 原型模式 chip 组是裸 flex;当前全局 tt-toolbar 是带边框渐变盒 */
-.distill-workbench .tt-toolbar {
+/* 原型模式 chip 组是裸 flex;当前全局 aitracker-toolbar 是带边框渐变盒 */
+.distill-workbench .aitracker-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -78,8 +78,8 @@
   box-shadow: none;
 }
 
-/* 原型遮罩透明度 0.68(全局 @utility tt-overlay 是 0.62) */
-.distill-workbench .tt-overlay {
+/* 原型遮罩透明度 0.68(全局 @utility aitracker-overlay 是 0.62) */
+.distill-workbench .aitracker-overlay {
   background-color: var(--overlay);
 }
 
@@ -103,7 +103,7 @@
   }
 
   .distill-workbench .distill-config-row > .min-w-0.flex-1,
-  .distill-workbench .distill-config-row > .tt-toolbar {
+  .distill-workbench .distill-config-row > .aitracker-toolbar {
     width: 100%;
   }
 
@@ -111,7 +111,7 @@
     display: none;
   }
 
-  .distill-workbench .distill-config-row .tt-toolbar .tt-chip {
+  .distill-workbench .distill-config-row .aitracker-toolbar .aitracker-chip {
     flex: 1 1 auto;
     justify-content: center;
   }
@@ -121,19 +121,19 @@
 /* 原型(styles.css @theme inline)用 animate-fade-in / animate-scale-in;
    drawer 等通过 portal 挂到 body,脱离 .distill-workbench 作用域,故独立定义。
    当前项目未引入 tw-animate-css 对应命名,这里补上,只被蒸馏组件使用。 */
-@keyframes tt-fade-in-kf {
+@keyframes aitracker-fade-in-kf {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes tt-scale-in-kf {
+@keyframes aitracker-scale-in-kf {
   from { opacity: 0; transform: scale(0.96) translateY(8px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .animate-fade-in {
-  animation: tt-fade-in-kf 0.18s ease-out both;
+  animation: aitracker-fade-in-kf 0.18s ease-out both;
 }
 .animate-scale-in {
-  animation: tt-scale-in-kf 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: aitracker-scale-in-kf 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
@@ -143,16 +143,16 @@
 }
 
 /* ── 运行中进度条:服务端同步完成、无真实进度,用不定向扫描条(原型梯度 + 扫动) ── */
-@keyframes tt-progress-kf {
+@keyframes aitracker-progress-kf {
   0% { width: 14%; }
   60% { width: 74%; }
   100% { width: 14%; }
 }
-.distill-workbench .tt-progress-indeterminate {
-  animation: tt-progress-kf 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+.distill-workbench .aitracker-progress-indeterminate {
+  animation: aitracker-progress-kf 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .distill-workbench .tt-progress-indeterminate {
+  .distill-workbench .aitracker-progress-indeterminate {
     animation: none;
     width: 40%;
   }

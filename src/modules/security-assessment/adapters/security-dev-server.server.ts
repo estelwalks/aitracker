@@ -50,7 +50,7 @@ import { getCompositionRoot } from "../../../app/composition.server.ts";
  */
 
 /** Key used to mirror the singleton on `globalThis` so it survives Vite HMR. */
-const DEV_SERVICE_GLOBAL = "__TRUSTTOOLS_SECURITY_DEV_SERVICE__";
+const DEV_SERVICE_GLOBAL = "__AITRACKER_SECURITY_DEV_SERVICE__";
 
 /** Mirror of `electron/local-web-server.ts` `MAX_SECURITY_API_BODY_BYTES`. */
 const MAX_SECURITY_API_BODY_BYTES = 64 * 1024;

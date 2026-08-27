@@ -171,14 +171,14 @@ function UsageHeatmapView({ events }: { events: LocalUsageEvent[] }) {
   }
 
   return (
-    <div className="tt-xscroll pb-1">
+    <div className="aitracker-xscroll pb-1">
       <div className="min-w-[720px]">
         <div className="grid grid-cols-[44px_repeat(24,minmax(22px,1fr))] gap-1">
           <span />
           {Array.from({ length: 24 }, (_, hour) => (
             <span
               key={hour}
-              className="tt-num text-center text-[9px] text-muted-foreground"
+              className="aitracker-num text-center text-[9px] text-muted-foreground"
             >
               {hour % 3 === 0 ? hour : ""}
             </span>

@@ -12,16 +12,18 @@ function WidgetRoutePage() {
 
   useEffect(() => {
     if (mode !== "float") return;
-    document.documentElement.classList.add("tt-widget-float-document");
-    document.body.classList.add("tt-widget-float-document");
+    document.documentElement.classList.add("aitracker-widget-float-document");
+    document.body.classList.add("aitracker-widget-float-document");
     return () => {
-      document.documentElement.classList.remove("tt-widget-float-document");
-      document.body.classList.remove("tt-widget-float-document");
+      document.documentElement.classList.remove(
+        "aitracker-widget-float-document",
+      );
+      document.body.classList.remove("aitracker-widget-float-document");
     };
   }, [mode]);
 
   return (
-    <div className="tt-widget-float-stage">
+    <div className="aitracker-widget-float-stage">
       <GlassOverviewWidget />
     </div>
   );

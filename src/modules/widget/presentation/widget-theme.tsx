@@ -11,7 +11,9 @@ export function WidgetThemeScope({ children }: { children: ReactNode }) {
   const { prefs } = useWidgetPrefs();
   return (
     <div
-      className={prefs.widgetTheme === "dark" ? "tt-widget-dark" : undefined}
+      className={
+        prefs.widgetTheme === "dark" ? "aitracker-widget-dark" : undefined
+      }
     >
       {children}
     </div>

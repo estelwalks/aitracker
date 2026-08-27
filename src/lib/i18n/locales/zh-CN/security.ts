@@ -90,7 +90,7 @@ export const security = {
     summary: "{skills} 个 Skill · {dimensions} 个检测维度 · 健康度 {health}%",
     devBanner: {
       title: "开发模式 · 检测服务已连接",
-      desc: "扫描使用真实本机 Skill 根目录；检测历史隔离保存在 ~/.trusttools/security-dev/。",
+      desc: "扫描使用真实本机 Skill 根目录；检测历史隔离保存在 ~/.aitracker/security-dev/。",
     },
     unavailable: {
       title: "本机伴随服务不可用",

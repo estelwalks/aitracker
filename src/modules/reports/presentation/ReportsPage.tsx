@@ -413,13 +413,13 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
         {/* 顶部：归档筛选 + 当前周期操作（V3.0 原型） */}
         <section className="sticky top-14 z-10 rounded-xl bg-card p-2.5 shadow-[0_10px_24px_-18px_rgba(0,0,0,0.7)] ring-1 ring-border/60 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="tt-seg shrink-0">
+            <div className="aitracker-seg shrink-0">
               {KINDS.map((item) => (
                 <button
                   key={item.k}
                   type="button"
                   onClick={() => switchKind(item.k)}
-                  className={`tt-seg-item ${kind === item.k ? "tt-seg-on" : ""}`}
+                  className={`aitracker-seg-item ${kind === item.k ? "aitracker-seg-on" : ""}`}
                   title={t(item.hintKey)}
                 >
                   {t(item.labelKey)}
@@ -465,7 +465,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                           : "text-muted-foreground hover:bg-surface-2/55"
                       } ${n || has ? "" : "opacity-45"}`}
                     >
-                      <span className="tt-num truncate whitespace-nowrap">
+                      <span className="aitracker-num truncate whitespace-nowrap">
                         {big}
                       </span>
                       {has && (
@@ -520,7 +520,7 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                 <h2 className="truncate text-[13px] font-semibold tracking-tight">
                   {period.label}
                 </h2>
-                <span className="tt-num mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
+                <span className="aitracker-num mt-0.5 block truncate font-mono text-[10.5px] text-muted-foreground">
                   {t("reports.header.sessions", {
                     count: periodMetric.count,
                   })}
@@ -704,10 +704,10 @@ export function ReportsPage({ initial }: { initial: ReportQueryViewModel }) {
                       setBody(event.target.value);
                     }}
                     spellCheck={false}
-                    className="tt-scroll min-h-[460px] w-full resize-y rounded-xl bg-surface-2 p-4 font-mono text-[12.5px] leading-7 outline-none"
+                    className="aitracker-scroll min-h-[460px] w-full resize-y rounded-xl bg-surface-2 p-4 font-mono text-[12.5px] leading-7 outline-none"
                   />
                 ) : (
-                  <div className="tt-scroll min-h-[460px] rounded-xl bg-surface-2/40 px-5 py-4">
+                  <div className="aitracker-scroll min-h-[460px] rounded-xl bg-surface-2/40 px-5 py-4">
                     <MarkdownView source={body} />
                   </div>
                 )}

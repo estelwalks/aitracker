@@ -8,7 +8,7 @@ test("session query facade normalizes the browser-safe page contract", () => {
   const result = validateSessionsPageInput({
     filter: {
       source: "codex",
-      projectId: "trusttools_webapp",
+      projectId: "aitracker_webapp",
       keyword: "scanner",
       range: "30d",
       status: "available",
@@ -21,7 +21,7 @@ test("session query facade normalizes the browser-safe page contract", () => {
   assert.deepEqual(result, {
     filter: {
       source: "codex",
-      projectId: "trusttools_webapp",
+      projectId: "aitracker_webapp",
       keyword: "scanner",
       range: "30d",
       status: "available",

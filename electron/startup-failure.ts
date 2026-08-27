@@ -1,6 +1,6 @@
 import type { ElectronMessages } from "./i18n.js";
 
-export const STARTUP_FAILURE_CODE_HEADER = "x-trusttools-startup-failure-code";
+export const STARTUP_FAILURE_CODE_HEADER = "x-aitracker-startup-failure-code";
 
 export type StartupFailureCode =
   | "database.access-denied"

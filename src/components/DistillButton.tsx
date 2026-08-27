@@ -1,7 +1,7 @@
 import { Brain } from "lucide-react";
 
 import { useI18n } from "../lib/i18n/context.tsx";
-import { TTButton } from "./tt.tsx";
+import { AITrackerButton } from "./aitracker.tsx";
 
 /**
  * 全局统一的「蒸馏」按钮：会话列表、会话详情、片段蒸馏均使用同一形态与文案。
@@ -33,7 +33,7 @@ export function DistillButton({
         noun: resolvedNoun,
       });
   return (
-    <TTButton
+    <AITrackerButton
       size={size}
       variant={off ? "default" : "primary"}
       disabled={off}
@@ -43,6 +43,6 @@ export function DistillButton({
     >
       <Brain className="size-3.5" />
       {t("distill.button.label")}
-    </TTButton>
+    </AITrackerButton>
   );
 }

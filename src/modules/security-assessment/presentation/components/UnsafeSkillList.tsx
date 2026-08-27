@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 
-import { Pagination } from "../../../../components/tt";
+import { Pagination } from "../../../../components/aitracker";
 import { useI18n } from "../../../../lib/i18n/context";
 import {
   hitDimensionsOf,
@@ -49,7 +49,7 @@ export function UnsafeSkillList({
       ) : (
         <>
           <div className="border-t border-border/60">
-            <table className="tt-table tt-table--clean-head w-full">
+            <table className="aitracker-table aitracker-table--clean-head w-full">
               <thead>
                 <tr>
                   <th>{t("security.center.result.skill")}</th>

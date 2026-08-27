@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { catalogs, getMessage } from "../lib/i18n/messages";
+import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { getSkillWorkspace } from "../modules/skill-catalog/query";
 
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/agents")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "skills.agentOverview.title",
+          brandParams,
         ),
       },
       {

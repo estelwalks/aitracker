@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 import "./distill/distill.css";
 
-import { Pagination } from "../../../components/tt";
+import { Pagination } from "../../../components/aitracker";
 import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context";
 import { toUiError } from "../../../lib/errors";
@@ -53,7 +53,7 @@ import {
 const EST_TOKENS_PER_TURN = 900;
 /** 蒸馏历史每页条数（原型 HIST_PAGE = 10）。 */
 const HIST_PAGE = 10;
-const DISTILL_TASK_KEY = "trusttools.distillation.active-task";
+const DISTILL_TASK_KEY = "aitracker.distillation.active-task";
 
 function keyOf(item: { source: string; sessionId: string }): string {
   return materialKeyOf(item);
@@ -596,7 +596,7 @@ export function DistillationPage({
             />
 
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
-              <div className="tt-toolbar gap-1">
+              <div className="aitracker-toolbar gap-1">
                 {(
                   [
                     {
@@ -619,7 +619,7 @@ export function DistillationPage({
                       key={k}
                       type="button"
                       onClick={() => setDistillView(k)}
-                      className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                      className={`aitracker-chip font-mono ${on ? "aitracker-chip-on" : ""}`}
                     >
                       <Icon className="size-4" /> {label}
                       {badge != null && badge > 0 && (
@@ -671,18 +671,18 @@ export function DistillationPage({
 
         {distillView === "result" && (
           <div className="flex flex-wrap items-center gap-2 rounded-xl bg-card px-3 py-2">
-            <div className="tt-toolbar gap-1">
+            <div className="aitracker-toolbar gap-1">
               <button
                 type="button"
                 onClick={() => setDistillView("config")}
-                className="tt-chip font-mono"
+                className="aitracker-chip font-mono"
               >
                 <FlaskConical className="size-3.5" /> {t("distill.viewConfig")}
               </button>
               <button
                 type="button"
                 onClick={() => setDistillView("result")}
-                className="tt-chip font-mono tt-chip-on"
+                className="aitracker-chip font-mono aitracker-chip-on"
               >
                 <PackageCheck className="size-3.5" />{" "}
                 {t("distill.historyTitle")}
@@ -718,7 +718,7 @@ export function DistillationPage({
         )}
 
         {distillView === "result" && (
-          <aside className="tt-scroll min-w-0 space-y-3">
+          <aside className="aitracker-scroll min-w-0 space-y-3">
             <div id="distill-results" className="scroll-mt-20 space-y-3">
               {distilling && (
                 <RunningExpCard
@@ -852,13 +852,13 @@ export function DistillationPage({
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                <span className="tt-num truncate text-[14px] font-semibold">
+                                <span className="aitracker-num truncate text-[14px] font-semibold">
                                   {candidate.title || t(badge.labelKey)}
                                 </span>
                                 <span className="shrink-0 rounded-sm bg-surface-2 px-1.5 py-px text-[11px] text-muted-foreground">
                                   {t(badge.labelKey)}
                                 </span>
-                                <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                                <span className="aitracker-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
                                   {t("distill.histSegments", {
                                     count: candidate.selectedSessionRefs.length,
                                   })}{" "}

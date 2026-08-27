@@ -132,8 +132,8 @@ export interface BackupSchemaSnapshot {
 /** Name of the single JSON manifest next to the backup files. */
 export const MANIFEST_FILE_NAME = "manifest.json";
 
-/** Backups are named `trusttools-YYYYMMDD-HHmmss.db` (architecture §3.3). */
-const BACKUP_PREFIX = "trusttools";
+/** Backups are named `aitracker-YYYYMMDD-HHmmss.db` (architecture §3.3). */
+const BACKUP_PREFIX = "aitracker";
 
 const LEDGER_TABLE = "schema_migrations";
 
@@ -502,7 +502,7 @@ export function verifyBackupIntegrity(path: string): void {
  * Reads the schema identity a restore has to validate: `PRAGMA application_id`
  * and the `schema_migrations` ledger, both from a single read-only connection.
  * `migrations` is `undefined` when the table does not exist at all, which means
- * the file is not a migrated TrustTools database.
+ * the file is not a migrated AITracker database.
  */
 export function readBackupSchemaSnapshot(path: string): BackupSchemaSnapshot {
   let session: ReturnType<typeof openReadOnlySqlite>;
@@ -650,7 +650,7 @@ function ensureDirectory(directory: string): void {
 }
 
 /**
- * Atomically reserves the first non-colliding `trusttools-YYYYMMDD-HHmmss.db`
+ * Atomically reserves the first non-colliding `aitracker-YYYYMMDD-HHmmss.db`
  * name in `directory` by creating it with `openSync(..., "wx")` (fail-exclusive)
  * and closing the descriptor. The empty placeholder is the destination the
  * backup writes directly into. A collision retries with a `-2`, `-3`, …
@@ -695,7 +695,7 @@ function formatTimestamp(ms: number): string {
  */
 function parseBackupFilenameTimestamp(fileName: string): number | undefined {
   const match =
-    /^trusttools-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-\d+)?\.db$/.exec(
+    /^aitracker-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-\d+)?\.db$/.exec(
       fileName,
     );
   if (match === null) return undefined;

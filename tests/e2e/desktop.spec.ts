@@ -5,8 +5,8 @@ test.beforeEach(async ({ page }) => {
   // （与 locale.spec.ts 的既有做法一致；否则 Playwright 默认 en-US 会在
   // 客户端 i18n 收敛时把界面翻成英文，破坏中文文案断言）。
   await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-locale-mode");
+    window.localStorage.removeItem("aitracker-locale");
+    window.localStorage.removeItem("aitracker-locale-mode");
     Object.defineProperty(window.navigator, "language", {
       get: () => "zh-CN",
       configurable: true,

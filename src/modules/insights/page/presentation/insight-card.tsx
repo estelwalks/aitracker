@@ -9,7 +9,7 @@
  * default; surfaces can opt out when their own action column is already full.
  */
 import { Link } from "@tanstack/react-router";
-import type { LucideIcon } from "lucide-react";
+import { Sparkles, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { JarvisInsight } from "../../../../components/JarvisInsight";
@@ -108,7 +108,11 @@ export function InsightCard({
     shouldShowFallbackStatus && fallbackStatusKey ? (
       envelope?.status === "enhancer-unavailable" ? (
         <span className="inline-flex min-h-7 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.08] px-3 text-[11px] font-semibold tracking-normal text-foreground/85">
-          <span aria-hidden="true">✨</span>
+          <Sparkles
+            className="size-2.5 shrink-0 text-muted-foreground"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
           {renderMessage(fallbackStatusKey)}
           <Link
             to="/settings"

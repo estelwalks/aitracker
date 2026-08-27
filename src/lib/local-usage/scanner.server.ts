@@ -223,7 +223,7 @@ function isTimestampInRange(
 
 function privacyFingerprint(source: LocalUsageSource, value: unknown): string {
   return createHash("sha256")
-    .update("trusttools-local-usage-event\0")
+    .update("aitracker-local-usage-event\0")
     .update(source)
     .update("\0")
     .update(JSON.stringify(value))

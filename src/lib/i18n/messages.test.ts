@@ -8,6 +8,11 @@ import {
   type Translations,
 } from "./messages.ts";
 import { LOCALES, type Locale } from "./locale.ts";
+import {
+  catalogs as routeCatalogs,
+  getMessage as getRouteMessage,
+} from "./route-messages.ts";
+import { APP_NAME, brandParams } from "../app-config.ts";
 
 type Leaf = string | { one: string; other: string };
 
@@ -91,6 +96,21 @@ test("getMessage: 无参数消息按当前语言解析", async () => {
   assert.equal(getMessage(catalogs["en-US"], "nav.home"), "Home Overview");
   assert.equal(getMessage(catalogs["ja-JP"], "nav.home"), "ホーム概要");
   assert.equal(getMessage(catalogs["ko-KR"], "nav.home"), "홈 개요");
+});
+
+test("路由元数据使用 AITracker 品牌参数", () => {
+  for (const locale of ["zh-CN", "en-US"] as const) {
+    for (const key of [
+      "meta.titles.dashboard",
+      "meta.titles.market",
+      "meta.titles.skills",
+      "meta.titles.tracker",
+    ]) {
+      const title = getRouteMessage(routeCatalogs[locale], key, brandParams);
+      assert.match(title, new RegExp(APP_NAME));
+      assert.doesNotMatch(title, /\{\w+\}/);
+    }
+  }
 });
 
 test("getMessage: {var} 插值(合成带参消息)", async () => {

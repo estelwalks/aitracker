@@ -92,7 +92,7 @@ export function readRuntimeSqliteVersion(): string {
 export function probeJournalModeIn(directory: string): {
   readonly journalMode: string;
 } {
-  const probeDirectory = mkdtempSync(join(directory, "trusttools-wal-probe-"));
+  const probeDirectory = mkdtempSync(join(directory, "aitracker-wal-probe-"));
   const databasePath = join(probeDirectory, "probe.db");
   let database: DatabaseSync | undefined;
   try {

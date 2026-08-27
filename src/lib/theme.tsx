@@ -7,7 +7,10 @@ import {
 } from "react";
 
 import type { MessageKey } from "./i18n/messages";
+import { STORAGE_KEY_PREFIX } from "./app-config";
 import { getPreference, setPreference } from "./preferences/client.ts";
+
+const THEME_PREFERENCE_KEY = `${STORAGE_KEY_PREFIX}theme`;
 
 export const themes = [
   {
@@ -92,7 +95,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    void getPreference("tt-theme").then((saved) => {
+    void getPreference(THEME_PREFERENCE_KEY).then((saved) => {
       if (!cancelled) {
         if (
           typeof saved === "string" &&
@@ -113,7 +116,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.classList.remove("theme-light");
     const cls = resolveThemeClass(theme, systemPrefersLight);
     if (cls) root.classList.add(cls);
-    if (hydrated) void setPreference("tt-theme", theme);
+    if (hydrated) void setPreference(THEME_PREFERENCE_KEY, theme);
   }, [hydrated, systemPrefersLight, theme]);
 
   return (

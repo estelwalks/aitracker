@@ -39,7 +39,7 @@ function input(): DashboardAIInsightInput {
       costQuality: "available",
     },
     topModels: [{ label: "gpt-5", tokens: 8100, events: 12 }],
-    topProjects: [{ label: "trusttools_webapp", tokens: 8100, events: 12 }],
+    topProjects: [{ label: "aitracker_webapp", tokens: 8100, events: 12 }],
     topTools: [{ label: "Codex", tokens: 8100, events: 12 }],
     monitoring: {
       running: true,

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Boxes, Flame, FolderKanban, MessagesSquare } from "lucide-react";
 
-import { MetricGrid } from "../../../components/tt";
+import { MetricGrid } from "../../../components/aitracker";
 import { useI18n } from "../../../lib/i18n/context";
 import { InsightCard } from "../../insights/index.ts";
 import type { TrackerReadModel } from "../contracts.ts";
