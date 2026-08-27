@@ -11,6 +11,7 @@ import {
   reportSchedulesPreferenceValue,
   serializeReportSchedules,
 } from "../schedule.ts";
+import { compactScheduleSummaryItems } from "./compact-schedule-summary.ts";
 
 test("v2 report schedules round-trip with three independent switches", () => {
   const config = {
@@ -88,6 +89,66 @@ test("monthly day 31 clamps to 28, 29, 30 or 31 for the target month", () => {
   }
 });
 
+test("compact summary uses real next runs for enabled plans", () => {
+  const schedule = {
+    ...DEFAULT_REPORT_SCHEDULES,
+    daily: { enabled: true, time: "18:30" },
+    weekly: { enabled: true, time: "09:00", dayOfWeek: 1 },
+    monthly: { enabled: false, time: "08:00", dayOfMonth: 31 },
+  };
+  assert.deepEqual(
+    compactScheduleSummaryItems(schedule, {
+      daily: {
+        lastRun: null,
+        nextRunAt: "2026-08-28T10:30:00.000Z",
+        pending: false,
+      },
+      weekly: {
+        lastRun: null,
+        nextRunAt: "2026-09-01T01:00:00.000Z",
+        pending: false,
+      },
+    }),
+    [
+      {
+        kind: "daily",
+        state: "scheduled",
+        nextRunAt: "2026-08-28T10:30:00.000Z",
+      },
+      {
+        kind: "weekly",
+        state: "scheduled",
+        nextRunAt: "2026-09-01T01:00:00.000Z",
+      },
+    ],
+  );
+});
+
+test("compact summary distinguishes pending, loading, and all disabled", () => {
+  const enabled = {
+    ...DEFAULT_REPORT_SCHEDULES,
+    daily: { enabled: true, time: "18:30" },
+    weekly: { enabled: true, time: "09:00", dayOfWeek: 1 },
+  };
+  assert.deepEqual(
+    compactScheduleSummaryItems(enabled, {
+      daily: {
+        lastRun: null,
+        nextRunAt: "2026-08-28T10:30:00.000Z",
+        pending: true,
+      },
+    }),
+    [
+      { kind: "daily", state: "pending" },
+      { kind: "weekly", state: "loading" },
+    ],
+  );
+  assert.deepEqual(
+    compactScheduleSummaryItems(DEFAULT_REPORT_SCHEDULES, null),
+    [],
+  );
+});
+
 test("reports page uses a collapsed schedule card and Settings stays expanded", async () => {
   const [component, reportsPage, settingsPage] = await Promise.all([
     readFile(new URL("./ReportSchedule.tsx", import.meta.url), "utf8"),
@@ -102,6 +163,8 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.match(component, /aria-expanded=\{open\}/);
   assert.match(component, /rounded-xl bg-card px-4 py-3/);
   assert.match(component, /SCHEDULE_KINDS\.map/);
+  assert.match(component, /summaryItems\.map/);
+  assert.doesNotMatch(component, /flex-1 truncate font-mono/);
   const compactEditor = component.slice(
     component.indexOf("function CompactPlanEditor"),
     component.indexOf("function SettingsPlanEditor"),
@@ -115,6 +178,22 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.ok(weeklyPickerIndex < timeInputIndex);
   assert.ok(monthDayInputIndex < timeInputIndex);
   assert.equal(compactEditor.match(/<TimeInput/g)?.length, 1);
+  const compactHeader = compactEditor.slice(
+    compactEditor.indexOf('className="flex items-center gap-2"'),
+    compactEditor.indexOf('className="mt-2 flex flex-wrap items-center gap-2"'),
+  );
+  assert.doesNotMatch(
+    compactEditor,
+    /planSummary|disabledStatus|schedule\.(?:daily|weekly|monthly)\.time/,
+  );
+  assert.match(compactHeader, /<ScheduleToggle/);
+  assert.match(compactHeader, /<\/span>\s*<ScheduleToggle/);
+  assert.match(
+    component,
+    /COMPACT_CONTROL_CLASS =\s*"security-config-input h-8 w-\[9rem\] py-0 text-\[11px\]"/,
+  );
+  assert.equal(component.match(/COMPACT_CONTROL_CLASS/g)?.length, 4);
+  assert.match(component, /width: "9rem", height: "2rem"/);
   assert.match(reportsPage, /<ReportSchedule \/>/);
   assert.match(settingsPage, /<ReportSchedule variant="settings" \/>/);
 });

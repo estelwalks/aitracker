@@ -18,6 +18,7 @@ import {
 } from "../../../shared/ui/schedule-config";
 import type { ReportScheduleStatus } from "../server-fns.ts";
 import type { ReportScheduleKind, ReportSchedulesConfig } from "../schedule.ts";
+import { compactScheduleSummaryItems } from "./compact-schedule-summary.ts";
 import {
   useReportSchedule,
   type ReportScheduleSyncResult,
@@ -25,6 +26,8 @@ import {
 
 const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 const SCHEDULE_KINDS = ["daily", "weekly", "monthly"] as const;
+const COMPACT_CONTROL_CLASS =
+  "security-config-input h-8 w-[9rem] py-0 text-[11px]";
 
 function lastRunText(
   t: ReturnType<typeof useI18n>["t"],
@@ -41,26 +44,6 @@ function lastRunText(
     ),
     result: t(`reports.schedule.runStatus.${status.lastRun.status}`),
   });
-}
-
-function planSummary(
-  t: ReturnType<typeof useI18n>["t"],
-  schedule: ReportSchedulesConfig,
-  kind: ReportScheduleKind,
-): string {
-  const plan = schedule[kind];
-  if (!plan.enabled) return t("reports.schedule.disabledStatus");
-  if (kind === "weekly") {
-    return `${t(`reports.schedule.kinds.${kind}`)} · ${t(
-      `reports.schedule.days.${WEEKDAY_KEYS[schedule.weekly.dayOfWeek] ?? "mon"}`,
-    )} ${schedule.weekly.time}`;
-  }
-  if (kind === "monthly") {
-    return `${t(`reports.schedule.kinds.${kind}`)} · ${schedule.monthly.dayOfMonth}${t(
-      "reports.schedule.monthDaySuffix",
-    )} ${schedule.monthly.time}`;
-  }
-  return `${t(`reports.schedule.kinds.${kind}`)} · ${plan.time}`;
 }
 
 export function ReportSchedule({
@@ -114,13 +97,32 @@ export function ReportSchedule({
     const enabledCount = SCHEDULE_KINDS.filter(
       (kind) => schedule[kind].enabled,
     ).length;
-    const summary = !loaded
-      ? t("common.loading")
-      : statusError
-        ? t("reports.schedule.loadFailed")
-        : enabledCount === 0
-          ? t("reports.schedule.allDisabled")
-          : t("reports.schedule.enabledCount", { count: enabledCount });
+    const summaryItems = compactScheduleSummaryItems(schedule, status);
+    let summary: ReactNode;
+    if (!loaded) {
+      summary = <span>{t("common.loading")}</span>;
+    } else if (statusError) {
+      summary = <span>{t("reports.schedule.loadFailed")}</span>;
+    } else if (summaryItems.length === 0) {
+      summary = <span>{t("reports.schedule.allDisabled")}</span>;
+    } else {
+      summary = summaryItems.map((item) => {
+        const kind = t(`reports.schedule.kinds.${item.kind}`);
+        let detail: string;
+        if (item.state === "pending") {
+          detail = t("reports.schedule.pending");
+        } else if (item.state === "scheduled") {
+          detail = format.formatDateTime(item.nextRunAt, false);
+        } else {
+          detail = t("common.loading");
+        }
+        return (
+          <span key={item.kind} className="whitespace-nowrap">
+            {kind} · {detail}
+          </span>
+        );
+      });
+    }
 
     return (
       <section className="rounded-xl bg-card px-4 py-3">
@@ -135,9 +137,9 @@ export function ReportSchedule({
           <span className="text-[12.5px] font-semibold tracking-tight">
             {t("reports.schedule.title")}
           </span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
             {summary}
-          </span>
+          </div>
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
@@ -255,12 +257,9 @@ function CompactPlanEditor({
   const plan = schedule[kind];
   return (
     <div className="py-3 last:pb-0">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="w-[64px] shrink-0 text-[12px] font-medium">
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] font-medium">
           {t(`reports.schedule.kinds.${kind}`)}
-        </span>
-        <span className="min-w-[9rem] flex-1 font-mono text-[11px] text-muted-foreground">
-          {planSummary(t, schedule, kind)}
         </span>
         <ScheduleToggle
           value={plan.enabled}
@@ -273,7 +272,7 @@ function CompactPlanEditor({
           }
         />
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 pl-[76px]">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {kind === "weekly" && (
           <WeekdayPicker
             value={schedule.weekly.dayOfWeek}
@@ -291,6 +290,7 @@ function CompactPlanEditor({
           <MonthDayInput
             value={schedule.monthly.dayOfMonth}
             disabled={saving}
+            compact
             onCommit={(dayOfMonth) =>
               onSave({
                 ...schedule,
@@ -302,20 +302,23 @@ function CompactPlanEditor({
         <TimeInput
           value={plan.time}
           disabled={saving}
+          compact
           onCommit={(time) =>
             onSave({ ...schedule, [kind]: { ...plan, time } })
           }
         />
-        <span className="font-mono text-[10.5px] text-muted-foreground">
-          {status?.pending
-            ? t("reports.schedule.pending")
-            : status?.nextRunAt
-              ? `${t("reports.schedule.nextRun")} ${format.formatDateTime(
-                  status.nextRunAt,
-                  false,
-                )}`
-              : t("reports.schedule.disabledStatus")}
-        </span>
+        {plan.enabled && (
+          <span className="font-mono text-[10.5px] text-muted-foreground">
+            {status?.pending
+              ? t("reports.schedule.pending")
+              : status?.nextRunAt
+                ? `${t("reports.schedule.nextRun")} ${format.formatDateTime(
+                    status.nextRunAt,
+                    false,
+                  )}`
+                : t("common.loading")}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -418,16 +421,25 @@ function SettingsPlanEditor({
 function TimeInput({
   value,
   disabled,
+  compact = false,
   onCommit,
 }: {
   value: string;
   disabled: boolean;
+  compact?: boolean;
   onCommit: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
-    <span className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+    <span
+      className={
+        compact
+          ? `${COMPACT_CONTROL_CLASS} inline-flex items-center gap-2`
+          : "inline-flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5"
+      }
+      style={compact ? { width: "9rem", height: "2rem" } : undefined}
+    >
       <Clock className="size-3.5 text-muted-foreground" />
       <input
         type="time"
@@ -439,7 +451,9 @@ function TimeInput({
           if (!/^\d{2}:\d{2}$/.test(time)) setDraft(value);
           else if (time !== value) onCommit(time);
         }}
-        className="bg-transparent font-mono text-[11.5px] outline-none disabled:opacity-40"
+        className={`min-w-0 flex-1 bg-transparent font-mono outline-none disabled:opacity-40 ${
+          compact ? "text-[11px]" : "text-[11.5px]"
+        }`}
       />
     </span>
   );
@@ -463,8 +477,8 @@ function WeekdayPicker({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="security-config-input h-7 w-[5.5rem] py-0 text-[11px]"
-        style={{ width: "5.5rem" }}
+        className={COMPACT_CONTROL_CLASS}
+        style={{ width: "9rem", height: "2rem" }}
       >
         {WEEKDAY_KEYS.map((key, index) => (
           <option key={key} value={index}>
@@ -493,17 +507,26 @@ function WeekdayPicker({
 function MonthDayInput({
   value,
   disabled,
+  compact = false,
   onCommit,
 }: {
   value: number;
   disabled: boolean;
+  compact?: boolean;
   onCommit: (value: number) => void;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span
+      className={
+        compact
+          ? `${COMPACT_CONTROL_CLASS} inline-flex items-center gap-1.5`
+          : "inline-flex items-center gap-1.5"
+      }
+      style={compact ? { width: "9rem", height: "2rem" } : undefined}
+    >
       <input
         type="number"
         min={1}
@@ -519,8 +542,12 @@ function MonthDayInput({
           if (day !== value) onCommit(day);
         }}
         disabled={disabled}
-        className="security-config-input h-7 w-16 py-0 text-[11px]"
-        style={{ width: "4rem" }}
+        className={
+          compact
+            ? "min-w-0 flex-1 bg-transparent font-mono outline-none"
+            : "security-config-input h-8 w-16 py-0 text-[11px]"
+        }
+        style={compact ? undefined : { width: "4rem", height: "2rem" }}
       />
       <span className="font-mono text-[11px] text-muted-foreground">
         {t("reports.schedule.monthDaySuffix")}
