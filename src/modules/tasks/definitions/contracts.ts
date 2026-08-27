@@ -24,13 +24,14 @@ const taskId = z.string().regex(/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/);
 const i18nKey = z.enum(JOB_I18N_KEYS);
 const schedule = z
   .object({
-    kind: z.enum(["interval", "daily", "weekly"]),
+    kind: z.enum(["interval", "daily", "weekly", "monthly"]),
     minutes: z.number().int().positive().optional(),
     localTime: z
       .string()
       .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
       .optional(),
     weekday: z.number().int().min(1).max(7).optional(),
+    dayOfMonth: z.number().int().min(1).max(31).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -40,7 +41,9 @@ const schedule = z
         message: "interval requires minutes",
       });
     if (
-      (value.kind === "daily" || value.kind === "weekly") &&
+      (value.kind === "daily" ||
+        value.kind === "weekly" ||
+        value.kind === "monthly") &&
       value.localTime === undefined
     )
       ctx.addIssue({
@@ -57,10 +60,15 @@ const schedule = z
         code: z.ZodIssueCode.custom,
         message: "minutes only applies to interval",
       });
-    if (value.kind !== "weekly" && value.weekday !== undefined)
+    if (value.kind !== "monthly" && value.dayOfMonth !== undefined)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "weekday only applies to weekly",
+        message: "dayOfMonth only applies to monthly",
+      });
+    if (value.kind === "monthly" && value.dayOfMonth === undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "monthly requires dayOfMonth",
       });
   });
 

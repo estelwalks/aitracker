@@ -128,10 +128,19 @@ function safeUiRef(value: string): string | undefined {
 }
 
 function taskRunToRun(value: TaskRunSummaryPublic): ReportRun | undefined {
-  if (value.taskId !== "reports.generate") return undefined;
+  const definitionId =
+    value.taskId === "reports.generate.daily"
+      ? "reports.daily"
+      : value.taskId === "reports.generate.weekly" ||
+          value.taskId === "reports.generate.monthly"
+        ? "reports.weekly"
+        : value.taskId === "reports.generate"
+          ? "reports.daily"
+          : undefined;
+  if (!definitionId) return undefined;
   return {
     runId: value.runId,
-    definitionId: "reports.daily",
+    definitionId,
     trigger: value.trigger === "schedule" ? "schedule" : "manual",
     status:
       value.status === "succeeded"
@@ -327,11 +336,19 @@ export function createTaskBackedReportsSource(
   return {
     listReports: () => reports.listReports(),
     async listRuns() {
-      const result = await tasks.listRuns({ taskId: "reports.generate" });
-      if (!result.ok) return [];
-      return result.value
+      const results = await Promise.all(
+        [
+          "reports.generate.daily",
+          "reports.generate.weekly",
+          "reports.generate.monthly",
+          "reports.generate",
+        ].map((taskId) => tasks.listRuns({ taskId })),
+      );
+      return results
+        .flatMap((result) => (result.ok ? result.value : []))
         .map(taskRunToRun)
-        .filter((run): run is ReportRun => !!run);
+        .filter((run): run is ReportRun => !!run)
+        .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
     },
   };
 }

@@ -48,7 +48,9 @@ import { createReportsApplication } from "../modules/reports/application/index.t
 import type { ReportsApplication } from "../modules/reports/contracts.ts";
 import {
   parseReportSchedule,
+  parseReportSchedulesWithMigration,
   REPORT_SCHEDULE_KEY,
+  reportSchedulePreferenceRequests,
 } from "../modules/reports/schedule.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
@@ -241,6 +243,31 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     monitoring: monitoringStore,
     performanceRollout,
   } = databaseRuntime.features;
+
+  // Migrate/synchronize the old single report schedule before the scheduler
+  // can start. The app preference remains the renderer-safe authority; each
+  // v2 plan receives its own task preference and the legacy task is disabled.
+  const reportScheduleEntry =
+    databaseRuntime.features.appPreferences.get(REPORT_SCHEDULE_KEY);
+  if (reportScheduleEntry) {
+    const parsed = parseReportSchedulesWithMigration(reportScheduleEntry.value);
+    if (parsed.migratedFromLegacy) {
+      databaseRuntime.features.appPreferences.set({
+        key: REPORT_SCHEDULE_KEY,
+        value: parsed.config,
+        updatedAtMs: Math.max(
+          clock.now().getTime(),
+          reportScheduleEntry.updatedAtMs + 1,
+        ),
+      });
+    }
+    for (const request of reportSchedulePreferenceRequests(parsed.config)) {
+      await preferences.set(request.taskId, {
+        enabled: request.enabled,
+        ...(request.schedule ? { schedule: request.schedule } : {}),
+      });
+    }
+  }
 
   // P3-T3-06: project classification index. Dashboard queries resolve from
   // this persisted index (O(1)); the Usage refresh collector feeds observed

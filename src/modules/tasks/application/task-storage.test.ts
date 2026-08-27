@@ -62,6 +62,42 @@ test("preference schema accepts a monthly schedule for a report task", () => {
   );
 });
 
+test("independent report task ids accept only their own schedule kind", () => {
+  const base = {
+    schemaVersion: 2,
+    updatedAt: "2026-08-07T00:00:00.000Z",
+  } as const;
+  const parsed = preferenceSchema().parse({
+    ...base,
+    tasks: {
+      "reports.generate.daily": {
+        enabled: true,
+        schedule: { kind: "daily", localTime: "18:30" },
+      },
+      "reports.generate.weekly": {
+        enabled: true,
+        schedule: { kind: "weekly", weekday: 7, localTime: "09:00" },
+      },
+      "reports.generate.monthly": {
+        enabled: true,
+        schedule: { kind: "monthly", dayOfMonth: 31, localTime: "09:00" },
+      },
+    },
+  });
+  assert.equal(parsed.tasks["reports.generate.weekly"]?.enabled, true);
+  assert.throws(() =>
+    preferenceSchema().parse({
+      ...base,
+      tasks: {
+        "reports.generate.daily": {
+          enabled: true,
+          schedule: { kind: "weekly", weekday: 1, localTime: "18:30" },
+        },
+      },
+    }),
+  );
+});
+
 test("preference schema rejects the legacy {updatedAt, tasks} shape", () => {
   assert.throws(() =>
     preferenceSchema().parse({

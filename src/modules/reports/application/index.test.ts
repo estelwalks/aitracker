@@ -50,7 +50,11 @@ test("built-in daily and weekly definitions have independent template versions a
   );
   assert.equal(
     BUILTIN_REPORT_DEFINITIONS[0]?.scheduleRef.taskId,
-    "reports.generate",
+    "reports.generate.daily",
+  );
+  assert.equal(
+    BUILTIN_REPORT_DEFINITIONS[1]?.scheduleRef.taskId,
+    "reports.generate.weekly",
   );
   assert.notEqual(
     BUILTIN_REPORT_DEFINITIONS[0]?.template.templateId,

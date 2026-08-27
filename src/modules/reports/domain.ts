@@ -22,7 +22,10 @@ export const BUILTIN_REPORT_DEFINITIONS: readonly ReportDefinition[] = [
         "3. 只使用提供的真实数字；没有的项目如实写「暂无」，绝不编造。\n" +
         "4. 不出现任何路径、命令、密钥或会话正文。",
     },
-    scheduleRef: { taskId: "reports.generate", scheduleId: "reports.daily" },
+    scheduleRef: {
+      taskId: "reports.generate.daily",
+      scheduleId: "reports.daily",
+    },
     enabled: true,
   },
   {
@@ -40,7 +43,10 @@ export const BUILTIN_REPORT_DEFINITIONS: readonly ReportDefinition[] = [
         "3. 只使用提供的真实数字；没有的项目如实写「暂无」，绝不编造。\n" +
         "4. 不出现任何路径、命令、密钥或会话正文。",
     },
-    scheduleRef: { taskId: "reports.generate", scheduleId: "reports.weekly" },
+    scheduleRef: {
+      taskId: "reports.generate.weekly",
+      scheduleId: "reports.weekly",
+    },
     enabled: true,
   },
 ];
