@@ -12,95 +12,31 @@ import {
 import {
   buildReportPeriod,
   reportScheduleInputSchema,
-  reportScheduleToPreferenceRequest,
-  reportScheduleToTaskSchedule,
+  reportScheduleStatusFor,
   syncReportScheduleToTaskPreference,
   type ReportScheduleInput,
 } from "./server-fns.ts";
 
 const base: ReportScheduleInput = {
+  version: 2,
   configured: true,
-  enabled: true,
-  granularity: "daily",
-  time: "18:30",
-  dayOfWeek: 1,
-  dayOfMonth: 1,
+  daily: { enabled: true, time: "18:30" },
+  weekly: { enabled: true, time: "09:00", dayOfWeek: 6 },
+  monthly: { enabled: true, time: "08:15", dayOfMonth: 31 },
 };
 
-test("reportScheduleToTaskSchedule maps daily/weekly/monthly configs", () => {
-  assert.deepEqual(
-    reportScheduleToTaskSchedule({
-      ...base,
-      granularity: "daily",
-      time: "09:00",
-    }),
-    { kind: "daily", localTime: "09:00" },
-  );
-  // The report config numbers weekdays 0=Monday…6=Sunday; the task schedule
-  // uses 1=Monday…7=Sunday.
-  assert.deepEqual(
-    reportScheduleToTaskSchedule({
-      ...base,
-      granularity: "weekly",
-      dayOfWeek: 0,
-      time: "09:00",
-    }),
-    { kind: "weekly", weekday: 1, localTime: "09:00" },
-  );
-  assert.deepEqual(
-    reportScheduleToTaskSchedule({
-      ...base,
-      granularity: "weekly",
-      dayOfWeek: 6,
-      time: "09:00",
-    }),
-    { kind: "weekly", weekday: 7, localTime: "09:00" },
-  );
-  assert.deepEqual(
-    reportScheduleToTaskSchedule({
-      ...base,
-      granularity: "monthly",
-      dayOfMonth: 15,
-      time: "09:00",
-    }),
-    { kind: "monthly", dayOfMonth: 15, localTime: "09:00" },
-  );
+test("report schedule schema accepts three valid independent plans", () => {
+  assert.equal(reportScheduleInputSchema.safeParse(base).success, true);
 });
 
-test("reportScheduleToPreferenceRequest omits the schedule when disabled", () => {
-  assert.deepEqual(
-    reportScheduleToPreferenceRequest({ ...base, enabled: false }),
-    {
-      taskId: "reports.generate",
-      enabled: false,
-    },
-  );
-  const enabled = reportScheduleToPreferenceRequest({
-    ...base,
-    granularity: "weekly",
-    dayOfWeek: 2,
-  });
-  assert.deepEqual(enabled, {
-    taskId: "reports.generate",
-    enabled: true,
-    schedule: { kind: "weekly", weekday: 3, localTime: "18:30" },
-  });
-});
-
-test("reportScheduleInputSchema rejects malformed input", () => {
+test("report schedule schema rejects malformed nested plans", () => {
   const cases: unknown[] = [
-    { ...base, granularity: "yearly" },
-    { ...base, time: "25:00" },
-    { ...base, time: "09:60" },
-    { ...base, time: "9:30" },
-    { ...base, dayOfWeek: -1 },
-    { ...base, dayOfWeek: 7 },
-    { ...base, dayOfMonth: 0 },
-    { ...base, dayOfMonth: 32 },
-    { ...base, enabled: "yes" },
-    { ...base, configured: "yes" },
+    { ...base, version: 1 },
+    { ...base, daily: { enabled: true, time: "25:00" } },
+    { ...base, weekly: { ...base.weekly, dayOfWeek: 7 } },
+    { ...base, monthly: { ...base.monthly, dayOfMonth: 0 } },
+    { ...base, monthly: { ...base.monthly, enabled: "yes" } },
     { ...base, extra: true },
-    { ...base, time: undefined },
   ];
   for (const value of cases) {
     assert.equal(
@@ -111,25 +47,6 @@ test("reportScheduleInputSchema rejects malformed input", () => {
   }
 });
 
-test("reportScheduleInputSchema accepts a valid full config", () => {
-  assert.equal(reportScheduleInputSchema.safeParse(base).success, true);
-  assert.equal(
-    reportScheduleInputSchema.safeParse({
-      ...base,
-      granularity: "monthly",
-      dayOfMonth: 31,
-      time: "23:59",
-      dayOfWeek: 0,
-    }).success,
-    true,
-  );
-});
-
-/**
- * End-to-end sync through the REAL composition root against an isolated
- * usage-home env var (same pattern as composition.integration.test.ts), so the
- * test exercises repository → task-api wiring.
- */
 async function isolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), `${TEST_TMP_PREFIX}reports-sync-`));
   const savedHome = process.env[ENV.USAGE_HOME];
@@ -150,46 +67,134 @@ async function isolatedRoot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-test("syncReportScheduleToTaskPreference persists the mapped preference (daily)", async () => {
+test("sync persists all three tasks independently and disables legacy", async () => {
   await isolatedRoot(async () => {
-    const result = await syncReportScheduleToTaskPreference({
-      ...base,
-      granularity: "daily",
-      time: "07:30",
-    });
+    const result = await syncReportScheduleToTaskPreference(base);
     assert.deepEqual(result, { ok: true });
     const root = await getCompositionRoot();
-    const pref = await root.preferences.get("reports.generate");
-    assert.deepEqual(pref, {
+    assert.deepEqual(await root.preferences.get("reports.generate.daily"), {
       enabled: true,
-      schedule: { kind: "daily", localTime: "07:30" },
+      schedule: { kind: "daily", localTime: "18:30" },
+    });
+    assert.deepEqual(await root.preferences.get("reports.generate.weekly"), {
+      enabled: true,
+      schedule: { kind: "weekly", weekday: 7, localTime: "09:00" },
+    });
+    assert.deepEqual(await root.preferences.get("reports.generate.monthly"), {
+      enabled: true,
+      schedule: { kind: "monthly", dayOfMonth: 31, localTime: "08:15" },
+    });
+    assert.deepEqual(await root.preferences.get("reports.generate"), {
+      enabled: false,
     });
   });
 });
 
-test("syncReportScheduleToTaskPreference persists weekly and monthly schedules", async () => {
+test("composition startup migrates the legacy app preference before scheduling", async () => {
+  const dir = await mkdtemp(
+    join(tmpdir(), `${TEST_TMP_PREFIX}reports-migrate-`),
+  );
+  const savedHome = process.env[ENV.USAGE_HOME];
+  process.env[ENV.USAGE_HOME] = dir;
+  resetCompositionRootForTests();
+  try {
+    const first = await getCompositionRoot();
+    first.database.features.appPreferences.set({
+      key: "tt.report.schedule",
+      value: {
+        configured: true,
+        enabled: true,
+        granularity: "monthly",
+        time: "07:45",
+        dayOfWeek: 1,
+        dayOfMonth: 31,
+      },
+      updatedAtMs: 1,
+    });
+    await first.scheduler.stop();
+    resetCompositionRootForTests();
+
+    const migrated = await getCompositionRoot();
+    const stored =
+      migrated.database.features.appPreferences.get(
+        "tt.report.schedule",
+      )?.value;
+    assert.equal((stored as { version?: number } | undefined)?.version, 2);
+    assert.deepEqual(
+      await migrated.preferences.get("reports.generate.monthly"),
+      {
+        enabled: true,
+        schedule: { kind: "monthly", dayOfMonth: 31, localTime: "07:45" },
+      },
+    );
+    assert.deepEqual(await migrated.preferences.get("reports.generate"), {
+      enabled: false,
+    });
+    await migrated.scheduler.stop();
+  } finally {
+    resetCompositionRootForTests();
+    if (savedHome === undefined) delete process.env[ENV.USAGE_HOME];
+    else process.env[ENV.USAGE_HOME] = savedHome;
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+});
+
+test("independent switches do not overwrite another task preference", async () => {
   await isolatedRoot(async () => {
-    const weekly = await syncReportScheduleToTaskPreference({
+    await syncReportScheduleToTaskPreference(base);
+    await syncReportScheduleToTaskPreference({
       ...base,
-      granularity: "weekly",
-      dayOfWeek: 6,
-      time: "09:00",
+      daily: { ...base.daily, enabled: false },
     });
-    assert.deepEqual(weekly, { ok: true });
-    const monthly = await syncReportScheduleToTaskPreference({
-      ...base,
-      granularity: "monthly",
-      dayOfMonth: 31,
-      time: "09:00",
-    });
-    assert.deepEqual(monthly, { ok: true });
     const root = await getCompositionRoot();
-    const pref = await root.preferences.get("reports.generate");
-    assert.deepEqual(pref, {
-      enabled: true,
-      schedule: { kind: "monthly", dayOfMonth: 31, localTime: "09:00" },
+    assert.deepEqual(await root.preferences.get("reports.generate.daily"), {
+      enabled: false,
     });
+    assert.equal(
+      (await root.preferences.get("reports.generate.weekly"))?.enabled,
+      true,
+    );
+    assert.equal(
+      (await root.preferences.get("reports.generate.monthly"))?.enabled,
+      true,
+    );
   });
+});
+
+test("status reads and reports each task independently", async () => {
+  const requested: string[] = [];
+  const listRuns = async ({ taskId }: { taskId: string; limit: number }) => {
+    requested.push(taskId);
+    return {
+      ok: true as const,
+      value:
+        taskId === "reports.generate.weekly"
+          ? ([
+              {
+                trigger: "schedule" as const,
+                status: "succeeded" as const,
+                finishedAt: "2026-08-23T09:01:00.000Z",
+              },
+            ] as const)
+          : [],
+    };
+  };
+  const now = new Date(2026, 7, 27, 12, 0);
+  const statuses = await Promise.all(
+    (["daily", "weekly", "monthly"] as const).map((kind) =>
+      reportScheduleStatusFor({ kind, config: base, now, listRuns }),
+    ),
+  );
+  assert.deepEqual(requested, [
+    "reports.generate.daily",
+    "reports.generate.weekly",
+    "reports.generate.monthly",
+  ]);
+  assert.equal(statuses[0]?.lastRun, null);
+  assert.equal(statuses[1]?.lastRun?.status, "succeeded");
+  assert.ok(statuses[0]?.nextRunAt);
+  assert.ok(statuses[1]?.nextRunAt);
+  assert.ok(statuses[2]?.nextRunAt);
 });
 
 test("buildReportPeriod resolves day/week/month keys and rejects malformed ones", () => {
@@ -207,20 +212,4 @@ test("buildReportPeriod resolves day/week/month keys and rejects malformed ones"
   });
   assert.equal(buildReportPeriod("day", "2026-8-5"), undefined);
   assert.equal(buildReportPeriod("month", "2026-08-15"), undefined);
-  assert.equal(buildReportPeriod(undefined, "2026-08-15"), undefined);
-  assert.equal(buildReportPeriod("day", undefined), undefined);
-});
-
-test("syncReportScheduleToTaskPreference with enabled=false disables the task", async () => {
-  await isolatedRoot(async () => {
-    await syncReportScheduleToTaskPreference({ ...base, enabled: true });
-    const disabled = await syncReportScheduleToTaskPreference({
-      ...base,
-      enabled: false,
-    });
-    assert.deepEqual(disabled, { ok: true });
-    const root = await getCompositionRoot();
-    const pref = await root.preferences.get("reports.generate");
-    assert.deepEqual(pref, { enabled: false });
-  });
 });

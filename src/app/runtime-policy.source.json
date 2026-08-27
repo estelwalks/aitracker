@@ -200,6 +200,68 @@
         "network": "forbidden",
         "requiresApproval": false,
         "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+      },
+      {
+        "id": "reports.generate.daily",
+        "executorKey": "generate-report-v1",
+        "category": "report",
+        "defaultSchedule": { "kind": "daily", "localTime": "18:30" },
+        "constraints": {
+          "minMinutes": 1440,
+          "maxMinutes": 1440,
+          "singleFlight": true
+        },
+        "startupPolicy": "disabled",
+        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "timeoutMs": 300000,
+        "queue": "interactive",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+      },
+      {
+        "id": "reports.generate.weekly",
+        "executorKey": "generate-report-v1",
+        "category": "report",
+        "defaultSchedule": {
+          "kind": "weekly",
+          "weekday": 1,
+          "localTime": "09:00"
+        },
+        "constraints": {
+          "minMinutes": 10080,
+          "maxMinutes": 10080,
+          "singleFlight": true
+        },
+        "startupPolicy": "disabled",
+        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "timeoutMs": 300000,
+        "queue": "interactive",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
+      },
+      {
+        "id": "reports.generate.monthly",
+        "executorKey": "generate-report-v1",
+        "category": "report",
+        "defaultSchedule": {
+          "kind": "monthly",
+          "dayOfMonth": 1,
+          "localTime": "09:00"
+        },
+        "constraints": {
+          "minMinutes": 1440,
+          "maxMinutes": 10080,
+          "singleFlight": true
+        },
+        "startupPolicy": "disabled",
+        "retry": { "maxAttempts": 2, "backoffSeconds": [120, 600] },
+        "timeoutMs": 300000,
+        "queue": "interactive",
+        "network": "forbidden",
+        "requiresApproval": false,
+        "ui": { "settingsVisible": false, "i18nKey": "tasks.reportsGenerate" }
       }
     ]
   },

@@ -10,7 +10,7 @@ export type ReportTrigger = "manual" | "schedule";
 
 /** Opaque link to the task scheduler. It is not a cron expression or command. */
 export interface ScheduleRef {
-  readonly taskId: "reports.generate";
+  readonly taskId: "reports.generate.daily" | "reports.generate.weekly";
   readonly scheduleId: "reports.daily" | "reports.weekly";
 }
 

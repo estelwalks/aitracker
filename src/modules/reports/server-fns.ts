@@ -10,11 +10,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { ReportContent, ReportPeriod } from "./contracts.ts";
-import type { Schedule } from "../tasks/application/task-storage.ts";
 import {
   nextReportScheduleAt,
-  parseReportSchedule,
+  parseReportSchedules,
   REPORT_SCHEDULE_KEY,
+  REPORT_TASK_IDS,
+  reportSchedulePreferenceRequests,
+  type ReportScheduleKind,
 } from "./schedule.ts";
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
@@ -151,25 +153,27 @@ export const saveReportBody = createServerFn({ method: "POST" })
     return save(data.reportId, data.body);
   });
 
-/**
- * Report schedule sync (Story B-200). Bridges the persisted `tt.report.schedule`
- * config (see `presentation/report-schedule.ts`) into the task scheduler's
- * `reports.generate` preference, so the config actually drives scheduled
- * generation instead of only persisting. The heavy composition root is
- * dynamically imported so it never reaches the browser bundle; the mapping and
- * request-shaping helpers below are pure and unit-tested.
- */
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const reportScheduleInputSchema = z
   .object({
+    version: z.literal(2),
     configured: z.boolean(),
-    enabled: z.boolean(),
-    granularity: z.enum(["daily", "weekly", "monthly"]),
-    /** 24h `HH:MM`. */
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-    /** 0 = Monday … 6 = Sunday; used for weekly granularity. */
-    dayOfWeek: z.number().int().min(0).max(6),
-    /** 1–31; used for monthly granularity. */
-    dayOfMonth: z.number().int().min(1).max(31),
+    daily: z.object({ enabled: z.boolean(), time: timeSchema }).strict(),
+    weekly: z
+      .object({
+        enabled: z.boolean(),
+        time: timeSchema,
+        /** 0 = Monday … 6 = Sunday. */
+        dayOfWeek: z.number().int().min(0).max(6),
+      })
+      .strict(),
+    monthly: z
+      .object({
+        enabled: z.boolean(),
+        time: timeSchema,
+        dayOfMonth: z.number().int().min(1).max(31),
+      })
+      .strict(),
   })
   .strict();
 export type ReportScheduleInput = z.infer<typeof reportScheduleInputSchema>;
@@ -196,55 +200,9 @@ export interface ReportScheduleStatus {
   readonly nextRunAt: string | null;
   readonly pending: boolean;
 }
-
-/**
- * Maps a persisted report schedule config to the task scheduler's `Schedule`.
- * The report config numbers weekdays 0=Monday…6=Sunday while the task schedule
- * uses 1=Monday…7=Sunday, so weekly shifts by one. Monthly maps to the
- * scheduler's `monthly` kind (dayOfMonth 1–31; short months clamp to their last
- * day in `nextRunAt`).
- */
-export function reportScheduleToTaskSchedule(
-  config: ReportScheduleInput,
-): Schedule {
-  switch (config.granularity) {
-    case "daily":
-      return { kind: "daily", localTime: config.time };
-    case "weekly":
-      return {
-        kind: "weekly",
-        weekday: config.dayOfWeek + 1,
-        localTime: config.time,
-      };
-    case "monthly":
-      return {
-        kind: "monthly",
-        dayOfMonth: config.dayOfMonth,
-        localTime: config.time,
-      };
-  }
-}
-
-/**
- * Builds the exact `updatePreference` request for the `reports.generate` task.
- * A disabled config carries no schedule (the preference store then keeps the
- * catalog default, but `enabled: false` means the scheduler never fires it).
- */
-export function reportScheduleToPreferenceRequest(
-  config: ReportScheduleInput,
-): {
-  taskId: "reports.generate";
-  enabled: boolean;
-  schedule?: Schedule;
-} {
-  return {
-    taskId: "reports.generate",
-    enabled: config.enabled,
-    ...(config.enabled
-      ? { schedule: reportScheduleToTaskSchedule(config) }
-      : {}),
-  };
-}
+export type ReportScheduleStatuses = Readonly<
+  Record<ReportScheduleKind, ReportScheduleStatus>
+>;
 
 /**
  * Testable core of `syncReportScheduleToTasks`: applies the mapped preference
@@ -257,16 +215,16 @@ export async function syncReportScheduleToTaskPreference(
   const { getCompositionRoot } =
     await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
-  const result = await root.taskApi.updatePreference(
-    reportScheduleToPreferenceRequest(config),
-  );
-  return result.ok ? { ok: true } : { ok: false, errorCode: result.error.code };
+  for (const request of reportSchedulePreferenceRequests(config)) {
+    const result = await root.taskApi.updatePreference(request);
+    if (!result.ok) return { ok: false, errorCode: result.error.code };
+  }
+  return { ok: true };
 }
 
 /**
- * Persist a report schedule config into the task scheduler's `reports.generate`
- * preference. The client sends the full saved config; this server fn re-parses
- * and validates it so nothing unvalidated crosses the transport.
+ * Persist all three independent schedules, then disable the legacy single task.
+ * Each TaskApi update re-arms the running scheduler after its durable write.
  */
 export const syncReportScheduleToTasks = createServerFn({ method: "POST" })
   .validator((input: unknown): ReportScheduleInput =>
@@ -276,19 +234,36 @@ export const syncReportScheduleToTasks = createServerFn({ method: "POST" })
     syncReportScheduleToTaskPreference(data),
   );
 
-/** Renderer-safe evidence for the same persisted schedule used by the task runtime. */
-export const getReportScheduleStatus = createServerFn({
-  method: "GET",
-}).handler(async (): Promise<ReportScheduleStatus> => {
-  const { getCompositionRoot } =
-    await import("../../app/composition.server.ts");
-  const root = await getCompositionRoot();
-  const stored =
-    root.database.features.appPreferences.get(REPORT_SCHEDULE_KEY)?.value;
-  const config =
-    typeof stored === "string" ? parseReportSchedule(stored) : undefined;
-  const runs = await root.taskApi.listRuns({
-    taskId: "reports.generate",
+interface ReportScheduleRunView {
+  readonly trigger: "manual" | "schedule" | "startup-recovery" | "event";
+  readonly status:
+    | "queued"
+    | "running"
+    | "waiting-approval"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "skipped"
+    | "abandoned";
+  readonly startedAt?: string;
+  readonly finishedAt?: string;
+}
+
+export async function reportScheduleStatusFor(options: {
+  readonly kind: ReportScheduleKind;
+  readonly config: ReportScheduleInput;
+  readonly now: Date;
+  readonly listRuns: (request: {
+    taskId: string;
+    limit: number;
+  }) => Promise<
+    | { readonly ok: true; readonly value: readonly ReportScheduleRunView[] }
+    | { readonly ok: false }
+  >;
+}): Promise<ReportScheduleStatus> {
+  const { kind, config } = options;
+  const runs = await options.listRuns({
+    taskId: REPORT_TASK_IDS[kind],
     limit: 20,
   });
   const scheduledRuns = runs.ok
@@ -301,6 +276,10 @@ export const getReportScheduleStatus = createServerFn({
       run.status === "running" ||
       run.status === "waiting-approval",
   );
+  const plan = config[kind];
+  const schedule = reportSchedulePreferenceRequests(config).find(
+    (request) => request.taskId === REPORT_TASK_IDS[kind],
+  )?.schedule;
   return {
     lastRun: lastRun
       ? {
@@ -311,9 +290,42 @@ export const getReportScheduleStatus = createServerFn({
         }
       : null,
     nextRunAt:
-      config?.enabled && config.configured
-        ? nextReportScheduleAt(config, new Date()).toISOString()
+      config.configured && plan.enabled && schedule
+        ? nextReportScheduleAt(schedule, options.now).toISOString()
         : null,
     pending,
   };
+}
+
+/** Renderer-safe status evidence, independently keyed by report cadence. */
+export const getReportScheduleStatus = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<ReportScheduleStatuses> => {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const stored =
+    root.database.features.appPreferences.get(REPORT_SCHEDULE_KEY)?.value;
+  const config = parseReportSchedules(stored);
+  const [daily, weekly, monthly] = await Promise.all([
+    reportScheduleStatusFor({
+      kind: "daily",
+      config,
+      now: new Date(),
+      listRuns: (request) => root.taskApi.listRuns(request),
+    }),
+    reportScheduleStatusFor({
+      kind: "weekly",
+      config,
+      now: new Date(),
+      listRuns: (request) => root.taskApi.listRuns(request),
+    }),
+    reportScheduleStatusFor({
+      kind: "monthly",
+      config,
+      now: new Date(),
+      listRuns: (request) => root.taskApi.listRuns(request),
+    }),
+  ]);
+  return { daily, weekly, monthly };
 });

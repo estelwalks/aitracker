@@ -11,9 +11,11 @@ import type {
   MonitoringRecorder,
 } from "../../../monitoring/contracts.ts";
 import {
+  REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
   type ScheduleGranularity,
-} from "../../../reports/index.ts";
+} from "../../../reports/schedule.ts";
+import { monthKeyOf } from "../../../reports/period.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
@@ -110,19 +112,25 @@ function bindPort(
 }
 
 /**
- * Reports executor. The scheduler carries an opaque `reports.generate` task;
- * the injected schedule reader resolves that task to the configured daily or
- * weekly report definition before invoking the same generation use case used
- * by the manual action. Monthly cadence intentionally produces the weekly
- * review because the product currently has no separate monthly definition.
+ * Reports executor. New schedules have distinct task ids, so one plan can
+ * never overwrite or mis-route another. The legacy task keeps the injected
+ * schedule reader solely for old persisted runs/preferences. Monthly cadence
+ * reuses the weekly definition but explicitly collects the current month.
  */
 function bindReports(
   app: ReportsApplication | undefined,
   readSchedule?: () => Promise<ScheduleGranularity | undefined>,
 ): TaskExecutor {
-  return async () => {
+  return async (context) => {
     if (!app) return unavailable();
-    const granularity = await readSchedule?.();
+    const granularity: ScheduleGranularity =
+      context.taskId === REPORT_TASK_IDS.daily
+        ? "daily"
+        : context.taskId === REPORT_TASK_IDS.weekly
+          ? "weekly"
+          : context.taskId === REPORT_TASK_IDS.monthly
+            ? "monthly"
+            : ((await readSchedule?.()) ?? "daily");
     const definitionId = reportDefinitionIdForSchedule(granularity ?? "daily");
     const definition = app.definitions.find(
       (item) => item.definitionId === definitionId && item.enabled,
@@ -131,6 +139,14 @@ function bindReports(
     const result = await app.generate({
       definitionId: definition.definitionId,
       trigger: "schedule",
+      ...(granularity === "monthly"
+        ? {
+            period: {
+              granularity: "month" as const,
+              key: monthKeyOf(new Date()),
+            },
+          }
+        : {}),
     });
     if (!result.ok)
       throw new ControlledExecutorError(EXECUTOR_ERROR_CODES.failed);

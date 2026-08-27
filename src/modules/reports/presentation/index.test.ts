@@ -8,7 +8,10 @@ import type {
   ReportSummary,
   ReportsApplication,
 } from "../contracts.ts";
-import { createReportsPresentation } from "./index.ts";
+import {
+  createReportsPresentation,
+  createTaskBackedReportsSource,
+} from "./index.ts";
 
 const definitions: readonly ReportDefinitionSummary[] = [
   {
@@ -16,7 +19,10 @@ const definitions: readonly ReportDefinitionSummary[] = [
     kind: "daily",
     title: "Daily brief",
     templateVersion: 2,
-    scheduleRef: { taskId: "reports.generate", scheduleId: "reports.daily" },
+    scheduleRef: {
+      taskId: "reports.generate.daily",
+      scheduleId: "reports.daily",
+    },
     enabled: true,
   },
 ];
@@ -93,6 +99,43 @@ const memory: KnowledgeAsset = {
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-07T00:00:00.000Z",
 };
+
+test("task-backed source aggregates the three independent report task ids", async () => {
+  const requested: string[] = [];
+  const source = createTaskBackedReportsSource(
+    {
+      listReports: async () => [],
+      listRuns: async () => [],
+    },
+    {
+      async listRuns(request) {
+        const taskId = (request as { taskId: string }).taskId;
+        requested.push(taskId);
+        return ok([
+          {
+            runId: `run:${taskId}`,
+            taskId,
+            trigger: "schedule" as const,
+            status: "succeeded" as const,
+            startedAt: "2026-08-27T09:00:00.000Z",
+            attempt: 1,
+          },
+        ]);
+      },
+    },
+  );
+  const runs = await source.listRuns();
+  assert.deepEqual(requested, [
+    "reports.generate.daily",
+    "reports.generate.weekly",
+    "reports.generate.monthly",
+    "reports.generate",
+  ]);
+  assert.deepEqual(
+    new Set(runs.map((item) => item.definitionId)),
+    new Set(["reports.daily", "reports.weekly"]),
+  );
+});
 
 test("maps running, waiting approval, published and stale statuses", async () => {
   const source = {
