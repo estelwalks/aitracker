@@ -97,7 +97,7 @@ export const security = {
     summary: "{skills} 個の Skill · {dimensions} 検査次元 · 健全度 {health}%",
     devBanner: {
       title: "開発モード · 検査サービス接続済み",
-      desc: "スキャンは実際のローカル Skill ルートを使用します。検査履歴は ~/.trusttools/security-dev/ に分離保存されます。",
+      desc: "スキャンは実際のローカル Skill ルートを使用します。検査履歴は ~/.aitracker/security-dev/ に分離保存されます。",
     },
     unavailable: {
       title: "ローカルコンパニオンサービスを利用できません",

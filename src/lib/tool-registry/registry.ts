@@ -231,10 +231,14 @@ export function getUsagePlanFor(def: ToolDefinition): UsagePlan | null {
 /** Pure per-tool session plan. */
 export function getSessionPlanFor(def: ToolDefinition): SessionPlan | null {
   const sessions = def.capabilities.sessions;
-  if (sessions.mode !== "resume" || !sessions.reader || !sessions.command) {
+  if (sessions.mode === "unsupported" || !sessions.reader) {
     return null;
   }
-  return { toolId: def.id, reader: sessions.reader, command: sessions.command };
+  return {
+    toolId: def.id,
+    reader: sessions.reader,
+    command: sessions.command ?? [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -646,12 +650,12 @@ export function getContextPlan(
   return registry.byId.get(toolId)?.capabilities.context ?? null;
 }
 
-/** Session-resumable tool ids, in canonical order (docs §7). */
+/** Tool ids with session history support, in canonical order (docs §7). */
 export function listSessionTools(
   registry: CompiledRegistry = getDefaultRegistry(),
 ): readonly string[] {
   return registry.definitions
-    .filter((def) => def.capabilities.sessions.mode === "resume")
+    .filter((def) => def.capabilities.sessions.mode !== "unsupported")
     .map((def) => def.id);
 }
 

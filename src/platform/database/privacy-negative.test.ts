@@ -50,7 +50,7 @@ function rmTempDir(directory: string): void {
 }
 
 function openMigratedHost(scope: TestScope): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-privacy-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-privacy-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: versionsProvider(),
@@ -111,7 +111,7 @@ test("app_preferences: legitimate scalar/object preferences pass", () => {
   assertAppPreferenceValueSafe("windowBounds", { x: 1, y: 2 });
   assertAppPreferenceValueSafe("lastRoute", { id: "s-1", at: "1700000000000" });
   // Relative display paths are allowed (only absolute paths are forbidden).
-  assertAppPreferenceValueSafe("exportDir", "~/Documents/trusttools");
+  assertAppPreferenceValueSafe("exportDir", "~/Documents/aitracker");
 });
 
 test("app_preferences: secret-named keys are rejected", () => {
@@ -356,7 +356,7 @@ test("app_preferences: 15 reviewer bypass classes are rejected (P1-8)", () => {
 });
 
 test("app_preferences: legitimate values still pass the hardened guard", () => {
-  assertAppPreferenceValueSafe("exportDir", "~/Documents/trusttools");
+  assertAppPreferenceValueSafe("exportDir", "~/Documents/aitracker");
   assertAppPreferenceValueSafe("note", { text: "普通中文文本,无敏感内容" });
   assertAppPreferenceValueSafe("windowBounds", { x: 1, y: 2 });
   assertAppPreferenceValueSafe("pref", { fontSize: "medium", locale: "zh-CN" });

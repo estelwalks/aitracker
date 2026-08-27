@@ -12,7 +12,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   InsightSurfaceId,
-} from "../../modules/insights/page/contracts.ts";
+} from "../../modules/insights/index.ts";
 
 /**
  * entityId whitelist: 1..128 chars from `[A-Za-z0-9._:-]`. Anything else is

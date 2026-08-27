@@ -10,7 +10,7 @@ import { runMigrations } from "../../../platform/database/migration-runner.serve
 import { createSqliteAIExecutionRepository } from "./sqlite-ai-execution-repository.server.ts";
 
 function fixture(t: { after(fn: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-ai-audit-repo-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-ai-audit-repo-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

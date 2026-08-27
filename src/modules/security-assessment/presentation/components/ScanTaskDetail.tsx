@@ -199,7 +199,7 @@ function Cell({
         <span className="truncate">{label}</span>
       </div>
       <div
-        className="tt-num mt-1.5 font-mono text-[15px] leading-none font-bold"
+        className="aitracker-num mt-1.5 font-mono text-[15px] leading-none font-bold"
         style={color ? { color } : undefined}
       >
         {value}

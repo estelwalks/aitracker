@@ -2,7 +2,7 @@ import { Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
-import { EmptyState, TTButton } from "../../../components/tt";
+import { EmptyState, AITrackerButton } from "../../../components/aitracker";
 import {
   Dialog,
   DialogContent,
@@ -122,12 +122,14 @@ export function SkillSecurityModal({
             desc={t("skills.detail.verifySecurity")}
             actions={
               <Link to="/security">
-                <TTButton>{t("skills.actions.goMarket")}</TTButton>
+                <AITrackerButton>
+                  {t("skills.actions.goMarket")}
+                </AITrackerButton>
               </Link>
             }
           />
         ) : (
-          <ul className="tt-rows max-h-[60vh] overflow-auto rounded-sm border border-border">
+          <ul className="aitracker-rows max-h-[60vh] overflow-auto rounded-sm border border-border">
             {entries.map((entry, index) => {
               const report = entry.report;
               // Failed / skipped / cancelled scans carry no findings; render a
@@ -139,7 +141,7 @@ export function SkillSecurityModal({
                     className="flex flex-wrap items-center gap-2 px-3 py-2 text-[12px]"
                   >
                     <span className="size-1.5 shrink-0 rounded-sm bg-muted-foreground/40" />
-                    <span className="tt-num min-w-0 flex-1 text-[11px] text-muted-foreground">
+                    <span className="aitracker-num min-w-0 flex-1 text-[11px] text-muted-foreground">
                       {format.formatDateTime(entry.finishedAt, false)}
                     </span>
                     <span className="rounded-sm border px-1.5 py-px text-[10px] text-muted-foreground">
@@ -157,7 +159,7 @@ export function SkillSecurityModal({
                   <span
                     className={`size-1.5 shrink-0 rounded-sm ${display.tone}`}
                   />
-                  <span className="tt-num min-w-0 flex-1 text-[11px] text-muted-foreground">
+                  <span className="aitracker-num min-w-0 flex-1 text-[11px] text-muted-foreground">
                     {format.formatDateTime(entry.finishedAt, false)}
                   </span>
                   <span className="truncate text-muted-foreground">
@@ -177,9 +179,9 @@ export function SkillSecurityModal({
         )}
 
         <DialogFooter>
-          <TTButton variant="default" onClick={onClose}>
+          <AITrackerButton variant="default" onClick={onClose}>
             {t("common.close")}
-          </TTButton>
+          </AITrackerButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

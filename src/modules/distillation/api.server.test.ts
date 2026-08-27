@@ -141,6 +141,11 @@ test("configured profile is selected automatically and starts through the profil
     try {
       const result = await startDistillation({ sessionRefs: [] });
       assert.equal(result.ok, true);
+      // Starts are intentionally durable background tasks. Wait until the
+      // task has reached the application before asserting the routed request.
+      for (let attempt = 0; attempt < 100 && !request; attempt += 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      }
       assert.deepEqual(request, { modelId: profile.id, providerId: "profile" });
     } finally {
       root.distillation.start = originalStart;

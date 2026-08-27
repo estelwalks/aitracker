@@ -15,7 +15,7 @@ export function hashSensitiveRef(
   value: string,
 ): string {
   return createHmac("sha256", key)
-    .update(`trusttools:${domain}:v1\0`, "utf8")
+    .update(`aitracker:${domain}:v1\0`, "utf8")
     .update(value, "utf8")
     .digest("base64url");
 }

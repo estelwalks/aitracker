@@ -1,10 +1,10 @@
 /**
- * Complete TrustTools database schema for a fresh installation.
+ * Complete AITracker database schema for a fresh installation.
  *
  * This unpublished product intentionally has no historical upgrade, backfill,
  * or rollback path. Future schema changes must be added as version 2+.
  */
-export const INITIAL_SCHEMA_SQL = `-- TrustTools local storage database — initial schema baseline.
+export const INITIAL_SCHEMA_SQL = `-- AITracker local storage database — initial schema baseline.
 -- Fresh-install only: no historical upgrade, backfill, or rollback logic.
 
 PRAGMA application_id = 0x54544442;

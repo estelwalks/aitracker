@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 
-import { TTButton } from "../../../components/tt";
+import { AITrackerButton } from "../../../components/aitracker";
 import { useI18n } from "../../../lib/i18n/context";
 import { MemoryModal } from "./memory-modal";
 import type { MemoryCreateInput, MemoryEntry, MemoryType } from "./index";
@@ -71,24 +71,28 @@ export function MemoryForm({
       onClose={onClose}
       footer={
         <>
-          <TTButton onClick={onClose} disabled={busy}>
+          <AITrackerButton onClick={onClose} disabled={busy}>
             {t("memory.cancel")}
-          </TTButton>
+          </AITrackerButton>
           {editingExisting && (
-            <TTButton onClick={exportMd} disabled={busy}>
+            <AITrackerButton onClick={exportMd} disabled={busy}>
               <Download className="size-3.5" />
               {t("memory.exportMd")}
-            </TTButton>
+            </AITrackerButton>
           )}
-          <TTButton variant="primary" onClick={save} disabled={!ok || busy}>
+          <AITrackerButton
+            variant="primary"
+            onClick={save}
+            disabled={!ok || busy}
+          >
             {t("memory.form.save")}
-          </TTButton>
+          </AITrackerButton>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         <div>
-          <div className="tt-label mb-1.5">{t("memory.form.type")}</div>
+          <div className="aitracker-label mb-1.5">{t("memory.form.type")}</div>
           <div className="flex flex-wrap gap-1.5">
             {(["profile", "task"] as const).map((candidate) => (
               <button
@@ -117,7 +121,7 @@ export function MemoryForm({
         </div>
 
         <div>
-          <div className="tt-label mb-1.5">{t("memory.form.title")}</div>
+          <div className="aitracker-label mb-1.5">{t("memory.form.title")}</div>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -128,7 +132,7 @@ export function MemoryForm({
         </div>
 
         <div>
-          <div className="tt-label mb-1.5">{t("memory.form.body")}</div>
+          <div className="aitracker-label mb-1.5">{t("memory.form.body")}</div>
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}

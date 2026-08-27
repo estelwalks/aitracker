@@ -69,7 +69,7 @@ function openMigratedDb(scope: TestScope): {
   directory: string;
   databasePath: string;
 } {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-backup-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-backup-"));
   const databasePath = join(directory, "platform.db");
   const host = DatabaseHost.open({
     path: databasePath,
@@ -286,7 +286,7 @@ test("listBackupFiles verifies through the manifest and reports every rejected f
   // A stray file that is not even a database, and has no manifest record.
   writeFileSync(join(backupsDirectory, "garbage.db"), "not a sqlite database");
   // A recorded backup whose file was deleted behind our back.
-  const missing = join(backupsDirectory, "trusttools-19990101-000000.db");
+  const missing = join(backupsDirectory, "aitracker-19990101-000000.db");
   writeFileSync(missing, readFileSync(good.path));
   const index = readBackupManifestIndex(backupsDirectory);
   writeFileSync(
@@ -583,7 +583,7 @@ test("pruneBackups never deletes files without a manifest record", async (t) => 
     sqliteVersion: SQLITE_VERSION,
     now: () => now - 10 * DAY,
   });
-  const stray = join(backupsDirectory, "trusttools-19900101-000000.db");
+  const stray = join(backupsDirectory, "aitracker-19900101-000000.db");
   writeFileSync(stray, "not a sqlite database");
 
   const result = pruneBackups({

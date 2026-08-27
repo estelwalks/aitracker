@@ -22,8 +22,8 @@ import {
   Pagination,
   SearchInput,
   Segmented,
-  TTButton,
-} from "../../../components/tt";
+  AITrackerButton,
+} from "../../../components/aitracker";
 import {
   Dialog,
   DialogContent,
@@ -350,7 +350,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
             <div className="text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
               {kpi.label}
             </div>
-            <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
+            <div className="aitracker-num aitracker-text-metric mt-2 font-mono leading-none font-black tracking-tight">
               {kpi.value}
             </div>
             <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
@@ -365,7 +365,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
       )}
 
       <div className="min-w-0">
-        <div className="tt-panel mb-3 flex flex-wrap items-center gap-2 p-2">
+        <div className="aitracker-panel mb-3 flex flex-wrap items-center gap-2 p-2">
           <SearchInput
             value={rawQuery}
             onChange={setRawQuery}
@@ -381,7 +381,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               label: t(option.labelKey),
             }))}
           />
-          <TTButton
+          <AITrackerButton
             variant="default"
             disabled={loading}
             onClick={() => {
@@ -393,11 +393,11 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
               className={`size-3.5 ${loading ? "animate-spin" : ""}`}
             />
             {t(loading ? "common.refreshing" : "common.refresh")}
-          </TTButton>
+          </AITrackerButton>
         </div>
 
         {/* 领域分类胶囊（原型样式） */}
-        <div className="tt-xscroll mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
+        <div className="aitracker-xscroll mb-3 flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => {
@@ -506,7 +506,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                           <button
                             type="button"
                             onClick={() => setDetail(skill)}
-                            className="tt-num truncate text-[14px] font-semibold hover:text-primary"
+                            className="aitracker-num truncate text-[14px] font-semibold hover:text-primary"
                           >
                             {skill.name}
                           </button>
@@ -533,7 +533,7 @@ export function MarketPanel({ initial }: { initial: MarketListResult }) {
                           </span>
                           {(skill.stars != null ||
                             skill.securityScore != null) && (
-                            <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+                            <span className="aitracker-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
                               {skill.stars != null &&
                                 `${compactNumber(skill.stars)} Star`}
                               {skill.stars != null &&
@@ -701,7 +701,7 @@ function MarketDetailModal({
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2 pr-8 text-[15px] font-semibold">
             <Package className="size-4 shrink-0 text-primary" />
-            <span className="tt-num truncate">{skill.name}</span>
+            <span className="aitracker-num truncate">{skill.name}</span>
             <span
               className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-px text-[10px] ${
                 security === "safe"
@@ -735,7 +735,7 @@ function MarketDetailModal({
 
         <div className="space-y-4">
           <div
-            className="tt-num truncate font-mono text-[11.5px] text-muted-foreground"
+            className="aitracker-num truncate font-mono text-[11.5px] text-muted-foreground"
             title={repoSlug}
           >
             源路径：{repoSlug}
@@ -775,8 +775,10 @@ function MarketDetailModal({
                 key={cell.label}
                 className="rounded-sm border border-border bg-surface-2/40 px-2.5 py-1.5"
               >
-                <div className="tt-label text-[10px]">{cell.label}</div>
-                <div className="tt-num mt-0.5 text-[13px]">{cell.value}</div>
+                <div className="aitracker-label text-[10px]">{cell.label}</div>
+                <div className="aitracker-num mt-0.5 text-[13px]">
+                  {cell.value}
+                </div>
               </div>
             ))}
           </div>
@@ -800,7 +802,7 @@ function MarketDetailModal({
 
           {/* Install info grid */}
           <div>
-            <div className="tt-label mb-1.5">
+            <div className="aitracker-label mb-1.5">
               {t("market.detail.infoTitle")}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -847,7 +849,7 @@ function MarketDetailModal({
           {/* 安装到Agent（多选勾选 + 全选，最后统一安装） */}
           {agents.length > 0 && (
             <div>
-              <div className="tt-label mb-1.5">
+              <div className="aitracker-label mb-1.5">
                 {t("market.drawer.selectAgent", {
                   count: agents.length,
                 })}
@@ -876,10 +878,14 @@ function MarketDetailModal({
           {installError && (
             <p className="mr-auto text-[12px] text-danger">{installError}</p>
           )}
-          <TTButton variant="default" disabled={installing} onClick={onClose}>
+          <AITrackerButton
+            variant="default"
+            disabled={installing}
+            onClick={onClose}
+          >
             {t("common.close")}
-          </TTButton>
-          <TTButton
+          </AITrackerButton>
+          <AITrackerButton
             variant="primary"
             disabled={installing || selectedAgents.size === 0}
             onClick={() => void handleInstallSelected()}
@@ -887,7 +893,7 @@ function MarketDetailModal({
             {installing
               ? t("market.install.downloading")
               : t("market.install.toSelected")}
-          </TTButton>
+          </AITrackerButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -897,8 +903,10 @@ function MarketDetailModal({
 function InfoCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-sm border border-border bg-surface-2/40 px-2.5 py-1.5">
-      <div className="tt-label text-[10px] text-muted-foreground">{label}</div>
-      <div className="tt-num mt-0.5 truncate" title={value}>
+      <div className="aitracker-label text-[10px] text-muted-foreground">
+        {label}
+      </div>
+      <div className="aitracker-num mt-0.5 truncate" title={value}>
         {value}
       </div>
     </div>

@@ -45,7 +45,7 @@ test("reference agents expose their actual platform-specific directories", () =>
   );
 });
 
-test("the reference local-agent universe is present in the TrustTools registry", () => {
+test("the reference local-agent universe is present in the AITracker registry", () => {
   const referenceIds = [
     "claude-code",
     "codex",

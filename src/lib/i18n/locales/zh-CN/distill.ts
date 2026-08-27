@@ -114,7 +114,7 @@ export const distill = {
   savedStep3: "点「同步」选择Agent",
   savedStep3Desc: "分发到 Claude Code / Codex 等",
   savedStep4: "本地目录",
-  savedStep4Desc: "~/.trusttools/skills/<skill-name>/",
+  savedStep4Desc: "~/.aitracker/skills/<skill-name>/",
   savedGuideGo: "去 Skill 管理",
   savedGuideStay: "留在本页",
   guideTitle: "蒸馏是什么？",

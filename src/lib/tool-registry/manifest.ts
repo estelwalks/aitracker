@@ -15,7 +15,7 @@ export interface PublicCapabilityStatus {
   usage: "native" | "adapter" | "unsupported";
   skills: "read-write" | "read" | "unsupported";
   agents: "read" | "unsupported";
-  sessions: "resume" | "unsupported";
+  sessions: "read" | "resume" | "unsupported";
   market: "install-target" | "unsupported";
   security: "scan" | "unsupported";
 }

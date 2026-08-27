@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { APP_NAME } from "../lib/app-config";
+import { APP_ICON_URL, APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 import type { MessageKey } from "../lib/i18n/messages";
 import { NativeTrayTitleSync } from "../modules/widget/presentation/NativeTrayTitleSync";
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (isWidgetFloat) {
     return (
-      <div className="tt-widget-float-shell min-h-screen text-foreground">
+      <div className="aitracker-widget-float-shell min-h-screen text-foreground">
         <main className="min-h-screen">{children}</main>
       </div>
     );
@@ -100,20 +100,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <>
       <NativeTrayTitleSync />
-      <div className="tt-app-shell flex min-h-screen bg-background text-foreground">
+      <div className="aitracker-app-shell flex min-h-screen bg-background text-foreground">
         <WindowChrome />
         <aside
-          className="tt-sidebar fixed bottom-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
+          className="aitracker-sidebar fixed bottom-0 left-0 z-30 flex flex-col bg-sidebar transition-[width] duration-200"
           style={{ width: railWidth, top: chromeOffset }}
         >
           <div
             className={`flex items-center px-3 py-4 ${collapsed ? "justify-center" : "gap-2.5"}`}
           >
             <img
-              src="/brand-logos/ai-tracker/ai-tracker-icon-mono.png"
+              src={APP_ICON_URL}
               alt=""
               aria-hidden="true"
-              className="tt-brand-mark size-7 shrink-0 rounded-md object-cover"
+              className="aitracker-brand-mark size-7 shrink-0 rounded-md object-cover"
             />
             {!collapsed && (
               <div className="min-w-0 leading-tight">
@@ -126,7 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <nav
             aria-label={APP_NAME}
-            className="tt-scroll mt-1 flex-1 overflow-y-auto px-2 pb-2"
+            className="aitracker-scroll mt-1 flex-1 overflow-y-auto px-2 pb-2"
           >
             <div className="space-y-0.5">
               {navItems.map((item) => {
@@ -219,11 +219,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div
-          className="tt-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
+          className="aitracker-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
         >
-          <main className="tt-app-main tt-scroll min-w-0 flex-1 px-4 pb-14 pt-2 md:px-8 md:pt-4 2xl:px-10 2xl:pt-5">
-            <div className="tt-container">{children}</div>
+          <main className="aitracker-app-main aitracker-scroll min-w-0 flex-1 px-4 pb-14 pt-2 md:px-8 md:pt-4 2xl:px-10 2xl:pt-5">
+            <div className="aitracker-container">{children}</div>
           </main>
         </div>
 

@@ -1,7 +1,7 @@
 /**
  * 轻量 Markdown 渲染（标题 / 列表 / 表格 / 代码块 / 引用 / 粗体）。
  * 共享渲染器：蒸馏产物卡、对比弹窗、记忆卡片等复用，保证渲染结果一致。
- * 输出直接喂给 `tt-md` / `tt-md-sm`（全局 utility，见 styles.css）。
+ * 输出直接喂给 `aitracker-md` / `aitracker-md-sm`（全局 utility，见 styles.css）。
  */
 
 export function md(text: string) {

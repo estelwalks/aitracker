@@ -39,7 +39,7 @@ export interface LoadSessionTranscriptInput {
 }
 
 export interface TranscriptReaderOptions {
-  /** Test seam: base home directory (defaults to `$TRUSTTOOLS_USAGE_HOME`/HOME). */
+  /** Test seam: base home directory (defaults to `$AITRACKER_USAGE_HOME`/HOME). */
   homeDirectory?: string;
   /** Test seam: registry used for session-plan and data-root resolution. */
   registry?: CompiledRegistry;
@@ -425,7 +425,11 @@ async function readClaudeTranscript(
         const recordSessionId = stringValue(
           record.sessionId ?? record.session_id ?? record.conversationId,
         );
-        if (recordSessionId !== sessionId && !(fileMatchesSession && recordSessionId == null)) return;
+        if (
+          recordSessionId !== sessionId &&
+          !(fileMatchesSession && recordSessionId == null)
+        )
+          return;
         const message = asObject(record.message);
         if (message == null) return;
         const role = stringValue(message.role);

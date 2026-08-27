@@ -17,7 +17,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import {
   DatabaseError,
-  TRUSTTOOLS_APPLICATION_ID,
+  AITRACKER_APPLICATION_ID,
   type SqliteDatabasePort,
   type SqliteRow,
   type SqliteStatement,
@@ -311,7 +311,7 @@ function caseFold(path: string): string {
 
 /**
  * Creates the database directory chain when it is missing. A first run on a
- * fresh machine must not fail just because `~/.trusttools/data` does not exist
+ * fresh machine must not fail just because `~/.aitracker/data` does not exist
  * yet, and a genuine filesystem failure must still be a stable error code.
  */
 function ensureDirectory(directory: string): void {
@@ -420,7 +420,7 @@ export function capabilityFailureCode(
 
 /**
  * `application_id` must already be `0` (fresh, not yet migrated) or the
- * TrustTools constant; any other value means the file belongs to a different
+ * AITracker constant; any other value means the file belongs to a different
  * application and must not be opened (architecture §9-6 database-substitution
  * guard). Migration 0001 stamps the constant, so a migrated database always
  * reads back the constant.
@@ -432,7 +432,7 @@ function assertApplicationId(
   const actual = normalizePragmaValue(
     firstValue(connection.prepare("PRAGMA application_id").get()),
   );
-  if (actual === String(TRUSTTOOLS_APPLICATION_ID)) return true;
+  if (actual === String(AITRACKER_APPLICATION_ID)) return true;
   if (actual !== "0") {
     throw new PragmaAssertionFailure("capability-mismatch", actual);
   }

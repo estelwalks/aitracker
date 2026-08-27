@@ -91,7 +91,7 @@ test("decodeZstdSessionLog rejects empty or header-less input", () => {
 });
 
 test("readDshSessionLog decodes zstd files and passes plaintext through", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-dsh-zstd-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-dsh-zstd-"));
   try {
     const zstdPath = join(root, "session.jsonl.zstd");
     await writeFile(

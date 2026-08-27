@@ -105,7 +105,7 @@ test("development and packaged paths target their bundled public assets", () => 
     join(projectRoot, "public", "build", TRAY_ICON_FILENAME),
   );
   const packagedPath = join(
-    "/Applications/TrustTools/Resources",
+    "/Applications/AITracker/Resources",
     "tray",
     TRAY_ICON_FILENAME,
   );
@@ -113,7 +113,7 @@ test("development and packaged paths target their bundled public assets", () => 
     findTrayIconPath(
       {
         isPackaged: true,
-        resourcesPath: "/Applications/TrustTools/Resources",
+        resourcesPath: "/Applications/AITracker/Resources",
         appPath: "/unused",
       },
       (candidate) => candidate === packagedPath,
@@ -127,7 +127,7 @@ test("missing development icon falls back without a path warning", () => {
     findTrayIconPath({
       isPackaged: false,
       resourcesPath: "/tmp/resources",
-      appPath: "/tmp/trusttools-no-build",
+      appPath: "/tmp/aitracker-no-build",
     }),
     null,
   );

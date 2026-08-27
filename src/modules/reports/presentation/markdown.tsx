@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
  * 轻量 Markdown 渲染器（逐字对齐 V3.0 原型 MarkdownView 的样式类，并补充围栏代码块）。
  *
  * 原型未用 react-markdown 等框架，而是手写渲染器并把排版类直接写死在每个标签上
- * （表格 tt-table、引用 chart-1 边框、标题字号等），因此预览区无需外层 .tt-md 也能
+ * （表格 aitracker-table、引用 chart-1 边框、标题字号等），因此预览区无需外层 .aitracker-md 也能
  * 还原同样的视觉效果。纯函数 + React 元素：SSR 安全（不触碰 DOM、不用
  * dangerouslySetInnerHTML），零外部依赖。行内支持 **粗体** 与 `行内代码`；块级支持
  * 标题 / 列表 / 表格 / 引用 / 围栏代码块 / 段落。
@@ -71,7 +71,8 @@ function Heading({
   level: 1 | 2 | 3 | 4;
   children: ReactNode;
 }) {
-  const size = level === 1 ? "tt-text-page-title" : "tt-text-section-title";
+  const size =
+    level === 1 ? "aitracker-text-page-title" : "aitracker-text-section-title";
   const className = `mt-5 mb-2 font-semibold tracking-tight first:mt-0 ${size}`;
   if (level === 1) return <h1 className={className}>{children}</h1>;
   if (level === 2) return <h2 className={className}>{children}</h2>;
@@ -126,9 +127,9 @@ export function MarkdownView({ source }: { source: string }) {
       out.push(
         <div
           key={`t${i}`}
-          className="tt-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2/60"
+          className="aitracker-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2/60"
         >
-          <table className="tt-table w-full min-w-[520px] text-[12px]">
+          <table className="aitracker-table w-full min-w-[520px] text-[12px]">
             <thead>
               <tr>
                 {head.map((cell, n) => (

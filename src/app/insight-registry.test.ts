@@ -21,7 +21,9 @@ import {
 async function withIsolatedDataRoot<T>(
   fn: (dir: string) => Promise<T>,
 ): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), `tt-insight-${randomUUID()}-`));
+  const dir = await mkdtemp(
+    join(tmpdir(), `aitracker-insight-${randomUUID()}-`),
+  );
   const previous = process.env[ENV.USAGE_HOME];
   process.env[ENV.USAGE_HOME] = dir;
   resetCompositionRootForTests();

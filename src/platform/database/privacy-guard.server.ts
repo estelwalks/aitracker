@@ -30,7 +30,7 @@
  * UNC / escaped backslashes, the documented POSIX roots (`/Users/`, `/home/`,
  * `/mnt/`, `/Applications/`, `/Volumes/`, `/srv/`, …), `%ENV%` expansions and
  * bare POSIX absolute paths. Only the `~/…` display form used by the rest of
- * TrustTools stays allowed.
+ * AITracker stays allowed.
  */
 import { DatabaseError } from "./contracts.ts";
 

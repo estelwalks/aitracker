@@ -13,5 +13,6 @@
     "sourceMap": true,
     "declaration": false
   },
-  "include": ["electron/**/*.ts", "electron/**/*.cts"]
+  "include": ["electron/**/*.ts", "electron/**/*.cts"],
+  "exclude": ["electron/**/*.test.ts", "electron/**/*.test.cts"]
 }

@@ -23,7 +23,7 @@ async function fixture(): Promise<{
   root: string;
   options: ReleaseDataResetOptions;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "tt-release-reset-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-release-reset-"));
   const homeDirectory = join(root, "home");
   const userDataDirectory = join(root, "user-data");
   await mkdir(homeDirectory, { recursive: true });
@@ -39,10 +39,10 @@ async function fixture(): Promise<{
   };
 }
 
-test("first packaged macOS launch clears ~/.trusttools and marks only on explicit completion", async () => {
+test("first packaged macOS launch clears ~/.aitracker and marks only on explicit completion", async () => {
   const { root, options } = await fixture();
   try {
-    const target = join(options.homeDirectory, ".trusttools");
+    const target = join(options.homeDirectory, ".aitracker");
     await mkdir(join(target, "nested"), { recursive: true });
     await writeFile(join(target, "nested", "database.sqlite"), "old-data");
 
@@ -62,14 +62,14 @@ test("first packaged macOS launch clears ~/.trusttools and marks only on explici
   }
 });
 
-test("first packaged Windows launch clears incompatible ~/.trusttools data", async () => {
+test("first packaged Windows launch clears incompatible ~/.aitracker data", async () => {
   const { root, options } = await fixture();
   try {
     const windowsOptions = { ...options, platform: "win32" as const };
-    const target = join(windowsOptions.homeDirectory, ".trusttools");
+    const target = join(windowsOptions.homeDirectory, ".aitracker");
     await mkdir(join(target, "data"), { recursive: true });
     await writeFile(
-      join(target, "data", "trusttools.v1.db"),
+      join(target, "data", "aitracker.v1.db"),
       "legacy-migration-lineage",
     );
 
@@ -94,7 +94,7 @@ test("same release does not clear data again after its completion marker exists"
     const first = await prepareReleaseDataReset(options);
     await first.markInitializationComplete();
 
-    const target = join(options.homeDirectory, ".trusttools");
+    const target = join(options.homeDirectory, ".aitracker");
     const retained = join(target, "created-after-initialization.txt");
     await mkdir(target, { recursive: true });
     await writeFile(retained, "keep");
@@ -115,7 +115,7 @@ test("failed initialization leaves no marker so the next launch retries", async 
     // Simulate startup failure by intentionally not calling completion.
     assert.equal(await readReleaseDataResetMarker(options), null);
 
-    const target = join(options.homeDirectory, ".trusttools");
+    const target = join(options.homeDirectory, ".aitracker");
     await mkdir(target, { recursive: true });
     await writeFile(join(target, "partial-initialization"), "retry-me");
     const retry = await prepareReleaseDataReset(options);
@@ -130,8 +130,8 @@ test("failed initialization leaves no marker so the next launch retries", async 
 test("a compatibility reset refuses to delete data held by another writer", async () => {
   const { root, options } = await fixture();
   try {
-    const target = join(options.homeDirectory, ".trusttools");
-    const retained = join(target, "data", "trusttools.v1.db");
+    const target = join(options.homeDirectory, ".aitracker");
+    const retained = join(target, "data", "aitracker.v1.db");
     await mkdir(join(target, "data"), { recursive: true });
     await writeFile(retained, "must-survive", "utf8");
     await writeFile(
@@ -159,7 +159,7 @@ test("a compatibility reset refuses to delete data held by another writer", asyn
 test("development and unsupported-platform launches never clear data", async () => {
   const { root, options } = await fixture();
   try {
-    const target = join(options.homeDirectory, ".trusttools");
+    const target = join(options.homeDirectory, ".aitracker");
     const retained = join(target, "retained.txt");
     await mkdir(target, { recursive: true });
     await writeFile(retained, "safe");
@@ -182,14 +182,14 @@ test("development and unsupported-platform launches never clear data", async () 
   }
 });
 
-test("a ~/.trusttools symlink is unlinked without touching its destination", async () => {
+test("a ~/.aitracker symlink is unlinked without touching its destination", async () => {
   const { root, options } = await fixture();
   try {
     const external = join(root, "external-data");
     const externalFile = join(external, "must-survive.txt");
     await mkdir(external, { recursive: true });
     await writeFile(externalFile, "safe");
-    const target = join(options.homeDirectory, ".trusttools");
+    const target = join(options.homeDirectory, ".aitracker");
     await symlink(external, target, "dir");
 
     await prepareReleaseDataReset(options);
@@ -214,7 +214,7 @@ test("packaged desktop reset rejects an invalid or dangerously broad home", asyn
     await assert.rejects(
       prepareReleaseDataReset({
         ...options,
-        userDataDirectory: join(options.homeDirectory, ".trusttools", "state"),
+        userDataDirectory: join(options.homeDirectory, ".aitracker", "state"),
       }),
       /outside the reset target/,
     );

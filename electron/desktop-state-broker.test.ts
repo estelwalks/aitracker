@@ -14,23 +14,23 @@ test("broker sends the fixed auth header and packaged capability cookie", async 
       capabilityToken: () => "capability-token",
       fetchFn: async (input, init) => {
         request = new Request(input, init);
-        return Response.json({ "trusttools.theme": "dark" });
+        return Response.json({ "aitracker.theme": "dark" });
       },
     });
     assert.deepEqual(await broker.preferences(), {
-      "trusttools.theme": "dark",
+      "aitracker.theme": "dark",
     });
     assert.equal(
       request?.url,
       "http://127.0.0.1:3210/api/desktop-state/preferences",
     );
     assert.equal(
-      request?.headers.get("x-trusttools-desktop-broker"),
+      request?.headers.get("x-aitracker-desktop-broker"),
       "test-broker-token",
     );
     assert.equal(
       request?.headers.get("cookie"),
-      "trusttools_token=capability-token",
+      "aitracker_token=capability-token",
     );
   } finally {
     if (previous == null) delete process.env[ENV.DESKTOP_BROKER_TOKEN];

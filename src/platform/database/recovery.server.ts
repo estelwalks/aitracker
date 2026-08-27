@@ -39,7 +39,7 @@ import { basename, dirname, resolve } from "node:path";
 
 import {
   DatabaseError,
-  TRUSTTOOLS_APPLICATION_ID,
+  AITRACKER_APPLICATION_ID,
   type Backup,
   type BackupManifest,
 } from "./contracts.ts";
@@ -418,18 +418,18 @@ async function verifyRestoreCandidate(
 
 /**
  * `application_id` identifies the file as ours (architecture §9-6). Migration
- * A restorable backup must be a migrated TrustTools database. Unstamped files
+ * A restorable backup must be a migrated AITracker database. Unstamped files
  * are never accepted, even when they happen to contain a ledger-shaped table.
  */
 function assertAcceptableApplicationId(applicationId: number): void {
-  if (applicationId !== TRUSTTOOLS_APPLICATION_ID)
+  if (applicationId !== AITRACKER_APPLICATION_ID)
     throw invalidRestoreArgument();
 }
 
 /**
  * The backup's ledger must be a prefix of the migration lineage this build
  * knows: a missing `schema_migrations` table means the file is not a migrated
- * TrustTools database, an unknown version means a foreign lineage, and a
+ * AITracker database, an unknown version means a foreign lineage, and a
  * differing name/checksum means the same version was built from different SQL.
  */
 function assertLedgerMatchesDefinitions(

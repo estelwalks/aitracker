@@ -40,7 +40,7 @@ export function DashboardTrendPanel({
         <div>
           <h2>{t("dashboard.v2.trendTitle")}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
-            <span className="tt-num">
+            <span className="aitracker-num">
               {t("dashboard.v2.dailyAverage", {
                 tokens: format.formatTokens(Math.round(avg)),
               })}
@@ -52,7 +52,7 @@ export function DashboardTrendPanel({
               ) : null}
             </span>
             {peak && (
-              <span className="tt-num">
+              <span className="aitracker-num">
                 {t("dashboard.v2.peakLabel", {
                   date: format.formatDate(`${peak.date}T00:00:00`, {
                     month: "numeric",

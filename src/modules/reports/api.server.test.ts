@@ -80,9 +80,9 @@ async function withIsolatedRoot<T>(
 function withLlmEnv<T>(fn: () => Promise<T>): Promise<T> {
   return withEnv(
     {
-      TRUSTTOOLS_LLM_BASE_URL: "https://api.example.com/v1",
-      TRUSTTOOLS_LLM_API_KEY: "sk-test-123456",
-      TRUSTTOOLS_LLM_MODEL: "env-test-model",
+      AITRACKER_LLM_BASE_URL: "https://api.example.com/v1",
+      AITRACKER_LLM_API_KEY: "sk-test-123456",
+      AITRACKER_LLM_MODEL: "env-test-model",
     },
     fn,
   );

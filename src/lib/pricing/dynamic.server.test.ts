@@ -27,7 +27,7 @@ function memoryCache(): ExchangeRateCache {
  * row per currency.
  */
 test("refresh loads latest exchange rate and stamps the offline rule-pack version", async () => {
-  const homeDirectory = await mkdtemp(join(tmpdir(), "tt-pricing-"));
+  const homeDirectory = await mkdtemp(join(tmpdir(), "aitracker-pricing-"));
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
     if (url.includes("frankfurter")) {

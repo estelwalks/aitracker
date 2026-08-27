@@ -17,7 +17,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { Segmented, TTButton } from "../../../components/tt";
+import { Segmented, AITrackerButton } from "../../../components/aitracker";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ import {
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import { Progress } from "../../../components/ui/progress";
-import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
+import { AgentInstallBar } from "../../skill-distribution/index.ts";
 import {
   getSkillFiles,
   requestApprovedSkillInstall,
@@ -201,7 +201,7 @@ function Markdown({ text }: { text: string }) {
       out.push(
         <div
           key={key++}
-          className="tt-num rounded-sm border border-border bg-surface-2/50 px-3 py-2 text-[11px] text-muted-foreground"
+          className="aitracker-num rounded-sm border border-border bg-surface-2/50 px-3 py-2 text-[11px] text-muted-foreground"
         >
           {tree.length === 0
             ? buffer.join("\n")
@@ -225,7 +225,7 @@ function Markdown({ text }: { text: string }) {
       out.push(
         <pre
           key={key++}
-          className="tt-xscroll tt-num overflow-x-auto rounded-sm border border-border bg-surface-2/60 p-3 text-[11.5px] leading-relaxed"
+          className="aitracker-xscroll aitracker-num overflow-x-auto rounded-sm border border-border bg-surface-2/60 p-3 text-[11.5px] leading-relaxed"
         >
           {buffer.join("\n")}
         </pre>,
@@ -271,7 +271,7 @@ function Markdown({ text }: { text: string }) {
       out.push(
         <div
           key={key++}
-          className="tt-xscroll overflow-x-auto rounded-sm border border-border"
+          className="aitracker-xscroll overflow-x-auto rounded-sm border border-border"
         >
           <table className="w-full border-collapse text-[12px]">
             <thead>
@@ -436,15 +436,15 @@ function FileTree({
   }, [files]);
 
   return (
-    <div className="tt-scroll h-full min-h-0 overflow-auto rounded-sm border border-border bg-surface-2/40 p-1.5">
-      <div className="tt-num flex items-center gap-1.5 px-1.5 py-1 text-[11px] text-muted-foreground">
+    <div className="aitracker-scroll h-full min-h-0 overflow-auto rounded-sm border border-border bg-surface-2/40 p-1.5">
+      <div className="aitracker-num flex items-center gap-1.5 px-1.5 py-1 text-[11px] text-muted-foreground">
         <FolderTree className="size-3.5" />
         {root}/
       </div>
       {dirs.map(([dir, entries]) => (
         <div key={dir || "_root"}>
           {dir && (
-            <div className="tt-num flex items-center gap-1.5 py-0.5 pl-4 text-[11px] text-muted-foreground/80">
+            <div className="aitracker-num flex items-center gap-1.5 py-0.5 pl-4 text-[11px] text-muted-foreground/80">
               <FolderTree className="size-3" />
               {dir}/
             </div>
@@ -454,7 +454,7 @@ function FileTree({
               key={file.path}
               type="button"
               onClick={() => onPick(file.path)}
-              className={`tt-num flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-[11.5px] ${
+              className={`aitracker-num flex w-full items-center gap-1.5 rounded-sm py-1 pr-2 text-left text-[11.5px] ${
                 dir ? "pl-7" : "pl-4"
               } ${
                 active === file.path
@@ -702,9 +702,9 @@ export function SkillDetailModal({
               key={metric.label}
               className="rounded-sm border border-border bg-surface-2/40 px-2.5 py-1.5"
             >
-              <div className="tt-label text-[10px]">{metric.label}</div>
+              <div className="aitracker-label text-[10px]">{metric.label}</div>
               <div
-                className="tt-num mt-0.5 truncate text-[13px]"
+                className="aitracker-num mt-0.5 truncate text-[13px]"
                 title={metric.key}
               >
                 {metric.key}
@@ -723,7 +723,7 @@ export function SkillDetailModal({
               onPick={setActive}
             />
           ) : loadError ? (
-            <div className="tt-scroll h-full min-h-0 overflow-auto rounded-sm border border-border bg-surface-2/40 p-3 text-[11px] text-muted-foreground">
+            <div className="aitracker-scroll h-full min-h-0 overflow-auto rounded-sm border border-border bg-surface-2/40 p-3 text-[11px] text-muted-foreground">
               {loadError}
             </div>
           ) : (
@@ -734,7 +734,7 @@ export function SkillDetailModal({
 
           <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-sm border border-border bg-surface-2/30">
             <div className="flex h-8 shrink-0 items-center justify-between border-b border-border px-2.5">
-              <span className="tt-num truncate text-[11px] text-muted-foreground">
+              <span className="aitracker-num truncate text-[11px] text-muted-foreground">
                 {listing ? `${listing.root}/${file?.path ?? ""}` : skill.name}
               </span>
               {isMarkdown && (
@@ -748,7 +748,7 @@ export function SkillDetailModal({
                 />
               )}
             </div>
-            <div className="tt-scroll min-h-0 flex-1 overflow-auto p-3">
+            <div className="aitracker-scroll min-h-0 flex-1 overflow-auto p-3">
               {listing == null && loadError == null ? (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
@@ -757,7 +757,7 @@ export function SkillDetailModal({
                 isMarkdown && !raw ? (
                   <Markdown text={file.content} />
                 ) : (
-                  <pre className="tt-num whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted-foreground">
+                  <pre className="aitracker-num whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted-foreground">
                     {file.content}
                   </pre>
                 )
@@ -773,7 +773,7 @@ export function SkillDetailModal({
         {/* 安装到工具：与安全市场 AgentInstallBar 一致（多选勾选 + 全选 + 安装） */}
         <div className="mt-3 border-t border-border/60 pt-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="tt-label">
+            <span className="aitracker-label">
               {t("skills.detail.installPos", {
                 installed: installedSet.size,
                 usable: usableSet.size,
@@ -809,27 +809,31 @@ export function SkillDetailModal({
 
         <DialogFooter className="mt-3 flex-wrap items-center gap-2">
           <div className="mr-auto flex flex-wrap gap-2">
-            <TTButton size="md" variant="ghost" onClick={onToggleBlacklist}>
+            <AITrackerButton
+              size="md"
+              variant="ghost"
+              onClick={onToggleBlacklist}
+            >
               <ShieldBan className="size-4" />
               {blacklisted
                 ? t("skills.actions.unblock")
                 : t("skills.actions.block")}
-            </TTButton>
-            <TTButton size="md" variant="ghost" onClick={onOpenSecurity}>
+            </AITrackerButton>
+            <AITrackerButton size="md" variant="ghost" onClick={onOpenSecurity}>
               <ShieldCheck className="size-4" />{" "}
               {t("skills.detail.scanSecurity")}
-            </TTButton>
+            </AITrackerButton>
           </div>
-          <TTButton size="md" variant="ghost" onClick={exportCurrent}>
+          <AITrackerButton size="md" variant="ghost" onClick={exportCurrent}>
             <Download className="size-4" /> {t("skills.detail.exportFile")}
-          </TTButton>
-          <TTButton size="md" variant="ghost" onClick={exportBundle}>
+          </AITrackerButton>
+          <AITrackerButton size="md" variant="ghost" onClick={exportBundle}>
             <Download className="size-4" /> {t("skills.detail.exportDir")}
-          </TTButton>
-          <TTButton size="md" variant="danger" onClick={onRemove}>
+          </AITrackerButton>
+          <AITrackerButton size="md" variant="danger" onClick={onRemove}>
             <Trash2 className="size-4" /> {t("skills.actions.uninstall")}
-          </TTButton>
-          <TTButton
+          </AITrackerButton>
+          <AITrackerButton
             size="md"
             variant="primary"
             disabled={installing || selectedAgents.size === 0}
@@ -838,7 +842,7 @@ export function SkillDetailModal({
             {installing
               ? t("skills.detail.installing")
               : t("skills.detail.installToSelected")}
-          </TTButton>
+          </AITrackerButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

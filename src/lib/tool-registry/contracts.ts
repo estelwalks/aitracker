@@ -77,7 +77,12 @@ export type UsageReaderKey =
   | (string & {});
 
 export type SessionReaderKey =
-  "claude-session-v1" | "codex-session-v1" | "grok-session-v1" | (string & {});
+  | "claude-session-v1"
+  | "codex-session-v1"
+  | "grok-session-v1"
+  | "dsh-session-v1"
+  | "aipy-session-v1"
+  | (string & {});
 
 export interface UsageCapability {
   mode: "native" | "adapter" | "unsupported";
@@ -105,8 +110,8 @@ export interface AgentsCapability {
 }
 
 export interface SessionsCapability {
-  mode: "resume" | "unsupported";
-  /** Required when mode === "resume". */
+  mode: "read" | "resume" | "unsupported";
+  /** Required when mode is "read" or "resume". */
   reader?: SessionReaderKey;
   /**
    * Resume command as a token array template. Must contain a `{sessionId}`

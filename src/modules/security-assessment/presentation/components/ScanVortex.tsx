@@ -50,7 +50,7 @@ const FLY_DURATION_MS = 220;
 const DIMENSION_DURATION_MS = 130;
 const EXIT_DURATION_MS = 900;
 const MIN_VISIBLE_DURATION_MS = 2000;
-const MINIMIZED_STORAGE_KEY = "trusttools.security-scan.minimized";
+const MINIMIZED_STORAGE_KEY = "aitracker.security-scan.minimized";
 
 function readMinimizedState(): boolean {
   if (typeof window === "undefined") return false;
@@ -123,7 +123,7 @@ export function ScanVortex({
   };
 
   useEffect(() => {
-    const sidebar = document.querySelector<HTMLElement>(".tt-sidebar");
+    const sidebar = document.querySelector<HTMLElement>(".aitracker-sidebar");
     if (!sidebar) return;
     const update = () =>
       setSidebarInset(Math.round(sidebar.getBoundingClientRect().width));
@@ -178,13 +178,13 @@ export function ScanVortex({
     return (
       <div className="fixed right-6 bottom-14 z-50 flex items-center gap-3 rounded-full bg-card px-4 py-2.5 shadow-xl shadow-black/30 ring-1 ring-border/60">
         <span
-          className="tt-breathe size-2 shrink-0 rounded-full"
+          className="aitracker-breathe size-2 shrink-0 rounded-full"
           style={{ background: ok }}
         />
         <span className="text-[12.5px] font-medium">
           {t("security.center.vortex.scanning")}
         </span>
-        <span className="tt-num font-mono text-[11px] text-muted-foreground">
+        <span className="aitracker-num font-mono text-[11px] text-muted-foreground">
           {Math.round(progress)}% · {settled}/{total}
         </span>
         <span className="h-1 w-24 overflow-hidden rounded-full bg-surface-2">
@@ -224,8 +224,8 @@ export function ScanVortex({
       style={{
         left: sidebarInset,
         animation: exiting
-          ? "tt-vx-out .9s ease-in forwards"
-          : "tt-vx-in .5s ease-out",
+          ? "aitracker-vx-out .9s ease-in forwards"
+          : "aitracker-vx-in .5s ease-out",
       }}
       role="dialog"
       aria-modal="true"
@@ -236,7 +236,7 @@ export function ScanVortex({
       <div className="relative flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2.5">
           <span
-            className="tt-breathe size-2 rounded-full"
+            className="aitracker-breathe size-2 rounded-full"
             style={{ background: ok }}
           />
           <span className="text-[13px] font-semibold tracking-tight">
@@ -313,7 +313,7 @@ export function ScanVortex({
             />
             <div
               className="absolute inset-0 overflow-hidden rounded-full"
-              style={{ animation: "tt-radar-spin 4.2s linear infinite" }}
+              style={{ animation: "aitracker-radar-spin 4.2s linear infinite" }}
             >
               <div
                 className="absolute inset-0 rounded-full"
@@ -348,7 +348,7 @@ export function ScanVortex({
                   background: ok,
                   boxShadow: `0 0 6px ${ok}`,
                   opacity: 0,
-                  animation: `tt-blip 4.2s linear ${(index * 1.3) % 4.2}s infinite`,
+                  animation: `aitracker-blip 4.2s linear ${(index * 1.3) % 4.2}s infinite`,
                 }}
               />
             ))}
@@ -364,14 +364,14 @@ export function ScanVortex({
                     background: danger,
                     boxShadow: `0 0 10px ${danger}`,
                     animation:
-                      "tt-risk-fly 1.3s cubic-bezier(.5,0,.7,1) forwards",
+                      "aitracker-risk-fly 1.3s cubic-bezier(.5,0,.7,1) forwards",
                   }}
                 />
                 <span
                   className="absolute size-1.5 rounded-full"
                   style={{
                     border: `1px solid ${danger}`,
-                    animation: "tt-risk-ping .9s ease-out forwards",
+                    animation: "aitracker-risk-ping .9s ease-out forwards",
                   }}
                 />
               </span>
@@ -460,7 +460,8 @@ export function ScanVortex({
                             style={{
                               border:
                                 "1px solid color-mix(in oklab, var(--ok) 45%, transparent)",
-                              animation: "tt-ripple 1.8s ease-out infinite",
+                              animation:
+                                "aitracker-ripple 1.8s ease-out infinite",
                             }}
                           />
                         )}
@@ -510,7 +511,8 @@ export function ScanVortex({
                             style={{
                               background: ok,
                               boxShadow: `0 0 6px ${ok}`,
-                              animation: "tt-signal .9s ease-in infinite",
+                              animation:
+                                "aitracker-signal .9s ease-in infinite",
                             }}
                           />
                         )}
@@ -537,7 +539,7 @@ export function ScanVortex({
                         currentSkill ?? t("security.center.vortex.waiting")
                       }`
                     : t("security.center.vortex.waiting")}
-                  <span className="tt-breathe">_</span>
+                  <span className="aitracker-breathe">_</span>
                 </span>
               )}
             </span>
@@ -547,7 +549,7 @@ export function ScanVortex({
             className="pointer-events-none absolute flex items-center gap-2 font-mono text-[11px] text-muted-foreground"
             style={{ top: "calc(50% + 178px)" }}
           >
-            <span className="tt-num text-[15px] leading-none font-semibold tracking-tight text-foreground">
+            <span className="aitracker-num text-[15px] leading-none font-semibold tracking-tight text-foreground">
               {Math.round(progress)}%
             </span>
             <span>
@@ -603,7 +605,7 @@ export function ScanVortex({
                 key={entry.id}
                 className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[11px]"
                 style={{
-                  animation: "tt-result-pop .3s ease-out",
+                  animation: "aitracker-result-pop .3s ease-out",
                   color: danger,
                 }}
               >

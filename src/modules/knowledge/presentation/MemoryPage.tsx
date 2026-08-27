@@ -17,8 +17,12 @@ import {
 import { toast } from "sonner";
 
 import { ChunkErrorBoundary } from "../../../components/ChunkErrorBoundary";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
-import { EmptyState, SearchInput, TTButton } from "../../../components/tt";
+import { InsightCard } from "../../insights/index.ts";
+import {
+  EmptyState,
+  SearchInput,
+  AITrackerButton,
+} from "../../../components/aitracker";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
@@ -261,7 +265,7 @@ export function MemoryPage() {
               <div className="truncate text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
                 {card.label}
               </div>
-              <div className="tt-num tt-text-metric mt-2 truncate leading-none font-black tracking-tight">
+              <div className="aitracker-num aitracker-text-metric mt-2 truncate leading-none font-black tracking-tight">
                 {card.value}
               </div>
               <div
@@ -275,8 +279,8 @@ export function MemoryPage() {
         </div>
       </div>
 
-      {/* 筛选栏（V3.0 原型：tt-panel + 玻璃分段） */}
-      <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
+      {/* 筛选栏（V3.0 原型：aitracker-panel + 玻璃分段） */}
+      <div className="aitracker-panel flex flex-wrap items-center gap-2 p-2">
         <SearchInput
           value={q}
           onChange={setQ}
@@ -338,7 +342,7 @@ export function MemoryPage() {
       </div>
 
       {loading ? (
-        <div className="tt-panel p-5">
+        <div className="aitracker-panel p-5">
           <EmptyState
             icon={<Sparkles className="size-5" strokeWidth={1.8} />}
             title={t("common.loading")}
@@ -401,16 +405,19 @@ export function MemoryPage() {
           onClose={() => setConfirmDel(null)}
           footer={
             <>
-              <TTButton onClick={() => setConfirmDel(null)} disabled={busy}>
+              <AITrackerButton
+                onClick={() => setConfirmDel(null)}
+                disabled={busy}
+              >
                 {t("memory.cancel")}
-              </TTButton>
-              <TTButton
+              </AITrackerButton>
+              <AITrackerButton
                 variant="danger"
                 onClick={() => void handleDelete(confirmDel.assetId)}
                 disabled={busy}
               >
                 {t("memory.delete")}
-              </TTButton>
+              </AITrackerButton>
             </>
           }
         >
@@ -467,7 +474,7 @@ function MemoryCard({
 
         {/* 正文：紧凑 Markdown 预览（定高 + 底部渐隐，防止长正文撑爆卡片） */}
         {bodyText && (
-          <div className="tt-md-sm max-h-[88px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]">
+          <div className="aitracker-md-sm max-h-[88px] overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]">
             <div dangerouslySetInnerHTML={{ __html: md(bodyText) }} />
           </div>
         )}
@@ -478,11 +485,11 @@ function MemoryCard({
               {item.project}
             </span>
           )}
-          <span className="tt-num font-mono text-[10.5px] text-muted-foreground">
+          <span className="aitracker-num font-mono text-[10.5px] text-muted-foreground">
             {format.formatDateTime(item.updatedAt || item.createdAt, false)}
           </span>
           <span className="ml-auto flex items-center gap-1">
-            <TTButton
+            <AITrackerButton
               size="sm"
               onClick={() => {
                 downloadMemoryMarkdown(item);
@@ -492,16 +499,16 @@ function MemoryCard({
             >
               <Download className="size-3.5" strokeWidth={2} />
               {t("memory.exportMd")}
-            </TTButton>
-            <TTButton
+            </AITrackerButton>
+            <AITrackerButton
               size="sm"
               onClick={onEdit}
               disabled={busy}
               title={t("memory.edit")}
             >
               <Pencil className="size-3.5" strokeWidth={2} />
-            </TTButton>
-            <TTButton
+            </AITrackerButton>
+            <AITrackerButton
               size="sm"
               variant="danger"
               onClick={onDelete}
@@ -509,7 +516,7 @@ function MemoryCard({
               title={t("memory.delete")}
             >
               <Trash2 className="size-3.5" strokeWidth={2} />
-            </TTButton>
+            </AITrackerButton>
           </span>
         </div>
       </div>

@@ -20,7 +20,7 @@ import type {
   InsightEvidenceBundle,
   InsightScope,
   PageInsightAdapter,
-} from "../insights/page/contracts.ts";
+} from "../insights/index.ts";
 
 function composeSettingsCandidates(
   bundle: InsightEvidenceBundle,

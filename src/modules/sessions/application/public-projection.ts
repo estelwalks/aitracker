@@ -29,6 +29,8 @@ function fallbackTitle(source: string): string {
       return "Codex session";
     case "grok":
       return "Grok session";
+    case "aipy":
+      return "AiPy session";
     default:
       return "AI session";
   }

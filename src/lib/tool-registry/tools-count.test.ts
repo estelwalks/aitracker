@@ -129,12 +129,16 @@ test("skill/market/usage capabilities match the frozen baseline sets", () => {
         ? "adapter"
         : "unsupported";
     assert.equal(def.capabilities.usage.mode, expectedUsage);
-    // agents/security unsupported for every tool; sessions resume for the 4
-    // resume-capable tools (claude-code/codex/grok/dsh).
+    // agents/security unsupported for every tool; sessions include the
+    // read-only AiPy source in addition to the four resumable tools.
     assert.equal(def.capabilities.agents.mode, "unsupported");
     assert.equal(
       def.capabilities.sessions.mode,
-      BASELINE_SESSIONS_RESUME.has(def.id) ? "resume" : "unsupported",
+      BASELINE_SESSIONS_RESUME.has(def.id)
+        ? "resume"
+        : def.id === "aipy"
+          ? "read"
+          : "unsupported",
     );
     assert.equal(def.capabilities.security.mode, "unsupported");
   }

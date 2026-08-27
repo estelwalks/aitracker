@@ -45,6 +45,10 @@ export {
   useSecurityScanOverview,
   type SecurityScanOverview,
 } from "./query/use-security-scan-overview";
+export {
+  getSecuritySkillVerdicts,
+  type SecuritySkillVerdictReadModel,
+} from "./query/agent-verdicts.ts";
 
 // Browser-safe security UI contracts and clients (P0 cleanup: consumers must
 // import through this module entry instead of deep-importing presentation or

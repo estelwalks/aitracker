@@ -320,11 +320,11 @@ function PkgBrowser({
           />
         ) : isMd ? (
           <div
-            className="tt-md px-3 pb-3"
+            className="aitracker-md px-3 pb-3"
             dangerouslySetInnerHTML={{ __html: md(cur.content) }}
           />
         ) : (
-          <pre className="tt-scroll max-h-[360px] overflow-auto px-3 pb-3 font-mono text-[11.5px] leading-6 whitespace-pre">
+          <pre className="aitracker-scroll max-h-[360px] overflow-auto px-3 pb-3 font-mono text-[11.5px] leading-6 whitespace-pre">
             {cur.content}
           </pre>
         )}
@@ -810,14 +810,14 @@ export function CandidateCompareDialog({
         {candidates.map((candidate, index) => (
           <div
             key={`${candidate.candidateId}-${index}`}
-            className="tt-scroll max-h-[60vh] overflow-y-auto rounded-xl bg-surface-2 p-3"
+            className="aitracker-scroll max-h-[60vh] overflow-y-auto rounded-xl bg-surface-2 p-3"
           >
             <div className="font-mono text-[10.5px] text-muted-foreground">
               {t(kindMeta(candidate.kind).labelKey)} · {modelLabelOf(candidate)}{" "}
               · {format.formatDateTime(candidate.generatedAt, false)}
             </div>
             <div
-              className="tt-md mt-2"
+              className="aitracker-md mt-2"
               dangerouslySetInnerHTML={{ __html: md(candidate.summary) }}
             />
           </div>

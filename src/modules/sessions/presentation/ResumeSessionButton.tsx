@@ -2,7 +2,7 @@ import { Play } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { TTButton } from "../../../components/tt.tsx";
+import { AITrackerButton } from "../../../components/aitracker.tsx";
 import { toUiError } from "../../../lib/errors.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { resumeSession } from "../query.ts";
@@ -41,7 +41,7 @@ export function ResumeSessionButton({
   }
 
   return (
-    <TTButton
+    <AITrackerButton
       size={size}
       variant={session.resumeAvailable ? "primary" : "ghost"}
       disabled={busy || !session.resumeAvailable}
@@ -54,6 +54,6 @@ export function ResumeSessionButton({
     >
       <Play className="size-3.5" />
       {busy ? t("sessions.action.resuming") : t("sessions.action.resume")}
-    </TTButton>
+    </AITrackerButton>
   );
 }

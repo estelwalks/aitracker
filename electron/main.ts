@@ -385,7 +385,7 @@ async function waitForWidgetStyles(window: BrowserWindow): Promise<void> {
       `(() => new Promise((resolve) => {
         const deadline = performance.now() + 1800;
         const check = () => {
-          const card = document.querySelector('.tt-glass-overview');
+          const card = document.querySelector('.aitracker-glass-overview');
           if (card) {
             const style = getComputedStyle(card);
             if (style.display === 'flex' && style.borderRadius === '30px') {

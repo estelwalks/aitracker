@@ -95,7 +95,7 @@ export const security = {
     summary: "Skill {skills}개 · 검사 차원 {dimensions}개 · 건강도 {health}%",
     devBanner: {
       title: "개발 모드 · 검사 서비스 연결됨",
-      desc: "스캔은 실제 로컬 Skill 루트를 사용하며, 검사 기록은 ~/.trusttools/security-dev/에 격리 저장됩니다.",
+      desc: "스캔은 실제 로컬 Skill 루트를 사용하며, 검사 기록은 ~/.aitracker/security-dev/에 격리 저장됩니다.",
     },
     unavailable: {
       title: "로컬 컴패니언 서비스를 사용할 수 없습니다",

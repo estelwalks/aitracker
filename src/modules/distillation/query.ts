@@ -186,9 +186,8 @@ export const getDistillationTask = createServerFn({ method: "GET" })
     return input;
   })
   .handler(async ({ data }) => {
-    const { getDistillationTask: read } = await import(
-      "./task-state.server.ts"
-    );
+    const { getDistillationTask: read } =
+      await import("./task-state.server.ts");
     return read(data.taskId);
   });
 
@@ -240,7 +239,12 @@ export const cancelCandidate = createServerFn({ method: "POST" })
 
 export const deleteCandidates = createServerFn({ method: "POST" })
   .validator((input: { candidateIds: string[] }) => {
-    if (!Array.isArray(input?.candidateIds) || input.candidateIds.length === 0 || input.candidateIds.length > 100 || input.candidateIds.some((id) => typeof id !== "string" || id.length > 200)) {
+    if (
+      !Array.isArray(input?.candidateIds) ||
+      input.candidateIds.length === 0 ||
+      input.candidateIds.length > 100 ||
+      input.candidateIds.some((id) => typeof id !== "string" || id.length > 200)
+    ) {
       throw new AppError("errors.distillation.notFound");
     }
     return input;

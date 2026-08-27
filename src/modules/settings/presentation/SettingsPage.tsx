@@ -10,8 +10,8 @@ import {
   Panel,
   Segmented,
   StatusBadge,
-  TTButton,
-} from "../../../components/tt";
+  AITrackerButton,
+} from "../../../components/aitracker";
 import {
   DEFAULT_SETTINGS,
   useAppSettings,
@@ -59,11 +59,11 @@ import {
   type SettingsCategory,
   type SettingsSection,
 } from "../settings-navigation";
-import { InsightSettingsSection } from "../../insights/page/presentation/InsightSettingsSection";
+import { InsightSettingsSection } from "../../insights/index.ts";
 import {
   getSecurityLlmReviewAvailability,
   setSecurityLlmReviewEnabled,
-} from "../../security-assessment/llm-review.server-fns";
+} from "../../security-assessment/index.ts";
 
 const categoryKeys: Record<SettingsCategory, MessageKey> = {
   preferences: "settings.sections.preferences",
@@ -119,9 +119,11 @@ function NumberField({
         onChange={(event) =>
           onChange(Math.max(0, Number(event.target.value) || 0))
         }
-        className="tt-num tt-text-body h-8 w-24 rounded-sm border border-border bg-surface-2 px-2 text-right"
+        className="aitracker-num aitracker-text-body h-8 w-24 rounded-sm border border-border bg-surface-2 px-2 text-right"
       />
-      <span className="tt-text-caption text-muted-foreground">{suffix}</span>
+      <span className="aitracker-text-caption text-muted-foreground">
+        {suffix}
+      </span>
     </span>
   );
 }
@@ -415,7 +417,7 @@ export function SettingsPage({
             <button
               key={item}
               onClick={() => setCategory(item)}
-              className={`tt-text-body relative flex w-full rounded-sm px-3 py-2 text-left ${
+              className={`aitracker-text-body relative flex w-full rounded-sm px-3 py-2 text-left ${
                 category === item
                   ? "bg-accent font-medium"
                   : "text-muted-foreground hover:bg-accent/50"
@@ -495,7 +497,7 @@ export function SettingsPage({
               >
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="tt-num tt-text-body">
+                    <span className="aitracker-num aitracker-text-body">
                       {rates
                         ? t("settings.rate.line", {
                             rate: format.formatNumber(
@@ -506,7 +508,7 @@ export function SettingsPage({
                           })
                         : "—"}
                     </span>
-                    <TTButton
+                    <AITrackerButton
                       variant="ghost"
                       size="sm"
                       onClick={() => void handleRefreshRates()}
@@ -515,10 +517,10 @@ export function SettingsPage({
                       {ratesLoading
                         ? t("settings.rate.refreshing")
                         : t("settings.rate.refresh")}
-                    </TTButton>
+                    </AITrackerButton>
                   </div>
                   {rates && (
-                    <div className="tt-text-caption text-muted-foreground">
+                    <div className="aitracker-text-caption text-muted-foreground">
                       {t("settings.rate.updatedAt", { date: rates.date })}
                       {" · "}
                       {t(
@@ -545,7 +547,7 @@ export function SettingsPage({
                 />
                 {autoLaunchStatus !== "浏览器不可用" && (
                   <span
-                    className={`tt-text-caption ${
+                    className={`aitracker-text-caption ${
                       autoLaunchStatus === "桌面端可用"
                         ? "text-ok"
                         : "text-warn"
@@ -615,7 +617,7 @@ export function SettingsPage({
                   value={settings.dataPath}
                   readOnly
                   disabled
-                  className="tt-text-body h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-muted-foreground disabled:cursor-not-allowed"
+                  className="aitracker-text-body h-8 w-48 rounded-sm border border-border bg-surface-2 px-2 text-muted-foreground disabled:cursor-not-allowed"
                 />
               </Field>
               <Field
@@ -637,7 +639,7 @@ export function SettingsPage({
               <Field label={t("settings.storage")}>
                 {storageUsage ? (
                   <span
-                    className={`tt-num tt-text-body ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
+                    className={`aitracker-num aitracker-text-body ${storageUsage.exceedsSoftCap ? "text-warn" : ""}`}
                   >
                     {format.formatBytes(storageUsage.bytes)} /{" "}
                     {format.formatBytes(storageUsage.softCapBytes)}
@@ -646,35 +648,35 @@ export function SettingsPage({
                       : ""}
                   </span>
                 ) : loaderData.storageError ? (
-                  <span className="tt-text-body text-warn">
+                  <span className="aitracker-text-body text-warn">
                     {loaderData.storageError}
                   </span>
                 ) : (
-                  <span className="tt-text-body text-muted-foreground">
+                  <span className="aitracker-text-body text-muted-foreground">
                     {t("common.loading")}
                   </span>
                 )}
               </Field>
               <div className="mt-4 border-t border-border pt-1">
-                <div className="tt-text-caption mb-1 pt-2 font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="aitracker-text-caption mb-1 pt-2 font-medium uppercase tracking-wide text-muted-foreground">
                   {t("settings.dataDangerZone")}
                 </div>
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <div>
-                    <div className="tt-text-body">
+                    <div className="aitracker-text-body">
                       {t("settings.clearCache")}
                     </div>
-                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
+                    <div className="aitracker-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.clearCacheHint", brandParams)}
                     </div>
                   </div>
-                  <TTButton
+                  <AITrackerButton
                     variant="danger"
                     size="sm"
                     onClick={() => setClearCacheDialogOpen(true)}
                   >
                     {t("settings.clearCacheButton")}
-                  </TTButton>
+                  </AITrackerButton>
                 </div>
                 <AlertDialog
                   open={clearCacheDialogOpen}
@@ -710,20 +712,20 @@ export function SettingsPage({
                 </AlertDialog>
                 <div className="flex items-center justify-between gap-3 border-b border-border py-3">
                   <div>
-                    <div className="tt-text-body">
+                    <div className="aitracker-text-body">
                       {t("settings.clearCollectedData")}
                     </div>
-                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
+                    <div className="aitracker-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.clearCollectedDataHint")}
                     </div>
                   </div>
-                  <TTButton
+                  <AITrackerButton
                     variant="danger"
                     size="sm"
                     onClick={() => setClearCollectedDataDialogOpen(true)}
                   >
                     {t("settings.clearCollectedDataButton")}
-                  </TTButton>
+                  </AITrackerButton>
                 </div>
                 <AlertDialog
                   open={clearCollectedDataDialogOpen}
@@ -762,20 +764,20 @@ export function SettingsPage({
                 </AlertDialog>
                 <div className="flex items-center justify-between gap-3 py-3 last:border-0">
                   <div>
-                    <div className="tt-text-body">
+                    <div className="aitracker-text-body">
                       {t("settings.resetPrefs")}
                     </div>
-                    <div className="tt-text-caption mt-0.5 text-muted-foreground">
+                    <div className="aitracker-text-caption mt-0.5 text-muted-foreground">
                       {t("settings.resetPrefsHint")}
                     </div>
                   </div>
-                  <TTButton
+                  <AITrackerButton
                     variant="danger"
                     size="sm"
                     onClick={() => setResetPreferencesDialogOpen(true)}
                   >
                     {t("settings.resetButton")}
-                  </TTButton>
+                  </AITrackerButton>
                 </div>
                 <AlertDialog
                   open={resetPreferencesDialogOpen}
@@ -816,16 +818,18 @@ export function SettingsPage({
           {category === "about" && (
             <div>
               <Field label={t("settings.version")}>
-                <span className="tt-num tt-text-body">V{APP_VERSION}</span>
+                <span className="aitracker-num aitracker-text-body">
+                  V{APP_VERSION}
+                </span>
               </Field>
               <Field label={t("settings.releaseDate")}>
-                <span className="tt-text-body text-muted-foreground">
+                <span className="aitracker-text-body text-muted-foreground">
                   {APP_RELEASE_DATE}
                 </span>
               </Field>
               <Field label={t("settings.checkUpdate")}>
                 <div className="flex items-center gap-2">
-                  <TTButton
+                  <AITrackerButton
                     variant="ghost"
                     size="sm"
                     onClick={() => void versionRefresh()}
@@ -834,9 +838,9 @@ export function SettingsPage({
                     {versionLoading
                       ? t("settings.checking")
                       : t("settings.checkUpdate")}
-                  </TTButton>
+                  </AITrackerButton>
                   {versionResult && (
-                    <span className="tt-text-body-sm text-muted-foreground">
+                    <span className="aitracker-text-body-sm text-muted-foreground">
                       {versionResult.status === "newer"
                         ? t("settings.updateFound", {
                             version: versionResult.latestVersion ?? "",
@@ -850,7 +854,7 @@ export function SettingsPage({
                 {versionResult && versionResult.status === "newer" && (
                   <div className="mt-2 rounded-sm border border-primary/30 bg-primary/5 p-3">
                     {versionResult.changelog && (
-                      <p className="tt-text-body-sm leading-relaxed text-muted-foreground">
+                      <p className="aitracker-text-body-sm leading-relaxed text-muted-foreground">
                         {versionResult.changelog}
                       </p>
                     )}
@@ -859,7 +863,7 @@ export function SettingsPage({
                         href={versionResult.releaseUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="tt-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
+                        className="aitracker-text-body-sm mt-2 inline-flex items-center gap-1 text-primary hover:underline"
                       >
                         <ExternalLink className="size-3" />
                         {t("settings.viewRelease")}
@@ -873,7 +877,7 @@ export function SettingsPage({
                   href={APP_REPO_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="tt-text-body inline-flex items-center gap-1 text-primary hover:underline"
+                  className="aitracker-text-body inline-flex items-center gap-1 text-primary hover:underline"
                 >
                   <ExternalLink className="size-3.5" />
                   {APP_REPO_URL}
