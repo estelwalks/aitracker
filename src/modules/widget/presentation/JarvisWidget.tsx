@@ -32,7 +32,7 @@ function SoulPulse({ mood, anim }: { mood: Mood; anim: boolean }) {
       <span
         className={`absolute -right-0.5 -bottom-0.5 size-2 rounded-full border border-card ${
           active ? "bg-ok" : "bg-muted-foreground"
-        } ${anim && active ? "tt-breathe" : ""}`}
+        } ${anim && active ? "aitracker-breathe" : ""}`}
       />
     </span>
   );
@@ -72,7 +72,7 @@ function JarvisText({ lines, rotate }: { lines: string[]; rotate: number }) {
     <div className="flex items-start gap-2">
       <p className="min-h-[38px] flex-1 text-[12.5px] leading-relaxed text-foreground/90">
         {text.slice(0, n)}
-        <span className="ml-0.5 inline-block h-3 w-[2px] translate-y-[1px] bg-ok align-middle tt-breathe" />
+        <span className="ml-0.5 inline-block h-3 w-[2px] translate-y-[1px] bg-ok align-middle aitracker-breathe" />
       </p>
       {rotate <= 0 && (
         <button
@@ -136,9 +136,11 @@ function Row({
           style={{ width: `${Math.max(4, Math.round(ratio * 100))}%` }}
         />
       </span>
-      <span className="tt-num shrink-0 font-mono text-[11px]">{value}</span>
+      <span className="aitracker-num shrink-0 font-mono text-[11px]">
+        {value}
+      </span>
       {sub && (
-        <span className="tt-num w-9 shrink-0 text-right font-mono text-[10.5px] text-muted-foreground">
+        <span className="aitracker-num w-9 shrink-0 text-right font-mono text-[10.5px] text-muted-foreground">
           {sub}
         </span>
       )}
@@ -159,7 +161,7 @@ function SafetyCards() {
           <EmptyText text={t("widget.noData")} />
         ) : (
           <>
-            <div className="tt-num flex flex-wrap items-baseline gap-x-2 font-mono text-[12px]">
+            <div className="aitracker-num flex flex-wrap items-baseline gap-x-2 font-mono text-[12px]">
               <span className="text-[15px] font-semibold">
                 {security.coverage}
               </span>
@@ -235,7 +237,7 @@ function UsageCards() {
         <div className="grid grid-cols-3 gap-2">
           {cells.map(([value, label]) => (
             <div key={label}>
-              <div className="tt-num font-mono text-[16px] leading-none font-semibold">
+              <div className="aitracker-num font-mono text-[16px] leading-none font-semibold">
                 {value}
               </div>
               <div className="mt-1 font-mono text-[10.5px] text-muted-foreground">
@@ -295,7 +297,7 @@ function TodayCards() {
         <div className="grid grid-cols-4 gap-2">
           {cells.map(([value, label]) => (
             <div key={label} className="min-w-0">
-              <div className="tt-num font-mono text-[16px] leading-none font-semibold">
+              <div className="aitracker-num font-mono text-[16px] leading-none font-semibold">
                 {value}
               </div>
               <div className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground">
@@ -499,7 +501,7 @@ export function JarvisWidget({
         </div>
 
         {cfgOpen ? (
-          <div className="tt-scroll max-h-[460px] overflow-y-auto px-4 py-3">
+          <div className="aitracker-scroll max-h-[460px] overflow-y-auto px-4 py-3">
             <WidgetConfigPanel sections={["bar", "panel"]} />
             <button
               type="button"
@@ -510,7 +512,7 @@ export function JarvisWidget({
             </button>
           </div>
         ) : (
-          <div className="tt-scroll max-h-[560px] space-y-3 overflow-y-auto px-4 py-3">
+          <div className="aitracker-scroll max-h-[560px] space-y-3 overflow-y-auto px-4 py-3">
             {!hasData && !loading ? (
               <div className="flex flex-col items-center justify-center rounded-xl bg-surface-2/50 px-4 py-10 text-center">
                 <p className="text-[13px] font-medium">{t("widget.noData")}</p>
@@ -556,7 +558,7 @@ export function JarvisWidget({
                       )}
                       {key !== "safety" && (
                         <span
-                          className={`tt-num font-mono text-[10.5px] ${
+                          className={`aitracker-num font-mono text-[10.5px] ${
                             tab === key
                               ? "text-foreground/70"
                               : "text-muted-foreground/70"
@@ -580,7 +582,7 @@ export function JarvisWidget({
         {/* 底部常驻 */}
         <div className="border-t border-border/50">
           <div className="flex items-center gap-3 px-4 py-2.5 font-mono text-[11px]">
-            <span className="tt-num">
+            <span className="aitracker-num">
               <span className="text-[13px] font-semibold">
                 {today.activeTools}
               </span>
@@ -589,7 +591,9 @@ export function JarvisWidget({
               </span>
             </span>
             <span className="opacity-30">·</span>
-            <span className="tt-num">{format.formatTokens(total.tokens)}</span>
+            <span className="aitracker-num">
+              {format.formatTokens(total.tokens)}
+            </span>
             <span className="opacity-30">·</span>
             <span className="inline-flex items-center gap-1 text-muted-foreground/70">
               {danger > 0 ? (
@@ -600,7 +604,7 @@ export function JarvisWidget({
               ) : (
                 <ShieldCheck className="size-3.5 text-ok" strokeWidth={1.75} />
               )}
-              <span className="tt-num text-[10.5px]">
+              <span className="aitracker-num text-[10.5px]">
                 {danger > 0
                   ? t("widget.riskCount", { count: danger })
                   : t("widget.safe")}

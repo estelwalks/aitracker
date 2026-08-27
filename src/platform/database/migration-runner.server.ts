@@ -23,7 +23,7 @@ import { createHash } from "node:crypto";
 
 import {
   DatabaseError,
-  TRUSTTOOLS_APPLICATION_ID,
+  AITRACKER_APPLICATION_ID,
   type SqliteDatabasePort,
   type SqliteRow,
   type Transaction,
@@ -115,7 +115,7 @@ export function assertMigrationState(
     }
     return 0;
   }
-  if (applicationId !== TRUSTTOOLS_APPLICATION_ID) {
+  if (applicationId !== AITRACKER_APPLICATION_ID) {
     throw new DatabaseError("capability-mismatch", "migration", {
       retryable: false,
     });
@@ -220,7 +220,7 @@ function assertPersistedIdentity(
     return;
   }
   const latest = rows[rows.length - 1].version;
-  if (applicationId !== TRUSTTOOLS_APPLICATION_ID) {
+  if (applicationId !== AITRACKER_APPLICATION_ID) {
     throw new DatabaseError("capability-mismatch", "migration", {
       retryable: false,
     });

@@ -10,7 +10,7 @@ import { startLocalWebServer } from "./local-web-server.js";
 import { SECURITY_CSRF_HEADER } from "./security-http-api.js";
 
 async function fixture(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "tt-local-web-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-local-web-"));
   await mkdir(join(root, "server"), { recursive: true });
   await mkdir(join(root, "public"), { recursive: true });
   await writeFile(

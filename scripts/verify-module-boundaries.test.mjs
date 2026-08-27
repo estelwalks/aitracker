@@ -17,7 +17,7 @@ import {
 } from "./verify-module-boundaries.mjs";
 
 async function withFixture(files, run) {
-  const root = await mkdtemp(join(tmpdir(), "trusttools-architecture-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-architecture-"));
   try {
     await Promise.all(
       Object.entries(files).map(async ([path, content]) => {

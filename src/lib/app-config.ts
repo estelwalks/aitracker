@@ -2,7 +2,7 @@
  * Central application configuration — the single source of truth for the
  * product name and every runtime identifier derived from it.
  *
- * The product display name is independent from the compatibility identifiers.
+ * The product display name is independent from the runtime identifiers.
  * To rebrand, change `APP_NAME`; every other constant derives from `APP_ID`
  * and the renderer
  * must never hardcode a brand literal (enforced by
@@ -10,18 +10,21 @@
  *
  * ⚠ COMPAT SENSITIVITY — the constants marked [compat] below hold VALUES
  * THAT MUST NOT CHANGE without a migration plan: existing installs store
- * real data under `~/.trusttools`, browsers hold `trusttools.*` keys, and
+ * real data under `~/.aitracker`, browsers hold `aitracker.*` keys, and
  * session IDs are hashes over the HMAC domain string. This round only
- * centralizes them; changing any [compat] value is a future rebrand step
- * that must ship with migration/compatibility logic. Constants marked
- * [safe] may be changed freely.
+ * centralizes them. Constants marked [safe] may be changed freely. The
+ * namespace/data-directory rebrand intentionally starts a new AITracker
+ * namespace; data from the previous product namespace is not auto-migrated.
  *
  * Note: `electron/app-config.ts` mirrors the subset Electron needs (the
  * tsconfig boundary prevents a cross-import); `check-app-config-sync.mjs`
  * enforces that the mirror stays textually in sync.
  */
 export const APP_NAME = "AITracker";
-export const APP_ID = "trusttools";
+export const APP_ID = "aitracker";
+
+/** Browser-facing app icon from the AITracker brand package. [safe] */
+export const APP_ICON_URL = "/brand-logos/ai-tracker/ai-tracker-icon-mono.png";
 
 /** Product version shown in the UI; bump together with package.json `version`. */
 export const APP_VERSION = "3.0.1";
@@ -30,9 +33,9 @@ export const APP_RELEASE_DATE = "2026-08-03";
 /** Source repository link shown on the About page. */
 export const APP_REPO_URL = `https://github.com/${APP_ID}/${APP_ID}`;
 
-/** Local data root directory name under the user's home (`~/.trusttools`). [compat: user data] */
+/** Local data root directory name under the user's home (`~/.aitracker`). [compat: user data] */
 export const APP_DATA_DIR = `.${APP_ID}`;
-/** Namespace for SQLite-backed application preference keys (`trusttools.*`). */
+/** Namespace for SQLite-backed application preference keys (`aitracker.*`). */
 export const STORAGE_KEY_PREFIX = `${APP_ID}.`;
 /** Capability-token cookie name in the local web server. [safe] */
 export const COOKIE_TOKEN_NAME = `${APP_ID}_token`;
@@ -40,14 +43,14 @@ export const COOKIE_TOKEN_NAME = `${APP_ID}_token`;
 export const SECURITY_CSRF_HEADER = `x-${APP_ID}-csrf`;
 /** HMAC domain-separation string for local-usage session IDs. [compat: changing orphans every existing session ID] */
 export const SESSION_HMAC_DOMAIN = `${APP_ID}-local-usage-session-v1`;
-/** Downloaded export file prefix (`trusttools_export_<stamp>.csv`). [safe] */
+/** Downloaded export file prefix (`aitracker_export_<stamp>.csv`). [safe] */
 export const EXPORT_FILENAME_PREFIX = `${APP_ID}_export_`;
 /** Token poster image file prefix. [safe] */
 export const POSTER_FILENAME_PREFIX = `${APP_ID}-token-`;
 /** Skill market API base URL. [compat: live backend endpoint] */
 export const MARKET_API_BASE = `https://ai.${APP_ID}.cn/api`;
 /** Sandbox temp-dir prefix for tests. [safe — neutral on purpose] */
-export const TEST_TMP_PREFIX = "tt-";
+export const TEST_TMP_PREFIX = "aitracker-";
 /** Name of the global object exposed by the Electron preload bridge. [safe — rebuilt per launch] */
 export const DESKTOP_GLOBAL = `${APP_ID}Desktop`;
 

@@ -9,7 +9,7 @@ import { createFileSecretCodec } from "./file-secret-codec.server.ts";
 const ERROR_CODE = "errors.modelProfile.safeStorageUnavailable";
 
 function fixture(t: { after(fn: () => void): void }): string {
-  const directory = mkdtempSync(join(tmpdir(), "tt-secret-codec-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-secret-codec-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   return directory;
 }

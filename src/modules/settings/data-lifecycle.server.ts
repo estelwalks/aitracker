@@ -169,7 +169,7 @@ export async function clearRegenerableCache(): Promise<{
 
 /**
  * Clears local collection results and resets the in-memory read models. The
- * source logs themselves are external to TrustTools and are never deleted.
+ * source logs themselves are external to AITracker and are never deleted.
  * Empty coordinators trigger the normal background collection path on the
  * next dashboard/sources read, matching first-run initialization semantics.
  */

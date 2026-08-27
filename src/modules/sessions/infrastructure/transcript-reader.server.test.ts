@@ -19,7 +19,7 @@ const FIXTURES = join(
 );
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const home = await mkdtemp(join(tmpdir(), "tt-transcript-"));
+  const home = await mkdtemp(join(tmpdir(), "aitracker-transcript-"));
   try {
     return await fn(home);
   } finally {

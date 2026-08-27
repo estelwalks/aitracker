@@ -2,11 +2,11 @@
  * 小组件预览的强制暗色作用域。
  *
  * 应用默认主题为暗色（:root 上定义的变量），亮色主题通过 <html> 上的
- * `.theme-light` 覆盖变量。这里把同款暗色变量复制到 `.tt-widget-dark`
+ * `.theme-light` 覆盖变量。这里把同款暗色变量复制到 `.aitracker-widget-dark`
  * 类上，让「小组件主题=暗色」的预览在应用处于亮色主题时仍能局部渲染为暗色
  * （CSS 自定义属性沿子树继承，作用域内的卡片/文字全部随变量变化）。
  */
-.tt-widget-dark {
+.aitracker-widget-dark {
   --radius: 14px;
   --background: oklch(0.16 0.004 265);
   --foreground: oklch(0.98 0 0);

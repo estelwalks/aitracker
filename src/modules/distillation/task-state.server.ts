@@ -10,7 +10,7 @@ import { join } from "node:path";
 const tasks = new Map<string, DistillationTaskProgress>();
 const taskFile = join(
   homedir(),
-  ".trusttools",
+  ".aitracker",
   "tasks",
   "distillation-tasks.json",
 );
@@ -32,7 +32,7 @@ function loadTasks() {
 }
 
 function persistTasks() {
-  mkdirSync(join(homedir(), ".trusttools", "tasks"), { recursive: true });
+  mkdirSync(join(homedir(), ".aitracker", "tasks"), { recursive: true });
   writeFileSync(taskFile, JSON.stringify([...tasks.values()]), "utf8");
 }
 

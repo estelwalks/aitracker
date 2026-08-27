@@ -16,7 +16,7 @@ import {
   ChipTabs,
   EmptyState,
   MetricGrid,
-} from "../../../../components/tt";
+} from "../../../../components/aitracker";
 import { useI18n } from "../../../../lib/i18n/context";
 import { toUiError } from "../../../../lib/errors";
 import type { MessageKey } from "../../../../lib/i18n/messages";
@@ -175,7 +175,7 @@ export function SourcesPage({ initial }: { initial: SourcesQuerySummary }) {
             label: t("sources.summary.connected"),
             v: format.formatNumber(summary.totals.connectedCount),
             right: (
-              <span className="tt-num flex items-baseline gap-1 font-mono text-[13px] text-muted-foreground">
+              <span className="aitracker-num flex items-baseline gap-1 font-mono text-[13px] text-muted-foreground">
                 <span aria-hidden="true">/</span>
                 <span>{format.formatNumber(summary.totals.toolCount)}</span>
               </span>
@@ -305,7 +305,7 @@ function SourceCard({
         </span>
       </header>
 
-      <div className="tt-num mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
+      <div className="aitracker-num mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
         <span className="inline-flex items-center gap-1.5">
           <FolderOpen className="size-3.5" />
           {t("sources.row.files", {
@@ -342,7 +342,7 @@ function SourceCard({
         <span className="text-foreground/70">
           {t("sources.row.paths", { paths: "" })}
         </span>
-        <span className="tt-num ml-1 break-all">
+        <span className="aitracker-num ml-1 break-all">
           {hasPaths
             ? entry.paths.join(" · ")
             : t("sources.row.pathsUnavailable")}

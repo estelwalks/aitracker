@@ -45,7 +45,7 @@ async function fixture(): Promise<{
   client: string;
   skill: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "tt-security-dev-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-security-dev-"));
   cleanup.push(root);
   const home = join(root, "home");
   const data = join(root, "data");

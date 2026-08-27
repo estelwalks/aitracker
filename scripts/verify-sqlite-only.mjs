@@ -1,6 +1,6 @@
 // SQLite-only persistence gate.
 //
-// TrustTools is initialized as a new SQLite application. Production code may
+// AITracker is initialized as a new SQLite application. Production code may
 // read external Agent logs/assets and may write logs, SQLite backup metadata,
 // and user-requested exported/installed files, but application-owned state may
 // not fall back to JSON/localStorage or retain migration/shadow-write paths.
@@ -25,7 +25,7 @@ const EXCLUDED_PATHS = [
 ];
 
 const APP_OWNED_FILES = [
-  "trusttools-prefs.json",
+  "aitracker-prefs.json",
   "preferences.v1.json",
   "runs.v1.json",
   "performance-rollout.v1.json",
@@ -87,7 +87,7 @@ const CONTENT_RULES = [
   {
     type: "legacy-read-switch",
     pattern:
-      /\b(?:FORCE_LEGACY_READ_PATH|TRUSTTOOLS_FORCE_LEGACY_READ_PATH|forceLegacyReadPath|readFromSqlite)\b/g,
+      /\b(?:FORCE_LEGACY_READ_PATH|forceLegacyReadPath|readFromSqlite)\b/g,
   },
   {
     type: "app-owned-local-storage",

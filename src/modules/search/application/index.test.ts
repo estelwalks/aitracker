@@ -24,7 +24,7 @@ function openHost(directory: string): DatabaseHost {
 }
 
 test("persists updates and reloads the same index after restart", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-index-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-search-index-"));
   try {
     let host = openHost(directory);
     const clock = { now: () => new Date("2026-08-07T00:00:00.000Z") };

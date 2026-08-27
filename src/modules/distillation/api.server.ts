@@ -374,7 +374,7 @@ export async function saveCandidateAsSkill(
   const { ENV } = await import("../../lib/app-config.ts");
   const { resolveAgentRoots } =
     await import("../../lib/local-skills/scanner.server.ts");
-  // `TRUSTTOOLS_USAGE_HOME` mirrors the composition root's data-root override
+  // `AITRACKER_USAGE_HOME` mirrors the composition root's data-root override
   // (and keeps the write testable in isolation); unset → the real home.
   const home = process.env[ENV.USAGE_HOME] ?? homedir();
   const roots = resolveAgentRoots(home, process.env);

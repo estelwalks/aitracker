@@ -11,7 +11,7 @@ import { formatCostLabel } from "../../lib/pricing/cost-label";
 import type { LocalUsageEvent } from "../../lib/local-usage";
 import { useI18n } from "../../lib/i18n/context";
 import type { MessageKey } from "../../lib/i18n/messages";
-import { Panel } from "../tt";
+import { Panel } from "../aitracker";
 import { BrandIcon } from "../BrandIcon";
 import { brandColorOf } from "../BrandIcon.helpers";
 
@@ -167,14 +167,16 @@ function SourceNode({
           style={{ background: color }}
         />
         <span>{label}</span>
-        <span className="tt-num ml-auto text-muted-foreground">{value}</span>
+        <span className="aitracker-num ml-auto text-muted-foreground">
+          {value}
+        </span>
       </button>
       {expanded && (
         <div className="space-y-1 bg-surface-2/40 px-5 py-2 text-[10px] text-muted-foreground">
           {children.map((child) => (
             <div key={child.label} className="flex gap-2">
               <span className="min-w-0 flex-1 truncate">{child.label}</span>
-              <span className="tt-num shrink-0">{child.value}</span>
+              <span className="aitracker-num shrink-0">{child.value}</span>
             </div>
           ))}
         </div>
@@ -328,13 +330,13 @@ function ModelRow({
           }}
         />
         <span className="min-w-0 flex-1 truncate">{row.key}</span>
-        <span className="tt-num w-14 text-right">
+        <span className="aitracker-num w-14 text-right">
           {format.formatTokens(row.totalTokens)}
         </span>
-        <span className="tt-num w-14 text-right text-muted-foreground">
+        <span className="aitracker-num w-14 text-right text-muted-foreground">
           {formatCostLabel(t, format, row.cost)}
         </span>
-        <span className="tt-num w-9 text-right text-muted-foreground">
+        <span className="aitracker-num w-9 text-right text-muted-foreground">
           {format.formatPercent(share)}
         </span>
       </button>
@@ -370,10 +372,10 @@ function TokenRow({
           }}
         />
       </span>
-      <span className="tt-num w-14 text-right">
+      <span className="aitracker-num w-14 text-right">
         {format.formatTokens(row.totalTokens)}
       </span>
-      <span className="tt-num w-9 text-right text-muted-foreground">
+      <span className="aitracker-num w-9 text-right text-muted-foreground">
         {format.formatPercent(share)}
       </span>
     </div>
@@ -408,7 +410,7 @@ function ObservedCallRow({
           }}
         />
         <span className="min-w-0 flex-1 truncate">{row.key}</span>
-        <span className="tt-num text-muted-foreground">
+        <span className="aitracker-num text-muted-foreground">
           {t("dashboard.context.calls", { count: row.calls })}
         </span>
       </button>
@@ -455,7 +457,7 @@ function ToolRanking({
             <BrandIcon name={label} className="size-3.5 shrink-0" />
           )}
           <span className="min-w-0 flex-1 truncate">{label}</span>
-          <span className="tt-num text-[10px] text-muted-foreground">
+          <span className="aitracker-num text-[10px] text-muted-foreground">
             {format.formatPercent(share)}
           </span>
         </span>
@@ -586,7 +588,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
       title={t("dashboard.context.title")}
       bodyClassName="p-0"
       action={
-        <span className="tt-num text-[10px] text-muted-foreground">
+        <span className="aitracker-num text-[10px] text-muted-foreground">
           {format.formatTokens(selectedTokens)} ·{" "}
           {formatCostLabel(t, format, selectedCost)}
         </span>
@@ -604,7 +606,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               className="h-6 w-full rounded-sm border border-border bg-surface-2 px-2 text-[11px] outline-none placeholder:text-muted-foreground focus:border-primary"
             />
           </div>
-          <div className="tt-xscroll max-h-[340px] min-h-0 flex-1 overflow-auto">
+          <div className="aitracker-xscroll max-h-[340px] min-h-0 flex-1 overflow-auto">
             {filteredTools.length > 0 || query.trim().length === 0 ? (
               <ToolRanking
                 toolRows={filteredTools}
@@ -643,7 +645,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               {t("dashboard.context.noTokenData")}
             </div>
           ) : dimension === "model" ? (
-            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+            <div className="aitracker-xscroll min-h-0 flex-1 overflow-auto">
               {models.map((row, index) => (
                 <ModelRow
                   key={row.key}
@@ -657,7 +659,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               ))}
             </div>
           ) : dimension === "messages" || dimension === "reasoning" ? (
-            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+            <div className="aitracker-xscroll min-h-0 flex-1 overflow-auto">
               {(dimension === "messages" ? messageRows : reasoningRows).map(
                 (row, index) => (
                   <TokenRow
@@ -670,7 +672,7 @@ export function ContextBreakdown({ events }: ContextBreakdownProps) {
               )}
             </div>
           ) : observedRows.length > 0 ? (
-            <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+            <div className="aitracker-xscroll min-h-0 flex-1 overflow-auto">
               {observedRows.map((row, index) => (
                 <ObservedCallRow key={row.key} row={row} index={index} />
               ))}

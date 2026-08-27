@@ -6,7 +6,7 @@ import { defineConfig, devices } from "playwright/test";
 
 /**
  * Dedicated config for the page-performance resilience scenarios (T7-04).
- * Starts a Vite dev server with `TRUSTTOOLS_USAGE_HOME` pointing at an empty
+ * Starts a Vite dev server with `AITRACKER_USAGE_HOME` pointing at an empty
  * temp directory so the app boots with no snapshots — pages must render the
  * shell/empty state, never a white screen or the load-failed boundary.
  *
@@ -14,12 +14,12 @@ import { defineConfig, devices } from "playwright/test";
  */
 
 const port = 41738;
-const emptyHome = mkdtempSync(join(tmpdir(), "tt-empty-home-"));
+const emptyHome = mkdtempSync(join(tmpdir(), "aitracker-empty-home-"));
 
 // The env vars must also reach the test process (specs read them to decide
 // whether to skip), not just the web server.
-process.env.TRUSTTOOLS_USAGE_HOME = emptyHome;
-process.env.TRUSTTOOLS_E2E_EMPTY_HOME = emptyHome;
+process.env.AITRACKER_USAGE_HOME = emptyHome;
+process.env.AITRACKER_E2E_EMPTY_HOME = emptyHome;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -38,8 +38,8 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
-      TRUSTTOOLS_USAGE_HOME: emptyHome,
-      TRUSTTOOLS_E2E_EMPTY_HOME: emptyHome,
+      AITRACKER_USAGE_HOME: emptyHome,
+      AITRACKER_E2E_EMPTY_HOME: emptyHome,
     },
   },
 });

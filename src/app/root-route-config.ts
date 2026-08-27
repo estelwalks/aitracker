@@ -1,5 +1,5 @@
 import appCss from "../styles.css?url";
-import { APP_NAME, brandParams } from "../lib/app-config";
+import { APP_ICON_URL, APP_NAME, brandParams } from "../lib/app-config";
 import {
   catalogFor,
   getMessage,
@@ -70,7 +70,7 @@ export function rootHead({ loaderData }: { loaderData?: RootLoaderData }) {
       { rel: "stylesheet", href: appCss },
       {
         rel: "icon",
-        href: "/brand-logos/ai-tracker/ai-tracker-icon-mono.png",
+        href: APP_ICON_URL,
         type: "image/png",
       },
     ],

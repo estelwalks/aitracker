@@ -39,16 +39,12 @@ test("win32: cross-drive absolute paths keep their absolute form (regression)", 
   // itself; prefixing ~/ would mangle it into "~/D:/Dev/app" and hide the
   // project from the dashboard overview.
   assert.equal(
-    normalizeProjectPathFor(
-      win32,
-      "D:\\Dev\\trusttools_webapp",
-      "C:\\Users\\u",
-    ),
-    "D:\\Dev\\trusttools_webapp",
+    normalizeProjectPathFor(win32, "D:\\Dev\\aitracker_webapp", "C:\\Users\\u"),
+    "D:\\Dev\\aitracker_webapp",
   );
   assert.equal(
-    normalizeProjectPathFor(win32, "D:/Dev/trusttools_webapp", "C:/Users/u"),
-    "D:/Dev/trusttools_webapp",
+    normalizeProjectPathFor(win32, "D:/Dev/aitracker_webapp", "C:/Users/u"),
+    "D:/Dev/aitracker_webapp",
   );
 });
 

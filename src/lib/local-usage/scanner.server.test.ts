@@ -18,7 +18,10 @@ import type { LocalUsageSource } from "./types.ts";
 const NOW = new Date("2026-07-27T12:00:00.000Z");
 
 test("Windows reuses an injected empty WSL topology without enumerating again", async () => {
-  const root = join(tmpdir(), `tt-empty-wsl-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-empty-wsl-${process.pid}-${Date.now()}`,
+  );
   await mkdir(root, { recursive: true });
   let enumerations = 0;
   try {
@@ -60,7 +63,10 @@ const NATIVE_FIXTURES = join(
 );
 
 test("Gemini native reader diffs cumulative snapshots, clamps component drops, and rebases only on total reset", async () => {
-  const root = join(tmpdir(), `tt-gemini-native-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-gemini-native-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(
@@ -130,7 +136,10 @@ test("Gemini native reader diffs cumulative snapshots, clamps component drops, a
 });
 
 test("Grok native reader uses keyed modelUsage, reported totals, component fallback, and eventId-model dedup", async () => {
-  const root = join(tmpdir(), `tt-grok-native-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-grok-native-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(
@@ -201,7 +210,7 @@ test("Grok native reader uses keyed modelUsage, reported totals, component fallb
 test("OpenClaw native reader merges active/archive/reset copies as a multiset and keeps genuine repeats", async () => {
   const root = join(
     tmpdir(),
-    `tt-openclaw-native-${process.pid}-${Date.now()}`,
+    `aitracker-openclaw-native-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
@@ -256,7 +265,10 @@ test("OpenClaw native reader merges active/archive/reset copies as a multiset an
 });
 
 test("Claude attaches tool-result metadata to the matching tool-use event without retaining output text", async () => {
-  const root = join(tmpdir(), `tt-claude-output-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-claude-output-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(homeDirectory, ".claude", "projects", "demo");
@@ -322,7 +334,10 @@ test("Claude attaches tool-result metadata to the matching tool-use event withou
 });
 
 test("Antigravity emits labelled model-only transcript estimates without context evidence", async () => {
-  const root = join(tmpdir(), `tt-antigravity-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-antigravity-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const logDirectory = join(
@@ -388,7 +403,7 @@ test("Antigravity emits labelled model-only transcript estimates without context
 });
 
 test("process cache reuses, reparses, prunes, and can be bypassed safely", async () => {
-  const root = join(tmpdir(), `tt-scanner-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `aitracker-scanner-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const claudeFile = join(
@@ -545,7 +560,7 @@ test("process cache reuses, reparses, prunes, and can be bypassed safely", async
 });
 
 test("process cache is scoped by cache key", async () => {
-  const root = join(tmpdir(), `tt-fp-${process.pid}-${Date.now()}`);
+  const root = join(tmpdir(), `aitracker-fp-${process.pid}-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDir = join(homeDirectory, ".codex", "sessions");
@@ -623,7 +638,10 @@ test("process cache is scoped by cache key", async () => {
 });
 
 test("WorkBuddy reads historical rawUsage with correct cache and reasoning token math", async () => {
-  const root = join(tmpdir(), `tt-workbuddy-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-workbuddy-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const sessionDirectory = join(
     homeDirectory,
@@ -686,7 +704,10 @@ test("WorkBuddy reads historical rawUsage with correct cache and reasoning token
 });
 
 test("discovers Codex sessions from an explicitly configured home", async () => {
-  const root = join(tmpdir(), `tt-codex-home-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-codex-home-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const codexHomeDirectory = join(root, "custom-codex-home");
   const sessionDirectory = join(
@@ -750,7 +771,7 @@ test("discovers Codex sessions from an explicitly configured home", async () => 
 test("discovers Windows-style alternate homes and nested cumulative Codex events", async () => {
   const root = join(
     tmpdir(),
-    `tt-codex-alternate-${process.pid}-${Date.now()}`,
+    `aitracker-codex-alternate-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "electron-home");
   const windowsUserHome = join(root, "windows-user");
@@ -833,7 +854,7 @@ test("discovers Windows-style alternate homes and nested cumulative Codex events
 test("generic adapters prefer structured sessions and distinguish file fallbacks", async () => {
   const root = join(
     tmpdir(),
-    `tt-generic-session-${process.pid}-${Date.now()}`,
+    `aitracker-generic-session-${process.pid}-${Date.now()}`,
   );
   const homeDirectory = join(root, "home");
   const sessionDirectory = join(homeDirectory, ".kimi", "sessions");
@@ -907,7 +928,10 @@ test("generic adapters prefer structured sessions and distinguish file fallbacks
 });
 
 test("Codex rollout context is attributed, bucketed, and never caches raw commands or outputs", async () => {
-  const root = join(tmpdir(), `tt-codex-context-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-codex-context-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   const sessionDirectory = join(homeDirectory, ".codex", "sessions");
@@ -1084,7 +1108,7 @@ test("Codex rollout context is attributed, bucketed, and never caches raw comman
 });
 
 test("TC-REG-005: external adapter/override files are never read", async () => {
-  const root = join(tmpdir(), `tt-reg005-${Date.now()}`);
+  const root = join(tmpdir(), `aitracker-reg005-${Date.now()}`);
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   await mkdir(homeDirectory, { recursive: true });
@@ -1092,10 +1116,10 @@ test("TC-REG-005: external adapter/override files are never read", async () => {
   try {
     // Plant the deleted runtime extension files in the user home; a scanner
     // that still reads them would fabricate a `custom:` source.
-    const ttDir = join(homeDirectory, APP_DATA_DIR);
-    await mkdir(ttDir, { recursive: true });
+    const appDataDir = join(homeDirectory, APP_DATA_DIR);
+    await mkdir(appDataDir, { recursive: true });
     await writeFile(
-      join(ttDir, "usage-adapters.json"),
+      join(appDataDir, "usage-adapters.json"),
       JSON.stringify({
         adapters: [
           {
@@ -1106,7 +1130,7 @@ test("TC-REG-005: external adapter/override files are never read", async () => {
       }),
     );
     await writeFile(
-      join(ttDir, "tool-overrides.json"),
+      join(appDataDir, "tool-overrides.json"),
       JSON.stringify({ "claude-code": { paths: [".evil"] } }),
     );
 

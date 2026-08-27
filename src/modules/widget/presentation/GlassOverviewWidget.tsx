@@ -20,7 +20,7 @@ import "./glass-overview-widget.css";
 
 function Metric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="tt-glass-metric">
+    <div className="aitracker-glass-metric">
       <strong>{value}</strong>
       <span>{label}</span>
     </div>
@@ -28,7 +28,7 @@ function Metric({ value, label }: { value: string; label: string }) {
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="tt-glass-section-title">{children}</h3>;
+  return <h3 className="aitracker-glass-section-title">{children}</h3>;
 }
 
 export function GlassOverviewWidget({
@@ -96,16 +96,18 @@ export function GlassOverviewWidget({
 
   return (
     <article
-      className={`tt-glass-overview backdrop-blur-3xl backdrop-saturate-150 ${className}`}
+      className={`aitracker-glass-overview backdrop-blur-3xl backdrop-saturate-150 ${className}`}
       aria-label={t("widget.floatPanel")}
     >
-      <div className="tt-glass-feather" aria-hidden="true" />
+      <div className="aitracker-glass-feather" aria-hidden="true" />
 
-      <header className="tt-glass-header">
+      <header className="aitracker-glass-header">
         <div className="min-w-0">
-          <div className="tt-glass-brand">
+          <div className="aitracker-glass-brand">
             <span>{APP_NAME}</span>
-            <i className={`tt-glass-status tt-glass-status--${mood}`} />
+            <i
+              className={`aitracker-glass-status aitracker-glass-status--${mood}`}
+            />
           </div>
           <p>
             {t("widget.localRunning")} <i aria-hidden="true">·</i>{" "}
@@ -114,11 +116,11 @@ export function GlassOverviewWidget({
         </div>
       </header>
 
-      <main className="tt-glass-content">
-        <section className="tt-glass-section tt-glass-overview-summary">
+      <main className="aitracker-glass-content">
+        <section className="aitracker-glass-section aitracker-glass-overview-summary">
           <SectionTitle>{t("widget.todayOverview")}</SectionTitle>
-          <div className="tt-glass-overview-grid">
-            <div className="tt-glass-token-total">
+          <div className="aitracker-glass-overview-grid">
+            <div className="aitracker-glass-token-total">
               <strong>{format.formatTokens(today.tokens)}</strong>
               <span>{t("widget.tokenCount")}</span>
             </div>
@@ -140,26 +142,26 @@ export function GlassOverviewWidget({
             />
           </div>
           {!hasData && !loading && (
-            <p className="tt-glass-empty">{t("widget.noDataDesc")}</p>
+            <p className="aitracker-glass-empty">{t("widget.noDataDesc")}</p>
           )}
         </section>
 
-        <section className="tt-glass-section">
+        <section className="aitracker-glass-section">
           <SectionTitle>{t("widget.agentDistribution")}</SectionTitle>
-          <div className="tt-glass-agent-list">
+          <div className="aitracker-glass-agent-list">
             {agentSlots.map((tool, index) => {
               if (tool == null) {
                 return (
                   <div
-                    className="tt-glass-agent-row tt-glass-agent-row--placeholder"
+                    className="aitracker-glass-agent-row aitracker-glass-agent-row--placeholder"
                     data-testid="widget-agent-slot"
                     data-empty="true"
                     key={`empty-agent-${index}`}
                     aria-hidden="true"
                   >
-                    <span className="tt-glass-agent-placeholder-icon" />
-                    <span className="tt-glass-agent-placeholder-name" />
-                    <span className="tt-glass-agent-placeholder-track" />
+                    <span className="aitracker-glass-agent-placeholder-icon" />
+                    <span className="aitracker-glass-agent-placeholder-name" />
+                    <span className="aitracker-glass-agent-placeholder-track" />
                   </div>
                 );
               }
@@ -169,16 +171,18 @@ export function GlassOverviewWidget({
               );
               return (
                 <div
-                  className="tt-glass-agent-row"
+                  className="aitracker-glass-agent-row"
                   data-testid="widget-agent-slot"
                   data-empty="false"
                   key={tool.id}
                 >
-                  <span className="tt-glass-agent-icon">
+                  <span className="aitracker-glass-agent-icon">
                     <BrandIcon name={tool.name} className="size-4" />
                   </span>
-                  <span className="tt-glass-agent-name">{tool.name}</span>
-                  <span className="tt-glass-agent-track">
+                  <span className="aitracker-glass-agent-name">
+                    {tool.name}
+                  </span>
+                  <span className="aitracker-glass-agent-track">
                     <i
                       style={{
                         width: `${Math.max(
@@ -188,11 +192,13 @@ export function GlassOverviewWidget({
                       }}
                     />
                   </span>
-                  <span className="tt-glass-agent-value">
+                  <span className="aitracker-glass-agent-value">
                     {format.formatTokens(tool.tokens)}
                   </span>
-                  <span className="tt-glass-agent-percent">{percent}%</span>
-                  <span className="tt-glass-agent-events">
+                  <span className="aitracker-glass-agent-percent">
+                    {percent}%
+                  </span>
+                  <span className="aitracker-glass-agent-events">
                     {format.formatNumber(tool.events)} {t("widget.rounds")}
                   </span>
                 </div>
@@ -201,9 +207,9 @@ export function GlassOverviewWidget({
           </div>
         </section>
 
-        <section className="tt-glass-section">
+        <section className="aitracker-glass-section">
           <SectionTitle>{t("widget.contextMemory")}</SectionTitle>
-          <div className="tt-glass-memory-grid">
+          <div className="aitracker-glass-memory-grid">
             <Metric
               value={
                 today.sessions == null
@@ -228,9 +234,11 @@ export function GlassOverviewWidget({
               }
               label={t("widget.dwMemory")}
             />
-            <div className="tt-glass-health">
+            <div className="aitracker-glass-health">
               <strong>
-                <i className={`tt-glass-status tt-glass-status--${mood}`} />
+                <i
+                  className={`aitracker-glass-status aitracker-glass-status--${mood}`}
+                />
                 {danger > 0
                   ? t("widget.riskCount", { count: danger })
                   : t("widget.healthy")}
@@ -240,13 +248,13 @@ export function GlassOverviewWidget({
           </div>
         </section>
 
-        <section className="tt-glass-section">
-          <div className="tt-glass-section-heading-row">
+        <section className="aitracker-glass-section">
+          <div className="aitracker-glass-section-heading-row">
             <SectionTitle>{t("widget.tokenTrend7d")}</SectionTitle>
             <span data-testid="widget-token-trend-summary">{trendSummary}</span>
           </div>
           <div
-            className="tt-glass-chart"
+            className="aitracker-glass-chart"
             aria-label={t("widget.tokenTrend7d")}
             onMouseLeave={() => setHoveredTrendDate(null)}
           >
@@ -261,7 +269,7 @@ export function GlassOverviewWidget({
               });
               return (
                 <div
-                  className="tt-glass-bar-column"
+                  className="aitracker-glass-bar-column"
                   data-testid={`widget-token-trend-${point.date}`}
                   key={point.date}
                   tabIndex={0}
@@ -293,12 +301,12 @@ export function GlassOverviewWidget({
 
         <button
           type="button"
-          className="tt-glass-section tt-glass-security"
+          className="aitracker-glass-section aitracker-glass-security"
           onClick={() => openAppRoute("/security")}
         >
           <div>
             <SectionTitle>{t("widget.securityRisk")}</SectionTitle>
-            <div className="tt-glass-security-grid">
+            <div className="aitracker-glass-security-grid">
               <Metric
                 value={format.formatNumber(riskTotal)}
                 label={t("widget.riskItems")}
@@ -321,10 +329,10 @@ export function GlassOverviewWidget({
         </button>
       </main>
 
-      <footer className="tt-glass-footer">
-        <div className="tt-glass-activity">
+      <footer className="aitracker-glass-footer">
+        <div className="aitracker-glass-activity">
           <span>
-            <i className="tt-glass-status tt-glass-status--live" />
+            <i className="aitracker-glass-status aitracker-glass-status--live" />
             {t("widget.activeAgents", { count: today.activeTools })}
           </span>
           <span>{updated}</span>

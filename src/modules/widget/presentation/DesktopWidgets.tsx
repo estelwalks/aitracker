@@ -58,7 +58,7 @@ function ToolRows({
           <span className="min-w-0 flex-1 truncate text-foreground/80">
             {tool.name}
           </span>
-          <span className="tt-num shrink-0 text-muted-foreground">
+          <span className="aitracker-num shrink-0 text-muted-foreground">
             {format.formatTokens(tool.tokens)}
           </span>
         </div>
@@ -79,7 +79,7 @@ function MoodOrb() {
   return (
     <span className="relative grid size-14 place-items-center">
       <span
-        className={`absolute inset-0 rounded-full ${colors[mood]} opacity-20 tt-breathe`}
+        className={`absolute inset-0 rounded-full ${colors[mood]} opacity-20 aitracker-breathe`}
       />
       <span
         className={`relative size-7 rounded-full ${colors[mood]} shadow-[0_0_18px_var(--color-ok)]`}
@@ -110,7 +110,7 @@ export function SmallWidget() {
           </div>
           <div className="flex flex-col items-center">
             <MoodOrb />
-            <div className="tt-num mt-1 font-mono text-[16px] leading-none font-semibold">
+            <div className="aitracker-num mt-1 font-mono text-[16px] leading-none font-semibold">
               {format.formatTokens(today.tokens)}
             </div>
             <div className="mt-1 font-mono text-[10.5px] text-muted-foreground">
@@ -119,7 +119,7 @@ export function SmallWidget() {
               })}
             </div>
           </div>
-          <div className="tt-num font-mono text-[10px] text-muted-foreground/70">
+          <div className="aitracker-num font-mono text-[10px] text-muted-foreground/70">
             {today.sessions == null
               ? t("widget.noData")
               : `${format.formatNumber(today.sessions)} ${t("widget.sessionCount")}`}
@@ -140,7 +140,7 @@ export function SmallWidget() {
           </div>
           <div>
             <div
-              className={`tt-num font-mono text-[30px] leading-none font-semibold ${
+              className={`aitracker-num font-mono text-[30px] leading-none font-semibold ${
                 danger > 0 ? "text-danger" : "text-ok"
               }`}
             >
@@ -151,7 +151,7 @@ export function SmallWidget() {
               {t("widget.dwScanned", { count: scanned })}
             </div>
           </div>
-          <div className="tt-num font-mono text-[10px] text-muted-foreground/70">
+          <div className="aitracker-num font-mono text-[10px] text-muted-foreground/70">
             {security.summary == null
               ? t("widget.noData")
               : t("widget.securityRuns", { count: security.runCount })}
@@ -219,7 +219,7 @@ function TrendBars({
 function MiniStat({ value, label }: { value: string; label: string }) {
   return (
     <div className="min-w-0">
-      <div className="tt-num font-mono text-[17px] leading-none font-semibold">
+      <div className="aitracker-num font-mono text-[17px] leading-none font-semibold">
         {value}
       </div>
       <div className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground">
@@ -256,7 +256,7 @@ export function MediumWidget() {
             </p>
             <div className="flex items-end gap-5">
               <div>
-                <div className="tt-num font-mono text-[18px] leading-none font-semibold">
+                <div className="aitracker-num font-mono text-[18px] leading-none font-semibold">
                   {outputs.memory ?? "—"}
                 </div>
                 <div className="mt-1 flex items-center gap-1 font-mono text-[10.5px] text-muted-foreground">
@@ -265,7 +265,7 @@ export function MediumWidget() {
                 </div>
               </div>
               <div>
-                <div className="tt-num font-mono text-[18px] leading-none font-semibold">
+                <div className="aitracker-num font-mono text-[18px] leading-none font-semibold">
                   {today.sessions == null
                     ? "—"
                     : format.formatNumber(today.sessions)}
@@ -332,7 +332,7 @@ export function MediumWidget() {
                 className="flex items-center gap-2 text-[11.5px]"
               >
                 <span className="min-w-0 flex-1 truncate">{tool.name}</span>
-                <span className="tt-num shrink-0 font-mono text-ok">
+                <span className="aitracker-num shrink-0 font-mono text-ok">
                   {format.formatTokens(tool.tokens)}
                 </span>
                 <span className="w-[38%] shrink-0 truncate font-mono text-[10px] text-muted-foreground">
@@ -341,14 +341,14 @@ export function MediumWidget() {
               </div>
             ))}
           </div>
-          <div className="tt-num font-mono text-[10.5px] text-muted-foreground">
+          <div className="aitracker-num font-mono text-[10.5px] text-muted-foreground">
             {t("widget.totalTokens")} {format.formatTokens(today.tokens)} ·{" "}
             {t("widget.dwActive", { count: today.activeTools })}
           </div>
         </div>
       ) : (
         <div className="flex h-full flex-col justify-between">
-          <div className="tt-num flex flex-wrap items-baseline gap-x-2 font-mono text-[11.5px]">
+          <div className="aitracker-num flex flex-wrap items-baseline gap-x-2 font-mono text-[11.5px]">
             <span className="text-[15px] font-semibold">{scanned}</span>
             <span className="text-muted-foreground">Skill</span>
             <span className="text-ok">
@@ -418,7 +418,7 @@ export function LargeWidget() {
                 />
               )}
               <span
-                className={`tt-num text-[17px] font-semibold ${
+                className={`aitracker-num text-[17px] font-semibold ${
                   danger > 0 ? "text-danger" : "text-ok"
                 }`}
               >
@@ -451,7 +451,7 @@ export function LargeWidget() {
                   className="flex items-center gap-2 text-[11.5px]"
                 >
                   <span className="min-w-0 flex-1 truncate">{tool.name}</span>
-                  <span className="tt-num shrink-0 font-mono text-ok">
+                  <span className="aitracker-num shrink-0 font-mono text-ok">
                     {format.formatTokens(tool.tokens)}
                   </span>
                   <span className="w-[36%] shrink-0 truncate font-mono text-[10px] text-muted-foreground">

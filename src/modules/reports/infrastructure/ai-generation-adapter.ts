@@ -130,7 +130,7 @@ export function buildOfflineReportDraft(
   return [
     `## ${kindNoun}摘要`,
     "",
-    `${stats.periodLabel}，共完成 **${stats.sessions}** 场 AI 协作会话，覆盖 ${stats.projects.length} 个项目（${projects}），累计对话 ${stats.turns} 轮、代码改动 ${stats.edits} 处，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCost(stats.costUsd)}。主要精力集中在「${top}」。`,
+    `${stats.periodLabel}，共完成 **${stats.sessions}** 场 AI 协作会话，覆盖 ${stats.projects.length} 个项目（${projects}），累计对话 ${stats.turns} 轮、代码改动 ${stats.edits} 处，有效协作时长 ${fmtDuration(stats.durationMin)}。Token 消耗 ${fmtTokens(stats.tokens)}，估算成本 ${fmtCost(stats.costUsd)}。主要精力集中在「${top}」。Token 按事件发生日统计（含内部 Agent 调用）；会话数、轮次、代码改动和时长按用户会话统计。`,
     "",
     `## Agent 使用详情`,
     "",

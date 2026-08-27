@@ -91,7 +91,7 @@ test("manual entries keep the decoded source/type/project and truncated summary"
       title: "Keep components small",
       body: "A task memory about splitting components beyond 200 lines.",
       source: "Claude Code",
-      project: "trusttools",
+      project: "aitracker",
     },
     scope,
   );
@@ -100,7 +100,7 @@ test("manual entries keep the decoded source/type/project and truncated summary"
   assert.equal(created.entry?.origin, "manual");
   assert.equal(created.entry?.source, "Claude Code");
   assert.equal(created.entry?.type, "task");
-  assert.equal(created.entry?.project, "trusttools");
+  assert.equal(created.entry?.project, "aitracker");
   assert.equal(
     created.entry?.summary,
     "A task memory about splitting components beyond 200 lines.",
@@ -230,14 +230,14 @@ test("createMemory validator normalizes optional source/project and keeps valid 
       title: "  Keep components small  ",
       body: " body ",
       source: "  Claude Code  ",
-      project: "  trusttools  ",
+      project: "  aitracker  ",
     }),
     {
       type: "profile",
       title: "Keep components small",
       body: "body",
       source: "Claude Code",
-      project: "trusttools",
+      project: "aitracker",
     },
   );
   assert.deepEqual(

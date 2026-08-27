@@ -36,11 +36,11 @@ function validInput(
 async function withTempHome(
   run: (root: string, dataDirectory: string) => Promise<void>,
 ): Promise<void> {
-  const root = await mkdtemp(join(tmpdir(), "tt-sources-migrate-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-sources-migrate-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   // `scanLocalSkills` resolves its origins/blacklist state through the
   // composition root's SQLite httpCache. Point that root at this temp home so
-  // the scan never touches the real `~/.trusttools` database (held open by a
+  // the scan never touches the real `~/.aitracker` database (held open by a
   // running dev/Electron process, or migrated by older code).
   const previous = process.env[ENV.USAGE_HOME];
   process.env[ENV.USAGE_HOME] = root;

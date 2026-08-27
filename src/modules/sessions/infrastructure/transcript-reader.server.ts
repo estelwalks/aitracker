@@ -39,7 +39,7 @@ export interface LoadSessionTranscriptInput {
 }
 
 export interface TranscriptReaderOptions {
-  /** Test seam: base home directory (defaults to `$TRUSTTOOLS_USAGE_HOME`/HOME). */
+  /** Test seam: base home directory (defaults to `$AITRACKER_USAGE_HOME`/HOME). */
   homeDirectory?: string;
   /** Test seam: registry used for session-plan and data-root resolution. */
   registry?: CompiledRegistry;

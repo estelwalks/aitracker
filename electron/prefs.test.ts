@@ -17,10 +17,10 @@ test("desktop preference keys target the SQLite app_preferences namespace", () =
       CURRENCY_MODE_PREF_KEY,
     ],
     [
-      "trusttools.locale",
-      "trusttools.localeMode",
-      "trusttools.displayCurrency",
-      "trusttools.currencyMode",
+      "aitracker.locale",
+      "aitracker.localeMode",
+      "aitracker.displayCurrency",
+      "aitracker.currencyMode",
     ],
   );
 });

@@ -7,7 +7,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   launchAtLoginRequested: false,
   retentionDays: 90,
-  dataPath: "~/.trusttools",
+  dataPath: "~/.aitracker",
 };
 
 export function parseSettings(raw: string | null): AppSettings {

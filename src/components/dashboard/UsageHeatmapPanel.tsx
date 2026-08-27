@@ -106,14 +106,14 @@ export function UsageHeatmapPanel({ events }: UsageHeatmapPanelProps) {
         onPrev={() => setWeekOffset((value) => value - 1)}
         onNext={() => setWeekOffset((value) => value + 1)}
       />
-      <div className="tt-xscroll pb-1">
+      <div className="aitracker-xscroll pb-1">
         <div className="min-w-[720px]">
           <div className="grid grid-cols-[44px_repeat(24,minmax(22px,1fr))] gap-1">
             <span />
             {Array.from({ length: 24 }, (_, hour) => (
               <span
                 key={hour}
-                className="tt-num text-center text-[9px] text-muted-foreground"
+                className="aitracker-num text-center text-[9px] text-muted-foreground"
               >
                 {hour % 3 === 0 ? hour : ""}
               </span>
@@ -151,7 +151,7 @@ function HeatmapHeader({
   const { t } = useI18n();
   return (
     <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-      <span className="tt-num">{weekLabel}</span>
+      <span className="aitracker-num">{weekLabel}</span>
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -161,7 +161,7 @@ function HeatmapHeader({
         >
           ‹
         </button>
-        <span className="tt-num w-12 text-center">
+        <span className="aitracker-num w-12 text-center">
           {weekOffset === 0
             ? t("dashboard.heatmap.thisWeek")
             : t("dashboard.heatmap.weeksAgo", { count: Math.abs(weekOffset) })}

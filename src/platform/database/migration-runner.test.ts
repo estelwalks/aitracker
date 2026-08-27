@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { DatabaseError } from "./contracts.ts";
-import { TRUSTTOOLS_APPLICATION_ID } from "./contracts.ts";
+import { AITRACKER_APPLICATION_ID } from "./contracts.ts";
 import type { SqliteRow } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import type { RuntimeVersionsProvider } from "./capability-probe.server.ts";
@@ -84,7 +84,7 @@ function rmTempDir(directory: string): void {
 
 /** Opens a real file-backed Host in a fresh temp directory (Windows/macOS). */
 function openHost(scope: TestScope): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-migration-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-migration-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: versionsProvider(),
@@ -187,8 +187,8 @@ test("migration 0001 stamps application_id and user_version (P1-4)", (t) => {
   assert.equal(result.currentVersion, LATEST_MIGRATION_VERSION);
   assert.equal(
     pragmaInteger(host, "PRAGMA application_id"),
-    TRUSTTOOLS_APPLICATION_ID,
-    "migration 0001 must stamp the TrustTools application_id",
+    AITRACKER_APPLICATION_ID,
+    "migration 0001 must stamp the AITracker application_id",
   );
   assert.equal(
     pragmaInteger(host, "PRAGMA user_version"),
@@ -303,9 +303,9 @@ test("rejects user_version that disagrees with the migration ledger", (t) => {
   );
 });
 
-test("rejects an empty ledger paired with a TrustTools application stamp", (t) => {
+test("rejects an empty ledger paired with a AITracker application stamp", (t) => {
   const host = openHost(t);
-  host.exec(`PRAGMA application_id = ${TRUSTTOOLS_APPLICATION_ID}`);
+  host.exec(`PRAGMA application_id = ${AITRACKER_APPLICATION_ID}`);
   assert.throws(
     () => runMigrations({ database: host, appVersion: APP_VERSION }),
     isDatabaseError("migration-reverted"),

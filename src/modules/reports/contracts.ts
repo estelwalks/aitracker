@@ -133,10 +133,10 @@ export interface ReportContentStore {
 }
 
 /**
- * Structured, display-safe report figures aggregated from real session data
- * (counts/tokens/cost by source, plus the display-safe project keys). Never
- * raw sessions, absolute paths or conversation content — every field here is
- * an aggregate safe to persist and to render.
+ * Structured, display-safe report figures aggregated from real usage/session
+ * projections (event tokens/source/projects plus session counts/turns/cost/
+ * edits/duration). Never raw sessions, absolute paths or conversation content
+ * — every field here is an aggregate safe to persist and to render.
  */
 export interface ReportStats {
   /** Display label for the covered period, e.g. "今日 2026-08-19". */

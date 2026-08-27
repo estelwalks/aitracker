@@ -65,7 +65,7 @@ export interface SqliteDatabasePort {
 }
 
 /**
- * `PRAGMA application_id` value that marks a file as a TrustTools platform
+ * `PRAGMA application_id` value that marks a file as a AITracker platform
  * database (architecture §9-6: startup must validate `application_id`,
  * `user_version` and the migration checksums before a database is accepted).
  *
@@ -74,7 +74,7 @@ export interface SqliteDatabasePort {
  * validation accepts `0` (a fresh, not-yet-migrated database) **or** this
  * constant, and rejects every other value as `capability-mismatch`.
  */
-export const TRUSTTOOLS_APPLICATION_ID = 0x54544442;
+export const AITRACKER_APPLICATION_ID = 0x54544442;
 
 /** Why a backup was created (architecture §10.2). */
 export type BackupKind = "daily" | "pre-migration";
