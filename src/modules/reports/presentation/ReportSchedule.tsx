@@ -274,13 +274,6 @@ function CompactPlanEditor({
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 pl-[76px]">
-        <TimeInput
-          value={plan.time}
-          disabled={saving}
-          onCommit={(time) =>
-            onSave({ ...schedule, [kind]: { ...plan, time } })
-          }
-        />
         {kind === "weekly" && (
           <WeekdayPicker
             value={schedule.weekly.dayOfWeek}
@@ -306,6 +299,13 @@ function CompactPlanEditor({
             }
           />
         )}
+        <TimeInput
+          value={plan.time}
+          disabled={saving}
+          onCommit={(time) =>
+            onSave({ ...schedule, [kind]: { ...plan, time } })
+          }
+        />
         <span className="font-mono text-[10.5px] text-muted-foreground">
           {status?.pending
             ? t("reports.schedule.pending")
