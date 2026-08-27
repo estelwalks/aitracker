@@ -51,6 +51,7 @@ import {
   parseReportSchedulesWithMigration,
   REPORT_SCHEDULE_KEY,
   reportSchedulePreferenceRequests,
+  reportSchedulesPreferenceValue,
 } from "../modules/reports/schedule.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
@@ -254,7 +255,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
     if (parsed.migratedFromLegacy) {
       databaseRuntime.features.appPreferences.set({
         key: REPORT_SCHEDULE_KEY,
-        value: parsed.config,
+        value: reportSchedulesPreferenceValue(parsed.config),
         updatedAtMs: Math.max(
           clock.now().getTime(),
           reportScheduleEntry.updatedAtMs + 1,
