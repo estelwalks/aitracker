@@ -206,7 +206,7 @@ export function DashboardV2Page({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-[16px]">
       {workspaceInitializationState === "loading" ? (
         <section
           className="dashboard-panel flex items-start gap-3 border border-primary/20 bg-primary/5"
@@ -253,7 +253,7 @@ export function DashboardV2Page({
         securityScan={securityScan}
       />
       {/* 时间范围：全页吸顶（与原型一致的横贯细条） */}
-      <div className="dashboard-range-bar sticky top-0 z-30 -mx-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-background px-4 py-2 md:-mx-8 md:px-8 2xl:-mx-10 2xl:px-10">
+      <div className="dashboard-range-bar sticky top-0 z-30 -mx-[16px] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-background px-[16px] py-2 md:-mx-[24px] md:px-[24px] 2xl:-mx-[32px] 2xl:px-[32px]">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <span className="shrink-0 text-[10px] tracking-[0.14em] text-foreground/75 uppercase">
             {t("dashboard.v2.overviewLabel")}

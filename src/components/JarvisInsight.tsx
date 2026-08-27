@@ -203,11 +203,7 @@ export function JarvisInsight({
   const enhancedMark =
     source === "enhanced" ? (
       <span className="inline-flex min-h-7 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.08] px-3 text-[9px] font-semibold tracking-normal text-foreground/85">
-        <Sparkles
-          className="size-2.5 shrink-0 text-emerald-400"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
+        <span aria-hidden="true">✨</span>
         {enhancedLabel}
       </span>
     ) : null;
@@ -300,7 +296,7 @@ export function JarvisInsight({
           <div className="flex flex-wrap items-center gap-2">
             {title ? (
               <Heading
-                className={`${hero ? "aitracker-text-section-title" : "aitracker-text-body"} font-semibold tracking-tight`}
+                className={`${hero ? "aitracker-text-page-title" : "aitracker-text-body"} font-semibold tracking-tight`}
               >
                 {title}
               </Heading>
@@ -320,7 +316,7 @@ export function JarvisInsight({
           <p
             className={
               hero
-                ? "aitracker-text-section-title mt-2 min-h-[62px] leading-[1.65] font-medium tracking-tight text-foreground/90"
+                ? "aitracker-text-body mt-2 min-h-[48px] leading-6 font-medium tracking-tight text-foreground/90"
                 : "aitracker-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
             }
             aria-label={line}
