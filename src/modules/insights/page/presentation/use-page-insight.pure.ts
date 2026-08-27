@@ -6,7 +6,7 @@
 import { isInsightAnalysisUseful } from "../analysis-quality.ts";
 
 /** Renderer event emitted after the active model profile changes. */
-export const PAGE_INSIGHT_REFRESH_EVENT = "trusttools:page-insight-refresh";
+export const PAGE_INSIGHT_REFRESH_EVENT = "aitracker:page-insight-refresh";
 export const PAGE_INSIGHT_REFRESH_CHANNEL = PAGE_INSIGHT_REFRESH_EVENT;
 
 /**

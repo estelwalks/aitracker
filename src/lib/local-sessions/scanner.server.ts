@@ -3,6 +3,7 @@ import { opendir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { createInterface } from "node:readline";
+import { DatabaseSync } from "node:sqlite";
 
 import { ENV } from "../app-config";
 import { readDshSessionLog } from "../local-usage/dsh-zstd.ts";
@@ -96,6 +97,8 @@ interface SessionFragment {
   subagentCalls: number;
   /** Explicit terminal state found in structured local metadata only. */
   terminalStatus: Extract<SessionStatus, "interrupted" | "lost"> | null;
+  /** Read-only session sources deliberately cannot be resumed. */
+  resumeSupported?: boolean;
 }
 
 function asObject(value: unknown): JsonObject | undefined {
@@ -1545,9 +1548,11 @@ async function fragmentToRecord(
   const pathImpl = serverPathImplForPlatform(process.platform);
   const gitRoot = await findNearestGitRepositoryRoot(pathImpl, rawProjectRef);
   const projectRef = gitRoot ?? rawProjectRef;
-  const resumeSafe = isResumeSafeId(fragment.sessionId);
+  const resumeSafe =
+    fragment.resumeSupported !== false && isResumeSafeId(fragment.sessionId);
+  const idSafe = isResumeSafeId(fragment.sessionId);
   const status: SessionStatus =
-    fragment.terminalStatus ?? (resumeSafe ? "available" : "unavailable");
+    fragment.terminalStatus ?? (idSafe ? "available" : "unavailable");
   const statusReason =
     status === "lost"
       ? "本地会话元数据明确标记为丢失。"
@@ -1617,6 +1622,107 @@ function dedupeAndSort(sessions: SessionRecord[]): SessionRecord[] {
   );
 }
 
+// AiPy stores tasks and their events in one SQLite database. It has no
+// supported resume command, but the task metadata is still useful as a
+// read-only session history entry.
+async function scanAipySessions(
+  aipyDirectory: string,
+  signal?: AbortSignal,
+): Promise<SessionRecord[]> {
+  signal?.throwIfAborted();
+  const databasePath = join(aipyDirectory, "aipy");
+  let database: DatabaseSync | undefined;
+  try {
+    const databaseStat = await stat(databasePath);
+    if (!databaseStat.isFile()) return [];
+    database = new DatabaseSync(databasePath, { readOnly: true });
+    const rows = database
+      .prepare(
+        `SELECT
+           e.task_id AS sessionId,
+           e.model AS eventModel,
+           e.time AS timestamp,
+           e.usage AS usage,
+           t.title AS title,
+           t.model AS taskModel,
+           t.workdir AS taskWorkdir,
+           w.workdir AS workspaceWorkdir
+         FROM task_event e
+         LEFT JOIN task t ON t.id = e.task_id
+         LEFT JOIN workspace w ON w.id = t.workspace_id
+         WHERE e.task_id IS NOT NULL AND e.task_id <> ''`,
+      )
+      .all() as Array<Record<string, unknown>>;
+    const fragments = new Map<string, SessionFragment>();
+    for (const row of rows) {
+      signal?.throwIfAborted();
+      const sessionId = stringValue(row.sessionId);
+      if (!sessionId) continue;
+      const fragment =
+        fragments.get(sessionId) ?? createEmptyFragment("aipy", sessionId);
+      fragment.resumeSupported = false;
+      if (!fragment.title) fragment.title = stringValue(row.title) ?? "";
+      if (!fragment.model) {
+        fragment.model =
+          stringValue(row.eventModel) ?? stringValue(row.taskModel) ?? null;
+      }
+      if (!fragment.projectRef) {
+        fragment.projectRef =
+          stringValue(row.workspaceWorkdir) ??
+          stringValue(row.taskWorkdir) ??
+          null;
+      }
+      const timestamp = parseTimestampValue(row.timestamp);
+      if (timestamp) fragment.timestamps.push(timestamp);
+      fragment.turns += 1;
+      let usage: JsonObject | undefined;
+      if (typeof row.usage === "string") {
+        try {
+          usage = asObject(JSON.parse(row.usage));
+        } catch {
+          usage = undefined;
+        }
+      } else {
+        usage = asObject(row.usage);
+      }
+      if (usage) {
+        const inputTokens = tokenValue(usage.input_tokens ?? usage.inputTokens);
+        const outputTokens = tokenValue(
+          usage.output_tokens ?? usage.outputTokens,
+        );
+        const reasoningOutputTokens = tokenValue(
+          usage.reasoning_tokens ?? usage.reasoningTokens,
+        );
+        const totalTokens =
+          tokenValue(usage.total_tokens ?? usage.totalTokens) ||
+          inputTokens + outputTokens + reasoningOutputTokens;
+        addTokenCounts(fragment.totals, {
+          inputTokens,
+          outputTokens,
+          cachedInputTokens: tokenValue(
+            usage.cached_input_tokens ?? usage.cachedInputTokens,
+          ),
+          cacheCreationInputTokens: tokenValue(
+            usage.cache_creation_input_tokens ?? usage.cacheCreationInputTokens,
+          ),
+          reasoningOutputTokens,
+          totalTokens,
+        });
+      }
+      fragments.set(sessionId, fragment);
+    }
+    return Promise.all(
+      [...fragments.values()]
+        .filter((fragment) => fragment.totals.totalTokens > 0)
+        .map((fragment) => fragmentToRecord(fragment)),
+    );
+  } catch {
+    return [];
+  } finally {
+    database?.close();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // P1-3: controlled SessionReader registration. The scan implementations stay
 // in this module; the factory (tool-registry/readers/session-readers.ts) binds
@@ -1645,7 +1751,11 @@ registerSessionReader({
   scan: scanDshSessions,
   defaultRoots: [".dsh"],
 });
-
+registerSessionReader({
+  key: "aipy-session-v1",
+  scan: scanAipySessions,
+  defaultRoots: [],
+});
 /**
  * Scan every registry-declared session tool and return a merged, deduplicated,
  * startedAt-descending summary. For each tool: take the scan implementation

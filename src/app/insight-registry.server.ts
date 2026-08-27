@@ -13,9 +13,9 @@
  * the enhancer is NEVER constructed and the model Profile is NEVER read —
  * rule-generated candidates remain, enhancement is disabled.
  */
-import type { AIExecutorPort } from "../modules/ai-orchestration/ai-executor.ts";
+import type { AIExecutorPort } from "../modules/ai-orchestration/index.ts";
 import type { ModelProfileRepository } from "../modules/ai-orchestration/model-profile.server.ts";
-import type { PageInsightAdapter } from "../modules/insights/page/contracts.ts";
+import type { PageInsightAdapter } from "../modules/insights/index.ts";
 import type { PageInsightsApplication } from "../modules/insights/page/application.ts";
 import type { SqliteInsightRepository } from "../modules/insights/infrastructure/sqlite-insight-repository.server.ts";
 import type { RuntimeFlagRepository } from "../platform/database/runtime-flag-repository.server.ts";

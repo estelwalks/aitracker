@@ -11,4 +11,3 @@ export type {
   UsageSnapshotDto,
 } from "./contracts";
 export type { UsageSnapshotReadView, UsageSnapshotRuntime } from "./contracts";
-export type { UsageViewModel } from "./presentation";

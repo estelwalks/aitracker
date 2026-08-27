@@ -45,7 +45,7 @@ import type { ModelSecretCodec } from "../modules/ai-orchestration/infrastructur
 import { createFileSecretCodec } from "../modules/ai-orchestration/infrastructure/file-secret-codec.server.ts";
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
-import type { ReportsApplication } from "../modules/reports/index.ts";
+import type { ReportsApplication } from "../modules/reports/contracts.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
@@ -512,7 +512,10 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const reports = createReportsApplication({
     store: databaseRuntime.features.reports,
     inlineContent: true,
-    context: createReportContextPort({ snapshot: sessionSnapshot }),
+    context: createReportContextPort({
+      snapshot: sessionSnapshot,
+      usage: usageSnapshot,
+    }),
     generation: createReportGenerationPort({
       ai: aiExecutor,
       // B-400: reports reuse the active S-500 profile (a real model call via
@@ -550,7 +553,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const resumeSession = createSessionResumePort(createNodeResumeExecutor());
 
   // Candidate store lives next to the reports/knowledge state under the same
-  // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
+  // `.aitracker/tasks` directory. It persists only privacy-filtered candidate
   // projections (session refs, generated knowledge note, execution summary).
   const distillQuota = databaseRuntime.features.distillQuota;
   const distillation = createDistillationApplication({
@@ -726,7 +729,16 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   };
   refreshPorts.installation = {
     requestRefresh: async () => {
-      await taskApi.runNow({ taskId: "installation.refresh" }).catch(() => {});
+      const started = await taskApi
+        .runNow({ taskId: "installation.refresh" })
+        .catch(() => null);
+      if (started?.ok !== true) return;
+      // Installation status is rendered by Sources and Agent Overview. Wait
+      // for the exact run so a manual/repair refresh cannot return the
+      // previous catalog snapshot (which may predate a newly added tool).
+      await taskApi
+        .awaitRun({ runId: started.value.runId, timeoutMs: 60_000 })
+        .catch(() => {});
     },
   };
 

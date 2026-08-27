@@ -119,7 +119,7 @@ export const distill = {
   savedStep3: "「同期」で Agent を選択",
   savedStep3Desc: "Claude Code / Codex などへ配布",
   savedStep4: "ローカルディレクトリ",
-  savedStep4Desc: "~/.trusttools/skills/<skill-name>/",
+  savedStep4Desc: "~/.aitracker/skills/<skill-name>/",
   savedGuideGo: "Skill 管理へ",
   savedGuideStay: "このページに留まる",
   guideTitle: "蒸留とは？",

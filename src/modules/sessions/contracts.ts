@@ -92,6 +92,8 @@ export interface SessionPage {
   readonly page: number;
   readonly pageSize: number;
   readonly totalPages: number;
+  /** Source ids present in the unfiltered local snapshot. */
+  readonly sources?: readonly SessionSource[];
 }
 
 /**

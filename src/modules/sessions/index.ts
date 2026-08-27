@@ -22,6 +22,7 @@ export type {
   SessionSource,
 } from "./contracts.ts";
 export { createSessionQueryService } from "./application/index.ts";
+export { getSessionTranscript } from "./query.ts";
 // Keep the public module entry free of presentation/server transport imports.
 // The UI implementation intentionally reaches a server function facade.
 export type SessionsViewModel = SessionsModuleContract | SessionPage;

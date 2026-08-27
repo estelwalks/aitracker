@@ -106,7 +106,7 @@ export function ScanHistory({
                   onClick={() => onOpenTask?.(group)}
                   className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3.5 text-left transition-colors hover:bg-surface-2"
                 >
-                  <span className="tt-num w-[104px] shrink-0 font-mono text-[11.5px] text-muted-foreground">
+                  <span className="aitracker-num w-[104px] shrink-0 font-mono text-[11.5px] text-muted-foreground">
                     {format.formatDateTime(group.finishedAt, false)}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
-import { AgentInstallBar } from "../../skill-distribution/presentation/AgentInstallBar.tsx";
+import { AgentInstallBar } from "../../skill-distribution/index.ts";
 import type { SkillAgent } from "../query.ts";
 import type { SkillAssetView } from "../application/index.ts";
 import { compactNumber, formatSizeBytes } from "./skill-format.ts";
@@ -145,7 +145,7 @@ export function SkillListRow({
                 event.stopPropagation();
                 onOpen();
               }}
-              className="tt-num truncate text-[14px] font-semibold hover:text-primary"
+              className="aitracker-num truncate text-[14px] font-semibold hover:text-primary"
               title={t("skills.aria.openSkill", { name: skill.name })}
             >
               {skill.name}
@@ -166,7 +166,7 @@ export function SkillListRow({
                 {sourceLabel}
               </span>
             )}
-            <span className="tt-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
+            <span className="aitracker-num hidden shrink-0 text-[11px] text-muted-foreground sm:inline">
               {compactNumber(skill.tokenEstimate)} tok ·{" "}
               {formatSizeBytes(skill.sizeBytes)}
             </span>

@@ -19,18 +19,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../../components/ui/dialog";
-import { StatusBadge, TTButton } from "../../../components/tt";
+import { StatusBadge, AITrackerButton } from "../../../components/aitracker";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { MessageKey } from "../../../lib/i18n/messages";
 import {
   PAGE_INSIGHT_REFRESH_CHANNEL,
   PAGE_INSIGHT_REFRESH_EVENT,
-} from "../../insights/page/presentation/use-page-insight.pure";
+} from "../../insights/index.ts";
 import {
-  deleteModelProfile,
-  listModelProfiles,
-  listRemoteModels,
   OFFICIAL_ENDPOINT,
   OFFICIAL_MODEL,
   OFFICIAL_MODEL_DISPLAY_NAME,
@@ -39,12 +36,17 @@ import {
   isRecommendedModel,
   protocolMeta,
   recommendedModelDisplayName,
-  setActiveModelProfile,
-  testModelProfile,
-  upsertModelProfile,
   type ModelProfileInput,
   type ModelProfileView,
   type ProfileMode,
+} from "../../ai-orchestration/index.ts";
+import {
+  deleteModelProfile,
+  listModelProfiles,
+  listRemoteModels,
+  setActiveModelProfile,
+  testModelProfile,
+  upsertModelProfile,
 } from "../../ai-orchestration/index.ts";
 
 interface FormState {
@@ -375,7 +377,7 @@ export function ModelProfilesSection() {
       <section className="rounded-sm border border-border bg-surface-2">
         <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
           <div className="min-w-0">
-            <span className="tt-label block truncate">
+            <span className="aitracker-label block truncate">
               {t("settings.modelProfiles.count", {
                 count:
                   profiles.length +
@@ -385,13 +387,13 @@ export function ModelProfilesSection() {
               })}
             </span>
           </div>
-          <TTButton size="sm" variant="ghost" onClick={openNew}>
+          <AITrackerButton size="sm" variant="ghost" onClick={openNew}>
             {t("settings.modelProfiles.add")}
-          </TTButton>
+          </AITrackerButton>
         </div>
 
         {loading ? (
-          <div className="tt-text-body-sm px-3 py-8 text-center text-muted-foreground">
+          <div className="aitracker-text-body-sm px-3 py-8 text-center text-muted-foreground">
             {t("common.loading")}
           </div>
         ) : (
@@ -412,7 +414,7 @@ export function ModelProfilesSection() {
               return (
                 <li
                   key={profile.id}
-                  className={`tt-text-body-sm flex items-start gap-3 px-3 py-2.5 transition-colors ${active ? "bg-accent/50" : "hover:bg-accent/30"}`}
+                  className={`aitracker-text-body-sm flex items-start gap-3 px-3 py-2.5 transition-colors ${active ? "bg-accent/50" : "hover:bg-accent/30"}`}
                 >
                   <div className="min-w-0 flex-1 text-left">
                     <span className="flex items-center gap-1.5">
@@ -427,12 +429,12 @@ export function ModelProfilesSection() {
                         </StatusBadge>
                       )}
                     </span>
-                    <span className="tt-text-caption mt-0.5 block truncate text-muted-foreground">
+                    <span className="aitracker-text-caption mt-0.5 block truncate text-muted-foreground">
                       {endpoint} · {model}
                     </span>
                   </div>
                   <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                    <TTButton
+                    <AITrackerButton
                       size="sm"
                       variant={active ? "primary" : "ghost"}
                       disabled={active}
@@ -441,8 +443,8 @@ export function ModelProfilesSection() {
                       {active
                         ? t("settings.modelProfiles.active")
                         : t("settings.modelProfiles.enable")}
-                    </TTButton>
-                    <TTButton
+                    </AITrackerButton>
+                    <AITrackerButton
                       size="sm"
                       variant="ghost"
                       onClick={() =>
@@ -452,8 +454,8 @@ export function ModelProfilesSection() {
                       }
                     >
                       {t("settings.modelProfiles.edit")}
-                    </TTButton>
-                    <TTButton
+                    </AITrackerButton>
+                    <AITrackerButton
                       size="sm"
                       variant="ghost"
                       disabled={isOfficial}
@@ -469,7 +471,7 @@ export function ModelProfilesSection() {
                       }}
                     >
                       {t("settings.modelProfiles.delete")}
-                    </TTButton>
+                    </AITrackerButton>
                   </div>
                 </li>
               );
@@ -503,7 +505,7 @@ export function ModelProfilesSection() {
             {form.mode === "official" ? (
               <>
                 <div>
-                  <div className="tt-label mb-1">
+                  <div className="aitracker-label mb-1">
                     {t("settings.modelProfiles.apiKeyLabel")}{" "}
                     <span className="text-danger">*</span>
                   </div>
@@ -518,12 +520,12 @@ export function ModelProfilesSection() {
                     className="security-config-input"
                   />
                   {form.storedApiKey && (
-                    <p className="tt-text-caption mt-1 text-muted-foreground">
+                    <p className="aitracker-text-caption mt-1 text-muted-foreground">
                       {t("settings.modelProfiles.apiKeyConfigured")}
                     </p>
                   )}
                 </div>
-                <dl className="tt-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
+                <dl className="aitracker-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
                   <div className="flex gap-2">
                     <dt className="w-20 shrink-0">
                       {t("settings.modelProfiles.apiFormatLabel")}
@@ -563,7 +565,7 @@ export function ModelProfilesSection() {
             ) : (
               <>
                 <div>
-                  <div className="tt-label mb-1">
+                  <div className="aitracker-label mb-1">
                     {t("settings.modelProfiles.nameLabel")}{" "}
                     <span className="text-danger">*</span>
                   </div>
@@ -579,7 +581,7 @@ export function ModelProfilesSection() {
                 </div>
 
                 <div>
-                  <div className="tt-label mb-1.5">
+                  <div className="aitracker-label mb-1.5">
                     {t("settings.modelProfiles.apiFormatLabel")}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -595,14 +597,14 @@ export function ModelProfilesSection() {
                         }
                         className={`rounded-sm border px-2.5 py-2 text-left transition-colors ${form.protocol === protocol ? "border-primary bg-primary/10" : "border-border hover:border-border-strong"}`}
                       >
-                        <span className="tt-text-body-sm block text-foreground">
+                        <span className="aitracker-text-body-sm block text-foreground">
                           {t(
                             protocol === "openai"
                               ? "settings.modelProfiles.protocolOpenai"
                               : "settings.modelProfiles.protocolAnthropic",
                           )}
                         </span>
-                        <span className="tt-text-caption mt-0.5 block text-muted-foreground">
+                        <span className="aitracker-text-caption mt-0.5 block text-muted-foreground">
                           {t(
                             protocol === "openai"
                               ? "settings.modelProfiles.protocolOpenaiHint"
@@ -616,7 +618,7 @@ export function ModelProfilesSection() {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="min-w-0">
-                    <div className="tt-label mb-1">
+                    <div className="aitracker-label mb-1">
                       {t("settings.modelProfiles.apiKeyLabel")}
                     </div>
                     <input
@@ -632,13 +634,13 @@ export function ModelProfilesSection() {
                       className="security-config-input"
                     />
                     {form.storedApiKey && (
-                      <p className="tt-text-caption mt-1 text-muted-foreground">
+                      <p className="aitracker-text-caption mt-1 text-muted-foreground">
                         {t("settings.modelProfiles.apiKeyConfigured")}
                       </p>
                     )}
                   </div>
                   <div className="min-w-0">
-                    <div className="tt-label mb-1">
+                    <div className="aitracker-label mb-1">
                       {t("settings.modelProfiles.endpointLabel")}
                     </div>
                     <input
@@ -656,7 +658,7 @@ export function ModelProfilesSection() {
 
                 <div>
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="tt-label">
+                    <span className="aitracker-label">
                       {t("settings.modelProfiles.modelLabel")}
                     </span>
                     <button
@@ -666,7 +668,7 @@ export function ModelProfilesSection() {
                         (form.apiKey.trim() === "" && form.id === null)
                       }
                       onClick={() => void loadModels()}
-                      className="tt-num tt-text-caption flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                      className="aitracker-num aitracker-text-caption flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       {form.listing ? (
                         <Loader2 className="size-3 animate-spin" />
@@ -722,13 +724,13 @@ export function ModelProfilesSection() {
                     />
                   )}
                   {form.listMsg && (
-                    <div className="tt-num tt-text-caption mt-1 text-muted-foreground">
+                    <div className="aitracker-num aitracker-text-caption mt-1 text-muted-foreground">
                       {form.listMsg}
                     </div>
                   )}
                 </div>
 
-                <dl className="tt-num tt-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
+                <dl className="aitracker-num aitracker-text-caption space-y-1 border-t border-border pt-2 text-muted-foreground">
                   <div className="flex gap-2">
                     <dt className="w-16 shrink-0">
                       {t("settings.modelProfiles.requestPath")}
@@ -743,15 +745,15 @@ export function ModelProfilesSection() {
           </div>
 
           <DialogFooter className="mt-2 flex-wrap gap-2">
-            <TTButton
+            <AITrackerButton
               variant="ghost"
               size="sm"
               onClick={() => setDialogOpen(false)}
               disabled={saving || testing}
             >
               {t("common.cancel")}
-            </TTButton>
-            <TTButton
+            </AITrackerButton>
+            <AITrackerButton
               size="sm"
               onClick={() => void doTest()}
               disabled={!formValid || testing || saving}
@@ -764,8 +766,8 @@ export function ModelProfilesSection() {
               {testing
                 ? t("settings.modelProfiles.testing")
                 : t("settings.modelProfiles.test")}
-            </TTButton>
-            <TTButton
+            </AITrackerButton>
+            <AITrackerButton
               size="sm"
               variant="primary"
               onClick={() => void doSave()}
@@ -773,7 +775,7 @@ export function ModelProfilesSection() {
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {t("common.save")}
-            </TTButton>
+            </AITrackerButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

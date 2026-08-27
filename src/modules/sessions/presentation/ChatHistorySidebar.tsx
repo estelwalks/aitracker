@@ -40,7 +40,13 @@ function projectItem(
  * title / source / date / project — never conversation content. Hidden below
  * the xl breakpoint; the data comes from the public sessions query facade.
  */
-export function ChatHistorySidebar({ activeId }: { activeId: string }) {
+export function ChatHistorySidebar({
+  activeId,
+  source,
+}: {
+  activeId: string;
+  source?: string;
+}) {
   const { t, format } = useI18n();
   const [items, setItems] = useState<SidebarItem[]>([]);
   const [failed, setFailed] = useState(false);
@@ -50,6 +56,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
     let cancelled = false;
     void getSessionsQuery({
       data: {
+        ...(source ? { filter: { source } } : {}),
         pageSize: 100,
         sort: { field: "startedAt", direction: "desc" },
       },
@@ -64,7 +71,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [format]);
+  }, [format, source]);
 
   const groups = useMemo(() => {
     const keyword = q.trim().toLocaleLowerCase();
@@ -95,7 +102,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
           <span className="text-foreground">
             {t("sessions.transcript.historyTitle")}
           </span>
-          <span className="tt-num ml-auto">
+          <span className="aitracker-num ml-auto">
             {format.formatNumber(items.length)}
           </span>
         </div>
@@ -113,7 +120,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
           </div>
         </div>
 
-        <div className="tt-scroll min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="aitracker-scroll min-h-0 flex-1 overflow-y-auto p-2">
           {failed ? (
             <p className="px-2 py-6 text-center text-[12px] text-muted-foreground">
               {t("sessions.transcript.historyUnavailable")}
@@ -129,7 +136,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
           ) : (
             groups.map(([dateKey, group]) => (
               <div key={dateKey} className="mb-3 last:mb-0">
-                <p className="tt-num px-1.5 pb-1 text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                <p className="aitracker-num px-1.5 pb-1 text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
                   {group[0]?.dateLabel ?? dateKey}
                 </p>
                 <div className="space-y-0.5">
@@ -140,6 +147,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
                         key={item.sessionId}
                         to="/chats/$id"
                         params={{ id: item.sessionId }}
+                        search={source ? { source } : {}}
                         title={item.title}
                         className={`flex items-start gap-2 rounded-md px-2 py-1.5 transition-colors ${
                           active
@@ -151,7 +159,7 @@ export function ChatHistorySidebar({ activeId }: { activeId: string }) {
                           <span className="block truncate text-[12px] leading-tight">
                             {item.title || t("sessions.row.untitled")}
                           </span>
-                          <span className="tt-num mt-0.5 block truncate text-[10px] text-muted-foreground">
+                          <span className="aitracker-num mt-0.5 block truncate text-[10px] text-muted-foreground">
                             {item.timeLabel} · {item.projectKey}
                           </span>
                         </span>

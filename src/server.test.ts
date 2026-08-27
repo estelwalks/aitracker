@@ -22,7 +22,9 @@ test("dynamic server responses are never reused from browser cache", () => {
 });
 
 test("desktop warmup receives a safe database failure code", async () => {
-  const dataRoot = await mkdtemp(join(tmpdir(), "tt-server-startup-error-"));
+  const dataRoot = await mkdtemp(
+    join(tmpdir(), "aitracker-server-startup-error-"),
+  );
   const previousRuntime = process.env[ENV.RUNTIME];
   const previousUsageHome = process.env[ENV.USAGE_HOME];
   const previousBrokerToken = process.env[ENV.DESKTOP_BROKER_TOKEN];
@@ -30,10 +32,10 @@ test("desktop warmup receives a safe database failure code", async () => {
   process.env[ENV.USAGE_HOME] = dataRoot;
   process.env[ENV.DESKTOP_BROKER_TOKEN] = "startup-test-token";
   try {
-    const databaseDirectory = join(dataRoot, ".trusttools", "data");
+    const databaseDirectory = join(dataRoot, ".aitracker", "data");
     await mkdir(databaseDirectory, { recursive: true });
     await writeFile(
-      join(databaseDirectory, "trusttools.v1.db.writer.lock"),
+      join(databaseDirectory, "aitracker.v1.db.writer.lock"),
       `${JSON.stringify({
         pid: process.pid,
         token: "test-owner",
@@ -47,14 +49,14 @@ test("desktop warmup receives a safe database failure code", async () => {
     try {
       const response = await serverEntry.fetch(
         new Request("http://127.0.0.1/api/desktop-state/preferences", {
-          headers: { "x-trusttools-desktop-broker": "startup-test-token" },
+          headers: { "x-aitracker-desktop-broker": "startup-test-token" },
         }),
         {},
         {},
       );
       assert.equal(response.status, 500);
       assert.equal(
-        response.headers.get("x-trusttools-startup-failure-code"),
+        response.headers.get("x-aitracker-startup-failure-code"),
         "database.already-open",
       );
     } finally {

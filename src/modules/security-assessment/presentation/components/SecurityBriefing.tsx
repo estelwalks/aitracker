@@ -65,12 +65,12 @@ export function SecurityBriefing({
         </svg>
         <div className="absolute flex flex-col items-center">
           <span
-            className="tt-num tt-text-metric leading-none font-bold"
+            className="aitracker-num aitracker-text-metric leading-none font-bold"
             style={{ color: tone }}
           >
             {health}%
           </span>
-          <span className="tt-text-caption mt-0.5 font-mono text-muted-foreground">
+          <span className="aitracker-text-caption mt-0.5 font-mono text-muted-foreground">
             {t("security.center.briefing.health")}
           </span>
         </div>

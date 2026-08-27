@@ -1,7 +1,7 @@
 # Packaging identity (appId/productName) mirrors src/lib/app-config.ts —
 # change APP_NAME/APP_ID there first, then update this file and
 # scripts/package-mac.mjs artifact names together.
-appId: com.trusttools.desktop
+appId: com.aitracker.desktop
 productName: AITracker
 asar: true
 npmRebuild: false
@@ -9,6 +9,10 @@ directories:
   output: release
 files:
   - build/electron/**/*
+  # Tests are compiled by the Electron TypeScript project for local unit-test
+  # runs, but are not runtime dependencies of the packaged application.
+  - "!build/electron/**/*.test.js"
+  - "!build/electron/**/*.test.js.map"
   - package.json
   - "!node_modules/**/*"
   # Main-process-only scanner runtime. Its ESM bundle loads Prompt markdown at
@@ -41,7 +45,7 @@ mac:
   hardenedRuntime: true
   gatekeeperAssess: false
   # 最小权限 entitlements:仅 hardened runtime 必需(Chromium JIT),不含
-  # App Sandbox 与任何 files.* 目录权限 —— 应用只读写 ~/.trusttools 与
+  # App Sandbox 与任何 files.* 目录权限 —— 应用只读写 ~/.aitracker 与
   # Application Support,不请求文稿/桌面/下载等 TCC 目录(见 build/entitlements.mac.plist)。
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
@@ -61,6 +65,3 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  # 选择任意目录时自动安装到 <所选目录>\AITracker 子目录
-  # （覆盖静默安装等内置 sanitize 不生效的场景）
-  include: build/installer.nsh

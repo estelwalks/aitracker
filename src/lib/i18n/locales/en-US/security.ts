@@ -96,7 +96,7 @@ export const security = {
       "{skills} Skills · {dimensions} scan dimensions · {health}% health",
     devBanner: {
       title: "Dev mode · scan service connected",
-      desc: "Scans use the real local Skill root; history is stored in isolation under ~/.trusttools/security-dev/.",
+      desc: "Scans use the real local Skill root; history is stored in isolation under ~/.aitracker/security-dev/.",
     },
     unavailable: {
       title: "Local companion service unavailable",

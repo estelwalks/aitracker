@@ -3,10 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { catalogs, getMessage } from "../lib/i18n/route-messages";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import { brandParams } from "../lib/app-config";
-import {
-  getStorageUsageQuery,
-  parseSettingsSection,
-} from "../modules/settings";
+import { getStorageUsageQuery } from "../modules/settings/query";
+import { parseSettingsSection } from "../modules/settings/settings-navigation";
 
 // The page component lives in settings.lazy.tsx (P6-T6-04 route splitting).
 export const Route = createFileRoute("/settings")({

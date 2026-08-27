@@ -39,7 +39,7 @@ test("AI_TOOLS catalogs all built-in tools with stable ids", () => {
   }
 });
 
-test("SKILL_AGENT_RULES covers the nine verified skill agents in UI order", () => {
+test("SKILL_AGENT_RULES covers the verified skill agents in UI order", () => {
   assert.equal(SKILL_AGENT_RULES.length, 9);
   assert.deepEqual(
     SKILL_AGENT_RULES.map((rule) => rule.toolId),

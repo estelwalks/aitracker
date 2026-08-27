@@ -21,8 +21,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { BrandIcon, brandColorOf } from "../../../components/BrandIcon";
-import { InsightCard } from "../../insights/page/presentation/insight-card";
+import { BrandIcon } from "../../../components/BrandIcon";
+import { brandColorOf } from "../../../components/BrandIcon.helpers";
+import { InsightCard } from "../../insights/index.ts";
 import { RangePicker, type RangeValue } from "../../../components/RangePicker";
 import { useI18n } from "../../../lib/i18n/context";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation";
@@ -32,7 +33,7 @@ import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
 import { getAgentUsageOverview } from "../usage-overview-query";
 import type { SkillSnapshot } from "../query";
-import type { SecuritySkillVerdictReadModel } from "../../security-assessment/query/agent-verdicts";
+import type { SecuritySkillVerdictReadModel } from "../../security-assessment/index.ts";
 import type {
   ToolOverviewBreakdownRow,
   ToolOverviewCard,
@@ -221,7 +222,7 @@ function AgentMetricCards({
               <Icon className="size-4" strokeWidth={1.8} />
               {label}
             </div>
-            <div className="tt-num tt-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
+            <div className="aitracker-num aitracker-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
               {value}
             </div>
             <div
@@ -283,13 +284,13 @@ function ToolBadgeWall({
   };
 
   return (
-    <div className="tt-agentbar sticky top-14 z-20 -mx-1 px-1 py-2">
+    <div className="aitracker-agentbar sticky top-14 z-20 -mx-1 px-1 py-2">
       {canLeft && (
         <button
           type="button"
           aria-label={t("skills.agentOverview.scrollLeft")}
           onClick={() => scrollBy(-1)}
-          className="tt-ab-arrow tt-ab-arrow-left"
+          className="aitracker-ab-arrow aitracker-ab-arrow-left"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
@@ -303,10 +304,16 @@ function ToolBadgeWall({
         </button>
       )}
       {canLeft && (
-        <span aria-hidden="true" className="tt-ab-fade tt-ab-fade-left" />
+        <span
+          aria-hidden="true"
+          className="aitracker-ab-fade aitracker-ab-fade-left"
+        />
       )}
 
-      <div ref={trackRef} className="tt-ab-track flex gap-2 overflow-x-auto">
+      <div
+        ref={trackRef}
+        className="aitracker-ab-track flex gap-2 overflow-x-auto"
+      >
         {cards.map((card) => {
           const color = card.color ?? brandColorOf(card.name);
           const on = selectedId === card.id;
@@ -326,7 +333,7 @@ function ToolBadgeWall({
               type="button"
               onClick={() => onPick(card.id)}
               className={cn(
-                "tt-ab-item relative flex shrink-0 snap-start items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                "aitracker-ab-item relative flex shrink-0 snap-start items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
                 on ? "bg-surface-2" : "bg-card hover:bg-surface-2",
               )}
               style={
@@ -351,7 +358,7 @@ function ToolBadgeWall({
                 <BrandIcon name={card.name} className="size-5" color={color} />
               </span>
               <span className="flex flex-col">
-                <span className="tt-text-body flex items-center gap-1.5 font-semibold tracking-tight whitespace-nowrap">
+                <span className="aitracker-text-body flex items-center gap-1.5 font-semibold tracking-tight whitespace-nowrap">
                   {card.name}
                   <span
                     className="inline-block size-2 shrink-0 rounded-full"
@@ -359,7 +366,7 @@ function ToolBadgeWall({
                     title={statusLabel}
                   />
                 </span>
-                <span className="tt-num tt-text-caption font-mono whitespace-nowrap text-muted-foreground">
+                <span className="aitracker-num aitracker-text-caption font-mono whitespace-nowrap text-muted-foreground">
                   {t("skills.agentOverview.badgeSubline", {
                     tokens:
                       card.tokens > 0 ? format.formatTokens(card.tokens) : DASH,
@@ -376,14 +383,17 @@ function ToolBadgeWall({
       </div>
 
       {canRight && (
-        <span aria-hidden="true" className="tt-ab-fade tt-ab-fade-right" />
+        <span
+          aria-hidden="true"
+          className="aitracker-ab-fade aitracker-ab-fade-right"
+        />
       )}
       {canRight && (
         <button
           type="button"
           aria-label={t("skills.agentOverview.scrollRight")}
           onClick={() => scrollBy(1)}
-          className="tt-ab-arrow tt-ab-arrow-right"
+          className="aitracker-ab-arrow aitracker-ab-arrow-right"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path
@@ -434,7 +444,7 @@ function TrendPanel({
           <h3 className="text-[13px] font-semibold tracking-tight">
             {name} · {t("skills.agentOverview.trend")}
           </h3>
-          <p className="tt-num mt-0.5 font-mono text-[10.5px] text-muted-foreground">
+          <p className="aitracker-num mt-0.5 font-mono text-[10.5px] text-muted-foreground">
             {t("skills.agentOverview.trendSummary", {
               tokens: format.formatTokens(totalTokens),
               average: format.formatTokens(avgTokens),
@@ -568,19 +578,19 @@ function ContextRow({
         </span>
 
         {node.calls != null && (
-          <span className="tt-num shrink-0 font-mono text-[10px] text-muted-foreground/70">
+          <span className="aitracker-num shrink-0 font-mono text-[10px] text-muted-foreground/70">
             {t("skills.agentOverview.callsTimes", {
               count: format.formatNumber(node.calls),
             })}
           </span>
         )}
         <span
-          className="tt-num w-[62px] shrink-0 text-right font-mono text-[11px]"
+          className="aitracker-num w-[62px] shrink-0 text-right font-mono text-[11px]"
           style={depth === 0 ? { color } : undefined}
         >
           {node.tokens == null ? DASH : format.formatTokens(node.tokens)}
         </span>
-        <span className="tt-num w-[46px] shrink-0 text-right font-mono text-[10.5px] text-muted-foreground">
+        <span className="aitracker-num w-[46px] shrink-0 text-right font-mono text-[10.5px] text-muted-foreground">
           {node.pct == null
             ? ""
             : `${node.pct < 0.05 ? "0.0" : node.pct.toFixed(1)}%`}
@@ -813,14 +823,14 @@ function ContextTreePanel({
             {t("skills.agentOverview.cacheHitLabel")}
           </span>
           <span
-            className="tt-num font-mono text-[15px] font-black"
+            className="aitracker-num font-mono text-[15px] font-black"
             style={{ color }}
           >
             {view.cacheRate == null
               ? DASH
               : format.formatPercent(view.cacheRate)}
           </span>
-          <span className="tt-num font-mono text-[11px] text-muted-foreground">
+          <span className="aitracker-num font-mono text-[11px] text-muted-foreground">
             {t("skills.agentOverview.contextCacheReused", {
               reused: format.formatTokens(reused),
               total: format.formatTokens(total),
@@ -981,13 +991,13 @@ function ToolModelPanel({
                   }}
                 />
               </span>
-              <span className="tt-num w-[92px] shrink-0 text-right font-mono text-[11.5px]">
+              <span className="aitracker-num w-[92px] shrink-0 text-right font-mono text-[11.5px]">
                 {format.formatTokens(row.tokens)}
               </span>
-              <span className="tt-num w-[78px] shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+              <span className="aitracker-num w-[78px] shrink-0 text-right font-mono text-[11px] text-muted-foreground">
                 {metaA}
               </span>
-              <span className="tt-num w-[70px] shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+              <span className="aitracker-num w-[70px] shrink-0 text-right font-mono text-[11px] text-muted-foreground">
                 {metaB}
               </span>
             </li>

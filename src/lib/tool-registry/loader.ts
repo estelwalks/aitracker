@@ -292,7 +292,12 @@ export function compileRawTool(
               reader: raw.capabilities.sessions.reader,
               command: raw.capabilities.sessions.command ?? [],
             }
-          : { mode: "unsupported" },
+          : raw.capabilities.sessions.mode === "read"
+            ? {
+                mode: "read",
+                reader: raw.capabilities.sessions.reader,
+              }
+            : { mode: "unsupported" },
       market: { mode: raw.capabilities.market },
       security: { mode: raw.capabilities.security },
       ...(raw.capabilities.context

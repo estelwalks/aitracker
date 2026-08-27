@@ -15,7 +15,7 @@ import { LATEST_MIGRATION_VERSION } from "./migrations/index.ts";
 import { createSqliteRuntimeFlagRepository } from "./runtime-flag-repository.server.ts";
 
 function hostForTest(t: { after(callback: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-m2-state-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-m2-state-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

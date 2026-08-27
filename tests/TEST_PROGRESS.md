@@ -6,7 +6,7 @@
 | 项目     | AITracker Desktop 3.0.1                    |
 | 执行时间 | 2026-08-24（最终复测）                      |
 | 系统 URL | 本地临时 Vite URL（无登录）                 |
-| 测试目录 | `/Users/gerry/RedactedWorkspace/trusttools_webapp` |
+| 测试目录 | `/Users/gerry/RedactedWorkspace/aitracker_webapp` |
 | 状态     | 完成（核心发布门禁通过）                    |
 
 ## 测试结果

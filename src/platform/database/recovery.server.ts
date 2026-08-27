@@ -39,7 +39,7 @@ import { basename, dirname, resolve } from "node:path";
 
 import {
   DatabaseError,
-  TRUSTTOOLS_APPLICATION_ID,
+  AITRACKER_APPLICATION_ID,
   type Backup,
   type BackupManifest,
 } from "./contracts.ts";
@@ -422,7 +422,7 @@ async function verifyRestoreCandidate(
  * are never accepted, even when they happen to contain a ledger-shaped table.
  */
 function assertAcceptableApplicationId(applicationId: number): void {
-  if (applicationId !== TRUSTTOOLS_APPLICATION_ID)
+  if (applicationId !== AITRACKER_APPLICATION_ID)
     throw invalidRestoreArgument();
 }
 

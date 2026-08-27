@@ -37,7 +37,7 @@ export function MemoryModal({
             <X className="size-4" />
           </button>
         </header>
-        <div className="tt-scroll min-h-0 flex-1 overflow-auto p-4">
+        <div className="aitracker-scroll min-h-0 flex-1 overflow-auto p-4">
           {children}
         </div>
         {footer && (

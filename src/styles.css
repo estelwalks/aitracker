@@ -6,8 +6,8 @@
 @source "../src";
 @import "tw-animate-css";
 
-html.tt-widget-float-document,
-body.tt-widget-float-document {
+html.aitracker-widget-float-document,
+body.aitracker-widget-float-document {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -17,23 +17,23 @@ body.tt-widget-float-document {
   background: transparent !important;
 }
 
-.tt-widget-float-shell,
-.tt-widget-float-shell main,
-.tt-widget-float-stage {
+.aitracker-widget-float-shell,
+.aitracker-widget-float-shell main,
+.aitracker-widget-float-stage {
   width: 100%;
   height: 100%;
   min-height: 0;
   background: transparent;
 }
 
-.tt-widget-float-stage {
+.aitracker-widget-float-stage {
   display: grid;
   place-items: stretch;
   padding: 0;
   overflow: hidden;
 }
 
-.tt-widget-float-stage > .tt-glass-overview {
+.aitracker-widget-float-stage > .aitracker-glass-overview {
   width: 100%;
   min-height: 100%;
 }
@@ -311,7 +311,7 @@ body.tt-widget-float-document {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-    font-size: var(--tt-font-body);
+    font-size: var(--aitracker-font-body);
     font-synthesis: none;
     font-optical-sizing: auto;
     line-height: 1.7;
@@ -340,70 +340,70 @@ body.tt-widget-float-document {
  * spacing value).
  */
 :root {
-  --tt-font-body: 16px;
-  --tt-font-body-sm: 16px;
-  --tt-font-caption: 16px;
-  --tt-font-control: 16px;
-  --tt-font-section-title: 18px;
-  --tt-font-page-title: 22px;
-  --tt-font-metric: 28px;
-  --tt-font-metric-hero: 36px;
-  --tt-readable-font-min: 16px;
-  --tt-control-height: 36px;
-  --tt-control-height-sm: 32px;
+  --aitracker-font-body: 16px;
+  --aitracker-font-body-sm: 16px;
+  --aitracker-font-caption: 16px;
+  --aitracker-font-control: 16px;
+  --aitracker-font-section-title: 18px;
+  --aitracker-font-page-title: 22px;
+  --aitracker-font-metric: 28px;
+  --aitracker-font-metric-hero: 36px;
+  --aitracker-readable-font-min: 16px;
+  --aitracker-control-height: 36px;
+  --aitracker-control-height-sm: 32px;
 }
 
-.tt-text-body {
-  font-size: var(--tt-font-body);
+.aitracker-text-body {
+  font-size: var(--aitracker-font-body);
 }
 
-.tt-text-body-sm {
-  font-size: var(--tt-font-body-sm);
+.aitracker-text-body-sm {
+  font-size: var(--aitracker-font-body-sm);
 }
 
-.tt-text-caption {
-  font-size: var(--tt-font-caption);
+.aitracker-text-caption {
+  font-size: var(--aitracker-font-caption);
 }
 
-.tt-text-control {
-  font-size: var(--tt-font-control);
+.aitracker-text-control {
+  font-size: var(--aitracker-font-control);
 }
 
-.tt-text-section-title {
-  font-size: var(--tt-font-section-title);
+.aitracker-text-section-title {
+  font-size: var(--aitracker-font-section-title);
 }
 
-.tt-text-page-title {
-  font-size: var(--tt-font-page-title);
+.aitracker-text-page-title {
+  font-size: var(--aitracker-font-page-title);
 }
 
-.tt-text-metric {
-  font-size: var(--tt-font-metric);
+.aitracker-text-metric {
+  font-size: var(--aitracker-font-metric);
 }
 
-.tt-text-metric-hero {
-  font-size: var(--tt-font-metric-hero);
+.aitracker-text-metric-hero {
+  font-size: var(--aitracker-font-metric-hero);
 }
 
-body:not(.tt-widget-float-document) .text-lg {
-  font-size: var(--tt-font-section-title);
+body:not(.aitracker-widget-float-document) .text-lg {
+  font-size: var(--aitracker-font-section-title);
 }
 
-body:not(.tt-widget-float-document) :where(.text-xl, .text-2xl) {
-  font-size: var(--tt-font-page-title);
+body:not(.aitracker-widget-float-document) :where(.text-xl, .text-2xl) {
+  font-size: var(--aitracker-font-page-title);
 }
 
-body:not(.tt-widget-float-document) .text-3xl {
-  font-size: var(--tt-font-metric);
+body:not(.aitracker-widget-float-document) .text-3xl {
+  font-size: var(--aitracker-font-metric);
 }
 
-body:not(.tt-widget-float-document) h1:not(.tt-num) {
-  font-size: var(--tt-font-page-title);
+body:not(.aitracker-widget-float-document) h1:not(.aitracker-num) {
+  font-size: var(--aitracker-font-page-title);
   font-family: var(--font-sans);
 }
 
-body:not(.tt-widget-float-document) :where(h2, h3, h4) {
-  font-size: var(--tt-font-section-title);
+body:not(.aitracker-widget-float-document) :where(h2, h3, h4) {
+  font-size: var(--aitracker-font-section-title);
   font-family: var(--font-sans);
 }
 
@@ -414,7 +414,7 @@ body:not(.tt-widget-float-document) :where(h2, h3, h4) {
  * sub-16px utility. Floating widgets are intentionally excluded because their
  * fixed-size canvases use a separate compact type scale.
  */
-body:not(.tt-widget-float-document)
+body:not(.aitracker-widget-float-document)
   :where(
     .text-xs,
     .text-sm,
@@ -448,24 +448,24 @@ body:not(.tt-widget-float-document)
     [class*="text-[0.875rem]"],
     [class*="text-[0.9375rem]"]
   ):not(svg) {
-  font-size: max(var(--tt-readable-font-min), 1em);
+  font-size: max(var(--aitracker-readable-font-min), 1em);
 }
 
-body:not(.tt-widget-float-document)
+body:not(.aitracker-widget-float-document)
   :where(
-    .tt-label,
-    .tt-chip,
-    .tt-tag,
-    .tt-select,
-    .tt-md table,
-    .tt-md-sm,
-    .tt-md-sm h2,
-    .tt-md-sm h3,
-    .tt-md-sm h4,
-    .tt-table,
-    .tt-table th,
-    .tt-xscroll > table th,
-    .tt-window-chrome-title,
+    .aitracker-label,
+    .aitracker-chip,
+    .aitracker-tag,
+    .aitracker-select,
+    .aitracker-md table,
+    .aitracker-md-sm,
+    .aitracker-md-sm h2,
+    .aitracker-md-sm h3,
+    .aitracker-md-sm h4,
+    .aitracker-table,
+    .aitracker-table th,
+    .aitracker-xscroll > table th,
+    .aitracker-window-chrome-title,
     .dashboard-hero-pill,
     .dashboard-hero-refresh,
     .dashboard-monitoring-strip,
@@ -489,10 +489,10 @@ body:not(.tt-widget-float-document)
     .skill-agent-chip,
     .security-config-input
   ) {
-  font-size: max(var(--tt-readable-font-min), 1em);
+  font-size: max(var(--aitracker-readable-font-min), 1em);
 }
 
-@utility tt-panel {
+@utility aitracker-panel {
   position: relative;
   overflow: hidden;
   background-color: var(--color-surface);
@@ -501,29 +501,29 @@ body:not(.tt-widget-float-document)
   box-shadow: 0 12px 30px -28px rgba(0, 0, 0, 0.82);
 }
 
-@utility tt-num {
+@utility aitracker-num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
 
-@utility tt-label {
-  font-size: var(--tt-font-body);
+@utility aitracker-label {
+  font-size: var(--aitracker-font-body);
   font-family: var(--font-sans);
   letter-spacing: 0.06em;
   color: color-mix(in oklab, var(--color-foreground) 75%, transparent);
 }
 
-/* 全站统一的筛选/标签胶囊：同一字号、同一高度、同一间距（V3.0 原型 tt-chip） */
-@utility tt-chip {
+/* 全站统一的筛选/标签胶囊：同一字号、同一高度、同一间距（V3.0 原型 aitracker-chip） */
+@utility aitracker-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  min-height: var(--tt-control-height);
+  min-height: var(--aitracker-control-height);
   padding-block: 0.375rem;
   padding-inline: 0.75rem;
   border-radius: 9999px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.25;
   white-space: nowrap;
   color: var(--color-muted-foreground);
@@ -542,7 +542,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@utility tt-chip-on {
+@utility aitracker-chip-on {
   color: var(--color-foreground);
   background-color: color-mix(
     in oklab,
@@ -552,8 +552,8 @@ body:not(.tt-widget-float-document)
   font-weight: 500;
 }
 
-/* 小标签（只读徽标），比 tt-chip 更轻 */
-@utility tt-tag {
+/* 小标签（只读徽标），比 aitracker-chip 更轻 */
+@utility aitracker-tag {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -561,7 +561,7 @@ body:not(.tt-widget-float-document)
   padding-block: 0.25rem;
   padding-inline: 0.5rem;
   border-radius: 9999px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.25;
   white-space: nowrap;
   color: var(--color-muted-foreground);
@@ -572,13 +572,13 @@ body:not(.tt-widget-float-document)
   );
 }
 
-/* 统一的下拉筛选控件：与 tt-chip 同高、同字号 */
-@utility tt-select {
-  min-height: var(--tt-control-height);
+/* 统一的下拉筛选控件：与 aitracker-chip 同高、同字号 */
+@utility aitracker-select {
+  min-height: var(--aitracker-control-height);
   padding-block: 0.375rem;
   padding-inline: 0.75rem 1.9rem;
   border-radius: 9999px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.25;
   color: var(--color-foreground);
   background-color: color-mix(
@@ -610,13 +610,13 @@ body:not(.tt-widget-float-document)
   }
 }
 
-/* 全站统一遮罩层（V3.0 原型 tt-overlay）：自包含，各主题通用 */
-@utility tt-overlay {
+/* 全站统一遮罩层（V3.0 原型 aitracker-overlay）：自包含，各主题通用 */
+@utility aitracker-overlay {
   background-color: oklch(0 0 0 / 0.62);
 }
 
-/* 透明毛玻璃分段控件（V3.0 原型 tt-seg）：整体一枚磨砂胶囊，激活项为内嵌亮玻璃丸 */
-@utility tt-seg {
+/* 透明毛玻璃分段控件（V3.0 原型 aitracker-seg）：整体一枚磨砂胶囊，激活项为内嵌亮玻璃丸 */
+@utility aitracker-seg {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -634,14 +634,14 @@ body:not(.tt-widget-float-document)
     color-mix(in oklab, var(--color-foreground) 16%, transparent);
 }
 
-@utility tt-seg-item {
+@utility aitracker-seg-item {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 1.75rem;
   padding-inline: 0.95rem;
   border-radius: 9999px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1;
   white-space: nowrap;
   color: var(--color-muted-foreground);
@@ -663,7 +663,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@utility tt-seg-on {
+@utility aitracker-seg-on {
   color: var(--color-foreground);
   font-weight: 500;
   background-color: color-mix(
@@ -679,9 +679,9 @@ body:not(.tt-widget-float-document)
 }
 
 /* Markdown 排版：报告 / 蒸馏预览等富文本渲染复用 */
-@utility tt-md {
+@utility aitracker-md {
   line-height: 28px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   color: var(--color-foreground);
 
   & h1,
@@ -695,16 +695,16 @@ body:not(.tt-widget-float-document)
   }
 
   & h1 {
-    font-size: var(--tt-font-page-title);
+    font-size: var(--aitracker-font-page-title);
   }
   & h2 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
   & h3 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
   & h4 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
 
   & p {
@@ -727,7 +727,7 @@ body:not(.tt-widget-float-document)
 
   & code {
     font-family: var(--font-mono);
-    font-size: var(--tt-font-body);
+    font-size: var(--aitracker-font-body);
     padding: 0.1em 0.3em;
     border-radius: 0.25rem;
     background-color: var(--color-surface-2);
@@ -757,7 +757,7 @@ body:not(.tt-widget-float-document)
   & table {
     width: 100%;
     border-collapse: collapse;
-    font-size: var(--tt-font-body);
+    font-size: var(--aitracker-font-body);
   }
 
   & th,
@@ -782,9 +782,9 @@ body:not(.tt-widget-float-document)
 }
 
 /* 紧凑 Markdown（卡片正文预览）：字号/行高/标题更小，避免撑爆卡片 */
-@utility tt-md-sm {
+@utility aitracker-md-sm {
   line-height: 20px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   color: var(--color-muted-foreground);
 
   & h1,
@@ -799,16 +799,16 @@ body:not(.tt-widget-float-document)
   }
 
   & h1 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
   & h2 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
   & h3 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
   & h4 {
-    font-size: var(--tt-font-section-title);
+    font-size: var(--aitracker-font-section-title);
   }
 
   & p {
@@ -826,7 +826,7 @@ body:not(.tt-widget-float-document)
 
   & code {
     font-family: var(--font-mono);
-    font-size: var(--tt-font-body);
+    font-size: var(--aitracker-font-body);
     padding: 0.05em 0.25em;
     border-radius: 0.25rem;
     background-color: var(--color-surface-2);
@@ -864,13 +864,13 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@utility tt-scroll {
+@utility aitracker-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
 }
 
 /* 桌面端缩放：横向滚动容器（表格、热力图等宽内容） */
-@utility tt-xscroll {
+@utility aitracker-xscroll {
   overflow-x: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-strong) transparent;
@@ -880,13 +880,13 @@ body:not(.tt-widget-float-document)
 }
 
 /* 内容主区：随视口宽度平滑缩放的内边距与最大宽度 */
-@utility tt-container {
+@utility aitracker-container {
   width: 100%;
   margin-inline: auto;
   max-width: 1720px;
 }
 
-@utility tt-toolbar {
+@utility aitracker-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -904,12 +904,12 @@ body:not(.tt-widget-float-document)
     color-mix(in oklab, var(--color-foreground) 3%, transparent);
 }
 
-@utility tt-table {
+@utility aitracker-table {
   width: 100%;
   min-width: max-content;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
 
   & thead {
     background: color-mix(in oklab, var(--color-surface-2) 72%, transparent);
@@ -919,7 +919,7 @@ body:not(.tt-widget-float-document)
     padding: 0.6rem 0.875rem;
     color: var(--color-muted-foreground);
     font-family: var(--font-sans);
-    font-size: var(--tt-font-body);
+    font-size: var(--aitracker-font-body);
     font-weight: 400;
     letter-spacing: 0.06em;
     text-align: left;
@@ -940,11 +940,11 @@ body:not(.tt-widget-float-document)
   }
 
   /* 安全页等场景：表头不用灰色底条，改用细分隔线，与卡片底色一致。 */
-  &.tt-table--clean-head thead {
+  &.aitracker-table--clean-head thead {
     background: transparent;
   }
 
-  &.tt-table--clean-head th {
+  &.aitracker-table--clean-head th {
     border-bottom: 1px solid
       color-mix(in oklab, var(--color-border) 78%, transparent);
   }
@@ -955,7 +955,7 @@ body:not(.tt-widget-float-document)
 }
 
 /* 科技感：网格底纹 / 边角标记 / 扫描线 */
-@utility tt-grid-bg {
+@utility aitracker-grid-bg {
   background-image:
     linear-gradient(
       to right,
@@ -971,7 +971,7 @@ body:not(.tt-widget-float-document)
   background-position: -1px -1px;
 }
 
-@utility tt-metric {
+@utility aitracker-metric {
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -1033,7 +1033,7 @@ body:not(.tt-widget-float-document)
 }
 
 /* 自绘标题栏（无边框主窗口顶部）：整条可拖拽，右侧为窗口控制按钮。 */
-.tt-window-chrome {
+.aitracker-window-chrome {
   position: fixed;
   inset-inline: 0;
   top: 0;
@@ -1047,22 +1047,22 @@ body:not(.tt-widget-float-document)
   user-select: none;
 }
 
-.tt-window-chrome-title {
+.aitracker-window-chrome-title {
   padding-left: 16px;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-muted-foreground);
 }
 
-.tt-window-controls {
+.aitracker-window-controls {
   display: flex;
   height: 100%;
   margin-left: auto;
   -webkit-app-region: no-drag;
 }
 
-.tt-window-control {
+.aitracker-window-control {
   display: inline-flex;
   width: 46px;
   height: 100%;
@@ -1077,18 +1077,18 @@ body:not(.tt-widget-float-document)
     color 0.12s ease;
 }
 
-.tt-window-control:hover {
+.aitracker-window-control:hover {
   background: var(--color-accent);
   color: var(--color-foreground);
 }
 
-.tt-window-control--close:hover {
+.aitracker-window-control--close:hover {
   background: var(--color-destructive);
   color: var(--color-destructive-foreground);
 }
 
 /* Application chrome: structured, compact, and intentionally data-first. */
-.tt-app-shell {
+.aitracker-app-shell {
   background:
     radial-gradient(
       circle at 88% -8%,
@@ -1098,21 +1098,21 @@ body:not(.tt-widget-float-document)
     var(--color-background);
 }
 
-.tt-sidebar {
+.aitracker-sidebar {
   box-shadow: 10px 0 30px -28px rgba(0, 0, 0, 0.9);
 }
 
-.tt-brand-mark {
+.aitracker-brand-mark {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
     0 8px 20px -12px color-mix(in oklab, var(--color-primary) 94%, transparent);
 }
 
-.tt-nav-item {
+.aitracker-nav-item {
   isolation: isolate;
 }
 
-.tt-nav-item::after {
+.aitracker-nav-item::after {
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -1122,11 +1122,11 @@ body:not(.tt-widget-float-document)
   transition: border-color 0.16s ease;
 }
 
-.tt-nav-item[aria-current="page"]::after {
+.aitracker-nav-item[aria-current="page"]::after {
   border-color: transparent;
 }
 
-.tt-app-main {
+.aitracker-app-main {
   background-image: linear-gradient(
     to bottom,
     color-mix(in oklab, var(--color-foreground) 1.7%, transparent) 1px,
@@ -1135,11 +1135,11 @@ body:not(.tt-widget-float-document)
   background-size: 100% 4.5rem;
 }
 
-.tt-status-bar {
+.aitracker-status-bar {
   box-shadow: 0 -12px 28px -26px rgba(0, 0, 0, 0.9);
 }
 
-.tt-panel > header {
+.aitracker-panel > header {
   background: linear-gradient(
     90deg,
     color-mix(in oklab, var(--color-surface-2) 50%, transparent),
@@ -1153,25 +1153,25 @@ body:not(.tt-widget-float-document)
 }
 
 /* Agent 概览的横向切换条：与原型保持同一套覆盖式滚动控件。 */
-.tt-agentbar {
+.aitracker-agentbar {
   position: sticky;
   display: block;
   background: color-mix(in oklab, var(--color-background) 85%, transparent);
   backdrop-filter: blur(10px);
 }
 
-.tt-ab-track {
+.aitracker-ab-track {
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   -ms-overflow-style: none;
   scroll-behavior: smooth;
 }
 
-.tt-ab-track::-webkit-scrollbar {
+.aitracker-ab-track::-webkit-scrollbar {
   display: none;
 }
 
-.tt-ab-item {
+.aitracker-ab-item {
   /* A wider card keeps the icon/name/usage line legible and limits the
      default desktop viewport to roughly four or five agents. */
   flex: 0 0 clamp(220px, 17vw, 250px);
@@ -1180,7 +1180,7 @@ body:not(.tt-widget-float-document)
   scroll-snap-align: start;
 }
 
-.tt-ab-arrow {
+.aitracker-ab-arrow {
   position: absolute;
   top: 50%;
   z-index: 30;
@@ -1200,20 +1200,20 @@ body:not(.tt-widget-float-document)
     transform 0.15s;
 }
 
-.tt-ab-arrow:hover {
+.aitracker-ab-arrow:hover {
   transform: translateY(-50%) scale(1.06);
   background: var(--color-surface-2);
 }
 
-.tt-ab-arrow-left {
+.aitracker-ab-arrow-left {
   left: 6px;
 }
 
-.tt-ab-arrow-right {
+.aitracker-ab-arrow-right {
   right: 6px;
 }
 
-.tt-ab-fade {
+.aitracker-ab-fade {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -1222,12 +1222,12 @@ body:not(.tt-widget-float-document)
   pointer-events: none;
 }
 
-.tt-ab-fade-left {
+.aitracker-ab-fade-left {
   left: 0;
   background: linear-gradient(to right, var(--color-background), transparent);
 }
 
-.tt-ab-fade-right {
+.aitracker-ab-fade-right {
   right: 0;
   background: linear-gradient(to left, var(--color-background), transparent);
 }
@@ -1275,9 +1275,9 @@ body:not(.tt-widget-float-document)
 }
 
 .security-briefing-scan {
-  min-height: var(--tt-control-height);
+  min-height: var(--aitracker-control-height);
   max-width: 100%;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.25;
 }
 
@@ -1384,14 +1384,14 @@ body:not(.tt-widget-float-document)
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: var(--tt-control-height-sm);
+  min-height: var(--aitracker-control-height-sm);
   padding-block: 0.375rem;
   padding-inline: 0.75rem;
   border-radius: 999px;
   background: color-mix(in oklab, var(--color-foreground) 6%, transparent);
   color: var(--color-muted-foreground);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.25;
 }
 
@@ -1427,11 +1427,11 @@ body:not(.tt-widget-float-document)
 
 .dashboard-hero-refresh {
   flex: 0 0 auto;
-  min-height: var(--tt-control-height-sm);
+  min-height: var(--aitracker-control-height-sm);
   padding-block: 0.375rem;
   padding-inline: 0.75rem;
   background: transparent;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   cursor: pointer;
   transition:
     background-color 0.18s ease,
@@ -1454,7 +1454,7 @@ body:not(.tt-widget-float-document)
   background: var(--color-card);
   color: var(--color-muted-foreground);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
 }
 
 .dashboard-monitoring-strip > span + span::before {
@@ -1513,7 +1513,7 @@ body:not(.tt-widget-float-document)
   background: transparent;
   padding: 0.125rem 0.5rem;
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   letter-spacing: 0.08em;
 }
 
@@ -1572,7 +1572,7 @@ body:not(.tt-widget-float-document)
   gap: 0.5rem;
   color: color-mix(in oklab, var(--color-foreground) 75%, transparent);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   letter-spacing: 0.025em;
 }
 .dashboard-spotlight-card-heading p {
@@ -1583,7 +1583,7 @@ body:not(.tt-widget-float-document)
   margin-top: 0.625rem;
   color: var(--color-foreground);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-metric-hero);
+  font-size: var(--aitracker-font-metric-hero);
   font-weight: 900;
   letter-spacing: -0.025em;
   line-height: 1;
@@ -1594,7 +1594,7 @@ body:not(.tt-widget-float-document)
   min-height: 1rem;
   overflow: hidden;
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   line-height: 1.4;
   color: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
   text-overflow: ellipsis;
@@ -1608,7 +1608,7 @@ body:not(.tt-widget-float-document)
   padding: 0.25rem 0.75rem;
   color: oklch(0.43 0.095 162);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 600;
 }
 
@@ -1625,11 +1625,11 @@ body:not(.tt-widget-float-document)
    transparent background); this rule only styles its inner controls. */
 .dashboard-range-bar button,
 .dashboard-range-bar input {
-  min-height: var(--tt-control-height);
+  min-height: var(--aitracker-control-height);
   border-radius: var(--radius-lg);
   padding: 0.375rem 0.75rem;
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 500;
 }
 
@@ -1667,13 +1667,13 @@ body:not(.tt-widget-float-document)
 }
 .dashboard-range-popover input {
   width: 100%;
-  min-height: var(--tt-control-height);
+  min-height: var(--aitracker-control-height);
   min-width: 0;
   padding-block: 0.375rem;
   padding-inline: 0.5rem;
   background: var(--color-surface-2);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 400;
   line-height: 1.25;
 }
@@ -1715,7 +1715,7 @@ body:not(.tt-widget-float-document)
   border-radius: 999px;
   padding: 0.5rem 0.875rem;
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 500;
   transition:
     background-color 0.16s ease,
@@ -1741,7 +1741,7 @@ body:not(.tt-widget-float-document)
   border-radius: 24px;
 }
 
-/* The reference heatmap uses the shared tt-panel surface: tighter radius, a
+/* The reference heatmap uses the shared aitracker-panel surface: tighter radius, a
    full-width h-11 header with bottom hairline, and a p-4 body. */
 .dashboard-calendar-panel {
   min-width: 0;
@@ -1751,7 +1751,7 @@ body:not(.tt-widget-float-document)
 }
 .dashboard-calendar-head {
   display: flex;
-  min-height: var(--tt-control-height);
+  min-height: var(--aitracker-control-height);
   height: auto;
   align-items: center;
   justify-content: space-between;
@@ -1762,7 +1762,7 @@ body:not(.tt-widget-float-document)
 }
 .dashboard-calendar-head h2 {
   min-width: 0;
-  font-size: var(--tt-font-section-title);
+  font-size: var(--aitracker-font-section-title);
   font-weight: 500;
   letter-spacing: 0.025em;
 }
@@ -1771,7 +1771,7 @@ body:not(.tt-widget-float-document)
   overflow: hidden;
   flex: 1 1 auto;
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   color: var(--color-muted-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1821,14 +1821,14 @@ body:not(.tt-widget-float-document)
   gap: 1rem;
 }
 .dashboard-panel-head h2 {
-  font-size: var(--tt-font-section-title);
+  font-size: var(--aitracker-font-section-title);
   font-weight: 600;
   letter-spacing: -0.025em;
 }
 .dashboard-panel-head p {
   margin-top: 0.3rem;
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   color: var(--color-muted-foreground);
 }
 
@@ -1850,7 +1850,7 @@ body:not(.tt-widget-float-document)
   overflow: hidden;
   color: var(--color-muted-foreground);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1860,7 +1860,7 @@ body:not(.tt-widget-float-document)
   overflow: hidden;
   color: var(--color-foreground);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-section-title);
+  font-size: var(--aitracker-font-section-title);
   font-weight: 700;
   text-overflow: ellipsis;
 }
@@ -1869,7 +1869,7 @@ body:not(.tt-widget-float-document)
   width: 100%;
   min-width: 28rem;
   border-collapse: collapse;
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
 }
 .dashboard-breakdown-table th {
   padding: 0.55rem 0.65rem;
@@ -1877,7 +1877,7 @@ body:not(.tt-widget-float-document)
     color-mix(in oklab, var(--color-foreground) 8%, transparent);
   color: var(--color-muted-foreground);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 400;
   text-align: left;
 }
@@ -1934,13 +1934,13 @@ body:not(.tt-widget-float-document)
 
 /* Reference navigation rail: fixed black foundation; the light theme's
    sidebar tokens come from the .theme-light block above. */
-.tt-sidebar {
+.aitracker-sidebar {
   box-shadow:
     1px 0 0 oklch(1 0 0 / 0.035),
     8px 0 28px -24px oklch(0 0 0 / 0.9);
 }
 
-.tt-nav-item[aria-current="page"]::after {
+.aitracker-nav-item[aria-current="page"]::after {
   border-color: transparent;
 }
 
@@ -1991,11 +1991,11 @@ body:not(.tt-widget-float-document)
   }
 }
 
-.tt-page-header h1 {
+.aitracker-page-header h1 {
   text-wrap: balance;
 }
 
-.tt-empty-state {
+.aitracker-empty-state {
   background: linear-gradient(
     135deg,
     color-mix(in oklab, var(--color-surface-2) 46%, transparent),
@@ -2003,48 +2003,48 @@ body:not(.tt-widget-float-document)
   );
 }
 
-.tt-stat + .tt-stat {
+.aitracker-stat + .aitracker-stat {
   border-left: 1px solid var(--color-border);
 }
 
 /* Table components wrapped in a horizontal rail inherit the terminal table
    treatment without requiring every legacy module to change its DTO/view. */
-.tt-xscroll > table {
+.aitracker-xscroll > table {
   width: 100%;
   min-width: max-content;
 }
 
-.tt-xscroll > table thead {
+.aitracker-xscroll > table thead {
   background: color-mix(in oklab, var(--color-surface-2) 55%, transparent);
 }
 
-.tt-xscroll > table th {
+.aitracker-xscroll > table th {
   color: var(--color-muted-foreground);
   font-family: var(--font-sans);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 400;
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
 
-.tt-xscroll > table tbody tr {
+.aitracker-xscroll > table tbody tr {
   transition: background-color 0.16s ease;
 }
 
-.tt-xscroll > table tbody tr:hover {
+.aitracker-xscroll > table tbody tr:hover {
   background: color-mix(in oklab, var(--color-primary) 5%, transparent);
 }
 
 @media (max-width: 640px) {
-  .tt-toolbar {
+  .aitracker-toolbar {
     align-items: stretch;
   }
 
-  .tt-toolbar > * {
+  .aitracker-toolbar > * {
     max-width: 100%;
   }
 
-  .tt-status-bar > :nth-child(2) {
+  .aitracker-status-bar > :nth-child(2) {
     display: none;
   }
 }
@@ -2060,7 +2060,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@utility tt-corner {
+@utility aitracker-corner {
   position: relative;
   &::before,
   &::after {
@@ -2131,7 +2131,7 @@ body:not(.tt-widget-float-document)
   border: 1px solid var(--color-border);
   border-radius: 999px;
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   transition:
     border-color 0.18s ease,
     background-color 0.18s ease,
@@ -2154,7 +2154,7 @@ body:not(.tt-widget-float-document)
   background: color-mix(in oklab, var(--color-muted) 84%, transparent);
   color: var(--color-muted-foreground);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   text-align: center;
 }
 
@@ -2227,7 +2227,7 @@ body:not(.tt-widget-float-document)
   padding: 0.65rem 0.8rem;
   background: var(--color-surface);
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   text-align: left;
   transition:
     background-color 0.18s ease,
@@ -2301,7 +2301,7 @@ body:not(.tt-widget-float-document)
   background: color-mix(in oklab, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
   font-family: var(--font-mono);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   font-weight: 700;
 }
 
@@ -2319,7 +2319,7 @@ body:not(.tt-widget-float-document)
   border-radius: 999px;
   background: color-mix(in oklab, var(--color-primary) 7%, transparent);
   color: var(--color-muted-foreground);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
 }
 
 .skill-agent-chip-more {
@@ -2344,11 +2344,11 @@ body:not(.tt-widget-float-document)
   margin-right: 0.25rem;
 }
 
-.tt-app-shell {
+.aitracker-app-shell {
   background: var(--color-background);
 }
 
-@keyframes tt-vx-in {
+@keyframes aitracker-vx-in {
   from {
     opacity: 0;
     transform: scale(0.985);
@@ -2359,7 +2359,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-vx-out {
+@keyframes aitracker-vx-out {
   from {
     opacity: 1;
   }
@@ -2369,7 +2369,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-result-pop {
+@keyframes aitracker-result-pop {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -2380,7 +2380,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-signal {
+@keyframes aitracker-signal {
   0% {
     left: 0;
     opacity: 0;
@@ -2394,7 +2394,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-ripple {
+@keyframes aitracker-ripple {
   0% {
     opacity: 0.9;
     transform: scale(0.9);
@@ -2405,7 +2405,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-radar-spin {
+@keyframes aitracker-radar-spin {
   from {
     transform: rotate(0deg);
   }
@@ -2414,7 +2414,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-blip {
+@keyframes aitracker-blip {
   0% {
     opacity: 0;
     transform: scale(0.5);
@@ -2433,7 +2433,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-risk-ping {
+@keyframes aitracker-risk-ping {
   0% {
     opacity: 1;
     transform: scale(0.6);
@@ -2448,7 +2448,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-risk-fly {
+@keyframes aitracker-risk-fly {
   0% {
     opacity: 1;
     transform: translate(0, 0) scale(1);
@@ -2464,7 +2464,7 @@ body:not(.tt-widget-float-document)
 }
 
 /* 呼吸动画基础类；今日洞察仅将它挂载到 Logo。 */
-@keyframes tt-breathe-kf {
+@keyframes aitracker-breathe-kf {
   0%,
   100% {
     opacity: 0.55;
@@ -2476,135 +2476,135 @@ body:not(.tt-widget-float-document)
   }
 }
 
-.tt-breathe {
-  animation: tt-breathe-kf 2.6s ease-in-out infinite;
+.aitracker-breathe {
+  animation: aitracker-breathe-kf 2.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-breathe {
+  .aitracker-breathe {
     animation: none;
   }
 }
 
-.tt-sidebar {
+.aitracker-sidebar {
   box-shadow: 8px 0 28px -24px oklch(0 0 0 / 0.9);
 }
 
 /* The navigation rail is deliberately driven by a native checkbox. This keeps
    its 184px ↔ 64px transition functional even if React's event layer is
    temporarily recovering from a development HMR update. */
-.tt-app-shell {
-  --tt-sidebar-width: 184px;
+.aitracker-app-shell {
+  --aitracker-sidebar-width: 184px;
 }
 
-.tt-sidebar,
-.tt-shell-content {
+.aitracker-sidebar,
+.aitracker-shell-content {
   transition:
     width 200ms ease,
     padding-left 200ms ease;
 }
 
-.tt-sidebar {
-  width: var(--tt-sidebar-width);
+.aitracker-sidebar {
+  width: var(--aitracker-sidebar-width);
   z-index: 40;
   pointer-events: auto;
 }
 
-.tt-shell-content {
+.aitracker-shell-content {
   position: relative;
   z-index: 0;
-  padding-left: var(--tt-sidebar-width);
+  padding-left: var(--aitracker-sidebar-width);
 }
 
 /* The content column is full-width and only offset with padding. Keep its
    stacking context behind the fixed navigation rail so it can never intercept
    navigation or collapse-control clicks. */
-.tt-sidebar nav,
-.tt-sidebar a,
-.tt-sidebar-collapse-control {
+.aitracker-sidebar nav,
+.aitracker-sidebar a,
+.aitracker-sidebar-collapse-control {
   position: relative;
   z-index: 1;
   pointer-events: auto;
 }
 
-.tt-sidebar-collapse-open {
+.aitracker-sidebar-collapse-open {
   display: none;
 }
 
-.tt-sidebar-toggle:checked ~ .tt-sidebar,
-.tt-sidebar-toggle:checked ~ .tt-shell-content {
-  --tt-sidebar-width: 64px;
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar,
+.aitracker-sidebar-toggle:checked ~ .aitracker-shell-content {
+  --aitracker-sidebar-width: 64px;
 }
 
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-brand,
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-bottom-control {
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-brand,
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-bottom-control {
   justify-content: center;
 }
 
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-copy,
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-group-label {
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-copy,
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-group-label {
   display: none;
 }
 
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-close {
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-collapse-close {
   display: none;
 }
 
-.tt-sidebar-toggle:checked ~ .tt-sidebar .tt-sidebar-collapse-open {
+.aitracker-sidebar-toggle:checked ~ .aitracker-sidebar .aitracker-sidebar-collapse-open {
   display: block;
 }
 
 @media (max-width: 1023px) {
-  .tt-app-shell {
-    --tt-sidebar-width: 64px;
+  .aitracker-app-shell {
+    --aitracker-sidebar-width: 64px;
   }
 
-  .tt-sidebar-brand,
-  .tt-sidebar-bottom-control {
+  .aitracker-sidebar-brand,
+  .aitracker-sidebar-bottom-control {
     justify-content: center;
   }
 
-  .tt-sidebar-copy,
-  .tt-sidebar-group-label {
+  .aitracker-sidebar-copy,
+  .aitracker-sidebar-group-label {
     display: none;
   }
 
-  .tt-sidebar-collapse-close {
+  .aitracker-sidebar-collapse-close {
     display: none;
   }
 
-  .tt-sidebar-collapse-open {
+  .aitracker-sidebar-collapse-open {
     display: block;
   }
 }
 
-.tt-shell-header {
+.aitracker-shell-header {
   background: color-mix(in oklab, var(--color-background) 82%, transparent);
   backdrop-filter: blur(16px);
   box-shadow: inset 0 -1px 0
     color-mix(in oklab, var(--color-foreground) 5%, transparent);
 }
 
-.tt-brand-mark {
+.aitracker-brand-mark {
   box-shadow: var(--elev-1), var(--hairline);
 }
 
-.tt-nav-item[aria-current="page"] {
+.aitracker-nav-item[aria-current="page"] {
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
 }
 
-.tt-panel,
-.tt-metric,
-.tt-empty-state {
+.aitracker-panel,
+.aitracker-metric,
+.aitracker-empty-state {
   box-shadow: var(--elev-1), var(--hairline);
 }
 
-.tt-panel:hover,
-.tt-metric:hover {
+.aitracker-panel:hover,
+.aitracker-metric:hover {
   box-shadow: var(--elev-2), var(--hairline);
 }
 
-.tt-panel > header {
+.aitracker-panel > header {
   background: linear-gradient(
     90deg,
     color-mix(in oklab, var(--color-surface-2) 48%, transparent),
@@ -2649,12 +2649,12 @@ body:not(.tt-widget-float-document)
 /* Chart ticks are rendered with inline Recharts styles, so bind them to the
    body token explicitly instead of allowing a third, chart-only size scale. */
 .dashboard-v3 .recharts-cartesian-axis-tick text {
-  font-size: var(--tt-font-body) !important;
+  font-size: var(--aitracker-font-body) !important;
 }
 
 /* Security center: animation is visual feedback only; adjacent facts come
  * directly from the Electron scan state. */
-@keyframes tt-vortex-spin {
+@keyframes aitracker-vortex-spin {
   from {
     transform: rotate(0deg);
   }
@@ -2663,7 +2663,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-vortex-spin-rev {
+@keyframes aitracker-vortex-spin-rev {
   from {
     transform: rotate(360deg);
   }
@@ -2672,7 +2672,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-particle {
+@keyframes aitracker-particle {
   0% {
     transform: translateY(0) scale(1);
     opacity: 0;
@@ -2686,7 +2686,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-vortex-enter {
+@keyframes aitracker-vortex-enter {
   from {
     opacity: 0;
     transform: scale(0.86);
@@ -2697,7 +2697,7 @@ body:not(.tt-widget-float-document)
   }
 }
 
-@keyframes tt-security-line {
+@keyframes aitracker-security-line {
   from {
     opacity: 0;
     transform: translateY(3px);
@@ -2708,8 +2708,8 @@ body:not(.tt-widget-float-document)
   }
 }
 
-.tt-security-line {
-  animation: tt-security-line 0.24s ease-out;
+.aitracker-security-line {
+  animation: aitracker-security-line 0.24s ease-out;
 }
 
 .security-config-input {
@@ -2720,7 +2720,7 @@ body:not(.tt-widget-float-document)
   background: var(--surface-2);
   padding-inline: 0.75rem;
   font-family: var(--font-mono);
-  font-size: var(--tt-font-body);
+  font-size: var(--aitracker-font-body);
   outline: none;
   transition:
     border-color 0.15s ease,
@@ -2738,9 +2738,9 @@ body:not(.tt-widget-float-document)
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tt-vortex-layer,
-  .tt-particle,
-  .tt-security-line {
+  .aitracker-vortex-layer,
+  .aitracker-particle,
+  .aitracker-security-line {
     animation: none !important;
   }
 }

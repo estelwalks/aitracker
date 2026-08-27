@@ -15,7 +15,7 @@ import {
 /**
  * The market query cache is SQLite-backed through the composition root. Point
  * the composition root at a fresh temp data root for this file so the tests
- * never touch the real `~/.trusttools` database (which a running dev/Electron
+ * never touch the real `~/.aitracker` database (which a running dev/Electron
  * process may hold open, and whose migration ledger can carry an older
  * checksum than the code under test).
  */
@@ -23,7 +23,7 @@ let previousHome: string | undefined;
 let tempDir: string | undefined;
 
 before(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), "tt-market-"));
+  tempDir = await mkdtemp(join(tmpdir(), "aitracker-market-"));
   previousHome = process.env[ENV.USAGE_HOME];
   process.env[ENV.USAGE_HOME] = tempDir;
   resetCompositionRootForTests();

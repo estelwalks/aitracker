@@ -17,7 +17,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import {
   DatabaseError,
-  TRUSTTOOLS_APPLICATION_ID,
+  AITRACKER_APPLICATION_ID,
   type SqliteDatabasePort,
   type SqliteRow,
   type SqliteStatement,
@@ -311,7 +311,7 @@ function caseFold(path: string): string {
 
 /**
  * Creates the database directory chain when it is missing. A first run on a
- * fresh machine must not fail just because `~/.trusttools/data` does not exist
+ * fresh machine must not fail just because `~/.aitracker/data` does not exist
  * yet, and a genuine filesystem failure must still be a stable error code.
  */
 function ensureDirectory(directory: string): void {
@@ -432,7 +432,7 @@ function assertApplicationId(
   const actual = normalizePragmaValue(
     firstValue(connection.prepare("PRAGMA application_id").get()),
   );
-  if (actual === String(TRUSTTOOLS_APPLICATION_ID)) return true;
+  if (actual === String(AITRACKER_APPLICATION_ID)) return true;
   if (actual !== "0") {
     throw new PragmaAssertionFailure("capability-mismatch", actual);
   }

@@ -23,7 +23,7 @@ import {
   MANIFEST_FILE_NAME,
   sha256OfFile,
 } from "./backup.server.ts";
-import { DatabaseError, TRUSTTOOLS_APPLICATION_ID } from "./contracts.ts";
+import { DatabaseError, AITRACKER_APPLICATION_ID } from "./contracts.ts";
 import { DatabaseHost } from "./database-host.server.ts";
 import { checkIntegrity } from "./integrity.server.ts";
 import { readSchemaVersion, runMigrations } from "./migration-runner.server.ts";
@@ -71,7 +71,7 @@ function openMigratedDb(scope: TestScope): {
   directory: string;
   databasePath: string;
 } {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-recovery-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-recovery-"));
   const databasePath = join(directory, "platform.db");
   const host = DatabaseHost.open({
     path: databasePath,
@@ -384,7 +384,7 @@ test("restoreFromBackup requires a manifest record for the chosen file", async (
 
   // A byte-identical copy of a *verified* backup is still not restorable: the
   // manifest record is the only trusted source of its SHA-256.
-  const unrecorded = join(backupsDirectory, "trusttools-19990101-000000.db");
+  const unrecorded = join(backupsDirectory, "aitracker-19990101-000000.db");
   writeFileSync(unrecorded, readFileSync(backup.path));
 
   await assert.rejects(
@@ -406,7 +406,7 @@ test("restoreFromBackup rejects a database that is not a migrated AITracker data
   mkdirSync(backupsDirectory, { recursive: true });
 
   // A perfectly healthy SQLite file with someone else's schema.
-  const foreign = join(backupsDirectory, "trusttools-20200101-000000.db");
+  const foreign = join(backupsDirectory, "aitracker-20200101-000000.db");
   const raw = new DatabaseSync(foreign);
   try {
     raw.exec("CREATE TABLE other (id INTEGER PRIMARY KEY)");
@@ -498,7 +498,7 @@ test("restoreFromBackup rejects a foreign application_id and accepts the AITrack
   );
 
   // The value migration 0001 stamps is accepted.
-  await stamp(TRUSTTOOLS_APPLICATION_ID);
+  await stamp(AITRACKER_APPLICATION_ID);
   const result = await restoreFromBackup({
     databasePath: join(directory, "restored.db"),
     backupPath: backup.path,

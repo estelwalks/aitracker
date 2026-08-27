@@ -140,7 +140,7 @@ export const skills = {
     version: "Version evidence",
   },
   agentOverview: {
-    title: "Agent overview · AITracker",
+    title: "Agent overview · {appName}",
     insightTitle: "Today's insight",
     dedicatedInsight: "Dedicated insight",
     insightDescription:

@@ -8,7 +8,7 @@ test("returns defaults for invalid persisted settings", () => {
 });
 
 test("uses the AITracker data directory as the default path", () => {
-  assert.equal(DEFAULT_SETTINGS.dataPath, "~/.trusttools");
+  assert.equal(DEFAULT_SETTINGS.dataPath, "~/.aitracker");
 });
 
 test("returns default retentionDays when value is invalid", () => {
@@ -33,7 +33,7 @@ test("keeps valid dataPath", () => {
 
 test("migrates the legacy home-directory data path", () => {
   const settings = parseSettings(JSON.stringify({ dataPath: "~/" }));
-  assert.equal(settings.dataPath, "~/.trusttools");
+  assert.equal(settings.dataPath, "~/.aitracker");
 });
 
 test("rejects empty dataPath and uses default", () => {

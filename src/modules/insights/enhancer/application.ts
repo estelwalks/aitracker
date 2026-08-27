@@ -9,7 +9,7 @@
  * path returns a stable status — nothing here throws to the caller.
  */
 import { sha256Hex } from "../../../lib/crypto/sha256.ts";
-import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
+import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
 import type {
   AIExecutionSummary,
   TokenUsage,

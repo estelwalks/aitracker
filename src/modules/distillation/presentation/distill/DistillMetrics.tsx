@@ -70,7 +70,7 @@ export function DistillMetrics({
             {m.k}
           </div>
           <div
-            className="tt-num tt-text-metric mt-1.5 min-w-0 truncate font-mono leading-none font-bold"
+            className="aitracker-num aitracker-text-metric mt-1.5 min-w-0 truncate font-mono leading-none font-bold"
             style={{ color: m.c }}
           >
             {m.v}

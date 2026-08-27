@@ -127,7 +127,7 @@ test("missing development icon falls back without a path warning", () => {
     findTrayIconPath({
       isPackaged: false,
       resourcesPath: "/tmp/resources",
-      appPath: "/tmp/trusttools-no-build",
+      appPath: "/tmp/aitracker-no-build",
     }),
     null,
   );

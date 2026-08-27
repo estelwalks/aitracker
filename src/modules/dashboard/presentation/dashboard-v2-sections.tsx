@@ -22,21 +22,20 @@ import {
   Zap,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { BrandIcon, brandColorOf } from "../../../components/BrandIcon.tsx";
-import {
-  DistillButton,
-  notifyDistillStarted,
-} from "../../../components/DistillButton.tsx";
+import { BrandIcon } from "../../../components/BrandIcon.tsx";
+import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
+import { DistillButton } from "../../../components/DistillButton.tsx";
+import { notifyDistillStarted } from "../../../components/DistillButton.helpers.ts";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../../../components/ui/tooltip.tsx";
-import { InsightCard } from "../../insights/page/presentation/insight-card.tsx";
+import { InsightCard } from "../../insights/index.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { PUBLIC_TOOL_MANIFEST } from "../../../lib/tool-registry/public-manifest.generated.ts";
-import type { SecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
+import type { SecurityScanOverview } from "../../security-assessment/index.ts";
 import type { UsagePeriod } from "../../../lib/local-usage/presentation.ts";
 import type {
   DashboardV2BreakdownRow,
@@ -62,7 +61,7 @@ export function DashboardDeltaChip({
   const { format, t } = useI18n();
   if (value == null || !Number.isFinite(value)) {
     return (
-      <span className="tt-text-caption font-mono text-muted-foreground">
+      <span className="aitracker-text-caption font-mono text-muted-foreground">
         {t("dashboard.kpi.unavailable")}
       </span>
     );
@@ -77,7 +76,7 @@ export function DashboardDeltaChip({
         : "text-[var(--color-warn)]";
   return (
     <span
-      className={`tt-text-caption inline-flex items-center gap-0.5 font-mono ${tone} ${className}`}
+      className={`aitracker-text-caption inline-flex items-center gap-0.5 font-mono ${tone} ${className}`}
       title={t("dashboard.kpi.vsPrevious")}
     >
       <ArrowIcon className="size-3" strokeWidth={2.2} />
@@ -227,14 +226,14 @@ export function DashboardTrustHero({
                     strokeWidth={1.8}
                   />
                 </div>
-                <strong className="tt-num">{value}</strong>
+                <strong className="aitracker-num">{value}</strong>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <small title={sub}>{sub}</small>
                   </TooltipTrigger>
                   <TooltipContent
                     side="top"
-                    className="max-w-[min(32rem,80vw)] whitespace-normal break-words tt-text-caption"
+                    className="max-w-[min(32rem,80vw)] whitespace-normal break-words aitracker-text-caption"
                   >
                     {sub}
                   </TooltipContent>
@@ -494,7 +493,7 @@ export function DashboardMetricGrid({
                 <span className="truncate">{card.label}</span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <strong className="tt-num tt-text-metric min-w-0 flex-1 truncate leading-none font-black tracking-tight">
+                <strong className="aitracker-num aitracker-text-metric min-w-0 flex-1 truncate leading-none font-black tracking-tight">
                   {card.value}
                 </strong>
                 {card.delta != null ? (
@@ -512,7 +511,7 @@ export function DashboardMetricGrid({
                 </TooltipTrigger>
                 <TooltipContent
                   side="top"
-                  className="max-w-[min(32rem,80vw)] whitespace-normal break-words tt-text-caption"
+                  className="max-w-[min(32rem,80vw)] whitespace-normal break-words aitracker-text-caption"
                 >
                   {hintLine}
                 </TooltipContent>
@@ -619,7 +618,7 @@ export function DashboardRangePicker({
           }}
         >
           <label className="space-y-1">
-            <span className="tt-text-body block tracking-wide text-muted-foreground uppercase">
+            <span className="aitracker-text-body block tracking-wide text-muted-foreground uppercase">
               {t("dashboard.header.customFrom")}
             </span>
             <input
@@ -629,11 +628,11 @@ export function DashboardRangePicker({
               value={draftFrom}
               max={draftTo}
               onChange={(event) => setDraftFrom(event.target.value)}
-              className="tt-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
+              className="aitracker-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
             />
           </label>
           <label className="space-y-1">
-            <span className="tt-text-body block tracking-wide text-muted-foreground uppercase">
+            <span className="aitracker-text-body block tracking-wide text-muted-foreground uppercase">
               {t("dashboard.header.customTo")}
             </span>
             <input
@@ -643,13 +642,13 @@ export function DashboardRangePicker({
               value={draftTo}
               min={draftFrom}
               onChange={(event) => setDraftTo(event.target.value)}
-              className="tt-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
+              className="aitracker-text-body w-full rounded-lg bg-surface px-2 py-1.5 font-mono font-normal outline-none"
             />
           </label>
           <button
             type="submit"
             disabled={!draftFrom || !draftTo || draftFrom > draftTo}
-            className="tt-text-body col-span-2 mt-3 inline-flex min-h-[var(--tt-control-height)] items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
+            className="aitracker-text-body col-span-2 mt-3 inline-flex min-h-[var(--aitracker-control-height)] items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 font-semibold text-background disabled:cursor-not-allowed disabled:opacity-45"
           >
             <Check className="size-4" strokeWidth={2.2} />
             {t("common.confirm")}
@@ -829,20 +828,20 @@ export function DashboardModelDonut({
             })}
           </div>
         ) : null}
-        <span className="tt-num shrink-0 font-mono text-[11px] text-muted-foreground">
+        <span className="aitracker-num shrink-0 font-mono text-[11px] text-muted-foreground">
           {t("dashboard.v2.calls", {
             count: format.formatNumber(item.events),
           })}
         </span>
-        <span className="tt-num w-16 shrink-0 text-right font-mono text-[12px] font-semibold">
+        <span className="aitracker-num w-16 shrink-0 text-right font-mono text-[12px] font-semibold">
           {format.formatTokens(item.tokens)}
         </span>
-        <span className="tt-num w-14 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
+        <span className="aitracker-num w-14 shrink-0 text-right font-mono text-[11px] text-muted-foreground">
           {item.estimatedCostUsd == null
             ? t("dashboard.kpi.unavailable")
             : format.formatUsd(item.estimatedCostUsd)}
         </span>
-        <span className="tt-num w-12 shrink-0 text-right font-mono text-[11px]">
+        <span className="aitracker-num w-12 shrink-0 text-right font-mono text-[11px]">
           {format.formatPercent(item.share)}
         </span>
         {item.deltaPercent != null ? (
@@ -1000,7 +999,7 @@ export function DashboardProjectOverview({
           <div className="relative flex items-center justify-center">
             <ThinRing rows={top} />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="tt-num tt-text-metric font-mono leading-none font-black">
+              <span className="aitracker-num aitracker-text-metric font-mono leading-none font-black">
                 {format.formatNumber(view.projectCount)}
               </span>
               <span className="mt-1 font-mono text-[9.5px] tracking-widest text-muted-foreground uppercase">
@@ -1011,7 +1010,7 @@ export function DashboardProjectOverview({
           <div className="w-full space-y-1.5">
             <div className="flex items-center justify-between font-mono text-[10.5px] text-muted-foreground">
               <span>{t("dashboard.v2.projectTotalQuota")}</span>
-              <span className="tt-num text-foreground">
+              <span className="aitracker-num text-foreground">
                 {format.formatTokens(totalTokens)}
               </span>
             </div>
@@ -1030,8 +1029,8 @@ export function DashboardProjectOverview({
           </div>
         </div>
 
-        <div className="min-w-0 flex-1 tt-xscroll">
-          <table className="tt-table w-full">
+        <div className="min-w-0 flex-1 aitracker-xscroll">
+          <table className="aitracker-table w-full">
             <thead>
               <tr className="font-mono text-[9.5px] tracking-wider text-muted-foreground uppercase">
                 <th className="px-4 py-2.5 text-left font-medium">
@@ -1076,13 +1075,13 @@ export function DashboardProjectOverview({
                       </span>
                     </div>
                   </td>
-                  <td className="tt-num px-3 py-3 text-right font-semibold">
+                  <td className="aitracker-num px-3 py-3 text-right font-semibold">
                     {format.formatPercent(item.share)}
                   </td>
-                  <td className="tt-num px-3 py-3 text-right text-muted-foreground">
+                  <td className="aitracker-num px-3 py-3 text-right text-muted-foreground">
                     {format.formatTokens(item.tokens)}
                   </td>
-                  <td className="tt-num px-3 py-3 text-right text-muted-foreground">
+                  <td className="aitracker-num px-3 py-3 text-right text-muted-foreground">
                     {item.sessions == null
                       ? t("dashboard.kpi.unavailable")
                       : format.formatNumber(item.sessions)}
@@ -1114,7 +1113,7 @@ export function DashboardProjectOverview({
                       </span>
                     </div>
                   </td>
-                  <td className="tt-num px-3 py-2.5 text-right">
+                  <td className="aitracker-num px-3 py-2.5 text-right">
                     {format.formatPercent(restShare)}
                   </td>
                   <td className="px-3 py-2.5 text-right opacity-50">--</td>
@@ -1363,7 +1362,7 @@ export function DashboardContribHeatmap({
       </header>
       <div
         ref={wrapRef}
-        className="tt-xscroll px-4 pt-4 pb-1"
+        className="aitracker-xscroll px-4 pt-4 pb-1"
         style={{ scrollbarGutter: "auto" }}
         aria-label={t("dashboard.v2.calendarTitle")}
       >
@@ -1374,7 +1373,7 @@ export function DashboardContribHeatmap({
               {monthTicks.map((tick) => (
                 <span
                   key={`${tick.column}-${tick.label}`}
-                  className="tt-num absolute top-0 text-[10px] leading-none text-muted-foreground"
+                  className="aitracker-num absolute top-0 text-[10px] leading-none text-muted-foreground"
                   style={{ left: tick.column * (cellSize + gap) }}
                 >
                   {tick.label}
@@ -1385,7 +1384,7 @@ export function DashboardContribHeatmap({
           {/* 标签列与网格之间不加 gap（与原型一致），保证总宽恰好等于容器 */}
           <div className="mt-1.5 flex">
             <div
-              className="tt-num flex shrink-0 flex-col text-[10px] leading-none text-muted-foreground"
+              className="aitracker-num flex shrink-0 flex-col text-[10px] leading-none text-muted-foreground"
               style={{ width: LABEL_W, gap }}
             >
               {weekdayLabels.map((label, rowIndex) => (
@@ -1472,7 +1471,7 @@ export function DashboardContribHeatmap({
                 style={{ left: hover.left, top: hover.top - 8 }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="tt-num font-mono text-[11px] text-muted-foreground">
+                  <span className="aitracker-num font-mono text-[11px] text-muted-foreground">
                     {format.formatDate(point.date)}
                   </span>
                   <span
@@ -1493,11 +1492,11 @@ export function DashboardContribHeatmap({
                 ) : (
                   <>
                     <div className="mt-1.5 flex items-baseline gap-1.5">
-                      <span className="tt-num tt-text-metric font-mono leading-none font-black">
+                      <span className="aitracker-num aitracker-text-metric font-mono leading-none font-black">
                         {format.formatTokens(point.tokens)}
                       </span>
                     </div>
-                    <div className="tt-num mt-2 flex gap-3 font-mono text-[10px] text-muted-foreground">
+                    <div className="aitracker-num mt-2 flex gap-3 font-mono text-[10px] text-muted-foreground">
                       <span>
                         {format.formatNumber(point.events)}{" "}
                         {t("dashboard.v2.eventShort")}

@@ -12,7 +12,7 @@ import type {
 import { windowToView } from "../summary-contracts.ts";
 import { getDashboardCustomWindow } from "../summary-query.ts";
 import type { DashboardSnapshotStatus } from "../summary-query.ts";
-import { useSecurityScanOverview } from "../../security-assessment/query/use-security-scan-overview.ts";
+import { useSecurityScanOverview } from "../../security-assessment/index.ts";
 import {
   DashboardAgentWorkstreams,
   DashboardContribHeatmap,
@@ -258,7 +258,7 @@ export function DashboardV2Page({
           <span className="shrink-0 text-[10px] tracking-[0.14em] text-foreground/75 uppercase">
             {t("dashboard.v2.overviewLabel")}
           </span>
-          <span className="tt-num truncate font-mono text-[11px] text-muted-foreground/70">
+          <span className="aitracker-num truncate font-mono text-[11px] text-muted-foreground/70">
             {format.formatTokens(view.totals.totalTokens)} tokens ·{" "}
             {view.estimatedCostUsd == null
               ? t("dashboard.kpi.unavailable")

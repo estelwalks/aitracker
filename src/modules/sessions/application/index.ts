@@ -90,6 +90,7 @@ export function createSessionQueryService(
         page,
         pageSize,
         totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+        sources: [...new Set(all.map((item) => item.source))].sort(),
       });
     },
   };

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { resolveNpmSpawn } from "./npm-spawn.mjs";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const labHome = join(projectRoot, ".tt-lab", "first-run-home");
+const labHome = join(projectRoot, ".aitracker-lab", "first-run-home");
 const prepareOnly = process.argv.includes("--prepare-only");
 const seedOnly = process.argv.includes("--seed-only");
 
@@ -58,7 +58,7 @@ async function launchDesktop() {
     cwd: projectRoot,
     env: {
       ...process.env,
-      TRUSTTOOLS_USAGE_HOME: labHome,
+      AITRACKER_USAGE_HOME: labHome,
     },
     stdio: "inherit",
   });

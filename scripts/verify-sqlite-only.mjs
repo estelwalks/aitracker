@@ -25,7 +25,7 @@ const EXCLUDED_PATHS = [
 ];
 
 const APP_OWNED_FILES = [
-  "trusttools-prefs.json",
+  "aitracker-prefs.json",
   "preferences.v1.json",
   "runs.v1.json",
   "performance-rollout.v1.json",
@@ -87,7 +87,7 @@ const CONTENT_RULES = [
   {
     type: "legacy-read-switch",
     pattern:
-      /\b(?:FORCE_LEGACY_READ_PATH|TRUSTTOOLS_FORCE_LEGACY_READ_PATH|forceLegacyReadPath|readFromSqlite)\b/g,
+      /\b(?:FORCE_LEGACY_READ_PATH|forceLegacyReadPath|readFromSqlite)\b/g,
   },
   {
     type: "app-owned-local-storage",

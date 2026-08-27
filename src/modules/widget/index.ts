@@ -1,17 +1,7 @@
 export { widgetModuleId } from "./contracts";
 export type { WidgetModuleContract, WidgetModuleId } from "./contracts";
-export type { WidgetViewModel } from "./presentation";
 export { createWidgetApplication } from "./application/index";
 export type { WidgetApplication } from "./application/index";
-export { JarvisWidget } from "./presentation/JarvisWidget";
-export { TrayWidget } from "./presentation/TrayWidget";
-export {
-  SmallWidget,
-  MediumWidget,
-  LargeWidget,
-} from "./presentation/DesktopWidgets";
-export { WidgetConfigPanel } from "./presentation/WidgetConfigPanel";
-export { WidgetThemeScope } from "./presentation/widget-theme";
 export {
   useWidgetPrefs,
   readWidgetPrefs,
@@ -20,7 +10,7 @@ export {
   toneLine,
   DEFAULT_WIDGET_PREFS,
   WIDGET_PREFS_STORAGE_KEY,
-} from "./presentation/widget-prefs";
+} from "./presentation/widget-prefs.ts";
 export type {
   MenuBarStyle,
   MenuBarClick,
@@ -32,4 +22,4 @@ export type {
   MediumContent,
   WidgetTheme,
   WidgetPrefs,
-} from "./presentation/widget-prefs";
+} from "./presentation/widget-prefs.ts";

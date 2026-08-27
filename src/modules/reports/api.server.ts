@@ -6,9 +6,9 @@
  *
  * The store exposes `listDocuments`/`listRuns` (see the ReportStore contract),
  * so the query source reads real persisted documents/runs instead of an empty
- * list. Session density for the archive band / calendar / header stats comes
- * from the composition root's sessions port (`root.sessions`), aggregated by
- * `aggregateSessionDensity` — never mocked.
+ * list. Session counts for the archive band / calendar / header stats come
+ * from the SessionSnapshot, while header Tokens/cost are projected from the
+ * UsageSnapshot so this read model uses event-date accounting consistently.
  *
  * Generation depends solely on the active S-500 model profile (real model
  * call). Without an active profile the transport reports `{ triggered: false }`
@@ -27,6 +27,8 @@ import type {
   ReportSummary,
   ReportsApplication,
 } from "./contracts.ts";
+import type { UsageSnapshotDto } from "../usage/contracts.ts";
+import { estimateUsageBucketCost } from "./infrastructure/usage-cost.ts";
 
 /**
  * T4-02: Session density now comes from the SessionSnapshot (one O(1) read),
@@ -67,10 +69,41 @@ async function loadSessionDensityFromSnapshot(
   }
 }
 
+async function loadUnifiedDensityFromSnapshots(
+  getSessionSnapshot: Parameters<typeof loadSessionDensityFromSnapshot>[0],
+  getUsageSnapshot: () => Promise<UsageSnapshotDto | null>,
+): Promise<ReportQueryViewModel["feed"]["density"]> {
+  const [sessionDensity, usageSnapshot] = await Promise.all([
+    loadSessionDensityFromSnapshot(getSessionSnapshot),
+    getUsageSnapshot().catch(() => null),
+  ]);
+  if (!usageSnapshot) return sessionDensity;
+
+  const days: Record<
+    string,
+    { count: number; tokens: number; knownUsd: number }
+  > = {};
+  for (const [date, row] of Object.entries(sessionDensity.days)) {
+    days[date] = { count: row.count, tokens: 0, knownUsd: 0 };
+  }
+  for (const bucket of usageSnapshot.aggregateBuckets ?? []) {
+    const existing = days[bucket.date] ?? {
+      count: 0,
+      tokens: 0,
+      knownUsd: 0,
+    };
+    existing.tokens += bucket.totalTokens;
+    existing.knownUsd += estimateUsageBucketCost(bucket);
+    days[bucket.date] = existing;
+  }
+  return { total: sessionDensity.total, days };
+}
+
 /** Reads persisted reports/runs/density from the composition root. */
 function compositionReportsSource(
   reports: ReportsApplication,
   getSessionSnapshot: Parameters<typeof loadSessionDensityFromSnapshot>[0],
+  getUsageSnapshot: () => Promise<UsageSnapshotDto | null>,
 ): ReportsQuerySource {
   return {
     async listReports(): Promise<readonly ReportSummary[]> {
@@ -81,7 +114,8 @@ function compositionReportsSource(
       const result = await reports.listRuns();
       return result.ok ? result.value : [];
     },
-    sessionMetrics: () => loadSessionDensityFromSnapshot(getSessionSnapshot),
+    sessionMetrics: () =>
+      loadUnifiedDensityFromSnapshots(getSessionSnapshot, getUsageSnapshot),
   };
 }
 
@@ -130,6 +164,10 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
       total: latest.data.sessions?.length ?? 0,
     };
   };
+  const getUsageSnapshot = async (): Promise<UsageSnapshotDto | null> => {
+    await root.usageSnapshot.ensureHydrated();
+    return root.usageSnapshot.readLatest().data;
+  };
   const activeView = await root.modelProfiles.getActiveView();
   const activeProfile = activeView
     ? await root.modelProfiles.getProfileForExecution(activeView.id)
@@ -139,7 +177,11 @@ export async function loadReports(_locale: Locale): Promise<LoadReportsResult> {
   );
   const presentation = createReportsPresentation({
     reports,
-    source: compositionReportsSource(reports, getSessionSnapshot),
+    source: compositionReportsSource(
+      reports,
+      getSessionSnapshot,
+      getUsageSnapshot,
+    ),
     // Generation runs only when an S-500 model profile is active; without one
     // the page shows the honest offline state so it disables generation
     // instead of faking it.

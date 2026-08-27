@@ -1,4 +1,4 @@
-.tt-glass-overview {
+.aitracker-glass-overview {
   --glass-ink: oklch(0.96 0.01 250);
   --glass-muted: oklch(0.78 0.015 250 / 0.78);
   --glass-line: oklch(1 0 0 / 0.12);
@@ -22,7 +22,7 @@
   isolation: isolate;
 }
 
-.tt-glass-overview::after {
+.aitracker-glass-overview::after {
   position: absolute;
   inset: 0;
   z-index: -2;
@@ -32,7 +32,7 @@
     linear-gradient(135deg, rgb(105 88 92), rgb(30 47 70)), rgb(28 38 57);
 }
 
-.tt-glass-overview::before {
+.aitracker-glass-overview::before {
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -53,7 +53,7 @@
     );
 }
 
-.tt-glass-feather {
+.aitracker-glass-feather {
   position: absolute;
   top: -100px;
   right: -90px;
@@ -75,22 +75,22 @@
   mask-image: radial-gradient(ellipse at center, black 12%, transparent 72%);
 }
 
-.tt-glass-header,
-.tt-glass-content,
-.tt-glass-section,
-.tt-glass-footer {
+.aitracker-glass-header,
+.aitracker-glass-content,
+.aitracker-glass-section,
+.aitracker-glass-footer {
   position: relative;
   z-index: 1;
 }
 
-.tt-glass-header {
+.aitracker-glass-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   padding: 14px 18px 10px;
 }
 
-.tt-glass-brand {
+.aitracker-glass-brand {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -99,13 +99,13 @@
   letter-spacing: -0.025em;
 }
 
-.tt-glass-header p {
+.aitracker-glass-header p {
   margin-top: 3px;
   color: var(--glass-muted);
   font-size: 11px;
 }
 
-.tt-glass-status {
+.aitracker-glass-status {
   display: inline-block;
   width: 7px;
   height: 7px;
@@ -115,29 +115,29 @@
   box-shadow: 0 0 0 3px oklch(0.63 0.16 155 / 0.09);
 }
 
-.tt-glass-status--idle {
+.aitracker-glass-status--idle {
   background: oklch(0.58 0.02 255);
   box-shadow: 0 0 0 3px oklch(0.58 0.02 255 / 0.08);
 }
 
-.tt-glass-status--warn {
+.aitracker-glass-status--warn {
   background: oklch(0.76 0.15 82);
   box-shadow: 0 0 0 3px oklch(0.76 0.15 82 / 0.1);
 }
 
-.tt-glass-status--danger {
+.aitracker-glass-status--danger {
   background: oklch(0.62 0.22 25);
   box-shadow: 0 0 0 3px oklch(0.62 0.22 25 / 0.09);
 }
 
-.tt-glass-footer svg,
-.tt-glass-security > svg {
+.aitracker-glass-footer svg,
+.aitracker-glass-security > svg {
   width: 15px;
   height: 15px;
   stroke-width: 1.7;
 }
 
-.tt-glass-section {
+.aitracker-glass-section {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -146,19 +146,19 @@
   border-top: 1px solid var(--glass-line);
 }
 
-.tt-glass-content {
+.aitracker-glass-content {
   display: flex;
   min-height: 0;
   flex: 1;
   flex-direction: column;
 }
 
-.tt-glass-overview-summary {
+.aitracker-glass-overview-summary {
   padding-top: 8px;
   border-top: 0;
 }
 
-.tt-glass-section-title {
+.aitracker-glass-section-title {
   margin: 0;
   color: var(--glass-muted);
   font-size: 11px;
@@ -166,7 +166,7 @@
   letter-spacing: 0.02em;
 }
 
-.tt-glass-overview-grid {
+.aitracker-glass-overview-grid {
   display: grid;
   grid-template-columns: 1.7fr repeat(3, 1fr);
   gap: 8px;
@@ -174,7 +174,7 @@
   margin-top: 7px;
 }
 
-.tt-glass-token-total strong {
+.aitracker-glass-token-total strong {
   display: block;
   font-family: var(--font-mono);
   font-size: 34px;
@@ -183,9 +183,9 @@
   letter-spacing: -0.065em;
 }
 
-.tt-glass-token-total span,
-.tt-glass-metric span,
-.tt-glass-health > span {
+.aitracker-glass-token-total span,
+.aitracker-glass-metric span,
+.aitracker-glass-health > span {
   display: block;
   margin-top: 6px;
   overflow: hidden;
@@ -196,8 +196,8 @@
   white-space: nowrap;
 }
 
-.tt-glass-metric strong,
-.tt-glass-health strong {
+.aitracker-glass-metric strong,
+.aitracker-glass-health strong {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -207,14 +207,14 @@
   line-height: 1;
 }
 
-.tt-glass-agent-list {
+.aitracker-glass-agent-list {
   display: grid;
   grid-template-rows: repeat(3, 23px);
   row-gap: 2px;
   margin-top: 6px;
 }
 
-.tt-glass-agent-row {
+.aitracker-glass-agent-row {
   display: grid;
   grid-template-columns: 20px 86px minmax(54px, 1fr) 48px 28px 36px;
   gap: 6px;
@@ -223,67 +223,67 @@
   font-size: 10.5px;
 }
 
-.tt-glass-agent-row--placeholder {
+.aitracker-glass-agent-row--placeholder {
   opacity: 0.26;
 }
 
-.tt-glass-agent-placeholder-icon,
-.tt-glass-agent-placeholder-name,
-.tt-glass-agent-placeholder-track {
+.aitracker-glass-agent-placeholder-icon,
+.aitracker-glass-agent-placeholder-name,
+.aitracker-glass-agent-placeholder-track {
   display: block;
   background: var(--glass-muted);
 }
 
-.tt-glass-agent-placeholder-icon {
+.aitracker-glass-agent-placeholder-icon {
   width: 14px;
   height: 14px;
   margin-left: 2px;
   border-radius: 50%;
 }
 
-.tt-glass-agent-placeholder-name {
+.aitracker-glass-agent-placeholder-name {
   width: 58px;
   height: 5px;
   border-radius: 999px;
 }
 
-.tt-glass-agent-placeholder-track {
+.aitracker-glass-agent-placeholder-track {
   width: 100%;
   height: 5px;
   border-radius: 999px;
 }
 
-.tt-glass-agent-icon {
+.aitracker-glass-agent-icon {
   display: grid;
   width: 18px;
   height: 18px;
   place-items: center;
 }
 
-.tt-glass-agent-name {
+.aitracker-glass-agent-name {
   overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tt-glass-agent-track {
+.aitracker-glass-agent-track {
   height: 5px;
   overflow: hidden;
   background: oklch(0.35 0.015 255 / 0.11);
   border-radius: 999px;
 }
 
-.tt-glass-agent-track i {
+.aitracker-glass-agent-track i {
   display: block;
   height: 100%;
   background: var(--color-chart-1);
   border-radius: inherit;
 }
 
-.tt-glass-agent-value,
-.tt-glass-agent-percent,
-.tt-glass-agent-events {
+.aitracker-glass-agent-value,
+.aitracker-glass-agent-percent,
+.aitracker-glass-agent-events {
   color: var(--glass-muted);
   font-family: var(--font-mono);
   font-size: 9px;
@@ -291,31 +291,31 @@
   white-space: nowrap;
 }
 
-.tt-glass-agent-value {
+.aitracker-glass-agent-value {
   color: var(--glass-ink);
 }
 
-.tt-glass-memory-grid,
-.tt-glass-security-grid {
+.aitracker-glass-memory-grid,
+.aitracker-glass-security-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
   margin-top: 7px;
 }
 
-.tt-glass-section-heading-row {
+.aitracker-glass-section-heading-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.tt-glass-section-heading-row > span {
+.aitracker-glass-section-heading-row > span {
   color: var(--glass-muted);
   font-family: var(--font-mono);
   font-size: 9px;
 }
 
-.tt-glass-chart {
+.aitracker-glass-chart {
   display: flex;
   height: 60px;
   gap: 5px;
@@ -323,7 +323,7 @@
   margin-top: 6px;
 }
 
-.tt-glass-bar-column {
+.aitracker-glass-bar-column {
   display: flex;
   min-width: 0;
   height: 100%;
@@ -333,7 +333,7 @@
   gap: 6px;
 }
 
-.tt-glass-bar-column i {
+.aitracker-glass-bar-column i {
   display: block;
   min-height: 5px;
   background: var(--color-chart-1);
@@ -341,17 +341,17 @@
   border-radius: 3px;
 }
 
-.tt-glass-bar-column i.is-current {
+.aitracker-glass-bar-column i.is-current {
   box-shadow: 0 0 8px color-mix(in oklab, var(--color-chart-1) 46%, transparent);
 }
 
-.tt-glass-bar-column i.is-selected {
+.aitracker-glass-bar-column i.is-selected {
   border-color: white;
   box-shadow: 0 0 10px
     color-mix(in oklab, var(--color-chart-1) 68%, transparent);
 }
 
-.tt-glass-bar-column span {
+.aitracker-glass-bar-column span {
   overflow: hidden;
   color: var(--glass-muted);
   font-family: var(--font-mono);
@@ -361,7 +361,7 @@
   white-space: nowrap;
 }
 
-.tt-glass-security {
+.aitracker-glass-security {
   display: flex;
   width: 100%;
   flex-direction: row;
@@ -378,27 +378,27 @@
   transition: background-color 160ms ease;
 }
 
-.tt-glass-security:hover {
+.aitracker-glass-security:hover {
   background: oklch(1 0 0 / 0.08);
 }
 
-.tt-glass-security > div {
+.aitracker-glass-security > div {
   min-width: 0;
   flex: 1;
 }
 
-.tt-glass-security > svg {
+.aitracker-glass-security > svg {
   flex: 0 0 auto;
   margin-left: 12px;
   color: var(--glass-muted);
 }
 
-.tt-glass-footer {
+.aitracker-glass-footer {
   flex: none;
   border-top: 1px solid var(--glass-line);
 }
 
-.tt-glass-activity {
+.aitracker-glass-activity {
   display: flex;
   justify-content: space-between;
   padding: 8px 18px;
@@ -407,20 +407,20 @@
   font-size: 9px;
 }
 
-.tt-glass-activity span {
+.aitracker-glass-activity span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
 
-.tt-glass-footer nav {
+.aitracker-glass-footer nav {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid var(--glass-line);
 }
 
-.tt-glass-footer nav a,
-.tt-glass-footer nav button {
+.aitracker-glass-footer nav a,
+.aitracker-glass-footer nav button {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -436,12 +436,12 @@
   transition: background-color 160ms ease;
 }
 
-.tt-glass-footer nav a:hover,
-.tt-glass-footer nav button:hover {
+.aitracker-glass-footer nav a:hover,
+.aitracker-glass-footer nav button:hover {
   background: oklch(1 0 0 / 0.12);
 }
 
-.tt-glass-empty {
+.aitracker-glass-empty {
   margin: 8px 0 0;
   color: var(--glass-muted);
   font-size: 9px;
@@ -449,17 +449,17 @@
 }
 
 @media (max-width: 380px) {
-  .tt-glass-agent-row {
+  .aitracker-glass-agent-row {
     grid-template-columns: 20px 72px minmax(42px, 1fr) 44px 25px;
   }
 
-  .tt-glass-agent-events {
+  .aitracker-glass-agent-events {
     display: none;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .tt-glass-overview {
+  .aitracker-glass-overview {
     background: oklch(0.24 0.025 250);
     backdrop-filter: none;
   }

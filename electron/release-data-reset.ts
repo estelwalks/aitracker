@@ -19,12 +19,12 @@ import {
   resolve,
 } from "node:path";
 
-const DATA_DIRECTORY_NAME = ".trusttools";
+const DATA_DIRECTORY_NAME = ".aitracker";
 const DATABASE_WRITER_LOCK_PATH = [
   "data",
-  "trusttools.v1.db.writer.lock",
+  "aitracker.v1.db.writer.lock",
 ] as const;
-const MARKER_PREFIX = ".trusttools-release-data-reset-";
+const MARKER_PREFIX = ".aitracker-release-data-reset-";
 const MARKER_SUFFIX = ".complete";
 
 /**
@@ -150,7 +150,7 @@ async function removeResetTarget(resetTarget: string): Promise<void> {
   }
 
   // Never hand a symlink to recursive removal. Unlinking it explicitly makes
-  // it impossible to descend into a directory outside ~/.trusttools.
+  // it impossible to descend into a directory outside ~/.aitracker.
   if (stats.isSymbolicLink()) {
     await unlink(resetTarget);
     return;

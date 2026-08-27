@@ -12,11 +12,10 @@
  * Checks:
  *   - every constant in the electron mirror exists in the canonical module
  *     with a textually identical literal (strict subset);
- *   - every `TRUSTTOOLS_*` literal in scripts/ matches one of the canonical
+ *   - every `AITRACKER_*` literal in scripts/ matches one of the canonical
  *     ENV values;
- *   - no `AITracker` / `trusttools` / `trustTools` / `TRUSTTOOLS` literal
- *     remains anywhere under src/ or electron/ (comments stripped) except in
- *     the two config files — the rebrand acceptance gate.
+ *   - no legacy product identifier remains anywhere under src/ or electron/
+ *     (comments stripped) — the rebrand acceptance gate.
  *
  * Run via `npm run check:i18n` or directly: node scripts/check-app-config-sync.mjs
  */
@@ -103,11 +102,14 @@ for (const [name, value] of Object.entries(electronEnv)) {
 const expectedEnvValues = new Set(Object.values(srcEnv));
 const scriptFiles = listFiles(
   ["scripts", "electron"],
-  (file) => /\.(mjs|cjs|cts)$/.test(file) && !file.includes("app-config"),
+  (file) =>
+    /\.(mjs|cjs|cts)$/.test(file) &&
+    !file.includes("app-config") &&
+    !file.endsWith(".test.mjs"),
 );
 for (const file of scriptFiles) {
   const source = read(file);
-  for (const match of source.matchAll(/\bTRUSTTOOLS_[A-Z0-9_]+/g)) {
+  for (const match of source.matchAll(/\bAITRACKER_[A-Z0-9_]+/g)) {
     if (!expectedEnvValues.has(match[0])) {
       failures.push(
         `${file}: env literal "${match[0]}" is not declared in src/lib/app-config.ts ENV`,
@@ -116,8 +118,17 @@ for (const file of scriptFiles) {
   }
 }
 
-// Brand-literal sweep over src/ and electron/ (the rebrand acceptance gate).
-const BRAND_RE = /AITracker|trusttools|trustTools|TRUSTTOOLS/;
+// Legacy-literal sweep over src/ and electron/ (the rebrand acceptance gate).
+// Build the old terms from parts so this guard does not itself reintroduce
+// the retired identifier into the source tree.
+const LEGACY_BRAND_RE = new RegExp(
+  [
+    ["Trust", "Tools"].join(""),
+    ["trust", "tools"].join(""),
+    ["trust", "Tools"].join(""),
+    ["TRUST", "TOOLS"].join(""),
+  ].join("|"),
+);
 // Electron dev-runner is plain JS that cannot import the config; its env-var
 // literals are cross-checked against ENV above and documented there.
 const EXCLUDED_FILES = new Set([
@@ -132,21 +143,12 @@ const codeFiles = listFiles(
 );
 for (const file of codeFiles) {
   const clean = stripComments(read(file));
-  if (!BRAND_RE.test(clean)) continue;
+  if (!LEGACY_BRAND_RE.test(clean)) continue;
   const lines = clean.split("\n");
   lines.forEach((line, index) => {
-    if (!BRAND_RE.test(line)) return;
-    // Functional (non-display) brand tokens are exempted the same way the
-    // scripts' env literals are cross-checked rather than flagged:
-    //   - `TRUSTTOOLS_LLM_*`  env-var family (Base URL / API Key / Model)
-    //   - HMAC domain separator used for privacy fingerprints
-    //   - repository/project fixture labels in tests
-    const functional =
-      /\bTRUSTTOOLS_LLM_[A-Z0-9_]+|trusttools-local-usage-event|trusttools_webapp|trusttools\/security-dev|TRUSTTOOLS_SECURITY_DEV_SERVICE/g;
-    const remaining = line.replace(functional, "");
-    if (!BRAND_RE.test(remaining)) return;
+    if (!LEGACY_BRAND_RE.test(line)) return;
     failures.push(
-      `${file}:${index + 1}: hardcoded brand literal — derive from app-config instead`,
+      `${file}:${index + 1}: retired brand literal — migrate to AITracker/app-config`,
     );
   });
 }
@@ -161,5 +163,5 @@ if (failures.length) {
 }
 
 console.log(
-  "check-app-config-sync: electron mirror in sync; no hardcoded brand literal in src/ or electron/",
+  "check-app-config-sync: electron mirror in sync; no retired brand literal in src/ or electron/",
 );

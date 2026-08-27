@@ -56,7 +56,7 @@ const topology: WslTopology = {
 };
 
 test("save→load round-trips the topology across a reopened connection", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-wsl-snap-"));
   try {
     let host = openHost(directory);
     const repository = createSqliteWslSnapshotRepository({ database: host });
@@ -81,7 +81,7 @@ test("save→load round-trips the topology across a reopened connection", async 
 });
 
 test("rejects a payload larger than the 256 KB blob ceiling", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-big-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-wsl-snap-big-"));
   try {
     const host = openHost(directory);
     const repository = createSqliteWslSnapshotRepository({ database: host });
@@ -105,7 +105,7 @@ test("rejects a payload larger than the 256 KB blob ceiling", async () => {
 });
 
 test("rejects host Windows paths and secret-shaped payload content", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-privacy-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-wsl-snap-privacy-"));
   try {
     const host = openHost(directory);
     const repository = createSqliteWslSnapshotRepository({ database: host });
@@ -152,7 +152,7 @@ test("rejects host Windows paths and secret-shaped payload content", async () =>
 });
 
 test("keeps the head plus one previous generation and clears on demand", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-gen-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-wsl-snap-gen-"));
   try {
     const host = openHost(directory);
     let sequence = 0;
@@ -188,7 +188,7 @@ test("keeps the head plus one previous generation and clears on demand", async (
 });
 
 test("snapshot_blobs only accepts valid JSON (SQL CHECK) and bounded payloads", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-wsl-snap-json-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-wsl-snap-json-"));
   try {
     const host = openHost(directory);
     host

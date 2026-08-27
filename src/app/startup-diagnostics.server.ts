@@ -1,6 +1,6 @@
 /** Safe, path-free startup diagnostic codes for the desktop warmup boundary. */
 
-export const STARTUP_FAILURE_CODE_HEADER = "x-trusttools-startup-failure-code";
+export const STARTUP_FAILURE_CODE_HEADER = "x-aitracker-startup-failure-code";
 
 const DATABASE_CODES = new Set([
   "access-denied",

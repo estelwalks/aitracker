@@ -22,7 +22,7 @@ function openHost(directory: string): DatabaseHost {
 }
 
 test("upsert is idempotent on the (type, source_ref) identity", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-search-repo-"));
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
@@ -55,7 +55,9 @@ test("upsert is idempotent on the (type, source_ref) identity", async () => {
 });
 
 test("write is a full rebuild and removes rows absent from the snapshot", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-rebuild-"));
+  const directory = mkdtempSync(
+    join(tmpdir(), "aitracker-search-repo-rebuild-"),
+  );
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
@@ -106,7 +108,9 @@ test("write is a full rebuild and removes rows absent from the snapshot", async 
 });
 
 test("read reconstructs a snapshot whose version matches the domain fingerprint", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-version-"));
+  const directory = mkdtempSync(
+    join(tmpdir(), "aitracker-search-repo-version-"),
+  );
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
@@ -135,7 +139,9 @@ test("read reconstructs a snapshot whose version matches the domain fingerprint"
 });
 
 test("rejects forbidden private content at the repository layer", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-privacy-"));
+  const directory = mkdtempSync(
+    join(tmpdir(), "aitracker-search-repo-privacy-"),
+  );
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
@@ -191,7 +197,7 @@ test("rejects forbidden private content at the repository layer", async () => {
 });
 
 test("rejects host paths and secret-shaped refs but allows opaque references", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-search-repo-ref-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-search-repo-ref-"));
   try {
     const host = openHost(directory);
     const repository = createSqliteSearchIndexRepository({ database: host });
