@@ -8,6 +8,7 @@ import {
   parseReportSchedules,
   parseReportSchedulesWithMigration,
   reportSchedulePreferenceRequests,
+  reportSchedulesPreferenceValue,
   serializeReportSchedules,
 } from "../schedule.ts";
 
@@ -23,6 +24,7 @@ test("v2 report schedules round-trip with three independent switches", () => {
     parseReportSchedules(serializeReportSchedules(config)),
     config,
   );
+  assert.deepEqual(reportSchedulesPreferenceValue(config), config);
   const requests = reportSchedulePreferenceRequests(config);
   assert.deepEqual(
     requests.map(({ taskId, enabled }) => ({ taskId, enabled })),

@@ -1,4 +1,5 @@
 import type { Schedule } from "../tasks/application/task-storage.ts";
+import type { PreferenceValue } from "../../lib/preferences/client.ts";
 
 export type ReportScheduleKind = "daily" | "weekly" | "monthly";
 export type ScheduleGranularity = ReportScheduleKind;
@@ -249,6 +250,34 @@ export function serializeReportSchedules(
   config: ReportSchedulesConfig,
 ): string {
   return JSON.stringify(config);
+}
+
+/**
+ * Produces the explicit JSON-safe projection accepted by app_preferences.
+ * A named config interface intentionally has no string index signature, so
+ * callers use this boundary function instead of unsafe structural casts.
+ */
+export function reportSchedulesPreferenceValue(
+  config: ReportSchedulesConfig,
+): PreferenceValue {
+  return {
+    version: config.version,
+    configured: config.configured,
+    daily: {
+      enabled: config.daily.enabled,
+      time: config.daily.time,
+    },
+    weekly: {
+      enabled: config.weekly.enabled,
+      time: config.weekly.time,
+      dayOfWeek: config.weekly.dayOfWeek,
+    },
+    monthly: {
+      enabled: config.monthly.enabled,
+      time: config.monthly.time,
+      dayOfMonth: config.monthly.dayOfMonth,
+    },
+  };
 }
 
 export function serializeReportSchedule(
