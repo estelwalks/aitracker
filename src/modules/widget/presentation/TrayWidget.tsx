@@ -83,10 +83,10 @@ export function TrayWidget({ className = "" }: { className?: string }) {
                   <div className="font-mono text-[9.5px] tracking-[0.12em] text-muted-foreground/70 uppercase">
                     {cell.label}
                   </div>
-                  <div className="tt-num mt-1.5 font-mono text-[17px] leading-none font-semibold tracking-tight">
+                  <div className="aitracker-num mt-1.5 font-mono text-[17px] leading-none font-semibold tracking-tight">
                     {cell.value}
                   </div>
-                  <div className="tt-num mt-1.5 font-mono text-[10.5px] text-muted-foreground">
+                  <div className="aitracker-num mt-1.5 font-mono text-[10.5px] text-muted-foreground">
                     {cell.sub}
                   </div>
                 </div>
@@ -110,12 +110,12 @@ export function TrayWidget({ className = "" }: { className?: string }) {
                         <span className="min-w-0 flex-1 truncate text-[12px] font-medium">
                           {tool.name}
                         </span>
-                        <span className="tt-num font-mono text-[11px] text-muted-foreground">
+                        <span className="aitracker-num font-mono text-[11px] text-muted-foreground">
                           {format.formatTokens(tool.tokens)}
                         </span>
                       </div>
                       <div className="mt-1 flex items-center gap-2">
-                        <span className="tt-num w-16 shrink-0 font-mono text-[10px] text-muted-foreground/70">
+                        <span className="aitracker-num w-16 shrink-0 font-mono text-[10px] text-muted-foreground/70">
                           {format.formatNumber(tool.events)}{" "}
                           {t("widget.events")}
                         </span>
@@ -137,7 +137,7 @@ export function TrayWidget({ className = "" }: { className?: string }) {
                             }}
                           />
                         </div>
-                        <span className="tt-num w-16 shrink-0 text-right font-mono text-[10px] text-muted-foreground/70">
+                        <span className="aitracker-num w-16 shrink-0 text-right font-mono text-[10px] text-muted-foreground/70">
                           {tool.costUsd == null
                             ? "—"
                             : format.formatUsd(tool.costUsd)}

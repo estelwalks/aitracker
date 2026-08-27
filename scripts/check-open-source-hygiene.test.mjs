@@ -6,7 +6,7 @@ import test from "node:test";
 import { scanRepository } from "./check-open-source-hygiene.mjs";
 
 test("hygiene scanner detects secrets, private paths and AITracker references", () => {
-  const root = mkdtempSync(join(tmpdir(), "trusttools-hygiene-"));
+  const root = mkdtempSync(join(tmpdir(), "aitracker-hygiene-"));
   writeFileSync(
     join(root, "unsafe.ts"),
     'const token = "sk-12345678901234567890";\n// /Users/alice/project\n// AITracker\n',
@@ -23,7 +23,7 @@ test("hygiene scanner detects secrets, private paths and AITracker references", 
 });
 
 test("docs, fixtures and tests are excluded to avoid example false positives", () => {
-  const root = mkdtempSync(join(tmpdir(), "trusttools-hygiene-"));
+  const root = mkdtempSync(join(tmpdir(), "aitracker-hygiene-"));
   mkdirSync(join(root, "docs"));
   mkdirSync(join(root, "fixtures"));
   mkdirSync(join(root, ".output"));

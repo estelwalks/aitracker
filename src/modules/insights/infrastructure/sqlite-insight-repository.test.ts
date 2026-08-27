@@ -13,7 +13,7 @@ import {
 } from "./sqlite-insight-repository.server.ts";
 
 function fixture(t: { after(fn: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-insight-repo-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-insight-repo-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

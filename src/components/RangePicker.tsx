@@ -83,7 +83,7 @@ export function RangePicker({
       >
         <CalendarRange className="size-3.5" strokeWidth={1.8} />
         {isCustom ? (
-          <span className="tt-num font-mono text-[11px]">
+          <span className="aitracker-num font-mono text-[11px]">
             {value.from.slice(5)} → {value.to.slice(5)}
           </span>
         ) : (

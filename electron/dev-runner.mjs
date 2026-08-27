@@ -15,8 +15,8 @@ const viteOptimizationMetadata = join(
   projectRoot,
   "node_modules/.vite/deps/_metadata.json",
 );
-const host = process.env.TRUSTTOOLS_DEV_HOST ?? "127.0.0.1";
-const port = process.env.TRUSTTOOLS_DEV_PORT ?? "5173";
+const host = process.env.AITRACKER_DEV_HOST ?? "127.0.0.1";
+const port = process.env.AITRACKER_DEV_PORT ?? "5173";
 const origin = `http://${host}:${port}`;
 const children = new Set();
 const desktopBrokerToken = randomUUID();
@@ -296,7 +296,7 @@ export async function runDevDesktop() {
 
   const viteEnvironment = {
     ...process.env,
-    TRUSTTOOLS_DESKTOP_BROKER_TOKEN: desktopBrokerToken,
+    AITRACKER_DESKTOP_BROKER_TOKEN: desktopBrokerToken,
   };
 
   const vite = startProcess(
@@ -324,8 +324,8 @@ export async function runDevDesktop() {
     await waitForOptimizationMetadata();
     const electron = startProcess(["exec", "--", "electron", "."], {
       ...process.env,
-      TRUSTTOOLS_DEV_URL: origin,
-      TRUSTTOOLS_DESKTOP_BROKER_TOKEN: desktopBrokerToken,
+      AITRACKER_DEV_URL: origin,
+      AITRACKER_DESKTOP_BROKER_TOKEN: desktopBrokerToken,
     });
     electron.once("exit", (code) => shutdown(code ?? 0));
   } catch (error) {

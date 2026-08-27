@@ -3,7 +3,7 @@ import { expect, test } from "playwright/test";
 /**
  * P7-T7-04: page-performance resilience scenarios.
  *
- * Runs against a dev server whose `TRUSTTOOLS_USAGE_HOME` points at an empty
+ * Runs against a dev server whose `AITRACKER_USAGE_HOME` points at an empty
  * temporary directory, simulating a fresh install with no snapshots: pages
  * must render the shell/empty state (never a white screen or the load-failed
  * boundary), stay within a reasonable response budget, and support retry.
@@ -12,13 +12,13 @@ import { expect, test } from "playwright/test";
  *   npx playwright test -c playwright.config.empty-home.ts performance-scenarios.spec.ts
  */
 
-const EMPTY_HOME = process.env.TRUSTTOOLS_E2E_EMPTY_HOME ?? "";
+const EMPTY_HOME = process.env.AITRACKER_E2E_EMPTY_HOME ?? "";
 const hasEmptyHome = EMPTY_HOME.length > 0;
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-locale-mode");
+    window.localStorage.removeItem("aitracker-locale");
+    window.localStorage.removeItem("aitracker-locale-mode");
     Object.defineProperty(window.navigator, "language", {
       get: () => "zh-CN",
       configurable: true,
@@ -64,7 +64,7 @@ test("无快照时 Widget 浮窗模式正常渲染", async ({ page }) => {
   });
   expect(response?.status() ?? 0).toBeLessThan(400);
   await expect(page.getByText("页面加载失败")).toHaveCount(0);
-  await expect(page.locator(".tt-glass-overview")).toBeVisible();
+  await expect(page.locator(".aitracker-glass-overview")).toBeVisible();
 });
 
 /** Lazy route chunks must load on demand without errors (T6-04). */

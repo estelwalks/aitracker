@@ -38,7 +38,7 @@ export function DistillGuide({ onClose }: { onClose: () => void }) {
       aria-label={t("distill.guideTitle")}
     >
       <div
-        className="tt-overlay absolute inset-0 rounded-xl backdrop-blur-md"
+        className="aitracker-overlay absolute inset-0 rounded-xl backdrop-blur-md"
         onClick={onClose}
       />
       <section className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-card p-7 shadow-2xl shadow-black/60">

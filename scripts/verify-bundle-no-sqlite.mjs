@@ -5,7 +5,7 @@
 // Scans the built browser assets under `.output/public/**/*.js` and fails when
 // any of them contains a marker that must never reach a renderer:
 //   * `node:sqlite` / `DatabaseSync` — the driver or its class name;
-//   * `trusttools.v1.db`            — the database file name;
+//   * `aitracker.v1.db`            — the database file name;
 //   * `secure_secrets`             — the ciphertext table name.
 //
 // SERVER-FUNCTION CHUNKS ARE EXCLUDED FROM THE FAILING ASSERTION, AND THE
@@ -36,7 +36,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FORBIDDEN_MARKERS = [
   "node:sqlite",
   "DatabaseSync",
-  "trusttools.v1.db",
+  "aitracker.v1.db",
   "secure_secrets",
 ];
 

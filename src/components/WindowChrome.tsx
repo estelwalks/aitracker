@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { APP_NAME } from "../lib/app-config";
 import { useI18n } from "../lib/i18n/context";
 
-/** 自绘标题栏高度（px），与 styles.css 中 .tt-window-chrome 的 height 保持一致。 */
+/** 自绘标题栏高度（px），与 styles.css 中 .aitracker-window-chrome 的 height 保持一致。 */
 export const WINDOW_CHROME_HEIGHT = 36;
 
 /** macOS 红绿灯按钮位于标题栏左侧，需要预留空间（hiddenInset 下约 78px）。 */
@@ -78,16 +78,18 @@ export function WindowChrome() {
 
   return (
     <div
-      className={`tt-window-chrome ${isMac ? "tt-window-chrome--mac" : ""}`}
+      className={`aitracker-window-chrome ${isMac ? "aitracker-window-chrome--mac" : ""}`}
       style={isMac ? { paddingLeft: MAC_TRAFFIC_LIGHT_INSET } : undefined}
     >
-      {!isMac && <div className="tt-window-chrome-title">{APP_NAME}</div>}
+      {!isMac && (
+        <div className="aitracker-window-chrome-title">{APP_NAME}</div>
+      )}
 
       {!isMac && (
-        <div className="tt-window-controls">
+        <div className="aitracker-window-controls">
           <button
             type="button"
-            className="tt-window-control"
+            className="aitracker-window-control"
             title={t("common.windowMinimize")}
             onClick={() => void desktop.minimizeWindow()}
           >
@@ -95,7 +97,7 @@ export function WindowChrome() {
           </button>
           <button
             type="button"
-            className="tt-window-control"
+            className="aitracker-window-control"
             title={
               maximized ? t("common.windowRestore") : t("common.windowMaximize")
             }
@@ -111,7 +113,7 @@ export function WindowChrome() {
           </button>
           <button
             type="button"
-            className="tt-window-control tt-window-control--close"
+            className="aitracker-window-control aitracker-window-control--close"
             title={t("common.close")}
             onClick={() => void desktop.closeWindow()}
           >

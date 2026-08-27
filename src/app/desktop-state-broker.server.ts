@@ -24,7 +24,7 @@ const MAX_PERSISTED_SECURITY_HISTORY_JSON_LENGTH = 60_000;
 
 function authorized(request: Request): boolean {
   const expected = process.env[ENV.DESKTOP_BROKER_TOKEN];
-  const actual = request.headers.get("x-trusttools-desktop-broker");
+  const actual = request.headers.get("x-aitracker-desktop-broker");
   if (!expected || !actual) return false;
   const left = Buffer.from(actual);
   const right = Buffer.from(expected);

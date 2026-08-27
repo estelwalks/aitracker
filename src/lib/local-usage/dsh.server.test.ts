@@ -31,7 +31,10 @@ interface DshFixture {
 }
 
 async function fixture(): Promise<DshFixture> {
-  const root = join(tmpdir(), `tt-dsh-scan-${process.pid}-${Date.now()}`);
+  const root = join(
+    tmpdir(),
+    `aitracker-dsh-scan-${process.pid}-${Date.now()}`,
+  );
   const homeDirectory = join(root, "home");
   const cacheDirectory = join(root, "cache");
   await mkdir(cacheDirectory, { recursive: true });
@@ -317,5 +320,5 @@ test("dsh appears among KNOWN_LOCAL_USAGE_SOURCES and stays scannable via regist
   assert.ok(dsh);
   assert.equal(dsh.capabilities.usage.mode, "native");
   assert.equal(dsh.capabilities.usage.reader, "dsh-session-v1");
-  assert.equal(APP_DATA_DIR, ".trusttools"); // sanity: app data root untouched
+  assert.equal(APP_DATA_DIR, ".aitracker"); // sanity: app data root untouched
 });

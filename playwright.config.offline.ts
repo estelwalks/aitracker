@@ -16,7 +16,7 @@ import { defineConfig, devices } from "playwright/test";
  * ("内置基准" source, never a network round-trip on the page path) and no
  * white screen / load-failed boundary appears.
  *
- * The server reuses a seeded throwaway stale home as `TRUSTTOOLS_USAGE_HOME`
+ * The server reuses a seeded throwaway stale home as `AITRACKER_USAGE_HOME`
  * (stale usage + skills snapshot in SQLite) so first paint is deterministic and
  * fast (a present snapshot never triggers a background re-scan on the read path).
  *
@@ -31,11 +31,11 @@ const seedScript = join(
   "e2e",
   "seed-stale-home.mjs",
 );
-const offlineHome = mkdtempSync(join(tmpdir(), "tt-stale-home-"));
+const offlineHome = mkdtempSync(join(tmpdir(), "aitracker-stale-home-"));
 execFileSync(process.execPath, [seedScript, offlineHome], { stdio: "inherit" });
 
-process.env.TRUSTTOOLS_USAGE_HOME = offlineHome;
-process.env.TRUSTTOOLS_E2E_OFFLINE = "1";
+process.env.AITRACKER_USAGE_HOME = offlineHome;
+process.env.AITRACKER_E2E_OFFLINE = "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -57,8 +57,8 @@ export default defineConfig({
     // loaded machine (observed on this repo's Windows harness).
     timeout: 180_000,
     env: {
-      TRUSTTOOLS_USAGE_HOME: offlineHome,
-      TRUSTTOOLS_E2E_OFFLINE: "1",
+      AITRACKER_USAGE_HOME: offlineHome,
+      AITRACKER_E2E_OFFLINE: "1",
     },
   },
 });

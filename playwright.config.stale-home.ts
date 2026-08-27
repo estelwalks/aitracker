@@ -9,7 +9,7 @@ import { defineConfig, devices } from "playwright/test";
 /**
  * Dedicated config for the stale-snapshot page-performance scenarios (T7-04).
  * Seeds a throwaway home (temp dir) with a stale usage + skills snapshot in
- * SQLite, then starts a Vite dev server with `TRUSTTOOLS_USAGE_HOME` pointing at
+ * SQLite, then starts a Vite dev server with `AITRACKER_USAGE_HOME` pointing at
  * it. Pages must render the stale snapshot immediately (last-known-good)
  * instead of blocking on a re-scan or falling into the load-failed boundary.
  *
@@ -29,13 +29,13 @@ const seedScript = join(
   "e2e",
   "seed-stale-home.mjs",
 );
-const staleHome = mkdtempSync(join(tmpdir(), "tt-stale-home-"));
+const staleHome = mkdtempSync(join(tmpdir(), "aitracker-stale-home-"));
 execFileSync(process.execPath, [seedScript, staleHome], { stdio: "inherit" });
 
 // The env vars must also reach the test process (specs read them to decide
 // whether to skip), not just the web server.
-process.env.TRUSTTOOLS_USAGE_HOME = staleHome;
-process.env.TRUSTTOOLS_E2E_STALE_HOME = staleHome;
+process.env.AITRACKER_USAGE_HOME = staleHome;
+process.env.AITRACKER_E2E_STALE_HOME = staleHome;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -57,8 +57,8 @@ export default defineConfig({
     // loaded machine (observed on this repo's Windows harness).
     timeout: 180_000,
     env: {
-      TRUSTTOOLS_USAGE_HOME: staleHome,
-      TRUSTTOOLS_E2E_STALE_HOME: staleHome,
+      AITRACKER_USAGE_HOME: staleHome,
+      AITRACKER_E2E_STALE_HOME: staleHome,
     },
   },
 });

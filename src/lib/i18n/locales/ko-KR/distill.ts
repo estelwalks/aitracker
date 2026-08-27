@@ -117,7 +117,7 @@ export const distill = {
   savedStep3: "「동기화」로 Agent 선택",
   savedStep3Desc: "Claude Code / Codex 등에 배포",
   savedStep4: "로컬 디렉터리",
-  savedStep4Desc: "~/.trusttools/skills/<skill-name>/",
+  savedStep4Desc: "~/.aitracker/skills/<skill-name>/",
   savedGuideGo: "Skill 관리로",
   savedGuideStay: "이 페이지에 머물기",
   guideTitle: "증류란 무엇인가요?",

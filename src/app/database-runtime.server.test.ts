@@ -22,7 +22,7 @@ const codec = {
 };
 
 test("fresh startup exposes SQLite-only adapters", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "tt-sqlite-runtime-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-sqlite-runtime-"));
   const runtime = await createDatabaseRuntime({
     dataRoot: root,
     clock,
@@ -39,7 +39,7 @@ test("fresh startup exposes SQLite-only adapters", async (t) => {
 });
 
 test("capability failure rejects startup instead of returning another store", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "tt-sqlite-runtime-fail-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-sqlite-runtime-fail-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await assert.rejects(
     createDatabaseRuntime({

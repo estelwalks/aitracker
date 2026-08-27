@@ -141,12 +141,12 @@ npm run dev:desktop
 `http://127.0.0.1:5173`，可通过环境变量覆盖，避免依赖固定端口：
 
 ```bash
-TRUSTTOOLS_DEV_HOST=127.0.0.1 TRUSTTOOLS_DEV_PORT=4173 npm run dev:desktop
+AITRACKER_DEV_HOST=127.0.0.1 AITRACKER_DEV_PORT=4173 npm run dev:desktop
 ```
 
 桌面壳启用单实例、系统托盘、窗口隐藏恢复和开机自启动 IPC。Renderer 使用
 `contextIsolation=true`、`nodeIntegration=false`、`sandbox=true`，只通过
-`window.desktopBridge` 访问最小类型化 Preload API。
+`window.aiTrackerDesktop` 访问最小类型化 Preload API。
 
 ## 生产构建
 

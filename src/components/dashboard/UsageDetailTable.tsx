@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Segmented } from "../tt";
+import { Segmented } from "../aitracker";
 import { useI18n } from "../../lib/i18n/context";
 import type { MessageKey } from "../../lib/i18n/messages";
 import { estimateUsageCost, type CostEstimate } from "../../lib/pricing";
@@ -67,7 +67,7 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mb-2 flex items-center justify-between">
-        <span className="tt-num text-[11px] text-muted-foreground">
+        <span className="aitracker-num text-[11px] text-muted-foreground">
           {totalRows > 0
             ? `${t("dashboard.detail.items", { count: totalRows })} · ${format.formatTokens(grandTotal)}`
             : t("dashboard.detail.empty")}
@@ -88,7 +88,7 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
           {t("dashboard.detail.emptyRange")}
         </div>
       ) : (
-        <div className="tt-xscroll min-h-0 flex-1 overflow-auto">
+        <div className="aitracker-xscroll min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[920px] text-[13px]">
             <thead className="sticky top-0 z-10 bg-surface-1">
               <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
@@ -152,10 +152,10 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                       )}
                     </div>
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right">
                     {format.formatTokens(row.totalTokens)}
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right">
                     {formatCostLabel(t, format, row.cost)}
                   </td>
                   <td className="px-3 py-2.5">
@@ -170,31 +170,31 @@ export function UsageDetailTable({ events }: { events: LocalUsageEvent[] }) {
                           />
                         </div>
                       )}
-                      <span className="tt-num tabular-nums w-10 text-right text-muted-foreground">
+                      <span className="aitracker-num tabular-nums w-10 text-right text-muted-foreground">
                         {row.share.toFixed(1)}%
                       </span>
                     </div>
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right text-muted-foreground">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right text-muted-foreground">
                     {row.cacheHitRate.toFixed(0)}%
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right">
                     {format.formatTokens(row.inputTokens)}
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right">
                     {format.formatTokens(row.outputTokens)}
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right">
                     {format.formatTokens(row.reasoningOutputTokens)}
                   </td>
-                  <td className="tt-num tabular-nums px-3 py-2.5 text-right text-muted-foreground">
+                  <td className="aitracker-num tabular-nums px-3 py-2.5 text-right text-muted-foreground">
                     {row.sessions}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="tt-num border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="aitracker-num border-t border-border px-3 py-2 text-[11px] text-muted-foreground">
             {t("dashboard.detail.showing", {
               shown: Math.min(totalRows, MAX_ROWS),
               total: totalRows,

@@ -189,7 +189,7 @@ export function JarvisInsight({
 
   const severityBadge = severity ? (
     <span
-      className={`inline-flex min-h-[var(--tt-control-height-sm)] items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] leading-tight tracking-[0.08em] ${SEVERITY_TONE[severity].border} ${SEVERITY_TONE[severity].text}`}
+      className={`inline-flex min-h-[var(--aitracker-control-height-sm)] items-center gap-1 rounded-full border px-2.5 py-1 text-[9px] leading-tight tracking-[0.08em] ${SEVERITY_TONE[severity].border} ${SEVERITY_TONE[severity].text}`}
       title={severity}
       aria-label={severityLabel ?? severity}
     >
@@ -202,8 +202,12 @@ export function JarvisInsight({
 
   const enhancedMark =
     source === "enhanced" ? (
-      <span className="inline-flex min-h-[var(--tt-control-height-sm)] items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[9px] leading-tight tracking-[0.08em] text-muted-foreground">
-        <Sparkles className="size-2.5" strokeWidth={1.75} />
+      <span className="inline-flex min-h-7 items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/[0.08] px-3 text-[9px] font-semibold tracking-normal text-foreground/85">
+        <Sparkles
+          className="size-2.5 shrink-0 text-emerald-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
         {enhancedLabel}
       </span>
     ) : null;
@@ -269,7 +273,7 @@ export function JarvisInsight({
       <div className={`relative flex min-w-0 ${hero ? "gap-4" : "gap-3"}`}>
         <span className="relative mt-0.5 shrink-0">
           <span
-            className={`dashboard-insight-logo-shell tt-breathe relative flex shrink-0 ${
+            className={`dashboard-insight-logo-shell aitracker-breathe relative flex shrink-0 ${
               hero ? "size-10" : "size-8"
             }`}
           >
@@ -296,7 +300,7 @@ export function JarvisInsight({
           <div className="flex flex-wrap items-center gap-2">
             {title ? (
               <Heading
-                className={`${hero ? "tt-text-section-title" : "tt-text-body"} font-semibold tracking-tight`}
+                className={`${hero ? "aitracker-text-section-title" : "aitracker-text-body"} font-semibold tracking-tight`}
               >
                 {title}
               </Heading>
@@ -316,8 +320,8 @@ export function JarvisInsight({
           <p
             className={
               hero
-                ? "tt-text-section-title mt-2 min-h-[62px] leading-[1.65] font-medium tracking-tight text-foreground/90"
-                : "tt-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
+                ? "aitracker-text-section-title mt-2 min-h-[62px] leading-[1.65] font-medium tracking-tight text-foreground/90"
+                : "aitracker-text-body mt-2 min-h-[42px] leading-relaxed text-foreground/90"
             }
             aria-label={line}
           >

@@ -63,12 +63,17 @@ const useBrowserLayoutEffect =
  */
 const ROUTE_TITLE_KEYS: Array<[string, MessageKey]> = [
   ["/agents", "meta.titles.agents"],
+  ["/chats", "meta.titles.sessions"],
+  ["/distill", "meta.titles.distill"],
+  ["/market", "meta.titles.market"],
+  ["/memory", "meta.titles.memory"],
+  ["/reports", "meta.titles.reports"],
   ["/security", "meta.titles.security"],
   ["/sources", "meta.titles.sources"],
-  ["/reports", "meta.titles.reports"],
-  ["/distill", "meta.titles.distill"],
   ["/settings", "meta.titles.settings"],
   ["/skills", "meta.titles.skills"],
+  ["/tracker", "meta.titles.tracker"],
+  ["/widget", "meta.titles.widget"],
   ["/", "meta.titles.dashboard"],
 ];
 
@@ -151,7 +156,7 @@ function updateSearchParams(locale: Locale, currency: Currency): void {
 
 function titleForPath(catalog: Translations, pathname: string): string {
   const match = ROUTE_TITLE_KEYS.find(([prefix]) =>
-    pathname.startsWith(prefix),
+    prefix === "/" ? pathname === "/" : pathname.startsWith(prefix),
   );
   return getMessage(catalog, match?.[1] ?? "meta.titles.notFound", brandParams);
 }

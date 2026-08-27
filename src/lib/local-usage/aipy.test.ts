@@ -17,7 +17,7 @@ import { getUsagePlan } from "../tool-registry/registry.ts";
 async function withFixture<T>(
   fn: (db: DatabaseSync) => Promise<T>,
 ): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), "tt-aipy-"));
+  const dir = await mkdtemp(join(tmpdir(), "aitracker-aipy-"));
   const db = new DatabaseSync(join(dir, "aipy"), { readOnly: false });
   try {
     db.exec(`

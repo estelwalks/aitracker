@@ -23,7 +23,7 @@ import {
   probeWalCapability,
   type RuntimeVersionsProvider,
 } from "./capability-probe.server.ts";
-import { DatabaseError, TRUSTTOOLS_APPLICATION_ID } from "./index.ts";
+import { DatabaseError, AITRACKER_APPLICATION_ID } from "./index.ts";
 import type {
   SqliteDatabasePort,
   SqliteRow,
@@ -185,18 +185,18 @@ test("evaluateCapabilities rejects low and unparseable sqlite versions and non-w
 });
 
 test("probeWalCapability reports wal on a real file-backed probe and cleans up", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   const probe = probeWalCapability(dir);
   assert.equal(probe.journalMode, "wal");
   const leftovers = readdirSync(dir).filter((name) =>
-    name.includes("trusttools-wal-probe"),
+    name.includes("aitracker-wal-probe"),
   );
   assert.deepEqual(leftovers, []);
 });
 
 test("opens a file database and asserts every required pragma", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
 
@@ -225,7 +225,7 @@ test("maps a wal-unavailable probe to journal-not-wal (P2-10)", () => {
 });
 
 test("checkpoint returns the wal_checkpoint columns on a file database (P2-8)", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   const result = host.checkpoint("passive");
   assert.equal(typeof result.busy, "boolean");
@@ -237,7 +237,7 @@ test("checkpoint returns the wal_checkpoint columns on a file database (P2-8)", 
 });
 
 test("rejects a database with a foreign application_id as capability-mismatch (P1-4)", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "foreign.db");
   // Create a real SQLite file stamped with a foreign application_id.
   const raw = new DatabaseSync(dbPath);
@@ -265,7 +265,7 @@ test("rejects a database with a foreign application_id as capability-mismatch (P
   // also requires a complete migration ledger and matching user_version.
   const stamped = new DatabaseSync(dbPath);
   try {
-    stamped.exec(`PRAGMA application_id = ${TRUSTTOOLS_APPLICATION_ID}`);
+    stamped.exec(`PRAGMA application_id = ${AITRACKER_APPLICATION_ID}`);
   } finally {
     stamped.close();
   }
@@ -281,7 +281,7 @@ test("rejects a database with a foreign application_id as capability-mismatch (P
 });
 
 test("file-backed database artifacts use platform-private permissions", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "private.db", versionsProvider("99.0.0"));
 
   if (process.platform === "win32") {
@@ -304,7 +304,7 @@ test("file-backed database artifacts use platform-private permissions", (t) => {
 });
 
 test("rejects an unstamped SQLite file that already contains user schema", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "foreign-unstamped.db");
   const raw = new DatabaseSync(dbPath);
   try {
@@ -331,7 +331,7 @@ test("rejects an unstamped SQLite file that already contains user schema", (t) =
 });
 
 test("a second process cannot acquire the writer while this process owns it", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "cross-process.db");
   const host = openHostInDir(
     t,
@@ -358,7 +358,7 @@ test("a second process cannot acquire the writer while this process owns it", (t
 });
 
 test("a stale writer lock is atomically reclaimed", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "stale.db");
   writeFileSync(
     `${dbPath}.writer.lock`,
@@ -369,7 +369,7 @@ test("a stale writer lock is atomically reclaimed", (t) => {
 });
 
 test("a child process releases writer ownership on normal process exit", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "child-exit.db");
   t.after(() => rmTempDir(dir));
   const script = `
@@ -392,7 +392,7 @@ test("a child process releases writer ownership on normal process exit", (t) => 
 });
 
 test("creates missing parent directories before probing and opening a file database", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const nestedPath = join(dir, "level-one", "level-two", "nested.db");
   const host = DatabaseHost.open({
     path: nestedPath,
@@ -407,7 +407,7 @@ test("creates missing parent directories before probing and opening a file datab
 });
 
 test("rejects a second open of the same absolute path with already-open", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   const aliased = join(dir, "sub", "..", "host.db");
   assert.throws(
@@ -424,7 +424,7 @@ test("rejects a second open of the same absolute path with already-open", (t) =>
 });
 
 test("close releases the singleton so the same path can be reopened", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   host.close();
   assert.equal(host.isOpen, false);
@@ -433,7 +433,7 @@ test("close releases the singleton so the same path can be reopened", (t) => {
 });
 
 test("close keeps ownership after a close failure and releases it only on a later successful teardown", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   let attempts = 0;
   const host = DatabaseHost.open({
@@ -461,7 +461,7 @@ test("close keeps ownership after a close failure and releases it only on a late
 });
 
 test("close refuses to release ownership while an asynchronous backup borrow is active", async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "borrow.db", versionsProvider("99.0.0"));
   let finish!: () => void;
   const pending = host.withUnderlyingConnection(
@@ -477,7 +477,7 @@ test("close refuses to release ownership while an asynchronous backup borrow is 
 });
 
 test("a case-alias of an open database cannot obtain a second writable connection", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "platform.db", versionsProvider("99.0.0"));
   const aliasPath = join(dir, "PLATFORM.DB");
 
@@ -535,7 +535,7 @@ test("an empty path is rejected instead of silently becoming an in-memory databa
 });
 
 test("a closed Host reports not-open instead of forwarding to a dead connection", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
   host.close();
   for (const use of [
@@ -552,7 +552,7 @@ test("a closed Host reports not-open instead of forwarding to a dead connection"
 });
 
 test("withUnderlyingConnection borrows the Host's own connection, not a second one", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = openHostInDir(t, dir, "host.db", versionsProvider("99.0.0"));
 
   // `foreign_keys` is per-connection and the Host asserts it ON at open time; a
@@ -576,7 +576,7 @@ test("withUnderlyingConnection borrows the Host's own connection, not a second o
 });
 
 test("withUnderlyingConnection refuses a port that is not the strict adapter", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   const host = openHostInDir(
     t,
@@ -593,7 +593,7 @@ test("withUnderlyingConnection refuses a port that is not the strict adapter", (
 });
 
 test("a low injected sqlite version rejects the write path with capability-mismatch", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const dbPath = join(dir, "host.db");
   assert.throws(
     () =>
@@ -614,7 +614,7 @@ test("a low injected sqlite version rejects the write path with capability-misma
 });
 
 test("closes the connection when the journal assertion fails and returns journal-not-wal", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   let closed = false;
   const factory: DatabaseHostOptions["adapterFactory"] = () =>
@@ -642,7 +642,7 @@ test("closes the connection when the journal assertion fails and returns journal
 });
 
 test("closes the connection when a non-journal pragma assertion fails and returns capability-mismatch", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   t.after(() => rmTempDir(dir));
   let closed = false;
   const factory: DatabaseHostOptions["adapterFactory"] = () =>
@@ -669,7 +669,7 @@ test("closes the connection when a non-journal pragma assertion fails and return
 });
 
 test("opens an in-memory database and accepts the memory journal mode", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "tt-db-host-"));
+  const dir = mkdtempSync(join(tmpdir(), "aitracker-db-host-"));
   const host = DatabaseHost.open({
     path: ":memory:",
     versionsProvider: versionsProvider("99.0.0"),

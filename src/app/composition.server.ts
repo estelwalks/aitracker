@@ -512,7 +512,10 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const reports = createReportsApplication({
     store: databaseRuntime.features.reports,
     inlineContent: true,
-    context: createReportContextPort({ snapshot: sessionSnapshot }),
+    context: createReportContextPort({
+      snapshot: sessionSnapshot,
+      usage: usageSnapshot,
+    }),
     generation: createReportGenerationPort({
       ai: aiExecutor,
       // B-400: reports reuse the active S-500 profile (a real model call via
@@ -550,7 +553,7 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
   const resumeSession = createSessionResumePort(createNodeResumeExecutor());
 
   // Candidate store lives next to the reports/knowledge state under the same
-  // `.trusttools/tasks` directory. It persists only privacy-filtered candidate
+  // `.aitracker/tasks` directory. It persists only privacy-filtered candidate
   // projections (session refs, generated knowledge note, execution summary).
   const distillQuota = databaseRuntime.features.distillQuota;
   const distillation = createDistillationApplication({

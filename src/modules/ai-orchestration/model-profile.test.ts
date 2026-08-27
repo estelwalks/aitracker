@@ -82,7 +82,7 @@ function withRepo(
   t: { after(fn: () => void): void },
   fn: (repository: ModelProfileRepository, host: DatabaseHost) => Promise<void>,
 ): Promise<void> {
-  const directory = mkdtempSync(join(tmpdir(), "tt-model-profile-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-model-profile-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {
@@ -440,7 +440,9 @@ test("sqlite repository: update keeps createdAt and stored key when key is blank
 
 test("sqlite repository: auth round-trips and blank-key test uses the stored key", async (t) => {
   let received: ModelProfileInput | undefined;
-  const directory = mkdtempSync(join(tmpdir(), "tt-model-profile-auth-"));
+  const directory = mkdtempSync(
+    join(tmpdir(), "aitracker-model-profile-auth-"),
+  );
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

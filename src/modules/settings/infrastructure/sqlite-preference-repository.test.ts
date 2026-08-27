@@ -11,7 +11,7 @@ import { createSqliteRuntimeFlagRepository } from "../../../platform/database/ru
 import { createSqlitePreferenceRepository } from "./sqlite-preference-repository.server.ts";
 
 function fixture(t: { after(fn: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-pref-repo-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-pref-repo-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

@@ -8,7 +8,7 @@ import {
   Pagination,
   SearchInput,
   Segmented,
-} from "../../../components/tt.tsx";
+} from "../../../components/aitracker.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { brandColorOf } from "../../../components/BrandIcon.helpers.ts";
 import { useI18n } from "../../../lib/i18n/context.tsx";
@@ -263,7 +263,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
                 strokeWidth={1.8}
               />
             </div>
-            <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
+            <div className="aitracker-num aitracker-text-metric mt-2 font-mono leading-none font-black tracking-tight">
               {card.value}
             </div>
             <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
@@ -275,7 +275,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
 
       {/* 筛选栏：搜索 + 时间 + 工具 */}
       <section className="space-y-3">
-        <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
+        <div className="aitracker-panel flex flex-wrap items-center gap-2 p-2">
           <SearchInput
             value={keywordInput}
             onChange={(value) => changeFilter(() => setKeywordInput(value))}
@@ -294,7 +294,7 @@ export function SessionsPage({ initial }: { initial: SessionPage }) {
         </div>
 
         <div
-          className="tt-xscroll flex items-center gap-2 overflow-x-auto px-1 pb-1"
+          className="aitracker-xscroll flex items-center gap-2 overflow-x-auto px-1 pb-1"
           role="group"
           aria-label={t("sessions.summary.tools")}
         >
@@ -486,7 +486,7 @@ function SessionRow({
         >
           {session.title || t("sessions.row.untitled")}
         </p>
-        <div className="tt-num mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
+        <div className="aitracker-num mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted-foreground">
           <span>{session.projectKey}</span>
           <span aria-hidden="true">·</span>
           <span>{format.formatTime(session.startedAt)}</span>

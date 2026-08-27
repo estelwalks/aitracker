@@ -38,15 +38,15 @@ test("MarkdownView renders bullet and ordered lists with prototype classes", () 
   );
 });
 
-test("MarkdownView renders tables with prototype tt-table chrome", () => {
+test("MarkdownView renders tables with prototype aitracker-table chrome", () => {
   const markup = render("| 名称 | 数量 |\n| --- | --- |\n| A | 1 |\n| B | 2 |");
   assert.match(
     markup,
-    /class="tt-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2\/60"/,
+    /class="aitracker-xscroll my-3 overflow-x-auto rounded-xl bg-surface-2\/60"/,
   );
   assert.match(
     markup,
-    /<table class="tt-table w-full min-w-\[520px\] text-\[12px\]">/,
+    /<table class="aitracker-table w-full min-w-\[520px\] text-\[12px\]">/,
   );
   assert.match(
     markup,

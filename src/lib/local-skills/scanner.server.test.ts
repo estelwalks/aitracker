@@ -78,7 +78,7 @@ const readSkillFiles = (
 ) => readSkillFilesWithState(name, { ...options, stateRepository: testState });
 
 test("scans common agent roots without treating mtime as usage evidence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeSkill = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "example");
   const codexSkill = join(root, SKILL_ROOT_SUFFIXES["Codex"], "example");
@@ -102,7 +102,7 @@ test("scans common agent roots without treating mtime as usage evidence", async 
 });
 
 test("detects an installed Agent even when its skill directory is empty", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-agent-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-agent-"));
   try {
     // .codex is the installation probe root; .codex/skills intentionally does
     // not exist, proving the market target is not inferred from Skill rows.
@@ -122,7 +122,7 @@ test("detects an installed Agent even when its skill directory is empty", async 
 });
 
 test("uses structured Skill calls as the only activity evidence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-usage-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-usage-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "example");
   await mkdir(skillPath, { recursive: true });
@@ -153,7 +153,7 @@ test("uses structured Skill calls as the only activity evidence", async () => {
 });
 
 test("reads real version and source from SKILL.md frontmatter and changes fingerprint", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "versioned");
   try {
@@ -192,7 +192,7 @@ test("reads real version and source from SKILL.md frontmatter and changes finger
 });
 
 test("marks an update only when persisted market evidence is truly newer", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "market-skill");
   try {
@@ -240,7 +240,7 @@ test("marks an update only when persisted market evidence is truly newer", async
 });
 
 test("refreshes matching market evidence without inventing missing fields", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   await mkdir(dataDirectory, { recursive: true });
   origins = {
@@ -300,7 +300,7 @@ test("refreshes matching market evidence without inventing missing fields", asyn
 
 test("installs a validated market skill from the controlled temporary directory", async () => {
   const name = `contract-${randomUUID()}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-market-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const sourcePath = join(dataDirectory, "tmp", `market-${randomUUID()}`, name);
   const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
@@ -346,7 +346,7 @@ test("installs a validated market skill from the controlled temporary directory"
 });
 
 test("rejects a market source outside the controlled temporary directory", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-market-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   await mkdir(join(dataDirectory, "tmp"), { recursive: true });
   const sourcePath = await mkdtemp(join(tmpdir(), "market-outside-"));
@@ -366,7 +366,7 @@ test("rejects a market source outside the controlled temporary directory", async
 });
 
 test("rejects symbolic links anywhere in a market skill source", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-market-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-market-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const marketRoot = join(dataDirectory, "tmp", `market-${randomUUID()}`);
   const sourcePath = join(marketRoot, `symlink-${randomUUID()}`);
@@ -398,7 +398,7 @@ test("rejects symbolic links anywhere in a market skill source", async () => {
 });
 
 test("reads description from SKILL.md frontmatter block scalars", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-desc-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-desc-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const foldedPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], "folded-skill");
   const literalPath = join(
@@ -439,7 +439,7 @@ test("rejects an empty batch uninstall operation", async () => {
 
 test("uninstalls a skill via batch uninstall (moved to trash) and collects failures", async () => {
   const name = `uninstall-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
   try {
@@ -447,7 +447,7 @@ test("uninstalls a skill via batch uninstall (moved to trash) and collects failu
     await writeFile(join(skillPath, "SKILL.md"), "# Test");
 
     const result = await batchUninstallLocalSkills(
-      [skillPath, "/tmp/nonexistent-tt-skill"],
+      [skillPath, "/tmp/nonexistent-aitracker-skill"],
       { homeDirectory: root, dataDirectory },
     );
     assert.equal(result.succeeded.length, 1);
@@ -473,7 +473,7 @@ test("uninstalls a skill via batch uninstall (moved to trash) and collects failu
 
 test("rejects uninstall of a collection directory without a marker", async () => {
   const name = `collection-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const collectionPath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
   const childPath = join(collectionPath, "child-skill");
   try {
@@ -495,7 +495,7 @@ test("rejects uninstall of a collection directory without a marker", async () =>
 
 test("syncLocalSkill refuses to overwrite its own source path", async () => {
   const name = `selfsync-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
   try {
     await mkdir(sourcePath, { recursive: true });
@@ -521,7 +521,7 @@ test("syncLocalSkill refuses to overwrite its own source path", async () => {
 
 test("syncLocalSkill copies a skill to a target agent with no conflict", async () => {
   const name = `sync-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
   const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
   try {
@@ -563,7 +563,7 @@ test("syncLocalSkill copies a skill to a target agent with no conflict", async (
 
 test("syncLocalSkill skips on conflict when onConflict is skip", async () => {
   const name = `sync-skip-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
   const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
   try {
@@ -603,7 +603,7 @@ test("syncLocalSkill skips on conflict when onConflict is skip", async () => {
 
 test("syncLocalSkill overwrites on conflict when onConflict is overwrite", async () => {
   const name = `sync-overwrite-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const sourcePath = join(root, SKILL_ROOT_SUFFIXES["Claude Code"], name);
   const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
@@ -650,7 +650,7 @@ test("syncLocalSkill overwrites on conflict when onConflict is overwrite", async
 });
 
 test("discovers nested skills two levels deep without treating containers as skills", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-nested-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-nested-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(
     root,
@@ -680,7 +680,7 @@ test("discovers nested skills two levels deep without treating containers as ski
 });
 
 test("ignores bare markdown files as skills", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-readme-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-readme-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   try {
@@ -699,7 +699,7 @@ test("ignores bare markdown files as skills", async () => {
 });
 
 test("recognizes the lowercase skill.md marker and reads its frontmatter", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-lower-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-lower-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillPath = join(
     root,
@@ -725,7 +725,7 @@ test("recognizes the lowercase skill.md marker and reads its frontmatter", async
 });
 
 test("reads the frontmatter form field for 形态 classification", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-form-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-form-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   try {
     await mkdir(join(root, SKILL_ROOT_SUFFIXES["Claude Code"], "wf-pack"), {
@@ -763,7 +763,7 @@ test("reads the frontmatter form field for 形态 classification", async () => {
 });
 
 test("stops descending at maxDepth 3", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-depth-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-depth-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   try {
@@ -789,7 +789,7 @@ test("stops descending at maxDepth 3", async () => {
 });
 
 test("prefers frontmatter name over the directory name", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-name-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-name-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   try {
@@ -816,7 +816,7 @@ test("prefers frontmatter name over the directory name", async () => {
 });
 
 test("skips dot-prefixed and symlinked skill directories", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-hidden-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-hidden-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   try {
@@ -844,7 +844,7 @@ test("skips dot-prefixed and symlinked skill directories", async () => {
 });
 
 test("scans the newly verified agent roots", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-newagents-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-newagents-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   try {
     // hermes / openclaw / cursor roots are HOME-relative.
@@ -872,7 +872,7 @@ test("scans the newly verified agent roots", async () => {
 });
 
 test("scans both antigravity skill roots as one agent with two installations", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-antigravity-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-antigravity-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   try {
     const first = join(root, ".gemini", "antigravity", "skills", "agi-skill");
@@ -909,9 +909,9 @@ test("scans both antigravity skill roots as one agent with two installations", a
 });
 
 test("env overrides redirect codex and grok roots; empty values fall back to HOME", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-envhome-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-envhome-"));
   const dataDirectory = join(root, APP_DATA_DIR);
-  const envRoot = await mkdtemp(join(tmpdir(), "tt-skills-env-"));
+  const envRoot = await mkdtemp(join(tmpdir(), "aitracker-skills-env-"));
   try {
     await mkdir(join(envRoot, "skills", "codex-skill"), { recursive: true });
     await writeFile(join(envRoot, "skills", "codex-skill", "SKILL.md"), "# c");
@@ -946,7 +946,7 @@ test("env overrides redirect codex and grok roots; empty values fall back to HOM
 });
 
 test("resolves default codex and grok roots under HOME without env overrides", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-defaultroots-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-defaultroots-"));
   try {
     const snapshot = await scanLocalSkills({
       homeDirectory: root,
@@ -963,7 +963,7 @@ test("resolves default codex and grok roots under HOME without env overrides", a
 
 test("uninstall accepts nested managed paths and rejects traversal escapes", async () => {
   const name = `nested-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   const nestedPath = join(claudeRoot, "development", name);
   try {
@@ -985,7 +985,7 @@ test("uninstall accepts nested managed paths and rejects traversal escapes", asy
 
     // A symlink inside the root pointing outside is rejected by realpath.
     const linked = join(claudeRoot, `escape-${randomUUID().slice(0, 8)}`);
-    const outside = await mkdtemp(join(tmpdir(), "tt-outside-"));
+    const outside = await mkdtemp(join(tmpdir(), "aitracker-outside-"));
     try {
       try {
         await symlink(outside, linked);
@@ -1008,7 +1008,7 @@ test("uninstall accepts nested managed paths and rejects traversal escapes", asy
 
 test("syncLocalSkill flattens a nested source skill into the codex root", async () => {
   const name = `sync-nested-${randomUUID().slice(0, 8)}`;
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-op-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-op-"));
   const claudeRoot = join(root, SKILL_ROOT_SUFFIXES["Claude Code"]);
   const sourcePath = join(claudeRoot, "development", name);
   const targetPath = join(root, SKILL_ROOT_SUFFIXES["Codex"], name);
@@ -1041,7 +1041,7 @@ test("syncLocalSkill flattens a nested source skill into the codex root", async 
 });
 
 test("measures skill size/token and reads the real file tree via readSkillFiles", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-read-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-read-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   const skillDir = join(
     root,
@@ -1091,7 +1091,7 @@ test("measures skill size/token and reads the real file tree via readSkillFiles"
 });
 
 test("readSkillFiles rejects unknown skills and traversal-shaped names", async () => {
-  const root = await mkdtemp(join(tmpdir(), "tt-skills-read-"));
+  const root = await mkdtemp(join(tmpdir(), "aitracker-skills-read-"));
   const dataDirectory = join(root, APP_DATA_DIR);
   try {
     await assert.rejects(
@@ -1107,7 +1107,7 @@ test("readSkillFiles rejects unknown skills and traversal-shaped names", async (
 
 test("rejects installing into a tool that is not actually installed", async () => {
   const previousPath = process.env.PATH;
-  const binDir = await mkdtemp(join(tmpdir(), "tt-bin-"));
+  const binDir = await mkdtemp(join(tmpdir(), "aitracker-bin-"));
   const cursorBin = join(binDir, "cursor");
   try {
     await writeFile(cursorBin, "#!/bin/sh\nexit 0\n", { mode: 0o755 });

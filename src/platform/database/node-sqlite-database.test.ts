@@ -46,7 +46,7 @@ function openDbInDir(
 }
 
 function freshDir(): string {
-  return mkdtempSync(join(tmpdir(), "tt-db-sqlite-"));
+  return mkdtempSync(join(tmpdir(), "aitracker-db-sqlite-"));
 }
 
 test("opens a file database and executes statements", (t) => {
@@ -263,7 +263,7 @@ test("BEGIN IMMEDIATE takes the write lock before the first write statement", (t
 test("open failure maps to a stable DatabaseError without the path in the message", () => {
   const missing = join(
     tmpdir(),
-    `tt-db-missing-${process.pid}-${randomUUID()}`,
+    `aitracker-db-missing-${process.pid}-${randomUUID()}`,
     "missing.db",
   );
   assert.throws(
@@ -282,7 +282,7 @@ test("open failure maps to a stable DatabaseError without the path in the messag
 test("a raw filesystem cause is sanitized so util.inspect leaks no path (P2-4)", () => {
   const missing = join(
     tmpdir(),
-    `tt-db-missing-${process.pid}-${randomUUID()}`,
+    `aitracker-db-missing-${process.pid}-${randomUUID()}`,
     "missing.db",
   );
   let error: unknown;

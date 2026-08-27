@@ -28,7 +28,7 @@ export function localDateKey(now: Date): string {
 
 /**
  * Read the configured daily limit. Prefers a positive integer from
- * `TRUSTTOOLS_DISTILL_DAILY_QUOTA` (see `ENV.DISTILL_DAILY_QUOTA`), falling
+ * `AITRACKER_DISTILL_DAILY_QUOTA` (see `ENV.DISTILL_DAILY_QUOTA`), falling
  * back to `DISTILL_DAILY_QUOTA` for unset/invalid values.
  */
 export function distillDailyQuotaLimit(

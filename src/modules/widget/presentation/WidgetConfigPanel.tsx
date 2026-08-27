@@ -11,9 +11,16 @@ import "./widget-config-panel.css";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="tt-widget-config-row" data-testid="widget-config-row">
-      <div className="tt-widget-config-label">{label}</div>
-      <div className="tt-widget-config-options" role="group" aria-label={label}>
+    <div
+      className="aitracker-widget-config-row"
+      data-testid="widget-config-row"
+    >
+      <div className="aitracker-widget-config-label">{label}</div>
+      <div
+        className="aitracker-widget-config-options"
+        role="group"
+        aria-label={label}
+      >
         {children}
       </div>
     </div>
@@ -34,7 +41,7 @@ function Opt({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`tt-widget-config-option${on ? " is-active" : ""}`}
+      className={`aitracker-widget-config-option${on ? " is-active" : ""}`}
     >
       {children}
     </button>
@@ -65,7 +72,7 @@ function Group<K extends keyof WidgetPrefs>({
 }
 
 function SectionTitle({ children }: { children: ReactNode }) {
-  return <div className="tt-widget-config-title">{children}</div>;
+  return <div className="aitracker-widget-config-title">{children}</div>;
 }
 
 /**
@@ -82,9 +89,9 @@ export function WidgetConfigPanel({
   const { t } = useI18n();
 
   return (
-    <div className={`tt-widget-config-panel ${className}`}>
+    <div className={`aitracker-widget-config-panel ${className}`}>
       {sections.includes("bar") && (
-        <section className="tt-widget-config-section">
+        <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configBar")}</SectionTitle>
           <Row label={t("widget.dynamicBar")}>
             <Group
@@ -118,7 +125,7 @@ export function WidgetConfigPanel({
       )}
 
       {sections.includes("panel") && (
-        <section className="tt-widget-config-section">
+        <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configPanel")}</SectionTitle>
           <Row label={t("widget.defaultTab")}>
             <Group
@@ -156,7 +163,7 @@ export function WidgetConfigPanel({
       )}
 
       {sections.includes("desktop") && (
-        <section className="tt-widget-config-section">
+        <section className="aitracker-widget-config-section">
           <SectionTitle>{t("widget.configDesktop")}</SectionTitle>
           <Row label={t("widget.smallContent")}>
             <Group
@@ -195,11 +202,11 @@ export function WidgetConfigPanel({
         </section>
       )}
 
-      <div className="tt-widget-config-reset-row">
+      <div className="aitracker-widget-config-reset-row">
         <button
           type="button"
           onClick={() => void resetWidgetPrefs()}
-          className="tt-widget-config-reset font-mono text-muted-foreground transition-colors hover:text-foreground"
+          className="aitracker-widget-config-reset font-mono text-muted-foreground transition-colors hover:text-foreground"
         >
           <RotateCcw className="size-3" strokeWidth={1.75} />
           {t("widget.resetDefaults")}

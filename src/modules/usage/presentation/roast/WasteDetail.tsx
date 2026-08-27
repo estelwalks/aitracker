@@ -76,7 +76,7 @@ function MetricCard({
         <Icon className="size-3.5" strokeWidth={1.8} />
         <span className="truncate">{label}</span>
       </div>
-      <div className="tt-num tt-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
+      <div className="aitracker-num aitracker-text-metric mt-2 truncate font-mono leading-none font-black tracking-tight">
         {value}
       </div>
     </div>
@@ -126,7 +126,7 @@ export function WasteDetail({
               <div className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground/70 uppercase">
                 {t("tracker.title")}
               </div>
-              <DialogTitle className="tt-text-section-title mt-1 truncate tracking-tight">
+              <DialogTitle className="aitracker-text-section-title mt-1 truncate tracking-tight">
                 {row.name}
               </DialogTitle>
               <DialogDescription className="mt-1.5 max-w-md text-[11.5px] leading-relaxed">
@@ -138,7 +138,7 @@ export function WasteDetail({
                 {t("tracker.row.waste")}
               </div>
               <div
-                className="tt-num tt-text-metric mt-1 font-mono leading-none font-black"
+                className="aitracker-num aitracker-text-metric mt-1 font-mono leading-none font-black"
                 style={{ color: tone.accent }}
               >
                 {row.waste.toFixed(1)}%

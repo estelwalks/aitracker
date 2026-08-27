@@ -10,7 +10,7 @@ import { BUILTIN_RATES } from "./index.ts";
 import type { ExchangeRateCache } from "../../platform/snapshot-runtime/exchange-rate.server.ts";
 
 function withTempHome(): string {
-  return mkdtempSync(join(tmpdir(), "tt-rates-test-"));
+  return mkdtempSync(join(tmpdir(), "aitracker-rates-test-"));
 }
 
 function jsonFetcher(payload: unknown): typeof fetch {

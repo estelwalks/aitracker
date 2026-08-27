@@ -34,8 +34,8 @@ async function preparePage(browser: Browser): Promise<{
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-locale-mode");
+    window.localStorage.removeItem("aitracker-locale");
+    window.localStorage.removeItem("aitracker-locale-mode");
     Object.defineProperty(window.navigator, "language", {
       get: () => "zh-CN",
       configurable: true,
@@ -51,7 +51,7 @@ async function openFromSidebar(
   route: string,
   label: string,
 ): Promise<number> {
-  const renderedName = `trusttools:navigation:rendered:${route}`;
+  const renderedName = `aitracker:navigation:rendered:${route}`;
   const startedAt = performance.now();
   await page.evaluate((name) => performance.clearMarks(name), renderedName);
   // Calling click from the DOM avoids Playwright's implicit hover, so this is

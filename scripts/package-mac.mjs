@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const releaseDirectory = join(projectRoot, "release");
+const appName = "AITracker";
 const electronBuilder = join(
   projectRoot,
   "node_modules",
@@ -63,7 +64,7 @@ async function findElectronCache(version) {
     homedir(),
     "Library",
     "Caches",
-    "trusttools-electron",
+    "aitracker-electron",
     version,
   );
   if (
@@ -137,7 +138,7 @@ async function findElectronArchiveCache(version, arch) {
     homedir(),
     "Library",
     "Caches",
-    "trusttools-electron",
+    "aitracker-electron",
     version,
   );
   if (await exists(join(managedCacheRoot, archive))) return managedCacheRoot;
@@ -224,19 +225,19 @@ async function main() {
   const artifacts = [
     {
       arch: "x64",
-      dmg: join(releaseDirectory, `AITracker-${version}-x64.dmg`),
-      app: join(releaseDirectory, "mac", "AITracker.app"),
+      dmg: join(releaseDirectory, `${appName}-${version}-x64.dmg`),
+      app: join(releaseDirectory, "mac", `${appName}.app`),
     },
     {
       arch: "arm64",
-      dmg: join(releaseDirectory, `AITracker-${version}-arm64.dmg`),
-      app: join(releaseDirectory, "mac-arm64", "AITracker.app"),
+      dmg: join(releaseDirectory, `${appName}-${version}-arm64.dmg`),
+      app: join(releaseDirectory, "mac-arm64", `${appName}.app`),
     },
   ].filter((artifact) => packagedArchitectures.includes(artifact.arch));
 
   console.log("\n[5/5] Verifying architectures, signatures, and disk images");
   for (const artifact of artifacts) {
-    await run("file", [join(artifact.app, "Contents", "MacOS", "AITracker")]);
+    await run("file", [join(artifact.app, "Contents", "MacOS", appName)]);
     await run("codesign", [
       "--verify",
       "--deep",

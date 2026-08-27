@@ -137,12 +137,12 @@ test("git worktree/submodule .git files (gitdir:) count as workspace markers", a
 test("win32 semantics: drive-letter absolute paths are recognized (cross-platform)", async (t) => {
   // Pure path-form matrix — verifiable on any host, no filesystem probes.
   assert.equal(
-    normaliseProjectRefFor(win32, "D:\\Dev\\trusttools_webapp", "C:\\Users\\u"),
-    "D:\\Dev\\trusttools_webapp",
+    normaliseProjectRefFor(win32, "D:\\Dev\\aitracker_webapp", "C:\\Users\\u"),
+    "D:\\Dev\\aitracker_webapp",
   );
   assert.equal(
-    normaliseProjectRefFor(win32, "D:/Dev/trusttools_webapp", "C:/Users/u"),
-    "D:\\Dev\\trusttools_webapp",
+    normaliseProjectRefFor(win32, "D:/Dev/aitracker_webapp", "C:/Users/u"),
+    "D:\\Dev\\aitracker_webapp",
   );
   assert.equal(
     normaliseProjectRefFor(win32, "~/work/app", "C:\\Users\\u"),
@@ -154,7 +154,7 @@ test("win32 semantics: drive-letter absolute paths are recognized (cross-platfor
   );
   // A drive-letter string is NOT absolute under posix semantics.
   assert.equal(
-    normaliseProjectRefFor(posix, "D:/Dev/trusttools_webapp", "/home/u"),
+    normaliseProjectRefFor(posix, "D:/Dev/aitracker_webapp", "/home/u"),
     null,
   );
   assert.equal(

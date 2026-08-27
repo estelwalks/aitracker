@@ -25,8 +25,8 @@ import {
   EmptyState,
   Pagination,
   SearchInput,
-  TTButton,
-} from "../../../components/tt";
+  AITrackerButton,
+} from "../../../components/aitracker";
 import { toUiError } from "../../../lib/errors";
 import { useI18n } from "../../../lib/i18n/context";
 import type { AgentUsageOverviewReadModel } from "../usage-overview-contracts";
@@ -601,7 +601,7 @@ export function SkillsPage({
                 <div className="text-[10px] tracking-[0.08em] text-foreground/75 uppercase">
                   {kpi.label}
                 </div>
-                <div className="tt-num tt-text-metric mt-2 font-mono leading-none font-black tracking-tight">
+                <div className="aitracker-num aitracker-text-metric mt-2 font-mono leading-none font-black tracking-tight">
                   {kpi.value}
                 </div>
                 <div className="mt-1.5 truncate text-[11px] text-muted-foreground/70">
@@ -613,7 +613,7 @@ export function SkillsPage({
 
           {/* Filter bar */}
           <section className="space-y-2">
-            <div className="tt-panel flex flex-wrap items-center gap-2 p-2">
+            <div className="aitracker-panel flex flex-wrap items-center gap-2 p-2">
               <SearchInput
                 value={query}
                 onChange={(value) => {
@@ -698,7 +698,9 @@ export function SkillsPage({
                   }`}
                 >
                   {t("skills.agent.all")}
-                  <span className="tt-num opacity-60">{allAssets.length}</span>
+                  <span className="aitracker-num opacity-60">
+                    {allAssets.length}
+                  </span>
                 </button>
                 {shownAgents.map((item) => (
                   <button
@@ -716,7 +718,7 @@ export function SkillsPage({
                   >
                     <BrandIcon name={item} className="size-3.5" />
                     {item}
-                    <span className="tt-num opacity-60">
+                    <span className="aitracker-num opacity-60">
                       {agentCounts.get(item) ?? 0}
                     </span>
                   </button>
@@ -769,10 +771,14 @@ export function SkillsPage({
               actions={
                 <>
                   <Link to="/settings">
-                    <TTButton>{t("skills.actions.addMonitorDir")}</TTButton>
+                    <AITrackerButton>
+                      {t("skills.actions.addMonitorDir")}
+                    </AITrackerButton>
                   </Link>
                   <Link to="/market">
-                    <TTButton>{t("skills.actions.goMarket")}</TTButton>
+                    <AITrackerButton>
+                      {t("skills.actions.goMarket")}
+                    </AITrackerButton>
                   </Link>
                 </>
               }
@@ -999,7 +1005,7 @@ export function SkillsPage({
           {/* Uninstall confirmation */}
           {removeTarget && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-              <div className="tt-panel w-full max-w-md bg-popover p-0">
+              <div className="aitracker-panel w-full max-w-md bg-popover p-0">
                 <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium">
                   <AlertTriangle className="size-4 text-danger" />
                   {t("skills.uninstall.title")}
@@ -1021,15 +1027,15 @@ export function SkillsPage({
                   </p>
                 </div>
                 <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-                  <TTButton onClick={() => setRemoveTarget(null)}>
+                  <AITrackerButton onClick={() => setRemoveTarget(null)}>
                     {t("common.cancel")}
-                  </TTButton>
-                  <TTButton
+                  </AITrackerButton>
+                  <AITrackerButton
                     variant="danger"
                     onClick={() => void confirmUninstall()}
                   >
                     {t("skills.uninstall.confirm")}
-                  </TTButton>
+                  </AITrackerButton>
                 </div>
               </div>
             </div>
@@ -1038,7 +1044,7 @@ export function SkillsPage({
           {/* Blacklist confirmation */}
           {blacklistTarget && (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
-              <div className="tt-panel w-full max-w-md bg-popover p-0">
+              <div className="aitracker-panel w-full max-w-md bg-popover p-0">
                 <div className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium">
                   <ShieldBan className="size-4 text-danger" />
                   {t("skills.blacklist.title")}
@@ -1049,10 +1055,10 @@ export function SkillsPage({
                   </p>
                 </div>
                 <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-                  <TTButton onClick={() => setBlacklistTarget(null)}>
+                  <AITrackerButton onClick={() => setBlacklistTarget(null)}>
                     {t("common.cancel")}
-                  </TTButton>
-                  <TTButton
+                  </AITrackerButton>
+                  <AITrackerButton
                     variant="danger"
                     onClick={() => {
                       const target = blacklistTarget;
@@ -1067,7 +1073,7 @@ export function SkillsPage({
                     }}
                   >
                     {t("skills.blacklist.confirm")}
-                  </TTButton>
+                  </AITrackerButton>
                 </div>
               </div>
             </div>
