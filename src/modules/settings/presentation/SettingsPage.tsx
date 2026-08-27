@@ -604,7 +604,7 @@ export function SettingsPage({
 
           {category === "reports" && (
             <div>
-              <ReportSchedule />
+              <ReportSchedule variant="settings" />
             </div>
           )}
 
