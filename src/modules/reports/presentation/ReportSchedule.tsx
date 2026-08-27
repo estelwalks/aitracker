@@ -1,5 +1,13 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, CalendarClock, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  Clock,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { useI18n } from "../../../lib/i18n/context";
@@ -40,11 +48,36 @@ function lastRunText(
   });
 }
 
-/** Shared report schedule editor used on /reports and Settings. */
-export function ReportSchedule() {
+function cadenceText(
+  t: ReturnType<typeof useI18n>["t"],
+  schedule: ReportScheduleConfig,
+): string {
+  if (schedule.granularity === "weekly") {
+    return `${t("reports.schedule.weekly")} · ${t(
+      `reports.schedule.days.${WEEKDAY_KEYS[schedule.dayOfWeek] ?? "mon"}`,
+    )}`;
+  }
+  if (schedule.granularity === "monthly") {
+    return `${t("reports.schedule.monthly")} · ${schedule.dayOfMonth}${t(
+      "reports.schedule.monthDaySuffix",
+    )}`;
+  }
+  return t("reports.schedule.daily");
+}
+
+/**
+ * Report schedule editor. The reports page uses the same collapsed ScheduleBar
+ * interaction as Security; Settings keeps the full always-expanded editor.
+ */
+export function ReportSchedule({
+  variant = "card",
+}: {
+  variant?: "card" | "settings";
+}) {
   const { t, format } = useI18n();
   const { schedule, save, loaded, status, statusError, reload } =
     useReportSchedule();
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [timeDraft, setTimeDraft] = useState(schedule.time);
   const [monthDayDraft, setMonthDayDraft] = useState(
@@ -80,6 +113,146 @@ export function ReportSchedule() {
       setSaving(false);
     }
   };
+
+  if (variant === "card") {
+    const enabled = loaded && !statusError && schedule.enabled;
+    const summary = !loaded
+      ? t("common.loading")
+      : statusError
+        ? t("reports.schedule.loadFailed")
+        : enabled
+          ? `${cadenceText(t, schedule)} ${schedule.time} · ${t(
+              "reports.schedule.enabledLabel",
+            )}`
+          : t("reports.schedule.disabledLabel");
+    const nextRunDetail = !enabled
+      ? t("reports.schedule.disabledStatus")
+      : status?.pending
+        ? t("reports.schedule.pending")
+        : status?.nextRunAt
+          ? format.formatDateTime(status.nextRunAt, false)
+          : t("common.loading");
+
+    return (
+      <section className="rounded-xl bg-card px-4 py-3">
+        <header className="flex flex-wrap items-center gap-3">
+          <CalendarClock
+            className="size-4 shrink-0"
+            style={{
+              color: enabled ? "var(--chart-1)" : "var(--muted-foreground)",
+            }}
+          />
+          <span className="text-[12.5px] font-semibold tracking-tight">
+            {t("reports.schedule.title")}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+            {summary}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              void saveSchedule({
+                ...schedule,
+                enabled: !schedule.enabled,
+                configured: true,
+              })
+            }
+            disabled={!loaded || statusError || saving}
+            aria-label={t("reports.schedule.title")}
+            className="relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              background: enabled ? "var(--chart-1)" : "var(--surface-2, #333)",
+            }}
+          >
+            <span
+              className="absolute top-0.5 size-4 rounded-full bg-white transition-all"
+              style={{ left: enabled ? 18 : 2 }}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            disabled={!loaded || statusError}
+            aria-expanded={open}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {t("reports.schedule.configure")}
+            <ChevronDown
+              className={`size-3.5 transition-transform ${
+                open ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </header>
+
+        {open && loaded && !statusError && (
+          <div className="mt-3 divide-y divide-border/40">
+            <CompactScheduleRow label={t("reports.schedule.granularity")}>
+              {CYCLE_OPTIONS.map((granularity) => (
+                <CompactScheduleChip
+                  key={granularity}
+                  active={schedule.granularity === granularity}
+                  disabled={saving}
+                  onClick={() =>
+                    void saveSchedule({
+                      ...schedule,
+                      granularity,
+                      configured: true,
+                    })
+                  }
+                >
+                  {schedule.granularity === granularity && (
+                    <Check
+                      className="size-3.5"
+                      style={{ color: "var(--chart-1)" }}
+                    />
+                  )}
+                  {t(`reports.schedule.${granularity}`)}
+                </CompactScheduleChip>
+              ))}
+            </CompactScheduleRow>
+
+            <CompactScheduleRow label={t("reports.schedule.time")}>
+              <span className="inline-flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+                <Clock className="size-3.5 text-muted-foreground" />
+                <input
+                  type="time"
+                  value={timeDraft}
+                  disabled={saving}
+                  onChange={(event) => setTimeDraft(event.target.value)}
+                  onBlur={(event) => {
+                    const time = event.currentTarget.value;
+                    if (!/^\d{2}:\d{2}$/.test(time)) {
+                      setTimeDraft(schedule.time);
+                    } else if (time !== schedule.time) {
+                      void saveSchedule({
+                        ...schedule,
+                        time,
+                        configured: true,
+                      });
+                    }
+                  }}
+                  className="bg-transparent font-mono text-[11.5px] outline-none disabled:opacity-40"
+                />
+              </span>
+              <span className="min-w-0 flex-1 font-mono text-[11px] text-muted-foreground">
+                {t("reports.schedule.nextRun")}：{nextRunDetail}
+                <Link
+                  to="/settings"
+                  search={{ section: "reports" }}
+                  className="ml-2 underline underline-offset-2 hover:text-foreground"
+                >
+                  {t("reports.schedule.configure")}
+                </Link>
+              </span>
+            </CompactScheduleRow>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   let content: ReactNode;
   if (!loaded) {
@@ -246,5 +419,49 @@ export function ReportSchedule() {
       </ScheduleSectionHeading>
       {content}
     </div>
+  );
+}
+
+function CompactScheduleRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 py-3 last:pb-0">
+      <span className="w-[64px] shrink-0 font-mono text-[11px] text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function CompactScheduleChip({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-surface-2 text-foreground"
+          : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
