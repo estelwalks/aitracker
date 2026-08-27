@@ -102,6 +102,19 @@ test("reports page uses a collapsed schedule card and Settings stays expanded", 
   assert.match(component, /aria-expanded=\{open\}/);
   assert.match(component, /rounded-xl bg-card px-4 py-3/);
   assert.match(component, /SCHEDULE_KINDS\.map/);
+  const compactEditor = component.slice(
+    component.indexOf("function CompactPlanEditor"),
+    component.indexOf("function SettingsPlanEditor"),
+  );
+  const timeInputIndex = compactEditor.indexOf("<TimeInput");
+  const weeklyPickerIndex = compactEditor.indexOf('{kind === "weekly"');
+  const monthDayInputIndex = compactEditor.indexOf('{kind === "monthly"');
+  assert.notEqual(timeInputIndex, -1);
+  assert.notEqual(weeklyPickerIndex, -1);
+  assert.notEqual(monthDayInputIndex, -1);
+  assert.ok(weeklyPickerIndex < timeInputIndex);
+  assert.ok(monthDayInputIndex < timeInputIndex);
+  assert.equal(compactEditor.match(/<TimeInput/g)?.length, 1);
   assert.match(reportsPage, /<ReportSchedule \/>/);
   assert.match(settingsPage, /<ReportSchedule variant="settings" \/>/);
 });
