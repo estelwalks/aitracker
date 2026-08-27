@@ -94,7 +94,7 @@ function usageEvent(sequence: number): LocalUsageEvent {
 }
 
 test("usage cold hydration uses a fixed number of SELECTs and preserves aggregates", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "tt-usage-hydrate-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-usage-hydrate-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

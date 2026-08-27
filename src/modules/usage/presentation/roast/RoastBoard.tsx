@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Flame, Minus } from "lucide-react";
 
-import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
-import { ChipTabs, EmptyState, Panel } from "../../../../components/tt";
+import { BrandIcon } from "../../../../components/BrandIcon";
+import { brandColorOf } from "../../../../components/BrandIcon.helpers";
+import { ChipTabs, EmptyState, Panel } from "../../../../components/aitracker";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { MessageKey } from "../../../../lib/i18n/messages";
 import type {
@@ -143,7 +144,7 @@ export function RoastBoard({
                   />
                   <div className="relative flex items-center gap-3">
                     <span
-                      className={`tt-num w-7 shrink-0 text-center font-mono font-black leading-none ${
+                      className={`aitracker-num w-7 shrink-0 text-center font-mono font-black leading-none ${
                         top
                           ? "text-2xl text-primary"
                           : "text-lg text-muted-foreground/60"
@@ -187,7 +188,7 @@ export function RoastBoard({
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <div className="tt-num font-mono text-[13px] font-black text-foreground">
+                      <div className="aitracker-num font-mono text-[13px] font-black text-foreground">
                         {format.formatTokens(row.tokens)}
                       </div>
                       <div className="font-mono text-[10px] text-muted-foreground">

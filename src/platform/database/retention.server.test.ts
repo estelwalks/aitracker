@@ -13,7 +13,7 @@ import {
 } from "./retention.server.ts";
 
 function openMigratedHost(t: { after(fn: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-db-retention-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-db-retention-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

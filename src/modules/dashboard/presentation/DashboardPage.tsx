@@ -69,7 +69,7 @@ export function DashboardPage({ locale }: { readonly locale: Locale }) {
           role="alert"
         >
           <div className="space-y-1">
-            <h1 className="tt-text-section-title font-medium">
+            <h1 className="aitracker-text-section-title font-medium">
               {t("dashboard.onboarding.workspaceInitializationFailed")}
             </h1>
             <p className="text-sm text-muted-foreground">

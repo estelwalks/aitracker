@@ -8,7 +8,7 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { TTButton } from "../../../../components/tt";
+import { AITrackerButton } from "../../../../components/aitracker";
 import {
   Dialog,
   DialogContent,
@@ -197,7 +197,7 @@ export function SkillReportModal({
                           {t("security.center.llm.failed")}
                         </p>
                       )}
-                      <TTButton
+                      <AITrackerButton
                         variant="ghost"
                         size="sm"
                         onClick={llm.request}
@@ -207,7 +207,7 @@ export function SkillReportModal({
                         {llm.loading
                           ? t("security.center.llm.loading")
                           : t("security.center.llm.trigger")}
-                      </TTButton>
+                      </AITrackerButton>
                     </div>
                   ) : (
                     <div className="mt-2.5 space-y-2.5">
@@ -313,14 +313,17 @@ export function SkillReportModal({
 
             <DialogFooter className="border-t border-border/60 px-5 py-3">
               {onRescan && (
-                <TTButton variant="ghost" onClick={() => onRescan(entry)}>
+                <AITrackerButton
+                  variant="ghost"
+                  onClick={() => onRescan(entry)}
+                >
                   <RotateCcw className="size-3.5" />
                   {t("security.center.task.rescan")}
-                </TTButton>
+                </AITrackerButton>
               )}
-              <TTButton onClick={onClose}>
+              <AITrackerButton onClick={onClose}>
                 {t("security.center.autoScan.close")}
-              </TTButton>
+              </AITrackerButton>
             </DialogFooter>
           </>
         )}
@@ -355,7 +358,7 @@ function ScoreHeader({
         <div className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
           {t("security.center.reportModal.securityScore")}
         </div>
-        <div className="tt-num tt-text-metric mt-1 leading-none font-semibold">
+        <div className="aitracker-num aitracker-text-metric mt-1 leading-none font-semibold">
           {score}
           <span className="ml-1 font-mono text-[11px] text-muted-foreground">
             / 100

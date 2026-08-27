@@ -7,7 +7,7 @@ import type { SnapshotRefreshPort } from "../../../platform/snapshot-runtime/con
 import { RUNTIME_POLICY } from "../../../app/runtime-policy.generated.ts";
 
 /** Bump when the session registry/path/parser contract changes. */
-export const SESSION_COLLECTOR_VERSION = "sessions-v3-stable-id";
+export const SESSION_COLLECTOR_VERSION = "sessions-v7";
 
 /**
  * P3-T3-01: Session snapshot coordinator.

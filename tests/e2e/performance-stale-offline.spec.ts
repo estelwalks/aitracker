@@ -9,19 +9,19 @@ import { expect, test, type Page } from "playwright/test";
  *   npx playwright test -c playwright.config.offline.ts   performance-stale-offline.spec.ts
  *
  * Scenarios are gated the same way as performance-scenarios.spec.ts: each
- * config exports an env var (TRUSTTOOLS_E2E_STALE_HOME / TRUSTTOOLS_E2E_OFFLINE)
+ * config exports an env var (AITRACKER_E2E_STALE_HOME / AITRACKER_E2E_OFFLINE)
  * that the spec reads to decide whether to run or skip.
  */
 
-const STALE_HOME = process.env.TRUSTTOOLS_E2E_STALE_HOME ?? "";
+const STALE_HOME = process.env.AITRACKER_E2E_STALE_HOME ?? "";
 const hasStaleHome = STALE_HOME.length > 0;
-const hasOffline = (process.env.TRUSTTOOLS_E2E_OFFLINE ?? "").length > 0;
+const hasOffline = (process.env.AITRACKER_E2E_OFFLINE ?? "").length > 0;
 
 /** Fixed zh-CN / clean-storage browser state, matching the other e2e specs. */
 function installStableLocaleInit(page: Page) {
   return page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-locale-mode");
+    window.localStorage.removeItem("aitracker-locale");
+    window.localStorage.removeItem("aitracker-locale-mode");
     Object.defineProperty(window.navigator, "language", {
       get: () => "zh-CN",
       configurable: true,

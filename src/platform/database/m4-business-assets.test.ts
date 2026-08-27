@@ -15,7 +15,7 @@ import { DatabaseHost } from "./database-host.server.ts";
 import { runMigrations } from "./migration-runner.server.ts";
 
 function database(t: { after(callback: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-m4-assets-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-m4-assets-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

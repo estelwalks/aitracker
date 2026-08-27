@@ -16,7 +16,7 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
+import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
 import { APP_NAME } from "../../../lib/app-config.ts";
 import {
   SECURITY_LLM_DIMENSIONS,

@@ -2,15 +2,14 @@
  * Local AI-tool session records (Task D1, V3.0 PRD v1.2).
  *
  * A `SessionRecord` is a privacy-preserving summary of one resumable session
- * from one of the registry-declared session tools (currently Claude Code,
- * Codex, Grok Build, and DeepSeek Harness). Only metadata is captured — ids,
+ * from one of the registry-declared session tools. Only metadata is captured — ids,
  * timestamps, model, cwd, token totals, and turn counts. Claude Code may read
  * only the first user-authored text long enough to derive a short fallback
  * title; prompt bodies, responses, and tool I/O are never retained or persisted.
  */
 
 /**
- * Compile-time mirror of the tool registry's `sessions.mode = "resume"` tool
+ * Compile-time mirror of the tool registry's supported session tools
  * ids (P1-3). The runtime source of truth is `listSessionTools()` in
  * server-fns.ts; parity between the two is asserted by resume-id.test.ts. The
  * `(string & {})` branch keeps the type open for future tools while still
@@ -21,6 +20,7 @@ export const SESSION_TOOL_IDS = [
   "codex",
   "grok",
   "dsh",
+  "aipy",
 ] as const;
 
 export type SessionSource = (typeof SESSION_TOOL_IDS)[number] | (string & {});
@@ -93,7 +93,7 @@ export interface SessionRecord {
   status: SessionStatus;
   /** Short explanation of the exact metadata evidence behind a non-default state. */
   statusReason: string | null;
-  /** true iff sessionId matches the shell-safe alphabet. */
+  /** true iff this source supports resume and sessionId matches the safe alphabet. */
   resumeSafe: boolean;
   /** Bare resume command (e.g. "claude --resume <id>"); null if !resumeSafe. */
   resumeCommand: string | null;

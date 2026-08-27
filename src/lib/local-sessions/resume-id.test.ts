@@ -5,10 +5,10 @@ import { listSessionTools } from "../tool-registry/registry.ts";
 import { SESSION_TOOL_IDS } from "./types.ts";
 
 describe("P4-T4 session whitelist derivation", () => {
-  it("session sources derive from the registry resume capability", () => {
+  it("session sources derive from the registry session capability", () => {
     assert.deepEqual(
       [...listSessionTools()],
-      ["claude-code", "codex", "grok", "dsh"],
+      ["claude-code", "codex", "grok", "dsh", "aipy"],
     );
   });
 

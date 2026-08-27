@@ -6,6 +6,7 @@ import {
   setPreference,
   type PreferenceValue,
 } from "../../../lib/preferences/client.ts";
+import { STORAGE_KEY_PREFIX } from "../../../lib/app-config";
 
 /**
  * 小组件配置偏好（SQLite app_preferences 独立 key）。
@@ -59,7 +60,7 @@ export const DEFAULT_WIDGET_PREFS: WidgetPrefs = {
   widgetTheme: "dark",
 };
 
-export const WIDGET_PREFS_STORAGE_KEY = "tt-widget-prefs";
+export const WIDGET_PREFS_STORAGE_KEY = `${STORAGE_KEY_PREFIX}widgetPrefs`;
 
 let state: WidgetPrefs = DEFAULT_WIDGET_PREFS;
 let hydrated = false;

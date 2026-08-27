@@ -10,7 +10,7 @@ import { runMigrations } from "../../../platform/database/migration-runner.serve
 import { createSqliteSecurityScanRunRepository } from "./sqlite-scan-run-repository.server.ts";
 
 function repositoryFixture(t: { after(fn: () => void): void }) {
-  const directory = mkdtempSync(join(tmpdir(), "tt-security-runs-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-security-runs-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

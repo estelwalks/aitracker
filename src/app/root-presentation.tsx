@@ -118,16 +118,16 @@ function NavigationPerformanceMarks() {
     if (status === "pending") {
       if (startedAt.current == null) {
         startedAt.current = performance.now();
-        performance.mark("trusttools:navigation:start");
+        performance.mark("aitracker:navigation:start");
       }
       return;
     }
     if (startedAt.current == null) return;
-    performance.mark("trusttools:navigation:complete");
+    performance.mark("aitracker:navigation:complete");
     performance.measure(
-      `trusttools:navigation:${pathname}`,
-      "trusttools:navigation:start",
-      "trusttools:navigation:complete",
+      `aitracker:navigation:${pathname}`,
+      "aitracker:navigation:start",
+      "aitracker:navigation:complete",
     );
     startedAt.current = null;
   }, [pathname, status]);
@@ -142,7 +142,7 @@ function NavigationPerformanceMarks() {
     const firstFrame = requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (cancelled) return;
-        performance.mark(`trusttools:navigation:rendered:${pathname}`);
+        performance.mark(`aitracker:navigation:rendered:${pathname}`);
         lastRenderedPath.current = pathname;
       });
     });
@@ -160,8 +160,10 @@ export function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="tt-num text-7xl font-bold text-foreground">404</h1>
-        <h2 className="tt-text-section-title mt-4 font-semibold text-foreground">
+        <h1 className="aitracker-num text-7xl font-bold text-foreground">
+          404
+        </h1>
+        <h2 className="aitracker-text-section-title mt-4 font-semibold text-foreground">
           {t("common.notFound")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -205,7 +207,7 @@ export function ErrorComponent({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="tt-text-page-title font-semibold tracking-tight text-foreground">
+        <h1 className="aitracker-text-page-title font-semibold tracking-tight text-foreground">
           {t("common.pageLoadFailed")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">

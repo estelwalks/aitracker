@@ -1,7 +1,7 @@
 import type { Locale } from "../../lib/i18n/locale";
 import type { WidgetReadModel } from "./read-model";
 
-const STORAGE_KEY = "tt-widget-read-model";
+const STORAGE_KEY = "aitracker-widget-read-model";
 
 interface CachedWidgetReadModel {
   readonly locale: Locale;

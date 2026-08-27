@@ -2,7 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { EmptyState, StatusBadge, TTButton } from "../../../components/tt.tsx";
+import {
+  EmptyState,
+  StatusBadge,
+  AITrackerButton,
+} from "../../../components/aitracker.tsx";
 import { BrandIcon } from "../../../components/BrandIcon.tsx";
 import { useI18n } from "../../../lib/i18n/context.tsx";
 import { sourceLabel } from "../../../lib/local-usage/presentation.ts";
@@ -56,10 +60,10 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="tt-text-page-title truncate font-semibold tracking-tight">
+            <h1 className="aitracker-text-page-title truncate font-semibold tracking-tight">
               {session.title || t("sessions.row.untitled")}
             </h1>
-            <div className="tt-num mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <div className="aitracker-num mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               <StatusBadge tone="primary">
                 {sourceLabel(session.source)}
               </StatusBadge>
@@ -80,7 +84,9 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
               ) : null}
             </div>
           </div>
-          <ResumeSessionButton session={session} />
+          {session.resumeAvailable ? (
+            <ResumeSessionButton session={session} />
+          ) : null}
         </div>
       </div>
 
@@ -97,7 +103,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
             <span aria-hidden="true">·</span>
             <span>{t("sessions.transcript.cliHint")}</span>
           </div>
-          <dl className="tt-num grid gap-x-6 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+          <dl className="aitracker-num grid gap-x-6 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-2">
             <div className="flex gap-2">
               <dt className="shrink-0">{t("sessions.transcript.sessionId")}</dt>
               <dd className="truncate text-foreground">{session.sessionId}</dd>
@@ -124,7 +130,7 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
               })}
             </span>
           </div>
-          <dl className="tt-num grid gap-x-6 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+          <dl className="aitracker-num grid gap-x-6 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-2">
             <div className="flex gap-2">
               <dt className="shrink-0">{t("sessions.transcript.sessionId")}</dt>
               <dd className="truncate text-foreground">{session.sessionId}</dd>
@@ -144,9 +150,9 @@ export function TranscriptPanel({ session }: { session: SessionSummary }) {
           <EmptyState
             title={t("sessions.transcript.error")}
             actions={
-              <TTButton onClick={load}>
+              <AITrackerButton onClick={load}>
                 {t("sessions.transcript.retry")}
-              </TTButton>
+              </AITrackerButton>
             }
           />
         ) : null}

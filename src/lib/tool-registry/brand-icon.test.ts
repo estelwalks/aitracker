@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { brandColorOf } from "../../components/BrandIcon.tsx";
+import { brandColorOf } from "../../components/BrandIcon.helpers.ts";
 import { PUBLIC_TOOL_MANIFEST } from "./public-manifest.generated.ts";
 
 test("brandColorOf prefers the registry display.color over name heuristics", () => {

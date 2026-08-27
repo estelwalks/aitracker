@@ -39,7 +39,7 @@ import { createSqliteInstallationSnapshotRepository } from "../platform/discover
 import { createSqliteWslSnapshotRepository } from "../platform/discovery/sqlite-wsl-snapshot-repository.server.ts";
 import type { Clock } from "../platform/persistence/contracts.ts";
 
-const DATABASE_FILE = "trusttools.v1.db";
+const DATABASE_FILE = "aitracker.v1.db";
 
 export interface CreateDatabaseRuntimeOptions {
   readonly dataRoot: string;
@@ -73,7 +73,7 @@ export async function createDatabaseRuntime(
         : {}),
     });
     const hmacKey = createHash("sha256")
-      .update(`trusttools:${options.dataRoot}`)
+      .update(`aitracker:${options.dataRoot}`)
       .digest();
     const features = {
       appPreferences: createSqlitePreferenceRepository(host),

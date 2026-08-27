@@ -228,8 +228,7 @@ function toDashboardEvent(
     source: event.source,
     timestamp: event.timestamp,
     model: event.model,
-    project:
-      event.projectLabel ?? classifiedLabel ?? projectKey(event.project),
+    project: event.projectLabel ?? classifiedLabel ?? projectKey(event.project),
     projectKind: event.projectKind ?? classification?.kind ?? "unknown",
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
@@ -733,7 +732,7 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
   // (O(1) — no scanner, no wsl.exe, no PATH probing on the query path).
   const { sessionSnapshot, skillSnapshot, installationSnapshot } =
     await getRootForUsage();
-  const [initialSessionLatest, skillLatest, installationLatest] =
+  const [initialSessionLatest, skillLatest, initialInstallationLatest] =
     await Promise.all([
       sessionSnapshot.ensureHydrated().then(() => sessionSnapshot.readLatest()),
       skillSnapshot.ensureHydrated().then(() => skillSnapshot.readLatest()),
@@ -741,6 +740,32 @@ export async function buildDashboardV2Snapshot(locale: Locale): Promise<{
         .ensureHydrated()
         .then(() => installationSnapshot.readLatest()),
     ]);
+  let installationLatest = initialInstallationLatest;
+  const knownInstallationIds = new Set(
+    installationLatest.data?.facts.map((fact) => fact.id) ?? [],
+  );
+  const catalogChanged = PUBLIC_TOOL_MANIFEST.tools.some(
+    (tool) => !knownInstallationIds.has(tool.id),
+  );
+  if (installationLatest.data == null || catalogChanged) {
+    // Keep Agent Overview in sync when a new catalog tool is added while the
+    // previous installation snapshot is still within its six-hour freshness
+    // window. The installation scan is bounded and runs through the task
+    // runtime; only this repair path waits for its committed result.
+    await installationSnapshot
+      .requestRefresh({
+        reason: installationLatest.data == null ? "empty" : "event",
+      })
+      .catch(() => {});
+    installationLatest = installationSnapshot.readLatest();
+  } else if (
+    installationLatest.status === "stale" ||
+    installationLatest.status === "failed"
+  ) {
+    void installationSnapshot
+      .requestRefresh({ reason: "event" })
+      .catch(() => {});
+  }
   const sessionLatest = initialSessionLatest;
   const usageSources = [...new Set(rawBuckets.map((bucket) => bucket.source))];
   const sessionSources = [

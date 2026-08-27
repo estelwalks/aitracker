@@ -200,7 +200,7 @@ export function ScanStatus({
             {riskKinds.map((kind, index) => (
               <div key={kind} className="rounded-lg bg-surface px-3 py-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="tt-num font-mono text-[10px] text-muted-foreground">
+                  <span className="aitracker-num font-mono text-[10px] text-muted-foreground">
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
@@ -245,7 +245,7 @@ function Cell({
         <span className="truncate">{label}</span>
       </div>
       <div
-        className="tt-num tt-text-metric mt-1.5 font-mono leading-none font-black tracking-tight"
+        className="aitracker-num aitracker-text-metric mt-1.5 font-mono leading-none font-black tracking-tight"
         style={color ? { color } : undefined}
       >
         {value}

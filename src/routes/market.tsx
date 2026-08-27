@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { catalogs, getMessage } from "../lib/i18n/route-messages";
+import { brandParams } from "../lib/app-config";
 import { resolveLocaleFromSearch } from "../lib/i18n/locale";
 import type { Locale } from "../lib/i18n/locale";
 import { getMarketSkills } from "../modules/skill-distribution/query";
@@ -43,6 +44,7 @@ export const Route = createFileRoute("/market")({
         title: getMessage(
           catalogs[loaderData?.locale ?? "zh-CN"],
           "meta.titles.market",
+          brandParams,
         ),
       },
     ],

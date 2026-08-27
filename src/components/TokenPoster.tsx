@@ -7,7 +7,7 @@ import {
   X,
 } from "lucide-react";
 
-import { Segmented, TTButton } from "./tt";
+import { Segmented, AITrackerButton } from "./aitracker";
 import { useI18n } from "../lib/i18n/context";
 import { brandParams, POSTER_FILENAME_PREFIX } from "../lib/app-config";
 import type { BoundFormatters } from "../lib/i18n/format";
@@ -407,13 +407,13 @@ export function TokenPoster({
       onClick={onClose}
     >
       <div
-        className="tt-panel flex max-h-[94vh] w-full max-w-[920px] flex-col overflow-hidden bg-surface"
+        className="aitracker-panel flex max-h-[94vh] w-full max-w-[920px] flex-col overflow-hidden bg-surface"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2 text-[13px] font-medium">
             <ImageIcon className="size-4" /> {t("dashboard.poster.generate")}
-            <span className="tt-num text-[10px] text-muted-foreground">
+            <span className="aitracker-num text-[10px] text-muted-foreground">
               1080 × 1920
             </span>
           </div>
@@ -442,7 +442,7 @@ export function TokenPoster({
           />
         </div>
 
-        <div className="tt-scroll flex-1 overflow-auto bg-background/40 p-4">
+        <div className="aitracker-scroll flex-1 overflow-auto bg-background/40 p-4">
           <canvas
             ref={canvasRef}
             className="mx-auto block w-full max-w-[360px] rounded-sm border border-border"
@@ -454,16 +454,16 @@ export function TokenPoster({
             {message || t("dashboard.poster.disclaimer")}
           </span>
           <div className="flex items-center gap-2">
-            <TTButton onClick={render}>
+            <AITrackerButton onClick={render}>
               <RefreshCw className="size-3.5" />{" "}
               {t("dashboard.poster.regenerate")}
-            </TTButton>
-            <TTButton onClick={copy}>
+            </AITrackerButton>
+            <AITrackerButton onClick={copy}>
               <Clipboard className="size-3.5" /> {t("dashboard.poster.copy")}
-            </TTButton>
-            <TTButton variant="primary" onClick={download}>
+            </AITrackerButton>
+            <AITrackerButton variant="primary" onClick={download}>
               <Download className="size-3.5" /> {t("dashboard.poster.download")}
-            </TTButton>
+            </AITrackerButton>
           </div>
         </footer>
       </div>

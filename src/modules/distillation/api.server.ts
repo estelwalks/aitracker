@@ -309,8 +309,11 @@ export async function cancelCandidate(
   return { ok: true, candidate: result.value.candidate };
 }
 
-export async function deleteCandidates(candidateIds: readonly string[]): Promise<{ deleted: number }> {
-  const { getCompositionRoot } = await import("../../app/composition.server.ts");
+export async function deleteCandidates(
+  candidateIds: readonly string[],
+): Promise<{ deleted: number }> {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
   const root = await getCompositionRoot();
   let deleted = 0;
   for (const candidateId of candidateIds) {
@@ -371,7 +374,7 @@ export async function saveCandidateAsSkill(
   const { ENV } = await import("../../lib/app-config.ts");
   const { resolveAgentRoots } =
     await import("../../lib/local-skills/scanner.server.ts");
-  // `TRUSTTOOLS_USAGE_HOME` mirrors the composition root's data-root override
+  // `AITRACKER_USAGE_HOME` mirrors the composition root's data-root override
   // (and keeps the write testable in isolation); unset → the real home.
   const home = process.env[ENV.USAGE_HOME] ?? homedir();
   const roots = resolveAgentRoots(home, process.env);

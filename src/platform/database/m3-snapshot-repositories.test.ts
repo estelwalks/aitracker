@@ -21,7 +21,7 @@ function stringifySqliteRows(value: unknown): string {
 }
 
 function openDatabase(t: { after(fn: () => void): void }): DatabaseHost {
-  const directory = mkdtempSync(join(tmpdir(), "tt-m3-"));
+  const directory = mkdtempSync(join(tmpdir(), "aitracker-m3-"));
   const host = DatabaseHost.open({
     path: join(directory, "platform.db"),
     versionsProvider: {

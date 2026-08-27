@@ -162,7 +162,7 @@ test("dashboard snapshot projects scanner data without paths or command summarie
 });
 
 test("dashboard keeps pending projects unknown instead of promoting them to workspace", () => {
-  const firstProject = `/Users/example/work/${APP_ID}`;
+  const firstProject = "/Users/example/work/workspace-project";
   const secondProject = "/Users/example/work/another-project";
   const result = projectedDashboardSnapshot(
     {
@@ -173,7 +173,7 @@ test("dashboard keeps pending projects unknown instead of promoting them to work
       ],
     },
     new Map([
-      [firstProject, { kind: "workspace", label: APP_ID }],
+      [firstProject, { kind: "workspace", label: "workspace-project" }],
       // The second reference is not in the persisted index yet. The query
       // path keeps a safe label but must not invent a workspace classification.
     ]),
@@ -188,7 +188,7 @@ test("dashboard keeps pending projects unknown instead of promoting them to work
       .sort((left, right) => left.project.localeCompare(right.project)),
     [
       { project: "another-project", projectKind: "unknown" },
-      { project: APP_ID, projectKind: "workspace" },
+      { project: "workspace-project", projectKind: "workspace" },
     ],
   );
 });

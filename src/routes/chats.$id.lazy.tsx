@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from "@tanstack/react-router";
 
 import { SessionDetailPage } from "../modules/sessions/presentation/SessionDetailPage.tsx";
-import { InsightCard } from "../modules/insights/page/presentation/insight-card";
+import { InsightCard } from "../modules/insights/index.ts";
 
 export const Route = createLazyFileRoute("/chats/$id")({
   component: ChatDetailRoute,
@@ -9,7 +9,7 @@ export const Route = createLazyFileRoute("/chats/$id")({
 
 function ChatDetailRoute() {
   const { id } = Route.useParams();
-  const { session } = Route.useLoaderData();
+  const { session, source } = Route.useLoaderData();
   return (
     <div className="space-y-4">
       <InsightCard
@@ -17,7 +17,7 @@ function ChatDetailRoute() {
         scope={{ entityId: id }}
         variant="inline"
       />
-      <SessionDetailPage session={session} />
+      <SessionDetailPage session={session} source={source} />
     </div>
   );
 }

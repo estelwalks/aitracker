@@ -477,7 +477,7 @@ export async function startLocalWebServer(
 
       const isWorkspaceWarmup =
         requestUrl.pathname === "/api/desktop-state/preferences" &&
-        typeof request.headers["x-trusttools-desktop-broker"] === "string";
+        typeof request.headers["x-aitracker-desktop-broker"] === "string";
       if (isWorkspaceWarmup) {
         // The loopback warmup response is a startup barrier. Direct-fetch test
         // and development builds may register initialization through
@@ -560,7 +560,7 @@ export async function startLocalWebServer(
         method: "GET",
         headers: {
           cookie: `${COOKIE_TOKEN_NAME}=${capabilityToken}`,
-          "x-trusttools-desktop-broker": desktopBrokerToken,
+          "x-aitracker-desktop-broker": desktopBrokerToken,
         },
       });
       const startupFailureCode = response.headers.get(

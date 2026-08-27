@@ -9,12 +9,13 @@ import {
   SelectValue,
 } from "../../../../components/ui/select";
 
-import { BrandIcon, brandColorOf } from "../../../../components/BrandIcon";
-import { EmptyState } from "../../../../components/tt";
+import { BrandIcon } from "../../../../components/BrandIcon";
+import { brandColorOf } from "../../../../components/BrandIcon.helpers";
+import { EmptyState } from "../../../../components/aitracker";
 import { SESSION_TOOL_IDS } from "../../../../lib/local-sessions/types";
 import { useI18n } from "../../../../lib/i18n/context";
 import type { SessionTranscriptMessage } from "../../../../modules/sessions/contracts";
-import { getSessionTranscript } from "../../../../modules/sessions/query";
+import { getSessionTranscript } from "../../../../modules/sessions/index.ts";
 import type { SegmentRef } from "../../contracts";
 import type { DistillationSessionItem } from "../index.ts";
 import {
@@ -401,7 +402,7 @@ export function MaterialDrawer({
           </div>
         ) : null}
 
-        <div className="tt-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="aitracker-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {activeTranscript.status === "loading" ? (
             <div className="flex h-full flex-col items-center justify-center gap-2">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -535,7 +536,7 @@ export function MaterialDrawer({
                 />
               </div>
             </div>
-            <div className="tt-scroll min-h-0 flex-1 overflow-y-auto pb-2">
+            <div className="aitracker-scroll min-h-0 flex-1 overflow-y-auto pb-2">
               {filtered.length === 0 ? (
                 <div className="px-6 py-12 text-center">
                   <Search
@@ -677,7 +678,7 @@ export function MaterialDrawer({
 
         <footer className="flex flex-col gap-2 bg-surface-2/50 px-5 py-3">
           {Object.keys(ranges).length > 0 && (
-            <div className="tt-scroll flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
+            <div className="aitracker-scroll flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
               {Object.entries(ranges).map(([cid, r]) => {
                 const item = byKey.get(cid);
                 if (!item) return null;
@@ -818,7 +819,7 @@ export function MaterialPicker({
 
   if (granularity === "project") {
     return (
-      <ul className="tt-scroll max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
+      <ul className="aitracker-scroll max-h-[260px] space-y-1.5 overflow-y-auto pr-1">
         {groupDistillationSessionsByProject(sessions).map((project) => {
           const keys = project.sessions.map(materialKeyOf);
           const selectedCount = keys.filter((key) => selected.has(key)).length;
@@ -887,7 +888,7 @@ export function MaterialPicker({
 
   return (
     <ul
-      className={`tt-scroll ${compact ? "max-h-[260px] overflow-y-auto pr-1" : ""} space-y-1.5`}
+      className={`aitracker-scroll ${compact ? "max-h-[260px] overflow-y-auto pr-1" : ""} space-y-1.5`}
     >
       {sessions.map((item) => {
         const itemKey = materialKeyOf(item);

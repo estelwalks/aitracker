@@ -12,7 +12,9 @@ export const Route = createFileRoute("/chats/")({
     locale: resolveLocaleFromSearch(search as Record<string, unknown>),
   }),
   loader: async ({ deps }) => {
-    const page = await getSessionsQuery({ data: {} });
+    const page = await getSessionsQuery({
+      data: { filter: { range: "30d" } },
+    });
     return { ...page, locale: deps.locale };
   },
   staleTime: 30_000,

@@ -120,7 +120,7 @@ function OutTypePicker({
               <span className="truncate text-[11.5px] font-semibold">
                 {t(group.labelKey)}
               </span>
-              <span className="tt-tag ml-auto shrink-0 font-mono">
+              <span className="aitracker-tag ml-auto shrink-0 font-mono">
                 → {t(group.destKey)}
               </span>
             </div>
@@ -134,7 +134,7 @@ function OutTypePicker({
                     onClick={() => onChange(meta.id)}
                     aria-pressed={on}
                     title={t(meta.hintKey)}
-                    className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                    className={`aitracker-chip font-mono ${on ? "aitracker-chip-on" : ""}`}
                   >
                     {t(meta.labelKey)}
                   </button>
@@ -233,7 +233,7 @@ function ModelSelect({
                 className="w-full bg-transparent font-mono text-[11.5px] outline-none placeholder:text-muted-foreground"
               />
             </div>
-            <div className="tt-scroll mt-1.5 max-h-[260px] overflow-y-auto">
+            <div className="aitracker-scroll mt-1.5 max-h-[260px] overflow-y-auto">
               {groups.length === 0 && (
                 <div className="px-3 py-6 text-center font-mono text-[11px] text-muted-foreground">
                   {t("distill.modelNoMatch")}
@@ -444,7 +444,7 @@ export function DistillConfig({
         <h2 className="text-[13px] font-semibold tracking-tight">
           {t("distill.configTitle")}
         </h2>
-        <div className="tt-toolbar shrink-0 gap-1">
+        <div className="aitracker-toolbar shrink-0 gap-1">
           {(
             [
               ["quick", t("common.distillation.modeQuick"), Zap],
@@ -456,7 +456,7 @@ export function DistillConfig({
               type="button"
               onClick={() => onMode(key)}
               aria-pressed={mode === key}
-              className={`tt-chip font-mono ${mode === key ? "tt-chip-on" : ""}`}
+              className={`aitracker-chip font-mono ${mode === key ? "aitracker-chip-on" : ""}`}
             >
               <Icon className="size-3" /> {label}
             </button>
@@ -471,7 +471,7 @@ export function DistillConfig({
         <Link
           to="/settings"
           search={{ section: "model" }}
-          className="tt-chip shrink-0 font-mono"
+          className="aitracker-chip shrink-0 font-mono"
         >
           {t("distill.manageModels")}
         </Link>
@@ -509,7 +509,7 @@ export function DistillConfig({
           <RowLabel>{t("distill.stepMaterial")}</RowLabel>
           {mode === "quick" && (
             <>
-              <div className="tt-toolbar gap-1">
+              <div className="aitracker-toolbar gap-1">
                 {(
                   [
                     ["session", t("distill.grainSession")],
@@ -523,7 +523,7 @@ export function DistillConfig({
                       type="button"
                       onClick={() => onGranularity(value)}
                       aria-pressed={on}
-                      className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                      className={`aitracker-chip font-mono ${on ? "aitracker-chip-on" : ""}`}
                     >
                       {label}
                     </button>
@@ -531,7 +531,7 @@ export function DistillConfig({
                 })}
               </div>
               <span className="h-4 w-px bg-border/60" />
-              <div className="tt-toolbar gap-1">
+              <div className="aitracker-toolbar gap-1">
                 {(
                   [
                     ["today", t("distill.rangeToday")],
@@ -547,7 +547,7 @@ export function DistillConfig({
                       type="button"
                       onClick={() => onTimeRange(value)}
                       aria-pressed={on}
-                      className={`tt-chip font-mono ${on ? "tt-chip-on" : ""}`}
+                      className={`aitracker-chip font-mono ${on ? "aitracker-chip-on" : ""}`}
                     >
                       {label}
                     </button>

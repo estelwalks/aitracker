@@ -5,7 +5,7 @@
  * candidate facts only. `assertPayloadSafe` is the final outbound audit point:
  * a secret, path, command, injection, or entity name never reaches the model.
  */
-import type { AIExecutorPort } from "../../ai-orchestration/ai-executor.ts";
+import type { AIExecutorPort } from "../../ai-orchestration/index.ts";
 import type {
   AIExecutionStatus,
   AIExecutionSummary,

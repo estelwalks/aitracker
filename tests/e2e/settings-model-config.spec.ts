@@ -4,8 +4,8 @@ test.beforeEach(async ({ page }) => {
   // 固定浏览器系统语言为 zh-CN 且无存储偏好，保证默认语言为中文
   // （与 locale.spec.ts 的既有做法一致）。
   await page.addInitScript(() => {
-    window.localStorage.removeItem("tt-locale");
-    window.localStorage.removeItem("tt-locale-mode");
+    window.localStorage.removeItem("aitracker-locale");
+    window.localStorage.removeItem("aitracker-locale-mode");
     Object.defineProperty(window.navigator, "language", {
       get: () => "zh-CN",
       configurable: true,

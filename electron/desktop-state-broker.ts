@@ -43,7 +43,7 @@ export class DesktopStateBroker {
         method: init.method ?? "GET",
         headers: {
           Accept: "application/json",
-          "x-trusttools-desktop-broker": token,
+          "x-aitracker-desktop-broker": token,
           ...(init.body === undefined
             ? {}
             : { "content-type": "application/json" }),
