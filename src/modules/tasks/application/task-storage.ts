@@ -163,6 +163,16 @@ export function validateSchedule(taskId: string, schedule: Schedule): Schedule {
   const definition = JOB_DEFINITIONS.find((candidate) => candidate.id === id);
   if (!definition) throw new TypeError("Invalid task id");
   const parsed = ScheduleSchema.parse(schedule);
+  const reportScheduleKinds = {
+    "reports.generate.daily": "daily",
+    "reports.generate.weekly": "weekly",
+    "reports.generate.monthly": "monthly",
+  } as const;
+  const reportKind =
+    reportScheduleKinds[taskId as keyof typeof reportScheduleKinds];
+  if (reportKind && parsed.kind !== reportKind) {
+    throw new TypeError("Schedule kind is not supported for report task");
+  }
   if (
     parsed.kind === "interval" &&
     (parsed.minutes < definition.constraints.minMinutes ||

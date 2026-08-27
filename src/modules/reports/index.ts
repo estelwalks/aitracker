@@ -29,12 +29,25 @@ export { BUILTIN_REPORT_DEFINITIONS } from "./domain.ts";
 export { createReportsApplication } from "./application/index.ts";
 export type { ReportsApplicationOptions } from "./application/index.ts";
 export { ReportSchedule } from "./presentation/ReportSchedule.tsx";
+export { MarkdownView } from "./presentation/markdown.tsx";
 export {
   DEFAULT_REPORT_SCHEDULE,
+  DEFAULT_REPORT_SCHEDULES,
+  LEGACY_REPORT_TASK_ID,
   nextReportScheduleAt,
   parseReportSchedule,
+  parseReportSchedules,
+  parseReportSchedulesWithMigration,
   REPORT_SCHEDULE_KEY,
+  REPORT_TASK_IDS,
   reportDefinitionIdForSchedule,
+  reportSchedulePreferenceRequests,
   serializeReportSchedule,
+  serializeReportSchedules,
 } from "./schedule.ts";
-export type { ReportScheduleConfig, ScheduleGranularity } from "./schedule.ts";
+export type {
+  ReportScheduleConfig,
+  ReportScheduleKind,
+  ReportSchedulesConfig,
+  ScheduleGranularity,
+} from "./schedule.ts";

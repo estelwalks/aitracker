@@ -3,61 +3,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getReportScheduleStatus,
   syncReportScheduleToTasks,
-  type ReportScheduleStatus,
+  type ReportScheduleStatuses,
 } from "../server-fns.ts";
 import {
   getPreference,
   setPreference,
 } from "../../../lib/preferences/client.ts";
 import {
-  DEFAULT_REPORT_SCHEDULE,
-  parseReportSchedule,
-  nextReportScheduleAt,
+  DEFAULT_REPORT_SCHEDULES,
+  parseReportSchedulesWithMigration,
   REPORT_SCHEDULE_KEY,
-  serializeReportSchedule,
-  type ReportScheduleConfig,
-  type ScheduleGranularity,
+  serializeReportSchedules,
+  type ReportSchedulesConfig,
 } from "../schedule.ts";
 
-/**
- * ReportSchedule configuration persistence + scheduler sync.
- *
- * The config persists to SQLite `app_preferences` (key `tt.report.schedule`).
- * Browser and Electron renderers use the same server-owned preference client. Every save additionally
- * syncs the config into the task scheduler's `reports.generate` preference via
- * `syncReportScheduleToTasks` (Story B-200), so the persisted config actually
- * drives scheduled generation — a sync failure never blocks the local save.
- */
-/** Outcome of syncing the config into the task scheduler. */
 export interface ReportScheduleSyncResult {
   readonly ok: boolean;
   readonly errorCode?: string;
 }
 
 export {
-  DEFAULT_REPORT_SCHEDULE,
-  parseReportSchedule,
-  serializeReportSchedule,
+  DEFAULT_REPORT_SCHEDULES,
+  parseReportSchedulesWithMigration,
+  serializeReportSchedules,
 };
-export { nextReportScheduleAt };
-export type { ReportScheduleConfig, ScheduleGranularity };
+export type { ReportSchedulesConfig };
 
-async function loadFromPlatform(): Promise<string | null> {
-  const value = await getPreference(REPORT_SCHEDULE_KEY);
-  return typeof value === "string" ? value : null;
+async function loadFromPlatform(): Promise<unknown> {
+  return getPreference(REPORT_SCHEDULE_KEY);
 }
 
-async function saveToPlatform(serialized: string): Promise<void> {
-  await setPreference(REPORT_SCHEDULE_KEY, serialized);
+async function saveToPlatform(config: ReportSchedulesConfig): Promise<void> {
+  await setPreference(REPORT_SCHEDULE_KEY, config);
 }
 
-/**
- * Push the current config into the task scheduler's `reports.generate`
- * preference. A transport/validation failure degrades to `{ ok: false }` and
- * never blocks the local save — the scheduler state simply stays as it was.
- */
 async function syncScheduleToTasks(
-  config: ReportScheduleConfig,
+  config: ReportSchedulesConfig,
 ): Promise<ReportScheduleSyncResult> {
   try {
     const result = await syncReportScheduleToTasks({ data: config });
@@ -69,29 +50,22 @@ async function syncScheduleToTasks(
   }
 }
 
-/**
- * Read the schedule once from SQLite and retain the latest value in memory for
- * toggle operations.
- */
 export function useReportSchedule(): {
-  schedule: ReportScheduleConfig;
-  /** Persist a full config (marks it configured) and sync it to the task scheduler. */
-  save: (next: ReportScheduleConfig) => Promise<ReportScheduleSyncResult>;
-  /** Toggle enabled without flipping the "configured" flag; syncs to the scheduler. */
-  setEnabled: (enabled: boolean) => Promise<ReportScheduleSyncResult>;
+  schedule: ReportSchedulesConfig;
+  save: (next: ReportSchedulesConfig) => Promise<ReportScheduleSyncResult>;
   loaded: boolean;
-  status: ReportScheduleStatus | null;
+  status: ReportScheduleStatuses | null;
   statusError: boolean;
   reload: () => void;
 } {
-  const [schedule, setSchedule] = useState<ReportScheduleConfig>(
-    DEFAULT_REPORT_SCHEDULE,
+  const [schedule, setSchedule] = useState<ReportSchedulesConfig>(
+    DEFAULT_REPORT_SCHEDULES,
   );
   const [loaded, setLoaded] = useState(false);
-  const [status, setStatus] = useState<ReportScheduleStatus | null>(null);
+  const [status, setStatus] = useState<ReportScheduleStatuses | null>(null);
   const [statusError, setStatusError] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
-  const lastSavedRef = useRef<string>("");
+  const lastSavedRef = useRef("");
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -106,14 +80,18 @@ export function useReportSchedule(): {
     let cancelled = false;
     setStatusError(false);
     void (async () => {
-      const [raw, nextStatus] = await Promise.all([
-        loadFromPlatform(),
-        getReportScheduleStatus(),
-      ]);
+      const raw = await loadFromPlatform();
+      const parsed = parseReportSchedulesWithMigration(raw);
+      // Browser/dev startup may race server composition. Persisting the v2
+      // value here makes migration deterministic in either environment.
+      if (parsed.migratedFromLegacy) {
+        await saveToPlatform(parsed.config);
+        await syncScheduleToTasks(parsed.config);
+      }
+      const nextStatus = await getReportScheduleStatus();
       if (cancelled) return;
-      const parsed = parseReportSchedule(raw);
-      setSchedule(parsed);
-      lastSavedRef.current = serializeReportSchedule(parsed);
+      setSchedule(parsed.config);
+      lastSavedRef.current = serializeReportSchedules(parsed.config);
       setStatus(nextStatus);
       setLoaded(true);
     })().catch(() => {
@@ -133,23 +111,23 @@ export function useReportSchedule(): {
     return () => window.clearInterval(timer);
   }, [loaded, refreshStatus]);
 
-  const persist = useCallback(
-    async (next: ReportScheduleConfig): Promise<ReportScheduleSyncResult> => {
-      const serialized = serializeReportSchedule(next);
+  const save = useCallback(
+    async (next: ReportSchedulesConfig): Promise<ReportScheduleSyncResult> => {
+      const configured = { ...next, configured: true } as const;
+      const serialized = serializeReportSchedules(configured);
       const previousSerialized = lastSavedRef.current;
-      const previous =
-        previousSerialized.length > 0
-          ? parseReportSchedule(previousSerialized)
-          : schedule;
+      const previous = previousSerialized
+        ? parseReportSchedulesWithMigration(previousSerialized).config
+        : schedule;
       lastSavedRef.current = serialized;
-      setSchedule(next);
+      setSchedule(configured);
       try {
-        await saveToPlatform(serialized);
-        const result = await syncScheduleToTasks(next);
+        await saveToPlatform(configured);
+        const result = await syncScheduleToTasks(configured);
         await refreshStatus();
         return result;
       } catch {
-        lastSavedRef.current = serializeReportSchedule(previous);
+        lastSavedRef.current = serializeReportSchedules(previous);
         setSchedule(previous);
         return { ok: false };
       }
@@ -157,28 +135,9 @@ export function useReportSchedule(): {
     [refreshStatus, schedule],
   );
 
-  const save = useCallback(
-    async (next: ReportScheduleConfig) => {
-      return persist({ ...next, configured: true });
-    },
-    [persist],
-  );
-
-  const setEnabled = useCallback(
-    async (enabled: boolean) => {
-      const current =
-        lastSavedRef.current.length > 0
-          ? parseReportSchedule(lastSavedRef.current)
-          : schedule;
-      return persist({ ...current, enabled });
-    },
-    [persist, schedule],
-  );
-
   return {
     schedule,
     save,
-    setEnabled,
     loaded,
     status,
     statusError,
