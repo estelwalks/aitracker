@@ -1,10 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { syncReportScheduleToTasks } from "../server-fns.ts";
+import {
+  getReportScheduleStatus,
+  syncReportScheduleToTasks,
+  type ReportScheduleStatus,
+} from "../server-fns.ts";
 import {
   getPreference,
   setPreference,
 } from "../../../lib/preferences/client.ts";
+import {
+  DEFAULT_REPORT_SCHEDULE,
+  parseReportSchedule,
+  nextReportScheduleAt,
+  REPORT_SCHEDULE_KEY,
+  serializeReportSchedule,
+  type ReportScheduleConfig,
+  type ScheduleGranularity,
+} from "../schedule.ts";
 
 /**
  * ReportSchedule configuration persistence + scheduler sync.
@@ -15,91 +28,27 @@ import {
  * `syncReportScheduleToTasks` (Story B-200), so the persisted config actually
  * drives scheduled generation — a sync failure never blocks the local save.
  */
-export type ScheduleGranularity = "daily" | "weekly" | "monthly";
-
-export interface ReportScheduleConfig {
-  /** False until the user has saved at least once ("configured"). */
-  readonly configured: boolean;
-  readonly enabled: boolean;
-  readonly granularity: ScheduleGranularity;
-  /** 24h `HH:MM` (prototype recommends 18:30). */
-  readonly time: string;
-  /** 0 = Monday … 6 = Sunday; only used for weekly granularity. */
-  readonly dayOfWeek: number;
-  /** 1–31; only used for monthly granularity. */
-  readonly dayOfMonth: number;
-}
-
 /** Outcome of syncing the config into the task scheduler. */
 export interface ReportScheduleSyncResult {
   readonly ok: boolean;
   readonly errorCode?: string;
 }
 
-export const DEFAULT_REPORT_SCHEDULE: ReportScheduleConfig = {
-  configured: false,
-  enabled: false,
-  granularity: "daily",
-  time: "18:30",
-  dayOfWeek: 1,
-  dayOfMonth: 1,
+export {
+  DEFAULT_REPORT_SCHEDULE,
+  parseReportSchedule,
+  serializeReportSchedule,
 };
-
-const SCHEDULE_KEY = "tt.report.schedule";
-
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-function isScheduleGranularity(value: unknown): value is ScheduleGranularity {
-  return value === "daily" || value === "weekly" || value === "monthly";
-}
-
-export function parseReportSchedule(raw: string | null): ReportScheduleConfig {
-  if (!raw) return DEFAULT_REPORT_SCHEDULE;
-  try {
-    const value = JSON.parse(raw) as Partial<ReportScheduleConfig>;
-    const clampDayOfWeek = (n: unknown): number =>
-      typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 6
-        ? n
-        : DEFAULT_REPORT_SCHEDULE.dayOfWeek;
-    const clampDayOfMonth = (n: unknown): number =>
-      typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 31
-        ? n
-        : DEFAULT_REPORT_SCHEDULE.dayOfMonth;
-    return {
-      configured:
-        typeof value.configured === "boolean"
-          ? value.configured
-          : DEFAULT_REPORT_SCHEDULE.configured,
-      enabled:
-        typeof value.enabled === "boolean"
-          ? value.enabled
-          : DEFAULT_REPORT_SCHEDULE.enabled,
-      granularity: isScheduleGranularity(value.granularity)
-        ? value.granularity
-        : DEFAULT_REPORT_SCHEDULE.granularity,
-      time:
-        typeof value.time === "string" && TIME_RE.test(value.time)
-          ? value.time
-          : DEFAULT_REPORT_SCHEDULE.time,
-      dayOfWeek: clampDayOfWeek(value.dayOfWeek),
-      dayOfMonth: clampDayOfMonth(value.dayOfMonth),
-    };
-  } catch {
-    return DEFAULT_REPORT_SCHEDULE;
-  }
-}
-
-export function serializeReportSchedule(config: ReportScheduleConfig): string {
-  return JSON.stringify(config);
-}
+export { nextReportScheduleAt };
+export type { ReportScheduleConfig, ScheduleGranularity };
 
 async function loadFromPlatform(): Promise<string | null> {
-  const value = await getPreference(SCHEDULE_KEY);
+  const value = await getPreference(REPORT_SCHEDULE_KEY);
   return typeof value === "string" ? value : null;
 }
 
 async function saveToPlatform(serialized: string): Promise<void> {
-  await setPreference(SCHEDULE_KEY, serialized);
+  await setPreference(REPORT_SCHEDULE_KEY, serialized);
 }
 
 /**
@@ -131,37 +80,81 @@ export function useReportSchedule(): {
   /** Toggle enabled without flipping the "configured" flag; syncs to the scheduler. */
   setEnabled: (enabled: boolean) => Promise<ReportScheduleSyncResult>;
   loaded: boolean;
+  status: ReportScheduleStatus | null;
+  statusError: boolean;
+  reload: () => void;
 } {
   const [schedule, setSchedule] = useState<ReportScheduleConfig>(
     DEFAULT_REPORT_SCHEDULE,
   );
   const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<ReportScheduleStatus | null>(null);
+  const [statusError, setStatusError] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
   const lastSavedRef = useRef<string>("");
+
+  const refreshStatus = useCallback(async () => {
+    try {
+      setStatus(await getReportScheduleStatus());
+      setStatusError(false);
+    } catch {
+      setStatusError(true);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    setStatusError(false);
     void (async () => {
-      const raw = await loadFromPlatform();
+      const [raw, nextStatus] = await Promise.all([
+        loadFromPlatform(),
+        getReportScheduleStatus(),
+      ]);
       if (cancelled) return;
       const parsed = parseReportSchedule(raw);
       setSchedule(parsed);
       lastSavedRef.current = serializeReportSchedule(parsed);
+      setStatus(nextStatus);
       setLoaded(true);
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setStatusError(true);
+        setLoaded(true);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadTick]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const timer = window.setInterval(() => void refreshStatus(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [loaded, refreshStatus]);
 
   const persist = useCallback(
     async (next: ReportScheduleConfig): Promise<ReportScheduleSyncResult> => {
       const serialized = serializeReportSchedule(next);
+      const previousSerialized = lastSavedRef.current;
+      const previous =
+        previousSerialized.length > 0
+          ? parseReportSchedule(previousSerialized)
+          : schedule;
       lastSavedRef.current = serialized;
       setSchedule(next);
-      await saveToPlatform(serialized);
-      return syncScheduleToTasks(next);
+      try {
+        await saveToPlatform(serialized);
+        const result = await syncScheduleToTasks(next);
+        await refreshStatus();
+        return result;
+      } catch {
+        lastSavedRef.current = serializeReportSchedule(previous);
+        setSchedule(previous);
+        return { ok: false };
+      }
     },
-    [],
+    [refreshStatus, schedule],
   );
 
   const save = useCallback(
@@ -182,5 +175,13 @@ export function useReportSchedule(): {
     [persist, schedule],
   );
 
-  return { schedule, save, setEnabled, loaded };
+  return {
+    schedule,
+    save,
+    setEnabled,
+    loaded,
+    status,
+    statusError,
+    reload: () => setReloadTick((value) => value + 1),
+  };
 }

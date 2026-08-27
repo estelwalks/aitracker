@@ -12,6 +12,7 @@ export const settings = {
   sections: {
     preferences: "应用偏好",
     scan: "扫描与安全",
+    reports: "日报与周报",
     model: "模型与 AI",
     data: "数据与存储",
     widget: "小组件",

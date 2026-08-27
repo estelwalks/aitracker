@@ -1,18 +1,22 @@
 export const SETTINGS_CATEGORIES = [
   "preferences",
   "scan",
+  "reports",
   "model",
   "data",
   "about",
 ] as const;
 
 export type SettingsCategory = (typeof SETTINGS_CATEGORIES)[number];
-export type SettingsSection = "scan" | "model" | "menu-bar-app";
+export type SettingsSection = "scan" | "reports" | "model" | "menu-bar-app";
 
 export function parseSettingsSection(
   value: unknown,
 ): SettingsSection | undefined {
-  return value === "scan" || value === "model" || value === "menu-bar-app"
+  return value === "scan" ||
+    value === "reports" ||
+    value === "model" ||
+    value === "menu-bar-app"
     ? value
     : undefined;
 }

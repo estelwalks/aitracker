@@ -10,7 +10,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { ReportContent, ReportPeriod } from "./contracts.ts";
-import type { Schedule } from "../tasks/index.ts";
+import type { Schedule } from "../tasks/application/task-storage.ts";
+import {
+  nextReportScheduleAt,
+  parseReportSchedule,
+  REPORT_SCHEDULE_KEY,
+} from "./schedule.ts";
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
@@ -175,6 +180,23 @@ export interface SyncReportScheduleResult {
   readonly errorCode?: string;
 }
 
+export interface ReportScheduleStatus {
+  readonly lastRun: {
+    readonly status:
+      | "queued"
+      | "running"
+      | "succeeded"
+      | "failed"
+      | "cancelled"
+      | "skipped"
+      | "abandoned";
+    readonly startedAt?: string;
+    readonly finishedAt?: string;
+  } | null;
+  readonly nextRunAt: string | null;
+  readonly pending: boolean;
+}
+
 /**
  * Maps a persisted report schedule config to the task scheduler's `Schedule`.
  * The report config numbers weekdays 0=Monday…6=Sunday while the task schedule
@@ -253,3 +275,45 @@ export const syncReportScheduleToTasks = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<SyncReportScheduleResult> =>
     syncReportScheduleToTaskPreference(data),
   );
+
+/** Renderer-safe evidence for the same persisted schedule used by the task runtime. */
+export const getReportScheduleStatus = createServerFn({
+  method: "GET",
+}).handler(async (): Promise<ReportScheduleStatus> => {
+  const { getCompositionRoot } =
+    await import("../../app/composition.server.ts");
+  const root = await getCompositionRoot();
+  const stored =
+    root.database.features.appPreferences.get(REPORT_SCHEDULE_KEY)?.value;
+  const config =
+    typeof stored === "string" ? parseReportSchedule(stored) : undefined;
+  const runs = await root.taskApi.listRuns({
+    taskId: "reports.generate",
+    limit: 20,
+  });
+  const scheduledRuns = runs.ok
+    ? runs.value.filter((run) => run.trigger === "schedule")
+    : [];
+  const lastRun = scheduledRuns[0];
+  const pending = scheduledRuns.some(
+    (run) =>
+      run.status === "queued" ||
+      run.status === "running" ||
+      run.status === "waiting-approval",
+  );
+  return {
+    lastRun: lastRun
+      ? {
+          status:
+            lastRun.status === "waiting-approval" ? "queued" : lastRun.status,
+          ...(lastRun.startedAt ? { startedAt: lastRun.startedAt } : {}),
+          ...(lastRun.finishedAt ? { finishedAt: lastRun.finishedAt } : {}),
+        }
+      : null,
+    nextRunAt:
+      config?.enabled && config.configured
+        ? nextReportScheduleAt(config, new Date()).toISOString()
+        : null,
+    pending,
+  };
+});

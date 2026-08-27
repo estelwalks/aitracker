@@ -463,6 +463,57 @@ test("monthly schedules roll to the next month and clamp short months", () => {
   assert.equal(clamped.getDate(), 31);
 });
 
+test("disabled-startup report schedules wait for the configured time and refresh re-arms the timer", async () => {
+  const reportDefinition = JOB_DEFINITIONS.find(
+    (definition) => definition.id === "reports.generate",
+  );
+  assert.ok(reportDefinition);
+  const h = harness();
+  await h.prefs.set("reports.generate", {
+    enabled: true,
+    schedule: { kind: "daily", localTime: "18:30" },
+  });
+  const now = new Date(2026, 7, 27, 18, 0, 0, 0);
+  const delays: number[] = [];
+  const cleared: number[] = [];
+  let timerSequence = 0;
+  let calls = 0;
+  const scheduler = createTaskScheduler({
+    preferences: h.prefs,
+    runs: h.repository,
+    catalog: [reportDefinition],
+    clock: { now: () => new Date(now) },
+    setTimeout(_handler, delay) {
+      delays.push(delay);
+      return { id: ++timerSequence } as unknown as ReturnType<
+        typeof setTimeout
+      >;
+    },
+    clearTimeout(timer) {
+      cleared.push((timer as unknown as { id: number }).id);
+    },
+    executors: {
+      "generate-report-v1": async () => {
+        calls += 1;
+      },
+    },
+  });
+
+  await scheduler.start();
+  assert.equal(calls, 0);
+  assert.equal(delays.at(-1), 30 * 60_000);
+
+  await h.prefs.set("reports.generate", {
+    enabled: true,
+    schedule: { kind: "daily", localTime: "19:00" },
+  });
+  await scheduler.refresh();
+  assert.equal(calls, 0);
+  assert.equal(delays.at(-1), 60 * 60_000);
+  assert.deepEqual(cleared, [1]);
+  await scheduler.stop();
+});
+
 test("uses the effective schedule and last successful completion for freshness", () => {
   const definition = {
     id: "usage.refresh",

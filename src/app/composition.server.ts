@@ -46,6 +46,10 @@ import { createFileSecretCodec } from "../modules/ai-orchestration/infrastructur
 import { deterministicOfflineFallback } from "../modules/ai-orchestration/application.ts";
 import { createReportsApplication } from "../modules/reports/application/index.ts";
 import type { ReportsApplication } from "../modules/reports/contracts.ts";
+import {
+  parseReportSchedule,
+  REPORT_SCHEDULE_KEY,
+} from "../modules/reports/schedule.ts";
 import { createReportGenerationPort } from "../modules/reports/infrastructure/ai-generation-adapter.ts";
 import { createReportContextPort } from "../modules/reports/infrastructure/usage-context-adapter.ts";
 import type { KnowledgeRepository } from "../modules/knowledge/contracts.ts";
@@ -648,6 +652,13 @@ async function buildCompositionRoot(clock: Clock): Promise<CompositionRoot> {
       },
     },
     reports,
+    reportSchedule: async () => {
+      const stored =
+        databaseRuntime.features.appPreferences.get(REPORT_SCHEDULE_KEY)?.value;
+      return typeof stored === "string"
+        ? parseReportSchedule(stored).granularity
+        : undefined;
+    },
     monitoring,
   });
 

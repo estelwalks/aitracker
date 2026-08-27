@@ -10,6 +10,10 @@ import type {
   MonitoringCollectorId,
   MonitoringRecorder,
 } from "../../../monitoring/contracts.ts";
+import {
+  reportDefinitionIdForSchedule,
+  type ScheduleGranularity,
+} from "../../../reports/index.ts";
 
 /**
  * Application ports used by task executors. The registry deliberately accepts
@@ -47,6 +51,8 @@ export interface ExecutorRegistryOptions {
   readonly installation?: RefreshInstallationPort;
   readonly retention?: ApplyRetentionPort;
   readonly reports?: ReportsApplication;
+  /** Reads the persisted report cadence so one task can produce daily or weekly reports. */
+  readonly reportSchedule?: () => Promise<ScheduleGranularity | undefined>;
   /** Operational status only; it never receives collector inputs or output. */
   readonly monitoring?: MonitoringRecorder;
 }
@@ -104,22 +110,22 @@ function bindPort(
 }
 
 /**
- * Reports executor. The task scheduler only carries opaque task/run ids, so
- * the executor derives the report definition from the reports application's
- * built-in catalog. The catalog exposes a `reports.generate` task that maps
- * to the daily brief; weekly review is produced by its own scheduled run of
- * the same use case (the application's `generate` accepts a `definitionId`).
- *
- * For now the executor picks the first enabled definition with kind
- * `"daily"`; if the catalog shape grows, this stays deterministic. When no
- * reports application is injected the executor fails safe (`unavailable`),
- * matching the other adapters.
+ * Reports executor. The scheduler carries an opaque `reports.generate` task;
+ * the injected schedule reader resolves that task to the configured daily or
+ * weekly report definition before invoking the same generation use case used
+ * by the manual action. Monthly cadence intentionally produces the weekly
+ * review because the product currently has no separate monthly definition.
  */
-function bindReports(app: ReportsApplication | undefined): TaskExecutor {
+function bindReports(
+  app: ReportsApplication | undefined,
+  readSchedule?: () => Promise<ScheduleGranularity | undefined>,
+): TaskExecutor {
   return async () => {
     if (!app) return unavailable();
+    const granularity = await readSchedule?.();
+    const definitionId = reportDefinitionIdForSchedule(granularity ?? "daily");
     const definition = app.definitions.find(
-      (item) => item.kind === "daily" && item.enabled,
+      (item) => item.definitionId === definitionId && item.enabled,
     );
     if (!definition) return unavailable();
     const result = await app.generate({
@@ -202,7 +208,7 @@ export function createExecutorRegistry(
       options.monitoring,
     ),
     "apply-retention-v1": bindPort(options.retention),
-    "generate-report-v1": bindReports(options.reports),
+    "generate-report-v1": bindReports(options.reports, options.reportSchedule),
   };
   const allowed = new Set<string>(JOB_EXECUTOR_KEYS);
   return Object.freeze({
