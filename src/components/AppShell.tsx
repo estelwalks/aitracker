@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
             {!collapsed && (
               <div className="min-w-0 leading-tight">
-                <div className="truncate text-[13px] font-semibold tracking-tight">
+                <div className="aitracker-text-body truncate font-semibold tracking-tight">
                   {APP_NAME}
                 </div>
               </div>
@@ -150,7 +150,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       strokeWidth={1.75}
                     />
                     {!collapsed && (
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                      <span className="aitracker-text-body min-w-0 flex-1 truncate font-medium">
                         {label}
                       </span>
                     )}
@@ -166,7 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               preload="intent"
               preloadDelay={80}
               title={t("nav.sources")}
-              className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+              className={`aitracker-text-body flex items-center rounded-md py-2 transition-colors ${
                 collapsed ? "justify-center px-0" : "gap-3 px-3"
               } ${pathname.startsWith("/sources") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
             >
@@ -182,7 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               preload="intent"
               preloadDelay={80}
               title={t("nav.settings")}
-              className={`flex items-center rounded-md py-2 text-[13px] transition-colors ${
+              className={`aitracker-text-body flex items-center rounded-md py-2 transition-colors ${
                 collapsed ? "justify-center px-0" : "gap-3 px-3"
               } ${pathname.startsWith("/settings") ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"}`}
             >
@@ -197,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => setCollapsed((value) => !value)}
               title={t("nav.collapse")}
-              className={`flex w-full items-center rounded-md py-2 text-[13px] transition-colors ${
+              className={`aitracker-text-body flex w-full items-center rounded-md py-2 transition-colors ${
                 collapsed ? "justify-center px-0" : "gap-3 px-3"
               } text-left text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground`}
             >
@@ -222,7 +222,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="aitracker-shell-content flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ paddingLeft: railWidth, paddingTop: chromeOffset }}
         >
-          <main className="aitracker-app-main aitracker-scroll min-w-0 flex-1 px-4 pb-14 pt-2 md:px-8 md:pt-4 2xl:px-10 2xl:pt-5">
+          <main className="aitracker-app-main aitracker-scroll min-w-0 flex-1 px-[16px] pt-[12px] pb-14 md:px-[24px] md:pt-[16px] 2xl:px-[32px]">
             <div className="aitracker-container">{children}</div>
           </main>
         </div>
