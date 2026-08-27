@@ -95,7 +95,8 @@ export interface TaskApi {
 }
 
 export interface CreateTaskApiOptions {
-  readonly scheduler: Pick<TaskScheduler, "runNow" | "cancel">;
+  readonly scheduler: Pick<TaskScheduler, "runNow" | "cancel"> &
+    Partial<Pick<TaskScheduler, "refresh">>;
   readonly preferences: TaskPreferenceRepository;
   readonly runs: TaskRunRepository;
   readonly catalog?: readonly JobTypeDefinition[];
@@ -330,6 +331,7 @@ export function createTaskApi(options: CreateTaskApiOptions): TaskApi {
       };
       try {
         await options.preferences.set(taskId.value, preference);
+        await options.scheduler.refresh?.();
         return ok(publicPreference(parsed.data.taskId, preference));
       } catch {
         return err("errors.tasks.persistenceFailed");

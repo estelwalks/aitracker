@@ -1,79 +1,11 @@
-import type { ReactNode } from "react";
 import { AlertTriangle, MonitorX, RefreshCw } from "lucide-react";
 
 import { useI18n } from "../../../lib/i18n/context";
-
-export function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-3 last:border-0">
-      <div>
-        <div className="aitracker-text-body">{label}</div>
-        {hint && (
-          <div className="aitracker-text-caption mt-0.5 text-muted-foreground">
-            {hint}
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-export function Toggle({
-  value,
-  onChange,
-  disabled = false,
-}: {
-  value: boolean;
-  onChange: (value: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      disabled={disabled}
-      className={`h-5 w-9 rounded-full p-0.5 transition-colors ${
-        value ? "bg-primary" : "border border-border bg-surface-2"
-      } disabled:cursor-not-allowed disabled:opacity-50`}
-      aria-pressed={value}
-    >
-      <span
-        className="block size-4 rounded-full bg-background transition-transform"
-        style={{ transform: value ? "translateX(16px)" : "translateX(0)" }}
-      />
-    </button>
-  );
-}
-
-/** 设置页内嵌分组的小标题（带可选图标）。 */
-export function SectionHeading({
-  icon,
-  children,
-}: {
-  icon?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="mb-1.5 mt-1 flex items-center gap-1.5">
-      {icon && (
-        <span className="grid size-6 shrink-0 place-items-center rounded-md bg-surface-2 text-muted-foreground">
-          {icon}
-        </span>
-      )}
-      <h3 className="aitracker-text-section-title font-semibold tracking-tight">
-        {children}
-      </h3>
-    </div>
-  );
-}
+export {
+  ScheduleField as Field,
+  ScheduleSectionHeading as SectionHeading,
+  ScheduleToggle as Toggle,
+} from "../../../shared/ui/schedule-config";
 
 /** 数据读取失败的内联提示（带重试），供安全相关设置分组复用。 */
 export function SecurityLoadError({

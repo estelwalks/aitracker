@@ -79,6 +79,8 @@ export interface SchedulerOptions {
 
 export interface TaskScheduler {
   start(): Promise<void>;
+  /** Re-read persisted preferences and re-arm the shared timer immediately. */
+  refresh(): Promise<void>;
   stop(): Promise<void>;
   runNow(request: { taskId: TaskId; reason: SchedulerReason }): Promise<JobRun>;
   cancel(runId: RunId | string): Promise<void>;
@@ -550,9 +552,14 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         scheduled && (!lastSuccess || scheduled > lastSuccess)
           ? scheduled
           : lastSuccess;
-      // A never-successful enabled task is intentionally scheduled promptly;
-      // the wake handler records a dispatch timestamp before it re-arms.
-      const candidate = base ? nextRunAt(schedule, base) : clock.now();
+      // Startup collectors without a success run immediately. Calendar tasks
+      // whose startup policy is disabled wait for their first configured
+      // occurrence instead of firing as soon as the preference is enabled.
+      const candidate = base
+        ? nextRunAt(schedule, base)
+        : definition.startupPolicy === "disabled"
+          ? nextRunAt(schedule, clock.now())
+          : clock.now();
       if (!soonest || candidate < soonest) soonest = candidate;
     }
     if (soonest && started && lifecycle === expectedLifecycle)
@@ -775,6 +782,17 @@ export function createTaskScheduler(options: SchedulerOptions): TaskScheduler {
         ...activeExecutions,
       ]);
       if (startPromise === pendingStart) startPromise = undefined;
+    },
+    async refresh() {
+      const pendingStart = startPromise;
+      if (pendingStart) await pendingStart.catch(() => undefined);
+      if (!started) return;
+      const expectedLifecycle = ++lifecycle;
+      if (timer !== undefined) {
+        clearTimer(timer);
+        timer = undefined;
+      }
+      await scheduleNext(expectedLifecycle);
     },
     runNow,
     async cancel(runId) {

@@ -13,6 +13,7 @@ export const settings = {
   sections: {
     preferences: "アプリ設定",
     scan: "スキャンとセキュリティ",
+    reports: "日報と週報",
     model: "モデルと AI",
     data: "データとストレージ",
     widget: "ウィジェット",

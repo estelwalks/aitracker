@@ -12,6 +12,7 @@ export const settings = {
   sections: {
     preferences: "App preferences",
     scan: "Scan & security",
+    reports: "Daily & weekly reports",
     model: "Models & AI",
     data: "Data & storage",
     widget: "Widgets",
