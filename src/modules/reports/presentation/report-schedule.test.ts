@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   DEFAULT_REPORT_SCHEDULE,
@@ -82,4 +83,22 @@ test("nextReportScheduleAt follows local daily, weekly and month-end semantics",
   );
   assert.equal(monthly.getMonth(), 1);
   assert.equal(monthly.getDate(), 28);
+});
+
+test("reports page uses the collapsed schedule card while Settings stays expanded", async () => {
+  const [component, reportsPage, settingsPage] = await Promise.all([
+    readFile(new URL("./ReportSchedule.tsx", import.meta.url), "utf8"),
+    readFile(new URL("./ReportsPage.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../../settings/presentation/SettingsPage.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(component, /variant = "card"/);
+  assert.match(component, /aria-expanded=\{open\}/);
+  assert.match(component, /rounded-xl bg-card px-4 py-3/);
+  assert.match(component, /mt-3 divide-y divide-border\/40/);
+  assert.match(reportsPage, /<ReportSchedule \/>/);
+  assert.match(settingsPage, /<ReportSchedule variant="settings" \/>/);
 });

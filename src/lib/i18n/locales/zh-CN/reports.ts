@@ -43,7 +43,7 @@ export const reports = {
     desc: "按设定节奏自动生成日报/周报，无需手动触发。",
     enable: "开启自动定时生成",
     recommend: "推荐节奏：每日 18:30",
-    configure: "配置",
+    configure: "设置",
     on: "已开启",
     off: "已关闭",
     enabledLabel: "自动生成已开启",
