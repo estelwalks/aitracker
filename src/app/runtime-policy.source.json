@@ -20,8 +20,8 @@
       "network": "forbidden"
     },
     "sessions": {
-      "freshForMinutes": 30,
-      "defaultRefreshMinutes": 30,
+      "freshForMinutes": 5,
+      "defaultRefreshMinutes": 5,
       "startupPolicy": "if-stale",
       "staleReadable": true,
       "manualRefresh": true,
@@ -164,7 +164,7 @@
         "category": "collection",
         "defaultSchedule": {
           "kind": "interval",
-          "minutes": 30
+          "minutes": 5
         },
         "constraints": {
           "minMinutes": 5,

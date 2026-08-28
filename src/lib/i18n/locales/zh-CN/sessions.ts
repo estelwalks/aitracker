@@ -45,6 +45,7 @@ export const sessions = {
     desc: "调整搜索关键词、工具或时间范围后重试。",
   },
   refreshing: "刷新中",
+  refreshNow: "立即刷新",
   group: {
     today: "今天",
     yesterday: "昨天",
