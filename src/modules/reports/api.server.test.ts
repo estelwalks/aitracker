@@ -173,10 +173,14 @@ test("an active profile triggers a real generation against the profile endpoint"
       // proves modelId = profile id reached the profile-backed provider.
       const payload = JSON.parse(receivedBody) as {
         model?: string;
-        messages?: Array<{ content?: string }>;
+        messages?: Array<{ role?: string; content?: string }>;
       };
       assert.equal(payload.model, "profile-test-model");
-      assert.match(payload.messages?.[0]?.content ?? "", /本时段共/);
+      assert.equal(payload.messages?.[0]?.role, "system");
+      assert.match(payload.messages?.[0]?.content ?? "", /日报生成助手/);
+      assert.equal(payload.messages?.[1]?.role, "user");
+      assert.match(payload.messages?.[1]?.content ?? "", /本时段共/);
+      assert.doesNotMatch(payload.messages?.[1]?.content ?? "", /日报生成助手/);
       assert.equal(await latestRunStatus(root), "succeeded");
     } finally {
       await new Promise<void>((resolve, reject) =>

@@ -349,6 +349,7 @@ export const settings = {
         "Background generation complete: {completed} succeeded, {failed} failed, {skipped} skipped",
       refreshFailed: "Failed to refresh AI insights",
       skipped: "Skipped",
+      recovered: "Batch interrupted — marked failed (refresh again to retry)",
       rulesModeRefreshDisabled:
         "Refreshing AI insights is not needed in local-rules mode",
       save: "Save",

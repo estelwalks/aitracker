@@ -19,7 +19,10 @@ import {
   createCodexPendingContext,
 } from "./codex-context.ts";
 import { readDshSessionLog } from "./dsh-zstd.ts";
-import { normalizeProjectPath } from "./project-path.ts";
+import {
+  canonicalizeProjectPath,
+  normalizeProjectPath,
+} from "./project-path.ts";
 import {
   collectClaudeContext,
   collectClaudeToolResults,
@@ -2911,10 +2914,21 @@ export async function scanLocalUsage(
     ...dsh.events,
     ...genericResults.flatMap((result) => result.events),
   ];
-  const events = nativeEvents.map((event) => ({
-    ...event,
-    project: normalizeProjectPath(event.project, homeDirectory),
-  }));
+  const canonicalProjectPaths = new Map<string, Promise<string>>();
+  const events = await Promise.all(
+    nativeEvents.map((event) => {
+      let canonicalProject = canonicalProjectPaths.get(event.project);
+      if (canonicalProject == null) {
+        canonicalProject = canonicalizeProjectPath(
+          event.project,
+          homeDirectory,
+          platform,
+        );
+        canonicalProjectPaths.set(event.project, canonicalProject);
+      }
+      return canonicalProject.then((project) => ({ ...event, project }));
+    }),
+  );
   const summaryBySource = new Map<LocalUsageSource, LocalUsageSourceSummary>();
   for (const summary of [
     claude.summary,

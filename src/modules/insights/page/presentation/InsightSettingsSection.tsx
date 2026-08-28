@@ -63,20 +63,37 @@ function notifyInsightRefresh(): void {
 /** Map a persisted failure attribution to its i18n label key. */
 function failureReasonLabelKey(
   detail: string | null | undefined,
+  resultStatus: string | null,
 ): string | null {
-  if (!detail) return null;
-  if (detail.startsWith("http-error")) {
-    return "settings.insight.failureReason.http-error";
+  if (detail === "recovered") {
+    return "settings.insight.section.recovered";
   }
-  switch (detail) {
+  if (detail !== null && detail !== undefined && detail !== "") {
+    if (detail.startsWith("http-error")) {
+      return "settings.insight.failureReason.http-error";
+    }
+    if (detail.startsWith("invalid-output")) {
+      return "settings.insight.fallbackStatus.invalid-output";
+    }
+    switch (detail) {
+      case "timeout":
+        return "settings.insight.failureReason.timeout";
+      case "empty-content":
+        return "settings.insight.failureReason.empty-content";
+      case "reasoning-only":
+        return "settings.insight.failureReason.reasoning-only";
+      case "not-json":
+        return "settings.insight.failureReason.not-json";
+      default:
+        return "settings.insight.failureReason.unknown";
+    }
+  }
+  // No attribution detail: fall back to the coarse envelope status.
+  switch (resultStatus) {
     case "timeout":
       return "settings.insight.failureReason.timeout";
-    case "empty-content":
-      return "settings.insight.failureReason.empty-content";
-    case "reasoning-only":
-      return "settings.insight.failureReason.reasoning-only";
-    case "not-json":
-      return "settings.insight.failureReason.not-json";
+    case "invalid-output":
+      return "settings.insight.fallbackStatus.invalid-output";
     default:
       return "settings.insight.failureReason.unknown";
   }
@@ -241,13 +258,14 @@ export function InsightSettingsSection() {
           </div>
         );
       case "failed": {
-        const reasonKey = failureReasonLabelKey(item.resultDetail);
+        const reasonKey = failureReasonLabelKey(
+          item.resultDetail,
+          item.resultStatus,
+        );
         const reason =
           reasonKey !== null
             ? render(reasonKey)
-            : item.resultStatus === "timeout"
-              ? render("settings.insight.failureReason.timeout")
-              : render("settings.insight.failureReason.unknown");
+            : render("settings.insight.failureReason.unknown");
         return (
           <div className="flex items-center gap-2">
             <span className="text-red-600">✗</span>

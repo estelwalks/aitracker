@@ -197,6 +197,8 @@ export interface InsightEnhancementResult {
 
 export interface InsightEnhancerPort {
   readonly id: string;
+  /** Whether the effective preference resolves to a configured model. */
+  readonly isAvailable?: (profileId?: string | null) => Promise<boolean>;
   /** Read a valid persisted result without starting a model request. */
   readonly readCached?: (
     input: InsightEnhancementInput,

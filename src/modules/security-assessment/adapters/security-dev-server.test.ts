@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { ProviderSchema } from "skill-scanner";
 import type { ScanSkillReport } from "skill-scanner";
 
 import type {
@@ -213,15 +214,25 @@ function memoryPersistence(
   };
 }
 
-const configuredModel = {
-  provider: "openai" as const,
-  endpoint: "http://127.0.0.1:11434/v1",
-  apiKey: "test-key",
-  liteModel: "local-model",
-  proModel: "local-model",
-  timeoutMs: 120_000,
-  maxAgentTurns: 8,
-};
+function expectedScannerModel(
+  protocol: "openai" | "openai-responses" | "anthropic",
+): Record<string, unknown> {
+  const explicit = protocol === "openai" ? "openai-completions" : protocol;
+  const output: Record<string, unknown> = {
+    endpoint: "http://127.0.0.1:11434/v1",
+    apiKey: "test-key",
+    liteModel: "local-model",
+    proModel: "local-model",
+    timeoutMs: 120_000,
+    maxAgentTurns: 8,
+  };
+  if (ProviderSchema.safeParse(explicit).success) {
+    output.provider = explicit;
+  } else {
+    output.provider = protocol === "anthropic" ? "anthropic" : "openai";
+  }
+  return output;
+}
 
 test("dev model adapter defaults off and exposes config only after opt-in", () => {
   const profile = {
@@ -232,8 +243,57 @@ test("dev model adapter defaults off and exposes config only after opt-in", () =
     model: "local-model",
   };
   assert.equal(toSecurityModelConfig(profile, false), undefined);
-  assert.deepEqual(toSecurityModelConfig(profile, true), configuredModel);
+  assert.deepEqual(
+    toSecurityModelConfig(profile, true),
+    expectedScannerModel("openai"),
+  );
   assert.equal(toSecurityModelConfig(null, true), undefined);
+});
+
+test("dev model adapter preserves the explicit Responses protocol for upgraded scanners", () => {
+  const profile = {
+    mode: "custom" as const,
+    protocol: "openai-responses" as const,
+    apiKey: "test-key",
+    endpoint: "https://api.openai.com/v1",
+    model: "gpt-5.2",
+  };
+  const config = toSecurityModelConfig(profile, true) as Record<
+    string,
+    unknown
+  >;
+  if (ProviderSchema.safeParse("openai-responses").success) {
+    assert.equal(config.provider, "openai-responses");
+  } else {
+    assert.equal(config.provider, "openai");
+  }
+});
+
+test("dev model adapter maps every profile protocol to the scanner contract", () => {
+  for (const [profileProtocol, scannerProtocol] of [
+    ["openai", "openai-completions"],
+    ["openai-responses", "openai-responses"],
+    ["anthropic", "anthropic"],
+  ] as const) {
+    const config = toSecurityModelConfig(
+      {
+        mode: "custom",
+        protocol: profileProtocol,
+        apiKey: "test-key",
+        endpoint: "https://api.example.com/v1",
+        model: "model",
+      },
+      true,
+    ) as Record<string, unknown>;
+    if (ProviderSchema.safeParse(scannerProtocol).success) {
+      assert.equal(config.provider, scannerProtocol);
+    } else {
+      assert.equal(
+        config.provider,
+        scannerProtocol === "anthropic" ? "anthropic" : "openai",
+      );
+    }
+  }
 });
 
 test("dev service appends through its SQLite persistence port without clobbering history", async () => {
@@ -341,17 +401,18 @@ test("dev automatic scans stay quick when disabled and become full only when ena
   assert.equal("model" in (disabledRequests[0] as object), false);
 
   const enabledRequests: unknown[] = [];
+  const enabledModel = expectedScannerModel("openai");
   const enabled = await createDevSecurityScannerService({
     homeDirectory: home,
     scanner: stubScanner(enabledRequests),
-    persistence: memoryPersistence([], configuredModel),
+    persistence: memoryPersistence([], enabledModel as never),
   });
   await enabled.startAutomaticScan();
   await waitForTerminal(enabled);
   assert.equal((enabledRequests[0] as { mode: string }).mode, "full");
   assert.deepEqual(
     (enabledRequests[0] as { model: unknown }).model,
-    configuredModel,
+    enabledModel,
   );
 });
 

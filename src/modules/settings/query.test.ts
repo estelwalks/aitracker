@@ -67,6 +67,19 @@ test("settings route delegates rendering to the module presentation", () => {
   );
 });
 
+test("settings page follows section deep links after it is already mounted", () => {
+  const source = readFileSync(
+    new URL("./presentation/SettingsPage.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /useRouterState/);
+  assert.match(source, /parseSettingsSection/);
+  assert.match(
+    source,
+    /setCategory\(resolveSettingsCategory\(requestedSection\)\)/,
+  );
+});
+
 test("model settings follow the prototype's official entry and modal form layout", () => {
   const source = readFileSync(
     new URL("./presentation/ModelProfilesSection.tsx", import.meta.url),

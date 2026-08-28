@@ -1,13 +1,16 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { access, constants } from "node:fs/promises";
+import { access, chmod, constants, mkdtemp, writeFile } from "node:fs/promises";
 import { delimiter, join, isAbsolute } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
   buildResumeCommandTokens,
   isResumeSafeId,
 } from "../../../lib/local-sessions/resume-id.ts";
-import type { ResumeSessionRequest } from "../contracts.ts";
-import type { ResumeCommandExecutor } from "./session-adapter.server.ts";
+import type {
+  ResumeCommandExecutor,
+  ResumeCommandRequest,
+} from "./session-adapter.server.ts";
 
 type Spawn = typeof spawn;
 
@@ -116,7 +119,7 @@ export function createNodeResumeExecutor(
     options.resolveExecutable ?? resolveExecutableForLaunch;
   return {
     async execute(
-      request: Pick<ResumeSessionRequest, "source" | "sessionId">,
+      request: ResumeCommandRequest,
       signal?: AbortSignal,
     ): Promise<void> {
       if (signal?.aborted) throw new Error("resume cancelled");
@@ -131,9 +134,10 @@ export function createNodeResumeExecutor(
       const [file, ...args] = command;
       if (!file) throw new Error("missing resume executable");
       const executable = await resolveExecutable(file);
-      const launch = visibleTerminalCommand(
+      const launch = await visibleTerminalCommand(
         executable,
         args,
+        request.cwd,
         useVisibleTerminal,
       );
 
@@ -161,6 +165,7 @@ export function createNodeResumeExecutor(
             shell: false,
             stdio: useVisibleTerminal ? "ignore" : "ignore",
             windowsHide: useVisibleTerminal ? false : true,
+            cwd: launch.cwd,
           });
         } catch (error) {
           finish(() => reject(error));
@@ -186,28 +191,70 @@ export function createNodeResumeExecutor(
   };
 }
 
-function appleScriptString(value: string): string {
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+function posixShellString(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function visibleTerminalCommand(
+interface TerminalLaunch {
+  file: string;
+  args: string[];
+  /** Working directory inherited by the terminal launcher process. */
+  cwd?: string;
+}
+
+async function macDefaultTerminalScript(
   executable: string,
   args: readonly string[],
+  cwd?: string,
+): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "aitracker-resume-"));
+  const scriptPath = join(directory, "resume.command");
+  const command = [executable, ...args].map(posixShellString).join(" ");
+  const script = [
+    "#!/bin/sh",
+    "set -e",
+    // `.command` is opened by the user's configured terminal association;
+    // this explicit cd is required because that terminal is a new process.
+    "script_path=$0",
+    'cleanup() { rm -f "$script_path"; rmdir "$(dirname "$script_path")" 2>/dev/null || true; }',
+    "trap cleanup EXIT",
+    ...(cwd == null ? [] : [`cd ${posixShellString(cwd)}`]),
+    command,
+    "",
+  ].join("\n");
+  await writeFile(scriptPath, script, { encoding: "utf8", mode: 0o700 });
+  await chmod(scriptPath, 0o700);
+  return scriptPath;
+}
+
+async function visibleTerminalCommand(
+  executable: string,
+  args: readonly string[],
+  cwd: string | undefined,
   enabled: boolean,
-): { file: string; args: string[] } {
-  if (!enabled) return { file: executable, args: [...args] };
+): Promise<TerminalLaunch> {
+  if (!enabled) return { file: executable, args: [...args], cwd };
   if (process.platform === "darwin") {
-    const command = [executable, ...args].map(appleScriptString).join(" ");
+    const scriptPath = await macDefaultTerminalScript(executable, args, cwd);
     return {
-      file: "/usr/bin/osascript",
-      args: [
-        "-e",
-        `tell application "Terminal" to do script ${appleScriptString(command)}`,
-      ],
+      // Let Launch Services choose the user's default terminal for the .command
+      // file instead of hard-coding Terminal.app or iTerm2.
+      file: "/usr/bin/open",
+      args: [scriptPath],
     };
   }
   if (process.platform === "win32") {
-    return { file: "cmd.exe", args: ["/d", "/k", executable, ...args] };
+    return {
+      file: process.env.ComSpec ?? "cmd.exe",
+      args: ["/d", "/k", executable, ...args],
+      cwd,
+    };
   }
-  return { file: "x-terminal-emulator", args: ["-e", executable, ...args] };
+  return {
+    // x-terminal-emulator is the system-selected default terminal launcher
+    // on Linux distributions that provide it.
+    file: "x-terminal-emulator",
+    args: ["-e", executable, ...args],
+    cwd,
+  };
 }

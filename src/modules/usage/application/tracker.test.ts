@@ -332,7 +332,78 @@ test("projection boards keep same-label projects distinct without raw details", 
   ]);
   assert.deepEqual(
     model.boards.project.rows.map((row) => row.name),
-    ["shared", "shared"],
+    ["shared · hmac-b", "shared · hmac-a"],
   );
   assert.deepEqual(model.totals, { tokens: 300, events: 2, entries: 2 });
+});
+
+test("projection project board keeps only workspace buckets", () => {
+  const bucket = (
+    identity: string,
+    projectKind: UsageTrackerBucket["projectKind"],
+  ): UsageTrackerBucket => ({
+    dimension: "project",
+    date: "2026-08-24",
+    source: "codex",
+    identity,
+    label: identity,
+    projectKind,
+    events: 1,
+    calls: 0,
+    inputTokens: 100,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    reasoningOutputTokens: 0,
+    totalTokens: 100,
+  });
+
+  const model = buildTrackerReadModelFromProjection({
+    generatedAt: "2026-08-24T12:00:00.000Z",
+    buckets: [
+      bucket("workspace", "workspace"),
+      bucket("quick-conversation", "quick-conversation"),
+      bucket("unknown", "unknown"),
+    ],
+    nowMs: Date.parse("2026-08-24T12:00:00.000Z"),
+  });
+
+  assert.deepEqual(
+    model.boards.project.rows.map((row) => row.name),
+    ["workspace"],
+  );
+  assert.equal(model.boards.project.totalTokens, 100);
+  assert.equal(model.totals.events, 1);
+});
+
+test("projection project board merges one identity across sources", () => {
+  const bucket = (source: "codex" | "claude-code", totalTokens: number) =>
+    ({
+      dimension: "project" as const,
+      date: "2026-08-24",
+      source,
+      identity: "same-project",
+      label: "same-project",
+      projectKind: "workspace" as const,
+      events: 1,
+      calls: 0,
+      inputTokens: totalTokens,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      totalTokens,
+    }) satisfies UsageTrackerBucket;
+
+  const model = buildTrackerReadModelFromProjection({
+    generatedAt: "2026-08-24T12:00:00.000Z",
+    buckets: [bucket("codex", 100), bucket("claude-code", 250)],
+    nowMs: Date.parse("2026-08-24T12:00:00.000Z"),
+  });
+
+  assert.equal(model.boards.project.rows.length, 1);
+  assert.equal(model.boards.project.rows[0]?.key, "same-project");
+  assert.equal(model.boards.project.rows[0]?.tokens, 350);
+  assert.equal(model.boards.project.rows[0]?.events, 2);
+  assert.equal(model.totals.events, 2);
 });

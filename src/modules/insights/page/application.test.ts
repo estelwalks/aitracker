@@ -109,6 +109,46 @@ test("read returns the adapter's local facts when default enhancement has no enh
   assert.equal(env.lines[0].action?.labelKey, "insights.actions.security");
 });
 
+test("read marks an enabled insight unavailable when no model profile is configured", async () => {
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: {
+      id: "profile-aware-enhancer",
+      isAvailable: async () => false,
+      enhance: async () => ({ status: "enhancer-unavailable", lines: [] }),
+    },
+    store: makeStore("enhanced-auto", {
+      consentVersion: "1",
+      consentedAtMs: 0,
+    }),
+  });
+
+  const env = await app.read("dashboard", {}, "zh-CN");
+  assert.equal(env.status, "enhancer-unavailable");
+  assert.equal(env.canEnhance, false);
+  assert.equal(env.autoEnhance, false);
+});
+
+test("read keeps enabled insight available when a model profile is configured", async () => {
+  const app = createPageInsightsApplication({
+    adapters: [makeAdapter()],
+    enhancer: {
+      id: "profile-aware-enhancer",
+      isAvailable: async () => true,
+      enhance: async () => ({ status: "enhanced-ready", lines: [] }),
+    },
+    store: makeStore("enhanced-auto", {
+      consentVersion: "1",
+      consentedAtMs: 0,
+    }),
+  });
+
+  const env = await app.read("dashboard", {}, "zh-CN");
+  assert.equal(env.status, "rules");
+  assert.equal(env.canEnhance, true);
+  assert.equal(env.autoEnhance, true);
+});
+
 test("read uses a valid persisted AI result for the first paint", async () => {
   let enhanceCalls = 0;
   const app = createPageInsightsApplication({

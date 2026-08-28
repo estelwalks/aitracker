@@ -262,6 +262,7 @@ test("Claude Code: derives a safe title from the first valid user text block", a
     assert.ok(!session.title.includes("abc123"));
     assert.equal(session.projectKey, "real-repository");
     assert.equal(session.projectRef, normalizeProjectPath(repo, home));
+    assert.equal(session.resumeCwd, nestedCwd);
     assertPrivacyClean(session);
   });
 });
@@ -311,6 +312,8 @@ test("session projects aggregate at a valid gitdir root and retain non-git cwd f
         normalizeProjectPath(checkout, home),
       );
     }
+    assert.equal(byId.get(sessions[0][0])?.resumeCwd, nestedOne);
+    assert.equal(byId.get(sessions[1][0])?.resumeCwd, nestedTwo);
     assert.equal(byId.get(sessions[2][0])?.projectKey, "plain-folder");
     assert.equal(
       byId.get(sessions[2][0])?.projectRef,
@@ -1526,5 +1529,47 @@ test("session projectRef normalizes identically to usage event projects", async 
     assert.equal(session.projectRef, normalizeProjectPath(cwd, home));
     assert.equal(session.projectRef, "~/acme");
     assert.equal(session.projectKey, "acme");
+  });
+});
+
+test("session project identity uses the same Git-root canonicalization as usage", async () => {
+  await withTempHome(async (home) => {
+    const repositoryRoot = join(home, "Documents", "Dev", "repo");
+    const releaseDirectory = join(repositoryRoot, "release");
+    const componentDirectory = join(repositoryRoot, "src", "components");
+    await mkdir(join(repositoryRoot, ".git"), { recursive: true });
+    await mkdir(releaseDirectory, { recursive: true });
+    await mkdir(componentDirectory, { recursive: true });
+
+    const session = (sessionId: string, cwd: string) =>
+      JSON.stringify({
+        timestamp: "2026-08-01T09:00:00.000Z",
+        sessionId,
+        cwd,
+        type: "assistant",
+        message: {
+          role: "assistant",
+          model: "claude-sonnet-4",
+          usage: { input_tokens: 10, output_tokens: 5 },
+        },
+      });
+    const projectDir = join(home, ".claude", "projects", "-repo");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      join(projectDir, "release.jsonl"),
+      `${session("claude-release", releaseDirectory)}\n`,
+    );
+    await writeFile(
+      join(projectDir, "components.jsonl"),
+      `${session("claude-components", "~/Documents/Dev/repo/src/components")}\n`,
+    );
+
+    const summary = await scanLocalSessions({ homeDirectory: home, now: NOW });
+    assert.equal(summary.total, 2);
+    assert.deepEqual(
+      new Set(summary.sessions.map((record) => record.projectRef)),
+      new Set(["~/Documents/Dev/repo"]),
+    );
+    assert.ok(summary.sessions.every((record) => record.isGitProject === true));
   });
 });

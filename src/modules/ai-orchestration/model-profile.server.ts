@@ -62,38 +62,68 @@ export class ModelProfileError extends Error {
   }
 }
 
-/** Shared request body builder; `maxTokens` differs for ping vs. real calls. */
-function chatRequestBody(
-  protocol: ProfileProtocol,
-  model: string,
-  content: string,
-  maxTokens: number,
-): string {
-  return JSON.stringify({
-    model,
-    max_tokens: maxTokens,
-    messages: [{ role: "user", content }],
-  });
+/**
+ * Shared request body builder; `maxTokens` differs for ping vs. real calls.
+ * Keep the instruction/template separate from the user input. Sending both as
+ * one user message makes providers treat the generation contract as report
+ * content and can cause the model to echo it into the result.
+ */
+/** Extra chat-completion knobs used by consumers that need structured JSON. */
+export interface ChatRequestBodyOptions {
+  readonly temperature?: number;
+  /** Ask the gateway for a JSON object (OpenAI Chat Completions only). */
+  readonly jsonResponse?: boolean;
 }
 
-function requestBody(
+/**
+ * Shared request-body builder across all supported protocols:
+ *  - OpenAI Responses API (`mode: "official"` / `protocol: "openai-responses"`)
+ *  - OpenAI Chat Completions (`protocol: "openai"`)
+ *  - Anthropic Messages API (`protocol: "anthropic"`)
+ */
+export function requestBody(
   mode: ModelProfileInput["mode"],
   protocol: ProfileProtocol,
   model: string,
-  content: string,
+  prompt: string,
+  input: string,
   maxTokens: number,
+  options: ChatRequestBodyOptions = {},
 ): string {
   if (mode === "official" || protocol === "openai-responses") {
     return JSON.stringify({
       model,
       max_output_tokens: maxTokens,
-      input: content,
+      ...(prompt ? { instructions: prompt } : {}),
+      input,
     });
   }
-  return chatRequestBody(protocol, model, content, maxTokens);
+  if (protocol === "anthropic") {
+    return JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      ...(prompt ? { system: prompt } : {}),
+      messages: [{ role: "user", content: input }],
+    });
+  }
+  return JSON.stringify({
+    model,
+    max_tokens: maxTokens,
+    ...(options.temperature !== undefined
+      ? { temperature: options.temperature }
+      : {}),
+    ...(options.jsonResponse === true
+      ? { response_format: { type: "json_object" } }
+      : {}),
+    messages: [
+      ...(prompt ? [{ role: "system", content: prompt }] : []),
+      { role: "user", content: input },
+    ],
+  });
 }
 
-function chatHeaders(
+/** Shared auth headers across all supported protocols (anthropic adds the API-version header). */
+export function chatHeaders(
   protocol: ProfileProtocol,
   apiKey: string,
   auth?: ProfileAuth,
@@ -281,6 +311,7 @@ export function createModelProfileNetworkOperations(options?: {
               input.mode,
               protocol,
               model,
+              "",
               "Reply with OK.",
               16,
             ),
@@ -415,8 +446,10 @@ function parseChatUsage(
         ? record.output_tokens
         : undefined;
   if (inputTokens === undefined || outputTokens === undefined) return undefined;
-  const details = record.completion_tokens_details as
-    { reasoning_tokens?: unknown } | undefined;
+  // OpenAI Chat Completions reports reasoning under `completion_tokens_details`;
+  // the Responses API uses `output_tokens_details`.
+  const details = (record.completion_tokens_details ??
+    record.output_tokens_details) as { reasoning_tokens?: unknown } | undefined;
   const reasoningTokens =
     details && typeof details.reasoning_tokens === "number"
       ? details.reasoning_tokens
@@ -432,14 +465,135 @@ function parseChatUsage(
   };
 }
 
+function classifyChatOutcome(
+  text: string,
+  reasoning: string,
+): ChatResponseClassification {
+  if (text.length > 0) return "ok";
+  if (reasoning.length > 0) return "reasoning-only";
+  return "empty-content";
+}
+
+/** OpenAI Chat Completions: `choices[].message` (with optional reasoning_content). */
+function parseOpenAICompletion(json: unknown): ClassifiedChatResponse {
+  const record = json as {
+    choices?: Array<{
+      text?: unknown;
+      message?: { content?: unknown; reasoning_content?: unknown };
+      finish_reason?: unknown;
+    }>;
+    output_text?: unknown;
+    usage?: unknown;
+  };
+  const choice = record.choices?.[0];
+  const content =
+    textFromContent(choice?.message?.content) ||
+    textFromContent(choice?.text) ||
+    textFromContent(record.output_text) ||
+    "";
+  const reasoning = textFromContent(choice?.message?.reasoning_content);
+  return {
+    text: content,
+    kind: classifyChatOutcome(content, reasoning),
+    ...(parseChatUsage(record.usage) ?? {}),
+    ...(typeof choice?.finish_reason === "string" &&
+    (choice.finish_reason === "stop" || choice.finish_reason === "length")
+      ? { finishReason: choice.finish_reason }
+      : {}),
+  };
+}
+
+/** OpenAI Responses API: typed `output` items; only `message` items are the answer. */
+function parseOpenAIResponsesCompletion(json: unknown): ClassifiedChatResponse {
+  const record = json as {
+    output?: Array<{
+      type?: unknown;
+      content?: unknown;
+      summary?: unknown;
+    }>;
+    output_text?: unknown;
+    status?: unknown;
+    incomplete_details?: { reason?: unknown } | null;
+    error?: unknown;
+    usage?: unknown;
+  };
+  const output = Array.isArray(record.output) ? record.output : [];
+  // Reasoning items carry the model's chain-of-thought; they must never be
+  // mistaken for the answer (their content is not JSON and can be large).
+  // Items without a `type` (some gateways omit it) are treated as message-like.
+  const messageParts = output
+    .filter((item) => item?.type === "message" || item?.type === undefined)
+    .flatMap((item) => (Array.isArray(item.content) ? item.content : []));
+  const reasoningParts = output
+    .filter((item) => item?.type === "reasoning")
+    .flatMap((item) => [
+      ...(Array.isArray(item.content) ? item.content : []),
+      ...(Array.isArray(item.summary) ? item.summary : []),
+    ]);
+  const content =
+    textFromContent(messageParts) || textFromContent(record.output_text) || "";
+  const reasoning = textFromContent(reasoningParts);
+  let finishReason: AIResponse["finishReason"] | undefined;
+  if (record.status === "completed") finishReason = "stop";
+  else if (record.status === "incomplete") finishReason = "length";
+  else if (record.error) finishReason = "error";
+  return {
+    text: content,
+    kind: classifyChatOutcome(content, reasoning),
+    ...(parseChatUsage(record.usage) ?? {}),
+    ...(finishReason !== undefined ? { finishReason } : {}),
+  };
+}
+
+/** Anthropic Messages API: content blocks; `thinking` blocks are reasoning. */
+function parseAnthropicCompletion(json: unknown): ClassifiedChatResponse {
+  const record = json as {
+    content?: unknown;
+    usage?: unknown;
+    stop_reason?: unknown;
+    error?: unknown;
+  };
+  const blocks = Array.isArray(record.content) ? record.content : [];
+  const text = textFromContent(blocks);
+  const thinking = blocks
+    .filter(
+      (block) =>
+        block !== null &&
+        typeof block === "object" &&
+        (block as { type?: unknown }).type === "thinking",
+    )
+    .flatMap((block) => {
+      const value = (block as { thinking?: unknown }).thinking;
+      return typeof value === "string" ? [value] : [];
+    });
+  let finishReason: AIResponse["finishReason"] | undefined;
+  if (
+    record.stop_reason === "end_turn" ||
+    record.stop_reason === "stop_sequence"
+  ) {
+    finishReason = "stop";
+  } else if (record.stop_reason === "max_tokens") {
+    finishReason = "length";
+  } else if (record.error) {
+    finishReason = "error";
+  }
+  return {
+    text,
+    kind: classifyChatOutcome(text, textFromContent(thinking)),
+    ...(parseChatUsage(record.usage) ?? {}),
+    ...(finishReason !== undefined ? { finishReason } : {}),
+  };
+}
+
 /**
- * Parses a chat-completion response and classifies the outcome. Reasoning
- * models (e.g. deepseek-v4-flash) frequently exhaust the output budget on
- * `reasoning_content` and return an empty `content`; distinguishing
- * `reasoning-only` from `empty-content` and `not-json` is what makes failure
- * attribution actionable.
+ * Parses a chat-completion response and classifies the outcome across all
+ * supported protocols: OpenAI Chat Completions, OpenAI Responses API, and
+ * Anthropic Messages API. Reasoning models (e.g. deepseek-v4-flash) frequently
+ * exhaust the output budget on chain-of-thought and return an empty answer;
+ * distinguishing `reasoning-only` from `empty-content` and `not-json` is what
+ * makes failure attribution actionable.
  */
-function parseChatCompletion(
+export function parseChatCompletion(
   protocol: ProfileProtocol,
   raw: string,
 ): ClassifiedChatResponse {
@@ -449,61 +603,17 @@ function parseChatCompletion(
   } catch {
     return { text: "", kind: "not-json" };
   }
-  let content: unknown;
-  let reasoningContent: unknown;
-  let usage: unknown;
-  let finishReason: unknown;
-  if (protocol === "anthropic") {
-    const record = json as {
-      content?: unknown;
-      usage?: unknown;
-      stop_reason?: unknown;
-    };
-    content = record.content;
-    usage = record.usage;
-    finishReason = record.stop_reason;
-  } else {
-    const record = json as {
-      choices?: Array<{
-        text?: unknown;
-        message?: {
-          content?: unknown;
-          reasoning_content?: unknown;
-        };
-        finish_reason?: unknown;
-      }>;
-      output_text?: unknown;
-      output?: Array<{ content?: unknown }>;
-      usage?: unknown;
-    };
-    const choice = record.choices?.[0];
-    content =
-      textFromContent(choice?.message?.content) ||
-      textFromContent(choice?.text) ||
-      textFromContent(record.output_text) ||
-      textFromContent(record.output?.flatMap((item) => item.content ?? [])) ||
-      "";
-    reasoningContent = choice?.message?.reasoning_content;
-    finishReason = choice?.finish_reason;
-    usage = record.usage;
+  if (protocol === "anthropic") return parseAnthropicCompletion(json);
+  // OpenAI-family: Responses API responses carry a typed `output` array;
+  // Chat Completions carry `choices`.
+  if (
+    json !== null &&
+    typeof json === "object" &&
+    Array.isArray((json as { output?: unknown }).output)
+  ) {
+    return parseOpenAIResponsesCompletion(json);
   }
-  const text = textFromContent(content);
-  const reasoning = textFromContent(reasoningContent);
-  const kind: ChatResponseClassification =
-    text.length > 0
-      ? "ok"
-      : reasoning.length > 0
-        ? "reasoning-only"
-        : "empty-content";
-  return {
-    text,
-    kind,
-    ...(parseChatUsage(usage) ?? {}),
-    ...(typeof finishReason === "string" &&
-    (finishReason === "stop" || finishReason === "length")
-      ? { finishReason }
-      : {}),
-  };
+  return parseOpenAICompletion(json);
 }
 
 function parseChatText(protocol: ProfileProtocol, raw: string): string {
@@ -585,6 +695,7 @@ async function runDiagnosticAttempt(input: {
             input.profile.mode,
             input.profile.protocol,
             input.model,
+            "",
             input.content,
             input.maxOutputTokens,
           ),
@@ -745,8 +856,8 @@ export function createProfileBackedProvider(options: {
         throw new ProfileProviderInvocationError("ai.profile-unavailable");
       const endpoint = effectiveEndpoint(profile);
       const model = effectiveModel(profile) ?? request.modelId;
-      const content =
-        `${request.prompt.template}\n\n${request.input.text}`.trim();
+      const prompt = request.prompt.template.trim();
+      const input = request.input.text.trim();
       const maxOutputTokens =
         request.maxOutputTokens ?? DEFAULT_PROFILE_MAX_OUTPUT_TOKENS;
       const requestInit: RequestInit = {
@@ -760,7 +871,8 @@ export function createProfileBackedProvider(options: {
           profile.mode,
           profile.protocol,
           model,
-          content,
+          prompt,
+          input,
           maxOutputTokens,
         ),
         signal: request.signal,

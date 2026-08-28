@@ -79,7 +79,7 @@ test("session projection strips private session fields", () => {
   const serialized = JSON.stringify(publicView);
   assert.doesNotMatch(
     serialized,
-    /projectRef|resumeCommand|command|prompt|response|transcript/,
+    /projectRef|resumeCwd|resumeCommand|command|prompt|response|transcript/,
   );
   assert.equal(publicView.projectKey, "demo");
   assert.equal(publicView.resumeAvailable, true);
@@ -128,7 +128,7 @@ test("resume maps executor failure and cancellation to stable codes", async () =
     assert.equal(cancelled.error.code, "errors.sessions.resumeCancelled");
 });
 
-test("resume delegates only a trusted source/session pair, never a command", async () => {
+test("resume delegates trusted session data and never a registry command", async () => {
   let received: unknown;
   const port = createSessionResumePort(
     {
@@ -141,6 +141,32 @@ test("resume delegates only a trusted source/session pair, never a command", asy
   const result = await port.resume({ source: "codex", sessionId: "abc" });
 
   assert.equal(result.ok, true);
-  assert.deepEqual(received, { source: "codex", sessionId: "abc" });
-  assert.doesNotMatch(JSON.stringify(received), /command|path|cwd/i);
+  assert.deepEqual(received, {
+    source: "codex",
+    sessionId: "abc",
+    cwd: "/private/demo",
+  });
+  assert.doesNotMatch(JSON.stringify(received), /command|resumeCommand/i);
+});
+
+test("Claude Code requires the scanned project cwd for automatic recovery", async () => {
+  const session = resumableRecord();
+  const result = await createSessionResumePort(
+    {
+      execute: async () => {
+        throw new Error("must not execute without cwd");
+      },
+    },
+    {
+      scanner: {
+        scan: async () => [
+          { ...session, source: "claude-code", projectRef: "unknown" },
+        ],
+      },
+    },
+  ).resume({ source: "claude-code", sessionId: session.sessionId });
+
+  assert.equal(isErr(result), true);
+  if (isErr(result))
+    assert.equal(result.error.code, "errors.sessions.resumeUnavailable");
 });

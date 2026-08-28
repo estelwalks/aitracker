@@ -68,6 +68,13 @@ export interface SessionRecord {
   /** Git repository root when available; otherwise raw cwd. */
 
   projectRef: string;
+  /**
+   * Original absolute working directory captured from the session metadata.
+   * This is server-only launch context and must never cross the public
+   * session projection. It intentionally remains separate from `projectRef`,
+   * which may be canonicalized to a Git root or HOME-relative display value.
+   */
+  resumeCwd?: string;
   /** True when `projectRef` resolved to a real git repository root (a `.git`
    *  directory or a worktree `gitdir:` file); false/absent when it fell back
    *  to the raw cwd because no repository was found. */

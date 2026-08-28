@@ -177,8 +177,12 @@ export function RoastBoard({
                       </div>
 
                       <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
-                        {t("tracker.row.calls", { count: row.calls })}
-                        {" · "}
+                        {dimension === "skill" ? (
+                          <>
+                            {t("tracker.row.calls", { count: row.calls })}
+                            {" · "}
+                          </>
+                        ) : null}
                         {t("tracker.row.tokens", {
                           count: format.formatTokens(row.tokens),
                         })}
