@@ -199,6 +199,29 @@ test("refuses to serve Nitro server-function chunks from /assets before token va
     assert.equal(withToken.status, 404);
     assert.equal(await withToken.text(), "Not Found");
 
+    // TanStack also emits browser-side ServerFn RPC proxies with a `.server`
+    // segment. They are required by lazy routes and must remain loadable.
+    await writeFile(
+      join(assetsDirectory, "llm-review.server-fns-abc123.js"),
+      "export const getAvailability = () => undefined;",
+    );
+    const browserProxy = await fetch(
+      `${server.origin}/assets/llm-review.server-fns-abc123.js`,
+    );
+    assert.equal(browserProxy.status, 200);
+    assert.equal(
+      await browserProxy.text(),
+      "export const getAvailability = () => undefined;",
+    );
+    await writeFile(
+      join(assetsDirectory, "version-check.server-abc123.js"),
+      "export const checkForUpdates = () => undefined;",
+    );
+    const versionCheckProxy = await fetch(
+      `${server.origin}/assets/version-check.server-abc123.js`,
+    );
+    assert.equal(versionCheckProxy.status, 200);
+
     // Regular hashed browser assets in the same directory keep serving.
     await writeFile(join(assetsDirectory, "index-abc123.js"), "browser chunk");
     const served = await fetch(`${server.origin}/assets/index-abc123.js`);
