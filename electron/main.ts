@@ -88,6 +88,7 @@ import {
   type ReleaseDataResetOptions,
 } from "./release-data-reset.js";
 import { shouldHideWindowOnClose } from "./window-close.js";
+import { isReloadShortcut } from "./reload-shortcut.js";
 
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 const developmentUrl = process.env[ENV.DEV_URL];
@@ -154,6 +155,31 @@ function applyNativeAppIcon(): void {
   for (const window of [mainWindow, widgetWindow]) {
     if (window && !window.isDestroyed()) window.setIcon(icon);
   }
+}
+
+/** Keep packaged clients from accidentally reloading their local app shell. */
+function disablePackagedReloadShortcuts(window: BrowserWindow): void {
+  if (!app.isPackaged) return;
+  window.webContents.on("before-input-event", (event, input) => {
+    if (isReloadShortcut(input)) event.preventDefault();
+  });
+}
+
+/** Remove native View → Reload actions where Electron creates a default menu. */
+function disablePackagedReloadMenuItems(): void {
+  if (!app.isPackaged) return;
+  const applicationMenu = Menu.getApplicationMenu();
+  if (!applicationMenu) return;
+
+  const visit = (menu: Menu): void => {
+    for (const item of menu.items) {
+      if (item.role === "reload" || item.role === "forceReload") {
+        item.enabled = false;
+      }
+      if (item.submenu) visit(item.submenu);
+    }
+  };
+  visit(applicationMenu);
 }
 
 /**
@@ -300,6 +326,7 @@ async function showWidgetWindow(
       sandbox: true,
     },
   });
+  disablePackagedReloadShortcuts(widgetWindow);
 
   // Position only after BrowserWindow exists. On macOS, positioning before
   // ready-to-show can be overwritten by the native window restoration logic.
@@ -912,6 +939,7 @@ async function createMainWindow(): Promise<void> {
       sandbox: true,
     },
   });
+  disablePackagedReloadShortcuts(mainWindow);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) {
@@ -1139,6 +1167,7 @@ if (!hasSingleInstanceLock) {
       if (process.platform !== "darwin" && app.isPackaged) {
         Menu.setApplicationMenu(null);
       }
+      disablePackagedReloadMenuItems();
       // Present a branded local frame before any server, SQLite, or route work.
       // This window does not need the application origin and therefore gives
       // feedback even on a truly cold start.
